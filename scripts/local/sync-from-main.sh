@@ -14,8 +14,7 @@
 # 规则:
 #   - 默认仅 fast-forward:有分歧立刻跳过并 warn,不强 rebase(避免改远端历史)
 #   - --merge 模式:diverged 时跑 3-way merge(产 merge commit),冲突时立即 abort 并跳过该分支
-#   - feature/docker-deploy 即使 --merge 也按 pre-push hook 拦截:本地是只读基线
-#     真正的 main → docker-deploy 同步走部署机 scripts/local/sync-main.sh(单独脚本)
+#   - citus 是分布式架构并排轨道(永不合 main):--merge 把 main 的通用修复并进来,保持薄 delta
 #   - 同步前 fetch --prune;同步后回到原始分支
 #   - 任一分支失败不阻断后续(继续同步剩下的)
 # =========================================================
@@ -23,9 +22,10 @@
 set -uo pipefail
 
 # 清单:跟 main 始终保持 ff 关系的 long-lived 分支
+# 常驻分支清单(详见 CLAUDE.md「分支用途」)。当前仅 citus 一条:main → citus 单向 sync。
+# 旧的 feature/docker-deploy(部署分支)已废弃——部署已合入 main,不再单列分支。
 BRANCHES=(
-  feature/be-bugfixed
-  feature/docker-deploy
+  citus
 )
 
 DRY_RUN=0
