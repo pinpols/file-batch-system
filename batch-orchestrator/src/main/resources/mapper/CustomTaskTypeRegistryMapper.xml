@@ -57,8 +57,10 @@
                descriptor_version      = excluded.descriptor_version,
                declared_by_worker_code = excluded.declared_by_worker_code,
                status                  = 'ACTIVE',
-               last_declared_at        = current_timestamp,
-               updated_at              = current_timestamp
+               <!-- Citus:distributed/reference 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp(STABLE)
+                    改 excluded 引用(值=INSERT 同语句 current_timestamp,双栈语义等价) -->
+               last_declared_at        = excluded.last_declared_at,
+               updated_at              = excluded.updated_at
     </insert>
 
     <select id="selectByTenantAndCode" resultMap="customTaskTypeMap">

@@ -62,14 +62,16 @@
 
     <insert id="upsert">
         insert into batch.resource_tag (
-            tenant_id, resource_type, resource_code, tag_key, tag_value, created_by
+            tenant_id, resource_type, resource_code, tag_key, tag_value, created_by, created_at
         ) values (
-            #{tenantId}, #{resourceType}, #{resourceCode}, #{tagKey}, #{tagValue}, #{operator}
+            #{tenantId}, #{resourceType}, #{resourceCode}, #{tagKey}, #{tagValue}, #{operator}, current_timestamp
         )
         on conflict (tenant_id, resource_type, resource_code, tag_key) do update
+            <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp(STABLE)
+                 改 excluded 引用(created_at 已显式进 INSERT 列表,值=同语句 current_timestamp,双栈等价) -->
             set tag_value  = #{tagValue},
                 created_by = #{operator},
-                created_at = current_timestamp
+                created_at = excluded.created_at
     </insert>
 
     <delete id="deleteByResourceAndKey">
