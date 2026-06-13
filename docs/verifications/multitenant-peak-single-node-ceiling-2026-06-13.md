@@ -67,6 +67,27 @@ launch(纯 PG 写入)轻松到 150–344/s、p95 亚秒、0 拒绝 0 失败 → 
 4. **真 go/no-go 须多主机**:本地单主机给不出 Citus 横向扩展数字;门槛③ 的对比压测放到 2–3 台真机
    (各跑 coord/worker)再做,用本驱动改 `COLOCATED=1`(Citus join 补 tenant_id 共置)即可复用。
 
+## 根因定位 + 修复验证(本轮)
+
+orchestrator 只有一个 Kafka 消费者 `TriggerLaunchConsumer`(把 launch 事件落成 job_instance);
+report 走 HTTP(Tomcat 200 线程,非瓶颈)。查 `OrchestratorKafkaConsumerConfiguration`:
+listener factory **没调 `setConcurrency` → 默认 1**,而 `batch.trigger.launch.v1` topic 有 **4 个分区**
+——单线程顺序消费 4 分区,3/4 并行度闲置,launch→实例创建被单线程串行封顶。
+
+**修复**:`TriggerConsumerProperties` 新增 `concurrency`(默认 4,与分区数对齐),factory 调
+`setConcurrency`。重测:
+
+| L | 并发 | 修复前峰值/s | **修复后峰值/s** |
+|---|---|---|---|
+| 1 | 64 | 21.3 | **33.2** |
+| 2 | 128 | 20.8 | 29.1 |
+| 3 | 256 | 20.3 | 26.0 |
+
+峰值完成率 **~22 → ~33/s(+50%)**,0 拒绝 0 失败。证实单线程消费是瓶颈之一。但只升 1.6×(非 4×),
+且峰值随并发上升反降(33→26)——说明**修掉这层后冒出下一个瓶颈**(疑似 report HTTP 状态更新 /
+claim-partition 行锁争用;单任务 310ms 排队里仍有串行)。继续提升是递减收益,需另立专项:report 路径
+并发 + claim/状态更新争用。**但对本文主结论无影响:PG/Citus 始终不是瓶颈,杠杆全在控制面并发。**
+
 ## 复现
 
 ```bash
