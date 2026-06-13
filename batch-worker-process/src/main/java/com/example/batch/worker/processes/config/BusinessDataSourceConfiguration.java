@@ -59,6 +59,16 @@ public class BusinessDataSourceConfiguration {
     if (hikariConfig.getLeakDetectionThreshold() <= 0) {
       hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
     }
+    // HA:主备切换硬化——主动回收旧连接 + 空闲保活探测 + 校验快速失败,避免切换后坏连接被借出
+    if (properties.getMaxLifetimeMs() > 0) {
+      hikariConfig.setMaxLifetime(properties.getMaxLifetimeMs());
+    }
+    if (properties.getKeepaliveTimeMs() > 0) {
+      hikariConfig.setKeepaliveTime(properties.getKeepaliveTimeMs());
+    }
+    if (properties.getValidationTimeoutMs() > 0) {
+      hikariConfig.setValidationTimeout(properties.getValidationTimeoutMs());
+    }
     String appName = environment.getProperty("spring.application.name", "batch-worker-process");
     HikariPgSessionSupport.applyBusiness(hikariConfig, pgSessionProperties, appName + "-business");
     return new HikariDataSource(hikariConfig);

@@ -43,6 +43,18 @@ spring:
     password: ${BATCH_PLATFORM_DB_PASSWORD:}
     # JDBC 驱动类
     driver-class-name: org.postgresql.Driver
+    # ── Hikari 故障切换硬化(所有服务共享;各服务 application.yml 只覆盖 pool-size,这些 failover
+    #    参数由此统一兜底)。主备切换(Patroni/HAProxy/VIP)时池中旧连接已断但 Hikari 不知道,
+    #    下次借出即 "Connection reset" 把请求打挂。下面三件配合主动回收+探活,避免坏连接被借出。
+    hikari:
+      # 连接最长存活(应 < 后端/HAProxy/PgBouncer idle 上限 + < PG wait_timeout),到点主动重建,
+      # 让切换后残留的旧连接在一个生命周期内被淘汰。29min 留余量,避免与常见 30min 基础设施上限打平。
+      max-lifetime: ${BATCH_PLATFORM_DB_MAX_LIFETIME_MS:1740000}
+      # 空闲连接保活探测间隔(必须 < max-lifetime):周期 ping 空闲连接,切换后尽快发现并剔除死连接,
+      # 而非等业务借出才暴露。0=关闭(Hikari 默认),这里开 30s。
+      keepalive-time: ${BATCH_PLATFORM_DB_KEEPALIVE_MS:30000}
+      # 借出前连接校验超时:校验慢/卡死时快速判失败重取,避免切换瞬间长时间阻塞在坏连接上。
+      validation-timeout: ${BATCH_PLATFORM_DB_VALIDATION_TIMEOUT_MS:3000}
   servlet:
     # 显式限制 multipart 尺寸，防止恶意大文件 DoS / 默认 10MB 对 Excel 上传太小
     multipart:
