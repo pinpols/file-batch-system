@@ -20,9 +20,12 @@ jobs:
       - name: 拦截 citus → main
         if: github.head_ref == 'citus'
         run: |
-          echo "::error title=禁止合并::citus 是分布式架构常驻轨道,**禁止合并到 main**(CLAUDE.md 分支用途)。"
+          echo "::error title=禁止合并::citus 是分布式架构常驻轨道,禁止合并到 main(CLAUDE.md 分支用途)。"
           echo "通用/双栈代码进 main 请抽独立 feature 分支 off main → PR,不要整支合 citus。"
           exit 1
+      # head_ref 经 env 传递(actionlint:避免在 inline script 直接插值 untrusted 输入)
       - name: 通过(非 citus 分支)
         if: github.head_ref != 'citus'
-        run: echo "head=${{ github.head_ref }} 非 citus,放行。"
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: echo "head=$HEAD_REF 非 citus,放行。"
