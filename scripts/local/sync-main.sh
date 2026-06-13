@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
+# ⚠️ 已废弃(2026-06-13):feature/docker-deploy 部署分支已取消,部署内容合入 main。
+#    main → 常驻分支(citus)的同步改用 scripts/local/sync-from-main.sh。本脚本保留仅作历史参考。
 # sync-main.sh - 把 origin/main 的更新合并到本地 feature/docker-deploy
 # 说明：
 # 1) 仅做 git 操作,不触发部署。部署走 scripts/docker/deploy.ps1 或 up-apps.sh。
