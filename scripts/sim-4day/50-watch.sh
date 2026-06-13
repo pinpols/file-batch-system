@@ -5,8 +5,9 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SQL_DIR="$HERE/sql"
-PQF(){ docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tA -f /dev/stdin 2>/dev/null; }
-BQF(){ docker exec -i batch-postgres-primary psql -U batch_user -d batch_business -tA -f /dev/stdin 2>/dev/null; }
+# 平台→Citus 协调器(env-citus 时)/ 单机 fallback;业务→分区库 / 单机 fallback(双栈安全)
+PQF(){ docker exec -i "${PG_PLATFORM_CONTAINER:-batch-postgres-primary}" psql -U "${PG_PLATFORM_USER:-batch_user}" -d "${PG_PLATFORM_DB:-batch_platform}" -tA -f /dev/stdin 2>/dev/null; }
+BQF(){ docker exec -i "${PG_BUSINESS_CONTAINER:-batch-postgres-primary}" psql -U "${PG_BUSINESS_USER:-batch_user}" -d "${PG_BUSINESS_DB:-batch_business}" -tA -f /dev/stdin 2>/dev/null; }
 
 dash() {
   echo "================ SIM 4day 仪表盘  $(date '+%F %T') ================"

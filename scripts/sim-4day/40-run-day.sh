@@ -37,7 +37,7 @@ import_content() { # tenant tpl header rowgen
 # DISPATCH 需绑定一个已生成文件 + 渠道:取该租户最新 GENERATED 文件分发(自然形成 export→dispatch 链)。
 dispatch_latest() { # tenant job channelCode
   local t="$1" job="$2" ch="$3" fid
-  fid=$(docker exec -i batch-postgres-primary psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
+  fid=$(docker exec -i "${PG_PLATFORM_CONTAINER:-batch-postgres-primary}" psql -U "${PG_PLATFORM_USER:-$POSTGRES_USER}" -d "${PG_PLATFORM_DB:-$PLATFORM_DB}" -tAc \
     "select id from batch.file_record where tenant_id='$t' and file_status='GENERATED' order by id desc limit 1" 2>/dev/null)
   if [ -n "$fid" ]; then launch "$t" "$job" "$BD" "{\"fileId\":$fid,\"channelCode\":\"$ch\"}"; else printf '_'; return 0; fi
 }

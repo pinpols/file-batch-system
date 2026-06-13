@@ -12,7 +12,7 @@ SQL_DIR="$HERE/sql"
 CONSOLE="${CONSOLE_BASE_URL}"
 CJ=/tmp/console-cookies-42.txt
 TENANTS=(ta tb tc t04 t05 t06 t07 t08 t09 t10)
-PQF(){ docker exec -i batch-postgres-primary psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tA "$@" -f /dev/stdin 2>/dev/null; }
+PQF(){ docker exec -i "${PG_PLATFORM_CONTAINER:-batch-postgres-primary}" psql -U "${PG_PLATFORM_USER:-$POSTGRES_USER}" -d "${PG_PLATFORM_DB:-$PLATFORM_DB}" -tA "$@" -f /dev/stdin 2>/dev/null; }
 nextday(){ python3 -c "import datetime as d;print((d.date.fromisoformat('$1')+d.timedelta(days=$2)).isoformat())"; }
 
 # 日切结算 = CLOSE 的状态转移(day_status→SETTLED + settled_at)。本应走

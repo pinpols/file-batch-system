@@ -27,6 +27,7 @@ scripts/sim/
 ├── compose.yml                   # 模拟器容器定义(sftp + mockserver)
 ├── mockserver-stubs/
 │   └── expectations.json          # MockServer 启动期 stub 配置
+├── 00-reset-runtime.sh            # 把运行态 + biz 数据清回基线,让整套 sim 可重复跑(保留 config/definition)
 ├── 01-init-biz.sh                 # biz.* 表 + MinIO bucket
 ├── 02-start-sim.sh                # 起 sftp + mockserver
 ├── 03-import-tenants.sh           # 导入 ta/tb/tc Excel 配置到 console-api
@@ -57,6 +58,25 @@ bash scripts/sim/04-seed-source-data.sh   # 新一批源数据
 bash scripts/sim/05-load.sh               # 触发
 bash scripts/sim/06-verify.sh             # 看产物
 ```
+
+## 可重复跑(清回基线后重放整套)
+
+多数 stage 按唯一 `batchNo` / `requestId` 断言,天然可重复;但少数 stage 的 COUNT 断言
+依赖共享表的累积量(如 `12-export` 读 `biz.customer_account` 全部 ACTIVE 行、`24-trigger`
+的 outbox 重试实例计数),**跨 stage / 跨重复运行会累积污染**。跑前 reset 一次即全套可重复:
+
+```bash
+bash scripts/sim/00-reset-runtime.sh      # 清运行态(job_/pipeline_/outbox/file_/...)+ biz.* 数据
+                                          # 保留:所有 *_definition/*_config/*_template、tenant、
+                                          #       console_user、api_key、4 张系统表
+bash scripts/sim/04-seed-source-data.sh   # 重新投源数据
+bash scripts/sim/05-load.sh               # 重放
+bash scripts/sim/06-verify.sh
+```
+
+> 不需要重跑 `01-init-biz` / `03-import-tenants`——reset **只清数据、不删表结构和编排定义**。
+> 脚本是 env-driven 的双栈安全实现:不 source 任何 env 时走单机 `batch-postgres-primary`,
+> Citus 拓扑下 `source env-citus.sh` 后自动切到协调器(见 `citus` 分支的 `run-all-citus.sh`)。
 
 ## LAN 访问(多机环境 / 手机 / 跨网段)
 

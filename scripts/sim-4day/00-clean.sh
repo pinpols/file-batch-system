@@ -7,16 +7,21 @@
 # 跑前/跑后断言 config 行数不变,防误删。
 set -euo pipefail
 
-PG=batch-postgres-primary
-PGU=batch_user
+# 平台/业务双容器(env-citus 时:平台→citus-coord/postgres,业务→分区库;不 source 时单机 fallback)
+PG_PLAT="${PG_PLATFORM_CONTAINER:-batch-postgres-primary}"
+PGU_PLAT="${PG_PLATFORM_USER:-batch_user}"
+PG_DB_PLAT="${PG_PLATFORM_DB:-batch_platform}"
+PG_BIZ="${PG_BUSINESS_CONTAINER:-batch-postgres-primary}"
+PGU_BIZ="${PG_BUSINESS_USER:-batch_user}"
+PG_DB_BIZ="${PG_BUSINESS_DB:-batch_business}"
 MINIO=batch-minio
 MC_ALIAS=local
 BUCKET=batch-dev
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SQL_DIR="$HERE/sql"
 
-psql_plat() { docker exec -i "$PG" psql -U "$PGU" -d batch_platform -v ON_ERROR_STOP=1 "$@"; }
-psql_biz()  { docker exec -i "$PG" psql -U "$PGU" -d batch_business -v ON_ERROR_STOP=1 "$@"; }
+psql_plat() { docker exec -i "$PG_PLAT" psql -U "$PGU_PLAT" -d "$PG_DB_PLAT" -v ON_ERROR_STOP=1 "$@"; }
+psql_biz()  { docker exec -i "$PG_BIZ" psql -U "$PGU_BIZ" -d "$PG_DB_BIZ" -v ON_ERROR_STOP=1 "$@"; }
 
 echo "==> 0/4 config 基线快照(截断后须不变)"
 CFG_BEFORE=$(psql_plat -tA -f /dev/stdin < "$SQL_DIR/config-baseline.sql")
