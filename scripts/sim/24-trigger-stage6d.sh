@@ -65,7 +65,9 @@ def psql(sql, tuples=False):
     return subprocess.run(args, check=False, capture_output=True, text=True)
 
 def psql_file(path, *vars):
-    args = PG_PLAT + ["-v", "ON_ERROR_STOP=1"]
+    # 经 stdin pipe(-f /dev/stdin + stdin=fh)必须 docker exec -i,否则 stdin 不入容器、
+    # sql 没 apply(pause/resume 静默失效)。PG_PLAT 不含 -i,此处补。
+    args = ["docker", "exec", "-i"] + PG_PLAT[2:] + ["-v", "ON_ERROR_STOP=1"]
     for key, value in vars:
         args += ["-v", f"{key}={value}"]
     args += ["-f", "/dev/stdin"]
@@ -245,10 +247,17 @@ outbox_published = wait_int(
     lambda v: v >= OUTBOX_COUNT,
     timeout=180,
 )
-outbox_instances = int(scalar(
+# outbox PUBLISHED 后,"orchestrator launch → 建 job_instance → 回填 related_job_instance_id"
+# 是下游异步(Citus 上 fan-out 更慢),立即数会漏。等到 12 个 distinct 非空实例(race-safe);
+# 仍数不齐才是真 dedup/丢失(wait_int 超时即报错)。
+outbox_instances = wait_int(
+    "outbox-instances",
     "select count(distinct related_job_instance_id) from batch.trigger_request "
-    f"where tenant_id='ta' and request_id like '{BATCH}-outbox-%'"
-) or "0")
+    f"where tenant_id='ta' and request_id like '{BATCH}-outbox-%' "
+    "and related_job_instance_id is not null",
+    lambda v: v >= OUTBOX_COUNT,
+    timeout=120,
+)
 if outbox_instances != OUTBOX_COUNT:
     raise RuntimeError(f"outbox retry duplicated/lost instances: {outbox_instances}/{OUTBOX_COUNT}")
 

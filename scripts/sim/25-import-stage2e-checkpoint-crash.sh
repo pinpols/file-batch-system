@@ -26,9 +26,12 @@ restart_import_with_checkpoint() {
   echo "==> restart worker-import with checkpoint enabled"
   # Citus 拓扑:restart.sh 是单机配置(15432),会让 worker 连错库。检测 env-citus
   # (PG_PLATFORM_CONTAINER=citus-coord)时直接用 citus 连接命令起,checkpoint 打开。
-  if [[ "${PG_PLATFORM_CONTAINER:-}" == "citus-coord" ]] && declare -F citus_restart_worker >/dev/null; then
+  if [[ "${PG_PLATFORM_CONTAINER:-}" == "citus-coord" ]]; then
     # Citus:restart.sh 是单机配置(15432),改用 env-citus.sh 的 citus_restart_worker
-    # helper(连接配置集中在 env-citus,此处不硬编码)。checkpoint 作为额外 -D 透传。
+    # helper(连接配置集中在 env-citus,含 preferQueryMode=simple,此处不硬编码)。
+    # 显式 source 保证 helper 可用(不依赖父 shell 导出函数的继承,declare -F 不可靠)。
+    # shellcheck source=env-citus.sh
+    source "$ROOT/scripts/sim/env-citus.sh" >/dev/null 2>&1
     citus_restart_worker worker-import -Dbatch.worker.checkpoint.enabled=true
     local s=$SECONDS
     until curl -sf -m2 http://localhost:18083/actuator/health -o /dev/null 2>/dev/null || [ $((SECONDS-s)) -gt 120 ]; do sleep 5; done
@@ -178,8 +181,8 @@ def state_row(rid):
         "left join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         "left join batch.job_partition p on p.job_instance_id=i.id and p.tenant_id=i.tenant_id "
         "left join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
-        "left join batch.pipeline_instance pi on pi.related_job_instance_id=i.id "
-        "left join batch.pipeline_progress pp on pp.pipeline_instance_id=pi.id and pp.stage='LOAD' "
+        "left join batch.pipeline_instance pi on pi.related_job_instance_id=i.id and pi.tenant_id=i.tenant_id "
+        "left join batch.pipeline_progress pp on pp.pipeline_instance_id=pi.id and pp.tenant_id=pi.tenant_id and pp.stage='LOAD' "
         "left join batch.trigger_outbox_event oe on oe.tenant_id=tr.tenant_id "
         " and oe.request_id=tr.request_id "
         f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
@@ -297,7 +300,9 @@ def restart_worker():
     print("  [restart] worker-import", flush=True)
 
 def wait_success(rid):
-    deadline = time.time() + 420
+    # 续跑 20000 行 + worker 重启(JDK25 启动 ~50s);全套序列负载下 Citus 写入更慢,
+    # 给到 600s 容忍(实测 resume 功能正常达 SUCCESS,纯余量,非 bug)。
+    deadline = time.time() + 600
     last = None
     while time.time() < deadline:
         row = state_row(rid)

@@ -156,7 +156,9 @@ try:
 except urllib.error.HTTPError as ex:
     cancel_http = str(ex.code)
     ex.read()
-_, cancel_status = wait_terminal(rid_cancel, timeout=90)
+# 序列负载下 worker-atomic 较忙,cancel→terminal 可能略超 90s(实测实例确达终态,纯余量问题);
+# 给到 180s 与其余 wait 边界一致(功能正常,非 bug)。
+_, cancel_status = wait_terminal(rid_cancel, timeout=180)
 
 print("\n-- atomic_stage5c_status --", flush=True)
 req_list = ",".join("'" + rid + "'" for rid in [rid_http, rid_timeout, rid_cancel])

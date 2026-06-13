@@ -91,7 +91,20 @@ created=$(curl -s -m 8 -b "$CK" -X POST "$CONSOLE/api/console/api-keys?tenantId=
   -d "{\"keyName\":\"$KEY_NAME\",\"scopes\":\"*\"}")
 RAW_KEY=$(echo "$created" | grep -oE '"rawKey":"[^"]+"' | head -1 | sed 's/"rawKey":"//;s/"//')
 [[ -z "$RAW_KEY" ]] && RAW_KEY=$(echo "$created" | grep -oE '"apiKey":"[^"]+"' | head -1 | sed 's/.*"//;s/"//')
-[[ -n "$RAW_KEY" ]] && ok "API key 已建(scopes=*)" || { bad "未取到 rawKey: $(echo "$created" | head -c 200)"; exit 1; }
+if [[ -z "$RAW_KEY" ]]; then
+  # 改写请求(POST/DELETE)被 FORBIDDEN:console 未开 bypass-mode 时启用 CSRF 双提交保护,
+  # 本脚本走 cookie 鉴权但不构造 CSRF token(Spring Security 6 默认 XorCsrf handler,token 由
+  # 服务端随机掩码派生,curl 无法复现)。本地 sim 应以 bypass-mode=true 启 console(免 CSRF)。
+  if echo "$created" | grep -qiE 'FORBIDDEN|访问被拒绝'; then
+    bad "建 API key 被 FORBIDDEN —— console 多半未开 bypass-mode(.env.local BATCH_SECURITY_BYPASS_MODE=false 时启用 CSRF)。"
+    echo "    本地 sim 请以 bypass-mode=true 重启 console 后重跑:" >&2
+    echo "      BATCH_SECURITY_BYPASS_MODE=true citus_restart_worker console -Dbatch.security.bypass-mode=true" >&2
+    echo "    (生产态 CSRF 由 FE 处理;本脚本是本地 sim 工具,不构造 XOR CSRF token。)" >&2
+    exit 1
+  fi
+  bad "未取到 rawKey: $(echo "$created" | head -c 200)"; exit 1
+fi
+ok "API key 已建(scopes=*)"
 
 # ---- 3. 构建 sample worker(缺 jar 才建)----
 note "3. sample-tenant-worker jar"

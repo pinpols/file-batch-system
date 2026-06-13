@@ -20,6 +20,14 @@
 # =========================================================
 set -uo pipefail
 
+# 与编号 stage 一致:source env-common 自带 TRIGGER_BASE/INTERNAL_SECRET/BIZ_DATE/BATCH_NO
+# (此前缺失,裸跑报 KeyError: 'BIZ_DATE',须调用方先手动 export)。
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+SIM_STAGE_NAME="load"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
+
 export ROWS="${ROUNDS:-5}"               # 每个 import 生成多少数据行
 export ONLY="${ONLY:-}"
 export CLEAN_SIM_OUTPUTS="${CLEAN_SIM_OUTPUTS:-false}"

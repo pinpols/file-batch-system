@@ -205,8 +205,8 @@ subprocess.run(PG_PLAT + [
     "fr.metadata_json->>'loadedCount' as loaded,fr.metadata_json->>'skipThresholdExceeded' as threshold_exceeded "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
-    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
-    "join batch.file_record fr on fr.id = pi.file_id "
+    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id and pi.tenant_id=i.tenant_id "
+    "join batch.file_record fr on fr.id = pi.file_id and fr.tenant_id=pi.tenant_id "
     f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,fr.id"
 ], check=False)
 
@@ -216,9 +216,9 @@ subprocess.run(PG_PLAT + [
     "select tr.request_id,er.record_no,er.error_code,er.error_stage,er.is_skipped,er.skip_action "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
-    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
-    "join batch.file_record fr on fr.id = pi.file_id "
-    "join batch.file_error_record er on er.file_id = fr.id "
+    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id and pi.tenant_id=i.tenant_id "
+    "join batch.file_record fr on fr.id = pi.file_id and fr.tenant_id=pi.tenant_id "
+    "join batch.file_error_record er on er.file_id = fr.id and er.tenant_id=fr.tenant_id "
     f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,er.record_no,er.id"
 ], check=False)
 
@@ -235,9 +235,9 @@ error_summary = (psql("batch_platform", (
     "count(*) filter (where tr.request_id='" + rid_over + "' and er.is_skipped) "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
-    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
-    "join batch.file_record fr on fr.id = pi.file_id "
-    "join batch.file_error_record er on er.file_id = fr.id "
+    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id and pi.tenant_id=i.tenant_id "
+    "join batch.file_record fr on fr.id = pi.file_id and fr.tenant_id=pi.tenant_id "
+    "join batch.file_error_record er on er.file_id = fr.id and er.tenant_id=fr.tenant_id "
     "where tr.request_id in ('" + rid_under + "','" + rid_over + "')"
 ), tuples=True).stdout or "").strip()
 
