@@ -72,8 +72,11 @@ public class TaskControllerApplicationService {
         CannotAcquireLockException.class,
         TransientDataAccessException.class
       },
-      maxAttempts = 3,
-      backoff = @Backoff(delay = 50, multiplier = 2.0))
+      maxAttempts = 5,
+      // Citus 上同 instance 的并发 report 会撞分布式死锁(FOR UPDATE 锁多分区行,加锁顺序非确定)。
+      // 原 3 次/50ms→100ms 窗口太窄,等长退避还会让两个 report 同步重投再撞。改 5 次 + random jitter
+      // (delay~maxDelay 间随机)打散并发重试,吸收瞬时死锁,避免落到 SYSTEM 死信。
+      backoff = @Backoff(delay = 50, maxDelay = 1000, multiplier = 2.0, random = true))
   public void report(Long taskId, TaskExecutionReportDto request) {
     String errorCode =
         resolveFailureField(request.getErrorCode(), request.getCode(), request.isSuccess());

@@ -147,11 +147,18 @@ public class LoadStep implements ImportStageStep {
       PipelineStageProgressSink.clear();
       // M-5: 失败时故意不删除暂存文件（validatedRecordsPath / PARSED_RECORDS_PATH），
       // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
+      // 加载失败多为模板/数据问题(坏 SQL、缺表、配置非法),message 已表达根因;ERROR 留一行,堆栈降 DEBUG,
+      // 避免大量数据级失败刷屏。失败已封装进 ImportStageResult + 死信,不丢信息。
+      Object fid = context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
       log.error(
           "load stage (streaming) failed: tenantId={}, fileId={}, message={}",
           context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          ex.getMessage(),
+          fid,
+          ex.getMessage());
+      log.debug(
+          "load stage (streaming) failed stack: tenantId={}, fileId={}",
+          context.getTenantId(),
+          fid,
           ex);
       boolean configError = ex instanceof WorkerConfigException;
       return ImportStageResult.failure(
