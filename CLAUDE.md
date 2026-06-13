@@ -38,7 +38,7 @@
 - **主链**:`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`
 - Orchestrator 是**唯一**状态主机;Worker **不能直接写** `job_instance` / `workflow_run` / `workflow_node_run`
 - Worker 执行前**必须 CLAIM**
-- `outbox_event` 写入**必须与任务状态同事务**
+- `outbox_event` 写入**必须与任务状态同事务**,且**只经 `OutboxDomainEventPublisher` 单一入口**(守护 `OutboxWriteChokePointArchTest`)——分区后全局 `(tenant_id,event_key)` 唯一不可用 DB 约束表达,幂等承重在该入口的 `INSERT ... WHERE NOT EXISTS` + 上游聚合乐观锁;禁裸 `outboxEventMapper.insert(` 旁路。详见 [`docs/design/partition-idempotency-decision.md`](docs/design/partition-idempotency-decision.md)
 - **UNIQUE 约束是 upsert 幂等契约的承重墙**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上(如 `outbox_event(tenant_id,event_key)` / `job_instance(tenant_id,dedup_key,run_attempt)`)。**任何改 UNIQUE 列集的动作**(分区/分片/重建表/迁移)都是语义变更而非运维操作——动手前必须 `grep -r 'on conflict'` 全量核对 + 评审幂等语义。2026-06-10 血泪:分区脚本实跑致 orchestrator outbox 写入全失败回滚,详见 `scripts/db/partition-migration/01-*.sql` 头注释
 - Console-api **不能直接 UPDATE/DELETE** `outbox_event`;运维(cleanup / republish)走 `ConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*`
 - **读写分离仅 console-api**;trigger / orchestrator / worker 严禁引入(状态机依赖 read-after-write 强一致),详见 [`docs/runbook/read-replica.md`](docs/runbook/read-replica.md) §六

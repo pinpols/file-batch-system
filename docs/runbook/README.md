@@ -35,6 +35,7 @@
 | 13 | [read-replica.md](./read-replica.md) | Console-API 读写分离（PG streaming replication） |
 | 14 | [minio-lifecycle-policy.md](./minio-lifecycle-policy.md) | MinIO 桶生命周期策略（自动清理） |
 | 15 | [backup-and-pitr.md](./backup-and-pitr.md) | **PG 备份 / PITR / 容量护栏**（上线前必做:base+WAL+逻辑导出、恢复演练、磁盘告警） |
+| 16 | [citus-deployment.md](./citus-deployment.md) | **Citus 部署 / 单机↔Citus 切换**（待 go 决策:GUC、distribute、batch.citus.enabled、连接扇出、回滚） |
 
 ### 四、灰度 / 切换（特性开关）
 
