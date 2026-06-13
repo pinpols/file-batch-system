@@ -220,3 +220,21 @@ SELECT alter_distributed_table('batch.job_task', shard_count => 4, cascade_to_co
 | 14/20 dispatch | ⏸ blocked | worker-dispatch 重 build jar JDK25+AspectJ 慢启动(10min+),未起 |
 
 **实质成果**:11 stage 完整 PASS + 2 stage(16/21)功能验证通过(脚本受 worker 调度间隔);3 个 edge/适配(23/24/25)+ 2 个 dispatch(工具链)待。**核心 Citus 兼容性 + 主链路(trigger→orch→kafka→worker→report,含 storm 60 并发)在 4-shard Citus 上验证通过**。
+
+### 23/24/25 根因诊断(worker/scheduler 代码级,非环境/主链路)
+reshard 根治环境后,主链路 + 11 stage 通过;剩 3 个是 worker 代码细节的 Citus 适配:
+- **25 checkpoint-crash**:`PlatformFileRuntimeMapper.insertPipelineInstance` 的
+  `ON CONFLICT (tenant_id, related_job_instance_id) WHERE related_job_instance_id IS NOT NULL`
+  报 `no unique/exclusion constraint matching`。jar 内 mapper 确有 WHERE(非旧 jar),uk 部分索引
+  citus/单机都在(reshard 未丢),08(related_job_instance_id 有值)reshard 后 PASS;25 失败。
+  差异在 **checkpoint 模式**:pipeline_instance 先创建时 related_job_instance_id 为 null,
+  Citus distributed 表对 partial-index(带 WHERE 谓词)的 ON CONFLICT 推断比单机严格 → 不匹配。
+  修:worker-core checkpoint 创建逻辑 / 或部分索引谓词调整;需 rebuild worker-import(遇 AspectJ 慢)。
+  另:25 脚本 worker 重启已从 restart.sh(单机)改 env-citus 的 citus_restart_worker helper。
+- **23 import-stage2d**:skip_under_threshold 场景(1 坏行应低于阈值跳过校验→SUCCESS)实际
+  validate STATUS_INVALID。worker-import 的"坏行容错阈值"逻辑/配置在 Citus 未按预期跳过。
+- **24 trigger-stage6d**:cron-fire✓/pause✓,但 resume(sim-stage6d-trigger-resume.sql 清
+  trigger_runtime_state + enable)后 scheduler 180s 没重新 fire。trigger 调度器 resume 后
+  next-fire 恢复时序问题。
+**性质**:三者都是 partition-readiness 的 **worker/scheduler 业务逻辑** Citus 适配,非 SQL 方言/
+环境;每个需深入对应 worker 代码 + rebuild(JDK25 AspectJ 慢启动),宜作独立专项。
