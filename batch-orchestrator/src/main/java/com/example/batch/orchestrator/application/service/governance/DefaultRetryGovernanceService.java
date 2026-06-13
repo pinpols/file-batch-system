@@ -95,6 +95,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           "IMPORT_LOAD_CONFIG_INVALID",
           "EXPORT_GENERATE_CONFIG_INVALID",
           "STEP_NOT_FOUND",
+          // 永久性输入/数据错:畸形文件(XML/定长/分隔符)、空文件、坏 SQL/缺表 —— 同一输入重放永不自愈,
+          // 自动重试只会让永久失败的任务在 dead_letter 无限循环(实测 3 个夹具 → 653 行死信、replay_count 恒 1)。
+          // IMPORT_LOAD_FAILED 也含"load 时 DB 死锁"这类瞬时错,但那在 TaskController @Retryable 阶段已重试过,
+          // 到死信层仍失败即视为永久,不再自动重试(与上面 TIMEOUT 同理:重放不自愈)。
+          "IMPORT_PARSE_FAILED",
+          "IMPORT_PARSE_EMPTY",
+          "IMPORT_LOAD_FAILED",
           // 同一 payload / SQL 在相同 statement_timeout 下重放不会自愈；自动重试只会形成风暴。
           "TIMEOUT",
           "WORKER_EXECUTION_TIMEOUT");
