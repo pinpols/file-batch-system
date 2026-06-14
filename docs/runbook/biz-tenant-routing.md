@@ -22,6 +22,17 @@
 
 一套配置可混用(Tiered):多数租户 hash 进池化片,少数大租户 silo 独占。
 
+### 维护面:谁表驱动 / 谁配置驱动
+
+| 类别 | 内容 | 在哪 | 怎么维护 |
+|---|---|---|---|
+| **placement 映射** | 租户 → 哪片(`tenant→key`) | 表 `business_tenant_placement` | **console API 在线 CRUD + 审计**,即时生效(最迟一个缓存 TTL) |
+| **分片目录 / 拓扑登记** | 有哪些片 + 位置(host/port/db)+ 状态 | 表 `business_shard_catalog` | console API 在线登记(供「分片列表」视图 + placement key 白名单);**但生效仍需 worker 重启重建池** |
+| **路由策略** | `enabled` / `placementSource` / `pooledShardCount` / `shardMaximumPoolSize` / `placementCacheTtlMs` | 配置(env/yml) | **改配置 + 重启 worker**;无表、无 console |
+| **实际连接池(各片 url + 账密)** | worker 真正连哪些片、用什么凭据 | 配置 `routing.shards[*]` + **secrets/vault** | 改配置/secret + 重启;账密经 secret 后端注入(见 §9),**永不入表** |
+
+> 一句话:**「租户在哪片」是数据 → 表 + console 在线维护;「有哪些片/容量/策略/凭据」是拓扑与容量 → 配置 + secrets,变更是部署事件(改配置/重启),catalog 表只负责登记可见与校验,不负责让运行中的池动态增减。**
+
 ## 3. 架构与关键类
 
 ```
