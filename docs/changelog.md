@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-06-14
+- **CLAUDE.md §分支用途 改写:`citus` 分支冻结为只读参考**。原"2 条常驻活分支(main + citus 并排活跃轨道,定期 main→citus 同步)"改为"唯一常驻活分支 = main;citus 冻结(❄️ reference-only,停止同步,不再开发)"。决策依据:多租洪峰单机压测(`docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md`)实测瓶颈在控制面分层并发(launch 消费 + worker 认领,已修 20→62/s),**PG 写有 10-15× 余量、零锁争用 → Citus 解决的是未来才有的写墙,当前非杠杆**;且 biz 分区先于 biz 分片、真要上有 Azure 托管 Citus 路径 B。citus 降级为"时间点 POC + 薄保险",快照 tag `citus-poc-2026-06-14`;耐久学习资产在 `docs/{backlog,analysis,runbook,design}` + `scripts/db/citus/01-distribute.sql`,不在活分支。新增**解冻流程**(重审 main delta Citus 正确性 + 重跑 distribute + 重跑 sim)。`citus → main` 永不合(一直如此,不变)。main 的「新多租大表复合 PK 前瞻」规则继续生效以压低将来解冻成本。
+
 ### 2026-06-10
 - **CLAUDE.md §架构硬约束 新增「UNIQUE = upsert 幂等契约承重墙」**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上,改任何 UNIQUE 列集(分区/分片/重建/迁移)= 语义变更而非运维操作,动手前必须 `grep 'on conflict'` 全量核对 + 幂等语义评审。背景:2026-06-10 分区脚本实跑,分区键被迫进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)`,orchestrator outbox 写入全失败、主链中断后回滚(PR #448)。此前该假设是隐性的——本条款将其显式化为权威约束。
 - **CLAUDE.md §多租隔离 新增「新表 PK 前瞻」**:新建多租大表 PK 一律复合 `(tenant_id, id)`(或含分区键),禁单列 `id` PK。理由:Citus 可行性实扫(`docs/backlog/citus-introduction-plan-2026-06-06.md` §0.5,2026-06-10 复核仍成立)确认存量 23 张表单列 PK 是最大迁移阻塞(复合化重构估 12-20 周,`useGeneratedKeys` 已从 43 涨到 49 处),新表止血控制阻塞面增速。小字典/配置/系统表豁免。存量表**不迁移**(等 Citus 触发门槛满足后按 POC 推进)。
