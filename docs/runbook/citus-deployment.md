@@ -26,6 +26,20 @@ app(orchestrator/trigger/worker/console)
 - 本地 dev 起集群:`bash scripts/local/citus-cluster.sh up`(1 coord + 2 worker,自动注册 + 配 GUC)
 - 生产:coordinator + N worker,每 worker 可选流复制副本做 HA(起步可单写)。**生产 docker-compose / Helm 产物属部署交付物,见 §6。**
 
+## 1b. 节点横向扩展在 Citus 下的边界
+
+**应用层不变**:orchestrator / trigger / worker / console 在 Citus 版**与单机版完全相同**——同一套双栈代码,仍是无状态、按 Kafka 分区 + outbox 分片 + ShedLock + StatefulSet 稳定身份水平扩。Citus 只动数据层,不改应用层无状态性。
+
+**Citus 把数据层共享天花板摊开**(单 PG 的写入/存储瓶颈 → 按 `tenant_id` 分片到多 worker 节点),但应用节点的扩展因此多 3 个数据层约束:
+
+| # | 约束 | 含义 | 详见 |
+|---|---|---|---|
+| ① | **连接扇出** | app Hikari 池 **× 分片数**在 coordinator 放大,默认配置秒打爆 `too many clients`;扩 app 节点不再线性加连接,须守三元组 `Σ(app 池) ≤ citus.max_shared_pool_size ≤ worker max_connections` | §2 / §4;实测 `docs/analysis/citus-w8-runtime-findings-2026-06-11.md` §连接三元组 |
+| ② | **协调器是新汇聚点** | 所有 app 查询经 coordinator 路由/扇出(等同今天的单 PG 入口,见 §1)。它**路由不执行**,比单 PG 扛全部活轻,但仍是中心漏斗——不是"无限免费扩"。HA 走 Patroni 原生 Citus 模式(coordinator 也要主备),不是单点 | §1 |
+| ③ | **业务库分布化是计划、未验** | 当前 sim/POC(`scripts/sim/env-citus.sh`)**只把平台 `batch.*` 分布式化**,`biz.*` 仍走原单机 PG(`batch_business_part`)——业务数据扩展这块**还是单机 PG 的故事**。§3.4 部署计划打算把 business 也 distribute,但**尚未在真集群验证**,属待验缺口 | §3.4 |
+
+**与吞吐结论的闭环**:当前实测瓶颈在控制面(launch 消费并发 / claim 争用,~20→33 jobs/s,见 `docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md`),**不在 PG**。所以上面数据层的横向扩展收益,要等控制面并发先拉满(launch 消费并发 + outbox 分片)、瓶颈真的回到 PG 之后才兑现——这也是门槛①②"单机榨干"未达前不启用 Citus 的原因。
+
 ## 2. 必配 GUC(coordinator,`ALTER SYSTEM` + reload)
 
 这三个**漏配会出静默故障**,`CitusRuntimeStartupCheck` 启动期会拦前两个:
