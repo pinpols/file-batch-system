@@ -1,6 +1,11 @@
 -- Stage 3b Export source data.
 -- Required psql variable: batch_no
 
+-- 先清理本 stage 专用的 EXP3B-% 行再 seed:固定 40 行(generate_series 1..40),保证 Stage 3b
+-- 的 4 分片 keyset 导出行数断言(40)精确可复现。原仅 ON CONFLICT 幂等,无法清除历史更大范围
+-- seed 残留(如旧版曾生成 1..80),导致行数累积、断言 4|4|4|40 漂移成 80。范围限 tenant=ta + EXP3B-%。
+DELETE FROM biz.customer_account WHERE tenant_id = 'ta' AND customer_no LIKE 'EXP3B-%';
+
 INSERT INTO biz.customer_account (
     tenant_id, customer_no, customer_name, customer_type, certificate_no,
     mobile_no, email, status, source_file_name, source_batch_no, source_trace_id,
