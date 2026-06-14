@@ -1,0 +1,149 @@
+# Runbook · biz 多租户分片路由(tenant-routing / Tiered)
+
+> 应用层把租户路由到不同 biz PG 实例的能力。**自研、零依赖**(不引 Citus / ShardingSphere),
+> 走 Spring `AbstractRoutingDataSource`。设计背景见 `docs/plans/biz-tiered-tenancy-plan-2026-06-14.md`
+> 与 `docs/analysis/scaling-state-and-biz-path-2026-06-14.md`。RLS(片内租户隔离)是正交的另一层,
+> 见 `docs/runbook/multi-tenant-rls.md`。
+
+## 1. 它解决什么 / 不解决什么
+
+- **解决**:biz 数据层水平扩展——把租户分到多片 PG(池化 shard + 大租户 silo 独占),突破单实例上限。
+- **不解决**:控制面吞吐(瓶颈在 orchestrator launch 消费,见 throughput 分析)、平台库(`batch.*`)扩展。
+- **为什么不是 Citus**:RLS 在 Citus 分布表上失效(GUC 不跨节点传播,PoC 实证返 0 行/写报错);
+  且当前无多租洪峰写墙需求(PG 写有 10-15× 余量)。tenant-routing 用 vanilla PG,对标 Notion(480 片)/ Figma(自研 DBProxy)。
+
+## 2. 三层模型(Tiered)
+
+| 层 | 含义 | 本能力对应 |
+|---|---|---|
+| Pool | 共享库 + RLS(现状) | 单片(`routing.enabled=false`,默认) |
+| Pooled-sharding | 多租户共享一片,片内 RLS | `shard-0..N-1`,hash 路由 |
+| Silo | 单租户独占一片 | `silo-*`,placement 表/config 指派 |
+
+一套配置可混用(Tiered):多数租户 hash 进池化片,少数大租户 silo 独占。
+
+## 3. 架构与关键类
+
+```
+请求(带 RLS tenant 上下文 RlsTenantContextHolder)
+  └─ BusinessRoutingDataSource (extends AbstractRoutingDataSource)
+       └─ determineCurrentLookupKey() = resolver.resolve(currentTenant)
+            ├─ CONFIG: HashAndSiloPlacementResolver  (hash 取模 + siloOverrides)
+            └─ TABLE : DbTablePlacementResolver       (placement 表覆盖 + hash 兜底)
+       └─ 选中 placement key → 对应 shard 的 HikariDataSource
+```
+
+| 关注点 | 类 / 文件 | 位置 |
+|---|---|---|
+| placement 接口 | `BusinessPlacementResolver` | batch-common `tenant/routing` |
+| hash + silo | `HashAndSiloPlacementResolver` | 同上 |
+| 表驱动 + 缓存兜底 | `DbTablePlacementResolver` | 同上 |
+| placement 表读(MyBatis) | `BusinessTenantPlacementMapper`(+XML)/ `MyBatisTenantPlacementRepository` / `BusinessTenantPlacementEntity` | batch-common |
+| 路由数据源 | `BusinessRoutingDataSource` / `BusinessRoutingDataSourceFactory`(single/multiShard) | 同上 |
+| 装配收敛 | `BusinessDataSourceBuilder` / `BusinessPlacementResolverFactory` | batch-common `config` |
+| 配置 | `BusinessRoutingProperties`(`batch.datasource.business.routing`) | 同上 |
+| placement 表 | `V170__business_tenant_placement.sql` | db/migration |
+| worker 接线 | 各 `BusinessDataSourceConfiguration` | import / export / process |
+
+> 只有 import / export / process 三个 worker 持有 biz 数据源;dispatch / atomic / SDK 不碰 biz,无需改。
+
+## 4. 事务与凭据(设计约束)
+
+- **事务**:单租户的一个 task 只落**一片**,事务在该片内完成,**不跨片、无 XA**。路由 key 在事务开始前由
+  tenant 上下文确定,事务内稳定。跨片操作不是本能力范畴(批批语义下不需要)。
+- **凭据**:每片账密走 **secrets / vault**(`secrets/biz-shards/<key>.env` 或 K8s Secret),
+  **绝不入 placement 表**。placement 表只存 `tenant → key`。对标 Hibernate MultiTenantConnectionProvider /
+  Azure Shard Map Manager(catalog 存 location 不存 credential)。
+
+## 5. placement 来源:CONFIG vs TABLE
+
+`batch.datasource.business.routing.placement-source`:
+
+- **CONFIG**(默认):hash 取模(`pooled-shard-count`)+ `silo-overrides` Map。改 placement = 改配置 + 重启。
+- **TABLE**:读 `batch.business_tenant_placement`(platform 库,运维/租户在线维护),**表命中优先**,
+  未登记的租户退回 hash。整表缓存 `placement-cache-ttl-ms`(默认 5s),迁片登记最迟一个 TTL 生效。
+  表缺失/读失败 **fail-open** 退回 hash(路由不因维护表中断)。
+
+迁片/silo 指派(TABLE 模式):
+```sql
+INSERT INTO batch.business_tenant_placement (tenant_id, placement_key, updated_by)
+VALUES ('big-corp', 'silo-big', 'ops:alice')
+ON CONFLICT (tenant_id) DO UPDATE SET placement_key = EXCLUDED.placement_key, updated_at = now();
+```
+
+## 6. DB 账户模型(每片 PG,least privilege)
+
+| 角色 | 用途 | 权限 | 谁用 |
+|---|---|---|---|
+| `batch_business_writer` | 应用读写 | DML on biz.*,**RLS 生效** | worker 路由数据源 |
+| `batch_business_admin` | 跨租聚合 / forensic | DML,**BYPASSRLS** | 平台,审计;禁给 worker |
+| `batch_business_readonly` | 单租户排故 | **SELECT only**,RLS 生效 | 人(连后 `SET LOCAL app.tenant_id`) |
+| `batch_business_readonly_all` | 跨租户排故 / 对账 | **SELECT only**,BYPASSRLS | 人,审计 + 限人 |
+
+脚本:`scripts/db/business/rls-phase-a.sql`(writer/admin + 授权 + RLS)、
+`scripts/db/business/diagnostic-readonly-role.sql`(两只读角色)。
+
+- **应用账户用 `batch_business_writer`,不要 superuser**(superuser 被 RLS 豁免 = 隔离失效)。
+  dev 的 `shard-*.env.example` 用 `batch_user`(superuser)**仅 dev 简化**,prod 必须改。
+- **排故**:单租户问题用 `readonly`,跨租用 `readonly_all`;**绝不用 writer 排故**(会误写)。
+
+## 7. 开一片(本地 / 幂等)
+
+```sh
+scripts/local/provision-biz-shard.sh <placement-key> <host-port>
+# 例: scripts/local/provision-biz-shard.sh shard-1 15442
+#     scripts/local/provision-biz-shard.sh silo-big 15443
+```
+一次完成:起 PG → 建库建表 → rls-phase-a(角色+授权+RLS)→ 只读角色 → 写 secret(存在不覆盖)。可重跑。
+compose 里 `postgres-biz-shard-1`(profile `biz-shard`)是 shard-1 的「生产形态」声明。
+
+## 8. 启用多片路由(配置)
+
+默认 `enabled=false` = 单片无损(全租户落 shard-0 = 现库,零行为变更)。开启示例(env / relaxed binding):
+
+```
+BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED=true
+BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE=TABLE   # 或 CONFIG
+BATCH_DATASOURCE_BUSINESS_ROUTING_POOLED_SHARD_COUNT=2
+# 每片凭据从 secrets 注入(key 必须含 default shard-0):
+BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_0_KEY=shard-0
+BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_0_URL=...
+BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_0_USERNAME=batch_business_writer
+BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_0_PASSWORD=...
+BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_1_KEY=shard-1
+BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_1_URL=...
+...
+```
+约束:`shards` 的 key 必须覆盖 resolver 可能返回的全部 key(含 default `shard-0` + 各 silo);
+`pooled-shard-count` 须与 `shard-0..N-1` 数量一致;缺 default key 装配直接拒绝。
+
+## 9. 验证
+
+```sh
+scripts/local/verify-biz-shard.sh
+```
+对两片真实 PG(shard-0=primary、shard-1=provision)跑活体:经路由 DS 读回每片 `__shard_identity`,
+证明每个租户连接物理落到 resolver 选定实例;并证明 TABLE 模式表覆盖 hash、未登记走 hash。
+单测:`HashAndSiloPlacementResolverTest` / `BusinessRoutingDataSource*Test` / `DbTablePlacementResolverTest`。
+活体测试 env-gated(`BIZ_SHARD_0_URL` 未设自动跳过),不进常规 CI。
+
+## 10. 生产激活清单(代码外的 ops 动作)
+
+代码 / 本地基础设施已闭环;真正上量需要:
+
+1. **N 个真实 PG 主机**(非单机多容器);各跑 provision 的等价(建库表 + rls-phase-a + 只读角色)。
+2. **secrets 接真实后端**(Vault / KMS / K8s Secret),应用账户切 `batch_business_writer`(非 superuser)。
+3. **placement 表填真实租户**(TABLE 模式):silo 指派 / 迁片登记走运维流程。
+4. **容量与再平衡**:pooled 片满了加片需 rehash(`pooled-shard-count` 变更会改 hash 落点)——
+   迁移期用 placement 表把受影响租户钉到原片,避免 rehash 抖动;新租户走新分母。
+5. **监控**:每片连接池 / 慢查 / biz 大表增长告警(已有增长告警,见监控)。
+
+## 11. 故障排查
+
+| 现象 | 排查 |
+|---|---|
+| 路由到错片 | 查 `business_tenant_placement` 该租户行;TABLE 缓存未刷可等一个 TTL 或重启;确认 `pooled-shard-count` 与片数一致 |
+| 某租户看不到数据 | 大概率连错片或 RLS 未 `SET LOCAL app.tenant_id`;用 `batch_business_readonly` 连对应片核 |
+| 启用多片后启动失败 | `shards` 缺 default key `shard-0`;或某片凭据/URL 错、片未 provision |
+| placement 表读不到 | fail-open 会退 hash + 打 WARN `load business_tenant_placement failed`;查 platform 库表是否建(V170)与授权 |
+| 排故该用哪个账户 | 单租户 `batch_business_readonly`;跨租 `batch_business_readonly_all`;**不要** writer / superuser |
