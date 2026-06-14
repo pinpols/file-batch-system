@@ -195,3 +195,29 @@ scripts/local/verify-biz-shard.sh
 | 启用多片后启动失败 | `shards` 缺 default key `shard-0`;或某片凭据/URL 错、片未 provision |
 | placement 表读不到 | fail-open 会退 hash + 打 WARN `load business_tenant_placement failed`;查 platform 库表是否建(V170)与授权 |
 | 排故该用哪个账户 | 单租户 `batch_business_readonly`;跨租 `batch_business_readonly_all`;**不要** writer / superuser |
+
+## 13. biz 表分区(片内,与分片正交)
+
+分片把租户摊到多片;**分区**解决「单片内单表仍大」。两者正交,分片不强制分区。PG 声明式分区要求
+**分区键必须进 PK + 每个 UNIQUE**——这是改造点与阻塞所在。`create_biz_tables.sql` 是规范 schema(biz 不走 Flyway)。
+
+已落地(`create_biz_tables.sql`,真实 PG 验证幂等/FK/路由):
+
+| 表 | 方案 | PK | 说明 |
+|---|---|---|---|
+| `customer_account` | HASH(tenant_id) ×4 | (tenant_id, id) | 实体表;UNIQUE 已含 tenant_id,**幂等不变** |
+| `settlement_batch` | HASH(tenant_id) ×4 | (tenant_id, id) | FK 父;复合 PK 让子表 FK 能引用 |
+| `settlement_detail` | HASH(tenant_id) ×4 | (tenant_id, id) | FK 改复合 `(tenant_id, batch_id)→settlement_batch(tenant_id,id)` |
+| `risk_score` | RANGE(score_date) + DEFAULT | (tenant_id, score_date, id) | UNIQUE 已含 score_date,**幂等不变**;后续可按月切分区 + archive |
+
+> HASH 选 tenant_id 的关键好处:所有 biz UNIQUE 本就含 tenant_id → **只重建 PK,不动 UNIQUE、不动 ON CONFLICT、不动模板** = 幂等中性。
+
+未做(需先改 UNIQUE → 牵动模板 `conflictColumns` + 幂等语义,单独评审):
+
+- `transaction`(RANGE txn_date):UNIQUE `(tenant_id, txn_no)` → 须加 `txn_date`,ON CONFLICT 变 `(tenant_id, txn_no, txn_date)`,
+  且模板 `IMP-TRANSACTION-CSV` 的 conflictColumns(运行时定义 + e2e seed 多处)须同步。仅当 txn_date 对 txn_no 不变时幂等等价。
+- `risk_alert`(RANGE alert_date):同理 UNIQUE 须加 `alert_date`;先确认其写入是否走 ON CONFLICT。
+
+**存量数据迁移**:`create_biz_tables.sql` 的 `CREATE TABLE IF NOT EXISTS` 只对新库/新片生效,**不会重分区已存在的非分区表**。
+已上线的 biz 库要分区须走维护窗口的重建迁移(建分区新表 → 拷数据 → 切换 → 重建 FK),先在副本演练,
+动手前 `grep -ri 'on conflict'` 全量核对幂等(项目硬规则)。
