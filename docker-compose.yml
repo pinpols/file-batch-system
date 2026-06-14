@@ -95,6 +95,41 @@ services:
       retries: 12
       start_period: 30s
 
+  # P2 tenant-routing: biz 第二片 PG 实例(shard-1)。shard-0 = postgres-primary 的 batch_business。
+  # 独立 PG 进程 + 独立数据卷,验证应用层按租户路由到不同物理实例(非 Citus、非分布表)。
+  # `--profile biz-shard` 启用:docker compose --profile biz-shard up -d postgres-biz-shard-1
+  # 默认不启,基线启动不受影响(零行为变更,与单片路由 default 一致)。
+  postgres-biz-shard-1:
+    profiles: ["biz-shard"]
+    image: postgres:${POSTGRES_IMAGE_TAG}
+    container_name: batch-postgres-biz-shard-1
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+    environment:
+      # initdb 引导库用平台同名账号体系(凭据本身经 secrets 注入应用,见 secrets/biz-shards/)
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --auth-host=scram-sha-256"
+      <<: *common-runtime-env
+      PGTZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+    ports:
+      - "${BIZ_SHARD_1_PORT:-15442}:5432"
+    volumes:
+      - postgres-biz-shard-1-data:/var/lib/postgresql/data
+      - ./docker/postgres-biz-shard-1/init:/docker-entrypoint-initdb.d:ro
+      - ./scripts/db/business/create_biz_tables.sql:/biz-sql/create_biz_tables.sql:ro
+    networks:
+      - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d batch_business"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   kafka:
     image: apache/kafka:${KAFKA_IMAGE_TAG}
     container_name: batch-kafka
@@ -216,6 +251,7 @@ services:
 volumes:
   postgres-primary-data:
   postgres-replica-data:
+  postgres-biz-shard-1-data:
   kafka-data:
   minio-data:
   valkey-data:
