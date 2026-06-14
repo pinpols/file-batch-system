@@ -52,6 +52,10 @@ public final class BusinessRoutingDataSourceFactory {
     BusinessRoutingDataSource routing = new BusinessRoutingDataSource(resolver);
     routing.setTargetDataSources(new HashMap<Object, Object>(shards));
     routing.setDefaultTargetDataSource(fallback);
+    // 关 lenientFallback:resolver 返回未配置的 key(typo silo / 迁片到不存在的片)时**硬失败**,
+    // 而非静默降级到 default(shard-0)。静默降级会把该租户数据写到错误分片且无报错(数据污染),
+    // 宁可该租户 task 当场抛错暴露配置问题。无租户上下文 → resolver 返 shard-0(已配置)不受影响。
+    routing.setLenientFallback(false);
     routing.afterPropertiesSet();
     return routing;
   }

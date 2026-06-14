@@ -38,7 +38,12 @@ public class BusinessRoutingProperties {
   /** placement 来源:CONFIG(默认,hash + siloOverrides)或 TABLE(表覆盖 + hash 兜底)。 */
   private PlacementSource placementSource = PlacementSource.CONFIG;
 
-  /** TABLE 模式下 placement 映射整表缓存 TTL(ms),过期触发重载;迁片登记最迟一个 TTL 生效。 */
+  /**
+   * TABLE 模式下 placement 映射整表缓存 TTL(ms),过期触发重载;迁片登记最迟一个 TTL 生效。
+   *
+   * <p>⚠️ 设为 0 = 每次路由决策(每次 getConnection)都查 platform 库,会把 platform 库负载与 biz 路由延迟直接耦合,
+   * 仅测试用;生产保持秒级(默认 5s)。
+   */
   private long placementCacheTtlMs = 5000L;
 
   /** 池化片数量(hash 取模分母),须与 shards 中 shard-0..N-1 的数量一致。 */
