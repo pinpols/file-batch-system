@@ -88,10 +88,12 @@
                bypass (netty-handler) + CVE-2026-44894 QUIC token handler (netty-codec-classes-quic)
              - bcprov-jdk18on 1.81 → 1.84: CVE-2026-5598 私钥泄漏 (非常量时间比较)
              - postgresql 42.7.10 → 42.7.11: CVE-2026-42198
+             - spring-kafka 4.0.5 → 4.0.6 (2026-06-14): CVE-2026-41731 trusted-package 过宽反序列化 (HIGH)
              SpringBoot 升级到 4.0.7+ 时这些可能不再需要，届时 review 移除。 -->
         <netty.version>4.2.15.Final</netty.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <postgresql.version>42.7.11</postgresql.version>
+        <spring-kafka.version>4.0.6</spring-kafka.version>
 
         <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
              2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4.0.6 + JDK25 是否能跑。
