@@ -9,6 +9,7 @@ import com.example.batch.common.config.BusinessRoutingProperties;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import com.example.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
+import com.example.batch.console.mapper.ConsoleBusinessShardCatalogMapper;
 import com.example.batch.console.mapper.ConsoleBusinessTenantPlacementMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -20,19 +21,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ConsoleBusinessTenantPlacementServiceTest {
 
   @Mock private ConsoleBusinessTenantPlacementMapper placementMapper;
+  @Mock private ConsoleBusinessShardCatalogMapper shardCatalogMapper;
 
-  private ConsoleBusinessTenantPlacementService service(BusinessRoutingProperties routing) {
-    return new ConsoleBusinessTenantPlacementService(placementMapper, routing);
+  private ConsoleBusinessTenantPlacementService service() {
+    return new ConsoleBusinessTenantPlacementService(
+        placementMapper, shardCatalogMapper, new BusinessRoutingProperties());
   }
 
-  private static BusinessRoutingProperties shards(String... keys) {
-    BusinessRoutingProperties props = new BusinessRoutingProperties();
-    for (String key : keys) {
-      BusinessRoutingProperties.Shard shard = new BusinessRoutingProperties.Shard();
-      shard.setKey(key);
-      props.getShards().add(shard);
-    }
-    return props;
+  private static BusinessTenantPlacementUpsertParam param(String key) {
+    return BusinessTenantPlacementUpsertParam.builder()
+        .tenantId("t-1")
+        .placementKey(key)
+        .operator("ops:alice")
+        .build();
   }
 
   @Test
@@ -42,7 +43,7 @@ class ConsoleBusinessTenantPlacementServiceTest {
     row.setPlacementKey("silo-big");
     when(placementMapper.findAll()).thenReturn(List.of(row));
 
-    assertThat(service(new BusinessRoutingProperties()).list())
+    assertThat(service().list())
         .singleElement()
         .extracting(BusinessTenantPlacementEntity::getPlacementKey)
         .isEqualTo("silo-big");
@@ -50,40 +51,26 @@ class ConsoleBusinessTenantPlacementServiceTest {
   }
 
   @Test
-  void upsertShouldDelegateToMapper_whenNoShardsConfigured() {
-    BusinessTenantPlacementUpsertParam param =
-        BusinessTenantPlacementUpsertParam.builder()
-            .tenantId("t-1")
-            .placementKey("shard-1")
-            .operator("ops:alice")
-            .build();
-    // 未配 shards → 不校验,直接落库(运行时 lenientFallback=false 兜底)
-    service(new BusinessRoutingProperties()).upsert(param);
-    verify(placementMapper).upsert(param);
+  void upsertShouldProceed_whenNoCatalogOrShardsConfigured() {
+    when(shardCatalogMapper.findEnabledKeys()).thenReturn(List.of());
+    BusinessTenantPlacementUpsertParam p = param("shard-1");
+    service().upsert(p);
+    verify(placementMapper).upsert(p);
   }
 
   @Test
-  void upsertShouldAcceptConfiguredKey() {
-    BusinessTenantPlacementUpsertParam param =
-        BusinessTenantPlacementUpsertParam.builder()
-            .tenantId("t-1")
-            .placementKey("silo-big")
-            .operator("ops:alice")
-            .build();
-    service(shards("shard-0", "shard-1", "silo-big")).upsert(param);
-    verify(placementMapper).upsert(param);
+  void upsertShouldAcceptKeyInCatalog() {
+    when(shardCatalogMapper.findEnabledKeys())
+        .thenReturn(List.of("shard-0", "shard-1", "silo-big"));
+    BusinessTenantPlacementUpsertParam p = param("silo-big");
+    service().upsert(p);
+    verify(placementMapper).upsert(p);
   }
 
   @Test
-  void upsertShouldRejectUnknownKey_whenShardsConfigured() {
-    BusinessTenantPlacementUpsertParam param =
-        BusinessTenantPlacementUpsertParam.builder()
-            .tenantId("t-1")
-            .placementKey("silo-typo")
-            .operator("ops:alice")
-            .build();
-    assertThatThrownBy(() -> service(shards("shard-0", "shard-1")).upsert(param))
-        .isInstanceOf(BizException.class);
+  void upsertShouldRejectKeyNotInCatalog() {
+    when(shardCatalogMapper.findEnabledKeys()).thenReturn(List.of("shard-0", "shard-1"));
+    assertThatThrownBy(() -> service().upsert(param("silo-typo"))).isInstanceOf(BizException.class);
   }
 
   @Test
@@ -91,7 +78,7 @@ class ConsoleBusinessTenantPlacementServiceTest {
     when(placementMapper.deleteByTenant("t-1")).thenReturn(1);
     when(placementMapper.deleteByTenant("t-absent")).thenReturn(0);
 
-    ConsoleBusinessTenantPlacementService svc = service(new BusinessRoutingProperties());
+    ConsoleBusinessTenantPlacementService svc = service();
     assertThat(svc.delete("t-1")).isTrue();
     assertThat(svc.delete("t-absent")).isFalse();
   }

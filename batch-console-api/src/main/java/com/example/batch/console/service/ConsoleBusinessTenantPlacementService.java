@@ -5,6 +5,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import com.example.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
+import com.example.batch.console.mapper.ConsoleBusinessShardCatalogMapper;
 import com.example.batch.console.mapper.ConsoleBusinessTenantPlacementMapper;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleBusinessTenantPlacementService {
 
   private final ConsoleBusinessTenantPlacementMapper placementMapper;
+  private final ConsoleBusinessShardCatalogMapper shardCatalogMapper;
   private final BusinessRoutingProperties routingProperties;
 
   public List<BusinessTenantPlacementEntity> list() {
@@ -53,9 +55,15 @@ public class ConsoleBusinessTenantPlacementService {
     return placementMapper.deleteByTenant(tenantId) > 0;
   }
 
-  /** console 侧已配置的片 key 集合;未配 shards 时返回空(表示不校验)。 */
+  /**
+   * placement 指派的合法 key 集合,优先级:shard catalog(enabled 片,权威)→ routing.shards 配置 → 空(不校验)。
+   * 空集合表示无可校验源,跳过(运行时 lenientFallback=false 兜底)。
+   */
   private Set<String> configuredShardKeys() {
-    Set<String> keys = new LinkedHashSet<>();
+    Set<String> keys = new LinkedHashSet<>(shardCatalogMapper.findEnabledKeys());
+    if (!keys.isEmpty()) {
+      return keys;
+    }
     for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
       if (shard.getKey() != null && !shard.getKey().isBlank()) {
         keys.add(shard.getKey());
