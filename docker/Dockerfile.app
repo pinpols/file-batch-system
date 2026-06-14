@@ -78,7 +78,7 @@ RUN groupadd --system --gid 1000 batch \
 COPY --from=builder /workspace/${MODULE}/target/ /tmp/build/
 RUN set -eux; \
     jar=""; \
-    for f in /tmp/build/${MODULE}-*.jar; do \
+    for f in /tmp/build/"${MODULE}"-*.jar; do \
         case "$f" in *sources*|*javadoc*|*original*) continue ;; esac; \
         [ -f "$f" ] || continue; \
         jar="$f"; \
