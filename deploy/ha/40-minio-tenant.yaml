@@ -1,5 +1,8 @@
 # 阶段 2 · 对象存储 HA(MinIO Operator,distributed Tenant 纠删码)。
-# 4 节点起步(EC:2 → 容忍 2 盘/节点故障);承文件交付 + PG WAL/备份。
+# 4 节点 × 4 盘 = 16 drive,1 个 erasure set。
+# ⚠️ parity 必须 ≥ 单节点盘数(=4)才能扛住"1 整节点宕":本清单 server 已做节点级反亲和,
+#    挂 1 个 node = 一次丢 4 盘。EC:2 只扛 2 盘 → 单节点故障即不可用(原注释 "EC:2 容忍节点故障" 是错的)。
+#    故显式锁 EC:4(spec.env MINIO_STORAGE_CLASS_STANDARD),读写均可在 1 节点全宕下继续。
 # 前置:已装 MinIO Operator。应用侧 object store 重试 + bounded read 已在仓。
 #
 # 占位符:STORAGE_CLASS / 镜像版本 / 容量 / 凭据 secret。
@@ -15,6 +18,11 @@ spec:
   image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z   # 与本仓一致
   configuration:
     name: batch-minio-creds          # ← 上面建的 secret
+  # 纠删码 parity 显式锁 EC:4 —— 16 drive 下 MinIO 默认即 EC:4,这里写死防漂移,
+  # 保证"挂 1 整节点(4 盘)"仍可读写(parity=单节点盘数)。
+  env:
+    - name: MINIO_STORAGE_CLASS_STANDARD
+      value: "EC:4"
   pools:
     - name: pool-0
       servers: 4                     # 4 节点(分布式纠删码最小推荐)
@@ -42,4 +50,8 @@ spec:
   requestAutoCert: false             # 内网无 TLS;有 CA 则开
   buckets:
     - name: batch-files              # 文件交付
-    - name: batch-pgbackup           # PG WAL/备份目标(对应 postgres CR 的 S3 endpoint)
+    # ⚠️ batch-pgbackup 仅 dev/staging 用。生产严禁把 PG 备份放在这个集群内 MinIO ——
+    #    它和应用对象存储是同一故障域,MinIO 整体故障(或集群级灾难)会同时带走数据与备份,
+    #    备份失去意义。生产 PG WAL/备份必须指向**集群外独立故障域**(异地 S3 / 另一存储栈),
+    #    见 10-postgres-zalando.yaml 的 WAL 归档 endpoint 说明。
+    - name: batch-pgbackup           # 仅 dev/staging:PG WAL/备份目标
