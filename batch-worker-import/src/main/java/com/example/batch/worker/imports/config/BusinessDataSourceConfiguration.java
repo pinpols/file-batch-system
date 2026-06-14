@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.config;
 import com.example.batch.common.config.BatchPgSessionProperties;
 import com.example.batch.common.config.BusinessDataSourceProperties;
 import com.example.batch.common.config.HikariPgSessionSupport;
+import com.example.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
@@ -66,7 +67,9 @@ public class BusinessDataSourceConfiguration {
     }
     String appName = environment.getProperty("spring.application.name", "batch-worker-import");
     HikariPgSessionSupport.applyBusiness(hikariConfig, pgSessionProperties, appName + "-business");
-    return new HikariDataSource(hikariConfig);
+    // P1-2:把现有 Hikari 包成 biz 路由 DataSource(单片 shard-0=现库,零行为变更),
+    // 建立按租户路由 seam;P2 扩多片只改装配,下游(SqlSessionFactory)不动。
+    return BusinessRoutingDataSourceFactory.singleShard(new HikariDataSource(hikariConfig));
   }
 
   @Bean(name = "importBusinessSqlSessionFactory")
