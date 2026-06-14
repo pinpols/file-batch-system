@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleBusinessShardCatalogMapper">
+
+    <resultMap id="catalogMap"
+               type="com.example.batch.console.domain.entity.BusinessShardCatalogEntity">
+        <id column="placement_key" property="placementKey"/>
+        <result column="host" property="host"/>
+        <result column="port" property="port"/>
+        <result column="db_name" property="dbName"/>
+        <result column="secret_ref" property="secretRef"/>
+        <result column="pool_max_size" property="poolMaxSize"/>
+        <result column="enabled" property="enabled"/>
+        <result column="description" property="description"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="updated_by" property="updatedBy"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="catalogMap">
+        select placement_key, host, port, db_name, secret_ref, pool_max_size,
+               enabled, description, updated_at, updated_by
+          from batch.business_shard_catalog
+         order by placement_key
+    </select>
+
+    <select id="findEnabledKeys" resultType="java.lang.String">
+        select placement_key from batch.business_shard_catalog where enabled = true
+    </select>
+
+    <insert id="upsert">
+        insert into batch.business_shard_catalog (
+            placement_key, host, port, db_name, secret_ref, pool_max_size, enabled,
+            description, updated_by
+        ) values (
+            #{p.placementKey}, #{p.host}, #{p.port}, #{p.dbName}, #{p.secretRef},
+            #{p.poolMaxSize}, #{p.enabled}, #{p.description}, #{p.operator}
+        )
+        on conflict (placement_key) do update
+            set host          = #{p.host},
+                port          = #{p.port},
+                db_name       = #{p.dbName},
+                secret_ref    = #{p.secretRef},
+                pool_max_size = #{p.poolMaxSize},
+                enabled       = #{p.enabled},
+                description   = #{p.description},
+                updated_by    = #{p.operator},
+                updated_at    = current_timestamp
+    </insert>
+
+    <delete id="deleteByKey">
+        delete from batch.business_shard_catalog where placement_key = #{placementKey}
+    </delete>
+
+</mapper>

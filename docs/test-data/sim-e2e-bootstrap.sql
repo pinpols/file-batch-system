@@ -353,7 +353,7 @@ SET query_param_schema = '{
           {"from": "txn_date", "to": "txn_date"},
           {"from": "remark", "to": "remark"}
         ],
-        "conflictColumns": ["tenant_id", "txn_no"]
+        "conflictColumns": ["tenant_id", "txn_no", "txn_date"]
       }
     }'::jsonb,
     load_target_ref = 'jdbc_mapped',
