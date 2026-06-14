@@ -43,6 +43,8 @@
 | 装配收敛 | `BusinessDataSourceBuilder` / `BusinessPlacementResolverFactory` | batch-common `config` |
 | 配置 | `BusinessRoutingProperties`(`batch.datasource.business.routing`) | 同上 |
 | placement 表 | `V170__business_tenant_placement.sql` | db/migration |
+| shard catalog 表 | `V171__business_shard_catalog.sql`(拓扑登记 + key 白名单源) | db/migration |
+| console 管理 API | `ConsoleBusinessTenantPlacement*` / `ConsoleBusinessShardCatalog*`(`/api/console/ops/tenant-placements`、`/shard-catalog`) | batch-console-api |
 | worker 接线 | 各 `BusinessDataSourceConfiguration` | import / export / process |
 
 > 只有 import / export / process 三个 worker 持有 biz 数据源;dispatch / atomic / SDK 不碰 biz,无需改。
@@ -61,8 +63,9 @@
 
 - **CONFIG**(默认):hash 取模(`pooled-shard-count`)+ `silo-overrides` Map。改 placement = 改配置 + 重启。
 - **TABLE**:读 `batch.business_tenant_placement`(platform 库,运维/租户在线维护),**表命中优先**,
-  未登记的租户退回 hash。整表缓存 `placement-cache-ttl-ms`(默认 5s),迁片登记最迟一个 TTL 生效。
-  表缺失/读失败 **fail-open** 退回 hash(路由不因维护表中断)。
+  未登记的租户退回 hash。整表缓存 `placement-cache-ttl-ms`(默认 5s,**0=每次查库仅测试用**),迁片登记最迟一个 TTL 生效。
+  降级区分:**已有缓存 + 重载失败 → 保留 stale**(silo 路由仍正确,不被 hash 误路由);**冷启动读失败 → 退 hash**
+  (此时表里本无 silo 指派可丢)。`TenantPlacementRepository` 读失败抛出由 resolver 据此分支。
 
 迁片/silo 指派(TABLE 模式):
 ```sql
@@ -117,7 +120,41 @@ BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_1_URL=...
 约束:`shards` 的 key 必须覆盖 resolver 可能返回的全部 key(含 default `shard-0` + 各 silo);
 `pooled-shard-count` 须与 `shard-0..N-1` 数量一致;缺 default key 装配直接拒绝。
 
-## 9. 验证
+## 9. 凭据注入(secret 后端 → env → 配置)
+
+**应用不集成任何 secret SDK**,只认 Spring 配置 `batch.datasource.business.routing.shards[*].url/username/password`。
+凭据来源是外部 secret 后端,经**标准 env/文件注入**喂进上面那组配置——故意不把系统绑死到某个 vault,
+谁部署谁用自己的后端注入。链条:
+
+```
+外部 secret 后端(Vault / AWS Secrets Manager / K8s Secret)
+   → 注入成 env 变量 / 挂载文件
+      → Spring relaxed binding 绑定 BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_n_PASSWORD 等
+         → BusinessRoutingProperties.shards[*]
+```
+
+**绝不**把账密写进 placement 表 / shard catalog 表(catalog 的 `secret_ref` 只是引用名,指向后端里的条目,不是密钥)。
+
+- **dev**:`secrets/biz-shards/<key>.env` 本地文件(gitignore),由 `provision`/`verify` 脚本读成 env。非外部系统。
+- **prod 示例 ① K8s Secret → env**:
+
+  ```yaml
+  env:
+    - name: BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_1_PASSWORD
+      valueFrom:
+        secretKeyRef: { name: biz-shard-1, key: password }
+    - name: BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_1_USERNAME
+      valueFrom:
+        secretKeyRef: { name: biz-shard-1, key: username }
+  ```
+
+- **prod 示例 ② Vault → env/文件**:Vault Agent / CSI Provider 把 secret 渲染成 env 或挂载文件,
+  应用读到的仍是同一组 `routing.shards[*]` 配置,代码无感知。轮换密码只动后端 + 重启(或热加载)worker,
+  不动 placement / catalog 表。
+
+> 账户用 `batch_business_writer`(非 superuser,见 §6);secret 后端里存的就是各片 writer 的账密。
+
+## 10. 验证
 
 ```sh
 scripts/local/verify-biz-shard.sh
@@ -127,7 +164,7 @@ scripts/local/verify-biz-shard.sh
 单测:`HashAndSiloPlacementResolverTest` / `BusinessRoutingDataSource*Test` / `DbTablePlacementResolverTest`。
 活体测试 env-gated(`BIZ_SHARD_0_URL` 未设自动跳过),不进常规 CI。
 
-## 10. 生产激活清单(代码外的 ops 动作)
+## 11. 生产激活清单(代码外的 ops 动作)
 
 代码 / 本地基础设施已闭环;真正上量需要:
 
@@ -138,7 +175,7 @@ scripts/local/verify-biz-shard.sh
    迁移期用 placement 表把受影响租户钉到原片,避免 rehash 抖动;新租户走新分母。
 5. **监控**:每片连接池 / 慢查 / biz 大表增长告警(已有增长告警,见监控)。
 
-## 11. 故障排查
+## 12. 故障排查
 
 | 现象 | 排查 |
 |---|---|
