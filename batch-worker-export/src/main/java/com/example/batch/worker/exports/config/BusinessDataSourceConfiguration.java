@@ -1,10 +1,12 @@
 package com.example.batch.worker.exports.config;
 
 import com.example.batch.common.config.BatchPgSessionProperties;
+import com.example.batch.common.config.BusinessDataSourceBuilder;
 import com.example.batch.common.config.BusinessDataSourceProperties;
-import com.example.batch.common.config.HikariPgSessionSupport;
+import com.example.batch.common.config.BusinessRoutingProperties;
+import com.example.batch.common.mapper.BusinessTenantPlacementMapper;
+import com.example.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
 import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -21,7 +23,10 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 /** 业务数据源配置，提供导出任务所需的业务库 MyBatis SqlSession。 */
 @Configuration("exportWorkerBusinessDataSourceConfiguration")
-@EnableConfigurationProperties(BusinessDataSourceProperties.class)
+@EnableConfigurationProperties({
+  BusinessDataSourceProperties.class,
+  BusinessRoutingProperties.class
+})
 @RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
 
@@ -37,37 +42,19 @@ public class BusinessDataSourceConfiguration {
   @Bean(name = "exportBusinessDataSource")
   public DataSource exportBusinessDataSource(
       BusinessDataSourceProperties properties,
+      BusinessRoutingProperties routingProperties,
+      BusinessTenantPlacementMapper placementMapper,
       @Qualifier("exportBusinessHikariConfig") HikariConfig hikariConfig) {
-    hikariConfig.setJdbcUrl(properties.getUrl());
-    hikariConfig.setUsername(properties.getUsername());
-    hikariConfig.setPassword(properties.getPassword());
-    if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
-      hikariConfig.setDriverClassName("org.postgresql.Driver");
-    }
-    // A-3.3: 业务库连接池显式配置
-    if (hikariConfig.getMaximumPoolSize() <= 1) {
-      hikariConfig.setMaximumPoolSize(properties.getMaximumPoolSize());
-    }
-    if (hikariConfig.getMinimumIdle() < 0) {
-      hikariConfig.setMinimumIdle(properties.getMinimumIdle());
-    }
-    if (hikariConfig.getConnectionTimeout() <= 0) {
-      hikariConfig.setConnectionTimeout(properties.getConnectionTimeoutMs());
-    }
-    if (hikariConfig.getLeakDetectionThreshold() <= 0) {
-      hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
-    }
-    // HA:主备切换硬化——主动回收旧连接 + 校验快速失败,避免切换后坏连接被借出。
-    // keepalive(空闲保活探测)由下方 HikariPgSessionSupport.applyBusiness 统一兜底,不在此重复设。
-    if (properties.getMaxLifetimeMs() > 0) {
-      hikariConfig.setMaxLifetime(properties.getMaxLifetimeMs());
-    }
-    if (properties.getValidationTimeoutMs() > 0) {
-      hikariConfig.setValidationTimeout(properties.getValidationTimeoutMs());
-    }
     String appName = environment.getProperty("spring.application.name", "batch-worker-export");
-    HikariPgSessionSupport.applyBusiness(hikariConfig, pgSessionProperties, appName + "-business");
-    return new HikariDataSource(hikariConfig);
+    // 构造 + pg-session 兜底 + 路由包裹统一收敛到 BusinessDataSourceBuilder;routing 默认关=单片无损,开=多片
+    // placement mapper 供 TABLE 模式 resolver 读 placement 表(单片/CONFIG 模式忽略)
+    return BusinessDataSourceBuilder.build(
+        hikariConfig,
+        properties,
+        pgSessionProperties,
+        routingProperties,
+        new MyBatisTenantPlacementRepository(placementMapper),
+        appName);
   }
 
   @Bean(name = "exportBusinessSqlSessionFactory")

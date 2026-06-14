@@ -39,6 +39,12 @@ spec:
   podAntiAffinityTopologyKey: kubernetes.io/hostname
 
   # 内置 PgBouncer(transaction mode)= P1-2 连接扇出;app 连 <cluster>-pooler svc
+  # ✅ transaction 模式对本仓 RLS 安全:RlsTenantSessionSupport 用 set_config('app.tenant_id',?,true)
+  #    = 事务内(SET LOCAL),随事务提交/回滚自动 reset,不跨会话残留 → 与 tx-pooling 兼容。
+  # ⚠️ 但 transaction 模式不兼容服务端预编译语句缓存:Hikari 须关 server-side prepared
+  #    (dataSourceProperties prepareThreshold=0,或 JDBC preferQueryMode=simple ——
+  #    Citus 路径已用 simple;单机 PG 走 pooler 时需确认同样设置),否则报
+  #    "prepared statement does not exist"。
   enableConnectionPooler: true            # 主连接池(读写)
   connectionPooler:
     numberOfInstances: 2
@@ -56,9 +62,14 @@ spec:
       - superuser            # 平台需建表/扩展;生产可收敛权限
       - createdb
 
-  # P0-3 备份:WAL 归档 + 逻辑备份到 MinIO(S3 兼容)。
-  # 真实 endpoint/bucket/凭据经 operator 全局配置或下方 env 注入;此处声明开启逻辑备份。
+  # P0-3 备份:WAL 归档 + 逻辑备份到 S3 兼容存储。
+  # 🔴 生产铁律:备份目标必须是**集群外独立故障域**(异地 S3 / 另一存储栈),
+  #    **不要**指向本集群内的 minio.minio.svc——那和应用对象存储同故障域,
+  #    集群级灾难会同时带走数据与备份。集群内 MinIO 仅 dev/staging 可用。
   enableLogicalBackup: true
   logicalBackupSchedule: "0 2 * * *"      # 每日 02:00 UTC,避开归档/清理高峰
-  # WAL 连续归档(PITR)由 operator 的 WAL-E/WAL-G 配置驱动,指向 MinIO bucket;
-  # 集群级在 operator configmap 配 AWS_S3_ENDPOINT=http://minio.minio.svc:9000 + 凭据。
+  # WAL 连续归档(PITR)由 operator 的 WAL-E/WAL-G 配置驱动,在 operator configmap 配 endpoint+凭据:
+  #   - 生产:AWS_S3_ENDPOINT=<集群外/异地 S3>(独立故障域)
+  #   - dev/staging:AWS_S3_ENDPOINT=http://minio.minio.svc:9000(集群内,仅图省事)
+  # 备份保留策略(base 份数 / PITR 窗口)在 operator configmap 设,别用默认无限堆。
+  # 备份新鲜度由 prometheus PostgresBackupStale 告警兜底(>26h critical)。

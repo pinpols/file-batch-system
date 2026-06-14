@@ -5,6 +5,8 @@
 .env.prod
 .env.*.local
 .local/
+# biz 分片真凭据不入库,只提交 *.env.example 模板
+secrets/biz-shards/*.env
 target/
 **/target/
 target/security-scan-report/

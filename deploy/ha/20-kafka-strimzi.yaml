@@ -46,6 +46,11 @@ spec:
   kafka:
     version: 4.1.0
     metadataVersion: 4.1-IV0
+    # 跨 AZ 容灾(P2,本轮单 AZ HA 不开):上多可用区时务必开 rack 感知,
+    # 否则同一 partition 的 3 副本可能全落在一个 AZ,AZ 宕掉即丢该 partition。
+    # rack:
+    #   topologyKey: topology.kubernetes.io/zone
+    # 同时把上面 KafkaNodePool 的 podAntiAffinity topologyKey 换成 zone 级。
     listeners:
       - name: plain
         port: 9092
