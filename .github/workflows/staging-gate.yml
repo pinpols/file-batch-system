@@ -52,7 +52,8 @@ jobs:
               ExportFailurePipelineE2eIT,
               WorkerDrainE2eIT,
               ProcessPipelineE2eIT,
-              OutboxForwarderRetryE2eIT
+              OutboxForwarderRetryE2eIT,
+              SdkAgainstStubOrchestratorE2eIT
           - id: 2
             label: "292s + trigger async"
             tests: >-
@@ -61,6 +62,7 @@ jobs:
               ImportFailurePipelineE2eIT,
               ExportPipelineE2eIT,
               TriggerAsyncLaunchFullChainE2eIT,
+              TriggerAsyncLaunchE2eIT,
               AtomicTaskPipelineE2eIT
           - id: 3
             label: "334s + atomic mixed"
