@@ -1,10 +1,15 @@
 package com.example.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerSelfRegistrationService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
@@ -92,6 +97,31 @@ class GracefulKafkaShutdownTest {
     // initialActive=1 → counter 也应该有值
     assertThat(meterRegistry.find("batch.worker.drain.initial_active_leases").counter().count())
         .isEqualTo(1.0);
+  }
+
+  @Test
+  void shouldMarkDrainingThenDeactivateOnShutdown() {
+    WorkerRegistration reg = mock(WorkerRegistration.class);
+    lenient().when(reg.getWorkerId()).thenReturn("w1");
+    when(runtimeState.snapshot()).thenReturn(List.of(reg));
+
+    shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
+
+    // 顺序:先 DRAINING(派发停)→ ... 排空 ... → deactivate(→OFFLINE,免心跳超时窗口)
+    var ordered = inOrder(registryService);
+    ordered.verify(registryService).updateStatus(reg, WorkerRegistryStatus.DRAINING.code());
+    ordered.verify(registryService).deactivate(reg);
+  }
+
+  @Test
+  void shouldSkipDeactivateForInvalidRegistration() {
+    WorkerRegistration blank = mock(WorkerRegistration.class);
+    lenient().when(blank.getWorkerId()).thenReturn("  ");
+    when(runtimeState.snapshot()).thenReturn(List.of(blank));
+
+    shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
+
+    verify(registryService, org.mockito.Mockito.never()).deactivate(blank);
   }
 
   /** 占位 stub：ContextClosedEvent 需要一个 ApplicationContext source；测试不实际使用。 */
