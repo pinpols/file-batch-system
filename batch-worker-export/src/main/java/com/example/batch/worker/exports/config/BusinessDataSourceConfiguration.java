@@ -1,10 +1,9 @@
 package com.example.batch.worker.exports.config;
 
 import com.example.batch.common.config.BatchPgSessionProperties;
+import com.example.batch.common.config.BusinessDataSourceBuilder;
 import com.example.batch.common.config.BusinessDataSourceProperties;
-import com.example.batch.common.config.HikariPgSessionSupport;
 import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -38,36 +37,9 @@ public class BusinessDataSourceConfiguration {
   public DataSource exportBusinessDataSource(
       BusinessDataSourceProperties properties,
       @Qualifier("exportBusinessHikariConfig") HikariConfig hikariConfig) {
-    hikariConfig.setJdbcUrl(properties.getUrl());
-    hikariConfig.setUsername(properties.getUsername());
-    hikariConfig.setPassword(properties.getPassword());
-    if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
-      hikariConfig.setDriverClassName("org.postgresql.Driver");
-    }
-    // A-3.3: 业务库连接池显式配置
-    if (hikariConfig.getMaximumPoolSize() <= 1) {
-      hikariConfig.setMaximumPoolSize(properties.getMaximumPoolSize());
-    }
-    if (hikariConfig.getMinimumIdle() < 0) {
-      hikariConfig.setMinimumIdle(properties.getMinimumIdle());
-    }
-    if (hikariConfig.getConnectionTimeout() <= 0) {
-      hikariConfig.setConnectionTimeout(properties.getConnectionTimeoutMs());
-    }
-    if (hikariConfig.getLeakDetectionThreshold() <= 0) {
-      hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
-    }
-    // HA:主备切换硬化——主动回收旧连接 + 校验快速失败,避免切换后坏连接被借出。
-    // keepalive(空闲保活探测)由下方 HikariPgSessionSupport.applyBusiness 统一兜底,不在此重复设。
-    if (properties.getMaxLifetimeMs() > 0) {
-      hikariConfig.setMaxLifetime(properties.getMaxLifetimeMs());
-    }
-    if (properties.getValidationTimeoutMs() > 0) {
-      hikariConfig.setValidationTimeout(properties.getValidationTimeoutMs());
-    }
     String appName = environment.getProperty("spring.application.name", "batch-worker-export");
-    HikariPgSessionSupport.applyBusiness(hikariConfig, pgSessionProperties, appName + "-business");
-    return new HikariDataSource(hikariConfig);
+    // 构造 + pg-session 兜底 + 单片路由包裹统一收敛到 BusinessDataSourceBuilder(消除 3 worker 重复)
+    return BusinessDataSourceBuilder.build(hikariConfig, properties, pgSessionProperties, appName);
   }
 
   @Bean(name = "exportBusinessSqlSessionFactory")
