@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.config;
 import com.example.batch.common.config.BatchPgSessionProperties;
 import com.example.batch.common.config.BusinessDataSourceBuilder;
 import com.example.batch.common.config.BusinessDataSourceProperties;
+import com.example.batch.common.config.BusinessRoutingProperties;
 import com.zaxxer.hikari.HikariConfig;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,10 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 @Configuration("importWorkerBusinessDataSourceConfiguration")
-@EnableConfigurationProperties(BusinessDataSourceProperties.class)
+@EnableConfigurationProperties({
+  BusinessDataSourceProperties.class,
+  BusinessRoutingProperties.class
+})
 @RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
 
@@ -35,10 +39,12 @@ public class BusinessDataSourceConfiguration {
   @Bean(name = "importBusinessDataSource")
   public DataSource importBusinessDataSource(
       BusinessDataSourceProperties properties,
+      BusinessRoutingProperties routingProperties,
       @Qualifier("importBusinessHikariConfig") HikariConfig hikariConfig) {
     String appName = environment.getProperty("spring.application.name", "batch-worker-import");
-    // 构造 + pg-session 兜底 + 单片路由包裹统一收敛到 BusinessDataSourceBuilder(消除 3 worker 重复)
-    return BusinessDataSourceBuilder.build(hikariConfig, properties, pgSessionProperties, appName);
+    // 构造 + pg-session 兜底 + 路由包裹统一收敛到 BusinessDataSourceBuilder;routing 默认关=单片无损,开=多片
+    return BusinessDataSourceBuilder.build(
+        hikariConfig, properties, pgSessionProperties, routingProperties, appName);
   }
 
   @Bean(name = "importBusinessSqlSessionFactory")

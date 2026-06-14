@@ -3,6 +3,7 @@ package com.example.batch.worker.processes.config;
 import com.example.batch.common.config.BatchPgSessionProperties;
 import com.example.batch.common.config.BusinessDataSourceBuilder;
 import com.example.batch.common.config.BusinessDataSourceProperties;
+import com.example.batch.common.config.BusinessRoutingProperties;
 import com.example.batch.common.rls.RlsPolicyHealthIndicator;
 import com.zaxxer.hikari.HikariConfig;
 import javax.sql.DataSource;
@@ -23,7 +24,10 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /** 业务数据源配置，提供 PROCESS 配置驱动 SQL 加工访问业务库的连接池。 */
 @Configuration("processWorkerBusinessDataSourceConfiguration")
-@EnableConfigurationProperties(BusinessDataSourceProperties.class)
+@EnableConfigurationProperties({
+  BusinessDataSourceProperties.class,
+  BusinessRoutingProperties.class
+})
 @RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
 
@@ -39,10 +43,12 @@ public class BusinessDataSourceConfiguration {
   @Bean(name = "processBusinessDataSource")
   public DataSource processBusinessDataSource(
       BusinessDataSourceProperties properties,
+      BusinessRoutingProperties routingProperties,
       @Qualifier("processBusinessHikariConfig") HikariConfig hikariConfig) {
     String appName = environment.getProperty("spring.application.name", "batch-worker-process");
-    // 构造 + pg-session 兜底 + 单片路由包裹统一收敛到 BusinessDataSourceBuilder(消除 3 worker 重复)
-    return BusinessDataSourceBuilder.build(hikariConfig, properties, pgSessionProperties, appName);
+    // 构造 + pg-session 兜底 + 路由包裹统一收敛到 BusinessDataSourceBuilder;routing 默认关=单片无损,开=多片
+    return BusinessDataSourceBuilder.build(
+        hikariConfig, properties, pgSessionProperties, routingProperties, appName);
   }
 
   @Bean(name = "processBusinessSqlSessionFactory")
