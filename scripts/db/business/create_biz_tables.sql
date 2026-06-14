@@ -214,10 +214,12 @@ CREATE INDEX IF NOT EXISTS idx_settlement_detail_customer
 
 -- ---------------------------------------------------------
 -- tb 交易流水导入目标表（对应 tb/IMP-TRANSACTION-CSV 模板）
--- 列名与模板 field_mappings.targetColumn 对齐；conflictColumns = (tenant_id, txn_no)
+-- 列名与模板 field_mappings.targetColumn 对齐；conflictColumns = (tenant_id, txn_no, txn_date)
+-- 分区(P2):时序表按 txn_date RANGE 分区。分区键 txn_date 进 PK + UNIQUE;ON CONFLICT 随之变
+-- (tenant_id, txn_no, txn_date)——同步 seed 模板 conflictColumns。txn_date 对 txn_no 不变 → 幂等等价。
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS biz.transaction (
-    id              BIGSERIAL PRIMARY KEY,
+    id              BIGSERIAL,
     tenant_id       VARCHAR(64)   NOT NULL,
     txn_no          VARCHAR(64)   NOT NULL,
     account_no      VARCHAR(64)   NOT NULL,
@@ -228,9 +230,11 @@ CREATE TABLE IF NOT EXISTS biz.transaction (
     remark          VARCHAR(512),
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_transaction_tenant_txn UNIQUE (tenant_id, txn_no),
+    PRIMARY KEY (tenant_id, txn_date, id),
+    CONSTRAINT uk_transaction_tenant_txn UNIQUE (tenant_id, txn_no, txn_date),
     CONSTRAINT ck_transaction_amount CHECK (amount >= 0)
-);
+) PARTITION BY RANGE (txn_date);
+CREATE TABLE IF NOT EXISTS biz.transaction_default PARTITION OF biz.transaction DEFAULT;
 
 CREATE INDEX IF NOT EXISTS idx_transaction_tenant_date
     ON biz.transaction (tenant_id, txn_date);
@@ -269,9 +273,11 @@ CREATE INDEX IF NOT EXISTS idx_risk_score_band
 -- ---------------------------------------------------------
 -- tc 风险预警导出源表（对应 tc/EXP-RISK-ALERT-JSON 模板）
 -- default_query_sql 从本表按 tenant_id 拉取并 ORDER BY id
+-- 分区(P2):纯导出源表(无 import upsert / 无 ON CONFLICT),按 alert_date RANGE 分区零幂等风险。
+-- 分区键 alert_date 进 PK + UNIQUE(uk 从 (tenant_id, alert_id) → 加 alert_date)。
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS biz.risk_alert (
-    id              BIGSERIAL PRIMARY KEY,
+    id              BIGSERIAL,
     tenant_id       VARCHAR(64)   NOT NULL,
     alert_id        VARCHAR(64)   NOT NULL,
     entity_id       VARCHAR(64)   NOT NULL,
@@ -280,10 +286,12 @@ CREATE TABLE IF NOT EXISTS biz.risk_alert (
     alert_date      DATE          NOT NULL,
     description     VARCHAR(512),
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_risk_alert_tenant_alert UNIQUE (tenant_id, alert_id),
+    PRIMARY KEY (tenant_id, alert_date, id),
+    CONSTRAINT uk_risk_alert_tenant_alert UNIQUE (tenant_id, alert_id, alert_date),
     CONSTRAINT ck_risk_alert_severity
         CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))
-);
+) PARTITION BY RANGE (alert_date);
+CREATE TABLE IF NOT EXISTS biz.risk_alert_default PARTITION OF biz.risk_alert DEFAULT;
 
 CREATE INDEX IF NOT EXISTS idx_risk_alert_tenant_date
     ON biz.risk_alert (tenant_id, alert_date);

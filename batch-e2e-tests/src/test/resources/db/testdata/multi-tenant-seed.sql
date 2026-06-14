@@ -390,7 +390,7 @@ SET query_param_schema = '{
           {"from": "txnDate",      "to": "txn_date"},
           {"from": "remark",       "to": "remark"}
         ],
-        "conflictColumns": ["tenant_id", "txn_no"]
+        "conflictColumns": ["tenant_id", "txn_no", "txn_date"]
       }
     }'::jsonb,
     updated_at = now()
@@ -523,7 +523,7 @@ VALUES
      "columnMappings":[{"from":"txnNo","to":"txn_no"},{"from":"accountNo","to":"account_no"},
        {"from":"txnType","to":"txn_type"},{"from":"amount","to":"amount"},
        {"from":"currencyCode","to":"currency_code"},{"from":"txnDate","to":"txn_date"}],
-     "conflictColumns":["tenant_id","txn_no"]}}'::jsonb),
+     "conflictColumns":["tenant_id","txn_no","txn_date"]}}'::jsonb),
   ('tb', 'IMP-TXN-XML', 'Transaction XML Import', 'IMPORT', 'TRANSACTION',
    'XML','UTF-8','UTF-8',false,0,0,0,'NONE','NONE','NONE',
    '[
@@ -539,7 +539,7 @@ VALUES
        "columnMappings":[{"from":"txnNo","to":"txn_no"},{"from":"accountNo","to":"account_no"},
          {"from":"txnType","to":"txn_type"},{"from":"amount","to":"amount"},
          {"from":"currencyCode","to":"currency_code"},{"from":"txnDate","to":"txn_date"}],
-       "conflictColumns":["tenant_id","txn_no"]}}'::jsonb)
+       "conflictColumns":["tenant_id","txn_no","txn_date"]}}'::jsonb)
 ON CONFLICT (tenant_id, template_code, version) DO NOTHING;
 
 -- default-tenant dispatch channels：把占位 endpoint 改成本地联调可达的真实值。

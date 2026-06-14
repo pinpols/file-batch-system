@@ -209,14 +209,16 @@ scripts/local/verify-biz-shard.sh
 | `settlement_batch` | HASH(tenant_id) ×4 | (tenant_id, id) | FK 父;复合 PK 让子表 FK 能引用 |
 | `settlement_detail` | HASH(tenant_id) ×4 | (tenant_id, id) | FK 改复合 `(tenant_id, batch_id)→settlement_batch(tenant_id,id)` |
 | `risk_score` | RANGE(score_date) + DEFAULT | (tenant_id, score_date, id) | UNIQUE 已含 score_date,**幂等不变**;后续可按月切分区 + archive |
+| `transaction` | RANGE(txn_date) + DEFAULT | (tenant_id, txn_date, id) | UNIQUE → `(tenant_id, txn_no, txn_date)`;ON CONFLICT 同步;txn_date 对 txn_no 不变 → **幂等等价** |
+| `risk_alert` | RANGE(alert_date) + DEFAULT | (tenant_id, alert_date, id) | 纯导出源无 upsert;UNIQUE → `(tenant_id, alert_id, alert_date)`,**零幂等风险** |
 
-> HASH 选 tenant_id 的关键好处:所有 biz UNIQUE 本就含 tenant_id → **只重建 PK,不动 UNIQUE、不动 ON CONFLICT、不动模板** = 幂等中性。
+> HASH 选 tenant_id 的关键好处:所有 biz UNIQUE 本就含 tenant_id → **只重建 PK,不动 UNIQUE/ON CONFLICT/模板** = 幂等中性。
+> RANGE 时序表里,risk_score/risk_alert 的 UNIQUE 加日期不影响幂等(score_date 本就在;risk_alert 不 upsert);
+> **唯一动幂等语义的是 transaction**:UNIQUE 加 `txn_date`,模板 `conflictColumns` 同步成 `[tenant_id, txn_no, txn_date]`
+> (改动点:`batch-e2e-tests/.../multi-tenant-seed.sql` ×3、`docs/test-data/sim-e2e-bootstrap.sql`、手工 seed `sim-stage3c-export-source.sql`)。
+> **prod 自定义模板**:用户侧 `IMP-TRANSACTION-CSV` 的 conflictColumns 须同样加 `txn_date`,否则 ON CONFLICT 不匹配新约束。
 
-未做(需先改 UNIQUE → 牵动模板 `conflictColumns` + 幂等语义,单独评审):
-
-- `transaction`(RANGE txn_date):UNIQUE `(tenant_id, txn_no)` → 须加 `txn_date`,ON CONFLICT 变 `(tenant_id, txn_no, txn_date)`,
-  且模板 `IMP-TRANSACTION-CSV` 的 conflictColumns(运行时定义 + e2e seed 多处)须同步。仅当 txn_date 对 txn_no 不变时幂等等价。
-- `risk_alert`(RANGE alert_date):同理 UNIQUE 须加 `alert_date`;先确认其写入是否走 ON CONFLICT。
+全 6 表已落地并在真实 PG 验证(幂等/FK/HASH 路由/RANGE 落分区)。
 
 **存量数据迁移**:`create_biz_tables.sql` 的 `CREATE TABLE IF NOT EXISTS` 只对新库/新片生效,**不会重分区已存在的非分区表**。
 已上线的 biz 库要分区须走维护窗口的重建迁移(建分区新表 → 拷数据 → 切换 → 重建 FK),先在副本演练,
