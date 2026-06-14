@@ -241,6 +241,54 @@
 
     <build>
         <plugins>
+            <!-- R8 守护(2026-06-14):依赖层硬门禁。把「禁 JPA/Hibernate ORM / Spring Data JDBC」
+                 (CLAUDE.md 红线,原仅 ArchTest)上升到依赖图层面拦截;并禁误带 log4j1.x / 第三方 SNAPSHOT。
+                 bannedDependencies 精确到 ORM 坐标 —— hibernate-validator(Bean Validation)/ commons-logging /
+                 log4j-to-slf4j 都是合法传递依赖,不在禁列。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-rules</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[3.9.0,)</version>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>[25,)</version>
+                                </requireJavaVersion>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>jakarta.persistence:jakarta.persistence-api</exclude>
+                                        <exclude>org.hibernate.orm:*</exclude>
+                                        <exclude>org.hibernate:hibernate-core</exclude>
+                                        <exclude>org.springframework.data:spring-data-jdbc</exclude>
+                                        <exclude>org.springframework.boot:spring-boot-starter-data-jdbc</exclude>
+                                        <exclude>org.springframework.boot:spring-boot-starter-data-jpa</exclude>
+                                        <exclude>log4j:log4j</exclude>
+                                    </excludes>
+                                    <message>禁 JPA/Hibernate ORM / Spring Data JDBC / log4j1.x(ADR-001 + CLAUDE.md 红线)。持久化统一 MyBatis + JdbcTemplate。</message>
+                                </bannedDependencies>
+                                <requireReleaseDeps>
+                                    <message>禁第三方 SNAPSHOT 依赖进入构建(本仓自有模块 com.example.batch:* 豁免)。</message>
+                                    <onlyWhenRelease>false</onlyWhenRelease>
+                                    <excludes>
+                                        <exclude>com.example.batch:*</exclude>
+                                    </excludes>
+                                </requireReleaseDeps>
+                            </rules>
+                            <failFast>false</failFast>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
