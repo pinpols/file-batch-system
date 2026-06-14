@@ -83,10 +83,36 @@ listener factory **没调 `setConcurrency` → 默认 1**,而 `batch.trigger.lau
 | 2 | 128 | 20.8 | 29.1 |
 | 3 | 256 | 20.3 | 26.0 |
 
-峰值完成率 **~22 → ~33/s(+50%)**,0 拒绝 0 失败。证实单线程消费是瓶颈之一。但只升 1.6×(非 4×),
-且峰值随并发上升反降(33→26)——说明**修掉这层后冒出下一个瓶颈**(疑似 report HTTP 状态更新 /
-claim-partition 行锁争用;单任务 310ms 排队里仍有串行)。继续提升是递减收益,需另立专项:report 路径
-并发 + claim/状态更新争用。**但对本文主结论无影响:PG/Citus 始终不是瓶颈,杠杆全在控制面并发。**
+峰值完成率 **~22 → ~33/s(+50%)**,0 拒绝 0 失败。证实单线程消费是瓶颈之一,但只升 1.6×(非 4×)
+——说明**修掉这层后还有下一层**。
+
+### 第二层:worker 认领并发(与 launch 并发叠加,2026-06-14 续测)
+
+launch 并发修复后(=4),再抬 `BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS` 4→32(pool 40):
+
+| L | 并发 | 仅 launch=4 峰值/s | **launch=4 + worker=32 峰值/s** |
+|---|---|---|---|
+| 1 | 128 | 29.1 | **48.7** |
+| 2 | 256 | 26.0 | **61.7** |
+
+**关键**:launch=1 时抬 worker 完全无效(launch 单线程绑死,见上文证伪表);launch 放开后,worker 并发
+立刻显效——两个旋钮**叠加**:
+
+| 配置 | 峰值完成率 |
+|---|---|
+| baseline(launch=1,worker=4) | ~20/s |
+| + launch 并发(=4) | ~33/s |
+| + worker 并发(=32) | **~62/s(3× baseline,且未饱和)** |
+
+`worker maxConcurrentTasks` **本就是配置项**(无需改代码),默认 4 对多租洪峰偏保守;调高即放量,但
+default 抬高要权衡连接预算(`pool-size ≥ maxConcurrentTasks`,且 Citus 下经 coordinator 扇出放大,
+见 `citus-deployment.md` §1b/§4 三元组)——故保持默认、按部署调,本文给出 benchmark 依据。
+
+### 还有第三层(未榨干)
+
+launch+worker 双开后峰值 62/s 仍随并发上升(48.7→61.7)未饱和,说明上面还有瓶颈(report HTTP 状态
+更新 / claim-partition 行锁 / 单任务 310ms 排队里的串行)。但 3× 已是清晰的阶段性收益,继续榨是递减收益,
+留待真负载/多主机时再定。**本文主结论不变:PG/Citus 始终不是瓶颈,杠杆全在控制面分层并发。**
 
 ## 复现
 
