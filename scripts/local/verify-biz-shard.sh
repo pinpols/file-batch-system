@@ -67,11 +67,14 @@ set -a; . "$SECRETS_DIR/shard-1.env"; S1_URL="$BIZ_SHARD_URL"; S1_USER="$BIZ_SHA
 echo "    shard-0 $S0_URL"
 echo "    shard-1 $S1_URL"
 
-echo "==> 4/4 跑活体路由测试(真实双实例,resolver + multiShard;含 biz schema 连通性证明)"
+echo "==> 4/4 跑活体路由测试(真实双实例 + platform placement 表;config 路由 + 表驱动覆盖两证明)"
+# platform 库 = primary 的 batch_platform(表驱动 placement 表所在),dev 默认账密
+PLATFORM_URL="jdbc:postgresql://localhost:${POSTGRES_PORT:-15432}/batch_platform"
 BIZ_SHARD_0_URL="$S0_URL" BIZ_SHARD_0_USERNAME="$S0_USER" BIZ_SHARD_0_PASSWORD="$S0_PASS" \
 BIZ_SHARD_1_URL="$S1_URL" BIZ_SHARD_1_USERNAME="$S1_USER" BIZ_SHARD_1_PASSWORD="$S1_PASS" \
+BIZ_PLATFORM_URL="$PLATFORM_URL" BIZ_PLATFORM_USERNAME="$S0_USER" BIZ_PLATFORM_PASSWORD="$S0_PASS" \
   mvn -q -pl batch-common test \
-    -Dtest=BusinessMultiShardRoutingLiveTest \
+    -Dtest='BusinessMultiShardRoutingLiveTest,DbTablePlacementResolverTest' \
     -Dsurefire.failIfNoSpecifiedTests=false
 
 echo "==> ✅ biz 分片基础设施验证通过(两片真实 PG,路由按 placement 落到选定实例)"

@@ -1,7 +1,8 @@
 package com.example.batch.common.config;
 
+import com.example.batch.common.tenant.routing.BusinessPlacementResolver;
 import com.example.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
-import com.example.batch.common.tenant.routing.HashAndSiloPlacementResolver;
+import com.example.batch.common.tenant.routing.TenantPlacementRepository;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ public final class BusinessDataSourceBuilder {
    * @param properties biz 数据源属性(url/账密/池参数;单片或多片缺省片的凭据)
    * @param pgSessionProperties pg-session(RLS/keepalive 兜底)配置
    * @param routingProperties 多片路由配置(默认 enabled=false → 单片无损)
+   * @param placementRepository TABLE 模式 resolver 读 placement 表的 repository(单片/CONFIG 模式忽略)
    * @param appName 解析后的应用名(用于 application_name 标识)
    * @return 路由 DataSource(已 afterPropertiesSet)
    */
@@ -33,11 +35,13 @@ public final class BusinessDataSourceBuilder {
       BusinessDataSourceProperties properties,
       BatchPgSessionProperties pgSessionProperties,
       BusinessRoutingProperties routingProperties,
+      TenantPlacementRepository placementRepository,
       String appName) {
     if (routingProperties != null
         && routingProperties.isEnabled()
         && !routingProperties.getShards().isEmpty()) {
-      return buildMultiShard(properties, pgSessionProperties, routingProperties, appName);
+      return buildMultiShard(
+          properties, pgSessionProperties, routingProperties, placementRepository, appName);
     }
     return buildSingleShard(hikariConfig, properties, pgSessionProperties, appName);
   }
@@ -56,11 +60,12 @@ public final class BusinessDataSourceBuilder {
     return BusinessRoutingDataSourceFactory.singleShard(new HikariDataSource(hikariConfig));
   }
 
-  /** 多片:每片各建一个 Hikari 池(凭据来自 routing.shards),按 resolver 路由。 */
+  /** 多片:每片各建一个 Hikari 池(凭据来自 routing.shards),按 resolver(config 或 table 驱动)路由。 */
   private static DataSource buildMultiShard(
       BusinessDataSourceProperties properties,
       BatchPgSessionProperties pgSessionProperties,
       BusinessRoutingProperties routingProperties,
+      TenantPlacementRepository placementRepository,
       String appName) {
     Map<String, DataSource> shards = new LinkedHashMap<>();
     for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
@@ -73,9 +78,8 @@ public final class BusinessDataSourceBuilder {
           cfg, pgSessionProperties, appName + "-business-" + shard.getKey());
       shards.put(shard.getKey(), new HikariDataSource(cfg));
     }
-    HashAndSiloPlacementResolver resolver =
-        new HashAndSiloPlacementResolver(
-            routingProperties.getPooledShardCount(), routingProperties.getSiloOverrides());
+    BusinessPlacementResolver resolver =
+        BusinessPlacementResolverFactory.create(routingProperties, placementRepository);
     return BusinessRoutingDataSourceFactory.multiShard(shards, resolver);
   }
 

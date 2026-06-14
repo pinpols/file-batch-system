@@ -62,6 +62,48 @@ class BusinessMultiShardRoutingLiveTest {
     }
   }
 
+  @Test
+  @DisplayName("表驱动:placement 表显式映射覆盖 hash(table wins),未登记租户仍走 hash")
+  void placementTableOverridesHash() throws Exception {
+    DataSource direct0 = directDataSource(0);
+    DataSource direct1 = directDataSource(1);
+    DataSource platform = platformDataSource();
+    try (HikariDataSource ds0 = (HikariDataSource) direct0;
+        HikariDataSource ds1 = (HikariDataSource) direct1;
+        HikariDataSource platformDs = (HikariDataSource) platform) {
+      seedIdentity(ds0, "shard-0");
+      seedIdentity(ds1, "shard-1");
+
+      HashAndSiloPlacementResolver hash = new HashAndSiloPlacementResolver(2, Map.of());
+      // 选一个 tenant,把表里映射设成 hash 的「反片」,以证明表覆盖了 hash
+      String tenant = "table-driven-tenant";
+      String hashKey = hash.resolve(tenant);
+      String tableKey = "shard-0".equals(hashKey) ? "shard-1" : "shard-0";
+      ensurePlacementRow(platformDs, tenant, tableKey);
+
+      TenantPlacementRepository repo = platformPlacementRepository(platformDs);
+      DbTablePlacementResolver resolver =
+          new DbTablePlacementResolver(repo, hash, 0L, System::currentTimeMillis);
+      Map<String, DataSource> shards = new LinkedHashMap<>();
+      shards.put("shard-0", ds0);
+      shards.put("shard-1", ds1);
+      DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shards, resolver);
+
+      // 1) 登记租户:路由到表里的片(= 反片,证明 table wins)
+      RlsTenantContextHolder.set(tenant);
+      assertThat(readIdentity(routing))
+          .as("登记租户应路由到表里的 %s(覆盖 hash 的 %s)", tableKey, hashKey)
+          .isEqualTo(tableKey);
+      RlsTenantContextHolder.clear();
+
+      // 2) 未登记租户:仍走 hash
+      String unlisted = "unlisted-tenant";
+      RlsTenantContextHolder.set(unlisted);
+      assertThat(readIdentity(routing)).as("未登记租户应走 hash").isEqualTo(hash.resolve(unlisted));
+      RlsTenantContextHolder.clear();
+    }
+  }
+
   private static DataSource directDataSource(int shard) {
     HikariConfig cfg = new HikariConfig();
     cfg.setJdbcUrl(env("BIZ_SHARD_" + shard + "_URL"));
@@ -93,6 +135,55 @@ class BusinessMultiShardRoutingLiveTest {
       assertThat(rs.next()).as("shard identity 行应存在").isTrue();
       return rs.getString(1);
     }
+  }
+
+  private static DataSource platformDataSource() {
+    HikariConfig cfg = new HikariConfig();
+    cfg.setJdbcUrl(env("BIZ_PLATFORM_URL"));
+    cfg.setUsername(env("BIZ_PLATFORM_USERNAME"));
+    cfg.setPassword(env("BIZ_PLATFORM_PASSWORD"));
+    cfg.setDriverClassName("org.postgresql.Driver");
+    cfg.setMaximumPoolSize(2);
+    cfg.setPoolName("biz-platform-live");
+    return new HikariDataSource(cfg);
+  }
+
+  private static void ensurePlacementRow(DataSource platform, String tenant, String key)
+      throws Exception {
+    try (Connection conn = platform.getConnection();
+        Statement st = conn.createStatement()) {
+      st.execute(
+          "CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64)"
+              + " PRIMARY KEY, placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL"
+              + " DEFAULT now(), updated_by varchar(128))");
+      st.execute(
+          "INSERT INTO batch.business_tenant_placement (tenant_id, placement_key, updated_by)"
+              + " VALUES ('"
+              + tenant
+              + "', '"
+              + key
+              + "', 'live-test') ON CONFLICT (tenant_id) DO UPDATE SET placement_key ="
+              + " EXCLUDED.placement_key");
+    }
+  }
+
+  /** 直读 platform placement 表的 repository(测试桩;生产路径走 MyBatisTenantPlacementRepository)。 */
+  private static TenantPlacementRepository platformPlacementRepository(DataSource platform) {
+    return () -> {
+      Map<String, String> mapping = new LinkedHashMap<>();
+      try (Connection conn = platform.getConnection();
+          Statement st = conn.createStatement();
+          ResultSet rs =
+              st.executeQuery(
+                  "SELECT tenant_id, placement_key FROM batch.business_tenant_placement")) {
+        while (rs.next()) {
+          mapping.put(rs.getString(1), rs.getString(2));
+        }
+      } catch (Exception ex) {
+        return Map.of();
+      }
+      return mapping;
+    };
   }
 
   private static String env(String name) {

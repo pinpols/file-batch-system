@@ -35,6 +35,12 @@ public class BusinessRoutingProperties {
   /** 多片路由总开关。false(默认)=单片无损;true=按 shards 装配 multiShard。 */
   private boolean enabled = false;
 
+  /** placement 来源:CONFIG(默认,hash + siloOverrides)或 TABLE(表覆盖 + hash 兜底)。 */
+  private PlacementSource placementSource = PlacementSource.CONFIG;
+
+  /** TABLE 模式下 placement 映射整表缓存 TTL(ms),过期触发重载;迁片登记最迟一个 TTL 生效。 */
+  private long placementCacheTtlMs = 5000L;
+
   /** 池化片数量(hash 取模分母),须与 shards 中 shard-0..N-1 的数量一致。 */
   private int pooledShardCount = 1;
 
@@ -43,6 +49,14 @@ public class BusinessRoutingProperties {
 
   /** 各 placement 片的连接凭据(key + url/账密);凭据来源 secrets,禁明文入库。 */
   private List<Shard> shards = new ArrayList<>();
+
+  /** placement 解析来源。 */
+  public enum PlacementSource {
+    /** hash 池化 + config 里的 siloOverrides;改 placement = 改配置 + 重启。 */
+    CONFIG,
+    /** 表(batch.business_tenant_placement)覆盖 + hash 兜底;迁片/silo 在线维护。 */
+    TABLE
+  }
 
   /** 单片连接凭据。{@code key} 必须覆盖 resolver 可能返回的全部 key(含 default {@code shard-0})。 */
   @Data

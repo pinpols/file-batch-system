@@ -4,6 +4,8 @@ import com.example.batch.common.config.BatchPgSessionProperties;
 import com.example.batch.common.config.BusinessDataSourceBuilder;
 import com.example.batch.common.config.BusinessDataSourceProperties;
 import com.example.batch.common.config.BusinessRoutingProperties;
+import com.example.batch.common.mapper.BusinessTenantPlacementMapper;
+import com.example.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
 import com.zaxxer.hikari.HikariConfig;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
@@ -41,11 +43,18 @@ public class BusinessDataSourceConfiguration {
   public DataSource exportBusinessDataSource(
       BusinessDataSourceProperties properties,
       BusinessRoutingProperties routingProperties,
+      BusinessTenantPlacementMapper placementMapper,
       @Qualifier("exportBusinessHikariConfig") HikariConfig hikariConfig) {
     String appName = environment.getProperty("spring.application.name", "batch-worker-export");
     // 构造 + pg-session 兜底 + 路由包裹统一收敛到 BusinessDataSourceBuilder;routing 默认关=单片无损,开=多片
+    // placement mapper 供 TABLE 模式 resolver 读 placement 表(单片/CONFIG 模式忽略)
     return BusinessDataSourceBuilder.build(
-        hikariConfig, properties, pgSessionProperties, routingProperties, appName);
+        hikariConfig,
+        properties,
+        pgSessionProperties,
+        routingProperties,
+        new MyBatisTenantPlacementRepository(placementMapper),
+        appName);
   }
 
   @Bean(name = "exportBusinessSqlSessionFactory")
