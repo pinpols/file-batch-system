@@ -1,5 +1,6 @@
 package com.example.batch.common.tenant.routing;
 
+import java.util.HashMap;
 import java.util.Map;
 import javax.sql.DataSource;
 
@@ -26,6 +27,31 @@ public final class BusinessRoutingDataSourceFactory {
     routing.setTargetDataSources(
         Map.<Object, Object>of(HashAndSiloPlacementResolver.DEFAULT_KEY, shard0));
     routing.setDefaultTargetDataSource(shard0);
+    routing.afterPropertiesSet();
+    return routing;
+  }
+
+  /**
+   * 多片装配(P2 使能):按 {@code shards}(placement key → DataSource)+ resolver 路由。
+   *
+   * <p>{@code shards} 的 key 必须覆盖 resolver 可能返回的全部 key(shard-0..N-1 + 各 silo);
+   * defaultTargetDataSource 用 shard-0 兜底(无租户上下文时)。N 个真实 DataSource 的构造 (从 config + secrets)由装配方/ops
+   * 提供——本工厂只负责组装路由,不碰凭据。
+   *
+   * @param shards placement key → 已建好的 DataSource;必须含 {@link
+   *     HashAndSiloPlacementResolver#DEFAULT_KEY}
+   * @param resolver 租户→placement key 解析器(pooledShardCount 与 silo 须与 shards 的 key 一致)
+   */
+  public static DataSource multiShard(
+      Map<String, DataSource> shards, BusinessPlacementResolver resolver) {
+    DataSource fallback = shards.get(HashAndSiloPlacementResolver.DEFAULT_KEY);
+    if (fallback == null) {
+      throw new IllegalArgumentException(
+          "shards must contain default key " + HashAndSiloPlacementResolver.DEFAULT_KEY);
+    }
+    BusinessRoutingDataSource routing = new BusinessRoutingDataSource(resolver);
+    routing.setTargetDataSources(new HashMap<Object, Object>(shards));
+    routing.setDefaultTargetDataSource(fallback);
     routing.afterPropertiesSet();
     return routing;
   }
