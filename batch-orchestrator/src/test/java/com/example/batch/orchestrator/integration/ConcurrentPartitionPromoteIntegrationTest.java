@@ -65,8 +65,8 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
         jdbcTemplate.queryForObject(
             """
             INSERT INTO batch.job_instance (
-                tenant_id, job_definition_id, trigger_request_id, job_code, instance_no, trigger_type, instance_status, dedup_key
-            ) VALUES (?, ?, ?, ?, ?, 'API', 'RUNNING', ?)
+                tenant_id, job_definition_id, trigger_request_id, job_code, instance_no, trigger_type, instance_status, dedup_key, biz_date
+            ) VALUES (?, ?, ?, ?, ?, 'API', 'RUNNING', ?, CURRENT_DATE)
             RETURNING id
             """,
             Long.class,
