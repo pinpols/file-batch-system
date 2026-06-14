@@ -19,21 +19,23 @@
 
 ## 分支用途
 
-**只有 2 条常驻分支,其余都是短命的 `feature/<topic>`、`fix/<topic>` → PR → main 后即清理**:
+**唯一常驻活分支 = `main`**;其余都是短命 `feature/<topic>`、`fix/<topic>` → PR → main 后即清理。
+**`citus` 已于 2026-06-14 冻结为只读参考**(见下),不再是活跃轨道。
 
-| 常驻分支 | 是什么 | 含什么 |
+| 分支 | 是什么 | 含什么 |
 |---|---|---|
 | **`main`** | 唯一真相源、单机 PG 默认、**双栈-capable** | 全部应用代码 **+ 全部部署**(`docker-compose*.yml` / `docker/` / `helm/` / `deploy/` / k8s 清单 / `.env.example`)。Citus 能力靠配置开关(默认关) |
-| **`citus`** | **分布式架构并排轨道**,= main + Citus schema/拓扑薄 delta | 复合 PK 迁移、distribute 脚本、Citus 拓扑;跟踪 draft PR #459(**永不合 main**) |
+| **`citus`(❄️ 冻结·只读参考)** | 时间点验证过的 Citus POC,**非活跃轨道** | 复合 PK 迁移、`scripts/db/citus/01-distribute.sql`、Citus 拓扑、FOR UPDATE 租户路由;快照 tag **`citus-poc-2026-06-14`**;draft PR #459(**永不合 main**) |
 
-**同步方向(核心约束)**:
+**❄️ citus 冻结约束(2026-06-14 决策)**:
 
-- **`main → citus`:✅ 单向、定期**。citus 用 `scripts/local/sync-from-main.sh` 把 main 的通用修复 merge 进来,保持薄 delta、防漂移。
-- **整支 `citus → main`:❌ 永不**(架构承诺不合并)。
-- **citus 上发现的"通用 / 双栈"代码 → main**:✅ 但**抽成独立 `feature/<topic>` off main → PR**,不是整支合。判定:"单机也要吗?" 要(99%:新功能/bugfix/双栈 mapper 修复)→ 从 main 取分支;只有纯 Citus 架构(分片/方言/distribute)才从 citus 取。
-- **没有独立部署分支**——部署在 main 上(自托管/on-prem 的 helm/k8s/compose 是产品的一部分)。
+- **停止 `main → citus` 同步**,citus 上**不再开发**。它降级为"只读参考 + 薄保险"。判据见 `docs/analysis/`:瓶颈在控制面非 PG(PG 写有 10-15× 余量);Citus 解决的是未来才有的多租洪峰写墙;biz 分区先于 biz 分片;真要上有 Azure 托管 Citus 路径 B。
+- **整支 `citus → main`:❌ 永不**(架构承诺,一直如此)。
+- **耐久学习资产在 docs + 脚本,不在活分支**:`docs/backlog/citus-introduction-plan` / `docs/analysis/citus-w8-runtime-findings` / `docs/runbook/citus-deployment`(§1b 扩展边界)/ `docs/design/partition-idempotency-decision` / `scripts/db/citus/01-distribute.sql`。
+- **解冻流程**(真撞 PG 写墙、且确认自托管而非托管 Citus 时):从 tag 起分支 → 重新审计累积 main delta 的 Citus 正确性(新 `FOR UPDATE`/跨分片 join / 新表分片键)→ 重跑 `01-distribute` → 重跑 sim 验证。**切过去≠能直接跑。**
+- **main 保持 Citus-friendly 的前瞻规则仍生效**(见 §多租隔离「新表 PK 前瞻」:新多租大表一律复合 PK),把最严重的漂移堵在源头,降低将来解冻成本。
 
-**CI**:`pr-gate` 在**任何非-main 分支 push 时**跑(单机 `postgres:17` 回归)——citus 每次 push 都自动验"不破坏单机";但 **CI 无 Citus 集群**,Citus 分布式行为靠**手动 sim**(`scripts/sim/run-all-citus.sh`)验证。所以 citus 的 delta 越薄,逃出 CI 的面越小——这是"双栈代码尽量推 main"的硬理由。
+> 历史(冻结前):citus 曾是 main 的并排活跃轨道,靠 `scripts/local/sync-from-main.sh` 定期单向同步;"citus 上发现的通用/双栈代码 → 抽 `feature/<topic>` off main → PR" 的回流规则曾适用。冻结后这些不再发生。
 
 
 ## 构建
