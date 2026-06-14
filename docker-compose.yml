@@ -120,7 +120,7 @@ services:
       - "${BIZ_SHARD_1_PORT:-15442}:5432"
     volumes:
       - postgres-biz-shard-1-data:/var/lib/postgresql/data
-      - ./docker/postgres-biz-shard-1/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/biz-shard-init:/docker-entrypoint-initdb.d:ro
       - ./scripts/db/business/create_biz_tables.sql:/biz-sql/create_biz_tables.sql:ro
     networks:
       - batch-network
