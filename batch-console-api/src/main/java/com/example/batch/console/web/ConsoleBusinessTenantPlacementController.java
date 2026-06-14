@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.persistence.entity.BusinessTenantPlacementEntity;
+import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
 import com.example.batch.console.service.ConsoleBusinessTenantPlacementService;
 import com.example.batch.console.service.ConsoleResponseFactory;
@@ -45,6 +46,11 @@ public class ConsoleBusinessTenantPlacementController {
   }
 
   @PutMapping
+  @AuditAction(
+      action = "tenant_placement.upsert",
+      aggregateType = "tenant_placement",
+      aggregateId = "#request.tenantId",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<Void> upsert(@Valid @RequestBody UpsertTenantPlacementRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
     placementService.upsert(
@@ -57,6 +63,11 @@ public class ConsoleBusinessTenantPlacementController {
   }
 
   @DeleteMapping("/{tenantId}")
+  @AuditAction(
+      action = "tenant_placement.delete",
+      aggregateType = "tenant_placement",
+      aggregateId = "#tenantId",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Void> delete(
       @PathVariable("tenantId") @NotBlank @Size(max = 64) String tenantId) {
     placementService.delete(tenantId);

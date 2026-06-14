@@ -74,6 +74,14 @@ public final class BusinessDataSourceBuilder {
       cfg.setUsername(shard.getUsername());
       cfg.setPassword(shard.getPassword());
       applyPoolDefaults(cfg, properties);
+      // 多片:每片池上限可独立调小,控制 片数×池×worker 数 的总连接,防压爆 PG max_connections
+      int shardPool = routingProperties.getShardMaximumPoolSize();
+      if (shardPool > 0) {
+        cfg.setMaximumPoolSize(shardPool);
+        if (cfg.getMinimumIdle() > shardPool) {
+          cfg.setMinimumIdle(shardPool);
+        }
+      }
       // 多片:启动不验证连接(连接首用时懒建)。否则任一片(尤其本 worker 从不服务的 silo 片)
       // 在 worker 启动时不可达,会让整个 worker 启动失败——与「按片分布」目标相悖。
       cfg.setInitializationFailTimeout(-1L);
