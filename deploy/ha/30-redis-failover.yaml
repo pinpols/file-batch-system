@@ -37,6 +37,13 @@ spec:
     resources:
       requests: { cpu: "100m", memory: 128Mi }
       limits: { cpu: "200m", memory: 256Mi }
+    affinity:
+      podAntiAffinity:                 # 3 哨兵也必须散在不同 node ——
+        requiredDuringSchedulingIgnoredDuringExecution:   # 否则同节点宕掉 → quorum(2) 丢 → 选主失效,HA 名存实亡
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: sentinel
+            topologyKey: kubernetes.io/hostname
   # 鉴权:密码经 Secret(redis-operator 读取);生产必配,prod profile 弱口令会被本仓校验拦
   # auth:
   #   secretPath: batch-redis-auth
