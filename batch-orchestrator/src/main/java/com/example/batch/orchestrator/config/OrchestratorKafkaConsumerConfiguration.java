@@ -77,6 +77,8 @@ public class OrchestratorKafkaConsumerConfiguration {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(triggerLaunchConsumerFactory);
+    // launch→实例创建吞吐受此并发约束(旧默认 1 单线程封顶多租洪峰);与 launch topic 分区数对齐
+    factory.setConcurrency(consumerProperties.getConcurrency());
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.getContainerProperties().setObservationEnabled(true);
     factory.getContainerProperties().setObservationRegistry(observationRegistry);
