@@ -45,7 +45,7 @@ SELECT 'tb',
        CURRENT_DATE,
        'stage3c export source ' || :'batch_no'
 FROM generate_series(1, 20) AS gs
-ON CONFLICT (tenant_id, txn_no) DO UPDATE
+ON CONFLICT (tenant_id, txn_no, txn_date) DO UPDATE
 SET account_no = EXCLUDED.account_no,
     txn_type = EXCLUDED.txn_type,
     amount = EXCLUDED.amount,

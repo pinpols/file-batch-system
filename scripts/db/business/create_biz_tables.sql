@@ -98,8 +98,10 @@ ALTER TABLE batch.process_staging_default SET (
     autovacuum_analyze_scale_factor       = 0.05
 );
 
+-- 分区(P2 tenant-routing):按 tenant_id HASH 分区。分区键必须进 PK → 复合 PK (tenant_id, id);
+-- UNIQUE 已含 tenant_id(分区键),幂等承重不变(ON CONFLICT 仍按 tenant_id+customer_no)。id 仍由 BIGSERIAL 全局唯一。
 CREATE TABLE IF NOT EXISTS biz.customer_account (
-    id                BIGSERIAL PRIMARY KEY,
+    id                BIGSERIAL,
     tenant_id         VARCHAR(64)  NOT NULL,
     customer_no       VARCHAR(64)  NOT NULL,
     customer_name     VARCHAR(256) NOT NULL,
@@ -115,18 +117,24 @@ CREATE TABLE IF NOT EXISTS biz.customer_account (
     updated_by        VARCHAR(64),
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at        TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (tenant_id, id),
     CONSTRAINT uk_customer_account_tenant_no UNIQUE (tenant_id, customer_no),
     CONSTRAINT ck_customer_account_type CHECK (customer_type IN ('PERSONAL', 'ENTERPRISE')),
     CONSTRAINT ck_customer_account_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'FROZEN'))
-);
+) PARTITION BY HASH (tenant_id);
+CREATE TABLE IF NOT EXISTS biz.customer_account_p0 PARTITION OF biz.customer_account FOR VALUES WITH (MODULUS 4, REMAINDER 0);
+CREATE TABLE IF NOT EXISTS biz.customer_account_p1 PARTITION OF biz.customer_account FOR VALUES WITH (MODULUS 4, REMAINDER 1);
+CREATE TABLE IF NOT EXISTS biz.customer_account_p2 PARTITION OF biz.customer_account FOR VALUES WITH (MODULUS 4, REMAINDER 2);
+CREATE TABLE IF NOT EXISTS biz.customer_account_p3 PARTITION OF biz.customer_account FOR VALUES WITH (MODULUS 4, REMAINDER 3);
 
 CREATE INDEX IF NOT EXISTS idx_customer_account_status
     ON biz.customer_account (tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_customer_account_name
     ON biz.customer_account (tenant_id, customer_name);
 
+-- 分区(P2):HASH(tenant_id);复合 PK (tenant_id, id) 让 settlement_detail 的 FK 能引用复合键。
 CREATE TABLE IF NOT EXISTS biz.settlement_batch (
-    id                   BIGSERIAL PRIMARY KEY,
+    id                   BIGSERIAL,
     tenant_id            VARCHAR(64)  NOT NULL,
     batch_no             VARCHAR(128) NOT NULL,
     biz_date             DATE         NOT NULL,
@@ -143,22 +151,29 @@ CREATE TABLE IF NOT EXISTS biz.settlement_batch (
     updated_by           VARCHAR(64),
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (tenant_id, id),
     CONSTRAINT uk_settlement_batch_tenant_batch_no UNIQUE (tenant_id, batch_no),
     CONSTRAINT ck_settlement_batch_snapshot_mode CHECK (snapshot_mode IN ('BIZ_DATE', 'PERIOD', 'BATCH', 'SNAPSHOT_TS')),
     CONSTRAINT ck_settlement_batch_consistency_policy CHECK (consistency_policy IN ('REPEATABLE_READ', 'EXPORT_SNAPSHOT', 'MATERIALIZED_STAGE')),
     CONSTRAINT ck_settlement_batch_status CHECK (batch_status IN ('READY', 'RUNNING', 'EXPORTED', 'ARCHIVED', 'CANCELLED')),
     CONSTRAINT ck_settlement_batch_total_record_count CHECK (total_record_count >= 0)
-);
+) PARTITION BY HASH (tenant_id);
+CREATE TABLE IF NOT EXISTS biz.settlement_batch_p0 PARTITION OF biz.settlement_batch FOR VALUES WITH (MODULUS 4, REMAINDER 0);
+CREATE TABLE IF NOT EXISTS biz.settlement_batch_p1 PARTITION OF biz.settlement_batch FOR VALUES WITH (MODULUS 4, REMAINDER 1);
+CREATE TABLE IF NOT EXISTS biz.settlement_batch_p2 PARTITION OF biz.settlement_batch FOR VALUES WITH (MODULUS 4, REMAINDER 2);
+CREATE TABLE IF NOT EXISTS biz.settlement_batch_p3 PARTITION OF biz.settlement_batch FOR VALUES WITH (MODULUS 4, REMAINDER 3);
 
 CREATE INDEX IF NOT EXISTS idx_settlement_batch_biz_date
     ON biz.settlement_batch (tenant_id, biz_date, batch_status);
 CREATE INDEX IF NOT EXISTS idx_settlement_batch_period
     ON biz.settlement_batch (tenant_id, accounting_period);
 
+-- 分区(P2):HASH(tenant_id);FK 改复合 (tenant_id, batch_id) → settlement_batch(tenant_id, id),
+-- 因父表分区后 PK 变复合,FK 必须引用完整复合键(单 id 不再是键)。
 CREATE TABLE IF NOT EXISTS biz.settlement_detail (
-    id                   BIGSERIAL PRIMARY KEY,
+    id                   BIGSERIAL,
     tenant_id            VARCHAR(64)  NOT NULL,
-    batch_id             BIGINT       NOT NULL REFERENCES biz.settlement_batch(id),
+    batch_id             BIGINT       NOT NULL,
     settlement_no        VARCHAR(128) NOT NULL,
     customer_no          VARCHAR(64)  NOT NULL,
     biz_date             DATE         NOT NULL,
@@ -175,13 +190,20 @@ CREATE TABLE IF NOT EXISTS biz.settlement_detail (
     updated_by           VARCHAR(64),
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (tenant_id, id),
     CONSTRAINT uk_settlement_detail_tenant_no UNIQUE (tenant_id, settlement_no),
+    CONSTRAINT fk_settlement_detail_batch
+        FOREIGN KEY (tenant_id, batch_id) REFERENCES biz.settlement_batch (tenant_id, id),
     CONSTRAINT ck_settlement_detail_gross_amount CHECK (gross_amount >= 0),
     CONSTRAINT ck_settlement_detail_fee_amount CHECK (fee_amount >= 0),
     CONSTRAINT ck_settlement_detail_net_amount CHECK (net_amount >= 0),
     CONSTRAINT ck_settlement_detail_exported_version CHECK (exported_version >= 0),
     CONSTRAINT ck_settlement_detail_status CHECK (settlement_status IN ('READY', 'SETTLED', 'EXPORTED', 'FAILED', 'REVERSED'))
-);
+) PARTITION BY HASH (tenant_id);
+CREATE TABLE IF NOT EXISTS biz.settlement_detail_p0 PARTITION OF biz.settlement_detail FOR VALUES WITH (MODULUS 4, REMAINDER 0);
+CREATE TABLE IF NOT EXISTS biz.settlement_detail_p1 PARTITION OF biz.settlement_detail FOR VALUES WITH (MODULUS 4, REMAINDER 1);
+CREATE TABLE IF NOT EXISTS biz.settlement_detail_p2 PARTITION OF biz.settlement_detail FOR VALUES WITH (MODULUS 4, REMAINDER 2);
+CREATE TABLE IF NOT EXISTS biz.settlement_detail_p3 PARTITION OF biz.settlement_detail FOR VALUES WITH (MODULUS 4, REMAINDER 3);
 
 CREATE INDEX IF NOT EXISTS idx_settlement_detail_batch
     ON biz.settlement_detail (batch_id);
@@ -192,10 +214,12 @@ CREATE INDEX IF NOT EXISTS idx_settlement_detail_customer
 
 -- ---------------------------------------------------------
 -- tb 交易流水导入目标表（对应 tb/IMP-TRANSACTION-CSV 模板）
--- 列名与模板 field_mappings.targetColumn 对齐；conflictColumns = (tenant_id, txn_no)
+-- 列名与模板 field_mappings.targetColumn 对齐；conflictColumns = (tenant_id, txn_no, txn_date)
+-- 分区(P2):时序表按 txn_date RANGE 分区。分区键 txn_date 进 PK + UNIQUE;ON CONFLICT 随之变
+-- (tenant_id, txn_no, txn_date)——同步 seed 模板 conflictColumns。txn_date 对 txn_no 不变 → 幂等等价。
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS biz.transaction (
-    id              BIGSERIAL PRIMARY KEY,
+    id              BIGSERIAL,
     tenant_id       VARCHAR(64)   NOT NULL,
     txn_no          VARCHAR(64)   NOT NULL,
     account_no      VARCHAR(64)   NOT NULL,
@@ -206,9 +230,11 @@ CREATE TABLE IF NOT EXISTS biz.transaction (
     remark          VARCHAR(512),
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_transaction_tenant_txn UNIQUE (tenant_id, txn_no),
+    PRIMARY KEY (tenant_id, txn_date, id),
+    CONSTRAINT uk_transaction_tenant_txn UNIQUE (tenant_id, txn_no, txn_date),
     CONSTRAINT ck_transaction_amount CHECK (amount >= 0)
-);
+) PARTITION BY RANGE (txn_date);
+CREATE TABLE IF NOT EXISTS biz.transaction_default PARTITION OF biz.transaction DEFAULT;
 
 CREATE INDEX IF NOT EXISTS idx_transaction_tenant_date
     ON biz.transaction (tenant_id, txn_date);
@@ -219,8 +245,10 @@ CREATE INDEX IF NOT EXISTS idx_transaction_account
 -- tc 风险评分导入目标表（对应 tc/IMP-RISK-SCORE-JSON 模板）
 -- conflictColumns = (tenant_id, entity_id, score_date)
 -- ---------------------------------------------------------
+-- 分区(P2):时序表按 score_date RANGE 分区。分区键 score_date 进 PK;UNIQUE 已含 score_date(幂等不变,
+-- ON CONFLICT 仍按 tenant_id+entity_id+score_date)。DEFAULT 分区兜全部日期,后续可按月切独立分区 + archive。
 CREATE TABLE IF NOT EXISTS biz.risk_score (
-    id              BIGSERIAL PRIMARY KEY,
+    id              BIGSERIAL,
     tenant_id       VARCHAR(64)   NOT NULL,
     entity_id       VARCHAR(64)   NOT NULL,
     entity_type     VARCHAR(32)   NOT NULL,
@@ -230,10 +258,12 @@ CREATE TABLE IF NOT EXISTS biz.risk_score (
     model_version   VARCHAR(32),
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (tenant_id, score_date, id),
     CONSTRAINT uk_risk_score_tenant_entity_date UNIQUE (tenant_id, entity_id, score_date),
     CONSTRAINT ck_risk_score_band
         CHECK (score_band IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))
-);
+) PARTITION BY RANGE (score_date);
+CREATE TABLE IF NOT EXISTS biz.risk_score_default PARTITION OF biz.risk_score DEFAULT;
 
 CREATE INDEX IF NOT EXISTS idx_risk_score_tenant_date
     ON biz.risk_score (tenant_id, score_date);
@@ -243,9 +273,11 @@ CREATE INDEX IF NOT EXISTS idx_risk_score_band
 -- ---------------------------------------------------------
 -- tc 风险预警导出源表（对应 tc/EXP-RISK-ALERT-JSON 模板）
 -- default_query_sql 从本表按 tenant_id 拉取并 ORDER BY id
+-- 分区(P2):纯导出源表(无 import upsert / 无 ON CONFLICT),按 alert_date RANGE 分区零幂等风险。
+-- 分区键 alert_date 进 PK + UNIQUE(uk 从 (tenant_id, alert_id) → 加 alert_date)。
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS biz.risk_alert (
-    id              BIGSERIAL PRIMARY KEY,
+    id              BIGSERIAL,
     tenant_id       VARCHAR(64)   NOT NULL,
     alert_id        VARCHAR(64)   NOT NULL,
     entity_id       VARCHAR(64)   NOT NULL,
@@ -254,10 +286,12 @@ CREATE TABLE IF NOT EXISTS biz.risk_alert (
     alert_date      DATE          NOT NULL,
     description     VARCHAR(512),
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_risk_alert_tenant_alert UNIQUE (tenant_id, alert_id),
+    PRIMARY KEY (tenant_id, alert_date, id),
+    CONSTRAINT uk_risk_alert_tenant_alert UNIQUE (tenant_id, alert_id, alert_date),
     CONSTRAINT ck_risk_alert_severity
         CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))
-);
+) PARTITION BY RANGE (alert_date);
+CREATE TABLE IF NOT EXISTS biz.risk_alert_default PARTITION OF biz.risk_alert DEFAULT;
 
 CREATE INDEX IF NOT EXISTS idx_risk_alert_tenant_date
     ON biz.risk_alert (tenant_id, alert_date);

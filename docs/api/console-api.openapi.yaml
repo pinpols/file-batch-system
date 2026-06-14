@@ -107,6 +107,8 @@ tags:
     description: Circuit breaker and rate limit parameter management.
   - name: ArchivePolicies
     description: Data archive and cleanup policy management.
+  - name: TenantPlacements
+    description: biz tenant→shard placement management (P2 tenant-routing).
   - name: ClusterDiagnostic
     description: Cross-node consistency diagnostic endpoints.
   - name: Tenants
@@ -7355,6 +7357,140 @@ paths:
       responses:
         '200':
           description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/ops/tenant-placements:
+    get:
+      tags: [TenantPlacements]
+      summary: List biz tenant→shard placements (P2 tenant-routing, platform-wide)
+      operationId: listTenantPlacements
+      responses:
+        '200':
+          description: Placement list (tenantId, placementKey, updatedAt, updatedBy)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [TenantPlacements]
+      summary: Assign or migrate a tenant to a biz shard (upsert)
+      operationId: upsertTenantPlacement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, placementKey]
+              properties:
+                tenantId:
+                  type: string
+                  maxLength: 64
+                placementKey:
+                  type: string
+                  maxLength: 64
+                  pattern: '^[a-z0-9-]+$'
+                  description: 'shard key (e.g. shard-0 / silo-big); credentials are NOT here (secrets only)'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/ops/tenant-placements/{tenantId}:
+    delete:
+      tags: [TenantPlacements]
+      summary: Unassign a tenant placement (falls back to hash routing)
+      operationId: deleteTenantPlacement
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: Deleted (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/ops/shard-catalog:
+    get:
+      tags: [TenantPlacements]
+      summary: List biz shard catalog (P2 tenant-routing topology, locations only no credentials)
+      operationId: listShardCatalog
+      responses:
+        '200':
+          description: Shard catalog list (placementKey, host, port, dbName, enabled, ...)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [TenantPlacements]
+      summary: Register/update a biz shard (upsert; credentials NOT here, see secrets)
+      operationId: upsertShardCatalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [placementKey, host, port, dbName, enabled]
+              properties:
+                placementKey:
+                  type: string
+                  maxLength: 64
+                  pattern: '^[a-z0-9-]+$'
+                host:
+                  type: string
+                  maxLength: 255
+                port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                dbName:
+                  type: string
+                  maxLength: 64
+                secretRef:
+                  type: string
+                  maxLength: 128
+                  description: 'name of the credential in secrets/vault (e.g. placement key); never the credential itself'
+                poolMaxSize:
+                  type: integer
+                  minimum: 1
+                enabled:
+                  type: boolean
+                description:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/ops/shard-catalog/{placementKey}:
+    delete:
+      tags: [TenantPlacements]
+      summary: Remove a shard catalog entry
+      operationId: deleteShardCatalog
+      parameters:
+        - name: placementKey
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: Deleted (idempotent)
           content:
             application/json:
               schema:
