@@ -29,7 +29,7 @@ flowchart LR
   P["batch_platform<br/>trigger_request<br/>trigger_outbox_event (V80, ADR-010)<br/>job_definition<br/>job_instance<br/>job_partition<br/>job_task<br/>workflow_run<br/>workflow_node_run (output JSONB, ADR-009)<br/>worker_registry<br/>retry_schedule<br/>dead_letter_task<br/>outbox_event<br/>file_record<br/>file_channel_config<br/>file_dispatch_record<br/>file_audit_log<br/>..."]
   KT["Kafka topic<br/>batch.trigger.launch.v1<br/>(ADR-010 异步路径)"]
 
-  B["batch_business<br/>biz.customer_account<br/>biz.settlement_batch<br/>biz.settlement_detail"]
+  B["batch_business<br/>biz.customer_account<br/>biz.settlement_batch<br/>biz.settlement_detail<br/>(可选: BusinessRoutingDataSource 租户→分片, 默认关)"]
 
   Q["Quartz tables<br/>quartz.QRTZ_*"]
 
@@ -100,6 +100,11 @@ flowchart LR
   - `success=false` 且缺失 `errorCode/errorMessage` 时，服务端会落库兜底可观测错误信息（`UNKNOWN`）
   - **i18n 三元组**（V77/V78 后）：`errorKey` + `errorArgs`（JSON 数组）随 BizException.of 跨进程传递，落库 11 张表的 `error_key` + `error_args` JSONB 列；console 读路径过 `LocalizedErrorRenderer` 按当前 Locale 重渲染
   - **节点产出**（ADR-009 Stage 1.2）：`outputs: Map<String, Object>` 字段，worker SUCCESS 时上报 fileId / recordCount / receiptCode 等关键字段，orchestrator 序列化写 `workflow_node_run.output` JSONB 列，供下游 workflow 节点 `$.nodes.<X>.output.<key>` DSL 引用
+
+### biz 数据源可选租户分片路由（#473，默认关）
+- worker 连 `batch_business` 的数据源外层包 `BusinessRoutingDataSource`（Spring `AbstractRoutingDataSource`，已接 import/export/process 的 `BusinessDataSourceConfiguration`），按 `BusinessPlacementResolver` 把当前租户路由到某个 biz 分片。
+- `batch.datasource.business.routing.enabled=false` **默认 → 单片 shard-0 = 现库,透明无变更**(故上图 `JDBC → batch_business` 单库语义不变)。
+- 开启后分片拓扑 + 租户指派两种来源:`placementSource=CONFIG`（yml `shards`）或 `=DB`（平台库 `business_shard_catalog` + `business_tenant_placement`,经 console `/api/console/ops/{shard-catalog,tenant-placements}` ROLE_ADMIN 维护,worker 按 `placementCacheTtlMs` 缓存)。详见 `system-flow-overview.md` §1.3 注 + `docs/runbook/biz-tenant-routing.md`。
 
 ### 内部 Trigger Kafka 协议要点（ADR-010 异步路径，固化无开关）
 
