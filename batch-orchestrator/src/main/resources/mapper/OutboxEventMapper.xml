@@ -32,7 +32,11 @@
             next_publish_at,
             trace_id,
             priority
-        ) values (
+        )
+        <!-- 分区后全局 (tenant_id,event_key) 唯一不可用 DB 约束表达,NOT EXISTS 等价替代旧
+             ON CONFLICT DO NOTHING(跳过时同样不回填 id);竞态可接受性论证见
+             docs/design/partition-idempotency-decision.md。幂等承重在 OutboxDomainEventPublisher 单一入口 -->
+        select
             #{tenantId},
             #{aggregateType},
             #{aggregateId},
@@ -44,8 +48,10 @@
             #{nextPublishAt},
             #{traceId},
             coalesce(#{priority}, 5)
+        where not exists (
+            select 1 from batch.outbox_event
+            where tenant_id = #{tenantId} and event_key = #{eventKey}
         )
-        on conflict (tenant_id, event_key) do nothing
     </insert>
 
     <select id="selectPending" resultMap="OutboxEventResultMap">
