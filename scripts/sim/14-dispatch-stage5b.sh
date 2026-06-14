@@ -21,6 +21,10 @@ source "$ROOT/scripts/sim/env-common.sh"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
+echo "==> seed dispatch stage5b job/channel fixture"
+docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage5b-dispatch-fixtures.sql >/dev/null
+
 echo "==> preflight dispatch stage5 job/channel"
 if [[ "$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select count(*) from batch.job_definition where tenant_id='tb' and job_code='TB_DISPATCH_STAGE5_FAIL_ONCE' and enabled=true")" != "1" ]]; then
   echo "❌ missing TB_DISPATCH_STAGE5_FAIL_ONCE fixture" >&2
