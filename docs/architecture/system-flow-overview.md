@@ -65,7 +65,7 @@ flowchart LR
 
   subgraph DATA ["数据落地"]
     direction TB
-    BIZ[("batch_business<br/>biz.*")]:::store
+    BIZ[("batch_business<br/>biz.*<br/>(可选: BusinessRoutingDataSource<br/>租户→分片, 默认关)")]:::store
     M[("MinIO<br/>batch-dev")]:::store
   end
 
@@ -166,6 +166,8 @@ flowchart LR
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态（含 i18n 三元组 + ADR-009 节点 outputs）→ orchestrator 推进状态机 + 落 `workflow_node_run.output` JSONB 列。
 5. **落地**：IMPORT 写 `batch_business.biz.*` 表；EXPORT 把生成的文件 PUT 到 MinIO 并登记 `file_record`；DISPATCH 把 `file_record` 派到外部通道（LOCAL / SFTP / NAS / OSS / API）。
+
+> **biz 写/读经可选的租户分片路由层(#473，默认关)**：worker 的 biz 数据源外层包了一层 `BusinessRoutingDataSource`（Spring `AbstractRoutingDataSource`，与 console-api `ReadReplicaRoutingDataSource` 同款模式），按 `BusinessPlacementResolver`（Hash+Silo / DbTable）把当前租户路由到某个 biz 分片。**`batch.datasource.business.routing.enabled=false` 默认 → 走单片 shard-0 = 现库，完全透明无行为变更**(故上图 `batch_business` 仍按单库语义成立)。打开后:`placementSource=CONFIG` 走 yml `shards`,或 `=DB` 走平台库 `business_shard_catalog`(分片拓扑登记)+ `business_tenant_placement`(租户→分片指派)两张表——经 console `/api/console/ops/{shard-catalog,tenant-placements}`(ROLE_ADMIN)维护,worker 侧按 TTL 缓存读取。**这是 biz 数据层的水平扩展杠杆**(配合 PG 原生分区),独立于平台库的 Citus 评估;详见 `scalability-assessment.md` 与 `docs/runbook/biz-tenant-routing.md`。
 
 ### 1.4 Trigger → Orchestrator 异步路径（ADR-010，固化无开关）
 
