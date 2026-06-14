@@ -121,6 +121,19 @@ INSERT INTO batch.job_definition (
     (2007, 'default-tenant', 'atomic_http_demo', 'Atomic HTTP Demo', 'ATOMIC', 'GENERAL', 'MANUAL', NULL, 'Asia/Shanghai', 5, 'atomic_queue', 'atomic', 'default-calendar', 'always_open', 'MANUAL', FALSE, 'STATIC', 'EXPONENTIAL', 1, 300, NULL, jsonb_build_object('type', 'object'), jsonb_build_object('taskType', 'http', 'url', 'https://example.internal/health', 'method', 'GET'), 1, TRUE, '原子任务示例:http', 'system', 'system', TIMESTAMPTZ '2026-05-30 08:00:00+08', TIMESTAMPTZ '2026-05-30 08:00:00+08')
 ON CONFLICT (id) DO NOTHING;
 
+-- atomic_stored_proc_demo(2006)依赖的示例 procedure。原为 sim 手工补、未落 git
+-- (见 docs/verifications/worker-business-scenario-matrix-2026-06-08.md「补 CREATE
+-- PROCEDURE batch.refresh_metrics() 后成功」),环境 reset 后丢失致 stored-proc demo
+-- 不可复现。此处固化:无参 no-op,atomic stored-proc 执行器经 pg_proc.prokind 判定为
+-- procedure 后用原生 CALL batch.refresh_metrics() 调用,只需 CALL 成功。
+CREATE OR REPLACE PROCEDURE batch.refresh_metrics()
+LANGUAGE plpgsql AS $$
+BEGIN
+    -- demo:真实部署可在此刷新指标物化视图;sim 下仅验证 stored-proc 链路 CALL 成功。
+    PERFORM 1;
+END;
+$$;
+
 INSERT INTO batch.workflow_definition (
     id, tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at
 ) VALUES

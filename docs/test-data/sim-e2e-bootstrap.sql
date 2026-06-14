@@ -720,6 +720,37 @@ SET step_name = EXCLUDED.step_name,
 -- 11. Stage 3 export 业务分支:补 JSON / FIXED_WIDTH / EXCEL / bad SQL 模板。
 --     复用 TA_EXPORT_REPORT job,通过 params.templateCode 切换模板,避免增加 fixture job 数量。
 -- ----------------------------------------------------------------------------
+-- 11.0 源模板 TA_EXPORT_REPORT_TPL:原由 03 console Excel 配置包导入建立。sim 不跑 03 时缺失,
+--      导致下方 source_template CTE 为空 → export 衍生模板克隆 0 行 → 所有 export stage(9/12/18)
+--      报 "export_data_ref is required"。此处自包含补齐基础源模板(关键 export 配置仍由下方
+--      export_matrix / 克隆 SELECT 的硬编码提供),脱离 03 依赖;03 真跑时 DO NOTHING 保留其权威版本。
+--      列集沿用上面 import 模板已验证的集合 + export_data_ref。
+INSERT INTO batch.file_template_config (
+    tenant_id, template_code, template_name, template_type, biz_type,
+    file_format_type, charset, target_charset, with_bom, line_separator,
+    delimiter, quote_char, escape_char, record_length, header_rows, footer_rows,
+    header_template, trailer_template, checksum_type, compress_type, encrypt_type,
+    naming_rule, field_mappings, validation_rule_set, query_param_schema,
+    streaming_enabled, page_size, fetch_size, chunk_size, enabled, version,
+    description, created_by, updated_by, preprocess_pipeline,
+    preview_masking_enabled, error_line_masking_enabled, log_masking_enabled,
+    content_encryption_enabled, download_requires_approval, export_data_ref, load_target_ref, is_deleted
+)
+VALUES
+  ('ta', 'TA_EXPORT_REPORT_TPL', '客户报表导出基础源模板', 'EXPORT', 'TA_EXPORT_REPORT',
+   'JSON', 'UTF-8', 'UTF-8', false, E'\n',
+   null, null, null, 0, 1, 0,
+   null, null, 'NONE', 'NONE', 'NONE',
+   'ta_export_customer_${bizDate}_${batchNo}.json',
+   '[]'::jsonb, '{}'::jsonb,
+   jsonb_build_object('export_data_ref', 'sql_template_export',
+                      'sqlTemplateExport', jsonb_build_object('cursorColumn', 'id')),
+   true, 200, 200, 100, true, 1,
+   'Stage 3 export 基础源模板:JSON/FIXED/EXCEL/BAD_SQL/KEYSET 衍生模板由 bootstrap 与 stage fixture 克隆生成',
+   'sim-e2e', 'sim-e2e', null,
+   false, false, false, false, false, 'sql_template_export', null, false)
+ON CONFLICT (tenant_id, template_code, version) DO NOTHING;
+
 WITH source_template AS (
     SELECT *
     FROM batch.file_template_config
