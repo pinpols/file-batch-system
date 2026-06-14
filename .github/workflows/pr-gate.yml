@@ -151,6 +151,12 @@ jobs:
         # 拦 JDK preview 启用标记进入生产构建/运行(load-tests benchmark 豁免)。脚本内有详细说明。
         run: bash scripts/ci/check-no-enable-preview.sh
 
+      - name: Verify e2e shard lists cover all *E2eIT
+        shell: bash
+        # 守护 full-ci-gate / staging-gate 的硬编码 e2e shard 清单与实际 *E2eIT 一致,
+        # 防新增 / 重命名后被静默漏跑(2026-06-14 实测漏 5 个)。
+        run: bash scripts/ci/check-e2e-shard-coverage.sh
+
       - name: PMD + Spotless + dependency boundary
         shell: bash
         # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire

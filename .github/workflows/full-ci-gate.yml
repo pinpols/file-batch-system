@@ -278,9 +278,10 @@ jobs:
               ExportFailurePipelineE2eIT,
               WorkerDrainE2eIT,
               ProcessPipelineE2eIT,
-              OutboxForwarderRetryE2eIT
+              OutboxForwarderRetryE2eIT,
+              SdkAgainstStubOrchestratorE2eIT
           - id: 2
-            label: "292s + Spi/TriggerAsync 新增"
+            label: "292s + Atomic/TriggerAsync"
             tests: >-
               ImportFailureE2eIT,
               FullChainTenantPropagationE2eIT,
@@ -288,9 +289,9 @@ jobs:
               ExportPipelineE2eIT,
               TriggerAsyncLaunchFullChainE2eIT,
               TriggerAsyncLaunchE2eIT,
-              SpiTaskPipelineE2eIT
+              AtomicTaskPipelineE2eIT
           - id: 3
-            label: "334s + Spi mixed"
+            label: "334s + Atomic mixed"
             tests: >-
               DeadLetterApprovalReplayE2eIT,
               DispatchFailurePipelineE2eIT,
@@ -298,9 +299,9 @@ jobs:
               ProcessFailurePipelineE2eIT,
               OutboxForwarderE2eIT,
               SensorWaitFixtureE2eIT,
-              SpiMixedScenarioE2eIT
+              AtomicMixedScenarioE2eIT
           - id: 4
-            label: "334s + Spi seed/load"
+            label: "334s + Atomic seed/load"
             tests: >-
               ExportStorageFailureE2eIT,
               DispatchPipelineE2eIT,
@@ -308,8 +309,8 @@ jobs:
               ImportPipelineE2eIT,
               DedupJobLaunchE2eIT,
               OutboxPollMarginsYamlE2eIT,
-              SpiSeedStrictVerifyE2eIT,
-              SpiTaskLoadE2eIT
+              AtomicSeedStrictVerifyE2eIT,
+              AtomicTaskLoadE2eIT
     steps:
       - name: Checkout
         uses: actions/checkout@v6
