@@ -115,9 +115,27 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # 0 = 全历史:migration-safety / openapi-breaking 守护要相对 base 做 diff。
+          fetch-depth: 0
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
+
+      - name: Install squawk + oasdiff (迁移/契约守护工具)
+        shell: bash
+        run: |
+          npm install -g squawk-cli@2.58.0
+          OASDIFF_VERSION=1.19.0
+          curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin oasdiff
+          squawk --version && oasdiff --version
+
+      - name: Resolve guard base ref
+        shell: bash
+        run: |
+          BASE="${{ github.base_ref || 'main' }}"
+          git fetch --no-tags --depth=200 origin "$BASE" || git fetch --no-tags origin "$BASE"
+          echo "GUARD_BASE=origin/${BASE}" >> "$GITHUB_ENV"
 
       - name: Validate KAFKA_TOPICS sync (.env.example ↔ BatchTopics.java)
         shell: bash
@@ -162,6 +180,26 @@ jobs:
         # 守护根 reactor 里有测试的模块都被某 unit shard 的 -pl 覆盖,
         # 防新模块漏进 shard 被静默跳过(2026-06-14 实测 sdk×3 共 ~370 测试从未跑)。
         run: bash scripts/ci/check-module-test-coverage.sh
+
+      - name: Migration safety lint (squawk, diff-only)
+        shell: bash
+        # 只扫本 PR 新增/改动的 db/migration,拦危险 DDL(DROP COLUMN / 改类型 / 加 UNIQUE 长锁等)。
+        run: bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
+
+      - name: OpenAPI breaking-change (oasdiff)
+        shell: bash
+        # 比 base 的 openapi,删端点/删必填/改类型等 ERR 级破坏即 fail。
+        run: bash scripts/ci/check-openapi-breaking.sh "$GUARD_BASE"
+
+      - name: Biz table multi-tenant + RLS guard
+        shell: bash
+        # biz.* 基表必须含 tenant_id 且进 strict RLS tables[] 数组。
+        run: python3 scripts/ci/check-biz-table-tenant-rls.py
+
+      - name: No silently-disabled tests
+        shell: bash
+        # @Disabled 必须带非空 reason(防覆盖率被静默掏空)。
+        run: bash scripts/ci/check-no-silent-disabled-tests.sh
 
       - name: PMD + Spotless + dependency boundary
         shell: bash

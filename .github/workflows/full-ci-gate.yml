@@ -89,6 +89,9 @@ jobs:
           mvn verify -pl batch-orchestrator,batch-worker-core,batch-worker-sdk,batch-worker-sdk-spring-boot-starter,batch-worker-sdk-testkit -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
+          # 覆盖率门禁(BUNDLE 25% LINE + 15 个核心类 80% lock-in 棘轮)。原仅本地 strict-verify 跑,
+          # 现上 CI。只查本 shard 跑了测试的目标模块,不带 -am(否则上游模块 0% 覆盖误判失败)。
+          mvn jacoco:check@check -pl batch-orchestrator,batch-worker-core,batch-worker-sdk,batch-worker-sdk-spring-boot-starter,batch-worker-sdk-testkit -B
 
       - name: Upload Surefire Reports
         if: always()
@@ -129,6 +132,8 @@ jobs:
           mvn verify -pl batch-common,batch-trigger,batch-worker-process,batch-worker-dispatch -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
+          # 覆盖率门禁(见 unit-it-a 注释);只查本 shard 目标模块。
+          mvn jacoco:check@check -pl batch-common,batch-trigger,batch-worker-process,batch-worker-dispatch -B
 
       - name: Upload Surefire Reports
         if: always()
@@ -169,6 +174,8 @@ jobs:
           mvn verify -pl batch-worker-import,batch-worker-export,batch-worker-atomic,batch-console-api -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
+          # 覆盖率门禁(见 unit-it-a 注释);只查本 shard 目标模块。
+          mvn jacoco:check@check -pl batch-worker-import,batch-worker-export,batch-worker-atomic,batch-console-api -B
 
       - name: Upload Surefire Reports
         if: always()
@@ -229,6 +236,20 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: bash scripts/ci/security-scan.sh --skip-build -- --mode=deps
+
+      - name: License compliance + SBOM
+        shell: bash
+        # 生成 CycloneDX SBOM + 第三方许可证清单,并拦强 copyleft(AGPL/SSPL/CPAL/纯 GPL)。
+        run: bash scripts/ci/check-license-compliance.sh
+
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-cyclonedx
+          path: target/bom.json
+          retention-days: 90
+          if-no-files-found: warn
 
       - name: Lint Dockerfile
         uses: hadolint/hadolint-action@v3.3.0
