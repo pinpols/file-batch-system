@@ -127,7 +127,7 @@
             #{triggerRequestId},
             #{jobCode},
             #{instanceNo},
-            #{bizDate},
+            coalesce(#{bizDate}, CURRENT_DATE),
             #{triggerType},
             #{instanceStatus},
             #{batchNo},
