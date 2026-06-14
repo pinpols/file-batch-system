@@ -1,4 +1,4 @@
--- V171: job_instance 转 biz_date 月分区。8 条子表 FK 转应用层守护
+-- V173: job_instance 转 biz_date 月分区。8 条子表 FK 转应用层守护
 -- (SuccessInstanceArchiveScheduler 已支持级联删)。
 -- biz_date 升 NOT NULL(INSERT COALESCE(biz_date, created_at::date) 兜底,实库 0 行 NULL)。
 -- 唯一约束语义变化:dedup/instance_no 唯一从全局弱化为每 biz_date 内(评审已知悉)。

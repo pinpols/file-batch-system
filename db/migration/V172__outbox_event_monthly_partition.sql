@@ -1,4 +1,4 @@
--- V170: outbox_event 转 created_at 月分区。
+-- V172: outbox_event 转 created_at 月分区。
 -- 配套:OutboxEventMapper insert 已改 NOT EXISTS(同分支后续提交),
 -- 幂等语义决策见 docs/design/partition-idempotency-decision.md。
 -- 列/约束/索引权威源:scripts/db/partition-migration/01-*.sql(2026-06-10 pg_dump 重生成)。
