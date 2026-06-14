@@ -1,0 +1,27 @@
+# squawk 迁移安全 lint 配置(2026-06-14 R8 守护)。
+#
+# 只保留「危险锁 / 数据丢失 / 破坏应用」类规则;排除两类:
+#   1. 纯风格偏好(prefer-text-field / prefer-bigint / prefer-identity / prefer-timestamp-tz):
+#      与可用性无关,且会对存量大量误报。
+#   2. 与「Flyway 事务内迁移」冲突的规则:require-concurrent-index-* 在事务里根本不能用 CONCURRENTLY;
+#      require-timeout-settings / prefer-robust-stmts 对 versioned-once 的 Flyway 价值低且极噪。
+#
+# 保留的高价值规则(对照本仓痛点 + CLAUDE.md 红线):
+#   ban-drop-column / ban-drop-table / ban-drop-not-null  → 数据丢失
+#   renaming-table / renaming-column                      → 破坏 mybatis #{} 绑定(CLAUDE.md 禁重命名字段)
+#   changing-column-type                                  → 表重写 + 破坏应用
+#   disallowed-unique-constraint                          → 加 UNIQUE 约束取 ACCESS EXCLUSIVE 长锁
+#   constraint-missing-not-valid                          → 加 FK/CHECK 不带 NOT VALID 锁全表
+#   adding-not-nullable-field / adding-serial-primary-key-column → 大表重写
+excluded_rules = [
+  "prefer-text-field",
+  "prefer-bigint-over-int",
+  "prefer-bigint-over-smallint",
+  "prefer-identity",
+  "prefer-timestamp-tz",
+  "prefer-robust-stmts",
+  "require-concurrent-index-creation",
+  "require-concurrent-index-deletion",
+  "require-timeout-settings",
+  "adding-foreign-key-constraint",
+]
