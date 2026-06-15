@@ -14,7 +14,9 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -44,6 +46,11 @@ public class SensorPollScheduler {
   // RLS-bypass）解出 tenant，再绑定 holder 跑 probeOne。
   private final WorkflowRunMapper workflowRunMapper;
 
+  // CLAUDE.md §Java编码细则 #3 豁免①: self-invocation AOP workaround。fetchDue / probeOne 的
+  // @Transactional(REQUIRES_NEW) 只有经 Spring 代理调用才生效;同类内直接调用不走 AOP,
+  // SELECT ... FOR UPDATE SKIP LOCKED 的行锁事务边界会形同虚设(锁随即释放,失去单节点隔离)。
+  @Lazy @Autowired private SensorPollScheduler self;
+
   @Scheduled(fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
   @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")
   public void scheduledScan() {
@@ -56,7 +63,7 @@ public class SensorPollScheduler {
       return;
     }
     Instant now = BatchDateTimeSupport.utcNow();
-    List<WorkflowNodeRunEntity> due = fetchDue(now);
+    List<WorkflowNodeRunEntity> due = self.fetchDue(now);
     if (due.isEmpty()) {
       return;
     }
@@ -70,9 +77,9 @@ public class SensorPollScheduler {
         String tenantId = resolveTenantId(nodeRun);
         if (tenantId == null || tenantId.isBlank()) {
           // 拿不到 tenant 退回原行为，避免 nodeRun 残留卡死整 tick。
-          probeOne(nodeRun, now);
+          self.probeOne(nodeRun, now);
         } else {
-          RlsTenantContextHolder.runWithTenant(tenantId, () -> probeOne(nodeRun, now));
+          RlsTenantContextHolder.runWithTenant(tenantId, () -> self.probeOne(nodeRun, now));
         }
       } catch (Exception e) {
         // R2-P2-6：e.toString() 只给类名 + message 不带 stack；sensor policy 内部 NPE 等代码缺陷

@@ -49,7 +49,7 @@ public class ConsoleNotificationController {
   }
 
   @PostMapping("/channels")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> createChannel(
       @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
     service.createChannel(tenantId, params);
@@ -57,7 +57,7 @@ public class ConsoleNotificationController {
   }
 
   @PutMapping("/channels/{channelCode}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> updateChannel(
       @RequestParam @NotBlank String tenantId,
       @PathVariable String channelCode,
@@ -67,7 +67,7 @@ public class ConsoleNotificationController {
   }
 
   @DeleteMapping("/channels/{channelCode}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> deleteChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
     service.deleteChannel(tenantId, channelCode);
@@ -75,7 +75,7 @@ public class ConsoleNotificationController {
   }
 
   @PostMapping("/channels/{channelCode}/test")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Map<String, Object>> testChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
     return responseFactory.success(service.testChannel(tenantId, channelCode));
@@ -98,7 +98,7 @@ public class ConsoleNotificationController {
   }
 
   @PostMapping("/rules")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> createRule(
       @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
     service.createRule(tenantId, params);
@@ -106,7 +106,7 @@ public class ConsoleNotificationController {
   }
 
   @PutMapping("/rules/{ruleId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> updateRule(
       @RequestParam @NotBlank String tenantId,
       @PathVariable Long ruleId,
@@ -116,7 +116,7 @@ public class ConsoleNotificationController {
   }
 
   @DeleteMapping("/rules/{ruleId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> deleteRule(
       @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
     service.deleteRule(tenantId, ruleId);

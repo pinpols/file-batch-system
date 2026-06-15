@@ -15,8 +15,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Import worker 启动时扫自己挂的业务库（{@code biz} schema）把 (table, columns) 清单上报到 {@code
@@ -32,23 +32,31 @@ public class BizTableSchemaRegistrar {
   private final DataSource bizDataSource;
   private final BizTableSchemaMapper mapper;
   private final ObjectMapper objectMapper;
+  private final PlatformTransactionManager transactionManager;
 
   public BizTableSchemaRegistrar(
       @Qualifier("importBusinessDataSource") DataSource bizDataSource,
       BizTableSchemaMapper mapper,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      PlatformTransactionManager transactionManager) {
     this.bizDataSource = bizDataSource;
     this.mapper = mapper;
     this.objectMapper = objectMapper;
+    this.transactionManager = transactionManager;
   }
 
+  /** biz 元数据快照单元:一张表 + 其列定义 JSON。 */
+  private record TableColumns(String schema, String table, String columnsJson) {}
+
+  // P1-6: @EventListener 上原挂 @Transactional(REQUIRES_NEW) 违反 CLAUDE.md #4(@Transactional 只放
+  // Service 公共方法),且 EventListener 无外层事务时 REQUIRES_NEW≈REQUIRED 纯属误用。改为先在事务外只读
+  // 收集 biz 元数据快照,再用 TransactionTemplate 显式包裹 deleteAll + N 条 upsertEntry 原子覆盖写
+  // (对齐 AbstractStepBeanRegistrar 的合规范式)。
   @EventListener(ApplicationReadyEvent.class)
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void registerOnStartup() {
-    int tableCount = 0;
+    List<TableColumns> snapshot = new ArrayList<>();
     try (Connection conn = bizDataSource.getConnection()) {
       DatabaseMetaData md = conn.getMetaData();
-      mapper.deleteAll();
       try (ResultSet tables = md.getTables(null, "biz", "%", new String[] {"TABLE"})) {
         while (tables.next()) {
           String schema = tables.getString("TABLE_SCHEM");
@@ -63,14 +71,26 @@ public class BizTableSchemaRegistrar {
               cols.add(col);
             }
           }
-          mapper.upsertEntry(schema, table, objectMapper.writeValueAsString(cols));
-          tableCount++;
+          snapshot.add(new TableColumns(schema, table, objectMapper.writeValueAsString(cols)));
         }
       }
-      log.info("biz_table_schema snapshot refreshed: schema=biz, tables={}", tableCount);
     } catch (Exception ex) {
       // 失败降级：console-api 查到空表就跳过 targetColumn 校验（兼容首次部署无 biz 库的场景）
-      log.error("biz_table_schema snapshot failed: {}", ex.getMessage(), ex);
+      log.error("biz_table_schema snapshot failed (read biz metadata): {}", ex.getMessage(), ex);
+      return;
+    }
+    try {
+      new TransactionTemplate(transactionManager)
+          .executeWithoutResult(
+              status -> {
+                mapper.deleteAll();
+                for (TableColumns tc : snapshot) {
+                  mapper.upsertEntry(tc.schema(), tc.table(), tc.columnsJson());
+                }
+              });
+      log.info("biz_table_schema snapshot refreshed: schema=biz, tables={}", snapshot.size());
+    } catch (Exception ex) {
+      log.error("biz_table_schema snapshot failed (write registry): {}", ex.getMessage(), ex);
     }
   }
 }
