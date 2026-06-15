@@ -73,12 +73,16 @@ class PreprocessStepObjectLoadIntegrationTest {
     }
   }
 
-  private PreprocessStep newStep() {
+  /** 用本租户登记 {@code storage_path=registeredPath} 的 file_record stub 构造 step(归属校验放行该路径)。 */
+  private PreprocessStep newStep(String registeredPath) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true); // 跳过解密,下载的明文直通 pipeline
     PlatformFileRuntimeRepository runtimeRepo = mock(PlatformFileRuntimeRepository.class);
     when(runtimeRepo.toLong(any())).thenReturn(1L);
     when(runtimeRepo.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
+    // 归属校验:loadFileRecord 返回本租户登记的 storage_path,使该对象路径被放行。
+    when(runtimeRepo.loadFileRecord(any(), any()))
+        .thenReturn(Map.of("storage_path", registeredPath));
     S3StorageProperties props = new S3StorageProperties();
     props.setBucket(bucket);
     return new PreprocessStep(
@@ -144,12 +148,12 @@ class PreprocessStepObjectLoadIntegrationTest {
     String content = "{\"records\":[{\"customerNo\":\"OBJ-001\"},{\"customerNo\":\"OBJ-002\"}]}";
     putObject(key, content);
 
-    ImportStageResult result = newStep().execute(contextWithBlankRawPayload(objectPayload(key)));
+    ImportStageResult result = newStep(key).execute(contextWithBlankRawPayload(objectPayload(key)));
 
     assertThat(result.success()).as("object-path import should succeed").isTrue();
     // 下载的对象内容应流入 normalizedPayload(证明 storagePath 分支生效 + 早期校验放行)
     ImportJobContext probe = contextWithBlankRawPayload(objectPayload(key));
-    ImportStageResult r2 = newStep().execute(probe);
+    ImportStageResult r2 = newStep(key).execute(probe);
     assertThat(r2.success()).isTrue();
     Object normalized = probe.getAttributes().get("normalizedPayload");
     assertThat(normalized).isNotNull();
@@ -159,10 +163,26 @@ class PreprocessStepObjectLoadIntegrationTest {
   @Test
   void fails_whenStoragePathObjectMissing() {
     // 对象不存在 → downloadObjectBytes 抛错 → PREPROCESS 失败(而非静默空载)
-    ImportStageResult result =
-        newStep()
-            .execute(contextWithBlankRawPayload(objectPayload("ingress/objload-it/nope.json")));
+    String key = "ingress/objload-it/nope.json";
+    ImportStageResult result = newStep(key).execute(contextWithBlankRawPayload(objectPayload(key)));
     assertThat(result.success()).isFalse();
+  }
+
+  @Test
+  void fails_whenStoragePathNotOwnedByTenant() throws Exception {
+    // 越权防护:对象真实存在,但 payload.storagePath 与本租户 file_record 登记路径不符 →
+    // 归属校验拒绝拉取(IMPORT_PREPROCESS_OBJECT_FORBIDDEN),PREPROCESS 失败,不读他租户对象。
+    String registered = "ingress/objload-it/owned.json";
+    String forged = "ingress/other-tenant/secret.json";
+    putObject(forged, "{\"records\":[{\"customerNo\":\"LEAK\"}]}");
+
+    ImportJobContext context = contextWithBlankRawPayload(objectPayload(forged));
+    ImportStageResult result = newStep(registered).execute(context);
+
+    assertThat(result.success()).as("cross-tenant object fetch must be refused").isFalse();
+    assertThat(context.getAttributes().get("normalizedPayload"))
+        .as("forbidden fetch must not leak object content")
+        .isNull();
   }
 
   @Test
@@ -179,7 +199,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     putObject(key, sb.toString());
 
     ImportJobContext context = contextWithBlankRawPayload(objectPayload(key));
-    ImportStageResult result = newStep().execute(context);
+    ImportStageResult result = newStep(key).execute(context);
 
     assertThat(result.success()).as("large object stream-direct should succeed").isTrue();
     // 流式直载:设 spool 路径,PREPROCESS 不落 normalizedPayload(交给 PARSE 流式解码)

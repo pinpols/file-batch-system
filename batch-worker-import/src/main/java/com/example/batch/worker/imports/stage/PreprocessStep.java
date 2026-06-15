@@ -130,6 +130,13 @@ public class PreprocessStep implements ImportStageStep {
       Object templateConfigObject = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
       Map<String, Object> templateConfig = toStringKeyMap(templateConfigObject);
 
+      // 越权防护:任何从 payload.storagePath 拉对象前,先核对该路径确实是本租户已登记 file_record 的
+      // storage_path(逐字相等)。payload 来自上游消息,storagePath/storageBucket 字段一旦被篡改/伪造即可
+      // 指向他租户对象;这里 fail-fast 把"裸信任 payload 直接拉取"收敛成"只拉本租户登记的那个对象"。
+      if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
+        assertObjectBelongsToTenant(context, importPayload);
+      }
+
       // 大文件流式直载:无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件,
       // 交 PARSE 流式逐行消费,全程不把整文件读进堆(突破 byte[]/MAX_OBJECT_BYTES 内存天花板,
       // 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退 byte[] 路径。
@@ -264,6 +271,29 @@ public class PreprocessStep implements ImportStageStep {
     }
     String raw = context.getRawPayload();
     return raw == null ? new byte[0] : raw.getBytes(StandardCharsets.UTF_8);
+  }
+
+  /**
+   * 对象拉取前的租户归属校验:payload 携带的 {@code storagePath} 必须逐字命中本租户已登记 file_record (按 {@code tenant_id} +
+   * {@code FILE_ID} 加载)的 {@code storage_path}。 这是比"前缀匹配"更强的约束——只放行平台为本文件登记的那一个对象,杜绝跨租户/任意路径读取。
+   * 校验失败抛 {@link ImportPreprocessException},由 execute 的 catch 转优雅失败(非裸抛)。
+   */
+  private void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
+    Long fileId =
+        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> fileRecord =
+        fileId == null ? Map.of() : runtimeRepository.loadFileRecord(context.getTenantId(), fileId);
+    Object registeredPath = fileRecord.get("storage_path");
+    if (registeredPath == null
+        || !importPayload.storagePath().equals(String.valueOf(registeredPath))) {
+      throw new ImportPreprocessException(
+          "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
+          "import object path not owned by tenant (tenant="
+              + context.getTenantId()
+              + ", path="
+              + importPayload.storagePath()
+              + "); refusing to fetch object not registered to this tenant's file_record");
+    }
   }
 
   /**
