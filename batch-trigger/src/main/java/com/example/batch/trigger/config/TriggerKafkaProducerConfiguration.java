@@ -1,11 +1,11 @@
 package com.example.batch.trigger.config;
 
+import com.example.batch.common.config.BatchKafkaProducerProperties;
+import com.example.batch.common.config.BatchKafkaProducerSupport;
 import io.micrometer.observation.ObservationRegistry;
-import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -24,26 +24,23 @@ import org.springframework.kafka.core.ProducerFactory;
  * 自带 {@code spring.kafka.bootstrap-servers} 不入 Properties(避免与 Spring KafkaProperties 重复)。
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(TriggerKafkaProperties.class)
+@EnableConfigurationProperties({TriggerKafkaProperties.class, BatchKafkaProducerProperties.class})
 @RequiredArgsConstructor
 public class TriggerKafkaProducerConfiguration {
 
   private final TriggerKafkaProperties kafkaProperties;
+  private final BatchKafkaProducerProperties commonProducerProperties;
 
   @Bean
   public ProducerFactory<String, String> triggerKafkaProducerFactory(
       @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
-    Map<String, Object> properties = new HashMap<>();
-    properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(ProducerConfig.ACKS_CONFIG, kafkaProperties.getProducer().getAcks());
-    properties.put(ProducerConfig.RETRIES_CONFIG, kafkaProperties.getProducer().getRetries());
-    // 幂等生产者 + 顺序保证;send 失败由 outbox relay 退避兜底,无需 Producer 端 max.in.flight 限制。
-    properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-    // max.block.ms:buffer 满 / metadata fetch 阻塞上限。默认 60s 远超 sendTimeoutSeconds(默认 10s),
-    // broker 不可达时会让 relay 线程在 send() 内阻塞 2x sendTimeout。取 sendTimeout 的 80%(最少 1s)
-    // 作内部阻塞上限,超出由外层 sendTimeout 兜底取消 future,避免双层超时叠加。
+    // base 统一走全局 spring.kafka.producer.*(acks/retries/幂等/delivery & request 超时/buffer.memory),
+    // 与 orchestrator / worker-core 同源,消除三处漂移。
+    Map<String, Object> properties =
+        BatchKafkaProducerSupport.stringProducerConfig(bootstrapServers, commonProducerProperties);
+    // trigger 专属覆盖:max.block.ms 不取全局(默认 5s),而按本模块 sendTimeoutSeconds 推导更紧的
+    // 内部阻塞上限——取 sendTimeout 的 80%(最少 1s),超出由 KafkaTriggerEventPublisher 外层
+    // sendTimeout 兜底取消 future,避免双层超时叠加。
     long sendTimeoutMillis = Math.max(1_000L, kafkaProperties.getSendTimeoutSeconds() * 1_000L);
     long maxBlockMillis = Math.max(1_000L, (long) (sendTimeoutMillis * 0.8));
     properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMillis);
