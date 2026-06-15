@@ -2,6 +2,7 @@ package com.example.batch.worker.atomic.runtime;
 
 import com.example.batch.worker.atomic.http.HttpExecutorProperties;
 import com.example.batch.worker.atomic.shell.ShellExecutorProperties;
+import com.example.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
 import com.example.batch.worker.atomic.sql.SqlExecutorProperties;
 import com.example.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.util.ArrayList;
@@ -17,9 +18,9 @@ import org.springframework.stereotype.Component;
  * ADR-029 dual-use(RCE 级)SPI executor 启动期隔离守护。
  *
  * <p><b>背景</b>:batch-worker-atomic 同一个镜像可按 {@code batch.worker.executors.*} 开关启用 shell / sql /
- * stored-proc / http 等 executor。其中 shell + sql + stored-proc 属于 dual-use(可在 worker 进程里执行任意命令 / 任意
- * SQL / 任意存储过程),一旦在「连业务库 / 高权限 SA / 出口无限制」的 pod 上启用,等于把 RCE 能力直接挂进生产网络。ADR-029 要求这类 worker
- * 部署必须满足最小权限:
+ * stored-proc / http / spark-submit 等 executor。其中 shell + sql + stored-proc + spark-submit 属于
+ * dual-use(可在 worker 进程里执行任意命令 / 任意 SQL / 任意存储过程 / 提交任意 jar),一旦在「连业务库 / 高权限 SA / 出口无限制」的 pod
+ * 上启用,等于把 RCE 能力直接挂进生产网络。ADR-029 要求这类 worker 部署必须满足最小权限:
  *
  * <ul>
  *   <li>独立低权限 DB role(只给 claim/lease 平台库,绝不连业务库)
@@ -58,6 +59,7 @@ public class AtomicIsolationStartupCheck {
   private final ObjectProvider<SqlExecutorProperties> sqlProps;
   private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
   private final ObjectProvider<HttpExecutorProperties> httpProps;
+  private final ObjectProvider<SparkSubmitExecutorProperties> sparkProps;
   private final Environment environment;
 
   public AtomicIsolationStartupCheck(
@@ -65,11 +67,13 @@ public class AtomicIsolationStartupCheck {
       ObjectProvider<SqlExecutorProperties> sqlProps,
       ObjectProvider<StoredProcExecutorProperties> storedProcProps,
       ObjectProvider<HttpExecutorProperties> httpProps,
+      ObjectProvider<SparkSubmitExecutorProperties> sparkProps,
       Environment environment) {
     this.shellProps = shellProps;
     this.sqlProps = sqlProps;
     this.storedProcProps = storedProcProps;
     this.httpProps = httpProps;
+    this.sparkProps = sparkProps;
     this.environment = environment;
   }
 
@@ -128,6 +132,11 @@ public class AtomicIsolationStartupCheck {
     StoredProcExecutorProperties storedProc = storedProcProps.getIfAvailable();
     if (storedProc != null && storedProc.isEnabled()) {
       enabled.add("stored-proc");
+    }
+    // spark-submit 提交任意 jar/.py = 任意代码执行,危害等同 shell,归 dual-use RCE。
+    SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
+    if (spark != null && spark.isEnabled()) {
+      enabled.add("spark-submit");
     }
     // http executor 受出口域名白名单约束,不归为 dual-use RCE;仅在有它启用时也提示隔离,
     // 但它本身不触发 fail-fast(仍计入 WARN 的整体上下文判断之外)。这里有意不加入 enabled。

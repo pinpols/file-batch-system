@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.worker.atomic.http.HttpExecutorProperties;
 import com.example.batch.worker.atomic.shell.ShellExecutorProperties;
+import com.example.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
 import com.example.batch.worker.atomic.sql.SqlExecutorProperties;
 import com.example.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import org.junit.jupiter.api.Test;
@@ -30,11 +31,12 @@ class AtomicIsolationStartupCheckTest {
   @Mock private ObjectProvider<SqlExecutorProperties> sqlProvider;
   @Mock private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
   @Mock private ObjectProvider<HttpExecutorProperties> httpProvider;
+  @Mock private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
   @Mock private Environment environment;
 
   private AtomicIsolationStartupCheck newCheck() {
     return new AtomicIsolationStartupCheck(
-        shellProvider, sqlProvider, storedProcProvider, httpProvider, environment);
+        shellProvider, sqlProvider, storedProcProvider, httpProvider, sparkProvider, environment);
   }
 
   private void enableShell() {
@@ -49,6 +51,25 @@ class AtomicIsolationStartupCheckTest {
     lenient().when(storedProcProvider.getIfAvailable()).thenReturn(null);
     lenient().when(httpProvider.getIfAvailable()).thenReturn(null);
     lenient().when(shellProvider.getIfAvailable()).thenReturn(null);
+    lenient().when(sparkProvider.getIfAvailable()).thenReturn(null);
+  }
+
+  private void enableSpark() {
+    SparkSubmitExecutorProperties spark = new SparkSubmitExecutorProperties();
+    spark.setEnabled(true);
+    when(sparkProvider.getIfAvailable()).thenReturn(spark);
+  }
+
+  @Test
+  void sparkEnabled_requireIsolation_notAcked_throws() {
+    // S-2:spark-submit 是 dual-use RCE,启用 + require-isolation + 未 ack 必须 fail-fast。
+    noOtherExecutors();
+    enableSpark();
+    stubFlags(true, false);
+
+    assertThatThrownBy(() -> newCheck().checkOnStartup())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("spark-submit");
   }
 
   private void stubFlags(boolean requireIsolation, boolean acknowledged) {
