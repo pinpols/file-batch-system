@@ -21,6 +21,9 @@ import net.sf.jsqlparser.util.TablesNamesFinder;
 /** SQL Transform 只允许配置 SELECT/WITH 源 SQL，并限制可访问 schema。 */
 public class SqlTransformComputeSqlValidator {
 
+  /** 校验失败统一 i18n key,详情走 messageArgs[0]。 */
+  private static final String ERR_KEY = "error.process.sql_validation";
+
   private final SqlTransformComputeSecurityProperties security;
 
   public SqlTransformComputeSqlValidator(SqlTransformComputeSecurityProperties security) {
@@ -44,7 +47,7 @@ public class SqlTransformComputeSqlValidator {
       if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase())) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.process.sql_validation",
+            ERR_KEY,
             "sqlTransformCompute validation SQL may only read "
                 + SqlTransformComputePlugin.STAGING_TABLE
                 + ", found: "
@@ -58,16 +61,14 @@ public class SqlTransformComputeSqlValidator {
     String sql = raw == null ? "" : raw.trim();
     if (!Texts.hasText(sql)) {
       throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.process.sql_validation",
-          "sqlTransformCompute SQL is blank");
+          ResultCode.INVALID_ARGUMENT, ERR_KEY, "sqlTransformCompute SQL is blank");
     }
 
     Statement statement = parse(sql);
     if (!(statement instanceof Select select)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.process.sql_validation",
+          ERR_KEY,
           "sqlTransformCompute only allows SELECT/WITH queries, got: "
               + statement.getClass().getSimpleName());
     }
@@ -108,7 +109,7 @@ public class SqlTransformComputeSqlValidator {
         if (leftBoundary && rightCallSite) {
           throw BizException.of(
               ResultCode.INVALID_ARGUMENT,
-              "error.process.sql_validation",
+              ERR_KEY,
               "sqlTransformCompute SQL calls forbidden function '" + fn + "'");
         }
         idx = after;
@@ -132,7 +133,7 @@ public class SqlTransformComputeSqlValidator {
     if (limit == null) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.process.sql_validation",
+          ERR_KEY,
           "sqlTransformCompute SQL must include a top-level LIMIT clause (≤ "
               + maxLimitRows
               + " rows)");
@@ -140,7 +141,7 @@ public class SqlTransformComputeSqlValidator {
     if (limit > maxLimitRows) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.process.sql_validation",
+          ERR_KEY,
           "sqlTransformCompute SQL LIMIT " + limit + " exceeds max " + maxLimitRows);
     }
   }
@@ -174,7 +175,7 @@ public class SqlTransformComputeSqlValidator {
     } catch (Exception e) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.process.sql_validation",
+          ERR_KEY,
           e,
           "sqlTransformCompute SQL parse error: " + e.getMessage());
     }
@@ -228,7 +229,7 @@ public class SqlTransformComputeSqlValidator {
       if (expression instanceof AllColumns || expression instanceof AllTableColumns) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.process.sql_validation",
+            ERR_KEY,
             "sqlTransformCompute forbids SELECT * / SELECT table.*;"
                 + " enumerate columns explicitly");
       }
@@ -255,7 +256,7 @@ public class SqlTransformComputeSqlValidator {
       if (dot <= 0) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.process.sql_validation",
+            ERR_KEY,
             "sqlTransformCompute requires fully-qualified table names (schema.table), found: "
                 + name);
       }
@@ -263,7 +264,7 @@ public class SqlTransformComputeSqlValidator {
       if (!allowedSchemas.contains(schema)) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.process.sql_validation",
+            ERR_KEY,
             "sqlTransformCompute references disallowed schema '"
                 + schema
                 + "' - allowed: "
