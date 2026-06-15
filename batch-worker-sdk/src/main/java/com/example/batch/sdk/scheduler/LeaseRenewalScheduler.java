@@ -89,6 +89,11 @@ public class LeaseRenewalScheduler implements AutoCloseable {
       Map<String, Object> body = new HashMap<>();
       body.put("tenantId", config.getTenantId());
       body.put("workerId", config.getWorkerCode());
+      // 分区任务必须带 partitionInvocationId:平台 R3-P1-10 缺它直接 renewLease=false→409→不续租→分区任务双跑。
+      String partitionInvocationId = dispatcher.partitionInvocation(taskId);
+      if (partitionInvocationId != null) {
+        body.put("partitionInvocationId", partitionInvocationId);
+      }
       Map<String, Object> details = dispatcher.progressSnapshot(taskId);
       if (details != null) {
         body.put("details", details); // SDK-P4-2:handler reportProgress 快照,落 job_task
