@@ -74,6 +74,68 @@ public final class CodingConventionsArchRules {
                 + "新增以 Record 结尾的类必须改名 *Entity(例如 ApiKeyEntity / ImportBadRecordEntity)。");
   }
 
+  /**
+   * 禁止同一方法同时标 {@code @EventListener} 与 {@code @Transactional}:CLAUDE.md #4 要求
+   * {@code @Transactional} 只放 Service 公共方法。事件监听方法直接挂事务是误用(监听器由框架直接调用, 不走 Service
+   * 代理边界,事务语义不清/易吞异常),应改用 {@code TransactionTemplate} 显式包裹。
+   */
+  public static ArchRule noTransactionalOnEventListenerRule() {
+    return ArchRuleDefinition.noMethods()
+        .should(
+            haveBothAnnotations(
+                "org.springframework.context.event.EventListener",
+                "org.springframework.transaction.annotation.Transactional"))
+        .allowEmptyShould(true)
+        .because(
+            "CLAUDE.md #4:@EventListener 方法禁直接叠 @Transactional(误用);"
+                + "事件监听不走 Service 代理边界,改用 TransactionTemplate 显式包裹事务。");
+  }
+
+  /**
+   * 禁止同一方法同时标 {@code @Scheduled} 与 {@code @Transactional}:CLAUDE.md #4 要求 {@code @Transactional} 只放
+   * Service 公共方法。定时任务方法直接挂事务是误用(调度由框架直接调用, 不走 Service 代理边界),应抽出 Service 方法或改用 {@code
+   * TransactionTemplate}。
+   */
+  public static ArchRule noTransactionalOnScheduledRule() {
+    return ArchRuleDefinition.noMethods()
+        .should(
+            haveBothAnnotations(
+                "org.springframework.scheduling.annotation.Scheduled",
+                "org.springframework.transaction.annotation.Transactional"))
+        .allowEmptyShould(true)
+        .because(
+            "CLAUDE.md #4:@Scheduled 方法禁直接叠 @Transactional(误用);"
+                + "调度不走 Service 代理边界,抽 Service 方法或改用 TransactionTemplate。");
+  }
+
+  /** 命中条件 = 方法同时带 triggerAnnotation 与 transactional 两个注解(同一方法)。 */
+  private static ArchCondition<com.tngtech.archunit.core.domain.JavaMethod> haveBothAnnotations(
+      String triggerAnnotation, String transactionalAnnotation) {
+    return new ArchCondition<>(
+        "be annotated with both @"
+            + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
+            + " and @"
+            + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)) {
+      @Override
+      public void check(
+          com.tngtech.archunit.core.domain.JavaMethod method, ConditionEvents events) {
+        if (method.isAnnotatedWith(triggerAnnotation)
+            && method.isAnnotatedWith(transactionalAnnotation)) {
+          events.add(
+              SimpleConditionEvent.violated(
+                  method,
+                  method.getFullName()
+                      + " 同时标了 @"
+                      + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
+                      + " 与 @"
+                      + transactionalAnnotation.substring(
+                          transactionalAnnotation.lastIndexOf('.') + 1)
+                      + " — 违反 CLAUDE.md #4,改用 TransactionTemplate 显式包裹事务"));
+        }
+      }
+    };
+  }
+
   private static ArchCondition<JavaClass> existAtAll() {
     return new ArchCondition<>("not exist (any match = violation)") {
       @Override

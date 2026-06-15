@@ -164,4 +164,42 @@ class ConsoleTenantApplicationServiceTest {
     verify(filePipelineMapper).countByStatuses("tenant-a", expectedPipelineStatuses);
     verify(workflowRunMapper).countByStatuses("tenant-a", expectedWorkflowStatuses);
   }
+
+  // P1-5: 远端 trigger pause/resume 失败时,console DB 不能被改(否则状态分裂)。
+  // 远端先于 DB 写调用,且 callOrThrow fail-fast,故抛异常时 updateStatus 不应被触达。
+
+  @Test
+  void suspendTenant_whenRemotePauseFails_doesNotUpdateStatus() {
+    when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+    when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(triggerProxyService.pauseByTenant("tenant-a"))
+        .thenThrow(
+            BizException.of(
+                com.example.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
+                "error.common.downstream_unavailable",
+                "trigger"));
+
+    assertThatThrownBy(() -> service.suspendTenant("tenant-a")).isInstanceOf(BizException.class);
+
+    verify(triggerProxyService).pauseByTenant("tenant-a");
+    verify(tenantMapper, never()).updateStatus(any(), any());
+  }
+
+  @Test
+  void activateTenant_whenRemoteResumeFails_doesNotUpdateStatus() {
+    when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+    when(triggerProxyService.resumeByTenant("tenant-a"))
+        .thenThrow(
+            BizException.of(
+                com.example.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
+                "error.common.downstream_unavailable",
+                "trigger"));
+
+    assertThatThrownBy(() -> service.activateTenant("tenant-a")).isInstanceOf(BizException.class);
+
+    verify(triggerProxyService).resumeByTenant("tenant-a");
+    verify(tenantMapper, never()).updateStatus(any(), any());
+  }
 }

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
 import com.example.batch.console.domain.notification.service.WebhookDispatcher;
 import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEvent;
 import java.time.Instant;
@@ -14,12 +15,15 @@ import org.junit.jupiter.api.Test;
 class ConsoleWebhookDomainEventListenerTest {
 
   private WebhookDispatcher webhookDispatcher;
+  private SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher;
   private ConsoleWebhookDomainEventListener listener;
 
   @BeforeEach
   void setUp() {
     webhookDispatcher = mock(WebhookDispatcher.class);
-    listener = new ConsoleWebhookDomainEventListener(webhookDispatcher);
+    subscriptionRuleWebhookDispatcher = mock(SubscriptionRuleWebhookDispatcher.class);
+    listener =
+        new ConsoleWebhookDomainEventListener(webhookDispatcher, subscriptionRuleWebhookDispatcher);
   }
 
   @Test
@@ -37,13 +41,15 @@ class ConsoleWebhookDomainEventListenerTest {
 
     verify(webhookDispatcher)
         .dispatchAsync("tenant1", "JOB_COMPLETED", "job-instance", "cursor-1", "payload", now);
+    verify(subscriptionRuleWebhookDispatcher)
+        .dispatch("tenant1", "JOB_COMPLETED", "job-instance", "cursor-1", "payload", now);
   }
 
   @Test
   void shouldSkipNullEvent() {
     listener.onDomainEvent(null);
 
-    verifyNoInteractions(webhookDispatcher);
+    verifyNoInteractions(webhookDispatcher, subscriptionRuleWebhookDispatcher);
   }
 
   @Test
@@ -58,6 +64,6 @@ class ConsoleWebhookDomainEventListenerTest {
 
     listener.onDomainEvent(event);
 
-    verifyNoInteractions(webhookDispatcher);
+    verifyNoInteractions(webhookDispatcher, subscriptionRuleWebhookDispatcher);
   }
 }
