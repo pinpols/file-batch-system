@@ -118,8 +118,15 @@
     </insert>
 
     <insert id="archiveJobPartitionsByInstanceIds">
-        insert into archive.job_partition_archive
-        select *
+        insert into archive.job_partition_archive (
+            id, tenant_id, job_instance_id, partition_no, partition_key, partition_status, worker_group,
+            worker_code, lease_expire_at, retry_count, business_key, idempotency_key, input_snapshot,
+            output_summary, started_at, finished_at, created_at, updated_at, version,
+            current_invocation_id, invocation_started_at, dry_run)
+        select id, tenant_id, job_instance_id, partition_no, partition_key, partition_status, worker_group,
+            worker_code, lease_expire_at, retry_count, business_key, idempotency_key, input_snapshot,
+            output_summary, started_at, finished_at, created_at, updated_at, version,
+            current_invocation_id, invocation_started_at, dry_run
         from batch.job_partition
         where job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -127,8 +134,17 @@
     </insert>
 
     <insert id="archiveJobTasksByInstanceIds">
-        insert into archive.job_task_archive
-        select *
+        insert into archive.job_task_archive (
+            id, tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status,
+            assigned_worker_code, task_payload, result_summary, error_code, error_message, started_at,
+            finished_at, created_at, updated_at, version, error_key, error_args, priority, failure_class,
+            dry_run, effective_parameters, heartbeat_details, heartbeat_at, cancel_requested,
+            task_timeout_seconds)
+        select id, tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status,
+            assigned_worker_code, task_payload, result_summary, error_code, error_message, started_at,
+            finished_at, created_at, updated_at, version, error_key, error_args, priority, failure_class,
+            dry_run, effective_parameters, heartbeat_details, heartbeat_at, cancel_requested,
+            task_timeout_seconds
         from batch.job_task
         where job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -136,8 +152,13 @@
     </insert>
 
     <insert id="archiveJobStepInstancesByInstanceIds">
-        insert into archive.job_step_instance_archive
-        select *
+        insert into archive.job_step_instance_archive (
+            id, tenant_id, job_instance_id, job_partition_id, job_task_id, step_code, step_type,
+            step_status, retry_count, related_file_id, result_summary, error_code, error_message, version,
+            started_at, finished_at, created_at, updated_at, error_key, error_args)
+        select id, tenant_id, job_instance_id, job_partition_id, job_task_id, step_code, step_type,
+            step_status, retry_count, related_file_id, result_summary, error_code, error_message, version,
+            started_at, finished_at, created_at, updated_at, error_key, error_args
         from batch.job_step_instance
         where job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -145,8 +166,13 @@
     </insert>
 
     <insert id="archivePipelineInstancesByInstanceIds">
-        insert into archive.pipeline_instance_archive
-        select *
+        insert into archive.pipeline_instance_archive (
+            id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id,
+            related_job_instance_id, current_stage, last_success_stage, run_status, trace_id, started_at,
+            finished_at, created_at, updated_at)
+        select id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id,
+            related_job_instance_id, current_stage, last_success_stage, run_status, trace_id, started_at,
+            finished_at, created_at, updated_at
         from batch.pipeline_instance
         where related_job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -154,8 +180,13 @@
     </insert>
 
     <insert id="archivePipelineStepRunsByInstanceIds">
-        insert into archive.pipeline_step_run_archive
-        select *
+        insert into archive.pipeline_step_run_archive (
+            id, pipeline_instance_id, step_code, stage_code, run_seq, step_status, input_summary,
+            output_summary, error_code, error_message, retry_count, duration_ms, started_at, finished_at,
+            error_key, error_args)
+        select id, pipeline_instance_id, step_code, stage_code, run_seq, step_status, input_summary,
+            output_summary, error_code, error_message, retry_count, duration_ms, started_at, finished_at,
+            error_key, error_args
         from batch.pipeline_step_run
         where pipeline_instance_id in (
             select id from batch.pipeline_instance where related_job_instance_id in
@@ -165,8 +196,13 @@
     </insert>
 
     <insert id="archiveFileDispatchRecordsByInstanceIds">
-        insert into archive.file_dispatch_record_archive
-        select *
+        insert into archive.file_dispatch_record_archive (
+            id, tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target, dispatch_status,
+            dispatch_attempt, receipt_code, receipt_status, external_request_id, error_code, error_message,
+            dispatched_at, ack_at, created_at, updated_at, error_key, error_args)
+        select id, tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target, dispatch_status,
+            dispatch_attempt, receipt_code, receipt_status, external_request_id, error_code, error_message,
+            dispatched_at, ack_at, created_at, updated_at, error_key, error_args
         from batch.file_dispatch_record
         where pipeline_instance_id in (
             select id from batch.pipeline_instance where related_job_instance_id in
@@ -176,8 +212,11 @@
     </insert>
 
     <insert id="archiveWorkflowRunsByInstanceIds">
-        insert into archive.workflow_run_archive
-        select *
+        insert into archive.workflow_run_archive (
+            id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status,
+            current_node_code, trace_id, started_at, finished_at, created_at, updated_at, dry_run)
+        select id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status,
+            current_node_code, trace_id, started_at, finished_at, created_at, updated_at, dry_run
         from batch.workflow_run
         where related_job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -185,8 +224,13 @@
     </insert>
 
     <insert id="archiveWorkflowNodeRunsByInstanceIds">
-        insert into archive.workflow_node_run_archive
-        select *
+        insert into archive.workflow_node_run_archive (
+            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
+            error_message, started_at, finished_at, duration_ms, output, error_key, error_args,
+            sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count)
+        select id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
+            error_message, started_at, finished_at, duration_ms, output, error_key, error_args,
+            sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count
         from batch.workflow_node_run
         where workflow_run_id in (
             select id from batch.workflow_run where related_job_instance_id in
@@ -196,8 +240,11 @@
     </insert>
 
     <insert id="archiveJobExecutionLogsByInstanceIds">
-        insert into archive.job_execution_log_archive
-        select *
+        insert into archive.job_execution_log_archive (
+            id, tenant_id, job_instance_id, job_partition_id, log_level, log_type, trace_id, message,
+            detail_ref, extra_json, created_at)
+        select id, tenant_id, job_instance_id, job_partition_id, log_level, log_type, trace_id, message,
+            detail_ref, extra_json, created_at
         from batch.job_execution_log
         where job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -205,8 +252,15 @@
     </insert>
 
     <insert id="archiveCompensationCommandsByInstanceIds">
-        insert into archive.compensation_command_archive
-        select *
+        insert into archive.compensation_command_archive (
+            id, tenant_id, command_no, compensation_type, target_id, job_code, biz_date, batch_no,
+            related_job_instance_id, related_file_id, approval_id, operator_id, reason, strategy,
+            command_status, trace_id, result_summary, error_code, error_message, created_at, finished_at,
+            error_key, error_args)
+        select id, tenant_id, command_no, compensation_type, target_id, job_code, biz_date, batch_no,
+            related_job_instance_id, related_file_id, approval_id, operator_id, reason, strategy,
+            command_status, trace_id, result_summary, error_code, error_message, created_at, finished_at,
+            error_key, error_args
         from batch.compensation_command
         where related_job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
