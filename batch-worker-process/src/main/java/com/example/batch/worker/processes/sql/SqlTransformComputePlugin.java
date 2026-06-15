@@ -119,14 +119,15 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
   @Override
   public ProcessStageResult compute(ProcessJobContext context) {
+    Map<String, Object> attrs = context.getAttributes();
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
     // buildSqlParams 已经注入 batchKey / targetSchema / targetTable,这里不再重复 put。
     Map<String, Object> params = buildSqlParams(context, spec);
     if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
-      context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 0);
-      context.getAttributes().put("processedCount", 0);
-      context.getAttributes().put("processStagingMode", spec.stagingMode().name());
+      attrs.put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 0);
+      attrs.put("processedCount", 0);
+      attrs.put("processStagingMode", spec.stagingMode().name());
       log.info(
           "sqlTransformCompute direct fast path prepared: tenantId={}, batchKey={}, target={}.{}",
           context.getTenantId(),
@@ -167,8 +168,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
     String stageSql = buildStagingInsertSql(spec);
     int stagedRows = jdbc.update(stageSql, params);
-    context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, stagedRows);
-    context.getAttributes().put("processedCount", stagedRows);
+    attrs.put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, stagedRows);
+    attrs.put("processedCount", stagedRows);
     metrics.recordComputeStagedRows(context.getTenantId(), stagedRows);
 
     // P1-6:超过 maxStagedRows 立即清本批 staging,避免后续 stage 处理超大集合 / target 表雪崩。
@@ -213,9 +214,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     if (Texts.hasText(spec.watermarkColumn())) {
       Object highWaterMarkOut = queryMaxWatermark(spec, batchKey, context.getTenantId());
       if (highWaterMarkOut != null) {
-        context
-            .getAttributes()
-            .put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, String.valueOf(highWaterMarkOut));
+        attrs.put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, String.valueOf(highWaterMarkOut));
       }
     }
     log.info(

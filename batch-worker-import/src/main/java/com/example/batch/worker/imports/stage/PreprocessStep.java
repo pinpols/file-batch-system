@@ -101,10 +101,9 @@ public class PreprocessStep implements ImportStageStep {
           "context is null",
           ERROR_OBJECT_MAPPER);
     }
+    Map<String, Object> attrs = context.getAttributes();
     ImportPayload importPayload =
-        context.getAttributes().get("importPayload") instanceof ImportPayload payload
-            ? payload
-            : null;
+        attrs.get("importPayload") instanceof ImportPayload payload ? payload : null;
     if (!Texts.hasText(context.getRawPayload())
         && (importPayload == null
             || (!Texts.hasText(importPayload.content())
@@ -125,11 +124,10 @@ public class PreprocessStep implements ImportStageStep {
             runtimeRepository.loadLatestTemplateConfig(
                 context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
         if (!templateConfig.isEmpty()) {
-          context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+          attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
         }
       }
-      Object templateConfigObject =
-          context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+      Object templateConfigObject = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
       Map<String, Object> templateConfig = toStringKeyMap(templateConfigObject);
 
       // 大文件流式直载:无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件,
@@ -148,10 +146,8 @@ public class PreprocessStep implements ImportStageStep {
       if (directStreamObjectBytes >= SPOOL_THRESHOLD_BYTES) {
         // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
         // (消除每片 N× 下载/解析放大);否则维持整份流式直载。range 路径任何异常都回退整份(不抛)。
-        Integer partitionNo =
-            intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
-        Integer partitionCount =
-            intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+        Integer partitionNo = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_NO));
+        Integer partitionCount = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT));
         Charset directCharset = resolveCharset(importPayload, templateConfigObject);
         // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
         if (objectStore.supportsRangeRead()
@@ -189,9 +185,9 @@ public class PreprocessStep implements ImportStageStep {
 
       String formatType = resolveFileFormatType(importPayload, templateConfig);
       if (isBinaryImportFormat(formatType)) {
-        context.getAttributes().put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
+        attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
         context.setRawPayload("");
-        context.getAttributes().remove("normalizedPayload");
+        attrs.remove("normalizedPayload");
       } else {
         Charset charset = resolveCharset(importPayload, templateConfigObject);
         if (processed.length >= SPOOL_THRESHOLD_BYTES) {
@@ -199,8 +195,8 @@ public class PreprocessStep implements ImportStageStep {
         } else {
           String normalized = decodeWithGuards(processed, charset, context);
           context.setRawPayload(normalized);
-          context.getAttributes().put("normalizedPayload", normalized);
-          context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+          attrs.put("normalizedPayload", normalized);
+          attrs.remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
         }
       }
 
@@ -208,11 +204,11 @@ public class PreprocessStep implements ImportStageStep {
       fileMetadata.put("preprocessed", Boolean.TRUE);
       fileMetadata.put("preprocessFormat", formatType == null ? "" : formatType);
       // 编码守卫标记：D1 反向错怀疑 + B 残留 U+FFFD 计数，供前端 file_record 详情页/审计查询
-      Object charsetSuspect = context.getAttributes().get("charsetSuspect");
+      Object charsetSuspect = attrs.get("charsetSuspect");
       if (charsetSuspect != null) {
         fileMetadata.put("charsetSuspect", charsetSuspect);
       }
-      Object replacementMeta = context.getAttributes().get("replacementCount");
+      Object replacementMeta = attrs.get("replacementCount");
       if (replacementMeta != null) {
         fileMetadata.put("replacementCount", replacementMeta);
       }

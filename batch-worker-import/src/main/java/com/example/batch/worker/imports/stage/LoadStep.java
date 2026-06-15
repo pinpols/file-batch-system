@@ -91,14 +91,14 @@ public class LoadStep implements ImportStageStep {
     if (!Files.exists(validatedRecordsPath)) {
       return missingPayload(context);
     }
+    Map<String, Object> attrs = context.getAttributes();
     try {
-      if (numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0
-          && Files.size(validatedRecordsPath) == 0L) {
+      if (numberValue(attrs.get(KEY_SKIPPED_COUNT)) > 0 && Files.size(validatedRecordsPath) == 0L) {
         return markLoaded(context, 0L);
       }
       ImportPayload importPayload =
-          context.getAttributes().get("importPayload") instanceof ImportPayload item ? item : null;
-      Object fileRecord = context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD);
+          attrs.get("importPayload") instanceof ImportPayload item ? item : null;
+      Object fileRecord = attrs.get(PipelineRuntimeKeys.FILE_RECORD);
       String sourceFileName =
           fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null
               ? String.valueOf(row.get(KEY_FILE_NAME))
@@ -124,8 +124,7 @@ public class LoadStep implements ImportStageStep {
       if (ckpt != null && ckpt.completed()) {
         // 该实例的 LOAD 已整体完成,幂等跳过(防止重派后重复 loadChunk)。
         deleteQuietly(validatedRecordsPath);
-        deleteQuietly(
-            resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
+        deleteQuietly(resolvePath(attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
         // 幂等跳过:loaded_count 用已写库记录数,不能用 startLineNo(completed 态 positionMarker 为
         // null,parseLineNo 返回 0,会把审计 loaded_count 覆写成 0)。
         return markLoaded(context, ckpt.processedCount());
@@ -139,8 +138,7 @@ public class LoadStep implements ImportStageStep {
       commit(context, importPayload, loadedCount);
       PipelineStageProgressSink.clear();
       deleteQuietly(validatedRecordsPath);
-      deleteQuietly(
-          resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
+      deleteQuietly(resolvePath(attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
       // 失败也清掉 progress sink,避免心跳带上失败 stage 的残留(SDK 进程级 sink 跨 stage 共享)
@@ -149,7 +147,7 @@ public class LoadStep implements ImportStageStep {
       // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
       // 加载失败多为模板/数据问题(坏 SQL、缺表、配置非法),message 已表达根因;ERROR 留一行,堆栈降 DEBUG,
       // 避免大量数据级失败刷屏。失败已封装进 ImportStageResult + 死信,不丢信息。
-      Object fid = context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
+      Object fid = attrs.get(PipelineRuntimeKeys.FILE_ID);
       log.error(
           "load stage (streaming) failed: tenantId={}, fileId={}, message={}",
           context.getTenantId(),

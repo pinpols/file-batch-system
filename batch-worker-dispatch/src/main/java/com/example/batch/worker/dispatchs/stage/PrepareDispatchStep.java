@@ -55,11 +55,12 @@ public class PrepareDispatchStep implements DispatchStageStep {
           objectMapper);
     }
     try {
+      Map<String, Object> attrs = context.getAttributes();
       DispatchPayload payload =
-          context.getAttributes().get("dispatchPayload") instanceof DispatchPayload dispatchPayload
+          attrs.get("dispatchPayload") instanceof DispatchPayload dispatchPayload
               ? dispatchPayload
               : objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
-      context.getAttributes().put("dispatchPayload", payload);
+      attrs.put("dispatchPayload", payload);
       Long fileId =
           payload.fileId() == null || payload.fileId().isBlank()
               ? null
@@ -96,17 +97,13 @@ public class PrepareDispatchStep implements DispatchStageStep {
             objectMapper);
       }
       Map<String, Object> channelConfig = ChannelConfigMerge.merge(channelRow, objectMapper);
-      context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
-      context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
-      context.getAttributes().put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);
-      context.getAttributes().put("retryRequested", Boolean.TRUE.equals(payload.forceRetry()));
-      context
-          .getAttributes()
-          .put("receiptStatus", channelConfig.getOrDefault("receipt_policy", "NONE"));
+      attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
+      attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
+      attrs.put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);
+      attrs.put("retryRequested", Boolean.TRUE.equals(payload.forceRetry()));
+      attrs.put("receiptStatus", channelConfig.getOrDefault("receipt_policy", "NONE"));
       runtimeRepository.bindFileToPipelineInstance(
-          runtimeRepository.toLong(
-              context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-          fileId);
+          runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareDispatchStep.class, "catch:Exception", ex);
 
