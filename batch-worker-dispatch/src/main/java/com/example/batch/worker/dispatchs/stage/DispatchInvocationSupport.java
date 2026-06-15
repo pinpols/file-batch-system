@@ -56,13 +56,14 @@ final class DispatchInvocationSupport {
 
   /** 把 DispatchResult 内的识别码与状态写到 context.attributes，供后续 step 与 receipt watcher 使用。 */
   static void propagateIdentifiers(DispatchJobContext context, DispatchResult dispatchResult) {
-    context.getAttributes().put("dispatchResult", dispatchResult);
-    context.getAttributes().put("externalRequestId", dispatchResult.externalRequestId());
-    context.getAttributes().put("receiptCode", dispatchResult.receiptCode());
-    context.getAttributes().put("receiptStatus", receiptStatusOf(dispatchResult));
+    Map<String, Object> attrs = context.getAttributes();
+    attrs.put("dispatchResult", dispatchResult);
+    attrs.put("externalRequestId", dispatchResult.externalRequestId());
+    attrs.put("receiptCode", dispatchResult.receiptCode());
+    attrs.put("receiptStatus", receiptStatusOf(dispatchResult));
     DispatchManifestRef manifestRef = dispatchResult.manifestRef();
     if (manifestRef != null) {
-      manifestRef.putAttributes(context.getAttributes());
+      manifestRef.putAttributes(attrs);
     }
   }
 

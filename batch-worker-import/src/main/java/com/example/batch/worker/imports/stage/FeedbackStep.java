@@ -37,15 +37,13 @@ public class FeedbackStep implements ImportStageStep {
     if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
       return ImportStageResult.success(stage());
     }
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> attrs = context.getAttributes();
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     Map<String, Object> detailSummary = new LinkedHashMap<>();
-    detailSummary.put("parsedCount", context.getAttributes().get("parsedCount"));
-    detailSummary.put("validatedCount", context.getAttributes().get("validatedCount"));
-    detailSummary.put("loadedCount", context.getAttributes().get("loadedCount"));
-    detailSummary.put(
-        "pipelineInstanceId",
-        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    detailSummary.put("parsedCount", attrs.get("parsedCount"));
+    detailSummary.put("validatedCount", attrs.get("validatedCount"));
+    detailSummary.put("loadedCount", attrs.get("loadedCount"));
+    detailSummary.put("pipelineInstanceId", attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     runtimeRepository.appendAudit(
         FileAuditParam.builder()
             .fileId(fileId)
@@ -54,7 +52,7 @@ public class FeedbackStep implements ImportStageStep {
             .operationResult("SUCCESS")
             .operatorType("SYSTEM")
             .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
             .evidenceRef(null)
             .detailSummary(detailSummary)
             .build());

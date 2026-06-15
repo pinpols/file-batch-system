@@ -118,14 +118,11 @@ public class ReceiveStep implements ImportStageStep {
           objectMapper);
     }
     ImportPayload importPayload = resolvePayload(context);
-    Long existingFileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> attrs = context.getAttributes();
+    Long existingFileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     if (existingFileId == null) {
       String traceId =
-          String.valueOf(
-              context
-                  .getAttributes()
-                  .getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId()));
+          String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId()));
       String fileFormatType =
           normalizeFileFormat(importPayload.fileFormatType(), context.getRawPayload());
       String fileName = resolveFileName(importPayload, fileFormatType, traceId);
@@ -134,7 +131,7 @@ public class ReceiveStep implements ImportStageStep {
       metadata.put("sourceType", defaultText(importPayload.sourceType(), "UPLOAD"));
       metadata.put("headerRows", importPayload.headerRows());
       metadata.put("footerRows", importPayload.footerRows());
-      metadata.put("taskId", context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
+      metadata.put("taskId", attrs.get(PipelineRuntimeKeys.TASK_ID));
       metadata.put("withHeader", importPayload.withHeader());
       mergeSecurityMetadata(
           metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
@@ -167,19 +164,15 @@ public class ReceiveStep implements ImportStageStep {
                   .traceId(traceId)
                   .metadata(metadata)
                   .build());
-      context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
-      context
-          .getAttributes()
-          .put(
-              PipelineRuntimeKeys.FILE_RECORD,
-              runtimeRepository.loadFileRecord(context.getTenantId(), fileId));
+      attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
+      attrs.put(
+          PipelineRuntimeKeys.FILE_RECORD,
+          runtimeRepository.loadFileRecord(context.getTenantId(), fileId));
       runtimeRepository.bindFileToPipelineInstance(
-          runtimeRepository.toLong(
-              context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-          fileId);
+          runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
       context.setFileId(String.valueOf(fileId));
     }
-    context.getAttributes().put("importPayload", importPayload);
+    attrs.put("importPayload", importPayload);
     return ImportStageResult.success(stage());
   }
 

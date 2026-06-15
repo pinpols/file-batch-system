@@ -50,12 +50,10 @@ public class AckDispatchStep implements DispatchStageStep {
           "dispatch payload missing",
           ERROR_OBJECT_MAPPER);
     }
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> attrs = context.getAttributes();
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     DispatchResult dispatchResult =
-        context.getAttributes().get("dispatchResult") instanceof DispatchResult result
-            ? result
-            : null;
+        attrs.get("dispatchResult") instanceof DispatchResult result ? result : null;
     String receiptCode = dispatchPayload.receiptCode();
     if ((receiptCode == null || receiptCode.isBlank()) && dispatchResult != null) {
       receiptCode = dispatchResult.receiptCode();
@@ -70,13 +68,11 @@ public class AckDispatchStep implements DispatchStageStep {
               dispatchPayload.channelCode(),
               receiptCode == null ? "ACK-" + fileId : receiptCode);
       if (updated <= 0) {
-        context
-            .getAttributes()
-            .put(
-                PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE,
-                Boolean.TRUE.equals(context.getAttributes().get("retryRequested"))
-                    ? DispatchStage.RETRY.name()
-                    : DispatchStage.COMPENSATE.name());
+        attrs.put(
+            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE,
+            Boolean.TRUE.equals(attrs.get("retryRequested"))
+                ? DispatchStage.RETRY.name()
+                : DispatchStage.COMPENSATE.name());
         return DispatchStageResult.failure(
             stage(),
             "DISPATCH_ACK_FAILED",
@@ -87,11 +83,11 @@ public class AckDispatchStep implements DispatchStageStep {
       }
       runtimeRepository.updateFileStatus(
           fileId, "DISPATCHED", buildFileMetadata(dispatchPayload, context, receiptCode));
-      context.getAttributes().put("receiptStatus", "SUCCESS");
+      attrs.put("receiptStatus", "SUCCESS");
       return DispatchStageResult.success(stage());
     }
     if (pending || Boolean.TRUE.equals(dispatchPayload.ackRequired())) {
-      context.getAttributes().put("receiptStatus", "PENDING");
+      attrs.put("receiptStatus", "PENDING");
       return DispatchStageResult.success(stage());
     }
     runtimeRepository.updateFileStatus(

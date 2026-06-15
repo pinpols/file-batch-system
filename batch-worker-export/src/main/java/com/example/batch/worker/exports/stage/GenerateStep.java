@@ -85,8 +85,9 @@ public class GenerateStep implements ExportStageStep {
     // ADR-038 P3:续跑激活时,失败要保留残文件供下次 truncate+续写(类比 Import 失败保留 staging)。
     boolean keepPartialFileOnFailure = false;
     try {
+      Map<String, Object> attrs = context.getAttributes();
       String exportDataRef = resolveExportDataRef(context, exportPayload);
-      context.getAttributes().put("exportDataRef", exportDataRef);
+      attrs.put("exportDataRef", exportDataRef);
       ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
       ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
       Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
@@ -117,8 +118,7 @@ public class GenerateStep implements ExportStageStep {
       }
       int pageSize = resolvePageSize(context);
       int chunkSize = resolveChunkSize(context);
-      String fileFormatType =
-          String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
+      String fileFormatType = String.valueOf(attrs.getOrDefault("exportFileFormatType", "JSON"));
 
       // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
       // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
@@ -169,15 +169,11 @@ public class GenerateStep implements ExportStageStep {
         checkpoint.complete(recordCount);
       }
 
-      context.getAttributes().put("exportBatch", batch);
-      context
-          .getAttributes()
-          .put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
-      context.getAttributes().put("recordCount", recordCount);
-      context
-          .getAttributes()
-          .put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
-      context.getAttributes().put("fileSizeBytes", Files.size(generatedFile));
+      attrs.put("exportBatch", batch);
+      attrs.put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
+      attrs.put("recordCount", recordCount);
+      attrs.put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
+      attrs.put("fileSizeBytes", Files.size(generatedFile));
       // 2026-06-04 docs/design/pipeline-stage-progress-display.md:stage 结束清 sink,
       // 避免下一个 CLAIM 心跳带上残留;AbstractExportFormat.generatePaged 已在循环里每 1000 行 publish。
       PipelineStageProgressSink.clear();

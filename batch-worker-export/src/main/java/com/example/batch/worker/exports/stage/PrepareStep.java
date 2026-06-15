@@ -54,11 +54,12 @@ public class PrepareStep implements ExportStageStep {
           objectMapper);
     }
     try {
+      Map<String, Object> attrs = context.getAttributes();
       ExportPayload payload =
-          context.getAttributes().get("exportPayload") instanceof ExportPayload exportPayload
+          attrs.get("exportPayload") instanceof ExportPayload exportPayload
               ? exportPayload
               : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
-      context.getAttributes().put("exportPayload", payload);
+      attrs.put("exportPayload", payload);
       Map<String, Object> templateConfig = Map.of();
       // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 兜底加载导出模板;
       // 否则 TEMPLATE_CONFIG 为空 → GenerateStep 报「export_data_ref is required」、导出永久失败转死信。
@@ -72,7 +73,7 @@ public class PrepareStep implements ExportStageStep {
             runtimeRepository.loadLatestTemplateConfig(
                 context.getTenantId(), effectiveTemplateCode, ExportWorkerType.EXPORT);
         if (!templateConfig.isEmpty()) {
-          context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+          attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
         }
       }
       String bizDate = resolveBizDate(context, payload);
@@ -89,10 +90,8 @@ public class PrepareStep implements ExportStageStep {
       // 地区(per-run):metadata.region 优先 → 模板 defaultRegion 兜底 → allowedRegions 字典校验。
       // 在此统一解析:既喂文件名 ${region} 占位,也经 exportSnapshot 透传给 GENERATE 查询插件绑定 :region。
       String region = ExportRegionResolver.resolve(templateConfig, payload.metadata());
-      int partitionNo =
-          intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO), 1);
-      int partitionCount =
-          intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
+      int partitionNo = intOrDefault(attrs.get(PipelineRuntimeKeys.PARTITION_NO), 1);
+      int partitionCount = intOrDefault(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
       String fileName =
           BatchFileConstants.insertPartitionTag(
               resolveFileName(context, payload, templateConfig, fileFormatType, region),
@@ -106,11 +105,11 @@ public class PrepareStep implements ExportStageStep {
       if (Texts.hasText(region)) {
         exportSnapshot.put("region", region);
       }
-      context.getAttributes().put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
-      context.getAttributes().put("fileName", fileName);
-      context.getAttributes().put("exportFileFormatType", fileFormatType);
-      context.getAttributes().put("objectName", finalObjectName);
-      context.getAttributes().put("tempObjectName", tempObjectName);
+      attrs.put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
+      attrs.put("fileName", fileName);
+      attrs.put("exportFileFormatType", fileFormatType);
+      attrs.put("objectName", finalObjectName);
+      attrs.put("tempObjectName", tempObjectName);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareStep.class, "catch:Exception", ex);
 
