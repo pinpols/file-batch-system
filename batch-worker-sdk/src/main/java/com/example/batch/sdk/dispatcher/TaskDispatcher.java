@@ -75,6 +75,13 @@ public class TaskDispatcher {
    */
   private final Map<Long, ProgressReporter> progressReporters = new ConcurrentHashMap<>();
 
+  /**
+   * taskId → partitionInvocationId 内存映射。claim 时从 {@link TaskDispatchMessage#runtimeAttributes()}
+   * 落入,renew/report 必须带上(平台 R3-P1-10/R3-P0-5 对分区任务强制该不变量:缺失 → renew 返 false→409→ 不续租→lease
+   * 超时→分区任务被重派双跑;report 缺失则 late-invocation CAS 防覆盖守卫被跳过)。task 结束随其它槽表一起清。
+   */
+  private final Map<Long, String> partitionInvocations = new ConcurrentHashMap<>();
+
   /** P0 hardening:stop() 后置 true,onMessage 拒新消息(Zeebe JobWorker.close 模式)。 */
   private final AtomicBoolean draining = new AtomicBoolean(false);
 
@@ -268,9 +275,11 @@ public class TaskDispatcher {
     claimBody.put("tenantId", msg.tenantId());
     claimBody.put(
         "workerId", config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
-    if (msg.runtimeAttributes() != null) {
-      Object pInv = msg.runtimeAttributes().get("partitionInvocationId");
-      if (pInv != null) claimBody.put("partitionInvocationId", pInv.toString());
+    String partitionInvocationId = extractPartitionInvocation(msg);
+    if (partitionInvocationId != null) {
+      claimBody.put("partitionInvocationId", partitionInvocationId);
+      // 留存供 renew(只有 taskId、拿不到 msg)+ report 带上,贯穿分区不变量。
+      partitionInvocations.put(msg.taskId(), partitionInvocationId);
     }
     if (!claimWithRetry(msg, idemClaim, claimBody)) {
       return;
@@ -318,6 +327,7 @@ public class TaskDispatcher {
       body.put("taskId", msg.taskId());
       body.put("tenantId", msg.tenantId());
       body.put("workerId", config.getWorkerCode());
+      putPartitionInvocation(body, msg); // 平台 R3-P0-5 late-report CAS 防覆盖守卫依赖该字段
       body.put("success", result.success());
       body.put("message", result.message());
       body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
@@ -347,6 +357,7 @@ public class TaskDispatcher {
       inFlight.remove(msg.taskId());
       cancellations.remove(msg.taskId());
       progressReporters.remove(msg.taskId());
+      partitionInvocations.remove(msg.taskId());
     }
   }
 
@@ -378,6 +389,28 @@ public class TaskDispatcher {
     }
     ProgressReporter reporter = progressReporters.get(taskId);
     return reporter == null ? null : reporter.latest();
+  }
+
+  /** 供 {@link LeaseRenewalScheduler} 续租时读取该 in-flight task 的 partitionInvocationId(claim 时留存)。 */
+  public String partitionInvocation(Long taskId) {
+    return taskId == null ? null : partitionInvocations.get(taskId);
+  }
+
+  /** 从 dispatch 消息的 runtimeAttributes 抽 partitionInvocationId(无则 null)。 */
+  private static String extractPartitionInvocation(TaskDispatchMessage msg) {
+    if (msg.runtimeAttributes() == null) {
+      return null;
+    }
+    Object v = msg.runtimeAttributes().get("partitionInvocationId");
+    return v == null ? null : v.toString();
+  }
+
+  /** 把 partitionInvocationId 放进 renew/report body(无则不放,兼容非分区任务)。 */
+  private static void putPartitionInvocation(Map<String, Object> body, TaskDispatchMessage msg) {
+    String pInv = extractPartitionInvocation(msg);
+    if (pInv != null) {
+      body.put("partitionInvocationId", pInv);
+    }
   }
 
   /**
@@ -537,6 +570,7 @@ public class TaskDispatcher {
       body.put("taskId", msg.taskId());
       body.put("tenantId", msg.tenantId());
       body.put("workerId", config.getWorkerCode());
+      putPartitionInvocation(body, msg);
       body.put("success", false);
       body.put("message", message);
       if (error != null) {

@@ -51,6 +51,23 @@ class LeaseRenewalSchedulerTest {
   }
 
   @Test
+  void renewCarriesPartitionInvocationId() throws Exception {
+    // C1 回归守护:分区任务 renew 必须带 partitionInvocationId,否则平台 R3-P1-10 返 409 → 不续租 → 双跑。
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(42L));
+    when(dispatcher.partitionInvocation(42L)).thenReturn("inv-77");
+    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
+
+    s.tick();
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    verify(http).renew(eq(42L), body.capture());
+    assertThat(body.getValue()).containsEntry("partitionInvocationId", "inv-77");
+  }
+
+  @Test
   void emptyInFlightSkipsAllCalls() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);

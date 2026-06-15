@@ -92,6 +92,48 @@ class TaskDispatcherTest {
         .containsEntry("workerId", "w-1");
   }
 
+  @Test
+  @SuppressWarnings("unchecked")
+  void partitionInvocationThreadedToClaimAndReport() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    SdkTaskHandler handler =
+        new SdkTaskHandler() {
+          @Override
+          public String taskType() {
+            return "tt";
+          }
+
+          @Override
+          public SdkTaskResult execute(SdkTaskContext ctx) {
+            return SdkTaskResult.ok("done", Map.of());
+          }
+        };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+
+    // 分区任务:runtimeAttributes 带 partitionInvocationId(平台 R3-P1-10/R3-P0-5 强制不变量)。
+    TaskDispatchMessage partitioned =
+        new TaskDispatchMessage(
+            42L,
+            "tx",
+            "job-1",
+            "tt",
+            "ti-9",
+            Map.of("p", 1),
+            Map.of("traceId", "abc", "partitionInvocationId", "inv-77"));
+    dispatcher.processInWorkerThread(partitioned);
+
+    ArgumentCaptor<Map<String, Object>> claimBody = ArgumentCaptor.forClass(Map.class);
+    verify(http).claim(eq(42L), anyString(), claimBody.capture());
+    assertThat(claimBody.getValue()).containsEntry("partitionInvocationId", "inv-77");
+
+    ArgumentCaptor<Map<String, Object>> reportBody = ArgumentCaptor.forClass(Map.class);
+    verify(http).report(eq(42L), anyString(), reportBody.capture());
+    assertThat(reportBody.getValue()).containsEntry("partitionInvocationId", "inv-77");
+
+    // task 结束后映射已清(finally remove),不泄漏。
+    assertThat(dispatcher.partitionInvocation(42L)).isNull();
+  }
+
   // ─── handler 异常兜底 ────────────────────────────────────────────────────────
 
   @Test
