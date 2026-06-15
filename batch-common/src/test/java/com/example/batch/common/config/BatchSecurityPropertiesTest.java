@@ -1,6 +1,7 @@
 package com.example.batch.common.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
@@ -73,6 +74,35 @@ class BatchSecurityPropertiesTest {
   }
 
   // ─── 占位符密钥校验 ──────────────────────────────────────────────────
+
+  // ─── 非 prod:默认/弱凭据只 WARN 不阻断(审计 #4 第二层守护)──────────────
+
+  @Test
+  void localProfile_weakReplicaDbPassword_warnsNotThrows() {
+    // 非 prod + 默认弱口令 batch_pass_123 → 只 WARN(兜 prod fail-fast),启动不被阻断
+    BatchSecurityProperties props = new BatchSecurityProperties();
+    props.setInternalSecret("strong-secret-at-least-16-chars-long");
+    MockEnvironment env = new MockEnvironment();
+    env.setActiveProfiles("local");
+    env.setProperty("batch.console.read-replica.primary.password", "batch_pass_123");
+    ReflectionTestUtils.setField(props, "environment", env);
+    assertThatCode(props::validateSecuritySettings).doesNotThrowAnyException();
+  }
+
+  @Test
+  void prodProfile_weakReplicaDbPassword_throwsFatal() {
+    // 对照:prod 下同样的弱口令必须 fail-fast 拒绝启动
+    BatchSecurityProperties props = new BatchSecurityProperties();
+    props.setInternalSecret("strong-secret-at-least-16-chars-long");
+    MockEnvironment env = new MockEnvironment();
+    env.setActiveProfiles("prod");
+    env.setProperty("spring.datasource.password", "strong-real-password");
+    env.setProperty("batch.console.read-replica.primary.password", "batch_pass_123");
+    ReflectionTestUtils.setField(props, "environment", env);
+    assertThatThrownBy(props::validateSecuritySettings)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("默认弱口令");
+  }
 
   @Test
   void prodProfile_defaultInternalSecret_throwsFatal() {
