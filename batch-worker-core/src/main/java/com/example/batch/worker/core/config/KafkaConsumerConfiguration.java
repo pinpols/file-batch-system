@@ -1,13 +1,14 @@
 package com.example.batch.worker.core.config;
 
+import com.example.batch.common.config.BatchKafkaProducerProperties;
+import com.example.batch.common.config.BatchKafkaProducerSupport;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -19,6 +20,7 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(BatchKafkaProducerProperties.class)
 public class KafkaConsumerConfiguration {
 
   @Value("${spring.kafka.bootstrap-servers}")
@@ -49,26 +51,15 @@ public class KafkaConsumerConfiguration {
   @Value("${spring.kafka.listener.concurrency:1}")
   private int listenerConcurrency;
 
+  // worker → orchestrator REPORT 路径 producer:统一走全局 spring.kafka.producer.* 调优
+  // (acks=all / 幂等 / max.in.flight / delivery & request 超时 / buffer.memory / max.block 背压)。
+  // 之前 hand-build 缺 buffer.memory & max.block.ms,broker 抖动时 send() 可能在 buffer 满后久阻塞;
+  // 收敛到 BatchKafkaProducerSupport 后与 orchestrator / trigger 同源,消除三处漂移。
   @Bean
-  public ProducerFactory<String, String> kafkaProducerFactory() {
-    Map<String, Object> properties = new HashMap<>();
-    properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(ProducerConfig.ACKS_CONFIG, "all");
-    // R6 P0-6：worker → orchestrator REPORT 路径 producer 加固。
-    // 之前只有 acks=all，缺幂等 + 超时控制：
-    //   - enable.idempotence=true：单 partition 内防止 retry 重排 / 重写，
-    //     与 acks=all + retries 配合达成 exactly-once-per-session（producer 级）
-    //   - max.in.flight.requests.per.connection=5：开启幂等的官方上限值，保留并行度
-    //   - delivery.timeout.ms=30000：单条消息从 send 到 ack 整体超时，broker 挂时
-    //     不至于阻塞 worker step 提交线程
-    //   - request.timeout.ms=10000：单次 produce request 超时，配合上面整体超时使用
-    properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-    properties.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
-    properties.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 30_000);
-    properties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 10_000);
-    return new DefaultKafkaProducerFactory<>(properties);
+  public ProducerFactory<String, String> kafkaProducerFactory(
+      BatchKafkaProducerProperties kafkaProducerProperties) {
+    return new DefaultKafkaProducerFactory<>(
+        BatchKafkaProducerSupport.stringProducerConfig(bootstrapServers, kafkaProducerProperties));
   }
 
   @Bean
