@@ -140,7 +140,12 @@ public class FileDispatchRepository {
             KEY_RECEIPT_STATUS,
             FileReceiptStatus.SUCCESS.name(),
             "receiptCode",
-            receiptCode));
+            receiptCode,
+            // 行级 CAS 期望前态:只有仍 SENT+PENDING 才 ACK(防状态倒流)。
+            "expectedDispatchStatus",
+            FileDispatchStatus.SENT.name(),
+            "expectedReceiptStatus",
+            FileReceiptStatus.PENDING.name()));
   }
 
   public int markFailed(

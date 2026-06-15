@@ -68,6 +68,10 @@
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
           and channel_code = #{channelCode}
+          <!-- 行级 CAS:只有仍处 SENT+PENDING 才 ACK,防已 COMPENSATED/FAILED/ACKED 的记录被旧 poll 翻回(状态倒流)。
+               返回 0 行 = 另一路径已推进,调用方按 0 行跳过(名副其实的 CAS,非仅靠 ShedLock 互斥)。 -->
+          and dispatch_status = #{expectedDispatchStatus}
+          and receipt_status = #{expectedReceiptStatus}
     </update>
 
     <update id="markFailed">
@@ -76,8 +80,6 @@
             receipt_status = #{receiptStatus},
             error_code = #{errorCode},
             error_message = #{errorMessage},
-            error_key = #{errorKey},
-            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
@@ -103,8 +105,6 @@
             end,
             error_code = #{errorCode},
             error_message = #{errorMessage},
-            error_key = #{errorKey},
-            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and file_id = #{fileId}

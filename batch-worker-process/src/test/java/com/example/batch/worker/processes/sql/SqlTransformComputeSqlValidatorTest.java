@@ -3,10 +3,31 @@ package com.example.batch.worker.processes.sql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import java.util.List;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 
 class SqlTransformComputeSqlValidatorTest {
+
+  /**
+   * 用户 SQL 校验失败统一为 {@link BizException}(INVALID_ARGUMENT + error.process.sql_validation), 详情在
+   * messageArgs[0]。这样上层 catch(BizException) 归类为 BUSINESS_ERROR(确定性失败,不触发重试风暴), 而非裸
+   * IllegalArgumentException 落到 catch(Exception) 被误判 INFRA_ERROR。
+   */
+  private static void assertRejected(ThrowingCallable call, String detailSubstring) {
+    assertThatThrownBy(call)
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            e -> {
+              BizException be = (BizException) e;
+              assertThat(be.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+              if (detailSubstring != null) {
+                assertThat(be.getMessageArgs()[0].toString()).contains(detailSubstring);
+              }
+            });
+  }
 
   @Test
   void validateSelect_allowsSelectFromAllowlistedSchema() {
@@ -26,9 +47,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator =
         new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
 
-    assertThatThrownBy(() -> validator.validateSelect("delete from biz.order_event"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("only allows SELECT");
+    assertRejected(
+        () -> validator.validateSelect("delete from biz.order_event"), "only allows SELECT");
   }
 
   @Test
@@ -37,12 +57,11 @@ class SqlTransformComputeSqlValidatorTest {
     security.setAllowedSchemas(List.of("biz"));
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
-    assertThatThrownBy(
-            () ->
-                validator.validateSelect(
-                    "select id from pg_catalog.pg_tables where schemaname = 'biz'"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("disallowed schema");
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select id from pg_catalog.pg_tables where schemaname = 'biz'"),
+        "disallowed schema");
   }
 
   @Test
@@ -50,12 +69,11 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator =
         new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
 
-    assertThatThrownBy(
-            () ->
-                validator.validateUserCheckSelect(
-                    "select true AS pass, 'ok' AS message from biz.order_event"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("validation SQL may only read batch.process_staging");
+    assertRejected(
+        () ->
+            validator.validateUserCheckSelect(
+                "select true AS pass, 'ok' AS message from biz.order_event"),
+        "validation SQL may only read batch.process_staging");
   }
 
   @Test
@@ -64,12 +82,11 @@ class SqlTransformComputeSqlValidatorTest {
         new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
 
     // CTAS 被 JSqlParser 解析为 CreateTable, instanceof Select 检查直接拦,但要有显式守护
-    assertThatThrownBy(
-            () ->
-                validator.validateSelect(
-                    "create table biz.foo as select tenant_id from biz.order_event"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("only allows SELECT");
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "create table biz.foo as select tenant_id from biz.order_event"),
+        "only allows SELECT");
   }
 
   @Test
@@ -77,8 +94,7 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator =
         new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
 
-    assertThatThrownBy(() -> validator.validateSelect("set search_path = public, biz"))
-        .isInstanceOf(IllegalArgumentException.class);
+    assertRejected(() -> validator.validateSelect("set search_path = public, biz"), null);
   }
 
   @Test
@@ -87,12 +103,9 @@ class SqlTransformComputeSqlValidatorTest {
     security.setAllowedSchemas(List.of("biz"));
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
-    assertThatThrownBy(
-            () ->
-                validator.validateSelect(
-                    "select c from dblink('host=evil', 'select 1') as t(c int)"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("forbidden function 'dblink'");
+    assertRejected(
+        () -> validator.validateSelect("select c from dblink('host=evil', 'select 1') as t(c int)"),
+        "forbidden function 'dblink'");
   }
 
   @Test
@@ -101,12 +114,11 @@ class SqlTransformComputeSqlValidatorTest {
     security.setAllowedSchemas(List.of("biz"));
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
-    assertThatThrownBy(
-            () ->
-                validator.validateSelect(
-                    "select pg_terminate_backend(pid) from biz.fake where tenant_id = :tenantId"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select pg_terminate_backend(pid) from biz.fake where tenant_id = :tenantId"),
+        "forbidden function 'pg_terminate_backend'");
   }
 
   @Test
@@ -117,12 +129,11 @@ class SqlTransformComputeSqlValidatorTest {
     security.setMaxLimitRows(10_000L);
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
-    assertThatThrownBy(
-            () ->
-                validator.validateSelect(
-                    "select tenant_id from biz.order_event where tenant_id = :tenantId"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("LIMIT");
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select tenant_id from biz.order_event where tenant_id = :tenantId"),
+        "LIMIT");
   }
 
   @Test
@@ -133,13 +144,11 @@ class SqlTransformComputeSqlValidatorTest {
     security.setMaxLimitRows(10_000L);
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
-    assertThatThrownBy(
-            () ->
-                validator.validateSelect(
-                    "select tenant_id from biz.order_event"
-                        + " where tenant_id = :tenantId limit 50000"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("exceeds max");
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select tenant_id from biz.order_event where tenant_id = :tenantId limit 50000"),
+        "exceeds max");
   }
 
   @Test
