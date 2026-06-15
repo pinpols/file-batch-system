@@ -10,6 +10,7 @@ import com.example.batch.worker.exports.sql.SqlTemplateExportSpec;
 import com.example.batch.worker.exports.sql.SqlTemplateExportSqlValidator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +19,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 执行模板配置的 SELECT SQL（存储于 {@code default_query_sql}）的导出插件。
@@ -43,7 +46,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   private final ExportWorkerConfiguration workerConfiguration;
 
   /** Phase A RLS:read 路径 tx 包 SET LOCAL,触发 biz.* USING 过滤(防跨租户读)。 */
-  private final org.springframework.transaction.support.TransactionTemplate txTemplate;
+  private final TransactionTemplate txTemplate;
 
   private final ExportKeysetRangePlanner keysetRangePlanner = new ExportKeysetRangePlanner();
 
@@ -61,10 +64,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     this.security = security;
     this.workerConfiguration = workerConfiguration;
     this.sqlValidator = new SqlTemplateExportSqlValidator(security);
-    this.txTemplate =
-        new org.springframework.transaction.support.TransactionTemplate(
-            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
-                businessDataSource));
+    this.txTemplate = new TransactionTemplate(new DataSourceTransactionManager(businessDataSource));
     this.txTemplate.setReadOnly(true);
   }
 
@@ -306,8 +306,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   }
 
   /** 算游标列 [min,max];非数值列 → 元素 null(planner 据此退 hashtext)。复用只读 RLS tx。 */
-  private java.math.BigDecimal[] minMax(
-      String baseSql, String cursorColumn, Map<String, Object> baseParams) {
+  private BigDecimal[] minMax(String baseSql, String cursorColumn, Map<String, Object> baseParams) {
     String cur = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
     String mmSql =
         "SELECT min(%s) AS lo, max(%s) AS hi FROM (%s) base".formatted(cur, cur, baseSql);
@@ -317,15 +316,15 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
               RlsTenantSessionSupport.applyIfPresent(businessDataSource);
               return jdbc.queryForMap(mmSql, baseParams);
             });
-    return new java.math.BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
+    return new BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
   }
 
-  private static java.math.BigDecimal toBig(Object v) {
-    if (v instanceof java.math.BigDecimal b) {
+  private static BigDecimal toBig(Object v) {
+    if (v instanceof BigDecimal b) {
       return b;
     }
     if (v instanceof Number n) {
-      return new java.math.BigDecimal(n.toString());
+      return new BigDecimal(n.toString());
     }
     return null; // 非数值游标列 → 退 hashtext
   }

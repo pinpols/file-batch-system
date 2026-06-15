@@ -15,6 +15,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -528,7 +529,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     }
     // schema 已经过 PROC_NAME 正则校验(identifier 字符集),拼接安全;仍走静态 SQL。
     String sql = "SET LOCAL search_path = pg_catalog, " + schema;
-    try (java.sql.Statement st = conn.createStatement()) {
+    try (Statement st = conn.createStatement()) {
       st.execute(sql);
     } catch (SQLException | RuntimeException ex) {
       log.debug("pin search_path skipped: {}", ex.getMessage());

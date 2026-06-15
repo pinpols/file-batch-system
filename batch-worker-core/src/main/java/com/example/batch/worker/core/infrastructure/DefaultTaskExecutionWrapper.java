@@ -22,9 +22,11 @@ import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -72,8 +74,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   // R3-P2-5：之前 executionTimer 用 Tags.empty()，4 类 worker 共享一条时间序列。
   // 改为按 workerType 维度懒加载 cache → Grafana 可分别看 import/export/process/dispatch 各自分位。
   private final MeterRegistry meterRegistry;
-  private final Map<String, Timer> executionTimerByType =
-      new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<String, Timer> executionTimerByType = new ConcurrentHashMap<>();
 
   private final TaskScheduler watchdog;
 
@@ -390,10 +391,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       // ADR-030 §C: PipelineVerifierHook 把失败结果写到 attributes.VERIFIER_FAILURES；
       // 这里透传给 orchestrator（后续 PR 由 orchestrator 写入 outbox_event 走告警面板）。
       Object failures = executionContext.get(PipelineRuntimeKeys.VERIFIER_FAILURES);
-      if (failures instanceof java.util.List<?> failureList && !failureList.isEmpty()) {
+      if (failures instanceof List<?> failureList && !failureList.isEmpty()) {
         @SuppressWarnings("unchecked")
-        java.util.List<Map<String, Object>> typedFailures =
-            (java.util.List<Map<String, Object>>) failureList;
+        List<Map<String, Object>> typedFailures = (List<Map<String, Object>>) failureList;
         report.setVerifierFailures(typedFailures);
       }
     }

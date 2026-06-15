@@ -8,6 +8,7 @@ import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
 import com.example.batch.worker.atomic.runtime.AtomicErrorCode;
+import java.io.IOException;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
@@ -441,7 +442,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
                 ? AtomicErrorCode.EXECUTION_FAILED
                 : AtomicErrorCode.valueOf(existingCode);
         return AtomicErrorCode.fail(code, result.message());
-      } catch (java.io.IOException | InterruptedException ex) {
+      } catch (IOException | InterruptedException ex) {
         lastException = ex;
         if (Thread.currentThread().isInterrupted()) {
           Thread.currentThread().interrupt();
@@ -467,8 +468,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         lastException);
   }
 
-  private TaskResult runOnce(Invocation inv, int attempt)
-      throws java.io.IOException, InterruptedException {
+  private TaskResult runOnce(Invocation inv, int attempt) throws IOException, InterruptedException {
     // 显式禁止跟随重定向:重定向 target 不会再过 validateHost/validateResolvedIp,
     // 否则攻击者可用 30x 把请求重定向到内网 / metadata,绕过上面的 SSRF 校验。
     HttpClient client =

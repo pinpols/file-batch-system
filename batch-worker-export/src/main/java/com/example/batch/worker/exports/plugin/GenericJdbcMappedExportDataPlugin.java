@@ -8,6 +8,7 @@ import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
 import com.example.batch.worker.exports.jdbc.JdbcMappedExportSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +16,9 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 通用 JDBC 映射导出插件：从模板配置的白名单表/列中查询批次头部及明细分页数据。 */
 @Component
@@ -27,7 +30,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   private final JdbcMappedExportSecurityProperties securityProperties;
 
   /** Phase A RLS:export query 需 tx 包 SET LOCAL,触发 biz.* SELECT 时的 USING 过滤(防跨租户读)。 */
-  private final org.springframework.transaction.support.TransactionTemplate txTemplate;
+  private final TransactionTemplate txTemplate;
 
   private final ExportKeysetRangePlanner keysetRangePlanner = new ExportKeysetRangePlanner();
 
@@ -39,10 +42,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     this.jdbcTemplate = new JdbcTemplate(businessDataSource);
     this.objectMapper = objectMapper;
     this.securityProperties = securityProperties;
-    this.txTemplate =
-        new org.springframework.transaction.support.TransactionTemplate(
-            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
-                businessDataSource));
+    this.txTemplate = new TransactionTemplate(new DataSourceTransactionManager(businessDataSource));
     this.txTemplate.setReadOnly(true);
   }
 
@@ -198,7 +198,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   }
 
   /** 物理表游标列 [min,max];非数值列 → 元素 null(planner 退 hashtext)。复用只读 RLS tx。 */
-  private java.math.BigDecimal[] minMax(JdbcMappedExportSpec spec, Long batchId) {
+  private BigDecimal[] minMax(JdbcMappedExportSpec spec, Long batchId) {
     String fq =
         JdbcMappedSqlValidator.quotePg(spec.schema())
             + "."
@@ -213,15 +213,15 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
               RlsTenantSessionSupport.applyIfPresent(businessDataSource);
               return jdbcTemplate.queryForMap(sql, batchId);
             });
-    return new java.math.BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
+    return new BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
   }
 
-  private static java.math.BigDecimal toBig(Object v) {
-    if (v instanceof java.math.BigDecimal b) {
+  private static BigDecimal toBig(Object v) {
+    if (v instanceof BigDecimal b) {
       return b;
     }
     if (v instanceof Number n) {
-      return new java.math.BigDecimal(n.toString());
+      return new BigDecimal(n.toString());
     }
     return null;
   }
