@@ -1,8 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.worker.core.mapper.PlatformFileRuntimeMapper">
+    <!--
+      显式列清单(取代 select *):resultType=map 的查询按列名读取,列集必须与表全列一致;
+      显式化后 map 形状对 schema 变更稳定(新增列不会悄悄进 map),且避免 select * 把列序/大字段
+      变化暗中带出。列与 batch.* 表 DDL 全列对齐。如需按消费方收窄(丢弃未读的大 jsonb 列省带宽),
+      属另一步 per-consumer 分析,本次只做零风险的全列显式化。
+    -->
+    <sql id="fileRecordColumns">
+        id, tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
+        file_ext, file_format_type, charset, mime_type, file_size_bytes, checksum_type,
+        checksum_value, storage_type, storage_path, storage_bucket, file_version,
+        file_generation_no, is_latest, source_type, source_ref, file_status, biz_date,
+        trace_id, metadata_json, created_at, updated_at
+    </sql>
+    <sql id="fileTemplateConfigColumns">
+        id, tenant_id, template_code, template_name, template_type, biz_type, file_format_type,
+        charset, target_charset, with_bom, line_separator, delimiter, quote_char, escape_char,
+        record_length, header_rows, footer_rows, header_template, trailer_template, checksum_type,
+        compress_type, encrypt_type, naming_rule, field_mappings, validation_rule_set,
+        default_query_code, default_query_sql, query_param_schema, streaming_enabled, page_size,
+        fetch_size, chunk_size, enabled, version, description, created_by, updated_by, created_at,
+        updated_at, preprocess_pipeline, preview_masking_enabled, error_line_masking_enabled,
+        log_masking_enabled, content_encryption_enabled, encryption_key_ref,
+        download_requires_approval, masking_rule_set, export_data_ref, load_target_ref, is_deleted
+    </sql>
+    <sql id="fileChannelConfigColumns">
+        id, tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+        config_json, receipt_policy, timeout_seconds, enabled, created_at, updated_at, is_deleted
+    </sql>
+    <sql id="pipelineStepDefinitionColumns">
+        id, pipeline_definition_id, step_code, step_name, stage_code, step_order, impl_code,
+        step_params, timeout_seconds, retry_policy, retry_max_count, enabled, created_at, updated_at
+    </sql>
+    <sql id="fileErrorRecordColumns">
+        id, tenant_id, file_id, pipeline_instance_id, pipeline_step_run_id, record_no, error_code,
+        error_message, error_stage, is_skipped, skip_action, raw_record, created_at, error_key,
+        error_args
+    </sql>
+
     <select id="selectFileRecord" resultType="map">
-        select *
+        select <include refid="fileRecordColumns"/>
         from batch.file_record
         where tenant_id = #{tenantId}
           and id = #{fileId}
@@ -17,7 +55,7 @@
     </select>
 
     <select id="selectFileRecordByStoragePath" resultType="map">
-        select *
+        select <include refid="fileRecordColumns"/>
         from batch.file_record
         where tenant_id = #{tenantId}
           and coalesce(storage_bucket, '') = coalesce(#{storageBucket}, '')
@@ -27,7 +65,7 @@
     </select>
 
     <select id="selectLatestTemplateConfig" resultType="map">
-        select *
+        select <include refid="fileTemplateConfigColumns"/>
         from batch.file_template_config
         where tenant_id = #{tenantId}
           and template_code = #{templateCode}
@@ -41,7 +79,7 @@
     </select>
 
     <select id="selectChannelConfig" resultType="map">
-        select *
+        select <include refid="fileChannelConfigColumns"/>
         from batch.file_channel_config
         where tenant_id = #{tenantId}
           and channel_code = #{channelCode}
@@ -69,7 +107,7 @@
     </insert>
 
     <select id="selectPipelineStepDefinitions" resultType="map">
-        select *
+        select <include refid="pipelineStepDefinitionColumns"/>
         from batch.pipeline_step_definition
         where pipeline_definition_id = #{pipelineDefinitionId}
         <if test="enabledOnly != null and enabledOnly">
@@ -263,7 +301,7 @@
     </insert>
 
     <select id="selectFileErrorRecords" resultType="map">
-        select *
+        select <include refid="fileErrorRecordColumns"/>
         from batch.file_error_record
         where tenant_id = #{tenantId}
         <if test="fileId != null">
