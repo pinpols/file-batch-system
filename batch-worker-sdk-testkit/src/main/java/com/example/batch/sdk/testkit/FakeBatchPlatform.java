@@ -74,6 +74,9 @@ public final class FakeBatchPlatform implements AutoCloseable {
   private final List<Map<String, Object>> registrations = new CopyOnWriteArrayList<>();
   private final List<Long> claims = new CopyOnWriteArrayList<>();
 
+  /** taskId → claim 时携带的 partitionInvocationId(仅分区任务),供 renew/report 回校防回归。 */
+  private final Map<Long, String> claimedInvocations = new ConcurrentHashMap<>();
+
   private volatile Producer<String, byte[]> producer;
 
   private FakeBatchPlatform(
@@ -207,17 +210,51 @@ public final class FakeBatchPlatform implements AutoCloseable {
       if (path.endsWith("/register")) {
         registrations.add(readBody(exchange));
       } else if (path.endsWith("/report")) {
-        recordReport(readBody(exchange));
+        Map<String, Object> body = readBody(exchange);
+        recordReport(body);
+        // 守护回归:claim 带过 partitionInvocationId 的任务,report 必须也带(平台 R3-P0-5 late-report CAS 依赖它)。
+        if (missingClaimedInvocation(path, body)) {
+          respond(exchange, 409);
+          return;
+        }
       } else if (path.endsWith("/claim")) {
-        readBody(exchange);
+        captureClaimInvocation(taskIdFromPath(path), readBody(exchange));
         claims.add(taskIdFromPath(path));
+      } else if (path.endsWith("/renew")) {
+        Map<String, Object> body = readBody(exchange);
+        // 守护回归:分区任务 renew 缺 partitionInvocationId,平台 R3-P1-10 会 409→不续租→双跑。这里如实拒。
+        if (missingClaimedInvocation(path, body)) {
+          respond(exchange, 409);
+          return;
+        }
       } else {
-        readBody(exchange); // heartbeat / deactivate / renew:消费 body 后 200
+        readBody(exchange); // heartbeat / deactivate:消费 body 后 200
       }
       respond(exchange, 200);
     } catch (RuntimeException e) {
       respond(exchange, 500);
     }
+  }
+
+  /** claim 时若带了 partitionInvocationId 则留存,供 renew/report 回校(非分区任务 claim 无此字段,不留存)。 */
+  private void captureClaimInvocation(Long taskId, Map<String, Object> claimBody) {
+    if (taskId == null) {
+      return;
+    }
+    Object pInv = claimBody.get("partitionInvocationId");
+    if (pInv != null && !pInv.toString().isBlank()) {
+      claimedInvocations.put(taskId, pInv.toString());
+    }
+  }
+
+  /** 该 task claim 过 invocation,但本次 renew/report body 缺(或空)→ true,模拟平台拒绝。 */
+  private boolean missingClaimedInvocation(String path, Map<String, Object> body) {
+    Long taskId = taskIdFromPath(path);
+    if (taskId == null || !claimedInvocations.containsKey(taskId)) {
+      return false;
+    }
+    Object pInv = body.get("partitionInvocationId");
+    return pInv == null || pInv.toString().isBlank();
   }
 
   private void recordReport(Map<String, Object> body) {
