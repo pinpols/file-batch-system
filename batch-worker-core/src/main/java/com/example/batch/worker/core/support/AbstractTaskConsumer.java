@@ -15,6 +15,9 @@ import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,8 +26,11 @@ import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
 /**
  * Kafka 消费骨架（所有 worker 通用）。
@@ -107,8 +113,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @org.springframework.beans.factory.annotation.Value("${batch.worker.max-concurrent-tasks:8}")
-          int maxConcurrentTasks) {
+      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     this.meterRegistryProvider = meterRegistryProvider;
     this.maxConcurrentTasks = maxConcurrentTasks;
@@ -251,11 +256,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
    */
   private boolean isTransientOrchestratorFailure(Throwable t) {
     for (Throwable cur = t; cur != null; cur = cur.getCause()) {
-      if (cur instanceof org.springframework.web.client.HttpServerErrorException
-          || cur instanceof org.springframework.web.client.ResourceAccessException
-          || cur instanceof java.net.ConnectException
-          || cur instanceof java.net.SocketTimeoutException
-          || cur instanceof java.net.UnknownHostException) {
+      if (cur instanceof HttpServerErrorException
+          || cur instanceof ResourceAccessException
+          || cur instanceof ConnectException
+          || cur instanceof SocketTimeoutException
+          || cur instanceof UnknownHostException) {
         return true;
       }
     }
