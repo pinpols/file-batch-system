@@ -1,5 +1,7 @@
 package com.example.batch.worker.processes.sql;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Texts;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -40,7 +42,9 @@ public class SqlTransformComputeSqlValidator {
     List<String> tableNames = new TablesNamesFinder().getTableList(statement);
     for (String tableName : tableNames) {
       if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase())) {
-        throw new IllegalArgumentException(
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.process.sql_validation",
             "sqlTransformCompute validation SQL may only read "
                 + SqlTransformComputePlugin.STAGING_TABLE
                 + ", found: "
@@ -53,12 +57,17 @@ public class SqlTransformComputeSqlValidator {
   private String validate(String raw, boolean enforceSchemaAllowlist) {
     String sql = raw == null ? "" : raw.trim();
     if (!Texts.hasText(sql)) {
-      throw new IllegalArgumentException("sqlTransformCompute SQL is blank");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.process.sql_validation",
+          "sqlTransformCompute SQL is blank");
     }
 
     Statement statement = parse(sql);
     if (!(statement instanceof Select select)) {
-      throw new IllegalArgumentException(
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.process.sql_validation",
           "sqlTransformCompute only allows SELECT/WITH queries, got: "
               + statement.getClass().getSimpleName());
     }
@@ -97,7 +106,9 @@ public class SqlTransformComputeSqlValidator {
         boolean leftBoundary = idx == 0 || !isIdentifierPart(lower.charAt(idx - 1));
         boolean rightCallSite = after < lower.length() && nextIsLParen(lower, after);
         if (leftBoundary && rightCallSite) {
-          throw new IllegalArgumentException(
+          throw BizException.of(
+              ResultCode.INVALID_ARGUMENT,
+              "error.process.sql_validation",
               "sqlTransformCompute SQL calls forbidden function '" + fn + "'");
         }
         idx = after;
@@ -119,13 +130,17 @@ public class SqlTransformComputeSqlValidator {
   private static void checkTopLevelLimit(Select select, long maxLimitRows) {
     Long limit = topLimitOf(select);
     if (limit == null) {
-      throw new IllegalArgumentException(
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.process.sql_validation",
           "sqlTransformCompute SQL must include a top-level LIMIT clause (≤ "
               + maxLimitRows
               + " rows)");
     }
     if (limit > maxLimitRows) {
-      throw new IllegalArgumentException(
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.process.sql_validation",
           "sqlTransformCompute SQL LIMIT " + limit + " exceeds max " + maxLimitRows);
     }
   }
@@ -157,8 +172,11 @@ public class SqlTransformComputeSqlValidator {
     try {
       return CCJSqlParserUtil.parse(sql);
     } catch (Exception e) {
-      throw new IllegalArgumentException(
-          "sqlTransformCompute SQL parse error: " + e.getMessage(), e);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.process.sql_validation",
+          e,
+          "sqlTransformCompute SQL parse error: " + e.getMessage());
     }
   }
 
@@ -208,7 +226,9 @@ public class SqlTransformComputeSqlValidator {
     for (SelectItem<?> item : ps.getSelectItems()) {
       Object expression = item.getExpression();
       if (expression instanceof AllColumns || expression instanceof AllTableColumns) {
-        throw new IllegalArgumentException(
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.process.sql_validation",
             "sqlTransformCompute forbids SELECT * / SELECT table.*;"
                 + " enumerate columns explicitly");
       }
@@ -233,13 +253,17 @@ public class SqlTransformComputeSqlValidator {
     for (String name : tableNames) {
       int dot = name.indexOf('.');
       if (dot <= 0) {
-        throw new IllegalArgumentException(
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.process.sql_validation",
             "sqlTransformCompute requires fully-qualified table names (schema.table), found: "
                 + name);
       }
       String schema = name.substring(0, dot).toLowerCase();
       if (!allowedSchemas.contains(schema)) {
-        throw new IllegalArgumentException(
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.process.sql_validation",
             "sqlTransformCompute references disallowed schema '"
                 + schema
                 + "' - allowed: "
