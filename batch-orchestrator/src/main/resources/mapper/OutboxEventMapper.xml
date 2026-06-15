@@ -206,8 +206,11 @@
     </select>
 
     <insert id="archiveOutboxEventsByIds">
-        insert into archive.outbox_event_archive
-        select *
+        insert into archive.outbox_event_archive (
+            id, tenant_id, aggregate_type, aggregate_id, event_type, event_key, payload_json,
+            publish_status, publish_attempt, next_publish_at, trace_id, created_at, updated_at, priority)
+        select id, tenant_id, aggregate_type, aggregate_id, event_type, event_key, payload_json,
+            publish_status, publish_attempt, next_publish_at, trace_id, created_at, updated_at, priority
         from batch.outbox_event
         where id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -215,8 +218,13 @@
     </insert>
 
     <insert id="archiveEventDeliveryLogsByOutboxIds">
-        insert into archive.event_delivery_log_archive
-        select *
+        insert into archive.event_delivery_log_archive (
+            id, tenant_id, outbox_event_id, event_type, event_key, target_topic, target_worker_id,
+            delivery_status, delivery_attempt, delivery_summary, error_message, trace_id, created_at,
+            updated_at, error_key, error_args)
+        select id, tenant_id, outbox_event_id, event_type, event_key, target_topic, target_worker_id,
+            delivery_status, delivery_attempt, delivery_summary, error_message, trace_id, created_at,
+            updated_at, error_key, error_args
         from batch.event_delivery_log
         where outbox_event_id in
         <foreach collection="outboxIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -224,8 +232,11 @@
     </insert>
 
     <insert id="archiveEventOutboxRetriesByOutboxIds">
-        insert into archive.event_outbox_retry_archive
-        select *
+        insert into archive.event_outbox_retry_archive (
+            id, tenant_id, outbox_event_id, event_key, retry_attempt, retry_status, retry_reason,
+            next_retry_at, trace_id, created_at, updated_at)
+        select id, tenant_id, outbox_event_id, event_key, retry_attempt, retry_status, retry_reason,
+            next_retry_at, trace_id, created_at, updated_at
         from batch.event_outbox_retry
         where outbox_event_id in
         <foreach collection="outboxIds" item="id" open="(" separator="," close=")">#{id}</foreach>

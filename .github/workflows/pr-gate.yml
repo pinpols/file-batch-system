@@ -164,6 +164,12 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-sql-config-boundaries.sh
 
+      - name: No positional INSERT...SELECT * in mappers
+        shell: bash
+        # 拦「insert into archive.x_archive select *」位置式归档复制:列顺序漂移会静默错位
+        # (ArchiveSchemaDriftCheck 只比对列名集合不比顺序)。必须用显式列名。
+        run: python3 scripts/ci/check-no-positional-insert-select-star.py
+
       - name: No JDK preview flags in prod build/run config
         shell: bash
         # 拦 JDK preview 启用标记进入生产构建/运行(load-tests benchmark 豁免)。脚本内有详细说明。
