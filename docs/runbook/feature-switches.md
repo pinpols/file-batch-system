@@ -24,6 +24,8 @@
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
 | `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；**`SQLITE`** 时需 PVC 指向 `sqlite-path` |
 | `batch.worker.lease.renew-batch-max-items` | worker（ADR-016） | **256** | **256**（继承 yml） | 🟢 低 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS`：单 `renew-batch` HTTP 最多携带任务数，超出自动拆单 |
+| `batch.datasource.business.routing.enabled` | import/export/process worker | **false**（单片无损，全租户落 shard-0=现库） | **false** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED`；开后按 `placement-source`（CONFIG/TABLE）+ `shards[*]` 路由,详见 [`biz-tenant-routing.md`](./biz-tenant-routing.md) §8 |
+| `batch.datasource.business.routing.placement-source` | 同上 | **CONFIG**（hash+silo） | **CONFIG** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE`=CONFIG/TABLE；TABLE 读 `batch.business_tenant_placement`（在线维护,见 console `/api/console/ops/tenant-placements`） |
 | ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。
@@ -235,6 +237,23 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 **回滚**：`BATCH_QUOTA_SNAPSHOT_ENABLED=false` → 重启 orchestrator → 不再 snapshot；Redis 仍是限流权威源，但故障切回 database 模式时 PG 数据停在最后一次 snapshot 时刻。
 
 ---
+
+### 3.8 `batch.datasource.business.routing.*`（biz 租户分片路由 / Tiered）
+
+应用层把租户路由到不同 biz PG 实例(自研,非 Citus)。**默认 `enabled=false` = 单片无损**(全租户落 shard-0=现库,零行为变更)。开启后:
+
+- `placement-source=CONFIG`(默认):hash 池化 + `silo-overrides`;`=TABLE`:读 `batch.business_tenant_placement`(在线维护,console `/api/console/ops/tenant-placements`,表命中优先 hash 兜底)。
+- `shards[*]`(key+url+账密)凭据走 secrets,**不入表**;`shard-max-pool-size` 控每片池;`placement-cache-ttl-ms` 默认 5s(**0=每次查库仅测试用**)。
+- 仅 import/export/process 三 worker 持有 biz 数据源;dispatch/atomic/SDK 不涉及。
+- **Fail-open**:placement 表读失败时已有缓存保留 stale(silo 路由仍对),冷启动退 hash;未知 placement key **硬失败**(关 lenientFallback,防静默落 shard-0 污染)。
+
+完整设计 / 开片 / 账户 / 凭据注入见 [`biz-tenant-routing.md`](./biz-tenant-routing.md)。验证:`scripts/local/sim-harness.sh verify-data`(两片真实 PG 活体) + 单测 `*PlacementResolver*Test` / `BusinessRoutingDataSource*Test`。
+
+### 3.9 `batch.security.bypass-mode`（认证/CSRF 旁路 — 仅本地/联调/E2E）
+
+总旁路开关(认证/加解密/审批),**prod profile 强制拒绝**。本地 yml 默认 `true`,但 `.env.local` 的 `BATCH_SECURITY_BYPASS_MODE` 会**覆盖** yml。
+
+> ⚠️ **sim/本地踩坑(2026-06-14)**:`BATCH_SECURITY_BYPASS_MODE=false` 时 CSRF(double-submit cookie)对**所有写请求**生效;sim 的 curl 脚本不带 `X-XSRF-TOKEN` → **全部 403「访问被拒绝」**(租户导入/迁片/上传全挂)。`bypass-mode=true` 时 `BYPASS_MODE_CSRF_IGNORED_MATCHERS={"/**"}` 放行。**跑 sim 必须 `BATCH_SECURITY_BYPASS_MODE=true`**(已纳入 `sim-harness.sh preflight` 检查项)。FE/真实部署走正常 CSRF(axios 回传 XSRF-TOKEN),不受影响。
 
 ## 4. 翻开关的统一流程
 
