@@ -289,6 +289,10 @@ batch:
       multipart-enabled: ${BATCH_S3_MULTIPART_ENABLED:true}
       multipart-threshold-bytes: ${BATCH_S3_MULTIPART_THRESHOLD_BYTES:67108864}
       multipart-part-size-bytes: ${BATCH_S3_MULTIPART_PART_SIZE_BYTES:16777216}
+      # 连接 / 读取超时(S3AutoConfiguration 应用到 SDK httpClient)。MinIO/S3 抖动时无需改外部 yml,
+      # 直接用 env 调;默认与 S3StorageProperties 一致(connect 5s / read 30s)。
+      connect-timeout-ms: ${BATCH_S3_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${BATCH_S3_READ_TIMEOUT_MS:30000}
     encryption:
       max-in-memory-encrypt-bytes: ${BATCH_STORAGE_ENCRYPTION_MAX_IN_MEMORY_ENCRYPT_BYTES:33554432}
 
