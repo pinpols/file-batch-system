@@ -34,4 +34,14 @@ class ConsoleCodingConventionsArchTest {
   void recordSuffixForbidden() {
     CodingConventionsArchRules.recordSuffixForbiddenRule().check(CLASSES);
   }
+
+  @Test
+  void noTransactionalOnEventListener() {
+    CodingConventionsArchRules.noTransactionalOnEventListenerRule().check(CLASSES);
+  }
+
+  @Test
+  void noTransactionalOnScheduled() {
+    CodingConventionsArchRules.noTransactionalOnScheduledRule().check(CLASSES);
+  }
 }

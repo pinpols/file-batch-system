@@ -102,7 +102,12 @@ tags:
   - name: Telemetry
     description: Frontend telemetry log collection endpoint.
   - name: Notifications
-    description: Notification channel and subscription rule management, delivery logs.
+    description: >-
+      Notification channel and subscription rule management, delivery logs.
+      Channel/rule create/update/delete/test require ROLE_ADMIN or ROLE_TENANT_ADMIN;
+      read (list/get) also allows ROLE_AUDITOR / ROLE_TENANT_USER. Subscription rules
+      of channel_type=WEBHOOK are dispatched at runtime via SubscriptionRuleWebhookDispatcher
+      (other channel types are logged as not-yet-wired).
   - name: Governance
     description: Circuit breaker and rate limit parameter management.
   - name: ArchivePolicies

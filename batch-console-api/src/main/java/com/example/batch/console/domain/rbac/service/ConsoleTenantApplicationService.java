@@ -203,11 +203,14 @@ public class ConsoleTenantApplicationService {
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 
+  @Transactional
   public ConsoleTenantResponse suspendTenant(String tenantId) {
     assertExists(tenantId);
     assertNoActiveInstances(tenantId);
-    tenantMapper.updateStatus(tenantId, "SUSPENDED");
+    // 先调远端 trigger pause(fail-fast,callOrThrow 失败即抛),成功后才改 console DB,
+    // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.pauseByTenant(tenantId);
+    tenantMapper.updateStatus(tenantId, "SUSPENDED");
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 
@@ -231,10 +234,13 @@ public class ConsoleTenantApplicationService {
     }
   }
 
+  @Transactional
   public ConsoleTenantResponse activateTenant(String tenantId) {
     assertExists(tenantId);
-    tenantMapper.updateStatus(tenantId, "ACTIVE");
+    // 先调远端 trigger resume(fail-fast,callOrThrow 失败即抛),成功后才改 console DB,
+    // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.resumeByTenant(tenantId);
+    tenantMapper.updateStatus(tenantId, "ACTIVE");
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 
