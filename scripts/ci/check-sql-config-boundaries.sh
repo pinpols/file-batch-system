@@ -55,13 +55,21 @@ allowed_file() {
     scripts/sim/13-process-stage4b.sh) return 0 ;;
     scripts/sim/14-dispatch-stage5b.sh) return 0 ;;
     scripts/sim/15-trigger-stage6b.sh) return 0 ;;
+    # 运维/演练/本地编排脚本,内联 SQL 为只读校验探针 / DO 重置块,与上面同类。
+    scripts/db/backup/dr-drill.sh) return 0 ;;
+    scripts/local/provision-biz-shard.sh) return 0 ;;
+    scripts/local/sim-harness.sh) return 0 ;;
+    scripts/sim/00-reset-runtime.sh) return 0 ;;
+    scripts/sim/98-quiesce-schedules.sh) return 0 ;;
   esac
   return 1
 }
 
+# 用 grep(coreutils,处处可用)而非 rg —— GitHub runner 不一定装 ripgrep,
+# 之前 rg 缺失时本检查静默 no-op(offenders 空 → 永远 passed,假绿)。改 grep 杜绝。
+PATTERN="<<'?SQL|jsonb_build_object|psql[[:space:]][^#]*[[:space:]]-c([[:space:]]|$)|SELECT |INSERT |UPDATE |DELETE |ALTER TABLE|DROP TABLE|CREATE TABLE"
 mapfile -t offenders < <(
-  rg -l "<<'?SQL|jsonb_build_object|psql[[:space:]][^#\\n]*[[:space:]]-c([[:space:]]|$)|SELECT |INSERT |UPDATE |DELETE |ALTER TABLE|DROP TABLE|CREATE TABLE" \
-    scripts load-tests -g '*.sh' 2>/dev/null | sort
+  grep -rlE "$PATTERN" --include='*.sh' scripts load-tests 2>/dev/null | sort
 )
 
 fail=0

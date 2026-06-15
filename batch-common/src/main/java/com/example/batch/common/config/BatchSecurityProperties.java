@@ -4,14 +4,14 @@ import jakarta.annotation.PostConstruct;
 import java.util.Set;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.EnvironmentAware;
 import org.springframework.core.env.Environment;
 
 @Data
 @Slf4j
 @ConfigurationProperties(prefix = "batch.security")
-public class BatchSecurityProperties {
+public class BatchSecurityProperties implements EnvironmentAware {
 
   /**
    * 全局安全旁路总开关（{@code batch.security.bypass-mode}）。开启后放宽认证、脱敏、加解密、审批、 渠道校验等所有安全约束，仅供本地 / 联调 / E2E
@@ -34,8 +34,8 @@ public class BatchSecurityProperties {
    */
   private String internalSecret = "internal-secret";
 
-  // 注入 Environment 用于启动时 profile 检查；@Autowired(required=false) 保证测试兼容性
-  @Autowired(required = false)
+  // 注入 Environment 用于启动时 profile 检查;经 EnvironmentAware 框架回调注入(非 @Autowired field),
+  // 容器内由 Spring 调 @Data 生成的 setEnvironment 注入;单测 new 该类时不调用 → environment 为 null,守护逻辑已 null-safe。
   private transient Environment environment;
 
   // #5-1: 生产 profile 下强制禁止 bypassMode，防止误配导致认证被绕过

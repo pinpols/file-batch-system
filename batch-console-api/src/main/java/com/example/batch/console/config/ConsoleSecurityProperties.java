@@ -7,8 +7,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.EnvironmentAware;
 import org.springframework.core.env.Environment;
 
 /**
@@ -23,7 +23,7 @@ import org.springframework.core.env.Environment;
  */
 @Data
 @ConfigurationProperties(prefix = "batch.console.security")
-public class ConsoleSecurityProperties {
+public class ConsoleSecurityProperties implements EnvironmentAware {
 
   /** 安全总开关。关闭 → 所有 console API 不做认证（仅本地调试）。 */
   private boolean enabled = true;
@@ -119,7 +119,7 @@ public class ConsoleSecurityProperties {
     private String publicKeyPem = "";
   }
 
-  @Autowired(required = false)
+  // 经 EnvironmentAware 框架回调注入(非 @Autowired field);@Data 生成的 setEnvironment 即回调实现。
   private transient Environment environment;
 
   /**
