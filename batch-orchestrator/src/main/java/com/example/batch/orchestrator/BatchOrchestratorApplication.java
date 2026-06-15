@@ -1,13 +1,11 @@
 package com.example.batch.orchestrator;
 
 import com.example.batch.common.config.BatchJsonAutoConfiguration;
+import com.example.batch.common.config.BatchKafkaProducerProperties;
+import com.example.batch.common.config.BatchKafkaProducerSupport;
 import com.example.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import com.example.batch.common.config.BatchStartupSelfCheckAutoConfiguration;
 import io.micrometer.observation.ObservationRegistry;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -47,13 +45,13 @@ public class BatchOrchestratorApplication {
   @Value("${spring.kafka.bootstrap-servers}")
   private String bootstrapServers;
 
+  // outbox 发布路径 producer:统一走全局 spring.kafka.producer.* 调优(acks=all / 幂等 / delivery
+  // & request 超时 / buffer.memory / max.block 背压),不再只设 bootstrap+serializer 而丢掉这些保护。
   @Bean
-  public ProducerFactory<String, String> producerFactory() {
-    Map<String, Object> properties = new HashMap<>();
-    properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    return new DefaultKafkaProducerFactory<>(properties);
+  public ProducerFactory<String, String> producerFactory(
+      BatchKafkaProducerProperties kafkaProducerProperties) {
+    return new DefaultKafkaProducerFactory<>(
+        BatchKafkaProducerSupport.stringProducerConfig(bootstrapServers, kafkaProducerProperties));
   }
 
   @Bean
