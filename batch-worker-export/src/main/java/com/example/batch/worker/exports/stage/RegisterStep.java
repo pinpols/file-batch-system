@@ -67,8 +67,9 @@ public class RegisterStep implements ExportStageStep {
           "objectName missing",
           ERROR_OBJECT_MAPPER);
     }
-    Object payload = context.getAttributes().get("exportPayload");
-    Object batchObject = context.getAttributes().get("exportBatch");
+    Map<String, Object> attrs = context.getAttributes();
+    Object payload = attrs.get("exportPayload");
+    Object batchObject = attrs.get("exportBatch");
     if (!(payload instanceof ExportPayload exportPayload)
         || !(batchObject instanceof Map<?, ?> batch)) {
       return ExportStageResult.failure(
@@ -79,12 +80,11 @@ public class RegisterStep implements ExportStageStep {
           "export context missing",
           ERROR_OBJECT_MAPPER);
     }
-    String objectName = String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME));
-    String fileName = String.valueOf(context.getAttributes().get("fileName"));
-    String fileFormatType =
-        String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
+    String objectName = String.valueOf(attrs.get(KEY_OBJECT_NAME));
+    String fileName = String.valueOf(attrs.get("fileName"));
+    String fileFormatType = String.valueOf(attrs.getOrDefault("exportFileFormatType", "JSON"));
     String bucket = s3StorageProperties.getBucket();
-    String expectedChecksum = nullableText(context.getAttributes().get("checksumValue"));
+    String expectedChecksum = nullableText(attrs.get("checksumValue"));
     // 相同路径的 file_record 已存在时进行幂等复用（STORE → REGISTER 重试场景）
     if (runtimeRepository.existsFileRecordByStoragePath(
         context.getTenantId(), bucket, objectName)) {
@@ -106,14 +106,13 @@ public class RegisterStep implements ExportStageStep {
     }
 
     Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("recordCount", context.getAttributes().get("recordCount"));
-    metadata.put("totalAmount", context.getAttributes().get("totalAmount"));
+    metadata.put("recordCount", attrs.get("recordCount"));
+    metadata.put("totalAmount", attrs.get("totalAmount"));
     metadata.put("templateCode", exportPayload.templateCode());
     metadata.put(KEY_OBJECT_NAME, objectName);
-    mergeSecurityMetadata(metadata, context.getAttributes());
-    if (context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
-      metadata.put(
-          "exportSnapshot", context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
+    mergeSecurityMetadata(metadata, attrs);
+    if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
+      metadata.put("exportSnapshot", attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
     mergeUserMetadata(metadata, exportPayload.metadata());
     Long fileId =
@@ -131,12 +130,11 @@ public class RegisterStep implements ExportStageStep {
                 .fileFormatType(fileFormatType)
                 .charset(StandardCharsets.UTF_8.name())
                 .fileSizeBytes(
-                    runtimeRepository.toLong(context.getAttributes().get("fileSizeBytes")) == null
+                    runtimeRepository.toLong(attrs.get("fileSizeBytes")) == null
                         ? 0L
-                        : runtimeRepository.toLong(context.getAttributes().get("fileSizeBytes")))
-                .checksumType(
-                    String.valueOf(context.getAttributes().getOrDefault("checksumType", "SHA-256")))
-                .checksumValue(nullableText(context.getAttributes().get("checksumValue")))
+                        : runtimeRepository.toLong(attrs.get("fileSizeBytes")))
+                .checksumType(String.valueOf(attrs.getOrDefault("checksumType", "SHA-256")))
+                .checksumValue(nullableText(attrs.get("checksumValue")))
                 .storageType("S3")
                 .storagePath(objectName)
                 .storageBucket(bucket)
@@ -145,22 +143,20 @@ public class RegisterStep implements ExportStageStep {
                 .sourceType("GENERATED")
                 .sourceRef(exportPayload.batchNo())
                 .fileStatus("GENERATED")
-                .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+                .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
                 .metadata(metadata)
                 .build());
     Map<String, Object> fileRecord =
         runtimeRepository.loadFileRecord(context.getTenantId(), fileId);
-    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
-    context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
+    attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
+    attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
     context.setFileId(String.valueOf(fileId));
     runtimeRepository.bindFileToPipelineInstance(
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-        fileId);
+        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
     Long batchId = runtimeRepository.toLong(batch.get("id"));
     Integer exportVersion =
         fileRecord.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
-    String traceId = String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
+    String traceId = String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID));
     resolvePlugin(context)
         .onRegistered(buildDataContext(context, exportPayload), batchId, exportVersion, traceId);
     return ExportStageResult.success(stage());

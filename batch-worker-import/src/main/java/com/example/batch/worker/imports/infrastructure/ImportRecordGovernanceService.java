@@ -158,8 +158,8 @@ public class ImportRecordGovernanceService {
     if (badRecords.isEmpty()) {
       return;
     }
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> attrs = context.getAttributes();
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     if (fileId == null || !Texts.hasText(context.getTenantId())) {
       return;
     }
@@ -172,28 +172,19 @@ public class ImportRecordGovernanceService {
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("badRecordCount", badRecords.size());
-    metadata.put("successCount", numberValue(context.getAttributes().get("successCount")));
-    metadata.put(KEY_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)));
-    metadata.put("failedCount", numberValue(context.getAttributes().get("failedCount")));
-    metadata.put("totalCount", numberValue(context.getAttributes().get("totalCount")));
+    metadata.put("successCount", numberValue(attrs.get("successCount")));
+    metadata.put(KEY_SKIPPED_COUNT, numberValue(attrs.get(KEY_SKIPPED_COUNT)));
+    metadata.put("failedCount", numberValue(attrs.get("failedCount")));
+    metadata.put("totalCount", numberValue(attrs.get("totalCount")));
     // C-2.15：把 parse / validate 两阶段的细分计数一并登记，便于问题定位
-    metadata.put(
-        KEY_PARSE_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_PARSE_SKIPPED_COUNT)));
-    metadata.put(
-        KEY_VALIDATE_SKIPPED_COUNT,
-        numberValue(context.getAttributes().get(KEY_VALIDATE_SKIPPED_COUNT)));
-    metadata.put(
-        KEY_PARSE_FAILED_COUNT, numberValue(context.getAttributes().get(KEY_PARSE_FAILED_COUNT)));
-    metadata.put(
-        KEY_VALIDATE_FAILED_COUNT,
-        numberValue(context.getAttributes().get(KEY_VALIDATE_FAILED_COUNT)));
-    metadata.put(
-        "skipThresholdExceeded",
-        Boolean.TRUE.equals(context.getAttributes().get("skipThresholdExceeded")));
+    metadata.put(KEY_PARSE_SKIPPED_COUNT, numberValue(attrs.get(KEY_PARSE_SKIPPED_COUNT)));
+    metadata.put(KEY_VALIDATE_SKIPPED_COUNT, numberValue(attrs.get(KEY_VALIDATE_SKIPPED_COUNT)));
+    metadata.put(KEY_PARSE_FAILED_COUNT, numberValue(attrs.get(KEY_PARSE_FAILED_COUNT)));
+    metadata.put(KEY_VALIDATE_FAILED_COUNT, numberValue(attrs.get(KEY_VALIDATE_FAILED_COUNT)));
+    metadata.put("skipThresholdExceeded", Boolean.TRUE.equals(attrs.get("skipThresholdExceeded")));
     metadata.put(
         "manualReviewRequired",
-        Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired"))
-            || shouldManualReview());
+        Boolean.TRUE.equals(attrs.get("manualReviewRequired")) || shouldManualReview());
     if (Texts.hasText(errorOutputPath)) {
       metadata.put("errorOutputPath", errorOutputPath);
     }
@@ -206,7 +197,7 @@ public class ImportRecordGovernanceService {
             .operationResult("SUCCESS")
             .operatorType("SYSTEM")
             .operatorId(context.getWorkerId())
-            .traceId(stringValue(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+            .traceId(stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
             .evidenceRef("import-error-output")
             .detailSummary(metadata)
             .build());
@@ -247,6 +238,7 @@ public class ImportRecordGovernanceService {
     String errorMessage = brc.errorMessage();
     Object rawRecord = brc.rawRecord();
     boolean skipped = brc.skipped();
+    Map<String, Object> attrs = context.getAttributes();
     ImportBadRecordEntity badRecord =
         new ImportBadRecordEntity(
             recordNo,
@@ -274,15 +266,12 @@ public class ImportRecordGovernanceService {
       }
     }
 
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     Long pipelineInstanceId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     Long pipelineStepRunId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
-    Object templateConfig = context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
+    Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
     boolean errorLineMask = false;
     String maskingRuleSet = null;
     if (templateConfig instanceof Map<?, ?> templateMap) {
@@ -317,14 +306,14 @@ public class ImportRecordGovernanceService {
             .build());
 
     if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
-      context.getAttributes().put("manualReviewRequired", true);
+      attrs.put("manualReviewRequired", true);
     }
     if (!skipped) {
-      context.getAttributes().put("lastBadRecord", badRecord);
+      attrs.put("lastBadRecord", badRecord);
     }
-    context.getAttributes().put("lastProcessedRecordNo", recordNo);
-    context.getAttributes().put("lastErrorCode", errorCode);
-    context.getAttributes().put("lastErrorMessage", errorMessage);
+    attrs.put("lastProcessedRecordNo", recordNo);
+    attrs.put("lastErrorCode", errorCode);
+    attrs.put("lastErrorMessage", errorMessage);
   }
 
   @SuppressWarnings("unchecked")

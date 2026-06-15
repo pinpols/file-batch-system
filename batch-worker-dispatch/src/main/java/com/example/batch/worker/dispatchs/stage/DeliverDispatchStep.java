@@ -58,14 +58,14 @@ public class DeliverDispatchStep implements DispatchStageStep {
           "dispatch payload missing",
           ERROR_OBJECT_MAPPER);
     }
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> attrs = context.getAttributes();
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     @SuppressWarnings("unchecked")
     Map<String, Object> fileRecord =
-        (Map<String, Object>) context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD);
+        (Map<String, Object>) attrs.get(PipelineRuntimeKeys.FILE_RECORD);
     @SuppressWarnings("unchecked")
     Map<String, Object> channelConfig =
-        (Map<String, Object>) context.getAttributes().get(PipelineRuntimeKeys.CHANNEL_CONFIG);
+        (Map<String, Object>) attrs.get(PipelineRuntimeKeys.CHANNEL_CONFIG);
     if (fileId == null || fileRecord == null || channelConfig == null) {
       return DispatchStageResult.failure(
           stage(),
@@ -84,8 +84,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
               new FileDispatchRepository.InsertDispatchParam(
                   context.getTenantId(),
                   fileId,
-                  runtimeRepository.toLong(
-                      context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+                  runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
                   dispatchPayload.channelCode(),
                   dispatchPayload.dispatchTarget(),
                   dispatchPayload.receiptCode(),
@@ -106,7 +105,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
     }
     // ADR-026: 演练模式下不真发外部投递，伪造一个"成功 + dry-run"的 DispatchResult，
     // 让后续 markSent / file_dispatch_record 状态推进按演练通道走。
-    DryRunGuard guard = DryRunGuard.fromAttributes(context.getAttributes());
+    DryRunGuard guard = DryRunGuard.fromAttributes(attrs);
     DispatchResult dispatchResult =
         guard.callOrSkip(
             "dispatch.deliver",
@@ -128,10 +127,8 @@ public class DeliverDispatchStep implements DispatchStageStep {
     }
     runtimeRepository.updateFileStatus(fileId, "DISPATCHING", fileMetadata);
     if (!dispatchResult.success()) {
-      context.getAttributes().put("retryRequested", Boolean.TRUE);
-      context
-          .getAttributes()
-          .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
+      attrs.put("retryRequested", Boolean.TRUE);
+      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
       fileDispatchRepository.markFailed(
           context.getTenantId(),
           fileId,
@@ -158,7 +155,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
           "failed to mark sent",
           ERROR_OBJECT_MAPPER);
     }
-    context.getAttributes().put("dispatchRecord", dispatchPayload);
+    attrs.put("dispatchRecord", dispatchPayload);
     return DispatchStageResult.success(stage());
   }
 }

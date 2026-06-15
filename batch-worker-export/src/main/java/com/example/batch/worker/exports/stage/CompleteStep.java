@@ -48,28 +48,25 @@ public class CompleteStep implements ExportStageStep {
           "objectName missing",
           ERROR_OBJECT_MAPPER);
     }
+    Map<String, Object> attrs = context.getAttributes();
     ExportPayload exportPayload =
-        context.getAttributes().get("exportPayload") instanceof ExportPayload payload
-            ? payload
-            : null;
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        attrs.get("exportPayload") instanceof ExportPayload payload ? payload : null;
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     String nextStatus =
         exportPayload != null && Boolean.TRUE.equals(exportPayload.autoDispatch())
             ? "DISPATCHING"
             : "GENERATED";
     Map<String, Object> fileMetadata = new LinkedHashMap<>();
-    fileMetadata.put(KEY_RECORD_COUNT, context.getAttributes().get(KEY_RECORD_COUNT));
-    fileMetadata.put(KEY_OBJECT_NAME, context.getAttributes().get(KEY_OBJECT_NAME));
-    if (context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
-      fileMetadata.put(
-          "exportSnapshot", context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
+    fileMetadata.put(KEY_RECORD_COUNT, attrs.get(KEY_RECORD_COUNT));
+    fileMetadata.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
+    if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
+      fileMetadata.put("exportSnapshot", attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
     runtimeRepository.updateFileStatus(fileId, nextStatus, fileMetadata);
     Map<String, Object> detailSummary = new LinkedHashMap<>();
-    detailSummary.put(KEY_RECORD_COUNT, context.getAttributes().get(KEY_RECORD_COUNT));
-    detailSummary.put("fileSizeBytes", context.getAttributes().get("fileSizeBytes"));
-    detailSummary.put(KEY_OBJECT_NAME, context.getAttributes().get(KEY_OBJECT_NAME));
+    detailSummary.put(KEY_RECORD_COUNT, attrs.get(KEY_RECORD_COUNT));
+    detailSummary.put("fileSizeBytes", attrs.get("fileSizeBytes"));
+    detailSummary.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
     runtimeRepository.appendAudit(
         FileAuditParam.builder()
             .fileId(fileId)
@@ -78,8 +75,8 @@ public class CompleteStep implements ExportStageStep {
             .operationResult("SUCCESS")
             .operatorType("SYSTEM")
             .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME)))
+            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+            .evidenceRef(String.valueOf(attrs.get(KEY_OBJECT_NAME)))
             .detailSummary(detailSummary)
             .build());
     return ExportStageResult.success(stage());

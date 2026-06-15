@@ -50,8 +50,8 @@ public class CompensateDispatchStep implements DispatchStageStep {
           "dispatch payload missing",
           ERROR_OBJECT_MAPPER);
     }
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> attrs = context.getAttributes();
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     int updated =
         fileDispatchRepository.markCompensated(
             context.getTenantId(),
@@ -73,7 +73,7 @@ public class CompensateDispatchStep implements DispatchStageStep {
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put("channelCode", dispatchPayload.channelCode());
     detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());
-    detailSummary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
+    detailSummary.put("externalRequestId", attrs.get("externalRequestId"));
     runtimeRepository.appendAudit(
         FileAuditParam.builder()
             .fileId(fileId)
@@ -82,7 +82,7 @@ public class CompensateDispatchStep implements DispatchStageStep {
             .operationResult("FAILED")
             .operatorType("SYSTEM")
             .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
             .evidenceRef(null)
             .detailSummary(detailSummary)
             .build());

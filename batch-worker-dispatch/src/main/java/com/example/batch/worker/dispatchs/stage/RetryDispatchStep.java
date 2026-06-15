@@ -58,11 +58,10 @@ public class RetryDispatchStep implements DispatchStageStep {
           "dispatch context missing",
           ERROR_OBJECT_MAPPER);
     }
-    Object payload = context.getAttributes().get("dispatchPayload");
+    Map<String, Object> attrs = context.getAttributes();
+    Object payload = attrs.get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
-      context
-          .getAttributes()
-          .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
           stage(),
           "DISPATCH_RETRY_NO_PAYLOAD",
@@ -71,20 +70,17 @@ public class RetryDispatchStep implements DispatchStageStep {
           "dispatch payload missing",
           ERROR_OBJECT_MAPPER);
     }
-    if (!Boolean.TRUE.equals(context.getAttributes().get("retryRequested"))) {
-      context
-          .getAttributes()
-          .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+    if (!Boolean.TRUE.equals(attrs.get("retryRequested"))) {
+      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.success(stage());
     }
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     @SuppressWarnings("unchecked")
     Map<String, Object> fileRecord =
-        (Map<String, Object>) context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD);
+        (Map<String, Object>) attrs.get(PipelineRuntimeKeys.FILE_RECORD);
     @SuppressWarnings("unchecked")
     Map<String, Object> channelConfig =
-        (Map<String, Object>) context.getAttributes().get(PipelineRuntimeKeys.CHANNEL_CONFIG);
+        (Map<String, Object>) attrs.get(PipelineRuntimeKeys.CHANNEL_CONFIG);
     fileDispatchRepository.incrementAttempt(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
     DispatchResult dispatchResult =
@@ -99,9 +95,7 @@ public class RetryDispatchStep implements DispatchStageStep {
               "DISPATCH_RETRY",
               dispatchResult.message());
       if (updated <= 0) {
-        context
-            .getAttributes()
-            .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+        attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
         return DispatchStageResult.failure(
             stage(),
             "DISPATCH_RETRY_FAILED",
@@ -110,9 +104,7 @@ public class RetryDispatchStep implements DispatchStageStep {
             "failed to mark failed",
             ERROR_OBJECT_MAPPER);
       }
-      context
-          .getAttributes()
-          .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
           stage(),
           "DISPATCH_RETRY_FAILED",
@@ -125,9 +117,7 @@ public class RetryDispatchStep implements DispatchStageStep {
         DispatchInvocationSupport.markSent(
             fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
     if (updated <= 0) {
-      context
-          .getAttributes()
-          .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
           stage(),
           "DISPATCH_RETRY_FAILED",
@@ -136,10 +126,8 @@ public class RetryDispatchStep implements DispatchStageStep {
           "failed to mark retry sent",
           ERROR_OBJECT_MAPPER);
     }
-    context.getAttributes().put("retryRecovered", Boolean.TRUE);
-    context
-        .getAttributes()
-        .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
+    attrs.put("retryRecovered", Boolean.TRUE);
+    attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
     return DispatchStageResult.success(stage());
   }
 }

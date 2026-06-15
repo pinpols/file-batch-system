@@ -98,43 +98,37 @@ public class ParseStep implements ImportStageStep {
   public ImportStageResult execute(ImportJobContext context) {
     Path stagingFile = null;
     Path spoolFile = resolveSpoolPath(context);
+    Map<String, Object> attrs = context.getAttributes();
     try {
       String payloadText =
-          String.valueOf(
-              context.getAttributes().getOrDefault("normalizedPayload", context.getRawPayload()));
+          String.valueOf(attrs.getOrDefault("normalizedPayload", context.getRawPayload()));
       ImportPayload importPayload =
-          context.getAttributes().get("importPayload") instanceof ImportPayload payload
-              ? payload
-              : null;
+          attrs.get("importPayload") instanceof ImportPayload payload ? payload : null;
       stagingFile = createStagingFile(context, "parsed");
       long totalCount =
           parsePayloads(
               context,
               payloadText,
               importPayload,
-              context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG),
+              attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG),
               stagingFile);
       // 默认按行 mod 切片:partitionCount > 1 且未关闭时,流式过滤 staging 文件,只保留属于本 partition 的行。
       // (lineNo 0-based;partitionNo 1-based;条件 lineNo % count == partitionNo - 1)
       // totalCount = 文件原始行数(全部 partition 视角);parsedCount = 本 partition 实际处理的行数
       long partitionedCount =
           applyPartitionFilter(
-              context,
-              stagingFile,
-              totalCount,
-              context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
-      context.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
+              context, stagingFile, totalCount, attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+      attrs.put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
       // 切片时 parsedCount 应反映本 partition 视角(下游 LoadStep 用它做 audit + step output);
       // 不切片时维持原有 support.numberValue(...) 值兜底,保持与历史行为一致。
-      Object existingParsedCount = context.getAttributes().get(KEY_PARSED_COUNT);
+      Object existingParsedCount = attrs.get(KEY_PARSED_COUNT);
       long parsedCountValue =
           partitionedCount != totalCount
               ? partitionedCount
               : support.numberValue(existingParsedCount);
-      context.getAttributes().put(KEY_PARSED_COUNT, parsedCountValue);
-      context.getAttributes().put("totalCount", totalCount);
-      if (totalCount == 0
-          && support.numberValue(context.getAttributes().get("skippedCount")) == 0) {
+      attrs.put(KEY_PARSED_COUNT, parsedCountValue);
+      attrs.put("totalCount", totalCount);
+      if (totalCount == 0 && support.numberValue(attrs.get("skippedCount")) == 0) {
         deleteQuietly(stagingFile);
         return ImportStageResult.failure(
             stage(),
@@ -161,11 +155,11 @@ public class ParseStep implements ImportStageStep {
           "PARSED",
           Map.of(
               KEY_PARSED_COUNT,
-              support.numberValue(context.getAttributes().get(KEY_PARSED_COUNT)),
+              support.numberValue(attrs.get(KEY_PARSED_COUNT)),
               "totalCount",
               totalCount,
               "skippedCount",
-              support.numberValue(context.getAttributes().get("skippedCount")),
+              support.numberValue(attrs.get("skippedCount")),
               "badRecordCount",
               badRecordCount(context),
               "parsedRecordsPath",

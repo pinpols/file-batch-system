@@ -48,23 +48,22 @@ public class CompleteDispatchStep implements DispatchStageStep {
           "dispatch payload missing",
           ERROR_OBJECT_MAPPER);
     }
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    String receiptStatus =
-        String.valueOf(context.getAttributes().getOrDefault("receiptStatus", "NONE"));
+    Map<String, Object> attrs = context.getAttributes();
+    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    String receiptStatus = String.valueOf(attrs.getOrDefault("receiptStatus", "NONE"));
     if ("SUCCESS".equalsIgnoreCase(receiptStatus)) {
       Map<String, Object> fileMetadata = new LinkedHashMap<>();
       fileMetadata.put("channelCode", dispatchPayload.channelCode());
-      if (context.getAttributes().get(KEY_RECEIPT_CODE) != null) {
-        fileMetadata.put(KEY_RECEIPT_CODE, context.getAttributes().get(KEY_RECEIPT_CODE));
+      if (attrs.get(KEY_RECEIPT_CODE) != null) {
+        fileMetadata.put(KEY_RECEIPT_CODE, attrs.get(KEY_RECEIPT_CODE));
       }
       runtimeRepository.updateFileStatus(fileId, "DISPATCHED", fileMetadata);
     }
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put("channelCode", dispatchPayload.channelCode());
     detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());
-    detailSummary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
-    detailSummary.put(KEY_RECEIPT_CODE, context.getAttributes().get(KEY_RECEIPT_CODE));
+    detailSummary.put("externalRequestId", attrs.get("externalRequestId"));
+    detailSummary.put(KEY_RECEIPT_CODE, attrs.get(KEY_RECEIPT_CODE));
     detailSummary.put("receiptStatus", receiptStatus);
     runtimeRepository.appendAudit(
         FileAuditParam.builder()
@@ -74,9 +73,8 @@ public class CompleteDispatchStep implements DispatchStageStep {
             .operationResult("SUCCESS")
             .operatorType("SYSTEM")
             .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(
-                String.valueOf(context.getAttributes().getOrDefault("externalRequestId", "")))
+            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+            .evidenceRef(String.valueOf(attrs.getOrDefault("externalRequestId", "")))
             .detailSummary(detailSummary)
             .build());
     return DispatchStageResult.success(stage());
