@@ -6,10 +6,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
 import org.springframework.boot.availability.ReadinessState;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
@@ -26,15 +26,22 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class OrchestratorGracefulShutdown implements ApplicationListener<ContextClosedEvent> {
+public class OrchestratorGracefulShutdown
+    implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
 
   private final AtomicBoolean draining = new AtomicBoolean(false);
   private volatile Instant drainingSince;
   private volatile String reason;
 
-  // R3-P1-1：可选注入；Spring 测试场景可能不在容器内构造该类。
-  @Autowired(required = false)
+  // R3-P1-1：可选依赖,经 ApplicationEventPublisherAware 框架回调注入(非 @Autowired field)。
+  // 容器内 Spring 调 setApplicationEventPublisher 注入;单测 new 该类时不调用 → 保持 null,
+  // 下方所有用法均已 null 守护。
   private ApplicationEventPublisher eventPublisher;
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.eventPublisher = applicationEventPublisher;
+  }
 
   @Override
   public void onApplicationEvent(ContextClosedEvent event) {

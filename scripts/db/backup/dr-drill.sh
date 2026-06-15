@@ -126,11 +126,20 @@ fi
 # ---- 4. 恢复(§2.1)+ 量 RTO ----
 echo "${BLUE}[4/5] 恢复(pg_restore -j4)...${RESET}"
 T0=$(date +%s)
-docker exec -e PGPASSWORD="$PG_PASSWORD" "$PG_CONTAINER" \
-  pg_restore -U "$PG_USER" -d "$TGT_PLATFORM" -j4 --no-owner "$INDB_DIR/$PLATFORM_DB.dump" 2>/dev/null || true
+# 不再 2>/dev/null||true 静默吞错:--no-owner 下 role/acl 告警可忽略(故不用 ON_ERROR 直接退出),
+# 但真失败(dump 损坏 / 磁盘满)必须可见,否则会被 §5 粗粒度行数校验掩盖。捕获退出码 + 失败打 stderr。
+restore_db() { # $1=目标库 $2=dump 路径
+  local out rc
+  out="$(docker exec -e PGPASSWORD="$PG_PASSWORD" "$PG_CONTAINER" \
+    pg_restore -U "$PG_USER" -d "$1" -j4 --no-owner "$2" 2>&1)" && rc=0 || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    echo "  ${YELLOW}⚠ pg_restore $1 退出码 $rc(--no-owner 的 role/acl 告警可忽略;真失败详情↓,§5 校验为最终关卡)${RESET}"
+    printf '%s\n' "$out" | tail -20 >&2
+  fi
+}
+restore_db "$TGT_PLATFORM" "$INDB_DIR/$PLATFORM_DB.dump"
 if [[ "$HAS_BUSINESS" == "1" ]]; then
-  docker exec -e PGPASSWORD="$PG_PASSWORD" "$PG_CONTAINER" \
-    pg_restore -U "$PG_USER" -d "$TGT_BUSINESS" -j4 --no-owner "$INDB_DIR/$BUSINESS_DB.dump" 2>/dev/null || true
+  restore_db "$TGT_BUSINESS" "$INDB_DIR/$BUSINESS_DB.dump"
   # §2.1 step4:business 恢复后重跑 RLS(逻辑 dump 不保证 role/policy 完整)
   if [[ -f "$RLS_SQL" ]]; then
     docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
