@@ -2,6 +2,7 @@ package com.example.batch.worker.atomic.runtime;
 
 import com.example.batch.worker.atomic.http.HttpExecutorProperties;
 import com.example.batch.worker.atomic.shell.ShellExecutorProperties;
+import com.example.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
 import com.example.batch.worker.atomic.sql.SqlExecutorProperties;
 import com.example.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.util.ArrayList;
@@ -17,10 +18,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 
 /**
- * Atomic worker 启动期 fail-closed 守护:prod profile 下校验 4 类 executor 配置不能"空 = 允许全部"。
+ * Atomic worker 启动期 fail-closed 守护:prod profile 下校验 5 类 executor 配置不能"空 = 允许全部"。
  *
- * <p>背景:Sql/StoredProc/Http/Shell executor 的安全防护链都允许"空白名单 = 放行全部"以满足 dev 开发, 但生产同样配置等于把 dual-use
- * RCE 接口对内全开,与 ADR-029 atomic worker 隔离初衷背离。
+ * <p>背景:Sql/StoredProc/Http/Shell/SparkSubmit executor 的安全防护链都允许"空白名单 = 放行全部"以满足 dev 开发, 但生产同样配置等于把
+ * dual-use RCE 接口对内全开,与 ADR-029 atomic worker 隔离初衷背离。
  *
  * <p>本守护只在 active profile 含 "prod" 时触发;dev/local/test/未声明 profile 完全放行,保持开发友好。
  *
@@ -38,6 +39,7 @@ public class AtomicExecutorProductionGuard {
   private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
   private final ObjectProvider<HttpExecutorProperties> httpProps;
   private final ObjectProvider<ShellExecutorProperties> shellProps;
+  private final ObjectProvider<SparkSubmitExecutorProperties> sparkProps;
 
   @EventListener(ApplicationReadyEvent.class)
   public void verifyProductionFailClosed() {
@@ -91,6 +93,13 @@ public class AtomicExecutorProductionGuard {
           "batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
               + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
               + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
+    }
+    SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
+    if (spark != null && spark.isEnabled() && spark.getAppResourceAllowlist().isEmpty()) {
+      violations.add(
+          "batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
+              + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"
+              + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");
     }
     return violations;
   }

@@ -59,6 +59,24 @@ public class SparkSubmitExecutorProperties {
   private int maxAppArgs = 128;
 
   /**
+   * #1 安全:spark-submit 子进程**默认只继承必要 env**(SPARK_HOME/JAVA_HOME/HADOOP_CONF_DIR 等内置必需集), 其余一律清掉,防
+   * worker 环境里的 DB 密码 / 内部密钥 / 云凭据被透传进 Spark 作业泄密。本表是**额外**放行的 env key。
+   */
+  private Set<String> allowedEnvKeys = Set.of();
+
+  /**
+   * #4 安全:允许的 {@code --master} 前缀白名单(如 {@code yarn}、{@code k8s://}、{@code spark://prod-})。 为空 =
+   * 不校验(仅本地;生产建议收紧,防用户 param 把作业提交到任意/攻击者集群或 {@code local[超大]} 打爆机器)。
+   */
+  private List<String> allowedMasterPrefixes = List.of();
+
+  /**
+   * #7 防御:app 参数(传给 Spark app)的正则白名单,每个 appArg 必须匹配其一。为空 = 不校验。 注:appArgs 在 appResource 之后只传给
+   * app(不会被 spark-submit 解释),且走 execve 无 shell 注入,故默认宽松。
+   */
+  private List<String> appArgRegexAllowlist = List.of();
+
+  /**
    * 给了 {@code outputPath} 参数时,以该 conf key 注入给 Spark app 读取落盘目录(契约: app 用 {@code sparkConf.get(此
    * key)} 拿输出路径)。成功时执行器把 outputPath 回写到 {@code TaskResult.output["outputUri"]},下游(EXPORT / console
    * 下载 / 下一节点)按它取加工后 CSV。

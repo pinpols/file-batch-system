@@ -110,6 +110,60 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  void clusterDeployMode_failsConfigInvalid() {
+    TaskResult r =
+        executor.execute(
+            ctx(
+                Map.of(
+                    "appResource", "s3a://jobs/x.jar",
+                    "deployMode", "cluster",
+                    "dryRun", true)));
+    assertThat(r.success()).isFalse();
+    assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
+    assertThat(r.message()).contains("cluster");
+  }
+
+  @Test
+  void masterNotInAllowlist_failsConfigInvalid() {
+    SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
+    props.setEnabled(true);
+    props.setAllowedMasterPrefixes(List.of("yarn", "k8s://"));
+    SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
+
+    TaskResult r =
+        restricted.execute(
+            ctx(
+                Map.of(
+                    "appResource", "s3a://jobs/x.jar",
+                    "master", "spark://attacker:7077",
+                    "dryRun", true)));
+    assertThat(r.success()).isFalse();
+    assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
+  }
+
+  @Test
+  void appArgNotMatchingRegexAllowlist_failsConfigInvalid() {
+    SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
+    props.setEnabled(true);
+    props.setDefaultMaster("local[*]");
+    props.setAppArgRegexAllowlist(List.of("^--date$", "^\\d{4}-\\d{2}-\\d{2}$"));
+    SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
+
+    TaskResult r =
+        restricted.execute(
+            ctx(
+                Map.of(
+                    "appResource",
+                    "s3a://jobs/x.jar",
+                    "appArgs",
+                    List.of("--date", "; rm -rf /"),
+                    "dryRun",
+                    true)));
+    assertThat(r.success()).isFalse();
+    assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
+  }
+
+  @Test
   void confKeyNotInAllowlist_failsConfigInvalid() {
     SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
     props.setEnabled(true);

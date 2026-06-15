@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.worker.atomic.http.HttpExecutorProperties;
 import com.example.batch.worker.atomic.shell.ShellExecutorProperties;
+import com.example.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
 import com.example.batch.worker.atomic.sql.SqlExecutorProperties;
 import com.example.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.util.Set;
@@ -25,6 +26,7 @@ class AtomicExecutorProductionGuardTest {
   @Mock private ObjectProvider<StoredProcExecutorProperties> spProvider;
   @Mock private ObjectProvider<HttpExecutorProperties> httpProvider;
   @Mock private ObjectProvider<ShellExecutorProperties> shellProvider;
+  @Mock private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
 
   private MockEnvironment env;
 
@@ -35,7 +37,7 @@ class AtomicExecutorProductionGuardTest {
 
   private AtomicExecutorProductionGuard newGuard() {
     return new AtomicExecutorProductionGuard(
-        env, sqlProvider, spProvider, httpProvider, shellProvider);
+        env, sqlProvider, spProvider, httpProvider, shellProvider, sparkProvider);
   }
 
   private void stubAllWith(
@@ -47,6 +49,8 @@ class AtomicExecutorProductionGuardTest {
     when(spProvider.getIfAvailable()).thenReturn(sp);
     when(httpProvider.getIfAvailable()).thenReturn(http);
     when(shellProvider.getIfAvailable()).thenReturn(shell);
+    // spark 默认禁用(不参与既有用例);spark 专项用例自行 stub 启用态。
+    when(sparkProvider.getIfAvailable()).thenReturn(new SparkSubmitExecutorProperties());
   }
 
   @Test
@@ -140,6 +144,31 @@ class AtomicExecutorProductionGuardTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("batch.worker.executors.shell")
         .hasMessageContaining("command-whitelist");
+  }
+
+  @Test
+  void shouldFailFast_whenProdProfileAndSparkAppResourceAllowlistEmpty() {
+    env.setActiveProfiles("prod");
+    SqlExecutorProperties sql = new SqlExecutorProperties();
+    sql.setEnabled(false);
+    StoredProcExecutorProperties sp = new StoredProcExecutorProperties();
+    sp.setEnabled(false);
+    HttpExecutorProperties http = new HttpExecutorProperties();
+    http.setEnabled(false);
+    ShellExecutorProperties shell = new ShellExecutorProperties();
+    shell.setEnabled(false);
+    SparkSubmitExecutorProperties spark = new SparkSubmitExecutorProperties();
+    spark.setEnabled(true); // appResourceAllowlist 默认空 → prod 下任意 jar 提交 = RCE
+    when(sqlProvider.getIfAvailable()).thenReturn(sql);
+    when(spProvider.getIfAvailable()).thenReturn(sp);
+    when(httpProvider.getIfAvailable()).thenReturn(http);
+    when(shellProvider.getIfAvailable()).thenReturn(shell);
+    when(sparkProvider.getIfAvailable()).thenReturn(spark);
+
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("batch.worker.executors.spark-submit")
+        .hasMessageContaining("app-resource-allowlist");
   }
 
   @Test
