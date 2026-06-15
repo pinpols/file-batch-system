@@ -57,4 +57,17 @@ public class SparkSubmitExecutorProperties {
 
   /** app 参数个数上限(防滥用)。 */
   private int maxAppArgs = 128;
+
+  /**
+   * 给了 {@code outputPath} 参数时,以该 conf key 注入给 Spark app 读取落盘目录(契约: app 用 {@code sparkConf.get(此
+   * key)} 拿输出路径)。成功时执行器把 outputPath 回写到 {@code TaskResult.output["outputUri"]},下游(EXPORT / console
+   * 下载 / 下一节点)按它取加工后 CSV。
+   */
+  private String outputPathConfKey = "spark.batch.outputPath";
+
+  /**
+   * 是否在 exit=0 后校验本地输出目录有 {@code _SUCCESS} 标记(防 Spark 退 0 但没真写出)。默认 false。 仅对本地 FS 路径生效;远端({@code
+   * s3a:// / hdfs://})执行器够不着,需下游消费步骤自行核验。
+   */
+  private boolean verifyLocalSuccessMarker = false;
 }

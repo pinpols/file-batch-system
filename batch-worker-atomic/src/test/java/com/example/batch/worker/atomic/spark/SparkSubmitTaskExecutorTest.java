@@ -77,6 +77,25 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  void outputPath_injectsConfAndReturnsOutputUri() {
+    TaskResult r =
+        executor.execute(
+            ctx(
+                Map.of(
+                    "appResource", "s3a://jobs/etl.jar",
+                    "outputPath", "s3a://batch-out/t1/SPARK_JOB/2026-06-15/",
+                    "dryRun", true)));
+
+    assertThat(r.success()).isTrue();
+    assertThat(r.output()).containsEntry("outputUri", "s3a://batch-out/t1/SPARK_JOB/2026-06-15/");
+    @SuppressWarnings("unchecked")
+    List<String> argv = (List<String>) r.output().get("argv");
+    assertThat(argv)
+        .containsSubsequence(
+            "--conf", "spark.batch.outputPath=s3a://batch-out/t1/SPARK_JOB/2026-06-15/");
+  }
+
+  @Test
   void appResourceNotInAllowlist_failsConfigInvalid() {
     SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
     props.setEnabled(true);

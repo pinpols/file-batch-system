@@ -14,6 +14,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -79,6 +82,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
   static final String PARAM_SPARK_CONF = "sparkConf";
   static final String PARAM_APP_ARGS = "appArgs";
   static final String PARAM_TIMEOUT_SECONDS = "timeoutSeconds";
+  static final String PARAM_OUTPUT_PATH = "outputPath";
 
   /** 从 spark-submit 输出里抓 application id(YARN/standalone 常见格式),仅用于 output 透传,抓不到不影响成败判定。 */
   private static final Pattern APP_ID =
@@ -117,6 +121,9 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
         planned.put("dryRun", true);
         planned.put("plannedAction", "spark-submit");
         planned.put("argv", inv.argv);
+        if (!inv.outputPath.isBlank()) {
+          planned.put("outputUri", inv.outputPath);
+        }
         log.info(
             "spark executor dry-run skipped submit: tenantId={}, jobCode={}, appResource={}",
             ctx.tenantId(),
@@ -192,11 +199,19 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       argv.add("--conf");
       argv.add(e.getKey() + "=" + e.getValue());
     }
+    // 输出路径:平台传递的是"输出在哪"(URI),不是数据本身。给了 outputPath 就以平台 conf key
+    // 注入给 Spark app 读取(契约:app 用 sparkConf.get(outputPathConfKey) 拿落盘目录),
+    // 并在成功时回写 TaskResult.output["outputUri"],下游(EXPORT / console 下载 / 下一节点)按它取。
+    String outputPath = optionalString(params.get(PARAM_OUTPUT_PATH), "");
+    if (!outputPath.isBlank()) {
+      argv.add("--conf");
+      argv.add(props.getOutputPathConfKey() + "=" + outputPath);
+    }
     argv.add(appResource); // appResource 必须在 spark-submit 选项之后、app args 之前
     argv.addAll(parseAppArgs(params.get(PARAM_APP_ARGS)));
 
     Duration timeout = parseTimeout(params.get(PARAM_TIMEOUT_SECONDS));
-    return new SparkInvocation(appResource, argv, timeout);
+    return new SparkInvocation(appResource, argv, timeout, outputPath);
   }
 
   private void validateAppResourceAllowed(String appResource) {
@@ -303,6 +318,20 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       findApplicationId(stdout, stderr).ifPresent(id -> output.put("applicationId", id));
 
       if (exit == 0) {
+        // 回写输出位置,下游(EXPORT / console 下载 / 下一节点)按 outputUri 取加工后 CSV。
+        if (!inv.outputPath.isBlank()) {
+          output.put("outputUri", inv.outputPath);
+          // 可选:防"Spark 退 0 但没写出"。仅对本地 FS 路径(无 scheme)校验 _SUCCESS 标记;
+          // 远端(s3a:// / hdfs://)本执行器够不着,需下游消费步骤自行核验(见类注释 TODO)。
+          if (props.isVerifyLocalSuccessMarker() && isLocalPath(inv.outputPath)) {
+            Path marker = Paths.get(inv.outputPath, "_SUCCESS");
+            if (!Files.exists(marker)) {
+              return AtomicErrorCode.fail(
+                  AtomicErrorCode.EXECUTION_FAILED,
+                  "spark-submit exit=0 但本地输出目录缺 _SUCCESS,疑似未真正写出: " + inv.outputPath);
+            }
+          }
+        }
         log.info(
             "spark-submit ok: tenantId={}, jobCode={}, appResource={}",
             ctx.tenantId(),
@@ -337,6 +366,11 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
 
   private static String optionalString(Object v, String dflt) {
     return v instanceof String s && !s.isBlank() ? s.trim() : dflt;
+  }
+
+  /** 无 URI scheme(无 {@code ://})视为本地 FS 路径;{@code s3a:// / hdfs:// / file://} 等视为远端,本执行器不校验。 */
+  private static boolean isLocalPath(String path) {
+    return !path.contains("://");
   }
 
   /** 后台线程把子进程的一路输出读进有界缓冲(防 buffer 写满导致子进程阻塞 + 防日志爆内存)。 */
@@ -383,5 +417,6 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
   }
 
   /** 单次提交的不可变上下文。 */
-  private record SparkInvocation(String appResource, List<String> argv, Duration timeout) {}
+  private record SparkInvocation(
+      String appResource, List<String> argv, Duration timeout, String outputPath) {}
 }
