@@ -127,10 +127,25 @@ fi
 # ───────────────────────────────────────────────────────────
 hdr "1. cursor vs offset 翻页一致性"
 
+# 并发守卫:翻页一致性靠「取数期间行集稳定」。若 sim 仍在并发写 job_instance,
+# offset 快照(top 1000)与逐页 cursor 之间会有新 id 插进「order by id desc」顶部 →
+# 漂移 → 假 FAIL。开跑前采样 (max_id/count) 两次(间隔 3s);在写就等几个静默窗口,
+# 仍在写则 SKIP(这是「sim 未静默」的环境条件,不是数据缺陷)——先跑 sim 收尾
+# scripts/sim/98-quiesce-schedules.sh 静默后再验即稳定。
+GUARD_SKIP=""
+_ji_fingerprint() { psql_q "select coalesce(max(id),0)||'/'||count(*) from batch.job_instance;"; }
+_quiesced=0
+for _try in 1 2 3 4 5; do
+  _s1=$(_ji_fingerprint); sleep 3; _s2=$(_ji_fingerprint)
+  if [[ -n "$_s1" && "$_s1" == "$_s2" ]]; then _quiesced=1; break; fi
+  printf " ${YELLOW}…${RST} job_instance 并发写入中(%s→%s),等待静默(第 %s/5 次)\n" "$_s1" "$_s2" "$_try"
+done
+[[ "$_quiesced" == "1" ]] || GUARD_SKIP="job_instance 仍在并发写入(sim 未静默)— 先跑 scripts/sim/98-quiesce-schedules.sh 再验,避免翻页假失败"
+
 TENANT=$(psql_q "select tenant_id from batch.job_instance group by tenant_id order by count(*) desc limit 1;")
 TOTAL=$(psql_q "select count(*) from batch.job_instance where tenant_id='$TENANT';")
-if [[ -z "$TOTAL" ]] || [[ "$TOTAL" -lt 3 ]]; then
-  skip "cursor 翻页验证" "最大租户 '$TENANT' 行数 $TOTAL < 3"
+if [[ -n "$GUARD_SKIP" ]] || [[ -z "$TOTAL" ]] || [[ "$TOTAL" -lt 3 ]]; then
+  skip "cursor 翻页验证" "${GUARD_SKIP:-最大租户 '$TENANT' 行数 $TOTAL < 3}"
 else
   PAGE_SIZE=5
   offset_ids=$(psql_q "select string_agg(id::text, ',' order by id desc) from (select id from batch.job_instance where tenant_id='$TENANT' order by id desc limit 1000) t;")
