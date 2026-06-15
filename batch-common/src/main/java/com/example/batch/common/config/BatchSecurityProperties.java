@@ -71,6 +71,35 @@ public class BatchSecurityProperties implements EnvironmentAware {
       validateNotKnownWeakDbPassword(
           "batch.console.read-replica.replica.password",
           environment.getProperty("batch.console.read-replica.replica.password"));
+    } else {
+      // 非 prod:不 fail-fast(本地/联调要能起),但把"默认/弱凭据仍在用"显式 WARN 出来——
+      // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就静默用默认密钥连真库"(审计 #4)。
+      warnIfKnownInsecureDefault(
+          "batch.security.internal-secret", internalSecret, "internal-secret");
+      warnIfKnownWeakDbPassword(
+          "batch.console.read-replica.primary.password",
+          environment.getProperty("batch.console.read-replica.primary.password"));
+      warnIfKnownWeakDbPassword(
+          "batch.console.read-replica.replica.password",
+          environment.getProperty("batch.console.read-replica.replica.password"));
+    }
+  }
+
+  /** 非 prod:已知默认占位符仍在用 → WARN(不阻断,只提醒,prod profile 会 fail-fast 拒绝)。 */
+  private void warnIfKnownInsecureDefault(String key, String value, String shippedDefault) {
+    if (shippedDefault.equals(value)) {
+      log.warn(
+          "⚠️ 非生产 profile:{} 仍为出厂默认占位符,生产前务必经 env / secret-manager 注入真实强密钥"
+              + "(prod-like profile 下会 fail-fast 拒绝启动)",
+          key);
+    }
+  }
+
+  /** 非 prod:DB 密码仍为已知弱默认口令 → WARN(不阻断,property 不存在的模块跳过)。 */
+  private void warnIfKnownWeakDbPassword(String key, String value) {
+    if (value != null && KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
+      log.warn(
+          "⚠️ 非生产 profile:{} 仍为出厂默认弱口令,生产前务必注入真实凭据" + "(prod-like profile 下会 fail-fast 拒绝启动)", key);
     }
   }
 

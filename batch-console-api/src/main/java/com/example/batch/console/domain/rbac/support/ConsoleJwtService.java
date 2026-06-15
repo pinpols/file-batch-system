@@ -165,6 +165,19 @@ public class ConsoleJwtService {
         throw new IllegalStateException(
             "FATAL: batch.console.security.jwt-secret 长度不足 32 字符，HS256 弱密钥风险");
       }
+    } else {
+      // 非 prod:不 fail-fast(本地/联调要能起),但默认/弱 jwt-secret 仍在用就显式 WARN——
+      // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
+      String jwtSecret = properties.getJwtSecret();
+      String lower = jwtSecret == null ? "" : jwtSecret.toLowerCase(Locale.ROOT);
+      if (!Texts.hasText(jwtSecret)
+          || lower.contains("change-me")
+          || lower.contains("change_me")
+          || jwtSecret.length() < 32) {
+        log.warn(
+            "⚠️ 非生产 profile:batch.console.security.jwt-secret 仍为默认/弱密钥,生产前务必经 env / "
+                + "secret-manager 注入 ≥32 字符强密钥(prod-like profile 下会 fail-fast 拒绝启动)");
+      }
     }
     SecretKey key = signingKey();
     this.cachedEncoder = new NimbusJwtEncoder(new ImmutableSecret<>(key));
