@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -51,8 +52,7 @@ public class WorkerTaskLeaseRenewer {
   // R-4.4 a: 按 taskId 维护连续失败计数器；成功 / remove 时清零
   private final Map<String, AtomicInteger> consecutiveFailures = new ConcurrentHashMap<>();
   // P1-8: 进程级熔断 — 整轮 100% renew 失败时 OPEN,跳过后续 tick 直到半开探测;orch 恢复任一成功 → CLOSE
-  private final java.util.concurrent.atomic.AtomicBoolean circuitOpen =
-      new java.util.concurrent.atomic.AtomicBoolean(false);
+  private final AtomicBoolean circuitOpen = new AtomicBoolean(false);
   private final AtomicInteger ticksSinceOpen = new AtomicInteger(0);
   private volatile DistributionSummary renewBatchSizeSummary;
 

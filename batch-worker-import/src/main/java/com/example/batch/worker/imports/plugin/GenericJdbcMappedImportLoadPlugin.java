@@ -26,8 +26,10 @@ import org.postgresql.copy.CopyManager;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 通用 LOAD：通过模板驱动的列映射（白名单）向单张业务表执行 INSERT / UPSERT。 每次 {@link ImportLoadPlugin#loadChunk} 调用使用 JDBC
@@ -44,7 +46,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   private final JdbcMappedImportSecurityProperties securityProperties;
 
   /** Phase A RLS:loadChunk 的 batchUpdate 需显式 tx 包 SET LOCAL,policy 才生效。 */
-  private final org.springframework.transaction.support.TransactionTemplate txTemplate;
+  private final TransactionTemplate txTemplate;
 
   public GenericJdbcMappedImportLoadPlugin(
       @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource,
@@ -55,9 +57,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     this.objectMapper = objectMapper;
     this.securityProperties = securityProperties;
     this.txTemplate =
-        new org.springframework.transaction.support.TransactionTemplate(
-            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
-                importBusinessDataSource));
+        new TransactionTemplate(new DataSourceTransactionManager(importBusinessDataSource));
   }
 
   @Override
