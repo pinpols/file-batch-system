@@ -28,7 +28,7 @@ from typing import Any, Final, Protocol, runtime_checkable
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import PlatformError
-from batch_worker_sdk.internal import _fingerprint
+from batch_worker_sdk.internal import _fingerprint, _progress
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._directive import ParsedDirective, parse_directive
 
@@ -55,8 +55,6 @@ class DispatcherLike(Protocol):
     def in_flight_task_ids(self) -> set[int]: ...
     def apply_platform_directive(self, directive: Any) -> None: ...
     def mark_cancel_requested(self, task_id: int, reason: str) -> None: ...
-
-
 
 
 def _utc_now_iso() -> str:
@@ -173,7 +171,6 @@ class HeartbeatScheduler:
             body["buildId"] = self._config.build_id
         # 2026-06-03 docs/design/pipeline-stage-progress-display.md:流式 stage 行级进度上报。
         # Python SDK 用 _progress 模块的 sink(LOAD/GENERATE handler 调 publish),tick 时读最新值。
-        from batch_worker_sdk.internal import _progress  # local import 避免循环依赖
         rows = _progress.current_rows_processed()
         if rows is not None:
             body["rowsProcessed"] = rows
