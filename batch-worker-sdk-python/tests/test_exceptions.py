@@ -141,9 +141,7 @@ def test_parse_error_body_falls_back_to_legacy_trace_id_key() -> None:
 
 
 def test_parse_error_body_falls_back_to_request_id_key() -> None:
-    _, _, trace_id = parse_error_body(
-        {"code": "X", "message": "m", "requestId": "req-9"}
-    )
+    _, _, trace_id = parse_error_body({"code": "X", "message": "m", "requestId": "req-9"})
 
     assert trace_id == "req-9"
 
