@@ -36,7 +36,7 @@
     <sql id="fileErrorRecordColumns">
         id, tenant_id, file_id, pipeline_instance_id, pipeline_step_run_id, record_no, error_code,
         error_message, error_stage, is_skipped, skip_action, raw_record, created_at, error_key,
-        error_args
+        error_args, source_row_num, source_column
     </sql>
 
     <select id="selectFileRecord" resultType="map">
@@ -291,12 +291,14 @@
         insert into batch.file_error_record (
             tenant_id, file_id, pipeline_instance_id, pipeline_step_run_id, record_no,
             error_code, error_message, error_key, error_args,
-            error_stage, is_skipped, skip_action, raw_record, created_at
+            error_stage, is_skipped, skip_action, raw_record,
+            source_row_num, source_column, created_at
         ) values (
             #{tenantId}, #{fileId}, #{pipelineInstanceId}, #{pipelineStepRunId}, #{recordNo},
             #{errorCode}, #{errorMessage}, #{errorKey}, #{errorArgs,jdbcType=VARCHAR}::jsonb,
             #{errorStage}, #{isSkipped}, #{skipAction},
-            #{rawRecordJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+            #{rawRecordJson,jdbcType=VARCHAR}::jsonb,
+            #{sourceRowNum,jdbcType=BIGINT}, #{sourceColumn,jdbcType=VARCHAR}, current_timestamp
         )
     </insert>
 

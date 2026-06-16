@@ -352,7 +352,7 @@ class ImportRecordGovernanceServiceTest {
             new java.util.ArrayList<>(
                 List.of(
                     new ImportBadRecordEntity(
-                        1L, "PARSE", "E", "m", null, false, "CONTINUE", null))));
+                        1L, "PARSE", "E", "m", null, false, "CONTINUE", null, null, null))));
 
     service.finalizeErrorOutput(ctx);
 

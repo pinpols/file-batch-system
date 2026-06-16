@@ -566,7 +566,11 @@ public class PlatformFileRuntimeRepository {
             "skipAction",
             p.getSkipAction(),
             "rawRecordJson",
-            toJson(p.getRawRecord()));
+            toJson(p.getRawRecord()),
+            "sourceRowNum",
+            p.getSourceRowNum(),
+            "sourceColumn",
+            truncate(p.getSourceColumn(), 256));
     platformFileRuntimeMapper.insertFileErrorRecord(paramMap);
     return toLong(paramMap.get(KEY_ID));
   }
