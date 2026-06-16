@@ -9,6 +9,7 @@
 //! * [`protocol`] — wire-protocol request/response types + error-code consts.
 //! * [`decide`] — the pure decision functions and the unified [`decide::Decision`].
 
+pub mod client;
 pub mod constants;
 pub mod decide;
 pub mod protocol;
