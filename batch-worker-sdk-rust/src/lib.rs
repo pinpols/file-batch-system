@@ -14,6 +14,13 @@ pub mod constants;
 pub mod decide;
 pub mod protocol;
 
+/// Phase 3 — the real Kafka consumer adapter (rdkafka), behind the optional
+/// `kafka` feature. The default build excludes this module entirely, so the
+/// crate stays std-only with zero external dependencies unless `--features
+/// kafka` is passed.
+#[cfg(feature = "kafka")]
+pub mod kafka;
+
 // Re-exports for ergonomic top-level use, mirroring the TS `index.ts` surface.
 pub use constants::{
     SENSITIVE_KEYWORDS, SUPPORTED_SCHEMA_VERSIONS, TASK_STATUSES, WORKER_RUNTIME_STATES,

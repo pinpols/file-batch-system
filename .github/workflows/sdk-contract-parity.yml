@@ -126,9 +126,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-      - name: Run conformance + parity + unit
+      - name: Run conformance + parity + unit (root module, zero-dep)
         working-directory: batch-worker-sdk-go
         run: go vet ./... && go test ./...
+      - name: Build Kafka adapter (nested module, segmentio/kafka-go)
+        working-directory: batch-worker-sdk-go/kafka
+        run: go build ./... && go vet ./...
 
   rust-contract:
     name: rust contract (decision core + conformance)
@@ -137,9 +140,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Set up Rust (stable)
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
-      - name: Run conformance + parity + unit
+      - name: Run conformance + parity + unit (default features, zero-dep)
         working-directory: batch-worker-sdk-rust
         run: cargo test
+      # Kafka adapter is feature-gated (rdkafka builds librdkafka via cmake).
+      # Best-effort compile-check; not a hard gate until a broker-capable runner exists.
+      - name: Install librdkafka build deps
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev
+        continue-on-error: true
+      - name: Compile-check Kafka adapter (--features kafka)
+        working-directory: batch-worker-sdk-rust
+        run: cargo check --features kafka
+        continue-on-error: true
 
   # Parity report — soft-mode: log diff between Java and Python pass sets,
   # but never fail the build (Python is xfail until Lane Q lands). When
