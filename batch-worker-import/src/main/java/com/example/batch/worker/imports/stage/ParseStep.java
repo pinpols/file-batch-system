@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.utils.EncodingUtils;
@@ -165,6 +166,19 @@ public class ParseStep implements ImportStageStep {
               "parsedRecordsPath",
               stagingFile.toString()));
       return ImportStageResult.success(stage());
+    } catch (BizException biz) {
+      // 业务级 fail-fast(Excel 表头缺列 / sheet 名找不到 / 二进制 .xls 不支持 等):
+      // 保留 i18n key + args,转 BUSINESS_ERROR 让 orchestrator retry/dead-letter 政策接管;
+      // 不当 infra 异常吞成 error.import.parse.failed 丢失本地化消息。
+      if (stagingFile != null) {
+        deleteQuietly(stagingFile);
+      }
+      String tid = context == null ? null : context.getTenantId();
+      Object fid =
+          context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
+      log.warn(
+          "parse stage business error: tenantId={}, fileId={}, key={}", tid, fid, biz.getMessage());
+      return ImportStageResult.failure(stage(), "IMPORT_PARSE_FAILED", biz, ERROR_OBJECT_MAPPER);
     } catch (Exception ex) {
       if (stagingFile != null) {
         deleteQuietly(stagingFile);

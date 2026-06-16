@@ -374,11 +374,14 @@ public class ImportIngressScanner {
 
   private String resolveFileFormatType(String fileName) {
     String lower = fileName == null ? "" : fileName.toLowerCase();
+    // 仅 .xlsx(OOXML)映射 EXCEL;旧二进制 .xls(OLE2/HSSF)不再假映射成 EXCEL ——
+    // ExcelFormatParser 走纯 OOXML 的 OPCPackage.open(),喂 OLE2 字节必崩当坏文件。
+    // .xls 落 BINARY,真正解析时由 ExcelFormatParser/上游格式路由给出明确报错(转 .xlsx 提示),
+    // 而非在 PARSE 阶段静默产出坏数据。详见 ExcelFormatParser 的 OLE2 fail-fast。
     Map<String, String> formatMap =
         Map.ofEntries(
             Map.entry(".csv", "DELIMITED"),
             Map.entry(".xlsx", "EXCEL"),
-            Map.entry(".xls", "EXCEL"),
             Map.entry(".xml", "XML"),
             Map.entry(".json", "JSON"));
     return formatMap.entrySet().stream()
