@@ -8,8 +8,8 @@
  * report the task failed instead of crashing the worker.
  */
 
-import { SENSITIVE_KEYWORDS } from "./constants.ts";
-import { ErrorCode } from "./protocol.ts";
+import { SENSITIVE_KEYWORDS } from "../constants.ts";
+import { ErrorCode } from "../protocol.ts";
 
 /** Error thrown on the register path when a credential leaks into the body. */
 export class SensitiveDataError extends Error {

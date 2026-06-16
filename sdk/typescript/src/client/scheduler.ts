@@ -11,8 +11,8 @@
  * next interval from `nextHeartbeatHint` (Java接而不用).
  */
 
-import { applyHeartbeatDirective, applyRenew } from "./decide.ts";
-import type { FsmState, KafkaAction } from "./protocol.ts";
+import { applyHeartbeatDirective, applyRenew } from "../decide.ts";
+import type { FsmState, KafkaAction } from "../protocol.ts";
 import type { Transport } from "./transport.ts";
 import type { CancellationSignal } from "./handler.ts";
 import type { Logger } from "./consumer.ts";

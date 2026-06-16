@@ -117,7 +117,7 @@ jobs:
       # Unit + conformance live under test/; the broker integration test (kafka/*.integration.test.ts)
       # needs kafkajs + a live broker and is run locally/manually, NOT in this broker-free job.
       - name: Run conformance + parity (node --test, type-stripped)
-        run: node --test --experimental-strip-types 'sdk/typescript/test/**/*.test.ts'
+        run: node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
 
   go-contract:
     name: go contract (decision core + conformance)

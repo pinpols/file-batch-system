@@ -5,13 +5,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { WorkerLifecycle } from "../src/lifecycle.ts";
-import { FakePlatform } from "../src/testkit.ts";
+import { WorkerLifecycle } from "../src/client/lifecycle.ts";
+import { FakePlatform } from "../src/client/testkit.ts";
 import {
   taskSuccess,
   type TaskContext,
   type TaskHandler,
-} from "../src/handler.ts";
+} from "../src/client/handler.ts";
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 

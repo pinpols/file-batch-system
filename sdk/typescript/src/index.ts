@@ -14,10 +14,10 @@ export * from "./protocol.ts";
 export * from "./decide.ts";
 
 // Phase 2 — runtime engine
-export * from "./transport.ts";
-export * from "./scheduler.ts";
-export * from "./lifecycle.ts";
-export * from "./consumer.ts";
-export * from "./sensitive.ts";
-export * from "./handler.ts";
-export * from "./testkit.ts";
+export * from "./client/transport.ts";
+export * from "./client/scheduler.ts";
+export * from "./client/lifecycle.ts";
+export * from "./client/consumer.ts";
+export * from "./client/sensitive.ts";
+export * from "./client/handler.ts";
+export * from "./client/testkit.ts";

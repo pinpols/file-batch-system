@@ -9,7 +9,7 @@ import {
   MessagePipeline,
   type Assignment,
   type DispatchMessage,
-} from "../src/consumer.ts";
+} from "../src/client/consumer.ts";
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 

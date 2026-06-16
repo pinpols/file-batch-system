@@ -7,9 +7,9 @@ import assert from "node:assert/strict";
 import {
   HeartbeatScheduler,
   LeaseRenewalScheduler,
-} from "../src/scheduler.ts";
-import { FakeTransport } from "../src/testkit.ts";
-import { SimpleCancellationSignal } from "../src/handler.ts";
+} from "../src/client/scheduler.ts";
+import { FakeTransport } from "../src/client/testkit.ts";
+import { SimpleCancellationSignal } from "../src/client/handler.ts";
 import type { FsmState, KafkaAction } from "../src/protocol.ts";
 
 const silentLogger = {

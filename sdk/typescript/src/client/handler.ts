@@ -7,7 +7,7 @@
  * platform sets `cancelRequested`), and a `ProgressReporter`.
  */
 
-import { ErrorCode } from "./protocol.ts";
+import { ErrorCode } from "../protocol.ts";
 
 /**
  * Cooperative cancellation token. The lease-renewal scheduler calls

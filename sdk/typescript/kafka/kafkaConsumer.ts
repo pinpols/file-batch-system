@@ -32,7 +32,7 @@ import {
   type ConsumerRecord,
   type Logger,
   consoleLogger,
-} from "../src/consumer.ts";
+} from "../src/client/consumer.ts";
 
 /** SASL config (only SCRAM-SHA-512 is supported per byo-sdk-guide §1.2). */
 export interface KafkaSaslConfig {

@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { HttpTransport, FatalTransportError } from "../src/transport.ts";
+import { HttpTransport, FatalTransportError } from "../src/client/transport.ts";
 
 function startServer(
   handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,

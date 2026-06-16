@@ -15,8 +15,8 @@
 import {
   decideRegister,
   planStop,
-} from "./decide.ts";
-import type { FsmState, KafkaAction } from "./protocol.ts";
+} from "../decide.ts";
+import type { FsmState, KafkaAction } from "../protocol.ts";
 import type { Transport } from "./transport.ts";
 import {
   HeartbeatScheduler,
@@ -40,7 +40,7 @@ import {
   type TaskResult,
 } from "./handler.ts";
 import { SensitiveDataValidator } from "./sensitive.ts";
-import { ErrorCode } from "./protocol.ts";
+import { ErrorCode } from "../protocol.ts";
 
 let unhandledRejectionInstalled = false;
 

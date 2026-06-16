@@ -25,7 +25,7 @@ import {
   assignmentOf,
   type DispatchMessage,
   type PipelineOutcome,
-} from "../src/consumer.ts";
+} from "../src/client/consumer.ts";
 import {
   KafkaConsumerAdapter,
   consumerGroupId,

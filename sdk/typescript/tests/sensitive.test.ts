@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   SensitiveDataValidator,
   SensitiveDataError,
-} from "../src/sensitive.ts";
+} from "../src/client/sensitive.ts";
 import { ErrorCode } from "../src/protocol.ts";
 
 test("sensitive: register body with {password:'x'} throws", () => {

@@ -11,7 +11,7 @@ import type {
   Transport,
 } from "./transport.ts";
 import { FatalTransportError, NotFoundTransportError } from "./transport.ts";
-import type { HeartbeatResponse, RenewResponse } from "./protocol.ts";
+import type { HeartbeatResponse, RenewResponse } from "../protocol.ts";
 import { FakeConsumer, type ConsumerRecord } from "./consumer.ts";
 
 /** Recorded call for assertions. */

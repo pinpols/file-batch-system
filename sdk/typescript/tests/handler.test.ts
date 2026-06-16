@@ -8,7 +8,7 @@ import {
   SimpleCancellationSignal,
   taskSuccess,
   taskFailure,
-} from "../src/handler.ts";
+} from "../src/client/handler.ts";
 import { ErrorCode } from "../src/protocol.ts";
 
 test("handler: cancellation signal flips and fires onCancel once", () => {

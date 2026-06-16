@@ -13,7 +13,7 @@
  *   5. dispatch to the claim→execute→report flow (handled by lifecycle).
  */
 
-import { classifySchemaVersion, decideBackpressure } from "./decide.ts";
+import { classifySchemaVersion, decideBackpressure } from "../decide.ts";
 
 /** A raw dispatch record from the broker (or a fake). */
 export interface ConsumerRecord {

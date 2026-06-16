@@ -21,11 +21,11 @@ import {
   DEFAULT_RETRY_BASE_MS,
   DEFAULT_RETRY_MAX_ATTEMPTS,
   type HttpDecision,
-} from "./decide.ts";
+} from "../decide.ts";
 import type {
   HeartbeatResponse,
   RenewResponse,
-} from "./protocol.ts";
+} from "../protocol.ts";
 
 /** Effective task config returned by claim. */
 export interface ClaimResponse {
