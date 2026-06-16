@@ -32,6 +32,7 @@
 | 角色 | 推荐顺序 |
 |---|---|
 | 新人入门 | 顶层 02 coding-conventions → 子目录 01 architecture (`system-flow-overview.md`) → 04 runbook (`local-development.md`) |
+| 配置维护者 | 04 runbook (`first-tenant-config-quickstart.md` 手把手建第一个租户配置) → 下载 Excel 配置模板的「字段说明 / 四类Worker示例」sheet |
 | 业务开发 | 02 design → 03 api → 02 coding-conventions §22 代码模式 |
 | 运维 / SRE | 04 runbook → 01 architecture (`scalability-assessment.md`)|
 | 救火值班 | 04 runbook (`incident-response.md` → `troubleshooting-decision-tree.md`) |
