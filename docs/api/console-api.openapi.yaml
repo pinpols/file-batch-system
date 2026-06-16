@@ -7858,6 +7858,7 @@ paths:
         enabled 渠道凭据缺(非 NONE 鉴权但 config_json 空)、enabled job 引用的 queue_code 悬空。
         ADR-026 dry-run 边界内:只看「配置完整性 / 会不会跑」,不执行取数、不比对业务结果。
         blocking 为空即就绪(ready=true)。
+        每条 blocking 项附 hint(怎么补:在哪个 sheet 填哪个字段)+ docRef(指向 quickstart / 字段说明),向后兼容新增字段。
       operationId: tenantReadiness
       security:
         - bearerAuth: []
@@ -7869,7 +7870,11 @@ paths:
             type: string
       responses:
         '200':
-          description: Readiness result (blocking / warnings)
+          description: |
+            Readiness result (blocking / warnings; 每项附 hint / docRef 引导)。
+            data 的结构见 schema TenantReadinessResult / ReadinessItem(文档参考型;
+            为保持与 #509 已发布契约的向后兼容,200 包装仍用通用 CommonResponseObject,
+            data 字段 type=object 不收窄,仅在新增的 hint / docRef 上做加法式扩展)。
           content:
             application/json:
               schema:
@@ -9297,6 +9302,49 @@ components:
               type: object
               nullable: true
               description: Always null for void responses.
+    ReadinessItem:
+      type: object
+      description: |
+        单条就绪项。hint / docRef 为「报怎么补」的可操作引导(向后兼容新增字段):
+        告诉填写人具体在哪个 sheet 填哪个字段、参考哪份文档,而不是只报「缺什么」。
+        两字段对 blocking 项填具体值,对 warning 项可为空。
+      properties:
+        item:
+          type: string
+          description: 检查项类别(template / channel / queue / job)。
+        reason:
+          type: string
+          description: 原因可读英文摘要。
+        ref:
+          type: string
+          description: 关联配置引用(templateCode / channelCode / queueCode / jobCode)。
+        hint:
+          type: string
+          nullable: true
+          description: 怎么填的可操作提示(如「在配置模板 file_template_config sheet 填 default_query_sql,参考『四类Worker示例』」)。
+        docRef:
+          type: string
+          nullable: true
+          description: 指向 quickstart 文档 / 字段说明的引用路径(如 docs/runbook/first-tenant-config-quickstart.md)。
+      required: [item, reason, ref]
+    TenantReadinessResult:
+      type: object
+      description: 租户就绪自检结果(ADR-026 dry-run 边界内:只看配置完整性 / 会不会跑,不看业务结果)。
+      properties:
+        tenantId:
+          type: string
+        ready:
+          type: boolean
+          description: blocking 为空即就绪。
+        blocking:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadinessItem'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadinessItem'
+      required: [tenantId, ready, blocking, warnings]
     EnabledPatchRequest:
       type: object
       properties:
