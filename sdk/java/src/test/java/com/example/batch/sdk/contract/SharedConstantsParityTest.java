@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -44,8 +45,12 @@ class SharedConstantsParityTest {
   private static final YAMLMapper YAML = new YAMLMapper();
 
   private static Path repoRoot() {
-    Path here = Paths.get("").toAbsolutePath();
-    return here.endsWith("batch-worker-sdk") ? here.getParent() : here;
+    for (Path p = Paths.get("").toAbsolutePath(); p != null; p = p.getParent()) {
+      if (Files.isDirectory(p.resolve("docs/api"))) {
+        return p;
+      }
+    }
+    return Paths.get("").toAbsolutePath();
   }
 
   private static Path yamlPath() {

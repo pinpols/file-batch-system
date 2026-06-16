@@ -74,11 +74,14 @@ class JsonFixtureContractTest {
           "restore",
           "no-op");
 
-  /** 从 test class 路径反推 repo root:{@code <root>/batch-worker-sdk/...} → {@code <root>}。 */
+  /** 从测试 cwd(module 目录)向上找含 {@code docs/api} 的仓库根;与 module 路径深度无关(模块在 sdk/java)。 */
   private static Path repoRoot() {
-    Path here = Paths.get("").toAbsolutePath();
-    // mvn 跑测试时 cwd 是 batch-worker-sdk module,上一级即 repo root
-    return here.endsWith("batch-worker-sdk") ? here.getParent() : here;
+    for (Path p = Paths.get("").toAbsolutePath(); p != null; p = p.getParent()) {
+      if (Files.isDirectory(p.resolve("docs/api"))) {
+        return p;
+      }
+    }
+    return Paths.get("").toAbsolutePath();
   }
 
   private static Path fixturesDir() {
