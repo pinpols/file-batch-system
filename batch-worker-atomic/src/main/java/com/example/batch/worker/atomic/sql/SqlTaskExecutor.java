@@ -256,80 +256,83 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
    * maxStatementsPerJob / 只读判定偏差。
    */
   static List<String> splitStatements(String sql) {
-    List<String> out = new ArrayList<>();
-    StringBuilder buf = new StringBuilder();
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
-    boolean inLineComment = false;
-    boolean inBlockComment = false;
-    String dollarTag = null; // 非 null = 处于 $tag$...$tag$ dollar-quote 体内
+    SplitScanner sc = new SplitScanner();
     char prev = 0;
     int i = 0;
     int n = sql.length();
     while (i < n) {
       char c = sql.charAt(i);
-      // dollar-quote 体内:只找匹配的关闭 tag,其余(含 ; 引号 注释)全字面
-      if (dollarTag != null) {
-        if (c == '$' && sql.startsWith(dollarTag, i)) {
-          buf.append(dollarTag);
-          i += dollarTag.length();
-          prev = '$';
-          dollarTag = null;
-          continue;
-        }
-        buf.append(c);
-        prev = c;
-        i++;
-        continue;
-      }
-      if (inLineComment) {
-        if (c == '\n') inLineComment = false;
-        buf.append(c);
-      } else if (inBlockComment) {
-        if (prev == '*' && c == '/') inBlockComment = false;
-        buf.append(c);
-      } else if (inSingleQuote) {
-        if (c == '\'' && prev != '\\') inSingleQuote = false;
-        buf.append(c);
-      } else if (inDoubleQuote) {
-        if (c == '"' && prev != '\\') inDoubleQuote = false;
-        buf.append(c);
-      } else {
-        // 顶层:先试 dollar-quote 开标签($tag$),命中则整体入 buf 并进入 dollar-quote 体
-        String openTag = c == '$' ? matchDollarTag(sql, i) : null;
+      // 顶层(非引号/注释内)的 dollar-quote 开标签:整段(含开/闭标签)一次性消费,体内 ; 引号 注释全字面
+      if (sc.atTopLevel() && c == '$') {
+        String openTag = matchDollarTag(sql, i);
         if (openTag != null) {
-          buf.append(openTag);
-          i += openTag.length();
+          i = consumeDollarQuote(sql, i, openTag, sc.buf);
           prev = '$';
-          dollarTag = openTag;
           continue;
         }
-        if (c == '-' && prev == '-') {
-          inLineComment = true;
-          buf.append(c);
-        } else if (c == '*' && prev == '/') {
-          inBlockComment = true;
-          buf.append(c);
-        } else if (c == '\'') {
-          inSingleQuote = true;
-          buf.append(c);
-        } else if (c == '"') {
-          inDoubleQuote = true;
-          buf.append(c);
-        } else if (c == ';') {
-          String s = buf.toString().trim();
-          if (!s.isEmpty()) out.add(s);
-          buf.setLength(0);
-        } else {
-          buf.append(c);
-        }
       }
+      sc.feed(c, prev);
       prev = c;
       i++;
     }
-    String tail = buf.toString().trim();
-    if (!tail.isEmpty()) out.add(tail);
-    return out;
+    return sc.finish();
+  }
+
+  /** {@link #splitStatements} 的逐字符状态机,把引号/注释/分号状态与 buffer 封装,避免单方法 NCSS 过高。 */
+  private static final class SplitScanner {
+    private final List<String> out = new ArrayList<>();
+    private final StringBuilder buf = new StringBuilder();
+    private boolean inSingleQuote;
+    private boolean inDoubleQuote;
+    private boolean inLineComment;
+    private boolean inBlockComment;
+
+    boolean atTopLevel() {
+      return !inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment;
+    }
+
+    void feed(char c, char prev) {
+      if (inLineComment) {
+        if (c == '\n') inLineComment = false;
+      } else if (inBlockComment) {
+        if (prev == '*' && c == '/') inBlockComment = false;
+      } else if (inSingleQuote) {
+        if (c == '\'' && prev != '\\') inSingleQuote = false;
+      } else if (inDoubleQuote) {
+        if (c == '"' && prev != '\\') inDoubleQuote = false;
+      } else if (feedTopLevel(c, prev)) {
+        return; // 分号已切分,不入 buffer
+      }
+      buf.append(c);
+    }
+
+    /** 顶层字符:开注释/开引号置位;遇 `;` 切分并返回 true(调用方不再 append)。 */
+    private boolean feedTopLevel(char c, char prev) {
+      if (c == '-' && prev == '-') {
+        inLineComment = true;
+      } else if (c == '*' && prev == '/') {
+        inBlockComment = true;
+      } else if (c == '\'') {
+        inSingleQuote = true;
+      } else if (c == '"') {
+        inDoubleQuote = true;
+      } else if (c == ';') {
+        flush();
+        return true;
+      }
+      return false;
+    }
+
+    private void flush() {
+      String s = buf.toString().trim();
+      if (!s.isEmpty()) out.add(s);
+      buf.setLength(0);
+    }
+
+    List<String> finish() {
+      flush();
+      return out;
+    }
   }
 
   /**
@@ -337,6 +340,22 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
    * [A-Za-z_][A-Za-z0-9_]*}。返回含两端 {@code $} 的完整标签串(如 {@code $$} / {@code $body$}); 不是合法
    * dollar-quote(如位置参数 {@code $1}、运算)返回 null。
    */
+  /** 从 dollar-quote 开标签处把整段(含开/闭标签)写入 {@code buf},返回闭标签之后的索引; 未闭合(到串尾仍无闭标签)则全部写入并返回串尾。 */
+  private static int consumeDollarQuote(String sql, int start, String tag, StringBuilder buf) {
+    buf.append(tag);
+    int i = start + tag.length();
+    int n = sql.length();
+    while (i < n) {
+      if (sql.charAt(i) == '$' && sql.startsWith(tag, i)) {
+        buf.append(tag);
+        return i + tag.length();
+      }
+      buf.append(sql.charAt(i));
+      i++;
+    }
+    return n;
+  }
+
   private static String matchDollarTag(String sql, int pos) {
     int n = sql.length();
     for (int j = pos + 1; j < n; j++) {
