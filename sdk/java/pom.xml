@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  P1 Phase 1 落地(ADR-035):租户自托管 Worker SDK。
+
+  关键约束:
+  - 严格 minimal 依赖(jackson + jdk httpclient + kafka-client + slf4j),无 Spring
+  - 不 depend batch-common(common 里有 MyBatis / Flyway / Redis 等,会拖死租户进程)
+  - JAR 目标 < 2 MB
+  - 业务方按本 module 模板写自己 worker 进程,放 GitHub 自己 repo,跟主项目松耦合
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.example.batch</groupId>
+        <artifactId>batch-platform</artifactId>
+        <version>${revision}</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>batch-worker-sdk</artifactId>
+    <name>batch-worker-sdk</name>
+    <description>Tenant self-hosted worker SDK (ADR-035 Phase 1)</description>
+
+    <dependencies>
+        <!-- 仅 jackson(JSON 序列化)+ kafka-client(派单消费)+ slf4j-api(日志门面)
+             httpclient 用 JDK 11+ 内建 java.net.http.HttpClient,无需引第三方 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Lane P contract drift guard: parse OpenAPI yaml + shared-constants yaml in tests only.
+             Spring Boot parent manages version; no pin needed. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Lane P shared-constants parity: test scope only (不污染 tenant 运行时 jar)。
+             需要直接读取 batch-common 的 TaskStatus / SensitiveDataValidator 与 yaml 对账。 -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

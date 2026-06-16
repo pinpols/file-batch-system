@@ -34,7 +34,7 @@ done | sort -u > "$tested"
 
 # 2) CI workflow 里 -pl 覆盖的模块并集 ∪ 豁免清单。
 accepted="$(mktemp)"
-grep -hoE '\-pl [A-Za-z0-9,_-]+' "${WORKFLOWS[@]}" \
+grep -hoE '\-pl [A-Za-z0-9,_/-]+' "${WORKFLOWS[@]}" \
   | sed 's/-pl //' | tr ',' '\n' \
   | cat - "$EXEMPT_FILE" | sed '/^$/d' | sort -u > "$accepted"
 

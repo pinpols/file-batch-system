@@ -34,11 +34,11 @@ jobs:
         run: pip install --upgrade pip hatch
 
       - name: Build wheel + sdist
-        working-directory: batch-worker-sdk-python
+        working-directory: sdk/python
         run: hatch build --clean
 
       - name: Verify artifacts present
-        working-directory: batch-worker-sdk-python
+        working-directory: sdk/python
         run: |
           ls -la dist/
           test -n "$(ls dist/*.whl 2>/dev/null)" || { echo "missing wheel"; exit 1; }
@@ -48,7 +48,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.dry-run == true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: batch-worker-sdk-python/dist/
+          packages-dir: sdk/python/dist/
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
 
@@ -56,5 +56,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/sdk-python-v') && !(github.event_name == 'workflow_dispatch' && inputs.dry-run == true)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: batch-worker-sdk-python/dist/
+          packages-dir: sdk/python/dist/
           skip-existing: true

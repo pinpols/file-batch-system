@@ -198,9 +198,13 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 ## 5. 参考实现
 
 - **Java SDK(参考实现 + 协议主版本守护)**:[`batch-worker-sdk/`](../../batch-worker-sdk/) — 包含 `BatchPlatformClient` / `PlatformHttpClient` / `KafkaTaskConsumer` / `HeartbeatScheduler` / `LeaseRenewalScheduler` / `TaskDispatcher` 完整链路。
-- **Java SDK 示例租户 worker**:[`examples/sample-tenant-worker/`](../../examples/sample-tenant-worker/) —— plain Java(无 Spring)、200 行起一个 worker 进程。
+- **Java SDK 示例租户 worker**:[`examples/sample-tenant-worker-java/`](../../examples/sample-tenant-worker-java/) —— plain Java(无 Spring)、200 行起一个 worker 进程。
 - **Java SDK 契约测试**:[`batch-worker-sdk/src/test/java/com/example/batch/sdk/dispatcher/SdkPlatformContractTest.java`](../../batch-worker-sdk/src/test/java/com/example/batch/sdk/dispatcher/SdkPlatformContractTest.java) —— 字段集守护;本 lane 抽出的 JSON fixtures 即源自此。
-- **未来路线**(本 lane 不做):`examples/sample-tenant-worker-go/` —— Go 参考实现;开 issue 跟进。
+- **多语言示例租户 worker**(命名统一 `sample-tenant-worker-<lang>`):
+  - [`examples/sample-tenant-worker-go/`](../../examples/sample-tenant-worker-go/) —— `sdk/go` 运行时 + segmentio/kafka-go(可 `go build`)。
+  - [`examples/sample-tenant-worker-typescript/`](../../examples/sample-tenant-worker-typescript/) —— `sdk/typescript` 运行时 + kafkajs(Node ≥25)。
+  - [`examples/sample-tenant-worker-rust/`](../../examples/sample-tenant-worker-rust/) —— `sdk/rust` + rdkafka,**示意**(真 HTTP 待 reqwest 适配器,CI 编译)。
+  - [`examples/sample-tenant-worker-python/`](../../examples/sample-tenant-worker-python/) —— Python 3.12 asyncio。
 
 ---
 
