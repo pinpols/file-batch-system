@@ -8,6 +8,7 @@ import com.example.batch.sdk.scheduler.HeartbeatScheduler;
 import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
+import com.example.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -111,6 +112,8 @@ public class BatchPlatformClient {
     putIfPresent(body, "processId", WorkerFingerprint.processId());
     putIfPresent(body, "buildId", config.getBuildId());
     putIfPresent(body, "sdkVersion", WorkerFingerprint.sdkVersion());
+    // 协议门禁:声明本 SDK 实现的 wire 协议主版本;平台不支持则 register 被拒(400)。
+    body.put("protocolVersion", RegisterRequest.CURRENT_PROTOCOL_VERSION);
     // Phase 3 M3.1:声明了 descriptor 的 handler 随 register 上报 taskTypes[](平台 upsert 到 registry)。
     List<SdkTaskTypeDescriptor> descriptors = collectDescriptors();
     if (!descriptors.isEmpty()) {

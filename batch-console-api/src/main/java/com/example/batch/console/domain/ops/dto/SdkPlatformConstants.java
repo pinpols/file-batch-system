@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.ops.dto;
 
+import com.example.batch.common.dto.SdkProtocolVersions;
 import java.util.List;
 
 /**
@@ -19,8 +20,14 @@ public final class SdkPlatformConstants {
    * 平台当前支持的协议 schema 主版本集合(镜像 {@code sdk-shared-constants.yaml} 的 {@code
    * schema_versions_supported};权威源 = SDK {@code TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS})。v3+
    * 平台 reject。
+   *
+   * <p>2026-06-17:服务端字面量收敛到 {@code batch-common} 的 {@link
+   * SdkProtocolVersions#SUPPORTED_MAJOR_VERSIONS} —— register
+   * 准入门禁(orchestrator)与本只读镜像(console-api)共用同一处常量,消除服务端双源。两侧各自的 sdk-shared-constants.yaml parity
+   * 测试仍独立 fail-fast 防漂移。
    */
-  public static final List<String> SCHEMA_VERSIONS_SUPPORTED = List.of("v1", "v2");
+  public static final List<String> SCHEMA_VERSIONS_SUPPORTED =
+      SdkProtocolVersions.SUPPORTED_MAJOR_VERSIONS;
 
   /**
    * 平台当前 SDK 主版本(整数)。SDK 库版本(java/typescript/rust 跟根 {@code revision} 1.1.x)的主版本 = 1。worker 上报的
