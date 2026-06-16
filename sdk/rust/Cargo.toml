@@ -4,6 +4,14 @@ version = "1.1.0"
 edition = "2021"
 description = "BYO worker SDK decision core + conformance runner (Rust reference impl, zero-dependency)"
 license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/pinpols/file-batch-system"
+homepage = "https://github.com/pinpols/file-batch-system/tree/main/sdk/rust"
+keywords = ["batch", "worker", "sdk", "kafka", "conformance"]
+categories = ["api-bindings"]
+# Keep the publishable crate lean: tests/ are conformance harnesses that read
+# repo-relative fixtures and are not needed by downstream crates.
+exclude = ["tests/"]
 
 [lib]
 name = "batch_worker_sdk"

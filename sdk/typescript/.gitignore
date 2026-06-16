@@ -1,2 +1,5 @@
 node_modules/
 package-lock.json
+# Build output (compiled .js/.d.ts shipped in the npm tarball, not committed).
+dist/
+*.tgz

@@ -3,11 +3,25 @@
   "version": "1.1.0",
   "description": "TypeScript BYO worker SDK for the file-batch-system platform (decision core + conformance runner). Zero runtime dependencies.",
   "type": "module",
-  "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "tsc -p tsconfig.json",
     "test": "node --test --experimental-strip-types 'test/**/*.test.ts'"
   },
   "engines": {
@@ -16,5 +30,14 @@
   "license": "UNLICENSED",
   "optionalDependencies": {
     "kafkajs": "^2.2.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pinpols/file-batch-system.git",
+    "directory": "sdk/typescript"
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "provenance": true
   }
 }
