@@ -537,7 +537,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "queue_code",
             "resource_queue",
             "queue_code",
-            "TRUE",
+            GUIDE_TRUE,
             "queue_code 非空",
             "作业绑定的资源队列必须存在",
             "import-queue -> resource_queue.queue_code"
@@ -547,7 +547,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "calendar_code",
             "business_calendar",
             "calendar_code",
-            "TRUE",
+            GUIDE_TRUE,
             "calendar_code 非空",
             "作业绑定的业务日历必须存在",
             "default-calendar -> business_calendar.calendar_code"
@@ -557,7 +557,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "window_code",
             "batch_window",
             "window_code",
-            "TRUE",
+            GUIDE_TRUE,
             "window_code 非空",
             "作业绑定的批次窗口必须存在",
             "always-open -> batch_window.window_code"
@@ -567,7 +567,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "default_params.templateCode",
             "file_template_config",
             "template_code + version",
-            "TRUE",
+            GUIDE_TRUE,
             "templateCode 非空",
             "默认参数引用的文件模板必须存在",
             "TPL_IMPORT_CUSTOMER -> file_template_config.template_code"
@@ -577,7 +577,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "job_code",
             "job_definition",
             "job_code",
-            "TRUE",
+            GUIDE_TRUE,
             "总是",
             "流水线必须挂在已定义的作业上",
             "JOB_IMPORT_CUSTOMER -> job_definition.job_code"
@@ -597,7 +597,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "step_params.templateCode",
             "file_template_config",
             "template_code + version",
-            "TRUE",
+            GUIDE_TRUE,
             "templateCode 非空",
             "步骤引用的文件模板必须存在",
             "TPL_IMPORT_CUSTOMER -> file_template_config.template_code"
@@ -607,7 +607,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "step_params.channelCode / fileChannelCode",
             "file_channel_config",
             "channel_code",
-            "TRUE",
+            GUIDE_TRUE,
             "channelCode 非空",
             "派发步骤引用的通道必须存在",
             "sftp_inbound -> file_channel_config.channel_code"
@@ -627,7 +627,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "related_job_code",
             "job_definition",
             "job_code",
-            "TRUE",
+            GUIDE_TRUE,
             "related_job_code 非空",
             "节点引用的作业必须存在",
             "JOB_IMPORT_CUSTOMER -> job_definition.job_code"
@@ -637,7 +637,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "related_pipeline_code",
             "pipeline_definition",
             "job_code",
-            "TRUE",
+            GUIDE_TRUE,
             "related_pipeline_code 非空",
             "FILE_STEP 节点引用的流水线必须存在",
             "JOB_IMPORT_CUSTOMER -> pipeline_definition.job_code"
@@ -647,7 +647,7 @@ public class ConfigPackageExcelWorkbookWriter {
             "window_code",
             "batch_window",
             "window_code",
-            "TRUE",
+            GUIDE_TRUE,
             "window_code 非空",
             "节点绑定的批次窗口必须存在",
             "always-open -> batch_window.window_code"
@@ -687,9 +687,9 @@ public class ConfigPackageExcelWorkbookWriter {
   static final List<String[]> FOUR_WORKER_ROWS =
       List.of(
           new String[] {
-            "IMPORT",
-            "IMPORT",
-            "IMPORT",
+            GUIDE_IMPORT,
+            GUIDE_IMPORT,
+            GUIDE_IMPORT,
             "RECEIVE -> PREPROCESS -> PARSE -> VALIDATE -> LOAD -> FEEDBACK",
             "job_definition, file_template_config, pipeline_definition, pipeline_step_definition",
             "query_param_schema.jdbcMappedImport 配 schema/table/columnMappings/conflictColumns",
@@ -1026,7 +1026,7 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry(
             "queue_type",
             requiredColumn(
-                "队列类型。", GUIDE_ENUM, GUIDE_IMPORT, "IMPORT", "EXPORT", "DISPATCH", "MIXED")),
+                "队列类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", "DISPATCH", "MIXED")),
         Map.entry("max_running_jobs", requiredColumn("最大并发作业数。", GUIDE_INT, "10")),
         Map.entry("max_running_partitions", requiredColumn("最大并发分区数。", GUIDE_INT, "20")),
         Map.entry("max_qps", requiredColumn("最大派发 QPS。", GUIDE_INT, "100")),
@@ -1382,7 +1382,7 @@ public class ConfigPackageExcelWorkbookWriter {
     addDropdownValidation(
         sheet,
         columnIndex,
-        new String[] {"TRUE", "FALSE"},
+        new String[] {GUIDE_TRUE, GUIDE_FALSE},
         "excel.common.enabled.prompt_title",
         "excel.common.enabled.prompt_box",
         messageSource,
@@ -1514,7 +1514,7 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry("template_name", requiredColumn("文件模板名称。", GUIDE_STR, "客户导入模板")),
         Map.entry(
             "template_type",
-            requiredColumn("模板类型。", GUIDE_ENUM, "IMPORT", "IMPORT", "EXPORT", "SHARED")),
+            requiredColumn("模板类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", "SHARED")),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
         Map.entry(
             "file_format_type",
