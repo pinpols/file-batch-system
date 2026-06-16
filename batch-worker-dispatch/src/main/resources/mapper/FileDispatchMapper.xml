@@ -68,10 +68,12 @@
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
           and channel_code = #{channelCode}
-          <!-- 行级 CAS:只有仍处 SENT+PENDING 才 ACK,防已 COMPENSATED/FAILED/ACKED 的记录被旧 poll 翻回(状态倒流)。
-               返回 0 行 = 另一路径已推进,调用方按 0 行跳过(名副其实的 CAS,非仅靠 ShedLock 互斥)。 -->
+          <!-- 行级 CAS:只有仍处 SENT 才 ACK,防已 COMPENSATED/FAILED/ACKED 的记录被旧 poll 翻回(状态倒流)。
+               返回 0 行 = 另一路径已推进,调用方按 0 行跳过(名副其实的 CAS,非仅靠 ShedLock 互斥)。
+               注意:不能再附加 receipt_status=PENDING——即时确认渠道(acknowledged)在 DELIVER 的 markSent 已把
+               receipt_status 写成 SUCCESS,随后同步 AckDispatchStep 仍需 ACK;若卡 PENDING 会 0 行→误转 COMPENSATE,
+               派发成功路径永不收尾(2026-06-15 #495 引入、e2e 超时回归)。dispatch_status=SENT 已足够防倒流。 -->
           and dispatch_status = #{expectedDispatchStatus}
-          and receipt_status = #{expectedReceiptStatus}
     </update>
 
     <update id="markFailed">
