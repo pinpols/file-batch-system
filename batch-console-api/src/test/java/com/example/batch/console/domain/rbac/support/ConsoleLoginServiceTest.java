@@ -46,7 +46,8 @@ class ConsoleLoginServiceTest {
                     "Console Admin",
                     ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123,
                     Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
-                    true)));
+                    true,
+                    false)));
     Mockito.when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
         .thenReturn(true);
     Mockito.when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
@@ -64,7 +65,8 @@ class ConsoleLoginServiceTest {
                 Instant.parse("2026-04-05T08:00:00Z"),
                 "admin",
                 "default-tenant",
-                Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN")));
+                Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+                false));
 
     var response = loginService.login(request);
     assertThat(response.username()).isEqualTo("admin");
@@ -86,7 +88,8 @@ class ConsoleLoginServiceTest {
                     "Console Admin",
                     "hash",
                     Set.of("ROLE_ADMIN"),
-                    true)));
+                    true,
+                    false)));
     Mockito.when(passwordHasher.matches("wrong", "hash")).thenReturn(false);
 
     assertThatThrownBy(() -> loginService.login(request))

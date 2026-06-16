@@ -131,4 +131,18 @@
             is_deleted = false,
             updated_at = current_timestamp
     </insert>
+
+    <!-- 租户就绪自检:只取完整性判定所需列,未删除渠道。config_json::text 供应用层判空占位。 -->
+    <select id="selectReadinessRows" resultType="map">
+        select
+            channel_code,
+            channel_type,
+            auth_type,
+            enabled,
+            config_json::text as config_json,
+            target_endpoint
+        from batch.file_channel_config
+        where tenant_id = #{tenantId}
+          and is_deleted = false
+    </select>
 </mapper>

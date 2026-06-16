@@ -128,4 +128,11 @@
         set enabled = #{enabled}, updated_at = current_timestamp
         where tenant_id = #{tenantId} and id = #{id}
     </update>
+
+    <!-- 租户就绪自检:返回该租户全部队列 code,供判定 job.queue_code 是否悬空。 -->
+    <select id="selectQueueCodes" resultType="string">
+        select queue_code
+        from batch.resource_queue
+        where tenant_id = #{tenantId}
+    </select>
 </mapper>

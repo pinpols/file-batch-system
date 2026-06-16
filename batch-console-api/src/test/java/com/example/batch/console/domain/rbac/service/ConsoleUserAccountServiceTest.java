@@ -2,6 +2,8 @@ package com.example.batch.console.domain.rbac.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
@@ -12,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import com.example.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
@@ -20,6 +23,7 @@ import com.example.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -194,7 +198,8 @@ class ConsoleUserAccountServiceTest {
           .isInstanceOf(BizException.class)
           .extracting(e -> ((BizException) e).getCode())
           .isEqualTo(ResultCode.FORBIDDEN);
-      verify(userAccountMapper, never()).updatePasswordHash(eq(99L), any());
+      verify(userAccountMapper, never())
+          .updatePasswordHashAndMustChange(eq(99L), any(), anyBoolean());
     }
 
     @Test
@@ -214,7 +219,7 @@ class ConsoleUserAccountServiceTest {
       when(userAccountMapper.selectById(99L)).thenReturn(accountRow(99L, "tenant-b", "victim"));
 
       service.resetPassword(99L, "new-pw");
-      verify(userAccountMapper).updatePasswordHash(eq(99L), eq("hashed"));
+      verify(userAccountMapper).updatePasswordHashAndMustChange(eq(99L), eq("hashed"), eq(true));
     }
   }
 
@@ -259,6 +264,72 @@ class ConsoleUserAccountServiceTest {
 
       verify(userAccountMapper)
           .insert(eq("tenant-x"), eq("eve"), any(), any(), any(), nullable(String.class));
+    }
+  }
+
+  @Nested
+  class ChangeOwnPassword {
+
+    private ConsoleUserAccountEntity entity(String username, String tenantId, String hash) {
+      ConsoleUserAccountEntity e = new ConsoleUserAccountEntity();
+      e.setId(7L);
+      e.setUsername(username);
+      e.setTenantId(tenantId);
+      e.setPasswordHash(hash);
+      e.setMustChangePassword(true);
+      return e;
+    }
+
+    @Test
+    void shouldClearMustChange_whenCurrentPasswordCorrect() {
+      // arrange
+      when(userAccountMapper.findByUsernameIgnoreCase("admin"))
+          .thenReturn(Optional.of(entity("admin", "system", "old-hash")));
+      when(passwordHasher.matches("old-pw", "old-hash")).thenReturn(true);
+      when(passwordHasher.matches("new-pw", "old-hash")).thenReturn(false);
+
+      // act
+      service.changeOwnPassword("admin", "old-pw", "new-pw");
+
+      // assert
+      verify(userAccountMapper).updatePasswordHashAndMustChange(7L, "hashed", false);
+      verify(sessionRegistry).invalidateSession("admin", "system");
+    }
+
+    @Test
+    void shouldReject_whenCurrentPasswordWrong() {
+      when(userAccountMapper.findByUsernameIgnoreCase("admin"))
+          .thenReturn(Optional.of(entity("admin", "system", "old-hash")));
+      when(passwordHasher.matches("bad", "old-hash")).thenReturn(false);
+
+      assertThatThrownBy(() -> service.changeOwnPassword("admin", "bad", "new-pw"))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.UNAUTHORIZED);
+      verify(userAccountMapper, never())
+          .updatePasswordHashAndMustChange(anyLong(), any(), anyBoolean());
+    }
+
+    @Test
+    void shouldReject_whenNewPasswordSameAsCurrent() {
+      when(userAccountMapper.findByUsernameIgnoreCase("admin"))
+          .thenReturn(Optional.of(entity("admin", "system", "old-hash")));
+      when(passwordHasher.matches("old-pw", "old-hash")).thenReturn(true);
+
+      assertThatThrownBy(() -> service.changeOwnPassword("admin", "old-pw", "old-pw"))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.INVALID_ARGUMENT);
+    }
+
+    @Test
+    void shouldThrow_whenAccountNotFound() {
+      when(userAccountMapper.findByUsernameIgnoreCase("ghost")).thenReturn(Optional.empty());
+
+      assertThatThrownBy(() -> service.changeOwnPassword("ghost", "x", "y"))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.NOT_FOUND);
     }
   }
 }

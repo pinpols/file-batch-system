@@ -9,12 +9,15 @@ import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationSer
 import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService.ConfigInitOption;
 import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService.CreateTenantCommand;
 import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService.TenantSpec;
+import com.example.batch.console.domain.rbac.service.ConsoleTenantReadinessService;
 import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
 import com.example.batch.console.domain.rbac.web.request.BatchCreateTenantRequest;
 import com.example.batch.console.domain.rbac.web.request.CreateTenantRequest;
 import com.example.batch.console.domain.rbac.web.request.UpdateTenantRequest;
 import com.example.batch.console.domain.rbac.web.response.BatchCreateTenantsResponse;
 import com.example.batch.console.domain.rbac.web.response.ConsoleTenantResponse;
+import com.example.batch.console.domain.rbac.web.response.ProvisionTenantResponse;
+import com.example.batch.console.domain.rbac.web.response.TenantReadinessResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import java.util.List;
@@ -44,6 +47,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConsoleTenantController {
 
   private final ConsoleTenantApplicationService tenantService;
+  private final ConsoleTenantReadinessService readinessService;
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
@@ -63,6 +67,18 @@ public class ConsoleTenantController {
     return responseFactory.success(tenantService.getTenant(tenantId));
   }
 
+  /**
+   * 租户就绪自检(只读):扫该租户 template / channel / queue / job 配置闭环,返回 blocking / warning 清单。
+   *
+   * <p>ADR-026 dry-run 边界:本端点只看「配置完整性 / 会不会跑」(模板关键字段空、渠道凭据缺、queue_code 悬空),
+   * **不看**业务结果对不对(不执行取数、不比对数据),落在 ADR-026 √ 一侧。
+   */
+  @GetMapping("/{tenantId}/readiness")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  public CommonResponse<TenantReadinessResponse> readiness(@PathVariable String tenantId) {
+    return responseFactory.success(readinessService.check(tenantId));
+  }
+
   @PostMapping
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
   @AuditAction(
@@ -70,17 +86,18 @@ public class ConsoleTenantController {
       aggregateType = "tenant",
       aggregateId = "#request.tenantId",
       targetTenantParam = "#request.tenantId")
-  public CommonResponse<ConsoleTenantResponse> create(
+  public CommonResponse<ProvisionTenantResponse> create(
       @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
     return responseFactory.success(
-        tenantService.createTenant(
+        tenantService.provisionTenant(
             new CreateTenantCommand(
                 request.getTenantId(),
                 request.getTenantName(),
                 request.getDescription(),
                 request.getUsername(),
                 request.getPassword(),
-                resolveOperator(authentication))));
+                resolveOperator(authentication)),
+            new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode())));
   }
 
   @PostMapping("/batch")

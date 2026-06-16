@@ -43,5 +43,15 @@ public interface ConsoleUserAccountMapper {
 
   int updateEnabled(@Param("id") long id, @Param("enabled") boolean enabled);
 
+  /** 改密 / reset 时同步设置 must_change_password 标志(true=要求下次登录改密,false=清除)。 */
+  int updatePasswordHashAndMustChange(
+      @Param("id") long id,
+      @Param("passwordHash") String passwordHash,
+      @Param("mustChangePassword") boolean mustChangePassword);
+
+  /** 启动期默认密码守护:返回内置系统账号的 (username, password_hash, must_change_password)。 */
+  List<ConsoleUserAccountEntity> selectBuiltinSystemAccounts(
+      @Param("usernames") List<String> usernames);
+
   int deleteById(@Param("id") long id);
 }

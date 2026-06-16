@@ -6,6 +6,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import com.example.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
@@ -99,11 +100,41 @@ public class ConsoleUserAccountService {
     return toResponse(userAccountMapper.selectById(id));
   }
 
+  /** 管理员重置他人密码:置 must_change_password=true,要求被重置者下次登录强制改密;并踢掉其现有会话。 */
   public void resetPassword(long id, String newPassword) {
     Map<String, Object> account = assertExists(id);
     assertSameTenantOrGlobal(str(account, COL_TENANT_ID));
-    userAccountMapper.updatePasswordHash(id, passwordHasher.encode(newPassword));
+    userAccountMapper.updatePasswordHashAndMustChange(id, passwordHasher.encode(newPassword), true);
     sessionRegistry.invalidateSession(str(account, COL_USERNAME), str(account, COL_TENANT_ID));
+  }
+
+  /**
+   * 本人改密(首登强制改密的落地路径):校验旧密码,写新密码并清除 must_change_password 标志。
+   *
+   * <p>username 由已认证 principal 注入(controller 取 {@code authentication.principal.username}), 不接受客户端指定
+   * —— 防止越权改他人密码。旧密码错误 / 新旧相同一律拒绝。
+   */
+  public void changeOwnPassword(String username, String currentPassword, String newPassword) {
+    Guard.requireText(username, "username is required");
+    Guard.require(
+        currentPassword != null && !currentPassword.isBlank(), "current password is required");
+    Guard.require(newPassword != null && !newPassword.isBlank(), "new password is required");
+    ConsoleUserAccountEntity account =
+        userAccountMapper
+            .findByUsernameIgnoreCase(username)
+            .orElseThrow(
+                () -> BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", username));
+    String storedHash = account.getPasswordHash();
+    if (!passwordHasher.matches(currentPassword, storedHash)) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
+    }
+    if (passwordHasher.matches(newPassword, storedHash)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.password.same_as_current");
+    }
+    userAccountMapper.updatePasswordHashAndMustChange(
+        account.getId(), passwordHasher.encode(newPassword), false);
+    // 改密后踢旧会话,强制用新密码重新登录(与 reset 路径一致)。
+    sessionRegistry.invalidateSession(username, account.getTenantId());
   }
 
   public ConsoleUserAccountResponse enable(long id) {

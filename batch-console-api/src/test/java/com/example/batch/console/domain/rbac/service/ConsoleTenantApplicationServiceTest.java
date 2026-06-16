@@ -36,6 +36,7 @@ class ConsoleTenantApplicationServiceTest {
   @Mock private WorkflowRunMapper workflowRunMapper;
   @Mock private ConsoleTriggerProxyService triggerProxyService;
   @Mock private ConsoleTenantConfigCopyService configCopyService;
+  @Mock private ConsoleTenantReadinessService readinessService;
 
   private final org.springframework.core.env.Environment environment =
       new org.springframework.mock.env.MockEnvironment();
@@ -65,6 +66,7 @@ class ConsoleTenantApplicationServiceTest {
             workflowRunMapper,
             triggerProxyService,
             configCopyService,
+            readinessService,
             environment);
   }
 
@@ -201,5 +203,61 @@ class ConsoleTenantApplicationServiceTest {
 
     verify(triggerProxyService).resumeByTenant("tenant-a");
     verify(tenantMapper, never()).updateStatus(any(), any());
+  }
+
+  private static final Map<String, Object> ACME_TENANT =
+      Map.of(
+          "id", 9L,
+          "tenant_id", "acme",
+          "tenant_name", "Acme",
+          "status", "ACTIVE",
+          "description", "",
+          "created_by", "admin",
+          "created_at", "2026-01-01T00:00:00",
+          "updated_at", "2026-01-01T00:00:00");
+
+  @Test
+  void provisionTenant_withoutInitConfig_skipsCopyButRunsReadiness() {
+    when(tenantMapper.selectByTenantId("acme")).thenReturn(null).thenReturn(ACME_TENANT);
+    when(userAccountMapper.selectByUsername("acme-admin")).thenReturn(null);
+    when(passwordHasher.encode(any())).thenReturn("hash");
+    when(readinessService.check("acme"))
+        .thenReturn(
+            new com.example.batch.console.domain.rbac.web.response.TenantReadinessResponse(
+                "acme", true, List.of(), List.of()));
+
+    var cmd =
+        new ConsoleTenantApplicationService.CreateTenantCommand(
+            "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
+    var resp =
+        service.provisionTenant(
+            cmd, new ConsoleTenantApplicationService.ConfigInitOption(null, null));
+
+    assertThat(resp.tenant().tenantId()).isEqualTo("acme");
+    assertThat(resp.configInit()).isNull();
+    assertThat(resp.readiness().ready()).isTrue();
+    verify(configCopyService, never()).copy(any(), any(), any());
+    verify(readinessService).check("acme");
+  }
+
+  @Test
+  void provisionTenant_withInitConfig_copiesThenRunsReadiness() {
+    when(tenantMapper.selectByTenantId("acme")).thenReturn(null).thenReturn(ACME_TENANT);
+    when(userAccountMapper.selectByUsername("acme-admin")).thenReturn(null);
+    when(passwordHasher.encode(any())).thenReturn("hash");
+    when(configCopyService.copy(any(), eq("admin"), any())).thenReturn(null);
+    when(readinessService.check("acme"))
+        .thenReturn(
+            new com.example.batch.console.domain.rbac.web.response.TenantReadinessResponse(
+                "acme", true, List.of(), List.of()));
+
+    var cmd =
+        new ConsoleTenantApplicationService.CreateTenantCommand(
+            "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
+    service.provisionTenant(
+        cmd, new ConsoleTenantApplicationService.ConfigInitOption("default", null));
+
+    verify(configCopyService).copy(any(), eq("admin"), any());
+    verify(readinessService).check("acme");
   }
 }
