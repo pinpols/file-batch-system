@@ -17,6 +17,7 @@
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
     <artifactId>batch-worker-sdk</artifactId>

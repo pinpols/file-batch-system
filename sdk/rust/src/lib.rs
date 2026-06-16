@@ -1,7 +1,7 @@
 //! BYO worker SDK — pure decision core + shared constants (Rust reference impl).
 //!
-//! This crate mirrors the TypeScript (`batch-worker-sdk-typescript`) and Go
-//! (`batch-worker-sdk-go`) reference implementations: same decision behavior,
+//! This crate mirrors the TypeScript (`../typescript`) and Go
+//! (`../go`) reference implementations: same decision behavior,
 //! idiomatic Rust, **zero external dependencies** (std-only).
 //!
 //! * [`constants`] — the 4 cross-language shared constant arrays (parity-guarded

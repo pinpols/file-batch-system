@@ -38,10 +38,10 @@
 pip install batch-worker-sdk
 
 # 在此之前,从源码 editable 安装(repo root 跑):
-pip install -e batch-worker-sdk-python
+pip install -e sdk/python
 
 # testkit 仅供测试,生产 worker 不要装 testkit extra:
-pip install -e "batch-worker-sdk-python[testkit]"
+pip install -e "sdk/python[testkit]"
 ```
 
 ## 快速接入(5 分钟)

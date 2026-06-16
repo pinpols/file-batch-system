@@ -1,7 +1,7 @@
 # batch-worker-sdk-go
 
 Go BYO worker SDK decision core + conformance runner for the file-batch-system
-control plane. It mirrors the TypeScript reference (`../batch-worker-sdk-typescript`)
+control plane. It mirrors the TypeScript reference (`../typescript`)
 1:1 in behavior: pure, IO-free decision functions (`protocol/decide.go`) that map a
 protocol input (HTTP status, heartbeat directive, lease renew, capacity / stop
 signal) to a `Decision` whose fields are the closed `then.expect` vocabulary of the
