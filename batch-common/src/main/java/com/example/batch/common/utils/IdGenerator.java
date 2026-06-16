@@ -27,10 +27,7 @@ public final class IdGenerator {
     return UUID.randomUUID().toString().replace("-", "");
   }
 
-  /**
-   * ADR-014: per-partition CLAIM invocation id (never bridged from OTel — independent stale-worker
-   * guard).
-   */
+  /** ADR-014:每个分区的 CLAIM invocation id(绝不从 OTel 桥接而来 —— 独立的 stale-worker 守护)。 */
   public static String newInvocationId() {
     return UUID.randomUUID().toString().replace("-", "");
   }

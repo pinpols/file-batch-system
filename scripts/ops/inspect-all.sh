@@ -31,14 +31,14 @@
 
 set -uo pipefail
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# ── 配置 ─────────────────────────────────────────────────────────────
 BATCH_INSPECT_SKIP_OBSERVABILITY="${BATCH_INSPECT_SKIP_OBSERVABILITY:-false}"
 BATCH_INSPECT_SKIP_DB="${BATCH_INSPECT_SKIP_DB:-false}"
 BATCH_INSPECT_SKIP_WORKERS="${BATCH_INSPECT_SKIP_WORKERS:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── 辅助函数 ───────────────────────────────────────────────────────────────────
 overall_status=0
 declare -A script_results=()
 
@@ -73,7 +73,7 @@ run_script() {
   fi
 }
 
-# ── run inspections ───────────────────────────────────────────────────────────
+# ── 执行各项巡检 ───────────────────────────────────────────────────────────
 run_script "inspect-observability" \
   "${SCRIPT_DIR}/inspect-observability.sh" \
   "${BATCH_INSPECT_SKIP_OBSERVABILITY}"
@@ -86,7 +86,7 @@ run_script "inspect-workers" \
   "${SCRIPT_DIR}/inspect-workers.sh" \
   "${BATCH_INSPECT_SKIP_WORKERS}"
 
-# ── summary ───────────────────────────────────────────────────────────────────
+# ── 汇总 ───────────────────────────────────────────────────────────────────
 banner "INSPECTION SUMMARY"
 printf '%-30s  %s\n' "Script" "Result"
 printf '%s\n' "$(printf -- '-%.0s' {1..45})"

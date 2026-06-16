@@ -1,4 +1,4 @@
--- Stage 2c stale row for PARTITION_REPLACE_COPY verification.
+-- Stage 2c 用于 PARTITION_REPLACE_COPY 验证的陈旧(stale)行。
 
 INSERT INTO biz.import_stage2c_customer (
     tenant_id, customer_no, customer_name, customer_type, certificate_no,

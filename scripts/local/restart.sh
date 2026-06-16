@@ -153,8 +153,8 @@ stop_module() {
   local port
   port="$(port_for "$name")"
   local pids
-  # Only stop the listener. Plain `lsof -ti tcp:$port` also returns clients
-  # connected to this port, which can kill dependent workers during restart.
+  # 只停监听进程。纯 `lsof -ti tcp:$port` 还会返回连到该端口的客户端，
+  # 重启时可能误杀依赖此服务的 worker。
   pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
   if [ -n "$pids" ]; then
     echo "  停止 ${name}（端口 ${port}，pid=${pids}）"

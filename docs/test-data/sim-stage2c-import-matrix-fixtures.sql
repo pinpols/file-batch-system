@@ -1,5 +1,5 @@
--- Stage 2c Import load-mode matrix platform fixture.
--- Business schema setup is kept in sim-stage2c-import-matrix-business.sql.
+-- Stage 2c Import load 模式矩阵的平台侧 fixture。
+-- 业务 schema 的初始化放在 sim-stage2c-import-matrix-business.sql。
 
 BEGIN;
 

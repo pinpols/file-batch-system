@@ -6,11 +6,11 @@
 #   - 健康:health-check-infra.sh(PG/Kafka/Redis/MinIO)
 #   - 每 4h 一次 jcmd $pid GC.heap_dump
 #   - 退出条件 5 项(plan 表):任一触发就 touch $SOAK_STOP_FLAG
-#       1) Heap usage > HEAP_USAGE_THRESHOLD_PCT 持续 HEAP_USAGE_BREACH_SECONDS
+#       1) 堆使用率 > HEAP_USAGE_THRESHOLD_PCT 持续 HEAP_USAGE_BREACH_SECONDS
 #       2) Hikari active == max 持续 HIKARI_FULL_BREACH_SECONDS
 #       3) Kafka lag > KAFKA_LAG_THRESHOLD 持续 KAFKA_LAG_BREACH_SECONDS
-#       4) Error rate > ERROR_RATE_THRESHOLD_PCT 持续 ERROR_RATE_BREACH_SECONDS
-#       5) Disk usage > DISK_USAGE_THRESHOLD_PCT 立即
+#       4) 错误率 > ERROR_RATE_THRESHOLD_PCT 持续 ERROR_RATE_BREACH_SECONDS
+#       5) 磁盘使用率 > DISK_USAGE_THRESHOLD_PCT 立即
 # =========================================================
 set -uo pipefail
 
@@ -69,7 +69,7 @@ metric_value() {
   curl -fsS -m 3 "$url" 2>/dev/null | sed -n 's/.*"VALUE","value":\([0-9.]*\).*/\1/p' | head -1
 }
 
-# 1) Heap usage %
+# 1) 堆使用率 %
 check_heap() {
   local used max pct
   used="$(metric_value jvm.memory.used area:heap)"
@@ -87,7 +87,7 @@ check_heap() {
   fi
 }
 
-# 2) Hikari active / max
+# 2) Hikari active / max 连接占满
 check_hikari() {
   local active max
   active="$(metric_value hikaricp.connections.active)"
@@ -126,7 +126,7 @@ check_kafka_lag() {
   fi
 }
 
-# 4) Error rate(http.server.requests.errors / total)
+# 4) 错误率(http.server.requests.errors / total)
 check_error_rate() {
   local total err pct
   total="$(metric_value http.server.requests)"
@@ -145,7 +145,7 @@ check_error_rate() {
   fi
 }
 
-# 5) Disk usage(immediate)
+# 5) 磁盘使用率(立即触发)
 check_disk() {
   local pct
   pct="$(df -P "$ROOT_DIR" | awk 'NR==2 {gsub("%","",$5); print $5}')"

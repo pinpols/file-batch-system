@@ -1,9 +1,9 @@
--- Test seed data: file_template_config entries covering all import formats
--- Covers: DELIMITED (CSV, pipe, tab), FIXED_WIDTH, EXCEL, XML, JSON (array + envelope)
--- All records use tenant_id='t1' unless noted.
--- query_param_schema.jdbcMappedImport maps file fields → biz.customer_account columns.
--- Fields present in templates but absent from customer_account (creditLimit, currencyCode,
--- openDate, remark) are intentionally excluded from columnMappings.
+-- 测试种子数据：file_template_config 条目，覆盖全部 import 格式
+-- 覆盖：DELIMITED（CSV、pipe、tab）、FIXED_WIDTH、EXCEL、XML、JSON（array + envelope）
+-- 除特别说明外，所有记录均使用 tenant_id='t1'。
+-- query_param_schema.jdbcMappedImport 把文件字段映射到 biz.customer_account 列。
+-- 模板中存在但 customer_account 没有的字段（creditLimit、currencyCode、
+-- openDate、remark）已被有意排除在 columnMappings 之外。
 
 ALTER TABLE batch.file_template_config
     ADD COLUMN IF NOT EXISTS load_target_ref VARCHAR(128);
@@ -22,7 +22,7 @@ INSERT INTO batch.file_template_config
    load_target_ref)
 VALUES
 
--- 1. CSV comma-delimited import (with header, SHA-256 checksum)
+-- 1. CSV 逗号分隔导入（含表头，SHA-256 校验和）
 ('t1', 'IMP-CUSTOMER-CSV', 'Customer Import CSV', 'IMPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  ',', '"', '"',
@@ -66,7 +66,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 2. Pipe-delimited import
+-- 2. pipe 分隔导入
 ('t1', 'IMP-CUSTOMER-PIPE', 'Customer Import Pipe-delimited', 'IMPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  '|', '"', '"',
@@ -110,7 +110,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 3. Tab-separated import
+-- 3. tab 分隔导入
 ('t1', 'IMP-CUSTOMER-TAB', 'Customer Import Tab-separated', 'IMPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  '\t', null, null,
@@ -152,7 +152,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 4. Fixed-width import (each record exactly 100 chars)
+-- 4. 定长导入（每条记录恰好 100 字符）
 ('t1', 'IMP-CUSTOMER-FW', 'Customer Import Fixed-Width', 'IMPORT', 'CUSTOMER',
  'FIXED_WIDTH', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -196,7 +196,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 5. Excel import (sheet "Sheet1", row 1 = header)
+-- 5. Excel 导入（sheet "Sheet1"，第 1 行为表头）
 ('t1', 'IMP-CUSTOMER-EXCEL', 'Customer Import Excel', 'IMPORT', 'CUSTOMER',
  'EXCEL', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -240,7 +240,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 6. XML import (root=customers, record=record)
+-- 6. XML 导入（root=customers，record=record）
 ('t1', 'IMP-CUSTOMER-XML', 'Customer Import XML', 'IMPORT', 'CUSTOMER',
  'XML', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -284,7 +284,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 7. JSON array import
+-- 7. JSON array 导入
 ('t1', 'IMP-CUSTOMER-JSON-ARRAY', 'Customer Import JSON Array', 'IMPORT', 'CUSTOMER',
  'JSON', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -328,7 +328,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 7b. JSON array import with strict validation failure semantics for E2E negative path
+-- 7b. JSON array 导入，带严格校验失败语义，用于 E2E 负向路径
 ('t1', 'IMP-CUSTOMER-JSON-ARRAY-STRICT', 'Customer Import JSON Array Strict', 'IMPORT', 'CUSTOMER',
  'JSON', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -375,7 +375,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 8. JSON envelope import ({"records":[...]})
+-- 8. JSON envelope 导入（{"records":[...]}）
 ('t1', 'IMP-CUSTOMER-JSON-ENV', 'Customer Import JSON Envelope', 'IMPORT', 'CUSTOMER',
  'JSON', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -419,7 +419,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 9. Encrypted CSV import (AES/BATCHENC, requires approval)
+-- 9. 加密 CSV 导入（AES/BATCHENC，需审批）
 ('t1', 'IMP-CUSTOMER-CSV-ENC', 'Customer Import CSV Encrypted', 'IMPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  ',', '"', '"',
@@ -454,7 +454,7 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 10. GZIP-compressed pipe-delimited import
+-- 10. GZIP 压缩的 pipe 分隔导入
 ('t1', 'IMP-CUSTOMER-PIPE-GZ', 'Customer Import Pipe-delimited GZIP', 'IMPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  '|', '"', '"',

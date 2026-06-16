@@ -117,7 +117,7 @@ public class DefaultTriggerService implements TriggerService {
     TriggerRequestEntity requestFromPending =
         pendingTarget == null ? null : pendingTarget.request();
 
-    // 5.6: idempotency — if a request with this key was already launched, return early
+    // 5.6:幂等 —— 若已有相同 key 的请求被 launch 过,则提前返回
     if (requestFromPending == null
         && command.getIdempotencyKey() != null
         && !command.getIdempotencyKey().isBlank()) {

@@ -51,10 +51,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/**
- * Validates rows parsed from the tenant config package Excel workbook. Extracted from
- * DefaultConsoleTenantConfigPackageExcelApplicationService to reduce class size.
- */
+/** 校验从租户配置包 Excel 工作簿解析出的行。从 DefaultConsoleTenantConfigPackageExcelApplicationService 抽出以缩减类体积。 */
 public class ConfigPackageExcelValidator {
 
   public static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;

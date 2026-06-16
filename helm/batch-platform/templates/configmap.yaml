@@ -6,11 +6,11 @@ metadata:
   labels:
     {{- include "batch-platform.labels" . | nindent 4 }}
 data:
-  # ── Platform database ───────────────────────────────────────────────────────
+  # ── 平台库 ───────────────────────────────────────────────────────
   BATCH_PLATFORM_DB_URL: {{ .Values.postgresql.platform.url | quote }}
   BATCH_PLATFORM_DB_USERNAME: {{ .Values.postgresql.platform.username | quote }}
 
-  # ── Business database (workers) ────────────────────────────────────────────
+  # ── 业务库（workers 使用） ────────────────────────────────────────────
   BATCH_BUSINESS_DB_URL: {{ .Values.postgresql.business.url | quote }}
   BATCH_BUSINESS_DB_USERNAME: {{ .Values.postgresql.business.username | quote }}
   BATCH_BUSINESS_DB_SCHEMA: {{ .Values.postgresql.business.schema | quote }}
@@ -36,7 +36,7 @@ data:
   BATCH_S3_ENDPOINT: {{ .Values.objectStorage.endpoint | quote }}
   BATCH_S3_BUCKET: {{ .Values.objectStorage.bucket | quote }}
 
-  # ── Cross-service ──────────────────────────────────────────────────────────
+  # ── 跨服务 ──────────────────────────────────────────────────────────
   BATCH_ORCHESTRATOR_BASE_URL: {{ .Values.orchestratorBaseUrl | quote }}
   BATCH_SECURITY_BYPASS_MODE: {{ .Values.security.bypassMode | quote }}
 

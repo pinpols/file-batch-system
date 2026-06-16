@@ -320,10 +320,9 @@ public class ImportRecordGovernanceService {
   private List<ImportBadRecordEntity> badRecords(ImportJobContext context) {
     Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
     if (existing instanceof List<?> list) {
-      // Validate all elements are ImportBadRecordEntity; if so return the original
-      // list reference (mutating) so subsequent recordBadRecord adds are
-      // visible. Returning a defensive copy here silently dropped 2nd+ bad
-      // records.
+      // 校验所有元素都是 ImportBadRecordEntity;若是则返回原 list 引用(可变),
+      // 以便后续 recordBadRecord 的 add 可见。此处若返回防御性拷贝,会静默丢掉
+      // 第 2 条及之后的坏记录。
       boolean allMatch = true;
       for (Object item : list) {
         if (!(item instanceof ImportBadRecordEntity)) {

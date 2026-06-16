@@ -1,5 +1,5 @@
--- Stage 4c Process source data for sharded process and cancel profile.
--- Required psql variable: biz_date
+-- Stage 4c Process 源数据，用于分片处理和取消场景。
+-- 必需的 psql 变量：biz_date
 
 CREATE TABLE IF NOT EXISTS biz.process_stage4_source (
     id BIGSERIAL PRIMARY KEY,

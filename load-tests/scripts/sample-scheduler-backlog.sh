@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Sample scheduler / dispatch / worker backlog while Gatling is running.
+# 在 Gatling 运行期间采样 scheduler / dispatch / worker 的积压情况。
 #
-# Output CSV columns are intentionally flat so they can be pasted into a report or plotted quickly.
+# 输出的 CSV 列特意做成扁平结构，便于直接粘贴进报告或快速绘图。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

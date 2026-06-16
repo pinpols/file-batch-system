@@ -1,5 +1,5 @@
--- Stage 5c Dispatch channel matrix platform fixtures.
--- Required psql variables: sftp_host, sftp_port
+-- Stage 5c 分发通道矩阵的 platform 库 fixtures。
+-- 需要的 psql 变量：sftp_host, sftp_port
 
 INSERT INTO batch.job_definition (
     tenant_id, job_code, job_name, job_type, biz_type,

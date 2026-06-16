@@ -22,9 +22,8 @@ public interface TaskExecutionClient {
   boolean renewLease(String tenantId, Long taskId, String workerId, String partitionInvocationId);
 
   /**
-   * ADR-016: renew many tasks in as few orchestrator HTTP calls as possible. Per-task values mirror
-   * single {@link #renewLease}; on batch transport failure implementations should fall back to
-   * per-task {@link #renewLease}.
+   * ADR-016:用尽可能少的 orchestrator HTTP 调用续租多个 task。每个 task 的取值与单条 {@link #renewLease}
+   * 一致;批量传输失败时,实现应回退到逐条 {@link #renewLease}。
    */
   Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items);
 

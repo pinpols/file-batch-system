@@ -28,7 +28,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=env.sh
 source "$ROOT/scripts/ops/env.sh"
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# ── 配置 ─────────────────────────────────────────────────────────────
 BATCH_ORCHESTRATOR_URL="${BATCH_ORCHESTRATOR_URL:-http://localhost:8082}"
 BATCH_ORCHESTRATOR_TOKEN="${BATCH_ORCHESTRATOR_TOKEN:-}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
@@ -37,7 +37,7 @@ BATCH_HEAL_DLQ_SOURCE_TYPE="${BATCH_HEAL_DLQ_SOURCE_TYPE:-}"
 BATCH_HEAL_DLQ_BATCH_SIZE="${BATCH_HEAL_DLQ_BATCH_SIZE:-50}"
 BATCH_HEAL_DLQ_SLEEP_MS="${BATCH_HEAL_DLQ_SLEEP_MS:-500}"
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── 辅助函数 ───────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
 psql_file() {
@@ -83,13 +83,13 @@ require_tools() {
   done
 }
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── 主流程 ──────────────────────────────────────────────────────────────────────
 require_tools
 
 log "heal-dead-letters: BATCH_HEAL_DRY_RUN=${BATCH_HEAL_DRY_RUN}"
 log "Filter: tenant=${BATCH_HEAL_DLQ_TENANT:-<all>} source_type=${BATCH_HEAL_DLQ_SOURCE_TYPE:-<all>}"
 
-# Print summary
+# 打印汇总
 log "Dead-letter summary:"
 psql_file -f "$OPS_SQL_DIR/heal-dead-letters-summary.sql" 2>/dev/null \
 | while IFS='|' read -r tenant src cnt; do
@@ -110,7 +110,7 @@ failed=0
 offset=0
 
 while true; do
-  # Fetch a batch: id|tenant_id
+  # 取一批：id|tenant_id
   batch="$(psql_file \
       -v batch_size="$BATCH_HEAL_DLQ_BATCH_SIZE" \
       -v batch_offset="$offset" \

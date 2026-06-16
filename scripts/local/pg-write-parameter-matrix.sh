@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Run a small repeatable PG write parameter matrix for import COPY/UPSERT.
+# 针对 import COPY/UPSERT 跑一个小而可重复的 PG 写参数矩阵。
 #
-# Scope:
-#   - session parameters: synchronous_commit, work_mem, maintenance_work_mem
-#   - server parameters: checkpoint_timeout, max_wal_size (ALTER SYSTEM + reload)
-#   - target index count: 0 / 3 extra secondary indexes
+# 范围:
+#   - 会话级参数:synchronous_commit, work_mem, maintenance_work_mem
+#   - 实例级参数:checkpoint_timeout, max_wal_size(ALTER SYSTEM + reload)
+#   - 目标索引数量:0 / 额外 3 个二级索引
 #
-# The script restores checkpoint_timeout/max_wal_size when it exits.
+# 脚本退出时会恢复 checkpoint_timeout/max_wal_size。
 #
 # ⚠️ NEVER run against production: ALTER SYSTEM 修改的是 PG 实例级全局参数
 #    (影响实例上所有库),且 SIGKILL/崩溃时 EXIT trap 不保证恢复。

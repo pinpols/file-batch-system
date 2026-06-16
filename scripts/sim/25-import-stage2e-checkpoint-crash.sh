@@ -2,14 +2,14 @@
 # =========================================================
 # 25-import-stage2e-checkpoint-crash.sh
 #
-# Import checkpoint 真实崩溃续跑 fault-injection profile:
+# Import checkpoint 真实崩溃续跑故障注入场景:
 #   1. 以 checkpoint enabled 启动 worker-import
 #   2. API 触发 XML import
 #   3. 等 LOAD 推进至少 1 个 chunk 后 kill worker-import
 #   4. 等同一 instance/partition 进入 FAILED, 调 partition retry
 #   5. 重启 worker-import, 验证同一 pipeline_instance 从 checkpoint 续跑并最终 SUCCESS
 #
-# SQL fixture: docs/test-data/sim-stage2e-import-checkpoint.sql
+# SQL 测试夹具: docs/test-data/sim-stage2e-import-checkpoint.sql
 # =========================================================
 set -euo pipefail
 
@@ -23,6 +23,7 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 restart_import_with_checkpoint() {
+  # 以 checkpoint enabled 重启 worker-import
   echo "==> restart worker-import with checkpoint enabled"
   COMPOSE_ENV_FILE=/dev/null \
   BATCH_WORKER_CHECKPOINT_ENABLED=true \
@@ -30,6 +31,7 @@ restart_import_with_checkpoint() {
     bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
 }
 
+# 灌入 bootstrap + checkpoint 测试夹具
 echo "==> apply bootstrap + checkpoint fixture"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null

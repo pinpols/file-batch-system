@@ -26,12 +26,12 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=env.sh
 source "$ROOT/scripts/ops/env.sh"
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# ── 配置 ─────────────────────────────────────────────────────────────
 BATCH_CONSOLE_URL="${BATCH_CONSOLE_URL:-http://localhost:8080}"
 BATCH_CONSOLE_TOKEN="${BATCH_CONSOLE_TOKEN:-}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── 辅助函数 ───────────────────────────────────────────────────────────────────
 log()  { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 dry()  { log "DRY-RUN: $*"; }
 
@@ -66,13 +66,13 @@ require_tools() {
   done
 }
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── 主流程 ──────────────────────────────────────────────────────────────────────
 require_tools
 
 log "heal-drain-timeout: BATCH_HEAL_DRY_RUN=${BATCH_HEAL_DRY_RUN}"
 log "Querying drain-timeout workers from ${PGHOST}:${PGPORT}/${PGDATABASE}..."
 
-# Fetch: worker_code|tenant_id|drain_deadline_at
+# 拉取:worker_code|tenant_id|drain_deadline_at
 overdue_workers="$(psql_file -f "$OPS_SQL_DIR/heal-drain-timeout-workers.sql" 2>/dev/null)" || {
   log "ERROR: cannot query worker_registry"
   exit 1

@@ -122,7 +122,7 @@ public class ChildJobLaunchSupport {
     LaunchRequest childLaunchRequest = buildChildLaunchRequest(launchCtx);
     launchServiceProvider.getObject().launch(childLaunchRequest);
 
-    return 1; // one virtual partition added to the parent job
+    return 1; // 向父 job 新增了一个虚拟分区
   }
 
   private JobPartitionEntity createVirtualPartition(

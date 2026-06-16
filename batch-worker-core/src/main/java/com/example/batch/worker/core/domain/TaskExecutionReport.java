@@ -36,7 +36,7 @@ public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
    */
   private String highWaterMarkOut;
 
-  /** ADR-014: optional; sent with report when worker holds current partition invocation id。 */
+  /** ADR-014:可选;当 worker 持有当前分区 invocation id 时随上报一并发送。 */
   private String partitionInvocationId;
 
   /**

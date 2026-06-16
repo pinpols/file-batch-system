@@ -8,7 +8,7 @@
 # 永远以 0 退出 — flaky 用例本来就允许 pass,不阻断 CI,治理走
 # `docs/runbook/ci.md` 「flaky 治理」。
 #
-# Usage:
+# 用法：
 #   bash scripts/ci/collect-flaky.sh [-- <extra args passed to collect-flaky.py>]
 #
 # 常用透传:
