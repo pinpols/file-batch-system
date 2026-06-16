@@ -104,6 +104,20 @@ public class ConsoleAiProperties {
   /** 检索增强(RAG)配置:把系统自身语料向量化后注入提示词,让模型基于事实作答。 */
   private Rag rag = new Rag();
 
+  /** 只读诊断工具(function-calling):让模型按需拉取实时 job 状态 / 日志 / 失败实例。 */
+  private Tools tools = new Tools();
+
+  /** L3 工具调用参数。 */
+  @Data
+  public static class Tools {
+
+    /** 工具调用开关。开启后模型可调用只读查询工具(强制限定当前租户)诊断实时状态。 */
+    private boolean enabled = true;
+
+    /** 单次工具查询返回的最大行数(日志 / 失败实例列表),控制 token 与噪声。 */
+    private int maxRows = 10;
+  }
+
   /** RAG 检索参数。 */
   @Data
   public static class Rag {

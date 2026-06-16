@@ -18,6 +18,7 @@ import com.example.batch.console.domain.audit.service.ConsoleAiPromptGuard;
 import com.example.batch.console.domain.audit.support.AiPromptGateResult;
 import com.example.batch.console.domain.audit.support.ConsoleAiAuditService;
 import com.example.batch.console.domain.audit.web.response.AiChatResponse;
+import com.example.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.auth.AiChatRequest;
@@ -70,6 +71,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   private final ConsoleAiPromptGuard promptGuard;
   private final ConsoleAiAuditService auditService;
   private final ConsoleAiKnowledgeBase knowledgeBase;
+  private final ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
 
   /** 执行一轮 AI 对话并写审计。 */
   @Override
@@ -116,15 +118,16 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
     // RAG:检索系统自身语料,让模型基于事实作答(检索为空时退化为「仅 primer」)。
     List<ConsoleAiKnowledgeBase.Snippet> snippets = knowledgeBase.retrieve(prompt);
+    // L3:按租户绑定只读诊断工具(模型按需拉取实时 job 状态/日志);未启用或不可用则为 null。
+    ConsoleAiTools tools = resolveTools(tenantId);
     String promptPayload =
         buildPrompt(tenantId, sessionId, prompt, request.getContext(), gateResult.category());
-    String answer =
-        chatClient
-            .prompt()
-            .system(buildSystemPrompt(snippets))
-            .user(promptPayload)
-            .call()
-            .content();
+    ChatClient.ChatClientRequestSpec spec =
+        chatClient.prompt().system(buildSystemPrompt(snippets, tools != null)).user(promptPayload);
+    if (tools != null) {
+      spec = spec.tools(tools);
+    }
+    String answer = spec.call().content();
     String grounded = appendCitations(trim(answer, aiProperties.getMaxResponseLength()), snippets);
     answer = ConsoleTextSanitizer.safeDisplay(grounded, grounded.length());
 
@@ -227,7 +230,19 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     return builder.toString();
   }
 
-  private String buildSystemPrompt(List<ConsoleAiKnowledgeBase.Snippet> snippets) {
+  private ConsoleAiTools resolveTools(String tenantId) {
+    if (!aiProperties.getTools().isEnabled()) {
+      return null;
+    }
+    ConsoleQueryApplicationService queryService = queryServiceProvider.getIfAvailable();
+    if (queryService == null) {
+      return null;
+    }
+    return new ConsoleAiTools(tenantId, queryService, aiProperties.getTools().getMaxRows());
+  }
+
+  private String buildSystemPrompt(
+      List<ConsoleAiKnowledgeBase.Snippet> snippets, boolean toolsEnabled) {
     StringBuilder builder = new StringBuilder();
     builder.append(
         """
@@ -240,6 +255,14 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         4. 用户要求执行高风险操作时，只给受控流程建议，不代执行。
         5. 回答简洁、具体、可操作，用中文。无需自己罗列来源，系统会自动附上参考来源。
         """);
+    if (toolsEnabled) {
+      builder.append(
+          """
+
+          你可以调用只读工具拉取实时系统状态:getJobInstance(查实例状态/失败分类)、getJobExecutionLogs(查执行日志)、listRecentFailedJobInstances(列近期失败实例)。
+          当用户问某个具体 job 实例为什么失败、或提到实例 id、或问「最近有哪些失败」时，先调用工具拿到真实数据再据此回答，不要凭空臆测;工具只在当前租户内只读查询。实例不存在就如实说明。
+          """);
+    }
     if (snippets.isEmpty()) {
       builder.append("\n本次未检索到知识库片段。只能基于上述通用范围作答;若需具体事实而你不确定，明确说明无法确认并建议查阅对应文档/运维脚本，不要编造。\n");
       return builder.toString();
