@@ -27,9 +27,11 @@
 
 **事实**：V6 创建 pipeline_instance 时枚举里有 `COMPENSATING`，job_instance / workflow_run 没有。
 
-**原因**：pipeline 内部 stage 失败可触发反向 stage 补偿（删 biz / 删 MinIO 对象），需要中间态标识"在补偿中"防止外部误以为已 FAILED 终态。job_instance / workflow_run 的补偿走 `compensation_command` 独立表，不需要主状态标记。
+**⚠️ 实现状态(2026-06-16 审计澄清):`COMPENSATING` 当前是「预留态,未实现」。** 全 worker 代码无任何写 `pipeline_instance.run_status = COMPENSATING` 的路径——pipeline stage 失败**直接落 `FAILED`**,不做 stage 级反向补偿(删 biz / 删 MinIO)。枚举值 + DB CHECK 仅为前向兼容保留。**运维不应假设 pipeline 失败会自动补偿删脏数据。** (注:dispatch 域 `FileDispatchRunStatus.COMPENSATING` 是真实现的,勿混淆。)
 
-**结论**：**保持差异**。COMPENSATING 是 pipeline 域专属语义，强行抹平到其他状态机会丢失语义。
+**设想语义(若将来实现)**:pipeline 内部 stage 失败触发反向 stage 补偿,需要中间态标识"在补偿中"防止外部误判为 FAILED 终态。job_instance / workflow_run 的补偿走 `compensation_command` 独立表,不需要主状态标记。
+
+**结论**:**保留枚举差异**(语义专属 pipeline 域);但在真正实现 stage 补偿前,文档与运维须按"未实现"对待,不得依赖该态。
 
 ### 2.2 `READY` 出现在多张表，但语义微差
 
