@@ -223,9 +223,7 @@ async def test_typed_import_cancel_yields_cancelled_terminal() -> None:
     cp = InMemoryCheckpoint()
     sig = CancellationSignal()  # 执行中(第一批后)才置位
     h = _ResumableImport(cancel_after_first=sig)
-    r = await h.execute(
-        make_ctx(parameters={"source": "x"}, checkpoint=cp, cancel=sig)
-    )
+    r = await h.execute(make_ctx(parameters={"source": "x"}, checkpoint=cp, cancel=sig))
     assert r.success is False
     assert r.output["errorCode"] == CANCELLED_CODE
     # 第一批已安全提交(i=1)
