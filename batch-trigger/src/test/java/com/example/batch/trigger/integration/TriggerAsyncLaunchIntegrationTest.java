@@ -70,7 +70,7 @@ import org.springframework.boot.test.context.SpringBootTest;
       "spring.quartz.jdbc.initialize-schema=always",
       "batch.trigger.scheduler-impl=wheel",
     })
-class TriggerAsyncLaunchE2eIT extends AbstractIntegrationTest {
+class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private TriggerService triggerService;
   @Autowired private TriggerOutboxEventMapper outboxMapper;
