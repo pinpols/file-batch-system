@@ -45,22 +45,30 @@ export interface RenewResponse {
   cancelRequested?: boolean | null;
 }
 
-/** Canonical platform error codes (wire-protocol §B report errorCode). */
-export enum ErrorCode {
-  SUCCESS = "SUCCESS",
-  TIMEOUT = "TIMEOUT",
-  CANCELLED = "CANCELLED",
-  KILLED = "KILLED",
-  SECURITY_REJECTED = "SECURITY_REJECTED",
-  EXECUTION_FAILED = "EXECUTION_FAILED",
-  CONFIG_INVALID = "CONFIG_INVALID",
-  RESOURCE_EXHAUSTED = "RESOURCE_EXHAUSTED",
-}
+/**
+ * Canonical platform error codes (wire-protocol §B report errorCode).
+ *
+ * Modelled as a frozen const object (not a TS `enum`) so the source runs under
+ * Node's strip-only `--experimental-strip-types` (enums need full transpile).
+ * Public shape is unchanged: `ErrorCode.SUCCESS` etc. still works.
+ */
+export const ErrorCode = {
+  SUCCESS: "SUCCESS",
+  TIMEOUT: "TIMEOUT",
+  CANCELLED: "CANCELLED",
+  KILLED: "KILLED",
+  SECURITY_REJECTED: "SECURITY_REJECTED",
+  EXECUTION_FAILED: "EXECUTION_FAILED",
+  CONFIG_INVALID: "CONFIG_INVALID",
+  RESOURCE_EXHAUSTED: "RESOURCE_EXHAUSTED",
+} as const;
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
-/** ADR-012 failure classes. */
-export enum FailureClass {
-  TRANSIENT = "TRANSIENT",
-  TERMINAL_USER = "TERMINAL_USER",
-  TERMINAL_CONFIG = "TERMINAL_CONFIG",
-  BUSINESS = "BUSINESS",
-}
+/** ADR-012 failure classes (const object; see ErrorCode note). */
+export const FailureClass = {
+  TRANSIENT: "TRANSIENT",
+  TERMINAL_USER: "TERMINAL_USER",
+  TERMINAL_CONFIG: "TERMINAL_CONFIG",
+  BUSINESS: "BUSINESS",
+} as const;
+export type FailureClass = (typeof FailureClass)[keyof typeof FailureClass];
