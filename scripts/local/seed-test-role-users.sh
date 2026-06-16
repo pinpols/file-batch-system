@@ -5,10 +5,12 @@
 # 给本地 console-api 种入 FE e2e RBAC matrix 期望的 3 个角色用户。
 #
 # 用例:rbac-matrix.spec.ts 与 e2e/global-setup.cjs 期望以下角色 storage state
-#   - op-tx     ROLE_TENANT_USER  tenant=tx   pw=admin123
+#   - op-tx     ROLE_TENANT_USER  tenant=tc   pw=admin123
 #   - tadmin-ta ROLE_TENANT_ADMIN tenant=ta   pw=Admin@123abc
-#   - user-tx   ROLE_USER         tenant=tx   pw=admin123
+#   - user-tx   ROLE_USER         tenant=tc   pw=admin123
 # 缺这 3 个 -> login 401 -> rbac-matrix 50 spec 假阳性失败。
+# 注:登录契约只认 username(op-tx/user-tx 字面量不变)+ password,不传 tenant;
+#    用户归属租户改成白名单 tc 只影响 BE 数据归属,不动 FE storage-state 契约。
 #
 # 用法:
 #   bash scripts/local/seed-test-role-users.sh
@@ -17,7 +19,7 @@
 #   CONSOLE_BASE_URL  默认 http://localhost:18080
 #   ADMIN_USERNAME    默认 admin
 #   ADMIN_PASSWORD    默认 admin123(V52 seed)
-#   TENANT_TX         默认 tx(可改 tc 用 DEV_FIXTURE 白名单避开 NON-PROD prefix guard)
+#   TENANT_TX         默认 tc(DEV_FIXTURE 白名单 ta/tb/tc;变量名沿用 TX 仅为历史兼容)
 #   TENANT_TA         默认 ta(DEV_FIXTURE 白名单)
 #
 # 行为:
@@ -25,7 +27,8 @@
 #   2. POST /api/console/tenants 建 TENANT_TX 与 TENANT_TA(已存在 409 -> skip)
 #      —— BE NON-PROD ReservedPrefixGuard 要求 tenant_id 在 DEV_FIXTURE
 #         (ta/tb/tc/default-tenant)或带 test- prefix;否则 INVALID_ARGUMENT。
-#         默认 TENANT_TX=tx 不在白名单,**会失败**;脚本将引导用户切换 tc 或改 guard。
+#         默认值(TENANT_TX=tc / TENANT_TA=ta)都在白名单内,开箱即过;
+#         若 export 成非白名单值(如 tx)会被 guard 拒,step 2 会引导切回白名单。
 #   3. POST /api/console/users 建 op-tx / tadmin-ta / user-tx(409 -> skip)
 #   4. 逐用户验证可 login(明文 path)。任何失败 -> exit 1 + 引导。
 # =============================================================
@@ -38,7 +41,7 @@ source "$ROOT/scripts/lib/env-common.sh"
 CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-$CONSOLE_BASE}"
 ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
-TENANT_TX="${TENANT_TX:-tx}"
+TENANT_TX="${TENANT_TX:-tc}"
 TENANT_TA="${TENANT_TA:-ta}"
 
 COOKIE_JAR="$(mktemp -t seed-test-role-users.XXXXXX.cookies)"
@@ -90,10 +93,10 @@ create_tenant() {
       if echo "$detail" | grep -q "non_prod_require_test_prefix\|reserved_prefix\|reserved_id"; then
         ng "tenant $tid 拒绝(NON-PROD ReservedPrefixGuard)"
         echo "  $detail"
-        echo "  解决:"
-        echo "    - export TENANT_TX=tc(白名单:ta/tb/tc/default-tenant)再跑;或"
+        echo "  默认值 TENANT_TX=tc / TENANT_TA=ta 本在白名单;若你 export 成了非白名单值才会到这。解决:"
+        echo "    - unset TENANT_TX TENANT_TA 用回默认(白名单:ta/tb/tc/default-tenant);或"
         echo "    - export TENANT_TX=e2e-tx(带 test- prefix);或"
-        echo "    - 改 ReservedPrefixGuard.DEV_FIXTURE_TENANT_IDS 加入 tx"
+        echo "    - 改 ReservedPrefixGuard.DEV_FIXTURE_TENANT_IDS 加入你的自定义 id"
         exit 1
       fi
       ng "tenant $tid HTTP=400: $detail"

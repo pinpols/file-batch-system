@@ -192,5 +192,6 @@ WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)
 ## 7. 下一步(进阶)
 
 - 投递渠道(SFTP/API dispatch)、`config_json` 凭据:见 9+2 配置包设计 + `docs/runbook/biz-tenant-routing.md`(凭据隔离)。
+- **各类凭据怎么存/怎么注入/谁负责**:见 [`credential-matrix.md`](./credential-matrix.md)(凭据矩阵:片级账密 / 渠道凭据 / 密码 / 内部密钥 / KMS / DB 连接一表打尽,标注 prod 强校验与上线必配项)。
 - 队列 / 时间窗 / 日历调度、加密下载审批:见 `docs/design/` 数据模型 + 各 ADR。
 - 完整可跑样例集:`batch-e2e-tests/src/test/resources/db/testdata/import-template-config-seed.sql` / `export-template-config-seed.sql`(全格式金标准)。
