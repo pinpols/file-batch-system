@@ -1,13 +1,22 @@
 name: sdk-contract-parity
 
-# Lane P (drift guard): enforce Java SDK ↔ Python SDK ↔ shared-constants/fixtures
-# stay in lockstep. Three independent jobs run in parallel; any one failing
-# blocks the PR.
+# Lane P (drift guard): enforce Java SDK ↔ Python SDK ↔ (future Go/TS/Rust BYO SDKs)
+# ↔ shared-constants/fixtures stay in lockstep. Each language runs an independent
+# contract job in parallel; any one failing blocks the PR.
 #
-# Triggered ONLY by Java SDK, Python SDK, fixture or shared-constants changes —
-# unrelated PRs do not pay the Maven cold-start cost. Matches the pr-gate
-# paths-ignore for `.github/workflows/**` so a workflow-only PR still runs
-# this file via the workflow-lint pipeline rather than re-triggering Maven.
+# Conformance contract (what makes a BYO SDK compliant) is pinned in
+# docs/sdk/byo-conformance-contract.md. Every new-language SDK MUST:
+#   (a) consume docs/api/sdk-shared-constants.yaml (no re-authored literals),
+#   (b) pass every fixture's machine-assertable `then.expect` block,
+#   (c) add its `<lang>-contract` job + path here.
+# The per-language jobs below get added as each SDK lands; the `paths:` entries
+# for batch-worker-sdk-{go,typescript,rust} are pre-wired so their first PR
+# triggers this workflow.
+#
+# Triggered ONLY by SDK, fixture or shared-constants/contract changes — unrelated
+# PRs do not pay the Maven cold-start cost. Matches the pr-gate paths-ignore for
+# `.github/workflows/**` so a workflow-only PR still runs this file via the
+# workflow-lint pipeline rather than re-triggering Maven.
 
 on:
   pull_request:
@@ -18,9 +27,14 @@ on:
       - 'batch-common/src/main/java/com/example/batch/common/enums/**'
       - 'batch-common/src/main/java/com/example/batch/common/security/**'
       - 'batch-worker-sdk-python/**'
+      # BYO SDKs (pre-wired; per-language contract jobs added when each lands)
+      - 'batch-worker-sdk-go/**'
+      - 'batch-worker-sdk-typescript/**'
+      - 'batch-worker-sdk-rust/**'
       - 'docs/api/sdk-contract-fixtures/**'
       - 'docs/api/sdk-shared-constants.yaml'
       - 'docs/api/orchestrator-internal.openapi.yaml'
+      - 'docs/sdk/byo-conformance-contract.md'
       - '.github/workflows/sdk-contract-parity.yml'
   workflow_dispatch:
 

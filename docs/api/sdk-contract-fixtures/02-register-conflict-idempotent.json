@@ -32,7 +32,8 @@
   },
   "then": {
     "sdkExpectedAction": "treat as success (200 = success regardless of conflict semantics); transition FSM to NORMAL; do not retry",
-    "sdkMustNot": ["treat 200 with existing record as error", "send different workerCode on retry (workerCode must be stable across restarts for idempotency)"]
+    "sdkMustNot": ["treat 200 with existing record as error", "send different workerCode on retry (workerCode must be stable across restarts for idempotency)"],
+    "expect": { "action": "register-online", "fsmTransition": "NORMAL", "idempotent": true, "startSchedulers": ["heartbeat", "leaseRenew"] }
   },
   "references": ["wire-protocol.md §1", "openapi: /internal/workers/register"]
 }

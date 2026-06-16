@@ -20,7 +20,8 @@
   },
   "then": {
     "sdkExpectedAction": "step 1: set draining=true (reject new Kafka messages immediately); step 2: kafkaConsumer.wakeup() (interrupt poll); step 3: wait for in-flight drain up to (timeout * 0.4) = 12s; step 4: executor.awaitTermination up to (timeout * 0.6) = 18s; step 5: POST /deactivate (must succeed even if timeout exhausted); total must complete < 30s",
-    "sdkMustNot": ["accept new tasks during stop", "skip /deactivate (orch heartbeat-timeout would clean up 120s later, but explicit deactivate is faster)", "block stop() if /deactivate HTTP fails (log + continue exit)"]
+    "sdkMustNot": ["accept new tasks during stop", "skip /deactivate (orch heartbeat-timeout would clean up 120s later, but explicit deactivate is faster)", "block stop() if /deactivate HTTP fails (log + continue exit)"],
+    "expect": { "action": "graceful-stop", "kafka": "wakeup", "deactivate": true, "drainThenDeactivate": true, "withinMs": 30000 }
   },
   "references": ["wire-protocol.md §4", "wire-protocol.md §6 Lane A stop timeout"]
 }

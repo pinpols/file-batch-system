@@ -27,7 +27,8 @@
   },
   "then": {
     "sdkExpectedAction": "no-op; remain NORMAL; next heartbeat at default 30s",
-    "sdkMustNot": ["change maxConcurrent when desiredMaxConcurrent is null", "log WARN on null directives"]
+    "sdkMustNot": ["change maxConcurrent when desiredMaxConcurrent is null", "log WARN on null directives"],
+    "expect": { "action": "apply-directive", "fsmTransition": "NORMAL", "kafka": "none" }
   },
   "references": ["wire-protocol.md §2.1"]
 }

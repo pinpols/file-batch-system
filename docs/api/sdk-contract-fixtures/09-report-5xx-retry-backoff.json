@@ -26,7 +26,8 @@
   },
   "then": {
     "sdkExpectedAction": "attempt 1 → fail → sleep 200ms; attempt 2 → fail → sleep 400ms; attempt 3 → fail → log ERROR + drop; do not block worker thread on subsequent tasks; lease renew loop will detect (orch回收) and clean up locally",
-    "sdkMustNot": ["retry indefinitely", "use fixed delay (not respecting exponential)", "block heartbeat scheduler during retry sleep"]
+    "sdkMustNot": ["retry indefinitely", "use fixed delay (not respecting exponential)", "block heartbeat scheduler during retry sleep"],
+    "expect": { "action": "retry-then-drop", "retry": true, "retryBackoffMs": [200, 400, 800], "maxAttempts": 3 }
   },
   "references": ["wire-protocol.md §C", "PlatformHttpException.isServerError()"]
 }
