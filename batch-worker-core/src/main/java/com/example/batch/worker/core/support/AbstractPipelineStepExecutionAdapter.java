@@ -63,11 +63,19 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
    */
   private final PipelineVerifierHook verifierHook;
 
+  /**
+   * 安全增量补偿(opt-in)钩子。可选注入,语义同 {@link #verifierHook}：无 bean(测试 / 未装配)时为 null, {@link
+   * #runCompensationIfEnabled} 直接跳过 → 走原 markPipelineFailed 路径(默认行为逐字节不变)。
+   */
+  private final PipelineCompensationHook compensationHook;
+
   protected AbstractPipelineStepExecutionAdapter(
       PlatformFileRuntimeRepository runtimeRepository,
-      ObjectProvider<PipelineVerifierHook> verifierHookProvider) {
+      ObjectProvider<PipelineVerifierHook> verifierHookProvider,
+      ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     this.runtimeRepository = runtimeRepository;
     this.verifierHook = verifierHookProvider.getIfAvailable();
+    this.compensationHook = compensationHookProvider.getIfAvailable();
   }
 
   // 不能加 final:Spring CGLIB 用 Objenesis 实例化代理(跳过构造器→ runtimeRepository 字段为 null);
@@ -208,6 +216,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
 
         if (verifierResult.fatalFailure()) {
           // §G 硬中止：DB 标 FAILED，返回失败 response 而非 success。
+          // 安全增量补偿(opt-in):若开关 on 且注册了 compensator,先 COMPENSATING + 反向动作,再落 FAILED 终态。
+          runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
           runtimeRepository.markPipelineFailed(
               pipelineInstanceId, successStage, lastSuccessfulStage(attributes));
           String fatalCode =
@@ -226,6 +236,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         return successResponse;
       }
       String failureStage = resultStage(failed);
+      // 安全增量补偿(opt-in):stage 失败落地点。开关 off → 直接 markPipelineFailed(行为不变)。
+      runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
       runtimeRepository.markPipelineFailed(
           pipelineInstanceId, failureStage, lastSuccessfulStage(attributes));
       handlePipelineFailure(
@@ -244,6 +256,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
       SwallowedExceptionLogger.warn(
           AbstractPipelineStepExecutionAdapter.class, "catch:Exception", exception);
 
+      // 安全增量补偿(opt-in):未捕获异常落地点。开关 off → 直接 markPipelineFailed(行为不变)。
+      runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
       runtimeRepository.markPipelineFailed(
           pipelineInstanceId, initialStage(), lastSuccessfulStage(attributes));
       if (exception instanceof BizException bizException) {
@@ -264,6 +278,26 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
 
   protected PlatformFileRuntimeRepository runtimeRepository() {
     return runtimeRepository;
+  }
+
+  /**
+   * 安全增量补偿(opt-in)统一入口。在每个失败落地点 markPipelineFailed **之前**调用：
+   *
+   * <ul>
+   *   <li>无 compensation hook bean(测试 / 未装配)→ 直接返回,走原路径(默认行为逐字节不变)。
+   *   <li>有 hook → 由 hook 判定开关 {@code compensate_on_failure} + 是否注册了该类型 compensator;只有都满足才进入
+   *       COMPENSATING + 反向动作 + 审计。hook 永不抛异常,补偿失败不掩盖原始失败。
+   * </ul>
+   *
+   * <p>本方法无论补偿是否触发都不改变后续 markPipelineFailed 调用 —— COMPENSATING 仅是 hook 内部写的中间态, 终态始终由 adapter 的
+   * markPipelineFailed 落定,绝不停在 COMPENSATING。
+   */
+  private void runCompensationIfEnabled(
+      String tenantId, Long pipelineInstanceId, Map<String, Object> attributes) {
+    if (compensationHook == null) {
+      return;
+    }
+    compensationHook.runCompensation(tenantId, pipelineType(), pipelineInstanceId, attributes);
   }
 
   protected String pipelineWorkerGroup() {

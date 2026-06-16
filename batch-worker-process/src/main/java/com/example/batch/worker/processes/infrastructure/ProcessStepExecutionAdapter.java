@@ -6,6 +6,7 @@ import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
+import com.example.batch.worker.core.support.PipelineCompensationHook;
 import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
 import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
@@ -38,8 +39,9 @@ public class ProcessStepExecutionAdapter
       PipelineStepTemplateProvider stepTemplateProvider,
       ObjectMapper objectMapper,
       PlatformFileRuntimeRepository runtimeRepository,
-      ObjectProvider<PipelineVerifierHook> verifierHookProvider) {
-    super(runtimeRepository, verifierHookProvider);
+      ObjectProvider<PipelineVerifierHook> verifierHookProvider,
+      ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
+    super(runtimeRepository, verifierHookProvider, compensationHookProvider);
     this.processStageExecutor = processStageExecutor;
     this.stepTemplateProvider = stepTemplateProvider;
     this.objectMapper = objectMapper;

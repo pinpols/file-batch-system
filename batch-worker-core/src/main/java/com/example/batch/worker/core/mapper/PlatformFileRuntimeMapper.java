@@ -33,6 +33,8 @@ public interface PlatformFileRuntimeMapper {
 
   int markPipelineFailed(Map<String, Object> params);
 
+  int markPipelineCompensating(Map<String, Object> params);
+
   Integer selectNextStepRunSeq(Map<String, Object> params);
 
   int insertStepRun(Map<String, Object> params);
