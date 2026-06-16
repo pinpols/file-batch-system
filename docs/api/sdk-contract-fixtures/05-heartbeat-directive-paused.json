@@ -26,7 +26,8 @@
   },
   "then": {
     "sdkExpectedAction": "transition FSM to PAUSED; pause Kafka assignment; in-flight tasks continue; if a Kafka message with taskType in pausedTaskTypes already received, drop without commit (will redeliver after platform unpauses); on next heartbeat if platformStatus back to NORMAL → resume Kafka assignment",
-    "sdkMustNot": ["call deactivate (PAUSED != DRAINING)", "commit offset for dropped messages"]
+    "sdkMustNot": ["call deactivate (PAUSED != DRAINING)", "commit offset for dropped messages"],
+    "expect": { "action": "apply-directive", "fsmTransition": "PAUSED", "kafka": "pause" }
   },
   "references": ["wire-protocol.md §2.1"]
 }

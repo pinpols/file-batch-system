@@ -78,7 +78,7 @@
     },
     "then": {
       "type": "object",
-      "required": ["sdkExpectedAction"],
+      "required": ["sdkExpectedAction", "expect"],
       "additionalProperties": false,
       "properties": {
         "sdkExpectedAction": {
@@ -89,6 +89,71 @@
         "sdkMustNot": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Machine-assertable expectation (BYO conformance). Optional but RECOMMENDED: every language runner asserts these discrete fields identically, instead of parsing the human-readable sdkExpectedAction prose. Closed vocabulary — adding a field requires a schema bump so expectations themselves cannot drift.",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "register-online",
+                "apply-directive",
+                "fail-fast",
+                "idempotent-success",
+                "retry-then-drop",
+                "cancel",
+                "backpressure",
+                "graceful-stop"
+              ],
+              "description": "Primary SDK action the response/message must trigger."
+            },
+            "retry": { "type": "boolean", "description": "Whether the SDK retries this call." },
+            "retryBackoffMs": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 0 },
+              "description": "Expected sleep sequence between attempts, e.g. [200,400,800]."
+            },
+            "maxAttempts": { "type": "integer", "minimum": 1 },
+            "failFast": {
+              "type": "boolean",
+              "description": "Mark dispatcher fatal and stop accepting tasks."
+            },
+            "fsmTransition": {
+              "type": ["string", "null"],
+              "enum": ["NORMAL", "DEGRADED", "PAUSED", "DRAINING", null],
+              "description": "Target worker FSM state, or null when unchanged."
+            },
+            "kafka": {
+              "type": "string",
+              "enum": ["none", "subscribe", "pause", "resume", "wakeup", "drop-message"],
+              "description": "Required Kafka consumer action."
+            },
+            "startSchedulers": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["heartbeat", "leaseRenew"] }
+            },
+            "heartbeatNextIntervalMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Effective next heartbeat interval after applying nextHeartbeatHint."
+            },
+            "cancelRequested": { "type": "boolean" },
+            "idempotent": { "type": "boolean" },
+            "reportFailure": {
+              "type": "boolean",
+              "description": "Whether the SDK reports a task FAILURE for this scenario."
+            },
+            "deactivate": { "type": "boolean", "description": "Calls POST /deactivate." },
+            "drainThenDeactivate": { "type": "boolean" },
+            "resumeWhenDrained": { "type": "boolean" },
+            "withinMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Hard wall-clock bound the action must complete within (e.g. stop timeout)."
+            }
+          }
         }
       }
     },

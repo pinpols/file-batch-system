@@ -22,7 +22,8 @@
   },
   "then": {
     "sdkExpectedAction": "treat as idempotent success; log INFO 'task already claimed by peer'; commit Kafka offset; do NOT call /report (would corrupt 'success=false' counter); continue normal operation",
-    "sdkMustNot": ["call /report with success=false", "retry the claim", "treat as fatal error"]
+    "sdkMustNot": ["call /report with success=false", "retry the claim", "treat as fatal error"],
+    "expect": { "action": "idempotent-success", "retry": false, "idempotent": true, "reportFailure": false }
   },
   "references": ["wire-protocol.md §B", "PlatformHttpException.isConflict()"]
 }

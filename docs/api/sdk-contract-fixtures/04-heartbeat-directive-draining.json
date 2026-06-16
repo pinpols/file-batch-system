@@ -27,7 +27,8 @@
   },
   "then": {
     "sdkExpectedAction": "transition FSM to DRAINING; call kafkaConsumer.pause(assignment); continue running in-flight tasks; when inFlight == 0 → POST /deactivate and exit",
-    "sdkMustNot": ["accept new Kafka messages in DRAINING", "kill in-flight tasks abruptly"]
+    "sdkMustNot": ["accept new Kafka messages in DRAINING", "kill in-flight tasks abruptly"],
+    "expect": { "action": "apply-directive", "fsmTransition": "DRAINING", "kafka": "pause", "drainThenDeactivate": true }
   },
   "references": ["wire-protocol.md §2.1", "wire-protocol.md §4"]
 }
