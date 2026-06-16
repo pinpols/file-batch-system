@@ -107,6 +107,19 @@ export function classifyHttp(
   };
 }
 
+/**
+ * Classify a heartbeat / leaseRenew transport failure (wire-protocol §C exemption).
+ *
+ * Unlike register/claim/report (which run the full exponential-retry sequence),
+ * heartbeat and leaseRenew do NOT back off internally on a single failure — they
+ * simply skip this tick and try again on the next scheduled tick. So a 503 (or
+ * any transport-level failure) yields a single attempt with no retry. (A 4xx like
+ * 404 on renew is still classified by classifyHttp → not-found/give-up.)
+ */
+export function classifyHeartbeatRenewError(): HttpDecision {
+  return { action: "retry-then-drop", retry: false, maxAttempts: 1 };
+}
+
 // ---------------------------------------------------------------------------
 // §A — schemaVersion classification
 // ---------------------------------------------------------------------------
@@ -138,6 +151,7 @@ export interface HeartbeatDecision {
   kafka?: KafkaAction;
   drainThenDeactivate?: boolean;
   heartbeatNextIntervalMs?: number;
+  effectiveMaxConcurrent?: number;
 }
 
 /** Parse an ISO-8601 duration ("PT15S", "PT1M30S", "PT30S") to milliseconds. */
@@ -190,7 +204,38 @@ export function applyHeartbeatDirective(
     result.heartbeatNextIntervalMs = hintToMs(resp.nextHeartbeatHint);
   }
 
+  // §2.1 dynamic backpressure: platform-suggested concurrency cap. Only a
+  // positive value constrains; null/absent leaves local config in effect.
+  if (resp.desiredMaxConcurrent != null && resp.desiredMaxConcurrent > 0) {
+    result.effectiveMaxConcurrent = resp.desiredMaxConcurrent;
+  }
+
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Paused task types (heartbeat directive) — Kafka drop
+// ---------------------------------------------------------------------------
+
+export interface PausedTaskDecision {
+  action: "apply-directive";
+  kafka: KafkaAction;
+}
+
+/**
+ * Decide what to do with a freshly received Kafka dispatch message whose
+ * taskType is in the platform's pausedTaskTypes set (wire-protocol §2.1). The
+ * message is dropped WITHOUT committing the offset (platform redelivers after
+ * unpausing); a non-paused taskType is processed normally (kafka:none).
+ */
+export function decidePausedTaskType(
+  taskType: string,
+  pausedTaskTypes: string[],
+): PausedTaskDecision {
+  if (pausedTaskTypes.includes(taskType)) {
+    return { action: "apply-directive", kafka: "drop-message" };
+  }
+  return { action: "apply-directive", kafka: "none" };
 }
 
 // ---------------------------------------------------------------------------

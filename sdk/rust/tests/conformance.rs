@@ -16,14 +16,15 @@ use std::path::{Path, PathBuf};
 use std::collections::BTreeMap;
 
 use batch_worker_sdk::decide::{
-    apply_heartbeat_directive, apply_renew, build_request, classify_http, classify_schema_version,
-    decide_backpressure, decide_register, plan_stop, BodyValue, Decision, OutgoingRequest,
-    ReportPayload, RequestBuildConfig, RequestSpec,
+    apply_heartbeat_directive, apply_renew, build_request, classify_heartbeat_renew_error,
+    classify_http, classify_schema_version, decide_backpressure, decide_paused_task_type,
+    decide_register, plan_stop, BodyValue, Decision, OutgoingRequest, ReportPayload,
+    RequestBuildConfig, RequestSpec,
 };
 use batch_worker_sdk::protocol::{HeartbeatHint, HeartbeatResponse, RenewResponse};
 use json::Json;
 
-const EXPECTED_FIXTURE_COUNT: usize = 22;
+const EXPECTED_FIXTURE_COUNT: usize = 29;
 
 /// then.expect keys handled by the request builder, not the decision core.
 const REQUEST_SIDE_KEYS: &[&str] = &[
@@ -94,8 +95,23 @@ fn compute(fx: &Json) -> Decision {
 
     let channel = when.get("channel").and_then(Json::as_str).unwrap_or("");
 
-    // ----- Kafka receive -> capacity backpressure -----
+    // ----- Kafka receive -> pausedTaskTypes drop / capacity backpressure -----
+    // (schemaAccept is handled separately by the runner, not compute.)
     if channel == "kafka" {
+        if let Some(Json::Arr(paused)) = state.and_then(|s| s.get("pausedTaskTypes")) {
+            let paused_types: Vec<String> = paused
+                .iter()
+                .filter_map(Json::as_str)
+                .map(str::to_string)
+                .collect();
+            let body = when.get("body");
+            let task_type = body
+                .and_then(|b| b.get("workerType"))
+                .or_else(|| body.and_then(|b| b.get("taskType")))
+                .and_then(Json::as_str)
+                .unwrap_or("");
+            return decide_paused_task_type(task_type, &paused_types);
+        }
         let in_flight = num_from(state.and_then(|s| s.get("inFlight")), 0);
         let max_concurrent =
             num_from(config.and_then(|c| c.get("maxConcurrentTasks")), i64::MAX);
@@ -116,7 +132,13 @@ fn compute(fx: &Json) -> Decision {
         let idempotent = state.is_some();
         decide_register(idempotent)
     } else if path.contains("/heartbeat") {
-        apply_heartbeat_directive(&heartbeat_response(&response_body))
+        // A non-2xx heartbeat is a §C-exempt single-attempt failure (skip this
+        // tick, no internal backoff); a 2xx heartbeat applies the directive.
+        if status >= 400 {
+            classify_heartbeat_renew_error()
+        } else {
+            apply_heartbeat_directive(&heartbeat_response(&response_body))
+        }
     } else if path.contains("/deactivate") {
         // graceful stop. stop timeout: prefer config, else default 30s grace.
         let mut timeout_ms = num_from(config.and_then(|c| c.get("stopTimeoutMs")), 0);
@@ -169,6 +191,7 @@ fn computed_field(d: &Decision, field: &str) -> Option<Json> {
         "kafka" => str_j(&d.kafka),
         "startSchedulers" => arr_str(&d.start_schedulers),
         "heartbeatNextIntervalMs" => num_j(d.heartbeat_next_interval_ms),
+        "effectiveMaxConcurrent" => num_j(d.effective_max_concurrent),
         "cancelRequested" => bool_j(d.cancel_requested),
         "idempotent" => bool_j(d.idempotent),
         "reportFailure" => bool_j(d.report_failure),
@@ -312,6 +335,9 @@ enum Tok {
 fn class_of(spec: &str) -> Box<dyn Fn(char) -> bool> {
     match spec {
         "a-z" => Box::new(|c: char| c.is_ascii_lowercase()),
+        // lowercase + hyphen: the minted-key prefix may carry multiple segments
+        // (e.g. Python `sdk-py-`), so the leading run tolerates `-`.
+        "a-z-" => Box::new(|c: char| c.is_ascii_lowercase() || c == '-'),
         "0-9a-f" => Box::new(|c: char| c.is_ascii_digit() || ('a'..='f').contains(&c)),
         "0-9a-f-" => {
             Box::new(|c: char| c.is_ascii_digit() || ('a'..='f').contains(&c) || c == '-')
@@ -476,7 +502,7 @@ fn fixture_files() -> Vec<PathBuf> {
 }
 
 #[test]
-fn all_12_contract_fixtures_present() {
+fn all_contract_fixtures_present() {
     let files = fixture_files();
     assert_eq!(
         files.len(),

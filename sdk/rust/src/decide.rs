@@ -39,6 +39,7 @@ pub struct Decision {
     pub kafka: Option<String>,
     pub start_schedulers: Option<Vec<String>>,
     pub heartbeat_next_interval_ms: Option<i64>,
+    pub effective_max_concurrent: Option<i64>,
     pub cancel_requested: Option<bool>,
     pub idempotent: Option<bool>,
     pub report_failure: Option<bool>,
@@ -308,6 +309,41 @@ pub fn apply_heartbeat_directive(resp: &HeartbeatResponse) -> Decision {
         }
     }
 
+    // §2.1 dynamic backpressure: platform-suggested concurrency cap. Only a
+    // positive value constrains; null/absent leaves local config in effect.
+    if let Some(n) = resp.desired_max_concurrent {
+        if n > 0 {
+            d.effective_max_concurrent = Some(n);
+        }
+    }
+
+    d
+}
+
+/// Classify a heartbeat / leaseRenew transport failure (wire-protocol §C
+/// exemption). Unlike register/claim/report (which run the full exponential-retry
+/// sequence), heartbeat and leaseRenew do NOT back off internally on a single
+/// failure — they skip this tick and retry on the next scheduled tick. So a 503
+/// (or any transport-level failure) yields a single attempt with no retry. (A 4xx
+/// like 404 on renew is still classified by [`classify_http`] → not-found.)
+pub fn classify_heartbeat_renew_error() -> Decision {
+    let mut d = Decision::with_action("retry-then-drop");
+    d.retry = Some(false);
+    d.max_attempts = Some(1);
+    d
+}
+
+/// Decide what to do with a freshly received Kafka dispatch message whose
+/// taskType is in the platform's `pausedTaskTypes` set (wire-protocol §2.1). A
+/// paused taskType is dropped WITHOUT committing the offset (platform redelivers
+/// after unpausing); a non-paused taskType is processed (`kafka:none`).
+pub fn decide_paused_task_type(task_type: &str, paused_task_types: &[String]) -> Decision {
+    let mut d = Decision::with_action("apply-directive");
+    if paused_task_types.iter().any(|t| t == task_type) {
+        d.kafka = Some("drop-message".to_string());
+    } else {
+        d.kafka = Some("none".to_string());
+    }
     d
 }
 

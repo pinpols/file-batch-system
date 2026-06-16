@@ -1,0 +1,25 @@
+{
+  "scenario": "heartbeat-directive-degraded",
+  "description": "心跳 platformStatus:DEGRADED → FSM 切 DEGRADED;不暂停 Kafka(仍接派单,只是平台示意降级,后续可据 desiredMaxConcurrent 收敛)。enum 已有 DEGRADED 值(worker_runtime_states),本 fixture 驱动决策核产出 fsmTransition:DEGRADED 并断言不 pause(kafka:none)。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/w-1/heartbeat",
+    "responseStatus": 200,
+    "responseBody": {
+      "platformStatus": "DEGRADED",
+      "shouldDrain": false,
+      "pausedTaskTypes": [],
+      "desiredMaxConcurrent": null
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "transition FSM to DEGRADED; keep accepting tasks (do not pause Kafka assignment)",
+    "sdkMustNot": ["pause Kafka on DEGRADED", "treat DEGRADED as DRAINING"],
+    "expect": { "fsmTransition": "DEGRADED", "kafka": "none" }
+  },
+  "references": ["wire-protocol.md §2.1", "WorkerRuntimeState.DEGRADED", "sdk-shared-constants.yaml worker_runtime_states"]
+}

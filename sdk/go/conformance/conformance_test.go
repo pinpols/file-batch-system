@@ -25,7 +25,7 @@ import (
 
 const (
 	fixturesDir          = "../../../docs/api/sdk-contract-fixtures"
-	expectedFixtureCount = 22
+	expectedFixtureCount = 29
 )
 
 // requestSideKeys are then.expect keys handled by the request builder, not the
@@ -60,8 +60,20 @@ type fixture struct {
 func compute(fx fixture) (protocol.Decision, error) {
 	when := fx.When
 
-	// ----- Kafka receive → capacity backpressure -----
+	// ----- Kafka receive → pausedTaskTypes drop / capacity backpressure -----
+	// (schemaAccept is handled separately by the runner, not compute.)
 	if when.Channel == "kafka" {
+		if paused, ok := fx.Given.State["pausedTaskTypes"].([]any); ok {
+			pausedTypes := make([]string, 0, len(paused))
+			for _, p := range paused {
+				pausedTypes = append(pausedTypes, strFromAny(p))
+			}
+			taskType := strFromAny(when.Body["workerType"])
+			if taskType == "" {
+				taskType = strFromAny(when.Body["taskType"])
+			}
+			return protocol.DecidePausedTaskType(taskType, pausedTypes), nil
+		}
 		inFlight := numFromAny(fx.Given.State["inFlight"], 0)
 		maxConcurrent := numFromAny(fx.Given.Config["maxConcurrentTasks"], int(^uint(0)>>1))
 		return protocol.DecideBackpressure(inFlight, maxConcurrent), nil
@@ -82,6 +94,11 @@ func compute(fx fixture) (protocol.Decision, error) {
 		return protocol.DecideRegister(idempotent), nil
 
 	case strings.Contains(path, "/heartbeat"):
+		// A non-2xx heartbeat is a §C-exempt single-attempt failure (skip this
+		// tick, no internal backoff); a 2xx heartbeat applies the directive.
+		if status >= 400 {
+			return protocol.ClassifyHeartbeatRenewError(), nil
+		}
 		var resp protocol.HeartbeatResponse
 		if err := unmarshalResponse(when.ResponseBody, &resp); err != nil {
 			return protocol.Decision{}, err

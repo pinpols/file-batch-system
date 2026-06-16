@@ -1,0 +1,21 @@
+{
+  "scenario": "kafka-paused-task-type-drop",
+  "description": "pausedTaskTypes 命中 drop(wire-protocol §2.1):收到一条 Kafka dispatch 消息,其 workerType 在平台下发的 pausedTaskTypes 集合内 → drop 该消息且不 commit offset(平台 unpause 后会重投),kafka:drop-message。given.state.pausedTaskTypes 携带暂停集合;非命中类型则正常处理(kafka:none),由决策核 decidePausedTaskType 分流。enum 已有 drop-message 值。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state": { "pausedTaskTypes": ["shell", "http"] }
+  },
+  "when": {
+    "channel": "kafka",
+    "method": "RECEIVE",
+    "body": { "schemaVersion": "v1", "tenantId": "acme", "taskId": 12350, "jobCode": "run-shell", "workerType": "shell", "idempotencyKey": "key-12350" },
+    "responseStatus": null,
+    "responseBody": null
+  },
+  "then": {
+    "sdkExpectedAction": "drop a received message whose workerType is in pausedTaskTypes WITHOUT committing the offset (redelivered after platform unpauses)",
+    "sdkMustNot": ["commit offset for a paused-type message (would silently drop the task)", "dispatch a paused task type to a handler"],
+    "expect": { "kafka": "drop-message" }
+  },
+  "references": ["wire-protocol.md §2.1", "HeartbeatDirective.pausedTaskTypes"]
+}
