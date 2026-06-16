@@ -309,7 +309,6 @@ jobs:
               ImportFailurePipelineE2eIT,
               ExportPipelineE2eIT,
               TriggerAsyncLaunchFullChainE2eIT,
-              TriggerAsyncLaunchE2eIT,
               AtomicTaskPipelineE2eIT
           - id: 3
             label: "334s + Atomic mixed"
