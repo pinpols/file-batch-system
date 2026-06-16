@@ -1,6 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.JobInstanceMapper">
+    <!--
+      防终态复活守护谓词(2026-06 加固):job_instance 的终态集与 DefaultStateMachine.TERMINAL_STATES /
+      DefaultTaskOutcomeService.isTerminalJobInstanceStatus 严格一致——
+      SUCCESS / FAILED / PARTIAL_FAILED / CANCELLED / TERMINATED / SUCCESS_DRY_RUN / FAILED_DRY_RUN。
+      任何状态写 SQL 追加本片段后,「终态行被改成别的态」(复活 / 终态互换)只会命中 0 行被拦,
+      与状态机 guardTerminal 在 DB 层形成第二道防线,且不影响 RUNNING→终态 等所有正向流转。
+    -->
+    <sql id="NotFromTerminal">
+        and instance_status not in
+            ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
+             'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
+    </sql>
+    <!--
+      带「同终态幂等自写放行」的变体:并发 / 重复 REPORT 下,状态机对已终态实例会 NOOP 回原终态,
+      此时 updateProgress / updateStatus 会用相同终态做自写(version CAS 推进)。这条自写必须放行,
+      否则会误触发 STATE_CONFLICT。仅放行「写回同一终态」,跨终态 / 复活仍被拦。
+    -->
+    <sql id="NotFromTerminalAllowSelf">
+        and (instance_status = #{instanceStatus}
+             or instance_status not in
+                ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
+                 'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'))
+    </sql>
     <resultMap id="JobInstanceResultMap" type="com.example.batch.orchestrator.domain.entity.JobInstanceEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
@@ -193,6 +216,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          <include refid="NotFromTerminalAllowSelf"/>
     </update>
 
     <update id="markRunning">
@@ -205,6 +229,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          <include refid="NotFromTerminal"/>
     </update>
 
     <update id="updateExpectedPartitionCount">
@@ -215,6 +240,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          <include refid="NotFromTerminal"/>
     </update>
 
     <select id="selectTimedOutCandidates" resultMap="JobInstanceResultMap">
@@ -476,6 +502,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          <include refid="NotFromTerminalAllowSelf"/>
     </update>
 
     <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次"全成功"(SUCCESS only)实例,
