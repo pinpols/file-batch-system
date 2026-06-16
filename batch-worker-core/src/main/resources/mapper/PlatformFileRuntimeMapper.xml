@@ -189,6 +189,18 @@
         where id = #{pipelineInstanceId}
     </update>
 
+    <!--
+      安全增量补偿(opt-in)中间态:把 run_status 置 COMPENSATING。
+      COMPENSATING 是 *中间* 态,不写 finished_at —— 补偿跑完后由 markPipelineFailed 落终态(并写 finished_at)。
+      run_status 枚举值 + V6 DB CHECK 已含 COMPENSATING,无需 migration。
+    -->
+    <update id="markPipelineCompensating">
+        update batch.pipeline_instance
+        set run_status = #{runStatus},
+            updated_at = current_timestamp
+        where id = #{pipelineInstanceId}
+    </update>
+
     <select id="selectNextStepRunSeq" resultType="java.lang.Integer">
         select coalesce(max(run_seq), 0) + 1
         from batch.pipeline_step_run

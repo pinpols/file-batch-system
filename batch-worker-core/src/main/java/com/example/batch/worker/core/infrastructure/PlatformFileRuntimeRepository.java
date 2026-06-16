@@ -256,6 +256,22 @@ public class PlatformFileRuntimeRepository {
             PipelineRunStatus.SUCCESS.name()));
   }
 
+  /**
+   * 安全增量补偿(opt-in)：把 pipeline 实例置为 COMPENSATING 中间态。补偿动作跑完后必须由 {@link #markPipelineFailed} 落 FAILED
+   * 终态——绝不允许停在 COMPENSATING。run_status 枚举值与 V6 DB CHECK 已含 COMPENSATING，无需 migration。
+   */
+  public void markPipelineCompensating(Long pipelineInstanceId) {
+    if (pipelineInstanceId == null) {
+      return;
+    }
+    platformFileRuntimeMapper.markPipelineCompensating(
+        params(
+            KEY_PIPELINE_INSTANCE_ID,
+            pipelineInstanceId,
+            "runStatus",
+            PipelineRunStatus.COMPENSATING.name()));
+  }
+
   public void markPipelineFailed(
       Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
     if (pipelineInstanceId == null) {
