@@ -94,7 +94,7 @@ func ClassifyHTTP(status, clientErrorCount, baseMs, attempts int) Decision {
 		return Decision{Action: "fail-fast", FailFast: boolPtr(true), Retry: boolPtr(false)}
 	// 404 — give up this request, caller decides
 	case status == 404:
-		return Decision{Action: "not-found", Retry: boolPtr(false)}
+		return Decision{Action: "not-found", Retry: boolPtr(false), FailFast: boolPtr(false)}
 	// 409 — idempotent success (already claimed / lease reclaimed)
 	case status == 409:
 		return Decision{
@@ -108,7 +108,7 @@ func ClassifyHTTP(status, clientErrorCount, baseMs, attempts int) Decision {
 		if clientErrorCount+1 >= ClientErrorFailFastThreshold {
 			return Decision{Action: "fail-fast", FailFast: boolPtr(true), Retry: boolPtr(false)}
 		}
-		return Decision{Action: "client-error", Retry: boolPtr(false)}
+		return Decision{Action: "client-error", Retry: boolPtr(false), FailFast: boolPtr(false)}
 	// 5xx and transport errors (status <= 0 or >= 500) — exponential backoff
 	default:
 		return Decision{

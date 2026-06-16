@@ -77,6 +77,23 @@ _P2_KAFKA_FIXTURES: set[str] = {
 # 其它仍 pending 的(FSM stop/drain 语义)。
 _DEFERRED_FIXTURES: set[str] = set()
 
+# 请求侧断言 lane(requestBodyIncludes / requestBodyExcludes / requestHeaders /
+# schemaAccept)在 Java 静态 + Java wire 测 + TS/Go/Rust 决策核里硬断言;Python
+# 侧是软门(xfail),这批 fixture 的请求侧构造留作 Python 后续增量(skip,不静默
+# 通过)。详见 docs/sdk/byo-conformance-contract.md §2 请求侧字段。
+_REQUEST_SIDE_FIXTURES: set[str] = {
+    "13-report-field-names-redline",
+    "14-partition-invocation-id-passthrough",
+    "15-partition-invocation-id-absent-when-unclaimed",
+    "16-kafka-schema-version-missing-accept",
+    "17-kafka-schema-version-v2-accept",
+    "18-kafka-schema-version-v3-reject",
+    "19-register-apikey-in-header-not-body",
+    "20-report-idempotency-key-header",
+    "21-claim-4xx-client-error-no-failfast",
+    "22-renew-404-not-found-give-up",
+}
+
 
 def _discover_fixtures() -> list[Path]:
     """返回所有 contract fixture,跳过同目录下的 drift-guard metadata
@@ -161,6 +178,11 @@ async def test_contract_fixture(
     被 ``xfail`` 跳过。
     """
     fixture_id = fixture_path.stem
+    if fixture_id in _REQUEST_SIDE_FIXTURES:
+        pytest.skip(
+            "请求侧断言 lane(requestBody*/requestHeaders/schemaAccept):Python 软门后续增量,"
+            "硬断言已在 Java(静态+wire)+ TS/Go/Rust 决策核覆盖"
+        )
     if fixture_id in _DEFERRED_FIXTURES:
         request.applymarker(
             pytest.mark.xfail(
@@ -333,6 +355,7 @@ def test_fixture_discovery_reports_count(capsys: pytest.CaptureFixture[str]) -> 
         if f not in _P1_HTTP_FIXTURES
         and f not in _DEFERRED_FIXTURES
         and f not in _P2_KAFKA_FIXTURES
+        and f not in _REQUEST_SIDE_FIXTURES
     )
     if count == 0:
         print(f"[contract] 0 fixtures discovered at {_FIXTURES_DIR}")

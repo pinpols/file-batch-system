@@ -1,0 +1,28 @@
+{
+  "scenario": "partition-invocation-id-passthrough",
+  "description": "partitionInvocationId 贯穿 claim→renew→report(R3-P1-10;PR #493 双跑根因)。claim 阶段平台返回 partitionInvocationId,SDK 存进 dispatch state;后续 renew/report 出向 body 必须回填同一个 inv id。given.state 携带 claim 阶段存的 partitionInvocationId=inv-1,断言 renew 出向 body 带它。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state": {
+      "request": { "kind": "renew", "taskId": 12345, "partitionInvocationId": "inv-1" }
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/renew",
+    "responseStatus": 200,
+    "responseBody": { "cancelRequested": false }
+  },
+  "then": {
+    "sdkExpectedAction": "call renew with a body that carries the partitionInvocationId stored at claim time (inv-1) so the platform CAS lease renewal matches the active invocation",
+    "sdkMustNot": [
+      "omit partitionInvocationId on renew (platform CAS rejects → 409 → false lease loss)",
+      "send a fresh/different partitionInvocationId"
+    ],
+    "expect": {
+      "requestBodyIncludes": { "partitionInvocationId": "inv-1", "tenantId": "acme", "workerId": "w-1" }
+    }
+  },
+  "references": ["R3-P1-10", "LeaseRenewalScheduler.java", "DefaultTaskOutcomeService:328-334 CAS"]
+}

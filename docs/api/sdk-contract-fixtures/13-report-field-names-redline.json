@@ -1,0 +1,41 @@
+{
+  "scenario": "report-field-names-redline",
+  "description": "report 出向 body 字段名红线:必含 success(bool)/taskId/tenantId/workerId/outputs(复数);必不含历史错名 output/errorClass/errorMessage/status。一个新语言 SDK 把字段名写错(output/errorClass/...),平台静默读不到 → 数据丢失。请求侧断言把这条红线从 Java/Python 各自的服务端测推广到全部 5 语言。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state": {
+      "request": {
+        "kind": "report",
+        "taskId": 12345,
+        "partitionInvocationId": "inv-1",
+        "report": { "success": false, "errorCode": "EXECUTION_FAILED", "outputs": { "rows": 0 }, "resultSummary": "boom" }
+      }
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/report",
+    "responseStatus": 200,
+    "responseBody": { "accepted": true }
+  },
+  "then": {
+    "sdkExpectedAction": "call report with a body of success(bool)/taskId/tenantId/workerId/outputs and never the legacy mis-names output/errorClass/errorMessage/status",
+    "sdkMustNot": [
+      "send 'output' (singular) — platform reads 'outputs'",
+      "send 'errorClass'/'errorMessage' (废名) — platform reads 'errorCode'/'resultSummary'",
+      "send 'status' string instead of success:bool"
+    ],
+    "expect": {
+      "requestBodyIncludes": {
+        "success": false,
+        "taskId": 12345,
+        "tenantId": "acme",
+        "workerId": "w-1",
+        "outputs": { "rows": 0 }
+      },
+      "requestBodyExcludes": ["output", "errorClass", "errorMessage", "status"]
+    }
+  },
+  "references": ["wire-protocol.md §B", "ReportRequest.java (outputs/errorCode/resultSummary)", "SdkWireContractTest:290-335"]
+}

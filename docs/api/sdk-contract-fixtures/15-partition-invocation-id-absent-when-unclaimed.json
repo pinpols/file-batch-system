@@ -1,0 +1,26 @@
+{
+  "scenario": "partition-invocation-id-absent-when-unclaimed",
+  "description": "partitionInvocationId 贯穿的反例:claim 阶段没存 invocation id(state 不带)→ renew 出向 body 不应凭空捏造一个。SDK 要么带 claim 时拿到的真 id、要么不带——绝不发一个 SDK 自造的 id(平台 CAS 会 mismatch → 409)。这条锁住「该带没带 / 不该带乱带」两侧:无 state.partitionInvocationId 时,renew body 不含该 key。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state": {
+      "request": { "kind": "renew", "taskId": 12345 }
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/renew",
+    "responseStatus": 200,
+    "responseBody": { "cancelRequested": false }
+  },
+  "then": {
+    "sdkExpectedAction": "call renew with a body that omits partitionInvocationId (NON_NULL) when none was stored at claim, rather than inventing one",
+    "sdkMustNot": ["fabricate a partitionInvocationId the platform never issued"],
+    "expect": {
+      "requestBodyExcludes": ["partitionInvocationId"],
+      "requestBodyIncludes": { "tenantId": "acme", "workerId": "w-1" }
+    }
+  },
+  "references": ["R3-P1-10", "RenewRequest.java @JsonInclude(NON_NULL)"]
+}

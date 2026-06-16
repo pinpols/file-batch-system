@@ -1,0 +1,30 @@
+{
+  "scenario": "register-apikey-in-header-not-body",
+  "description": "安全红线(P1-7):apiKey 必须走鉴权 header(X-Batch-Api-Key),绝不进 register 请求 body。新语言 SDK 很容易把 apiKey 当普通字段塞 body → 在请求日志/审计里泄露。请求侧断言:register body 不含 apiKey,且 header 携带 X-Batch-Api-Key。",
+  "given": {
+    "config": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "apiKey": "secret-key-xyz",
+      "baseUrl": "http://orchestrator-internal:8081"
+    },
+    "state": { "request": { "kind": "register" } }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/register",
+    "responseStatus": 200,
+    "responseBody": { "id": 42, "status": "ONLINE" }
+  },
+  "then": {
+    "sdkExpectedAction": "call register with the apiKey only in the X-Batch-Api-Key header; never put it in the request body",
+    "sdkMustNot": ["include apiKey in the request body", "log the apiKey"],
+    "expect": {
+      "requestBodyIncludes": { "tenantId": "acme", "workerCode": "w-1" },
+      "requestBodyExcludes": ["apiKey"],
+      "requestHeaders": { "X-Batch-Api-Key": "^secret-key-xyz$", "X-Batch-Tenant-Id": "^acme$" }
+    }
+  },
+  "references": ["wire-protocol.md §4", "PlatformHttpClient: X-Batch-Api-Key header"]
+}
