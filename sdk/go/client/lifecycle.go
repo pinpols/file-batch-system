@@ -232,9 +232,19 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 			}
 		}()
 		// A panicking handler must not crash the worker process: recover, log,
-		// and report the failure as a terminal result.
+		// and report the failure as a terminal result. An SdkTaskStopped that
+		// propagated all the way out (decision 三: cooperative cancel after a
+		// committed safe point) is NOT a failure — it maps to a CANCELLED
+		// terminal report. The handler is documented to let SdkTaskStopped
+		// propagate (return it / panic with it), never swallow it.
 		defer func() {
 			if r := recover(); r != nil {
+				if stop, ok := r.(*SdkTaskStopped); ok {
+					w.logger.Printf("INFO task stopped (cooperative cancel) taskId=%s breakPosition=%v",
+						msg.TaskID, stop.BreakPosition)
+					w.report(msg, stoppedResult(stop))
+					return
+				}
 				w.logger.Printf("ERROR handler panic taskId=%s: %v", msg.TaskID, r)
 				w.report(msg, Fail(protocol.ErrorCodeExecutionFailed, fmt.Sprintf("panic: %v", r)))
 			}
@@ -260,6 +270,31 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 		}
 		w.report(msg, result)
 	}()
+}
+
+// stoppedResult maps an SdkTaskStopped sentinel to a CANCELLED terminal result
+// (decision 三). The committed break position is surfaced in outputs so the
+// platform / a later resume can see where the task safely stopped.
+func stoppedResult(stop *SdkTaskStopped) TaskResult {
+	r := Fail(protocol.ErrorCodeCancelled, "task stopped at committed safe point")
+	if stop != nil && stop.BreakPosition != nil {
+		r.Outputs = map[string]any{"breakPosition": stop.BreakPosition}
+	}
+	return r
+}
+
+// ResultFromError maps a handler error to a terminal TaskResult. SdkTaskStopped
+// becomes a CANCELLED report (not a failure); any other error becomes
+// EXECUTION_FAILED. Handlers that prefer returning a TaskResult (rather than
+// letting SdkTaskStopped panic-propagate) can do `return ResultFromError(err)`.
+func ResultFromError(err error) TaskResult {
+	if err == nil {
+		return Success(nil, "")
+	}
+	if stop, ok := IsSdkTaskStopped(err); ok {
+		return stoppedResult(stop)
+	}
+	return Fail(protocol.ErrorCodeExecutionFailed, err.Error())
 }
 
 // report posts the terminal result with the dispatch idempotency key. It uses a

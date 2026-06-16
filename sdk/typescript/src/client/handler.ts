@@ -8,6 +8,7 @@
  */
 
 import { ErrorCode } from "../protocol.ts";
+import type { SdkCheckpoint } from "./checkpoint.ts";
 
 /**
  * Cooperative cancellation token. The lease-renewal scheduler calls
@@ -74,6 +75,18 @@ export interface TaskContext {
   readonly traceId: string;
   readonly cancellation: CancellationSignal;
   readonly progress: ProgressReporter;
+  /**
+   * ADR-037 §决策一 — the break-point store this task resumes from / commits to.
+   * Long-running handlers call `ctx.checkpoint().load(taskId)` at the top of
+   * `execute` to resume, and persist progress via `ctx.commit(...)`.
+   */
+  checkpoint(): SdkCheckpoint;
+  /**
+   * ADR-037 §决策二/三 — commit one business batch: save the checkpoint, emit a
+   * rate-limited progress report, then throw `SdkTaskStopped` if the task was
+   * cancelled. Must NOT be swallowed by tenant code.
+   */
+  commit(breakPosition: Record<string, unknown>): Promise<void>;
 }
 
 /**

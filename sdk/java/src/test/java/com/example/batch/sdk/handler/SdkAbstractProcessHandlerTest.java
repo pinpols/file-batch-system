@@ -16,8 +16,10 @@ import org.junit.jupiter.api.Test;
 /** ADR-036 Process 模板 {@link SdkAbstractProcessHandler} 单测(经基类 execute 模板序驱动)。 */
 class SdkAbstractProcessHandlerTest {
 
-  private static final SdkTaskContext CTX =
-      new SdkTaskContext("tx", "job", "ti", 1L, "w-1", Map.of(), Map.of());
+  /** 每次执行用<b>独立</b>上下文(ADR-037:context 默认带内存断点协调器,跑完会落 completed 断点;共享 context 会让后续执行被幂等跳过)。 */
+  private static SdkTaskContext ctx() {
+    return new SdkTaskContext("tx", "job", "ti", 1L, "w-1", Map.of(), Map.of());
+  }
 
   /** 记录每次 upsert 收到的 batch(深拷贝,防 buf.clear() 影响),便于断言分批。 */
   private static List<Integer> ints(int n) {
@@ -70,7 +72,7 @@ class SdkAbstractProcessHandlerTest {
     var h = handler(ints(100), 40, (ctx, i) -> "o" + i, batches);
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isTrue();
@@ -90,7 +92,7 @@ class SdkAbstractProcessHandlerTest {
     var h = handler(ints(100), 40, (ctx, i) -> i % 2 == 0 ? "o" + i : null, batches);
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isTrue();
@@ -112,7 +114,7 @@ class SdkAbstractProcessHandlerTest {
     var h = handler(List.of(), 40, (ctx, i) -> "o" + i, batches);
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isTrue();
@@ -128,7 +130,7 @@ class SdkAbstractProcessHandlerTest {
     var h = handler(ints(80), 40, (ctx, i) -> "o" + i, batches);
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isTrue();
@@ -163,7 +165,7 @@ class SdkAbstractProcessHandlerTest {
         };
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isFalse();
@@ -189,7 +191,7 @@ class SdkAbstractProcessHandlerTest {
             batches);
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isFalse();
@@ -230,7 +232,7 @@ class SdkAbstractProcessHandlerTest {
         };
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isFalse();
@@ -246,7 +248,7 @@ class SdkAbstractProcessHandlerTest {
     var h = handler(ints(10), 3, (ctx, i) -> "o" + i, batches);
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isTrue();
@@ -285,7 +287,7 @@ class SdkAbstractProcessHandlerTest {
         };
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isTrue();
@@ -322,7 +324,7 @@ class SdkAbstractProcessHandlerTest {
         };
 
     // 执行
-    SdkTaskResult r = h.execute(CTX);
+    SdkTaskResult r = h.execute(ctx());
 
     // 断言
     assertThat(r.success()).isFalse();

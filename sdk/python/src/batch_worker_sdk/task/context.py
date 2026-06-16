@@ -14,9 +14,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from batch_worker_sdk.exceptions import SdkTaskStopped
 from batch_worker_sdk.task.cancellation import CancellationSignal
+from batch_worker_sdk.task.checkpoint import (
+    InMemoryCheckpoint,
+    SdkCheckpoint,
+    SdkCheckpointState,
+)
 from batch_worker_sdk.task.progress import ProgressReporter
 
 
@@ -91,6 +97,95 @@ class SdkTaskContext(BaseModel):
     ``details`` 字段,使平台的 job-task 详情页保持新鲜。仅在尚未升级的
     P0.5 时期调用方处为 ``None``。
     """
+
+    # ---- ADR-037 续跑原语(P1~P3)注入对象 ----
+    checkpoint_store: SdkCheckpoint | None = Field(default=None, exclude=True, repr=False)
+    """断点读 / 写 SPI(ADR-037 决策一)。``None`` 时 :meth:`checkpoint` 回落到
+    一个进程内 :class:`InMemoryCheckpoint`(仅本地 / 测试用,不持久化)。"""
+
+    report_interval_batches: int = Field(default=1, exclude=True, repr=False)
+    """进度上报限流:每攒满这么多次 ``commit`` 才上报一次(决策二)。默认每批都报。"""
+
+    self_report: bool = Field(default=True, exclude=True, repr=False)
+    """``True`` = ``commit`` 搭车自动上报进度;business 可关掉自己控制(决策二)。"""
+
+    # commit 计数器 —— 用于进度限流取模。私有可变状态(frozen 模型仍允许私有属性写)。
+    _commit_counter: int = PrivateAttr(default=0)
+    # 未注入 checkpoint_store 时惰性创建的进程内回落实现。
+    _fallback_checkpoint: SdkCheckpoint | None = PrivateAttr(default=None)
+
+    def checkpoint(self) -> SdkCheckpoint:
+        """断点存储访问入口(ADR-037 决策一)。
+
+        未注入 ``checkpoint_store`` 时返回一个**绑定到本上下文**的进程内
+        :class:`InMemoryCheckpoint`(惰性创建并缓存)—— 仅本地 / 测试可用,
+        生产必须注入持久化实现。
+        """
+        if self.checkpoint_store is not None:
+            return self.checkpoint_store
+        # 惰性创建并缓存到私有属性(frozen 字段不可重赋,故走 PrivateAttr)。
+        if self._fallback_checkpoint is None:
+            self._fallback_checkpoint = InMemoryCheckpoint()
+        return self._fallback_checkpoint
+
+    def is_cancelled(self) -> bool:
+        """协作式取消是否已被请求(ADR-037 决策三)。
+
+        读 :attr:`cancel_signal`;未注入信号时恒 ``False``。
+        """
+        return self.cancel_signal is not None and self.cancel_signal.is_cancellation_requested
+
+    async def commit(
+        self,
+        break_position: dict[str, Any],
+        *,
+        succeed_count: int = 0,
+        fail_count: int = 0,
+        completed: bool = False,
+    ) -> None:
+        """三合一可靠提交一个业务批次(ADR-037 决策二 + 三)。
+
+        一次调用原子完成:
+
+        1. **保存断点**:写 :class:`SdkCheckpointState`(``break_position`` + 计数 +
+           ``completed``)到 :meth:`checkpoint`。
+        2. **限流上报进度**:``commit`` 计数每达 :attr:`report_interval_batches` 的
+           整数倍且 :attr:`self_report` 为真时,经 :attr:`progress_reporter` 上报一次。
+        3. **取消安全点**(决策三):本次提交落盘后若 :meth:`is_cancelled` 命中,
+           抛 :class:`SdkTaskStopped`(携带 ``break_position``),让模板顶层落
+           cancelled 终态 —— 取消停在批次边界,不留半批脏数据。
+
+        **强约束**:业务数据提交与断点保存必须同事务 —— 由租户的 ``checkpoint``
+        实现保证(SDK 不介入其事务边界,见 :mod:`checkpoint` 文档)。
+
+        :raises SdkTaskStopped: 本批已安全提交后检测到取消(业务不得吞掉)。
+        """
+        state = SdkCheckpointState(
+            break_position=break_position,
+            succeed_count=succeed_count,
+            fail_count=fail_count,
+            completed=completed,
+        )
+        self.checkpoint().save(self.task_id, state)
+
+        self._commit_counter += 1
+        if (
+            self.self_report
+            and self.progress_reporter is not None
+            and self.report_interval_batches > 0
+            and self._commit_counter % self.report_interval_batches == 0
+        ):
+            self.progress_reporter.report(
+                {
+                    "succeed": succeed_count,
+                    "failed": fail_count,
+                    "breakPosition": dict(break_position),
+                }
+            )
+
+        # 安全点:业务 + 断点已落盘,此处检查取消才不会留半批脏数据。
+        if self.is_cancelled():
+            raise SdkTaskStopped(break_position)
 
     def is_dry_run(self) -> bool:
         """本次派发是否为 dry-run 探测(ADR-026)。

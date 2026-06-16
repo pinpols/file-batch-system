@@ -22,13 +22,18 @@ path = "src/lib.rs"
 # std-only. The OPTIONAL `kafka` feature (phase-3 adapter, src/kafka.rs) is the
 # only thing that pulls external crates, and only when explicitly enabled.
 [features]
+# Opt-in serde derives for the ADR-037 checkpoint types (`SdkCheckpointState`,
+# `JsonValue`). Off by default so the core build stays zero-dependency; pulled in
+# transitively by `kafka`/`http`. When enabled, `JsonValue` round-trips as plain
+# JSON (wire-compatible with the Java `Map<String,Object>` break position).
+serde = ["dep:serde", "dep:serde_json"]
 # Real Kafka consumer adapter (rdkafka). Off by default → default build stays
 # std-only and the phase-1/2 tests are unaffected.
-kafka = ["dep:rdkafka", "dep:serde", "dep:serde_json"]
+kafka = ["dep:rdkafka", "serde", "dep:serde_json"]
 # Real blocking control-plane HTTP transport (reqwest). Off by default → the
 # core crate stays dependency-light. `rustls-tls` avoids OpenSSL; `serde` +
 # `serde_json` are pulled for ergonomic JSON (de)serialize with ignore-unknown.
-http = ["dep:reqwest", "dep:serde", "dep:serde_json"]
+http = ["dep:reqwest", "serde", "dep:serde_json"]
 
 [dependencies]
 # All optional + behind a feature. `default-features = true` on rdkafka keeps

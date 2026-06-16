@@ -39,6 +39,13 @@ import {
   type TaskHandler,
   type TaskResult,
 } from "./handler.ts";
+import {
+  InMemorySdkCheckpoint,
+  ResumeSupport,
+  SdkTaskStopped,
+  type SdkCheckpoint,
+  type ResumeOptions,
+} from "./checkpoint.ts";
 import { SensitiveDataValidator } from "./sensitive.ts";
 import { ErrorCode } from "../protocol.ts";
 import { SUPPORTED_SCHEMA_VERSIONS } from "../constants.ts";
@@ -82,6 +89,14 @@ export interface WorkerLifecycleDeps {
   validator?: SensitiveDataValidator;
   /** test seam: avoid registering a real SIGTERM listener. */
   installSignalHandlers?: boolean;
+  /**
+   * ADR-037 §决策一 — per-task break-point store factory. The real tenant impl
+   * persists checkpoints in the same transaction as its business data (see
+   * `SdkCheckpoint`). Defaults to an in-memory store (tests / examples only).
+   */
+  checkpointFactory?: (taskId: string) => SdkCheckpoint;
+  /** ADR-037 §决策二 — progress-throttle / self-report tuning for `ctx.commit`. */
+  resumeOptions?: ResumeOptions;
 }
 
 interface TrackedTask extends InFlightTask {
@@ -97,6 +112,8 @@ export class WorkerLifecycle {
   #handler: TaskHandler;
   #logger: Logger;
   #validator: SensitiveDataValidator;
+  #checkpointFactory: (taskId: string) => SdkCheckpoint;
+  #resumeOptions?: ResumeOptions;
 
   #fsm: FsmState = "NORMAL";
   #draining = false;
@@ -113,6 +130,9 @@ export class WorkerLifecycle {
     this.#handler = deps.handler;
     this.#logger = deps.logger ?? consoleLogger;
     this.#validator = deps.validator ?? new SensitiveDataValidator();
+    this.#checkpointFactory =
+      deps.checkpointFactory ?? (() => new InMemorySdkCheckpoint());
+    this.#resumeOptions = deps.resumeOptions;
 
     this.#heartbeat = new HeartbeatScheduler(
       this.#transport,
@@ -274,6 +294,14 @@ export class WorkerLifecycle {
         // record the ADR-014 invocation token so renew/report can echo it
         const tracked = this.#inFlight.get(msg.taskId);
         if (tracked) tracked.partitionInvocationId = claim.partitionInvocationId ?? null;
+        const progress = new NoopProgressReporter();
+        const resume = new ResumeSupport({
+          taskId: msg.taskId,
+          checkpoint: this.#checkpointFactory(msg.taskId),
+          progress,
+          cancellation,
+          options: this.#resumeOptions,
+        });
         const ctx: TaskContext = {
           taskId: msg.taskId,
           effectiveConfig: claim.effectiveConfig ?? {},
@@ -282,18 +310,31 @@ export class WorkerLifecycle {
             (msg.runtimeAttributes?.traceId as string | undefined) ??
             "",
           cancellation,
-          progress: new NoopProgressReporter(),
+          progress,
+          checkpoint: () => resume.checkpoint(),
+          commit: (breakPosition) => resume.commit(breakPosition),
         };
 
         let result: TaskResult;
         try {
           result = await this.#handler.execute(ctx);
         } catch (e) {
-          result = {
-            success: false,
-            errorCode: ErrorCode.EXECUTION_FAILED,
-            resultSummary: String(e),
-          };
+          // ADR-037 §决策三 — cooperative cancel lands here as a *cancelled*
+          // terminal report, not a failure.
+          if (e instanceof SdkTaskStopped) {
+            result = {
+              success: false,
+              errorCode: ErrorCode.CANCELLED,
+              resultSummary: "task stopped at checkpoint (cancelled)",
+              outputs: { breakPosition: e.breakPosition },
+            };
+          } else {
+            result = {
+              success: false,
+              errorCode: ErrorCode.EXECUTION_FAILED,
+              resultSummary: String(e),
+            };
+          }
         }
 
         await this.#report(msg.taskId, {

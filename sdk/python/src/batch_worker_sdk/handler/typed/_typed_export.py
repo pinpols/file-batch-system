@@ -16,6 +16,7 @@ from typing import get_args, get_origin
 from pydantic import BaseModel
 
 from batch_worker_sdk.handler._base import SdkAbstractTaskHandler, SdkRowResult
+from batch_worker_sdk.handler.typed._resumable import ResumableTemplateMixin
 from batch_worker_sdk.handler.typed._typed_parameters import SdkTypedParameters
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.result import SdkTaskResult
@@ -32,16 +33,27 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
 
 
 class SdkAbstractTypedExportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT](
-    SdkAbstractTaskHandler
+    ResumableTemplateMixin, SdkAbstractTaskHandler
 ):
-    """Typed Export handler —— 租户 DB -> 外部文件。"""
+    """Typed Export handler —— 租户 DB -> 外部文件。
+
+    续跑(ADR-037):起头读断点、已完成跳过、恢复计数;每攒满
+    :meth:`commit_interval_rows` 行(``0`` = 仅收尾)走 ``await ctx.commit(break_key)``
+    原子提交 + 限流上报;取消在 commit 安全点抛 :class:`SdkTaskStopped`,顶层落
+    cancelled 终态。
+    """
 
     _params_model: type[BaseModel] | None = None
+    DEFAULT_COMMIT_INTERVAL_ROWS = 0
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
         if cls._params_model is None:
             cls._params_model = _resolve_params_model(cls, SdkAbstractTypedExportHandler)
+
+    def commit_interval_rows(self) -> int:
+        """每写出多少行做一次 ``commit``(进度安全点)。``0`` = 仅收尾一次。"""
+        return self.DEFAULT_COMMIT_INTERVAL_ROWS
 
     # ---- 租户钩子 --------------------------------------------------------
 
@@ -71,6 +83,9 @@ class SdkAbstractTypedExportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
     # ---- 模板 ------------------------------------------------------------
 
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
+        return await self._guard(self._run(ctx))
+
+    async def _run(self, ctx: SdkTaskContext) -> SdkTaskResult:
         model = self._params_model
         if model is None:
             return SdkTaskResult.fail(
@@ -85,18 +100,36 @@ class SdkAbstractTypedExportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
                 f"invalid parameters for taskType={self.task_type()}: {ex}",
                 cause=ex,
             )
+
+        # 续跑(决策一):已完成则跳过;否则恢复计数。
+        resume = self._resume(ctx)
+        if resume.already_completed:
+            return self._result(
+                params, resume.counts, f"resumed-complete: {resume.counts.success()} rows"
+            )
+        counts = resume.counts
+
         self.open_sink(params, ctx)
         q = self.build_query(params, ctx)
-        counts = SdkRowResult()
+        interval = self.commit_interval_rows()
+        since_commit = 0
         rows = self.stream_rows(params, ctx, q)
         if hasattr(rows, "__aiter__"):
             async for row in rows:
                 self.format_row(params, ctx, row)
                 counts.inc_success()
+                since_commit += 1
+                if interval > 0 and since_commit >= interval:
+                    since_commit = 0
+                    await self._commit_batch(ctx, row, counts)
         else:
             for row in rows:
                 self.format_row(params, ctx, row)
                 counts.inc_success()
+                since_commit += 1
+                if interval > 0 and since_commit >= interval:
+                    since_commit = 0
+                    await self._commit_batch(ctx, row, counts)
         explicit = self.write_out(params, ctx, counts)
         if explicit is not None:
             return explicit
