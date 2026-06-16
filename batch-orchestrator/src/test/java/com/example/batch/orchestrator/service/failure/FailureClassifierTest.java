@@ -9,6 +9,8 @@ import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.web.client.ResourceAccessException;
 
@@ -63,6 +65,34 @@ class FailureClassifierTest {
         .isEqualTo(FailureClass.UNKNOWN);
     // 未知 worker 上报字符串 → 走兜底（且最终仍是 UNKNOWN）
     assertThat(classifier.classify("WHO_KNOWS", null)).isEqualTo(FailureClass.UNKNOWN);
+  }
+
+  @Test
+  void shouldClassifyDataIntegrityViolationAsDataQuality_notInfrastructure() {
+    // 脏数据(唯一键 / FK / not-null 违反)→ DATA_QUALITY(不可重试),
+    // 不能被泛 DataAccessException catch-all 误判为 INFRASTRUCTURE 而无限重试。
+    assertThat(classifier.classify(null, new DataIntegrityViolationException("duplicate key")))
+        .isEqualTo(FailureClass.DATA_QUALITY);
+    // 即使被包在更外层的运行时异常里,遍历 cause 链也要命中 DATA_QUALITY。
+    assertThat(
+            classifier.classify(
+                null, new RuntimeException("wrap", new DataIntegrityViolationException("uk"))))
+        .isEqualTo(FailureClass.DATA_QUALITY);
+  }
+
+  @Test
+  void shouldClassifyDataIntegrityWithSqlStateByState() {
+    // 整合违反携带 23xxx SQLState 时,经 cause 链最终仍归 DATA_QUALITY。
+    DataIntegrityViolationException ex =
+        new DataIntegrityViolationException("uk", new SQLException("dup", "23505"));
+    assertThat(classifier.classify(null, ex)).isEqualTo(FailureClass.DATA_QUALITY);
+  }
+
+  @Test
+  void shouldClassifyOtherNonTransientDataAccessAsDataQuality() {
+    // NonTransient 且无 SQLState 信号(非整合违反)→ DATA_QUALITY,不再被当基础设施重试。
+    assertThat(classifier.classify(null, new DataAccessResourceFailureException("not-transient")))
+        .isEqualTo(FailureClass.DATA_QUALITY);
   }
 
   @Test
