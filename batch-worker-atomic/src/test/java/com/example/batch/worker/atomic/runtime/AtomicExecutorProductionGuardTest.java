@@ -239,4 +239,60 @@ class AtomicExecutorProductionGuardTest {
     AtomicExecutorProductionGuard guard = newGuard();
     assertThat(guard.collectViolations()).hasSize(2);
   }
+
+  @Test
+  void shouldEnforce_whenProfileListedInEnforceProfiles() {
+    // staging 不含 "prod",但被配置进 enforce-profiles → 同样 fail-closed
+    env.setActiveProfiles("staging");
+    env.setProperty("batch.worker.executors.guard.enforce-profiles", "staging,uat");
+    stubAllWith(enabledSqlEmptyAllowlist(), disabledSp(), disabledHttp(), disabledShell());
+
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("allowed-data-source-beans");
+  }
+
+  @Test
+  void shouldEnforce_whenAlwaysEnforceTrueEvenOnDev() {
+    env.setActiveProfiles("dev");
+    env.setProperty("batch.worker.executors.guard.always-enforce", "true");
+    stubAllWith(enabledSqlEmptyAllowlist(), disabledSp(), disabledHttp(), disabledShell());
+
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("allowed-data-source-beans");
+  }
+
+  @Test
+  void shouldOnlyWarn_whenNonEnforcedProfileHasViolations() {
+    // staging 未列入 enforce-profiles:检出违规也不抛(降级 WARN),保持非强制环境可启动
+    env.setActiveProfiles("staging");
+    stubAllWith(enabledSqlEmptyAllowlist(), disabledSp(), disabledHttp(), disabledShell());
+
+    newGuard().verifyProductionFailClosed(); // 不抛,仅 WARN
+  }
+
+  private static SqlExecutorProperties enabledSqlEmptyAllowlist() {
+    SqlExecutorProperties sql = new SqlExecutorProperties();
+    sql.setEnabled(true); // allowedDataSourceBeans 默认空 = 违规
+    return sql;
+  }
+
+  private static StoredProcExecutorProperties disabledSp() {
+    StoredProcExecutorProperties sp = new StoredProcExecutorProperties();
+    sp.setEnabled(false);
+    return sp;
+  }
+
+  private static HttpExecutorProperties disabledHttp() {
+    HttpExecutorProperties http = new HttpExecutorProperties();
+    http.setEnabled(false);
+    return http;
+  }
+
+  private static ShellExecutorProperties disabledShell() {
+    ShellExecutorProperties shell = new ShellExecutorProperties();
+    shell.setEnabled(false);
+    return shell;
+  }
 }

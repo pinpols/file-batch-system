@@ -250,7 +250,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return paramBean;
   }
 
-  /** 用 `;` 切语句,跳过引号内 / 注释内 `;`(简化版,不处理嵌套或 dollar-quote)。 */
+  /**
+   * 用 `;` 切语句,跳过引号内 / 注释内 / PG dollar-quote 体内的 `;`。dollar-quote(<code>$$...$$</code> / <code>
+   * $tag$...$tag$</code>)体内含 `;` 不再被误切(PG 函数体、含分号的字面量常用),修正原"不处理 dollar-quote" 导致的
+   * maxStatementsPerJob / 只读判定偏差。
+   */
   static List<String> splitStatements(String sql) {
     List<String> out = new ArrayList<>();
     StringBuilder buf = new StringBuilder();
@@ -258,9 +262,26 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     boolean inDoubleQuote = false;
     boolean inLineComment = false;
     boolean inBlockComment = false;
+    String dollarTag = null; // 非 null = 处于 $tag$...$tag$ dollar-quote 体内
     char prev = 0;
-    for (int i = 0; i < sql.length(); i++) {
+    int i = 0;
+    int n = sql.length();
+    while (i < n) {
       char c = sql.charAt(i);
+      // dollar-quote 体内:只找匹配的关闭 tag,其余(含 ; 引号 注释)全字面
+      if (dollarTag != null) {
+        if (c == '$' && sql.startsWith(dollarTag, i)) {
+          buf.append(dollarTag);
+          i += dollarTag.length();
+          prev = '$';
+          dollarTag = null;
+          continue;
+        }
+        buf.append(c);
+        prev = c;
+        i++;
+        continue;
+      }
       if (inLineComment) {
         if (c == '\n') inLineComment = false;
         buf.append(c);
@@ -274,6 +295,15 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         if (c == '"' && prev != '\\') inDoubleQuote = false;
         buf.append(c);
       } else {
+        // 顶层:先试 dollar-quote 开标签($tag$),命中则整体入 buf 并进入 dollar-quote 体
+        String openTag = c == '$' ? matchDollarTag(sql, i) : null;
+        if (openTag != null) {
+          buf.append(openTag);
+          i += openTag.length();
+          prev = '$';
+          dollarTag = openTag;
+          continue;
+        }
         if (c == '-' && prev == '-') {
           inLineComment = true;
           buf.append(c);
@@ -295,10 +325,44 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         }
       }
       prev = c;
+      i++;
     }
     String tail = buf.toString().trim();
     if (!tail.isEmpty()) out.add(tail);
     return out;
+  }
+
+  /**
+   * 在 {@code pos}(此处字符为 {@code $})尝试匹配 PG dollar-quote 开标签 {@code $tag$}: tag 为空或 {@code
+   * [A-Za-z_][A-Za-z0-9_]*}。返回含两端 {@code $} 的完整标签串(如 {@code $$} / {@code $body$}); 不是合法
+   * dollar-quote(如位置参数 {@code $1}、运算)返回 null。
+   */
+  private static String matchDollarTag(String sql, int pos) {
+    int n = sql.length();
+    for (int j = pos + 1; j < n; j++) {
+      char c = sql.charAt(j);
+      if (c == '$') {
+        String tag = sql.substring(pos + 1, j);
+        return (tag.isEmpty() || isValidDollarTag(tag)) ? sql.substring(pos, j + 1) : null;
+      }
+      if (!(Character.isLetterOrDigit(c) || c == '_')) {
+        return null; // 标签里出现非法字符(空格/运算符)→ 普通 $,非 dollar-quote
+      }
+    }
+    return null;
+  }
+
+  private static boolean isValidDollarTag(String tag) {
+    if (Character.isDigit(tag.charAt(0))) {
+      return false; // 标识符不能以数字开头($1 是位置参数,不是 dollar-quote)
+    }
+    for (int k = 0; k < tag.length(); k++) {
+      char c = tag.charAt(k);
+      if (!(Character.isLetterOrDigit(c) || c == '_')) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** 取首关键字粗分类语句类型。三道闸模型下<b>不再做类型白名单校验</b>,本方法仅用于判定"是否全是 SELECT"以走只读事务 + statement_timeout 优化。 */
@@ -335,15 +399,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
    * pg_read_server_files} / {@code pg_write_server_files} 成员(COPY PROGRAM / 服务端文件 / 不可信 PL 的前置)。
    *
    * <p><b>方言支持</b>:本检查仅对 PostgreSQL 有效(查 {@code pg_roles} / {@code pg_has_role()})。其他方言上若仍开 {@code
-   * forbidOsCapableRole=true},为避免「跑非 PG SQL 查询失败抛异常 → 误以为安全闸生效」的假阴性,本方法会:
+   * forbidOsCapableRole=true},本方法 <b>fail-closed 拒绝执行</b>——既然运维显式要求"禁 OS 能力角色"、而本闸在该方言下无法核验,
+   * 静默放行等于安全控制 no-op(原 WARN+放行的"假阴性"姿态比报错更危险)。要在非 PG 方言上跑,须显式 {@code
+   * forbidOsCapableRole=false}(明确接受该方言下无 OS 角色核验)并自行用方言原生最小权限角色兜底。
    *
-   * <ul>
-   *   <li>判 {@link java.sql.DatabaseMetaData#getDatabaseProductName()},非 PostgreSQL → 打一条 WARN(留
-   *       audit trail 提醒 ops 此闸在该方言下未启用),直接返回放行
-   *   <li>PostgreSQL → 走原 {@code pg_roles} 校验
-   * </ul>
-   *
-   * 见 {@link SqlExecutorProperties#isForbidOsCapableRole()} javadoc 标注「PostgreSQL only」。
+   * <p>见 {@link SqlExecutorProperties#isForbidOsCapableRole()} javadoc 标注「PostgreSQL only」。
    */
   void requireNonOsCapableRole(Connection conn) {
     String productName;
@@ -354,11 +414,13 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           "OS-capable role check failed reading DatabaseMetaData: " + ex.getMessage());
     }
     if (productName == null || !productName.toLowerCase(Locale.ROOT).contains("postgres")) {
-      log.warn(
-          "forbidOsCapableRole=true not supported on '{}', skipping (PostgreSQL-only safeguard)."
-              + " Configure dialect-native least-privilege role instead.",
-          productName);
-      return;
+      throw new SqlValidationException(
+          "forbidOsCapableRole=true but OS-capable-role check is PostgreSQL-only and cannot be"
+              + " verified on dialect '"
+              + productName
+              + "' — refusing to execute (fail-closed). Run on PostgreSQL, or explicitly set"
+              + " batch.worker.executors.sql.forbid-os-capable-role=false and enforce a"
+              + " dialect-native least-privilege role.");
     }
     String sql =
         "select rolsuper"
