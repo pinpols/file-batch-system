@@ -15,6 +15,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -195,12 +196,30 @@ public class ConsoleApiExceptionHandler {
 
       // 继续执行
     }
-    // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），避免前端只看到 500
+    // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），并按 status 反查对应业务 code，
+    // 避免 4xx（下游入参错误 / 资源冲突）被一律降级成 SYSTEM_ERROR 误导前端。
+    ResultCode code = mapStatusToResultCode(exception.getStatusCode());
     return ResponseEntity.status(exception.getStatusCode())
         .body(
             responseFactory.failure(
-                ResultCode.SYSTEM_ERROR,
-                body == null || body.isBlank() ? exception.getMessage() : body));
+                code, body == null || body.isBlank() ? exception.getMessage() : body));
+  }
+
+  /**
+   * 把下游真实 HTTP status 反查到对应业务 {@link ResultCode}：4xx 映射到语义最贴近的客户端错误码， 5xx / 未识别一律 {@code
+   * SYSTEM_ERROR}。仅在无法解析下游 {@code CommonResponse} body 时作为兜底使用。
+   */
+  private static ResultCode mapStatusToResultCode(HttpStatusCode status) {
+    return switch (status.value()) {
+      case 400 -> ResultCode.VALIDATION_ERROR;
+      case 401 -> ResultCode.UNAUTHORIZED;
+      case 403 -> ResultCode.FORBIDDEN;
+      case 404 -> ResultCode.NOT_FOUND;
+      case 409 -> ResultCode.CONFLICT;
+      case 422 -> ResultCode.BUSINESS_ERROR;
+      case 429 -> ResultCode.RATE_LIMITED;
+      default -> ResultCode.SYSTEM_ERROR;
+    };
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
@@ -263,27 +282,37 @@ public class ConsoleApiExceptionHandler {
   }
 
   /**
-   * DB 约束违反统一转 400 + 人话提示,避免暴露成 500 SYSTEM_ERROR。 覆盖: check constraint / not-null / unique /
-   * foreign key 四类常见违反。
+   * DB 约束违反按约束类型分流 HTTP status,避免暴露成 500 SYSTEM_ERROR：
+   *
+   * <ul>
+   *   <li><b>UNIQUE</b>（并发撞键）/ <b>FOREIGN_KEY</b>（删被引用行)→ <b>409 CONFLICT</b>，与基类 {@code
+   *       AbstractApiExceptionHandler} 对 {@code DuplicateKeyException} 的 409 处理语义一致。
+   *   <li><b>CHECK</b> / <b>NOT_NULL</b>（入参本身不合法）→ <b>400 VALIDATION_ERROR</b>。
+   * </ul>
+   *
+   * 每类都附人话中文提示。
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
     log.warn("console data integrity violation: {}", exception.getMostSpecificCause().getMessage());
     Throwable root = exception.getMostSpecificCause();
     String rawMsg = root == null ? null : root.getMessage();
-    String message = PgConstraintViolation.translate(rawMsg);
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, message));
+    PgConstraintViolation kind = PgConstraintViolation.classify(rawMsg);
+    return ResponseEntity.status(kind.resultCode().httpStatus())
+        .body(responseFactory.failure(kind.resultCode(), kind.render(rawMsg)));
   }
 
   /**
-   * PG DataIntegrityViolation 子串路由表（CLAUDE.md §分支消除规则 row 1）。 每个分支按 substring 命中并产出客户端可读的中文
-   * message。
+   * PG DataIntegrityViolation 子串路由表（CLAUDE.md §分支消除规则 row 1）。 每个分支按 substring 命中,携带目标 {@link
+   * ResultCode}（决定 HTTP status）并产出客户端可读的中文 message。
    */
   private enum PgConstraintViolation {
-    CHECK("violates check constraint") {
+    CHECK("violates check constraint", ResultCode.VALIDATION_ERROR) {
       @Override
       String render(String msg) {
+        if (msg == null) {
+          return DEFAULT_MESSAGE;
+        }
         int idx = msg.indexOf("\"", msg.indexOf("constraint"));
         if (idx > 0) {
           int end = msg.indexOf("\"", idx + 1);
@@ -294,21 +323,24 @@ public class ConsoleApiExceptionHandler {
         return DEFAULT_MESSAGE;
       }
     },
-    UNIQUE("violates unique constraint") {
+    UNIQUE("violates unique constraint", ResultCode.CONFLICT) {
       @Override
       String render(String msg) {
         return "记录已存在(唯一键冲突)";
       }
     },
-    FOREIGN_KEY("violates foreign key constraint") {
+    FOREIGN_KEY("violates foreign key constraint", ResultCode.CONFLICT) {
       @Override
       String render(String msg) {
         return "关联数据缺失或无法删除(外键约束)";
       }
     },
-    NOT_NULL("violates not-null constraint") {
+    NOT_NULL("violates not-null constraint", ResultCode.VALIDATION_ERROR) {
       @Override
       String render(String msg) {
+        if (msg == null) {
+          return "必填字段缺失";
+        }
         int colStart = msg.indexOf("\"");
         int colEnd = msg.indexOf("\"", colStart + 1);
         if (colStart >= 0 && colEnd > colStart) {
@@ -316,28 +348,41 @@ public class ConsoleApiExceptionHandler {
         }
         return "必填字段缺失";
       }
+    },
+    // 未识别约束类型兜底：保守按 400（与历史行为一致，避免误把系统错误抬成 409）。
+    UNKNOWN("", ResultCode.VALIDATION_ERROR) {
+      @Override
+      String render(String msg) {
+        return DEFAULT_MESSAGE;
+      }
     };
 
     private static final String DEFAULT_MESSAGE = "数据约束错误";
 
     private final String marker;
+    private final ResultCode resultCode;
 
-    PgConstraintViolation(String marker) {
+    PgConstraintViolation(String marker, ResultCode resultCode) {
       this.marker = marker;
+      this.resultCode = resultCode;
     }
 
     abstract String render(String msg);
 
-    static String translate(String rawMsg) {
+    ResultCode resultCode() {
+      return resultCode;
+    }
+
+    static PgConstraintViolation classify(String rawMsg) {
       if (rawMsg == null) {
-        return DEFAULT_MESSAGE;
+        return UNKNOWN;
       }
       for (PgConstraintViolation kind : values()) {
-        if (rawMsg.contains(kind.marker)) {
-          return kind.render(rawMsg);
+        if (kind != UNKNOWN && rawMsg.contains(kind.marker)) {
+          return kind;
         }
       }
-      return DEFAULT_MESSAGE;
+      return UNKNOWN;
     }
   }
 
