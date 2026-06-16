@@ -354,13 +354,22 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
           fixedWidth ? textValue(firstNonNull(map.get("align"), map.get("alignment"))) : null;
       String padChar =
           fixedWidth ? textValue(firstNonNull(map.get("padChar"), map.get("pad_char"))) : null;
+      // type / numberFormat / dateFormat 仅 Excel 类型化导出消费;delimited / fixed-width 忽略这三个字段,
+      // 解析在此统一做不增加分支(未配=STRING + null 格式串 = 历史全文本行为)。
+      ColumnType type = ColumnType.from(firstNonNull(map.get("type"), map.get("cell_type")));
+      String numberFormat =
+          textValue(firstNonNull(map.get("numberFormat"), map.get("number_format")));
+      String dateFormat = textValue(firstNonNull(map.get("dateFormat"), map.get("date_format")));
       columns.add(
           new ColumnLayout(
               header,
               normalizedSource,
               width,
               "RIGHT".equalsIgnoreCase(align),
-              resolvePadChar(padChar)));
+              resolvePadChar(padChar),
+              type,
+              numberFormat,
+              dateFormat));
     }
     return columns;
   }
@@ -605,8 +614,50 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return padChar.charAt(0);
   }
 
+  /**
+   * 列布局。{@code type} / {@code numberFormat} / {@code dateFormat} 为 Excel 类型化导出新增的<b>可选</b>字段:不配=
+   * {@link ColumnType#STRING}、无格式串,导出行为与历史一致(全文本)。delimited / fixed-width 不消费这三个字段。
+   */
   public record ColumnLayout(
-      String header, String source, Integer width, boolean rightAlign, char padChar) {}
+      String header,
+      String source,
+      Integer width,
+      boolean rightAlign,
+      char padChar,
+      ColumnType type,
+      String numberFormat,
+      String dateFormat) {
+
+    public ColumnLayout {
+      type = type == null ? ColumnType.STRING : type;
+    }
+
+    /** 兼容旧 5 参签名:type 默认 STRING、无数字 / 日期格式串(delimited / fixed-width 走此入口)。 */
+    public ColumnLayout(
+        String header, String source, Integer width, boolean rightAlign, char padChar) {
+      this(header, source, width, rightAlign, padChar, ColumnType.STRING, null, null);
+    }
+  }
+
+  /** Excel 类型化导出的列类型。未配置或解析失败一律回退 {@link #STRING}(全文本,历史行为)。 */
+  public enum ColumnType {
+    STRING,
+    NUMBER,
+    DATE,
+    BOOL;
+
+    public static ColumnType from(Object value) {
+      if (value == null) {
+        return STRING;
+      }
+      try {
+        return ColumnType.valueOf(String.valueOf(value).trim().toUpperCase());
+      } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+        return STRING;
+      }
+    }
+  }
 
   public record DelimitedFormatConfig(
       String delimiter,
