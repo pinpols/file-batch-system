@@ -151,7 +151,8 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 | cancel 信号无主动 push,延迟 60s | 设计权衡(避免反向 channel)| 不动 |
 | `nextHeartbeatHint` orch 下发但 SDK 未消费 | 待补 — SDK 接到但调度器不动态调速 | follow-up |
 | heartbeat / lease 超时阈值无 cross-field 校验 | 运维配错只能事后排查 | `troubleshooting.md` 写了排查路径,代码层无校验 |
-| worker fingerprint console 看板 | BE 端点已补(PR #240 Lane D);FE 看板未做 | 等 FE follow-up |
+| worker fingerprint console 看板 | BE 端点(PR #240 Lane D)+ **FE 看板已做**(`WorkerFingerprintBoard.vue`,`/ops/worker-fingerprints`) | ✅ 完成 |
+| 租户自助「我的 Worker」页(ADR-035 P4) | BE `ConsoleMyWorkerController`(`/api/console/my-workers`)+ **FE 自助页已做**(`MyWorkers.vue`,`/workers/my-workers`) | ✅ 完成 |
 | 凭据走 parameters / descriptor 泄露 | `SensitiveDataValidator`(PR #242 Lane C)拦截 register 路径 | atomic executor 入口注入待 Lane C/B PR 合后回头补 |
 
 ## A. 协议版本与 schemaVersion(BYO SDK 兼容矩阵)
