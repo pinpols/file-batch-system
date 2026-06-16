@@ -82,6 +82,9 @@ type RegisterRequest struct {
 	SDKVersion     string         `json:"sdkVersion"`
 	CapabilityTags []string       `json:"capabilityTags,omitempty"`
 	Attributes     map[string]any `json:"attributes,omitempty"`
+	// ProtocolVersion advertises the SDK's current wire-protocol major (#536
+	// register-time gate). Register only — heartbeat carries null.
+	ProtocolVersion string `json:"protocolVersion,omitempty"`
 }
 
 // RegisterResult reports whether the platform created a fresh record or reused

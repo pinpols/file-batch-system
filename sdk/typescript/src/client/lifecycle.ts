@@ -41,6 +41,7 @@ import {
 } from "./handler.ts";
 import { SensitiveDataValidator } from "./sensitive.ts";
 import { ErrorCode } from "../protocol.ts";
+import { SUPPORTED_SCHEMA_VERSIONS } from "../constants.ts";
 
 let unhandledRejectionInstalled = false;
 
@@ -222,6 +223,10 @@ export class WorkerLifecycle {
       workerCode: this.#cfg.workerCode,
       status: "RUNNING",
       heartbeatAt: new Date().toISOString(),
+      // #536 register-time protocol-version gate: advertise the SDK's current
+      // major (last of SUPPORTED_SCHEMA_VERSIONS). Register only — heartbeat null.
+      protocolVersion:
+        SUPPORTED_SCHEMA_VERSIONS[SUPPORTED_SCHEMA_VERSIONS.length - 1],
     };
     this.#validator.assertRegisterBody(regBody);
 

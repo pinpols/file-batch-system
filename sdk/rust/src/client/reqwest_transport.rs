@@ -40,6 +40,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, CONTENT_TYPE};
 
 use super::transport::{HttpResponse, Transport};
+use crate::constants::SUPPORTED_SCHEMA_VERSIONS;
 
 // Header names (lowercase for `HeaderName::from_static`), identical to the
 // Java/Python/Go SDKs: `X-Batch-Tenant-Id`, `X-Batch-Api-Key`, `Idempotency-Key`.
@@ -240,9 +241,39 @@ fn new_idempotency_key() -> String {
     )
 }
 
+/// The SDK's current wire-protocol major — the last entry of
+/// [`SUPPORTED_SCHEMA_VERSIONS`] — advertised on register (#536 gate). Kept in
+/// sync with the supported-versions list rather than hard-coded.
+fn current_protocol_version() -> &'static str {
+    SUPPORTED_SCHEMA_VERSIONS
+        .last()
+        .copied()
+        .unwrap_or("v1")
+}
+
+/// Default `protocolVersion` into a register body. If `body` parses to a JSON
+/// object lacking `protocolVersion`, insert the current major and re-serialize;
+/// a tenant-provided value is preserved. If `body` is not a JSON object (or
+/// fails to parse), it is returned unchanged.
+fn with_protocol_version(body: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(body) {
+        Ok(serde_json::Value::Object(mut map)) => {
+            map.entry("protocolVersion".to_string())
+                .or_insert_with(|| serde_json::Value::from(current_protocol_version()));
+            serde_json::Value::Object(map).to_string()
+        }
+        _ => body.to_string(),
+    }
+}
+
 impl Transport for ReqwestTransport {
     fn register(&self, _worker_code: &str, body: &str) -> HttpResponse {
-        self.post("/internal/workers/register", body, None)
+        // #536 register-time protocol-version gate: default `protocolVersion` to
+        // the SDK's current major (last of SUPPORTED_SCHEMA_VERSIONS) so the
+        // platform identifies + accepts us. A tenant-provided value is left
+        // intact; a non-object body is sent verbatim. Register only.
+        let sent = with_protocol_version(body);
+        self.post("/internal/workers/register", &sent, None)
     }
 
     fn heartbeat(&self, worker_code: &str, body: &str) -> HttpResponse {
@@ -429,6 +460,35 @@ mod tests {
         assert_eq!(req.header("X-Batch-Tenant-Id"), Some("tenant-42"));
         // register is not a per-task write → no Idempotency-Key.
         assert!(req.header("Idempotency-Key").is_none());
+        // #536: protocolVersion defaulted to the SDK's current major (v2).
+        assert!(
+            req.body.contains("\"protocolVersion\":\"v2\""),
+            "register body must advertise protocolVersion, got {}",
+            req.body,
+        );
+        // original fields preserved.
+        assert!(req.body.contains("\"workerCode\":\"w1\""));
+    }
+
+    #[test]
+    fn register_preserves_tenant_provided_protocol_version() {
+        let (base, rx) = one_shot_server(200, "");
+        let t = transport(&base);
+        t.register("w1", r#"{"workerCode":"w1","protocolVersion":"v1"}"#);
+        let req = rx.recv().expect("captured request");
+        // tenant-provided value is left intact (not overwritten).
+        assert!(req.body.contains("\"protocolVersion\":\"v1\""));
+        assert!(!req.body.contains("\"protocolVersion\":\"v2\""));
+    }
+
+    #[test]
+    fn register_non_object_body_sent_verbatim() {
+        let (base, rx) = one_shot_server(200, "");
+        let t = transport(&base);
+        // a non-object JSON body is forwarded unchanged.
+        t.register("w1", "[]");
+        let req = rx.recv().expect("captured request");
+        assert_eq!(req.body, "[]");
     }
 
     #[test]

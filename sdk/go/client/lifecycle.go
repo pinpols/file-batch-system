@@ -132,6 +132,9 @@ func (w *Worker) Start(ctx context.Context) error {
 		SDKVersion:     w.cfg.SDKVersion,
 		CapabilityTags: w.cfg.CapabilityTags,
 		Attributes:     w.cfg.RegisterAttributes,
+		// #536 register-time protocol-version gate: advertise the SDK's current
+		// major (last of SupportedSchemaVersions) so the platform identifies us.
+		ProtocolVersion: protocol.SupportedSchemaVersions[len(protocol.SupportedSchemaVersions)-1],
 	}
 	// §1.8 register-path sensitive scan (fail-fast at startup).
 	if err := w.validator.ValidateRegister(req); err != nil {
