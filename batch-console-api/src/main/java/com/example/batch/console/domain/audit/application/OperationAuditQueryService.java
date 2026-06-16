@@ -6,6 +6,7 @@ import com.example.batch.console.domain.audit.mapper.OperationAuditMapper.AuditR
 import com.example.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import com.example.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.TenantScope;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,7 @@ public class OperationAuditQueryService {
 
   @Transactional(readOnly = true)
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {
-    String tenantId = tenantGuard.resolveTenant(req.getTenantId());
+    String tenantId = TenantScope.requireTenant(tenantGuard.resolveTenant(req.getTenantId()));
     int pageNo = req.getPageNo() == null ? 1 : req.getPageNo();
     int pageSize = req.getPageSize() == null ? 20 : req.getPageSize();
     int offset = (pageNo - 1) * pageSize;
