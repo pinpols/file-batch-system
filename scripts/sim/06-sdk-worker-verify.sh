@@ -34,7 +34,7 @@ WORKER_CODE="${WORKER_CODE:-sdk-verify-worker}"
 # 每轮唯一 key 名(避免软删后名仍占用导致 CONFLICT);旧 sdk-verify* key 开头尽力清理
 KEY_NAME="${KEY_NAME:-sdk-verify-$(date +%s)}"
 KEY_PREFIX_PURGE="sdk-verify"
-JAR="$REPO_ROOT/examples/sample-tenant-worker/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar"
+JAR="$REPO_ROOT/examples/self-hosted-sdk/sample-tenant-worker-java/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 PSQL=(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc)
 REG_TIMEOUT="${REG_TIMEOUT:-45}"
@@ -96,8 +96,8 @@ RAW_KEY=$(echo "$created" | grep -oE '"rawKey":"[^"]+"' | head -1 | sed 's/"rawK
 note "3. sample-tenant-worker jar"
 if [[ -f "$JAR" ]]; then ok "jar 已存在($(basename "$JAR"))"; else
   info "jar 缺失,构建中(mvn install)..."
-  (cd "$REPO_ROOT" && mvn -q -pl batch-worker-sdk -am install -DskipTests && \
-     mvn -q install -f examples/sample-tenant-worker/pom.xml -DskipTests) \
+  (cd "$REPO_ROOT" && mvn -q -pl sdk/java -am install -DskipTests && \
+     mvn -q install -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml -DskipTests) \
     && ok "构建完成" || { bad "构建失败"; exit 1; }
 fi
 

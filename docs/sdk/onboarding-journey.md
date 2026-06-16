@@ -29,7 +29,7 @@
 [`troubleshooting.md`](./troubleshooting.md) §1):
 
 - `BatchPlatformClientConfig.fromEnv()` 默认 **`BATCH_SDK_`**(`BATCH_SDK_BASE_URL` / `BATCH_SDK_TENANT_ID` / `BATCH_SDK_API_KEY` / `BATCH_SDK_KAFKA_BOOTSTRAP` / `BATCH_SDK_KAFKA_SASL_JAAS_CONFIG` ...)
-- `examples/sample-tenant-worker/` builder 风格用短前缀 **`BATCH_`**(`BATCH_BASE_URL` / `BATCH_API_KEY` / `BATCH_KAFKA_PROTOCOL` / `BATCH_KAFKA_SASL_JAAS` ...)
+- `examples/sample-tenant-worker-java/` builder 风格用短前缀 **`BATCH_`**(`BATCH_BASE_URL` / `BATCH_API_KEY` / `BATCH_KAFKA_PROTOCOL` / `BATCH_KAFKA_SASL_JAAS` ...)
 
 > 半混会触发 `missing required env vars: ...`(`troubleshooting.md` §1 第一行)。
 

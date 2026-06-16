@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SDK-P5-2(ADR-035 / roadmap §7):租户 Worker 的集成测试工具箱。
+
+  关键约束:
+  - 这是 **测试支撑模块**,不是运行时 SDK 的一部分 —— 租户以 <scope>test</scope> 引入。
+    因此可以引 spring-kafka-test(EmbeddedKafka 内嵌 broker,无需 Docker),
+    不会污染运行时 batch-worker-sdk 的 < 2 MB / 无 Spring 约束。
+  - 对 batch-worker-sdk 是 compile 依赖:FakeBatchPlatform 直接用 SDK 的 wire / dispatcher 类型。
+  - junit-jupiter / spring-kafka-test 走 compile,让租户测试 classpath 直接拿到 @BatchWorkerTest
+    扩展与 EmbeddedKafka,无需自己再声明。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.example.batch</groupId>
+        <artifactId>batch-platform</artifactId>
+        <version>${revision}</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>batch-worker-sdk-testkit</artifactId>
+    <name>batch-worker-sdk-testkit</name>
+    <description>Integration test kit for tenant SDK workers: FakeBatchPlatform + EmbeddedKafka + @BatchWorkerTest (SDK-P5-2)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-sdk</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- 内嵌 Kafka broker(KRaft,纯 JVM,无 Docker),供 FakeBatchPlatform 起真 broker。 -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+        </dependency>
+
+        <!-- @BatchWorkerTest 扩展实现 JUnit5 SPI,租户测试也直接用 jupiter API。 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- 自测 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
