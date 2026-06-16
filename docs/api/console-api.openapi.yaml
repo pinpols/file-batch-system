@@ -7870,11 +7870,15 @@ paths:
             type: string
       responses:
         '200':
-          description: Readiness result (blocking / warnings; 每项附 hint / docRef 引导)
+          description: |
+            Readiness result (blocking / warnings; 每项附 hint / docRef 引导)。
+            data 的结构见 schema TenantReadinessResult / ReadinessItem(文档参考型;
+            为保持与 #509 已发布契约的向后兼容,200 包装仍用通用 CommonResponseObject,
+            data 字段 type=object 不收窄,仅在新增的 hint / docRef 上做加法式扩展)。
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseTenantReadiness'
+                $ref: '#/components/schemas/CommonResponseObject'
 
   /api/console/tenants/{tenantId}/suspend:
     post:
@@ -9341,13 +9345,6 @@ components:
           items:
             $ref: '#/components/schemas/ReadinessItem'
       required: [tenantId, ready, blocking, warnings]
-    CommonResponseTenantReadiness:
-      allOf:
-        - $ref: '#/components/schemas/CommonResponseBase'
-        - type: object
-          properties:
-            data:
-              $ref: '#/components/schemas/TenantReadinessResult'
     EnabledPatchRequest:
       type: object
       properties:
