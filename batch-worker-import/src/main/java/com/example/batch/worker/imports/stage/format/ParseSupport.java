@@ -189,13 +189,28 @@ public class ParseSupport {
 
   public void recordParseError(
       ImportJobContext context, long recordNo, String errorCode, String message, Object rawRecord) {
+    recordParseError(context, recordNo, errorCode, message, rawRecord, null);
+  }
+
+  /**
+   * 带 Excel 物理定位({@link ImportRecordGovernanceService.SourceLocator})的 PARSE 阶段坏行记录。 locator
+   * 为空时退化为不带定位的行为(其余格式 / 无法定位场景)。
+   */
+  public void recordParseError(
+      ImportJobContext context,
+      long recordNo,
+      String errorCode,
+      String message,
+      Object rawRecord,
+      ImportRecordGovernanceService.SourceLocator locator) {
+    ImportRecordGovernanceService.BadRecordCommand command =
+        ImportRecordGovernanceService.BadRecordCommand.of(
+            ImportStage.PARSE, recordNo, errorCode, message, rawRecord, locator);
     if (!recordGovernanceService.isSkippable(errorCode)) {
-      recordGovernanceService.recordFailedRecord(
-          context, ImportStage.PARSE, recordNo, errorCode, message, rawRecord);
+      recordGovernanceService.recordFailedRecord(context, command);
       throw new IllegalStateException(message);
     }
-    recordGovernanceService.recordSkippedRecord(
-        context, ImportStage.PARSE, recordNo, errorCode, message, rawRecord);
+    recordGovernanceService.recordSkippedRecord(context, command);
     if (recordGovernanceService.shouldFailOnSkip(errorCode)) {
       throw new IllegalStateException("skip action FAIL_BATCH");
     }

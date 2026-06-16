@@ -88,17 +88,13 @@ public class ImportRecordGovernanceService {
       String errorCode,
       String errorMessage,
       Object rawRecord) {
-    BadRecordContext brc =
-        BadRecordContext.builder()
-            .context(context)
-            .stage(stage)
-            .recordNo(recordNo)
-            .errorCode(errorCode)
-            .errorMessage(errorMessage)
-            .rawRecord(rawRecord)
-            .skipped(true)
-            .build();
-    recordBadRecord(brc);
+    recordSkippedRecord(
+        context, BadRecordCommand.of(stage, recordNo, errorCode, errorMessage, rawRecord, null));
+  }
+
+  /** 带 Excel 物理定位({@link SourceLocator})的跳过记录;locator 为空时退化为不带定位的行为。 */
+  public void recordSkippedRecord(ImportJobContext context, BadRecordCommand command) {
+    recordBadRecord(toBadRecordContext(context, command, true));
   }
 
   public void recordFailedRecord(
@@ -108,17 +104,53 @@ public class ImportRecordGovernanceService {
       String errorCode,
       String errorMessage,
       Object rawRecord) {
-    BadRecordContext brc =
-        BadRecordContext.builder()
-            .context(context)
-            .stage(stage)
-            .recordNo(recordNo)
-            .errorCode(errorCode)
-            .errorMessage(errorMessage)
-            .rawRecord(rawRecord)
-            .build();
-    recordBadRecord(brc);
+    recordFailedRecord(
+        context, BadRecordCommand.of(stage, recordNo, errorCode, errorMessage, rawRecord, null));
   }
+
+  /** 带 Excel 物理定位({@link SourceLocator})的失败记录;locator 为空时退化为不带定位的行为。 */
+  public void recordFailedRecord(ImportJobContext context, BadRecordCommand command) {
+    recordBadRecord(toBadRecordContext(context, command, false));
+  }
+
+  private BadRecordContext toBadRecordContext(
+      ImportJobContext context, BadRecordCommand command, boolean skipped) {
+    return BadRecordContext.builder()
+        .context(context)
+        .stage(command.stage())
+        .recordNo(command.recordNo())
+        .errorCode(command.errorCode())
+        .errorMessage(command.errorMessage())
+        .rawRecord(command.rawRecord())
+        .skipped(skipped)
+        .locator(command.locator())
+        .build();
+  }
+
+  /** 坏行登记命令(把 ≥7 参的坏行入参封装成参数对象,满足参数 ≤6 约束)。 {@code locator} 为 Excel 物理定位(可空)。 */
+  public record BadRecordCommand(
+      ImportStage stage,
+      Long recordNo,
+      String errorCode,
+      String errorMessage,
+      Object rawRecord,
+      SourceLocator locator) {
+    public static BadRecordCommand of(
+        ImportStage stage,
+        Long recordNo,
+        String errorCode,
+        String errorMessage,
+        Object rawRecord,
+        SourceLocator locator) {
+      return new BadRecordCommand(stage, recordNo, errorCode, errorMessage, rawRecord, locator);
+    }
+  }
+
+  /**
+   * Excel 物理定位:{@code rowNum} 为 1-based 物理行号(SAX 的 0-based rowNum +1), {@code column}
+   * 为出错列的表头名。两者均可空,缺失时坏行不带定位落库。
+   */
+  public record SourceLocator(Long rowNum, String column) {}
 
   public void recordThresholdViolation(
       ImportJobContext context, ImportStage stage, String errorCode, String message) {
@@ -228,7 +260,8 @@ public class ImportRecordGovernanceService {
       String errorCode,
       String errorMessage,
       Object rawRecord,
-      boolean skipped) {}
+      boolean skipped,
+      SourceLocator locator) {}
 
   private void recordBadRecord(BadRecordContext brc) {
     ImportJobContext context = brc.context();
@@ -238,6 +271,9 @@ public class ImportRecordGovernanceService {
     String errorMessage = brc.errorMessage();
     Object rawRecord = brc.rawRecord();
     boolean skipped = brc.skipped();
+    SourceLocator locator = brc.locator();
+    Long sourceRowNum = locator == null ? null : locator.rowNum();
+    String sourceColumn = locator == null ? null : locator.column();
     Map<String, Object> attrs = context.getAttributes();
     ImportBadRecordEntity badRecord =
         new ImportBadRecordEntity(
@@ -248,7 +284,9 @@ public class ImportRecordGovernanceService {
             rawRecord,
             skipped,
             resolveSkipAction().code(),
-            null);
+            null,
+            sourceRowNum,
+            sourceColumn);
     badRecords(context).add(badRecord);
 
     if (skipped) {
@@ -303,6 +341,8 @@ public class ImportRecordGovernanceService {
             .skipped(skipped)
             .skipAction(resolveSkipAction().code())
             .rawRecord(safePayload)
+            .sourceRowNum(sourceRowNum)
+            .sourceColumn(sourceColumn)
             .build());
 
     if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
