@@ -1,0 +1,17 @@
+{
+  "name": "@batch/worker-sdk",
+  "version": "1.1.0",
+  "description": "TypeScript BYO worker SDK for the file-batch-system platform (decision core + conformance runner). Zero runtime dependencies.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test --experimental-strip-types 'test/**/*.test.ts'"
+  },
+  "engines": {
+    "node": ">=25"
+  },
+  "license": "UNLICENSED"
+}
