@@ -10,12 +10,10 @@
 """
 from __future__ import annotations
 
-from typing import Optional
-
-_state: dict[str, Optional[int]] = {"rowsProcessed": None, "totalRowsHint": None}
+_state: dict[str, int | None] = {"rowsProcessed": None, "totalRowsHint": None}
 
 
-def publish(rows_processed: int, total_rows_hint: Optional[int] = None) -> None:
+def publish(rows_processed: int, total_rows_hint: int | None = None) -> None:
     """流式 handler 进度变化时调用。"""
     _state["rowsProcessed"] = rows_processed
     _state["totalRowsHint"] = total_rows_hint
@@ -27,11 +25,11 @@ def clear() -> None:
     _state["totalRowsHint"] = None
 
 
-def current_rows_processed() -> Optional[int]:
+def current_rows_processed() -> int | None:
     """心跳读取(无值返 ``None``)。"""
     return _state["rowsProcessed"]
 
 
-def current_total_rows_hint() -> Optional[int]:
+def current_total_rows_hint() -> int | None:
     """心跳读取(无值返 ``None``)。"""
     return _state["totalRowsHint"]
