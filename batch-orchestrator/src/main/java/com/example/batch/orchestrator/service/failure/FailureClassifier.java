@@ -8,6 +8,8 @@ import java.sql.SQLTransientException;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.NonTransientDataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
@@ -81,16 +83,34 @@ public class FailureClassifier {
           || isJavaSqlTimeout(cursor)) {
         return FailureClass.TIMEOUT;
       }
-      // INFRASTRUCTURE 类
+      // INFRASTRUCTURE 类(瞬态可重试):先于下面的 DATA_QUALITY/catch-all 命中,
+      // 因为 OptimisticLockingFailureException 也是 NonTransientDataAccessException 子类,
+      // 但它属于 CAS 冲突,语义上可重试,必须前置不能被整合规则误判为脏数据。
       if (cursor instanceof TransientDataAccessException
           || cursor instanceof SQLTransientException
           || cursor instanceof OptimisticLockingFailureException
-          || cursor instanceof ResourceAccessException
-          || cursor instanceof DataAccessException) {
+          || cursor instanceof ResourceAccessException) {
         return FailureClass.INFRASTRUCTURE;
       }
-      if (cursor instanceof SQLException sql) {
+      // DATA_QUALITY 类(不可重试脏数据):唯一键 / check / not-null / FK 违反等。
+      // 必须前置到泛 DataAccessException catch-all 之前,否则 DataIntegrityViolationException
+      // (NonTransientDataAccessException 子类)会被误判为 INFRASTRUCTURE → 脏数据无限重试。
+      if (cursor instanceof DataIntegrityViolationException) {
+        return FailureClass.DATA_QUALITY;
+      }
+      // 底层 SQLException 优先按 SQLState 精确分类(如 42xxx 语法 → CONFIG,23xxx 整合违反 →
+      // DATA_QUALITY),先于下面的 NonTransient/catch-all 粗分类。
+      if (cursor instanceof SQLException sql && Texts.hasText(sql.getSQLState())) {
         return classifyBySqlState(sql.getSQLState());
+      }
+      // 其余不可恢复(NonTransient)数据访问异常:无瞬态特征也无 SQLState 信号,
+      // 归脏数据(不可重试),避免被 catch-all 当基础设施无限重试。
+      if (cursor instanceof NonTransientDataAccessException) {
+        return FailureClass.DATA_QUALITY;
+      }
+      // 泛 DataAccessException 兜底:剩下的(瞬态语义弱但未显式标 Transient)归基础设施。
+      if (cursor instanceof DataAccessException) {
+        return FailureClass.INFRASTRUCTURE;
       }
       cursor = cursor.getCause();
     }

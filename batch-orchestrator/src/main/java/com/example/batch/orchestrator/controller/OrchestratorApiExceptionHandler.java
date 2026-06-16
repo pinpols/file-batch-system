@@ -58,8 +58,12 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
       ResponseStatusException exception) {
     ResultCode code =
         switch (exception.getStatusCode().value()) {
+          case 400 -> ResultCode.INVALID_ARGUMENT;
+          case 401 -> ResultCode.UNAUTHORIZED;
+          case 403 -> ResultCode.FORBIDDEN;
           case 404 -> ResultCode.NOT_FOUND;
           case 409 -> ResultCode.CONFLICT;
+          case 429 -> ResultCode.RATE_LIMITED;
           default -> ResultCode.SYSTEM_ERROR;
         };
     String message = exception.getReason() != null ? exception.getReason() : code.defaultMessage();
