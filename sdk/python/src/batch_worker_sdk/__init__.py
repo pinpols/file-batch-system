@@ -43,6 +43,7 @@ from batch_worker_sdk.exceptions import (
     ConflictError,
     PersistentClientError,
     PlatformError,
+    SdkTaskStopped,
     TransientError,
 )
 from batch_worker_sdk.handler._atomic import SdkAbstractAtomicHandler
@@ -53,7 +54,21 @@ from batch_worker_sdk.handler._export import SdkAbstractExportHandler
 from batch_worker_sdk.handler._import import SdkAbstractImportHandler
 from batch_worker_sdk.handler._process import SdkAbstractProcessHandler
 from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.idempotent import (
+    InMemoryIdempotencyStore,
+    NoOpIdempotencyStore,
+    SdkIdempotencyEntity,
+    SdkIdempotencyStore,
+    SdkIdempotentHandler,
+    idempotent,
+    wrap_idempotent,
+)
 from batch_worker_sdk.task.cancellation import CancellationSignal
+from batch_worker_sdk.task.checkpoint import (
+    InMemoryCheckpoint,
+    SdkCheckpoint,
+    SdkCheckpointState,
+)
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
 from batch_worker_sdk.task.progress import ProgressReporter
@@ -70,6 +85,9 @@ __all__: list[str] = [
     "BatchPlatformClientConfig",
     "CancellationSignal",
     "ConflictError",
+    "InMemoryCheckpoint",
+    "InMemoryIdempotencyStore",
+    "NoOpIdempotencyStore",
     "PersistentClientError",
     "PlatformError",
     "ProgressReporter",
@@ -79,10 +97,16 @@ __all__: list[str] = [
     "SdkAbstractImportHandler",
     "SdkAbstractProcessHandler",
     "SdkAbstractTaskHandler",
+    "SdkCheckpoint",
+    "SdkCheckpointState",
+    "SdkIdempotencyEntity",
+    "SdkIdempotencyStore",
+    "SdkIdempotentHandler",
     "SdkRowResult",
     "SdkTaskContext",
     "SdkTaskHandler",
     "SdkTaskResult",
+    "SdkTaskStopped",
     "SdkTaskTypeDescriptor",
     "TaskDispatcher",
     "TransientError",
@@ -90,4 +114,6 @@ __all__: list[str] = [
     "__version__",
     "batch_task",
     "collect_registered_handlers",
+    "idempotent",
+    "wrap_idempotent",
 ]

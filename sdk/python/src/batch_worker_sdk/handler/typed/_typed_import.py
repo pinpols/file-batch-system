@@ -17,6 +17,7 @@ from typing import get_args, get_origin
 from pydantic import BaseModel
 
 from batch_worker_sdk.handler._base import SdkAbstractTaskHandler, SdkRowResult
+from batch_worker_sdk.handler.typed._resumable import ResumableTemplateMixin
 from batch_worker_sdk.handler.typed._typed_parameters import SdkTypedParameters
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.result import SdkTaskResult
@@ -35,9 +36,16 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
 
 
 class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT](
-    SdkAbstractTaskHandler
+    ResumableTemplateMixin, SdkAbstractTaskHandler
 ):
-    """Typed Import handler —— 租户 -> 租户 DB;行级流式 + 批量 flush。"""
+    """Typed Import handler —— 租户 -> 租户 DB;行级流式 + 批量 flush。
+
+    续跑(ADR-037):``_do_execute`` 起头读断点 —— 已 ``completed`` 则跳过(幂等)、
+    恢复计数;每个 flush 批次走 ``await ctx.commit(break_key)`` 原子提交 + 限流上报;
+    取消在 commit 安全点抛 :class:`SdkTaskStopped`,顶层捕获落 cancelled 终态。
+    重写 :meth:`checkpoint_break_key` 提供续读坐标;``read_rows`` 里调 :meth:`resume_from`
+    取上次断点做续读起点。
+    """
 
     _params_model: type[BaseModel] | None = None
     DEFAULT_BATCH_SIZE = 1000
@@ -74,6 +82,9 @@ class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
     # ---- 模板 ------------------------------------------------------------
 
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
+        return await self._guard(self._run(ctx))
+
+    async def _run(self, ctx: SdkTaskContext) -> SdkTaskResult:
         model = self._params_model
         if model is None:
             return SdkTaskResult.fail(
@@ -88,8 +99,16 @@ class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
                 f"invalid parameters for taskType={self.task_type()}: {ex}",
                 cause=ex,
             )
+
+        # 续跑(决策一):已完成则跳过;否则恢复计数。
+        resume = self._resume(ctx)
+        if resume.already_completed:
+            return self._result(
+                params, resume.counts, f"resumed-complete: {resume.counts.success()} rows"
+            )
+        counts = resume.counts
+
         self.open_source(params, ctx)
-        counts = SdkRowResult()
         buf: list[RowT] = []
         size = self.batch_size()
         rows = self.read_rows(params, ctx)
@@ -97,17 +116,17 @@ class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
             async for row in rows:
                 buf.append(row)
                 if len(buf) >= size:
-                    self._flush(params, ctx, buf, counts)
+                    await self._flush(params, ctx, buf, counts)
         else:
             for row in rows:
                 buf.append(row)
                 if len(buf) >= size:
-                    self._flush(params, ctx, buf, counts)
+                    await self._flush(params, ctx, buf, counts)
         if buf:
-            self._flush(params, ctx, buf, counts)
+            await self._flush(params, ctx, buf, counts)
         return self._result(params, counts, f"imported {counts.success()} rows")
 
-    def _flush(
+    async def _flush(
         self,
         params: ParamsT,
         ctx: SdkTaskContext,
@@ -116,7 +135,10 @@ class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
     ) -> None:
         self.load_batch(params, ctx, buf)
         counts.add_success(len(buf))
+        last_row = buf[-1]
         buf.clear()
+        # 三合一可靠提交 + 取消安全点(决策二/三)。可能抛 SdkTaskStopped。
+        await self._commit_batch(ctx, last_row, counts)
 
     def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)

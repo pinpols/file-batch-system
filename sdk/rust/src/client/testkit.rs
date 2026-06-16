@@ -7,7 +7,9 @@
 //! execute → report → stop) entirely in-process.
 
 use crate::client::consumer::{FakeConsumer, MessageOutcome, TaskRecord};
-use crate::client::handler::{TaskContext, TaskHandler, TaskResult};
+use crate::client::handler::{
+    map_stopped_result, StoppableTaskHandler, TaskContext, TaskHandler, TaskResult,
+};
 use crate::client::lifecycle::{StopReport, Worker, WorkerState};
 use crate::client::transport::{FakeTransport, HttpResponse, Transport};
 
@@ -95,6 +97,33 @@ impl FakePlatform {
         }
     }
 
+    /// Like [`run_task`](FakePlatform::run_task) but for a
+    /// [`StoppableTaskHandler`] (ADR-037 决策三). The handler's
+    /// `Result<TaskResult, SdkTaskStopped>` is mapped through
+    /// [`map_stopped_result`]: `Err(SdkTaskStopped)` becomes a **cancelled**
+    /// terminal report (`errorCode = CANCELLED`), *not* a failure. The provided
+    /// `ctx` is used as-is so the caller can pre-wire a checkpoint store /
+    /// cancellation signal / report interval.
+    pub fn run_stoppable_task<H: StoppableTaskHandler>(
+        &self,
+        handler: &H,
+        ctx: &TaskContext,
+        record: &TaskRecord,
+        in_flight: i64,
+    ) -> Option<TaskResult> {
+        match self.consume(record, in_flight) {
+            MessageOutcome::Accept { .. } => {
+                let claim_body = record.partition_invocation_id.clone().unwrap_or_default();
+                let _ = self.transport.claim(&record.task_id, &claim_body);
+                // ADR-037 决策三: SdkTaskStopped → cancelled terminal (not failure).
+                let result = map_stopped_result(handler.execute(ctx));
+                let _ = self.transport.report(&record.task_id, &result.error_code);
+                Some(result)
+            }
+            _ => None,
+        }
+    }
+
     /// The transport's ordered call log.
     pub fn call_log(&self) -> Vec<String> {
         self.transport.call_log()
@@ -156,6 +185,45 @@ mod tests {
             ]
         );
         assert_eq!(report.deactivate_outcome, crate::client::transport::TransportOutcome::Success);
+    }
+
+    /// ADR-037 决策三: a stoppable handler that commits then gets cancelled
+    /// propagates SdkTaskStopped, which the run path maps to a CANCELLED report.
+    struct StopOnCancelHandler;
+    impl StoppableTaskHandler for StopOnCancelHandler {
+        fn task_type(&self) -> &str {
+            "import"
+        }
+        fn execute(
+            &self,
+            ctx: &TaskContext,
+        ) -> Result<TaskResult, crate::client::checkpoint::SdkTaskStopped> {
+            let mut bp = crate::client::checkpoint::BreakPosition::new();
+            for i in 1..=100i64 {
+                bp.insert("id".to_string(), crate::client::checkpoint::JsonValue::Int(i));
+                ctx.commit(i, 0, bp.clone())?; // propagates SdkTaskStopped up
+            }
+            Ok(TaskResult::success("all rows imported"))
+        }
+    }
+
+    #[test]
+    fn stoppable_handler_stop_maps_to_cancelled_terminal() {
+        let platform = FakePlatform::new("tenant-a", 4);
+        let record = TaskRecord::new("t1", "tenant-a", "import", Some("v1"));
+        platform.given_claim(200);
+        platform.given_report(200);
+
+        let ctx = TaskContext::new("t1", "tenant-a", "import").with_report_interval(1000);
+        // Pre-cancel so the very first commit stops at the safe-point.
+        ctx.cancellation.cancel();
+
+        let result = platform
+            .run_stoppable_task(&StopOnCancelHandler, &ctx, &record, 0)
+            .expect("ran");
+        assert_eq!(result.error_code, "CANCELLED");
+        // claim -> report (terminal=CANCELLED), no failure path.
+        assert_eq!(platform.call_log(), vec!["claim".to_string(), "report".to_string()]);
     }
 
     #[test]

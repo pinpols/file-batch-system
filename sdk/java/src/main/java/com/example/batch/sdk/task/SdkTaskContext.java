@@ -1,5 +1,6 @@
 package com.example.batch.sdk.task;
 
+import com.example.batch.sdk.checkpoint.SdkCheckpoint;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +25,8 @@ import java.util.Objects;
  * @param schedulingContext Phase 2 调度上下文;老平台未下发时为 null,便捷 getter 一律 null-safe
  * @param cancellation Phase 4 取消信号;由 dispatcher 注入,null 时构造器补一个永不取消的空信号(getter null-safe)
  * @param progress Phase 4 进度上报槽;由 dispatcher 注入,null 时构造器补一个空槽(handler 调 reportProgress 即写入)
+ * @param commitCoordinator ADR-037 三合一可靠提交协调器;由续跑模板 / dispatcher 注入,null 时构造器补一个内存断点的空协调器(getter
+ *     null-safe)
  */
 public record SdkTaskContext(
     String tenantId,
@@ -35,8 +38,10 @@ public record SdkTaskContext(
     Map<String, Object> runtimeAttributes,
     SdkSchedulingContext schedulingContext,
     CancellationSignal cancellation,
-    ProgressReporter progress) {
+    ProgressReporter progress,
+    SdkCommitCoordinator commitCoordinator) {
 
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public SdkTaskContext {
     Objects.requireNonNull(tenantId, "tenantId");
     Objects.requireNonNull(jobCode, "jobCode");
@@ -45,6 +50,39 @@ public record SdkTaskContext(
     runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
     cancellation = cancellation == null ? new CancellationSignal() : cancellation;
     progress = progress == null ? new ProgressReporter() : progress;
+    // ADR-037: 默认空协调器(内存断点 + 默认限流),让未走续跑模板的 handler 调 commit/checkpoint 也 null-safe。
+    commitCoordinator =
+        commitCoordinator == null
+            ? new SdkCommitCoordinator(
+                String.valueOf(taskId), null, progress, cancellation, true, 1)
+            : commitCoordinator;
+  }
+
+  /** 10 参兼容构造器 —— ADR-037 前的构造方式继续可用,commit 走默认协调器。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public SdkTaskContext(
+      String tenantId,
+      String jobCode,
+      String taskInstanceId,
+      Long taskId,
+      String workerId,
+      Map<String, Object> parameters,
+      Map<String, Object> runtimeAttributes,
+      SdkSchedulingContext schedulingContext,
+      CancellationSignal cancellation,
+      ProgressReporter progress) {
+    this(
+        tenantId,
+        jobCode,
+        taskInstanceId,
+        taskId,
+        workerId,
+        parameters,
+        runtimeAttributes,
+        schedulingContext,
+        cancellation,
+        progress,
+        null);
   }
 
   /** 9 参兼容构造器 —— SDK-P4-1 的构造方式继续可用,progress 走空槽。 */
@@ -69,6 +107,7 @@ public record SdkTaskContext(
         runtimeAttributes,
         schedulingContext,
         cancellation,
+        null,
         null);
   }
 
@@ -144,6 +183,30 @@ public record SdkTaskContext(
    */
   public void reportProgress(Map<String, Object> details) {
     progress.report(details);
+  }
+
+  /**
+   * ADR-037 决策一 — 断点续跑存储入口。续跑模板在 execute 开头 {@code checkpoint().load(taskId)}
+   * 读回上次断点;租户也可直接用它实现自定义续跑逻辑。
+   *
+   * <p>未注入自定义 {@link SdkCheckpoint} 时返回内存默认实现(供示例 / 测试,无持久化)。
+   */
+  public SdkCheckpoint checkpoint() {
+    return commitCoordinator.checkpoint();
+  }
+
+  /**
+   * ADR-037 决策二 + 决策三 — <b>三合一可靠提交</b>:一次调用原子完成「保存断点(同事务)+ 限流上报进度 + 取消安全点检查」。
+   *
+   * <p>每个业务批次写完后调一次。<b>强约束</b>:断点保存必须与业务数据在同一事务边界内(见 {@link SdkCheckpoint});JDBC 默认实现走同一个 {@link
+   * java.sql.Connection} 的 {@code commit()}。提交成功后若平台已请求取消,在<b>已提交的安全点</b>抛 {@link
+   * SdkTaskStoppedException}(业务<b>不得吞</b>),模板顶层捕获落 cancelled 终态。
+   *
+   * @param breakPosition 本批已处理到的断点坐标(业务主键 / 排序键 / 行号)
+   * @throws SdkTaskStoppedException 提交后命中取消标志时
+   */
+  public void commit(Map<String, Object> breakPosition) {
+    commitCoordinator.commit(breakPosition);
   }
 
   /** 实例业务日;无调度上下文时返回 null。 */

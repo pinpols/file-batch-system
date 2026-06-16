@@ -15,8 +15,10 @@ import org.junit.jupiter.api.Test;
 /** ADR-036 Import 模板基类单测 — 走基类 execute 整条模板序。 */
 class SdkAbstractImportHandlerTest {
 
-  private static final SdkTaskContext CTX =
-      new SdkTaskContext("tx", "job", "ti", 1L, "w-1", Map.of(), Map.of());
+  /** 每次执行用<b>独立</b>上下文(ADR-037:context 默认带内存断点协调器,跑完会落 completed 断点;共享 context 会让后续执行被幂等跳过)。 */
+  private static SdkTaskContext ctx() {
+    return new SdkTaskContext("tx", "job", "ti", 1L, "w-1", Map.of(), Map.of());
+  }
 
   /** 测试用 Import handler:rows 模拟读取,记录 loadBatch 调用次数与每批行数。 */
   private static final class RecordingImportHandler extends SdkAbstractImportHandler<Integer> {
@@ -98,7 +100,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = RecordingImportHandler.of(rows(100), 30);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isTrue();
@@ -113,7 +115,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = RecordingImportHandler.of(List.of(), 30);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isTrue();
@@ -128,7 +130,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = new RecordingImportHandler(rows(10), 30, false, true, false);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isFalse();
@@ -143,7 +145,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = new RecordingImportHandler(rows(10), 30, false, false, true);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isFalse();
@@ -157,7 +159,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = RecordingImportHandler.of(rows(60), 30);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isTrue();
@@ -172,7 +174,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = new RecordingImportHandler(rows(10), 30, true, false, false);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isFalse();
@@ -187,7 +189,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = RecordingImportHandler.of(rows(100), 30);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isTrue();
@@ -201,7 +203,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = new RecordingImportHandler(rows(100), 30, false, false, true);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isFalse();
@@ -215,7 +217,7 @@ class SdkAbstractImportHandlerTest {
     RecordingImportHandler handler = RecordingImportHandler.of(rows(50), 10);
 
     // 执行
-    SdkTaskResult result = handler.execute(CTX);
+    SdkTaskResult result = handler.execute(ctx());
 
     // 断言
     assertThat(result.success()).isTrue();

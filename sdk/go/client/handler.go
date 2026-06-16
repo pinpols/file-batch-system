@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
@@ -84,12 +85,100 @@ func (r *RecordingProgressReporter) Report(percent int, message string) {
 // TaskContext is the per-task execution context passed to a handler. Carries the
 // claimed EffectiveConfig snapshot, trace id for OTel stitching, the cancellation
 // signal, and the progress sink.
+//
+// ADR-037 primitives: checkpoint (决策一) is exposed via Checkpoint(); the
+// three-in-one reliable commit (决策二) via Commit(breakPosition). The handler
+// drives its own batch loop and calls Commit at each business-batch boundary;
+// the SDK supplies NO typed templates (thin BYO SDK).
 type TaskContext struct {
 	TaskID          string
 	EffectiveConfig map[string]any
 	TraceID         string
 	Cancellation    *CancellationSignal
 	Progress        ProgressReporter
+
+	// checkpoint is the breakpoint persistence SPI (决策一). Defaults to an
+	// InMemoryCheckpoint when the worker leaves it nil; a production handler
+	// should set a same-transaction impl (see checkpoint.go header).
+	checkpoint SdkCheckpoint
+	// ReportInterval rate-limits progress reporting inside Commit: progress is
+	// reported once every ReportInterval commits (决策二). Zero/negative means
+	// "report on every commit" (interval of 1).
+	ReportInterval int
+	// SelfReport, when true, disables Commit's automatic progress report so the
+	// handler can drive ctx.Progress.Report itself (决策二 selfReport switch).
+	SelfReport bool
+
+	// SucceedCount / FailCount are the live cumulative counters carried into
+	// each progress report; the handler updates these as it processes batches
+	// (typically after restoring them from a loaded checkpoint on resume).
+	SucceedCount int64
+	FailCount    int64
+
+	// commitCounter counts Commit calls for modulo rate-limiting.
+	commitCounter int64
+}
+
+// IsCancelled reports whether cooperative cancellation has been requested. It is
+// the hot-loop poll the handler checks between batches; Commit also checks it.
+func (c *TaskContext) IsCancelled() bool {
+	return c.Cancellation != nil && c.Cancellation.IsCancellationRequested()
+}
+
+// Checkpoint returns the breakpoint persistence SPI (决策一). It is never nil:
+// if none was wired, a process-local InMemoryCheckpoint is lazily installed.
+func (c *TaskContext) Checkpoint() SdkCheckpoint {
+	if c.checkpoint == nil {
+		c.checkpoint = NewInMemoryCheckpoint()
+	}
+	return c.checkpoint
+}
+
+// SetCheckpoint installs the checkpoint SPI (used by the worker / tests).
+func (c *TaskContext) SetCheckpoint(cp SdkCheckpoint) { c.checkpoint = cp }
+
+// Commit is the three-in-one reliable commit at a business-batch boundary
+// (决策二). It:
+//
+//  1. saves the checkpoint (breakPosition + current counters, not completed);
+//  2. reports progress, rate-limited to once every ReportInterval commits
+//     (unless SelfReport is set, in which case the handler reports itself);
+//  3. after a SUCCESSFUL save+report, if the task has been cancelled, returns
+//     an *SdkTaskStopped carrying breakPosition (决策三) — a safe stop between
+//     batches. The handler MUST propagate this error, not swallow it.
+//
+// STRONG CONSTRAINT: the BUSINESS-DATA commit is the tenant's, and a real
+// SdkCheckpoint impl MUST fuse step 1 into the same transaction as that
+// business-data write (see checkpoint.go header). The SDK cannot enforce this;
+// code review must.
+func (c *TaskContext) Commit(breakPosition map[string]any) error {
+	if err := c.Checkpoint().Save(c.TaskID, SdkCheckpointState{
+		BreakPosition: breakPosition,
+		SucceedCount:  c.SucceedCount,
+		FailCount:     c.FailCount,
+		Completed:     false,
+	}); err != nil {
+		return err
+	}
+
+	c.commitCounter++
+	interval := c.ReportInterval
+	if interval < 1 {
+		interval = 1
+	}
+	if !c.SelfReport && c.commitCounter%int64(interval) == 0 && c.Progress != nil {
+		c.Progress.Report(0, progressMessage(c.SucceedCount, c.FailCount, breakPosition))
+	}
+
+	if c.IsCancelled() {
+		return NewSdkTaskStopped(breakPosition)
+	}
+	return nil
+}
+
+// progressMessage renders a coarse progress line for the rate-limited report.
+func progressMessage(succeed, fail int64, breakPosition map[string]any) string {
+	return fmt.Sprintf("succeed=%d fail=%d breakPosition=%v", succeed, fail, breakPosition)
 }
 
 // TaskResult is the handler's terminal outcome. Field names + json tags are a

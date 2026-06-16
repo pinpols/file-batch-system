@@ -16,6 +16,7 @@ from typing import get_args, get_origin
 from pydantic import BaseModel
 
 from batch_worker_sdk.handler._base import SdkAbstractTaskHandler, SdkRowResult
+from batch_worker_sdk.handler.typed._resumable import ResumableTemplateMixin
 from batch_worker_sdk.handler.typed._typed_parameters import SdkTypedParameters
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.result import SdkTaskResult
@@ -32,9 +33,14 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
 
 
 class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, OutputT: BaseModel](
-    SdkAbstractTaskHandler
+    ResumableTemplateMixin, SdkAbstractTaskHandler
 ):
-    """Typed Process handler —— 租户 -> 租户(变换并回写)。"""
+    """Typed Process handler —— 租户 -> 租户(变换并回写)。
+
+    续跑(ADR-037):起头读断点、已完成跳过、恢复计数;每个 drain 批次走
+    ``await ctx.commit(break_key)`` 原子提交 + 限流上报;取消在 commit 安全点抛
+    :class:`SdkTaskStopped`,顶层落 cancelled 终态。
+    """
 
     _params_model: type[BaseModel] | None = None
     DEFAULT_BATCH_SIZE = 500
@@ -68,6 +74,9 @@ class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, Output
     # ---- 模板 ------------------------------------------------------------
 
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
+        return await self._guard(self._run(ctx))
+
+    async def _run(self, ctx: SdkTaskContext) -> SdkTaskResult:
         model = self._params_model
         if model is None:
             return SdkTaskResult.fail(
@@ -82,37 +91,43 @@ class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, Output
                 f"invalid parameters for taskType={self.task_type()}: {ex}",
                 cause=ex,
             )
-        counts = SdkRowResult()
+
+        # 续跑(决策一):已完成则跳过;否则恢复计数。
+        resume = self._resume(ctx)
+        if resume.already_completed:
+            return self._result(
+                params, resume.counts, f"resumed-complete: {resume.counts.success()} rows"
+            )
+        counts = resume.counts
         buf: list[OutRowT] = []
         size = self.batch_size()
         rows = self.select_input(params, ctx)
 
-        def _drain() -> None:
+        async def _drain() -> None:
             if buf:
                 self.upsert(params, ctx, buf)
+                last_row = buf[-1]
                 buf.clear()
+                # 三合一可靠提交 + 取消安全点(决策二/三)。可能抛 SdkTaskStopped。
+                await self._commit_batch(ctx, last_row, counts)
+
+        async def _handle(row: InRowT) -> None:
+            out = self.transform(params, ctx, row)
+            if out is not None:
+                buf.append(out)
+                counts.inc_success()
+            else:
+                counts.inc_skipped()
+            if len(buf) >= size:
+                await _drain()
 
         if hasattr(rows, "__aiter__"):
             async for row in rows:
-                out = self.transform(params, ctx, row)
-                if out is not None:
-                    buf.append(out)
-                    counts.inc_success()
-                else:
-                    counts.inc_skipped()
-                if len(buf) >= size:
-                    _drain()
+                await _handle(row)
         else:
             for row in rows:
-                out = self.transform(params, ctx, row)
-                if out is not None:
-                    buf.append(out)
-                    counts.inc_success()
-                else:
-                    counts.inc_skipped()
-                if len(buf) >= size:
-                    _drain()
-        _drain()
+                await _handle(row)
+        await _drain()
         return self._result(params, counts, f"processed {counts.success()} rows")
 
     def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:

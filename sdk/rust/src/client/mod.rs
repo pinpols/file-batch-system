@@ -26,6 +26,7 @@
 //!   `ProgressReporter`, `TaskResult`, `TaskHandler`.
 //! * [`testkit`] — `FakePlatform` end-to-end rig.
 
+pub mod checkpoint;
 pub mod consumer;
 pub mod handler;
 pub mod lifecycle;
@@ -41,10 +42,14 @@ pub mod transport;
 pub mod reqwest_transport;
 
 // Ergonomic re-exports mirroring the TS/Go phase-2 surface.
+pub use checkpoint::{
+    BreakPosition, CheckpointError, InMemoryCheckpoint, JsonValue, SdkCheckpoint,
+    SdkCheckpointState, SdkTaskStopped,
+};
 pub use consumer::{Consumer, FakeConsumer, MessageOutcome, TaskRecord};
 pub use handler::{
-    CancellationSignal, NoopProgressReporter, ProgressReporter, TaskContext, TaskHandler,
-    TaskResult,
+    map_stopped_result, CancellationSignal, CommitError, NoopProgressReporter, ProgressReporter,
+    RecordingProgressReporter, StoppableTaskHandler, TaskContext, TaskHandler, TaskResult,
 };
 pub use lifecycle::{StopReport, StopStep, Worker, WorkerState};
 pub use scheduler::{

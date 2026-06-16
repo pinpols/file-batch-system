@@ -9,6 +9,11 @@
 from __future__ import annotations
 
 from batch_worker_sdk.task.cancellation import CancellationSignal
+from batch_worker_sdk.task.checkpoint import (
+    InMemoryCheckpoint,
+    SdkCheckpoint,
+    SdkCheckpointState,
+)
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
 from batch_worker_sdk.task.progress import ProgressReporter
@@ -17,7 +22,10 @@ from batch_worker_sdk.task.state import WorkerRuntimeState
 
 __all__: list[str] = [
     "CancellationSignal",
+    "InMemoryCheckpoint",
     "ProgressReporter",
+    "SdkCheckpoint",
+    "SdkCheckpointState",
     "SdkTaskContext",
     "SdkTaskResult",
     "SdkTaskTypeDescriptor",
