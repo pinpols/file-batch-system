@@ -86,6 +86,23 @@ prune_older_than "$DEST/logical" 35d
 
 WAL 归档是 `archive_command` 实时触发的,不进 cron。
 
+> **docker-compose 里的 archive 配置(dev 默认关)**:`docker-compose.yml` 的 `postgres-primary` 已带注释版 `archive_mode=on` / `archive_command` / `archive_timeout=300` + `wal-archive` 卷示例,**默认注释关闭**(dev 开了无意义且占盘)。生产开 PITR:解开这 3 行 + 卷挂载,并把 `archive_command` 目标改成独立故障域(S3/专用 NFS),见 §1.1。
+
+---
+
+## 1.4 RTO / RPO SLO(量化目标)
+
+容灾不是"有备份"就行,得有**可度量的恢复目标**,否则无法判断备份策略是否达标、演练是否退化。
+
+| 指标 | 定义 | **SLO 目标** | 依据 / 由什么保证 |
+|---|---|---|---|
+| **RPO**(可容忍数据丢失) | 灾难时点 → 最近可恢复点 的时间差 | **≤ 5 min** | WAL 连续归档 `archive_timeout=300`(§1.1)封顶:低峰也每 5min 切一个 WAL 段归档,故最坏丢 5min。逻辑 dump(C 层)RPO=24h,仅作跨版本/单表兜底,不是主 RPO。 |
+| **RTO**(恢复耗时) | 开始恢复 → 应用可服务 的耗时 | **≤ 30 min** | 单实例两库:base 解包 + WAL replay 到目标点 + 应用拉起健康。`pg_restore -j4` 并行 + base streamed(`-Xs`)。`dr-drill.sh` 实测本地逻辑恢复远小于此(秒级),生产真实 RTO 受 dump 体积/网络/盘速影响,30min 是含人工介入的保守上限。 |
+
+**SLO 选值依据**:本系统是批量控制面,非 7×24 在线交易;主链 `DB→Outbox→Kafka→CLAIM→EXECUTE→REPORT` 在恢复后靠 lease 超时重派 + outbox republish **自愈收敛**(见 `ha-readiness.md` P0-5),允许分钟级恢复窗口,无需亚分钟 RTO/RPO(那需要同步多副本 + 自动 failover,成本与收益不匹配)。若未来 SLA 收紧:RPO 靠缩短 `archive_timeout` + 流复制 standby 同步提交;RTO 靠 Patroni 自动 failover(P0-2)+ 预热待命实例。
+
+**达标守护**:`dr-drill.sh` 演练对实测 RTO 做阈值断言(默认 `RTO_SLO_SECONDS=1800`=30min;`--strict-rto` 时超阈值直接 fail,否则 WARN)。把 SLO 从"文档数字"变成"演练里会红的断言",防恢复链路悄悄退化(dump 膨胀、并行度丢失)。
+
 ---
 
 ## 2. 恢复演练(**上线前必须至少跑一次**)
