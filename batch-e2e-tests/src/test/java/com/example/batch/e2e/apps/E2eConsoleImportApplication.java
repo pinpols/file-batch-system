@@ -16,6 +16,7 @@ import com.example.batch.worker.exports.infrastructure.ExportStepExecutionAdapte
 import com.example.batch.worker.imports.BatchWorkerImportApplication;
 import java.util.concurrent.Executor;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
@@ -41,6 +42,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableAutoConfiguration(
     exclude = {
       com.example.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
+      AnthropicChatAutoConfiguration.class,
       OpenAiChatAutoConfiguration.class,
       OpenAiAudioSpeechAutoConfiguration.class,
       OpenAiAudioTranscriptionAutoConfiguration.class,

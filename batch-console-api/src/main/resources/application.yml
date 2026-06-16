@@ -20,6 +20,16 @@ spring:
   # 注：DataRedisRepositoriesAutoConfiguration 已在 BatchConsoleApiApplication 主类 @SpringBootApplication(exclude=...) 排除
   #     data.redis.repositories.enabled=false 已在 batch-defaults.yml 设置；此处不再重复
   ai:
+    # 默认聊天 provider = Anthropic(Claude);RAG 嵌入仍走 OpenAI embedding(Anthropic 无 embedding API)
+    anthropic:
+      # Anthropic 接入地址(可按代理/私有化环境覆盖)
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      # API Key:通过环境变量注入,不要明文入仓
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          # 默认聊天模型(能力强,适合领域诊断)
+          model: ${ANTHROPIC_CHAT_MODEL:claude-opus-4-8}
     openai:
       # OpenAI 接入地址（可按代理/私有化环境覆盖）
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
@@ -27,8 +37,12 @@ spring:
       api-key: ${OPENAI_API_KEY:}
       chat:
         options:
-          # 默认模型（Console 内置 AI 功能使用；也会被 batch.console.ai.model 覆盖）
+          # OpenAI 聊天模型(仅当 provider=openai 或 anthropic 不可用时回退使用)
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      embedding:
+        options:
+          # RAG 文本嵌入模型(低成本;知识库与提问都用它向量化)
+          model: ${OPENAI_EMBED_MODEL:text-embedding-3-small}
 
 batch:
   console:
@@ -107,8 +121,18 @@ batch:
     ai:
       # Console AI 功能开关（仅在开启并满足白名单时生效）
       enabled: ${BATCH_CONSOLE_AI_ENABLED:false}
-      # AI 模型（通常与 OPENAI_CHAT_MODEL 保持一致）
-      model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      # 聊天 provider:anthropic(默认,Claude)/ openai
+      provider: ${BATCH_CONSOLE_AI_PROVIDER:anthropic}
+      # AI 模型(仅用于审计展示;实际由对应 provider 的 spring.ai 配置决定)
+      model: ${BATCH_CONSOLE_AI_MODEL:claude-opus-4-8}
+      # RAG 检索增强:用系统自身知识库片段给模型作答事实依据
+      rag:
+        enabled: ${BATCH_CONSOLE_AI_RAG_ENABLED:true}
+        top-k: ${BATCH_CONSOLE_AI_RAG_TOP_K:4}
+        min-score: ${BATCH_CONSOLE_AI_RAG_MIN_SCORE:0.5}
+        max-context-chars: ${BATCH_CONSOLE_AI_RAG_MAX_CONTEXT:6000}
+        locations:
+          - classpath:ai-knowledge/*.md
       # prompt 最大长度（防止输入过长导致请求失败/费用不可控）
       max-prompt-length: ${BATCH_CONSOLE_AI_MAX_PROMPT_LENGTH:4000}
       # response 最大长度（防止输出过长）
