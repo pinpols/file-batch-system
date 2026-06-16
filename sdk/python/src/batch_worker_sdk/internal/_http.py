@@ -143,11 +143,28 @@ class PlatformHttpClient:
         ConflictError``,即可按 wire-protocol §B 分支处理"幂等已 claim"
         情况。
         """
-        return await self._post_json(
+        decoded, _status = await self.claim_status(task_id, idempotency_key, body)
+        return decoded
+
+    async def claim_status(
+        self,
+        task_id: int,
+        idempotency_key: str,
+        body: dict[str, Any],
+    ) -> tuple[dict[str, Any], int]:
+        """POST /internal/tasks/{id}/claim,返回 ``(响应体, HTTP 状态码)``。
+
+        与 :meth:`claim` 调同一端点,但额外暴露 HTTP 状态码,让调用方
+        (dispatcher)区分 2xx 真正认领 vs 409 幂等"已被他人/自己 claim"。
+        409 时调用方必须**直接返回**:既不执行 handler,也不 REPORT —— 见
+        contract fixture 08(``sdkMustNot: call /report``)。
+        """
+        resp = await self._post_json_raw(
             f"/internal/tasks/{task_id}/claim",
             body,
             idempotency_key=idempotency_key,
         )
+        return _decode_body(resp), resp.status_code
 
     async def report(
         self,
@@ -178,6 +195,25 @@ class PlatformHttpClient:
             h["Idempotency-Key"] = idempotency_key
         return h
 
+    async def _post_json_raw(
+        self,
+        path: str,
+        body: dict[str, Any] | None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> httpx.Response:
+        headers = self._headers(idempotency_key)
+
+        async def factory() -> httpx.Response:
+            return await self._client.post(path, json=body or {}, headers=headers)
+
+        return await with_retry(
+            factory,
+            max_attempts=self.config.retry_max_attempts,
+            base_delay_s=self.config.retry_base_delay.total_seconds(),
+            counter=self._counter,
+        )
+
     async def _post_json(
         self,
         path: str,
@@ -185,17 +221,7 @@ class PlatformHttpClient:
         *,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        headers = self._headers(idempotency_key)
-
-        async def factory() -> httpx.Response:
-            return await self._client.post(path, json=body or {}, headers=headers)
-
-        resp = await with_retry(
-            factory,
-            max_attempts=self.config.retry_max_attempts,
-            base_delay_s=self.config.retry_base_delay.total_seconds(),
-            counter=self._counter,
-        )
+        resp = await self._post_json_raw(path, body, idempotency_key=idempotency_key)
         return _decode_body(resp)
 
 

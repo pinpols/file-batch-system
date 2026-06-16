@@ -22,7 +22,7 @@ type TaskDispatchMessage struct {
 	TaskID            string         `json:"taskId"`
 	TenantID          string         `json:"tenantId"`
 	SchemaVersion     string         `json:"schemaVersion"`
-	TaskType          string         `json:"taskType"`
+	WorkerType        string         `json:"workerType"`
 	IdempotencyKey    string         `json:"idempotencyKey"`
 	RuntimeAttributes map[string]any `json:"runtimeAttributes"`
 	Parameters        map[string]any `json:"parameters"`

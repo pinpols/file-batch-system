@@ -126,12 +126,17 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     }
   }
 
-  /** 黑名单可填正则;非法正则视为不匹配(已先做 contains 子串匹配兜底)。 */
+  /** 黑名单可填正则;非法正则 fail-closed —— 视为匹配(block),避免坏正则静默放行 host(SSRF)。 */
   private static boolean matchesRegex(String host, String pattern) {
     try {
       return host.matches(pattern);
     } catch (PatternSyntaxException ex) {
-      return false;
+      log.warn(
+          "invalid blocked host pattern '{}', failing closed (blocking host {}): {}",
+          pattern,
+          host,
+          ex.getMessage());
+      return true;
     }
   }
 

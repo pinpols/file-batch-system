@@ -27,6 +27,7 @@ type FakePlatform struct {
 	RenewResp       protocol.RenewResponse
 	RenewErr        error
 	RenewScript     map[string]protocol.RenewResponse // per-taskId override
+	RenewRevoke     map[string]bool                   // per-taskId 409 (lease revoked) override
 	DeactivateErr   error
 
 	// Recorded calls.
@@ -52,7 +53,7 @@ type claimStep struct {
 type ReportCall struct {
 	TaskID         string
 	IdempotencyKey string
-	Result         TaskResult
+	Result         ReportRequest
 }
 
 // NewFakePlatform builds a FakePlatform with empty scripts.
@@ -115,7 +116,7 @@ func (p *FakePlatform) Deactivate(_ context.Context, workerCode string) error {
 }
 
 // Claim implements Transport.
-func (p *FakePlatform) Claim(_ context.Context, taskID, _ string) (ClaimResult, error) {
+func (p *FakePlatform) Claim(_ context.Context, taskID, _ string, _ ClaimRequest) (ClaimResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.ClaimCalls = append(p.ClaimCalls, taskID)
@@ -128,22 +129,35 @@ func (p *FakePlatform) Claim(_ context.Context, taskID, _ string) (ClaimResult, 
 }
 
 // Report implements Transport.
-func (p *FakePlatform) Report(_ context.Context, taskID, idempotencyKey string, result TaskResult) error {
+func (p *FakePlatform) Report(_ context.Context, taskID, idempotencyKey string, req ReportRequest) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.ReportCalls = append(p.ReportCalls, ReportCall{TaskID: taskID, IdempotencyKey: idempotencyKey, Result: result})
+	p.ReportCalls = append(p.ReportCalls, ReportCall{TaskID: taskID, IdempotencyKey: idempotencyKey, Result: req})
 	return p.ReportErr
 }
 
 // Renew implements Transport.
-func (p *FakePlatform) Renew(_ context.Context, taskID string, _ RenewRequest) (protocol.RenewResponse, error) {
+func (p *FakePlatform) Renew(_ context.Context, taskID string, _ RenewRequest) (RenewResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.RenewCalls = append(p.RenewCalls, taskID)
-	if resp, ok := p.RenewScript[taskID]; ok {
-		return resp, p.RenewErr
+	if p.RenewRevoke[taskID] {
+		return RenewResult{Revoked: true}, nil
 	}
-	return p.RenewResp, p.RenewErr
+	if resp, ok := p.RenewScript[taskID]; ok {
+		return RenewResult{RenewResponse: resp}, p.RenewErr
+	}
+	return RenewResult{RenewResponse: p.RenewResp}, p.RenewErr
+}
+
+// ScriptRevoke marks taskID's next renew as a 409 lease-revoked (Revoked=true).
+func (p *FakePlatform) ScriptRevoke(taskID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.RenewRevoke == nil {
+		p.RenewRevoke = map[string]bool{}
+	}
+	p.RenewRevoke[taskID] = true
 }
 
 // ReportFor returns the recorded report for taskID (last wins) and whether one exists.

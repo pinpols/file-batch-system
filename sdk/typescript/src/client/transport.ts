@@ -32,6 +32,11 @@ export interface ClaimResponse {
   effectiveConfig?: Record<string, unknown>;
   leaseUntil?: string | null;
   traceId?: string | null;
+  /**
+   * ADR-014 partition invocation token (fixture 10). The worker must echo it on
+   * every renew / report so the platform can reject a stale invocation.
+   */
+  partitionInvocationId?: string | null;
 }
 
 /** Register acknowledgement. */
@@ -39,12 +44,14 @@ export interface RegisterAck {
   idempotent: boolean;
 }
 
-/** Report request body — field names are the §B red line. */
+/** Report request body — field names are the §B red line (TaskExecutionReportDto). */
 export interface ReportBody {
   success: boolean;
   errorCode?: string;
   outputs?: Record<string, unknown>;
   resultSummary?: string;
+  /** echoed from the claim response (ADR-014); platform rejects a mismatched invocation. */
+  partitionInvocationId?: string | null;
 }
 
 /** The 8 control-plane operations (§1.1 stable surface). */
@@ -78,6 +85,10 @@ export class NotFoundTransportError extends Error {
 
 export interface HttpTransportOptions {
   baseUrl: string; // e.g. "http://127.0.0.1:18080"
+  /** owning tenant — injected as `tenantId` into claim/renew/report/deactivate bodies. */
+  tenantId: string;
+  /** this worker's code — injected as `workerId` (claim/renew/report) / `workerCode` (deactivate). */
+  workerCode: string;
   timeoutMs?: number; // default 10000 (§5)
   retryBaseMs?: number;
   retryMaxAttempts?: number;
@@ -97,6 +108,8 @@ const realSleep = (ms: number): Promise<void> =>
 
 export class HttpTransport implements Transport {
   #baseUrl: URL;
+  #tenantId: string;
+  #workerCode: string;
   #timeoutMs: number;
   #retryBaseMs: number;
   #retryMaxAttempts: number;
@@ -108,6 +121,8 @@ export class HttpTransport implements Transport {
 
   constructor(opts: HttpTransportOptions) {
     this.#baseUrl = new URL(opts.baseUrl);
+    this.#tenantId = opts.tenantId;
+    this.#workerCode = opts.workerCode;
     this.#timeoutMs = opts.timeoutMs ?? 10_000;
     this.#retryBaseMs = opts.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
     this.#retryMaxAttempts = opts.retryMaxAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS;
@@ -294,20 +309,27 @@ export class HttpTransport implements Transport {
   }
 
   async deactivate(workerCode: string): Promise<void> {
+    // WorkerHeartbeatDto requires [tenantId, workerCode, status, heartbeatAt].
     await this.#call(
       "deactivate",
       `/internal/workers/${encodeURIComponent(workerCode)}/deactivate`,
-      {},
+      {
+        tenantId: this.#tenantId,
+        workerCode,
+        status: "OFFLINE",
+        heartbeatAt: new Date().toISOString(),
+      },
       {},
       true,
     );
   }
 
   async claim(taskId: string, idempotencyKey: string): Promise<ClaimResponse> {
+    // TaskClaimRequest requires [tenantId, workerId]; workerId == workerCode (ADR-035 §9).
     const raw = await this.#call(
       "claim",
       `/internal/tasks/${encodeURIComponent(taskId)}/claim`,
-      {},
+      { tenantId: this.#tenantId, workerId: this.#workerCode },
       { "idempotency-key": idempotencyKey },
       true,
     );
@@ -319,10 +341,11 @@ export class HttpTransport implements Transport {
     body: ReportBody,
     idempotencyKey: string,
   ): Promise<void> {
+    // TaskExecutionReportDto requires [taskId, tenantId, workerId, success].
     await this.#call(
       "report",
       `/internal/tasks/${encodeURIComponent(taskId)}/report`,
-      body,
+      { tenantId: this.#tenantId, workerId: this.#workerCode, ...body },
       { "idempotency-key": idempotencyKey },
       true,
     );

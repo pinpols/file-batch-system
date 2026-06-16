@@ -17,7 +17,7 @@ import {
   planStop,
 } from "../decide.ts";
 import type { FsmState, KafkaAction } from "../protocol.ts";
-import type { Transport } from "./transport.ts";
+import { FatalTransportError, type ReportBody, type Transport } from "./transport.ts";
 import {
   HeartbeatScheduler,
   LeaseRenewalScheduler,
@@ -41,6 +41,7 @@ import {
 } from "./handler.ts";
 import { SensitiveDataValidator } from "./sensitive.ts";
 import { ErrorCode } from "../protocol.ts";
+import { SUPPORTED_SCHEMA_VERSIONS } from "../constants.ts";
 
 let unhandledRejectionInstalled = false;
 
@@ -59,6 +60,12 @@ export interface WorkerConfig {
   tenantId: string;
   workerCode: string;
   maxConcurrent: number;
+  /**
+   * workerTypes this worker serves (== the taskTypes its handler accepts). A
+   * dispatch message whose `workerType` is not served is not-for-us and is not
+   * committed. Omitted / empty → serve all (no routing filter).
+   */
+  workerTypes?: readonly string[];
   registerBody?: Record<string, unknown>;
   buildHeartbeatBody?: () => Record<string, unknown>;
   buildRenewBody?: (taskId: string) => Record<string, unknown>;
@@ -79,6 +86,8 @@ export interface WorkerLifecycleDeps {
 
 interface TrackedTask extends InFlightTask {
   promise: Promise<void>;
+  /** ADR-014 invocation token from the claim response; echoed on renew + report. */
+  partitionInvocationId?: string | null;
 }
 
 export class WorkerLifecycle {
@@ -109,9 +118,16 @@ export class WorkerLifecycle {
       this.#transport,
       {
         workerCode: this.#cfg.workerCode,
+        // WorkerHeartbeatDto requires [tenantId, workerCode, status, heartbeatAt].
         buildBody:
           this.#cfg.buildHeartbeatBody ??
-          (() => ({ workerCode: this.#cfg.workerCode })),
+          (() => ({
+            tenantId: this.#cfg.tenantId,
+            workerCode: this.#cfg.workerCode,
+            status: this.#draining ? "DRAINING" : "RUNNING",
+            heartbeatAt: new Date().toISOString(),
+            currentLoad: this.#inFlight.size,
+          })),
         setFsm: (s) => this.#setFsm(s),
         applyKafka: (a) => this.#applyKafka(a),
         onDrain: () => void this.stop(30_000),
@@ -127,8 +143,16 @@ export class WorkerLifecycle {
       this.#transport,
       {
         inFlight: () => [...this.#inFlight.values()],
+        // TaskClaimRequest (claim/renew shared) requires [tenantId, workerId];
+        // taskId is in the URL. Echo the ADR-014 invocation token when present.
         buildBody:
-          this.#cfg.buildRenewBody ?? ((taskId) => ({ taskId })),
+          this.#cfg.buildRenewBody ??
+          ((taskId) => ({
+            tenantId: this.#cfg.tenantId,
+            workerId: this.#cfg.workerCode,
+            partitionInvocationId:
+              this.#inFlight.get(taskId)?.partitionInvocationId ?? null,
+          })),
         dropTask: (taskId) => this.#inFlight.delete(taskId),
         logger: this.#logger,
       },
@@ -137,6 +161,7 @@ export class WorkerLifecycle {
 
     this.#pipeline = new MessagePipeline({
       tenantId: this.#cfg.tenantId,
+      workerTypes: this.#cfg.workerTypes,
       inFlight: () => this.#inFlight.size,
       maxConcurrent: this.#cfg.maxConcurrent,
       assignment: assignmentOf(this.#consumer),
@@ -191,10 +216,17 @@ export class WorkerLifecycle {
 
   /** start(): register → start schedulers → subscribe consumer (§4 order). */
   async start(): Promise<void> {
-    // register body credential check (§1.8 register path → throw on leak)
+    // register body credential check (§1.8 register path → throw on leak).
+    // WorkerHeartbeatDto requires [tenantId, workerCode, status, heartbeatAt].
     const regBody = this.#cfg.registerBody ?? {
-      workerCode: this.#cfg.workerCode,
       tenantId: this.#cfg.tenantId,
+      workerCode: this.#cfg.workerCode,
+      status: "RUNNING",
+      heartbeatAt: new Date().toISOString(),
+      // #536 register-time protocol-version gate: advertise the SDK's current
+      // major (last of SUPPORTED_SCHEMA_VERSIONS). Register only — heartbeat null.
+      protocolVersion:
+        SUPPORTED_SCHEMA_VERSIONS[SUPPORTED_SCHEMA_VERSIONS.length - 1],
     };
     this.#validator.assertRegisterBody(regBody);
 
@@ -239,6 +271,9 @@ export class WorkerLifecycle {
         }
 
         const claim = await this.#transport.claim(msg.taskId, idemKey);
+        // record the ADR-014 invocation token so renew/report can echo it
+        const tracked = this.#inFlight.get(msg.taskId);
+        if (tracked) tracked.partitionInvocationId = claim.partitionInvocationId ?? null;
         const ctx: TaskContext = {
           taskId: msg.taskId,
           effectiveConfig: claim.effectiveConfig ?? {},
@@ -266,13 +301,23 @@ export class WorkerLifecycle {
           errorCode: result.errorCode,
           outputs: result.outputs,
           resultSummary: result.resultSummary,
+          partitionInvocationId:
+            this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
         });
       } catch (e) {
-        // claim/report fatal (e.g. 401) — log; lifecycle-level fail handled by caller
+        // claim/report fatal — log, then fail-fast on auth errors (§ openapi:
+        // 401/403 must stop the worker; a stale/invalid credential won't fix itself).
         this.#logger.error("task pipeline failed", {
           taskId: msg.taskId,
           error: String(e),
         });
+        if (e instanceof FatalTransportError && (e.status === 401 || e.status === 403)) {
+          this.#logger.error("auth failure (401/403); failing fast", {
+            taskId: msg.taskId,
+            status: e.status,
+          });
+          void this.stop(30_000);
+        }
       } finally {
         this.#inFlight.delete(msg.taskId);
         // a slot freed → resume assignment if it was paused for backpressure
@@ -289,10 +334,7 @@ export class WorkerLifecycle {
     });
   }
 
-  async #report(
-    taskId: string,
-    body: { success: boolean; errorCode?: string; outputs?: Record<string, unknown>; resultSummary?: string },
-  ): Promise<void> {
+  async #report(taskId: string, body: ReportBody): Promise<void> {
     await this.#transport.report(taskId, body, `report-${taskId}`);
   }
 

@@ -257,15 +257,16 @@ func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 	var dropped []string
 	for taskID, sig := range s.registry.snapshot() {
 		resp, err := s.transport.Renew(ctx, taskID, RenewRequest{
-			WorkerCode: s.workerCode,
-			TenantID:   s.tenantID,
+			WorkerID: s.workerCode,
+			TenantID: s.tenantID,
 		})
 		if err != nil {
-			// 404 (lease gone) or 409 (reclaimed) -> drop locally; handler's
-			// report would be rejected anyway (§1.4).
+			// 404 (lease gone) -> drop locally; handler's report would be
+			// rejected anyway (§1.4).
 			var nf *NotFoundError
 			if errors.As(err, &nf) {
 				s.logger.Printf("WARN lease gone taskId=%s, dropping: %v", taskID, err)
+				sig.MarkCancelled()
 				s.registry.Remove(taskID)
 				dropped = append(dropped, taskID)
 				continue
@@ -273,8 +274,17 @@ func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 			s.logger.Printf("WARN renew error taskId=%s: %v", taskID, err)
 			continue
 		}
+		// 409 (lease reclaimed / zombie claim): stop the handler and drop the
+		// task locally, same as 404 (openapi renew 409 semantics).
+		if resp.Revoked {
+			s.logger.Printf("WARN lease revoked (409) taskId=%s, cancelling handler and dropping", taskID)
+			sig.MarkCancelled()
+			s.registry.Remove(taskID)
+			dropped = append(dropped, taskID)
+			continue
+		}
 		// ApplyRenew turns cancelRequested into a cancel decision.
-		if d := protocol.ApplyRenew(resp); d.CancelRequested != nil && *d.CancelRequested {
+		if d := protocol.ApplyRenew(resp.RenewResponse); d.CancelRequested != nil && *d.CancelRequested {
 			s.logger.Printf("INFO cancelRequested taskId=%s -> signalling handler", taskID)
 			sig.MarkCancelled()
 		}

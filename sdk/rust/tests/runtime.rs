@@ -206,10 +206,13 @@ fn end_to_end_happy_path() {
     assert_eq!(state, WorkerState::Draining);
     assert!(result.unwrap().is_success());
     assert_eq!(report.deactivate_outcome, TransportOutcome::Success);
+    // Full lease cycle: register -> claim -> report -> deactivate (the worker
+    // must CLAIM before executing the handler, §1.1).
     assert_eq!(
         platform.call_log(),
         vec![
             "register".to_string(),
+            "claim".to_string(),
             "report".to_string(),
             "deactivate".to_string()
         ]

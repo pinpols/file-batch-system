@@ -48,7 +48,7 @@ func TestHTTPTransport_FailFastOn401(t *testing.T) {
 	defer srv.Close()
 
 	tr := NewHTTPTransport(srv.URL, WithSleep(func(time.Duration) {}))
-	_, err := tr.Claim(context.Background(), "task-1", "idem-1")
+	_, err := tr.Claim(context.Background(), "task-1", "idem-1", ClaimRequest{TenantID: "t1", WorkerID: "w1"})
 	if !IsFatal(err) {
 		t.Fatalf("expected FatalError on 401, got %v", err)
 	}
@@ -68,7 +68,7 @@ func TestHTTPTransport_IdempotentOn409(t *testing.T) {
 	defer srv.Close()
 
 	tr := NewHTTPTransport(srv.URL, WithSleep(func(time.Duration) {}))
-	res, err := tr.Claim(context.Background(), "task-9", "idem-9")
+	res, err := tr.Claim(context.Background(), "task-9", "idem-9", ClaimRequest{TenantID: "t9", WorkerID: "w9"})
 	if err != nil {
 		t.Fatalf("409 should be idempotent success, got err %v", err)
 	}
