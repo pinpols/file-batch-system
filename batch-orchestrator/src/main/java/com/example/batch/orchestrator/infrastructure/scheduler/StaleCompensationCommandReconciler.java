@@ -5,6 +5,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -41,6 +42,10 @@ public class StaleCompensationCommandReconciler {
       initialDelayString =
           "${batch.compensation.stale-running-reconciler.initial-delay-millis:60000}",
       fixedDelayString = "${batch.compensation.stale-running-reconciler.fixed-delay-millis:60000}")
+  @SchedulerLock(
+      name = "stale_compensation_reconcile",
+      lockAtMostFor = "PT15M",
+      lockAtLeastFor = "PT1M")
   public void reconcile() {
     if (timeoutSeconds <= 0 || batchSize <= 0) {
       return;
