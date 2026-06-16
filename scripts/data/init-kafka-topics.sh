@@ -9,7 +9,7 @@
 #                batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,
 #                batch.task.retry,batch.task.dead-letter
 #   - 分区数：默认全部 4；可通过 KAFKA_PARTITIONS_DISPATCH / _RESULT / _RETRY / _DEAD_LETTER 单独覆盖
-#   - 副本因子：1
+#   - 副本因子：默认 1（dev）；prod 设 KAFKA_TOPIC_REPLICATION_FACTOR=3 + KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2
 #
 # 使用方法：
 #   KAFKA_BOOTSTRAP_SERVER=localhost:19092 \
@@ -18,11 +18,17 @@
 #
 # 生产环境配置示例（10 实例 × 4 并发，3 节点 Kafka 集群）：
 #   KAFKA_TOPIC_REPLICATION_FACTOR=3
+#   KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2      # ← 配 RF=3 + producer acks=all，在途事件 0 丢
 #   KAFKA_PARTITIONS_DISPATCH=40
 #   KAFKA_PARTITIONS_RESULT=20
 #   KAFKA_PARTITIONS_RETRY=10
 #   KAFKA_PARTITIONS_DEAD_LETTER=5
-# 注意：生产环境还需在 Kafka broker 配置 min.insync.replicas=2
+#
+# 副本因子 / min.insync.replicas 均可配，默认值保持 dev 单 broker 行为不变：
+#   - KAFKA_TOPIC_REPLICATION_FACTOR：默认 1；prod 设 3。
+#   - KAFKA_TOPIC_MIN_INSYNC_REPLICAS：默认空（不下发 topic 级 min.insync，沿用 broker 默认 1）；
+#     prod 设 2，则建 topic 时随 `--config min.insync.replicas=2` 一并落地，不依赖
+#     “运维记得单独在 broker 上配”。RF=1 时若设 min.insync>1 会让该 topic 无法写入，故 dev 默认留空。
 set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
@@ -31,6 +37,8 @@ default_direct_topics="batch.task.dispatch.import.node.import-node-1,batch.task.
 topics_csv="${KAFKA_TOPICS:-${default_topics},${KAFKA_DIRECT_WORKER_TOPICS:-${default_direct_topics}}}"
 default_partitions="${KAFKA_TOPIC_PARTITIONS:-4}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
+# 空 = 不下发 topic 级 min.insync.replicas（dev 默认，沿用 broker 默认）；prod 设 2。
+min_insync_replicas="${KAFKA_TOPIC_MIN_INSYNC_REPLICAS:-}"
 
 # 各 topic 类型分区数（未设置则回退到 default_partitions）
 partitions_dispatch="${KAFKA_PARTITIONS_DISPATCH:-${default_partitions}}"
@@ -74,13 +82,25 @@ ensure_topic() {
   partitions="$2"
   current="$(topic_partitions "${topic}")"
   if [ -z "${current}" ]; then
-    /opt/kafka/bin/kafka-topics.sh \
-      --bootstrap-server "${bootstrap_server}" \
-      --create \
-      --if-not-exists \
-      --topic "${topic}" \
-      --partitions "${partitions}" \
-      --replication-factor "${replication_factor}"
+    # min.insync.replicas 为空则不下发该 --config（dev 行为不变）。
+    if [ -n "${min_insync_replicas}" ]; then
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server "${bootstrap_server}" \
+        --create \
+        --if-not-exists \
+        --topic "${topic}" \
+        --partitions "${partitions}" \
+        --replication-factor "${replication_factor}" \
+        --config "min.insync.replicas=${min_insync_replicas}"
+    else
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server "${bootstrap_server}" \
+        --create \
+        --if-not-exists \
+        --topic "${topic}" \
+        --partitions "${partitions}" \
+        --replication-factor "${replication_factor}"
+    fi
     return
   fi
   if [ "${current}" -lt "${partitions}" ]; then
