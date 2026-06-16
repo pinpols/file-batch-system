@@ -35,6 +35,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -68,8 +69,12 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
   @BeforeEach
   void setUpClient() {
+    // 用 JDK HttpClient 连接器而非默认 reactor-netty:后者的 HTTP 解码器对「重复且相同」的
+    // Content-Length 响应头 fail-fast 抛 "Multiple Content-Length values found"(Netty 安全加固),
+    // 在 CI runner(JDK25 + Tomcat 响应管线)上偶发触发,与被测业务无关。JDK 连接器对此宽容,
+    // 消除该环境 flake;不改任何生产行为,仅约束测试客户端。
     webTestClient =
-        WebTestClient.bindToServer()
+        WebTestClient.bindToServer(new JdkClientHttpConnector())
             .baseUrl("http://localhost:" + port)
             .responseTimeout(Duration.ofSeconds(60))
             .build();
