@@ -2555,6 +2555,29 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/WorkerFingerprintSummaryResponse'
+  /api/console/sdk/catalog:
+    get:
+      tags: [Workers]
+      summary: SDK developer-portal catalog (protocol version + per-language SDK metadata + shared constants + docs) — SDK runtime visibility ②
+      description: |
+        Read-only data source for the developer portal. Static, non-tenant (same for all tenants).
+        Data sources: protocolVersion ← TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS (mirrored via
+        sdk-shared-constants.yaml); languages[].latestVersion ← per-SDK package metadata
+        (pyproject/package.json/Cargo.toml/pom); sharedConstants ← sdk-shared-constants.yaml; docs ← repo paths.
+        FE portal page lives in the separate batch-console frontend repo (not in this backend repo).
+      operationId: getSdkCatalog
+      responses:
+        '200':
+          description: SDK catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    $ref: '#/components/schemas/SdkCatalog'
   /api/console/atomic-task-types/schema:
     get:
       tags: [Workers]
@@ -9255,6 +9278,71 @@ components:
         heartbeatAt:
           type: string
           format: date-time
+        compatibility:
+          $ref: '#/components/schemas/WorkerCompatibility'
+    WorkerCompatibility:
+      type: object
+      description: |
+        Protocol/SDK compatibility derived by backend from the worker's reported sdkVersion vs the
+        platform's current supported SDK major (SDK runtime visibility ①). worker_registry stores only
+        sdkVersion (no per-worker protocol schemaVersion), so the verdict is purely sdkVersion-major based;
+        unparseable/missing -> UNKNOWN (never guessed).
+      properties:
+        status:
+          type: string
+          enum: [OK, SDK_OUTDATED, PROTOCOL_UNSUPPORTED, UNKNOWN]
+        reasonCode:
+          type: string
+          description: Stable reason token for FE i18n (worker.compatibility.reason.*).
+          enum: [COMPATIBLE, SDK_VERSION_BEHIND, SDK_VERSION_AHEAD, SDK_VERSION_UNKNOWN]
+        reportedSdkVersion:
+          type: string
+          nullable: true
+        platformSdkMajor:
+          type: string
+          description: Platform current SDK major (e.g. v1) for "upgrade to" hint.
+    SdkCatalog:
+      type: object
+      description: SDK developer-portal catalog (SDK runtime visibility ②).
+      properties:
+        protocolVersion:
+          type: object
+          properties:
+            supportedMajors:
+              type: array
+              items: { type: string }
+              description: Platform-supported protocol majors (e.g. [v1, v2]).
+            current:
+              type: string
+              description: Current canonical protocol major dispatched (e.g. v2).
+            rejectedFrom:
+              type: string
+              description: Lowest rejected major (this and above are rejected, e.g. v3).
+        languages:
+          type: array
+          items:
+            type: object
+            properties:
+              lang: { type: string }
+              artifact: { type: string }
+              latestVersion:
+                type: string
+                description: Latest version; repo-version/unpublished when not published.
+              installSnippet: { type: string }
+              conformanceStatus: { type: string }
+        sharedConstants:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: Cross-language key constants mirrored from sdk-shared-constants.yaml.
+        docs:
+          type: array
+          items:
+            type: object
+            properties:
+              title: { type: string }
+              path: { type: string }
       required: [id, tenantId, workerCode, status]
     WorkerFingerprintSummaryResponse:
       type: object

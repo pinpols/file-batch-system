@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.console.domain.ops.dto.WorkerCompatibility;
+import com.example.batch.console.domain.ops.dto.WorkerCompatibility.ReasonCode;
+import com.example.batch.console.domain.ops.dto.WorkerCompatibility.Status;
 import com.example.batch.console.domain.ops.service.ConsoleWorkerFingerprintQueryService;
 import com.example.batch.console.domain.ops.web.response.WorkerFingerprintResponse;
 import com.example.batch.console.domain.ops.web.response.WorkerFingerprintSummaryResponse;
@@ -37,7 +40,8 @@ class ConsoleWorkerFingerprintControllerTest {
             "pid-42",
             "1.4.0",
             "ONLINE",
-            Instant.parse("2026-06-02T10:00:00Z"));
+            Instant.parse("2026-06-02T10:00:00Z"),
+            new WorkerCompatibility(Status.OK, ReasonCode.COMPATIBLE, "1.4.0", "v1"));
     when(queryService.list("tx")).thenReturn(List.of(row));
     when(responseFactory.success(ArgumentMatchers.<List<WorkerFingerprintResponse>>any()))
         .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
@@ -54,6 +58,8 @@ class ConsoleWorkerFingerprintControllerTest {
               assertThat(r.processId()).isEqualTo("pid-42");
               assertThat(r.status()).isEqualTo("ONLINE");
               assertThat(r.heartbeatAt()).isEqualTo(Instant.parse("2026-06-02T10:00:00Z"));
+              assertThat(r.compatibility().status()).isEqualTo(Status.OK);
+              assertThat(r.compatibility().reasonCode()).isEqualTo(ReasonCode.COMPATIBLE);
             });
   }
 
