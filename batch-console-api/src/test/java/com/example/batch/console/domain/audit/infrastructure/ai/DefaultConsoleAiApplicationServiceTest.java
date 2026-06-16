@@ -18,6 +18,7 @@ import com.example.batch.console.domain.audit.service.ConsoleAiPromptGuard;
 import com.example.batch.console.domain.audit.support.AiPromptGateResult;
 import com.example.batch.console.domain.audit.support.ConsoleAiAuditService;
 import com.example.batch.console.domain.audit.web.response.AiChatResponse;
+import com.example.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.auth.AiChatRequest;
@@ -58,6 +59,8 @@ class DefaultConsoleAiApplicationServiceTest {
   @Mock private ConsoleAiAuditService auditService;
   @Mock private ConsoleAiKnowledgeBase knowledgeBase;
 
+  @Mock private ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
+
   private ConsoleAiProperties aiProperties;
   private DefaultConsoleAiApplicationService service;
 
@@ -75,7 +78,8 @@ class DefaultConsoleAiApplicationServiceTest {
             authorizationService,
             promptGuard,
             auditService,
-            knowledgeBase);
+            knowledgeBase,
+            queryServiceProvider);
   }
 
   private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
