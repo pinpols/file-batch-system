@@ -25,8 +25,16 @@ import (
 
 const (
 	fixturesDir          = "../../../docs/api/sdk-contract-fixtures"
-	expectedFixtureCount = 12
+	expectedFixtureCount = 22
 )
+
+// requestSideKeys are then.expect keys handled by the request builder, not the
+// response→reaction decision core.
+var requestSideKeys = map[string]bool{
+	"requestBodyIncludes": true,
+	"requestBodyExcludes": true,
+	"requestHeaders":      true,
+}
 
 type fixture struct {
 	Scenario string `json:"scenario"`
@@ -89,6 +97,12 @@ func compute(fx fixture) (protocol.Decision, error) {
 		return protocol.PlanStop(timeoutMs), nil
 
 	case strings.Contains(path, "/renew"):
+		// error statuses classify by §B (404 give-up, 5xx backoff, ...);
+		// a 2xx renew applies the cancel directive from the response body.
+		if status >= 400 {
+			clientErrorCount := numFromAny(fx.Given.State["clientErrorCount"], 0)
+			return protocol.ClassifyHTTP(status, clientErrorCount, 0, 0), nil
+		}
 		var resp protocol.RenewResponse
 		if err := unmarshalResponse(when.ResponseBody, &resp); err != nil {
 			return protocol.Decision{}, err
@@ -98,7 +112,8 @@ func compute(fx fixture) (protocol.Decision, error) {
 	case strings.Contains(path, "/claim") || strings.Contains(path, "/report"):
 		baseMs := numFromAny(fx.Given.Config["retryBaseDelayMs"], 0)
 		attempts := numFromAny(fx.Given.Config["retryMaxAttempts"], 0)
-		return protocol.ClassifyHTTP(status, 0, baseMs, attempts), nil
+		clientErrorCount := numFromAny(fx.Given.State["clientErrorCount"], 0)
+		return protocol.ClassifyHTTP(status, clientErrorCount, baseMs, attempts), nil
 	}
 
 	return protocol.Decision{}, fmt.Errorf("no decision route for fixture %s (path=%s)", fx.Scenario, path)
@@ -121,6 +136,22 @@ func TestConformance(t *testing.T) {
 				t.Fatalf("%s: then.expect is empty", file)
 			}
 
+			// Request-side assertions (body includes/excludes, header regexes)
+			// are driven by the request builder, not the decision core.
+			if hasRequestSide(fx.Then.Expect) {
+				assertRequestSide(t, fx)
+			}
+
+			// schemaAccept (§A) is asserted on the received kafka message.
+			if want, ok := fx.Then.Expect["schemaAccept"]; ok {
+				assertSchemaAccept(t, fx, want)
+			}
+
+			// Remaining response-side fields come from the decision core.
+			if !hasDecisionFields(fx.Then.Expect) {
+				return
+			}
+
 			computed, err := compute(fx)
 			if err != nil {
 				t.Fatalf("%s [%s]: compute error: %v", file, fx.Scenario, err)
@@ -132,6 +163,9 @@ func TestConformance(t *testing.T) {
 			actual := decisionToMap(t, computed)
 
 			for field, expectedValue := range fx.Then.Expect {
+				if requestSideKeys[field] || field == "schemaAccept" {
+					continue
+				}
 				got, present := actual[field]
 				if !present {
 					t.Errorf("%s [%s]: decision core did not produce field %q (computed=%v)",
@@ -212,6 +246,116 @@ func numFromAny(v any, def int) int {
 	default:
 		return def
 	}
+}
+
+// hasRequestSide reports whether the expect block has any request-side key.
+func hasRequestSide(expect map[string]any) bool {
+	for k := range expect {
+		if requestSideKeys[k] {
+			return true
+		}
+	}
+	return false
+}
+
+// hasDecisionFields reports whether the expect block has any field produced by
+// the response→reaction decision core (i.e. not request-side and not schemaAccept).
+func hasDecisionFields(expect map[string]any) bool {
+	for k := range expect {
+		if !requestSideKeys[k] && k != "schemaAccept" {
+			return true
+		}
+	}
+	return false
+}
+
+// specFromState re-marshals given.state.request into a typed RequestSpec.
+func specFromState(t *testing.T, fx fixture) protocol.RequestSpec {
+	t.Helper()
+	raw, ok := fx.Given.State["request"]
+	if !ok {
+		t.Fatalf("%s: request-side fixture missing given.state.request", fx.Scenario)
+	}
+	blob, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("%s: marshal request spec: %v", fx.Scenario, err)
+	}
+	var spec protocol.RequestSpec
+	if err := json.Unmarshal(blob, &spec); err != nil {
+		t.Fatalf("%s: unmarshal request spec: %v", fx.Scenario, err)
+	}
+	return spec
+}
+
+// assertRequestSide builds the outgoing request and asserts requestBodyIncludes
+// (deep subset), requestBodyExcludes (absent keys), requestHeaders (regex match).
+func assertRequestSide(t *testing.T, fx fixture) {
+	t.Helper()
+	spec := specFromState(t, fx)
+	cfg := protocol.RequestBuildConfig{
+		TenantID:   strFromAny(fx.Given.Config["tenantId"]),
+		WorkerCode: strFromAny(fx.Given.Config["workerCode"]),
+		APIKey:     strFromAny(fx.Given.Config["apiKey"]),
+	}
+	req, err := protocol.BuildRequest(spec, cfg)
+	if err != nil {
+		t.Fatalf("%s: build request: %v", fx.Scenario, err)
+	}
+
+	if inc, ok := fx.Then.Expect["requestBodyIncludes"].(map[string]any); ok {
+		for k, v := range inc {
+			got, present := req.Body[k]
+			if !present {
+				t.Errorf("%s: outgoing body missing key %q (body=%v)", fx.Scenario, k, req.Body)
+				continue
+			}
+			if !jsonEqual(got, v) {
+				t.Errorf("%s: body[%q] mismatch — got %v, want %v", fx.Scenario, k, got, v)
+			}
+		}
+	}
+	if exc, ok := fx.Then.Expect["requestBodyExcludes"].([]any); ok {
+		for _, k := range exc {
+			key := strFromAny(k)
+			if _, present := req.Body[key]; present {
+				t.Errorf("%s: outgoing body must NOT contain key %q (body=%v)", fx.Scenario, key, req.Body)
+			}
+		}
+	}
+	if hdrs, ok := fx.Then.Expect["requestHeaders"].(map[string]any); ok {
+		for name, pat := range hdrs {
+			value, present := req.Headers[name]
+			if !present {
+				t.Errorf("%s: outgoing headers missing %q", fx.Scenario, name)
+				continue
+			}
+			re, err := regexp.Compile(strFromAny(pat))
+			if err != nil {
+				t.Fatalf("%s: bad header regex %q: %v", fx.Scenario, pat, err)
+			}
+			if !re.MatchString(value) {
+				t.Errorf("%s: header %q=%q does not match /%s/", fx.Scenario, name, value, pat)
+			}
+		}
+	}
+}
+
+// assertSchemaAccept classifies the kafka message's schemaVersion (§A).
+func assertSchemaAccept(t *testing.T, fx fixture, want any) {
+	t.Helper()
+	version := strFromAny(fx.When.Body["schemaVersion"])
+	got := protocol.ClassifySchemaVersion(version) == "accept"
+	if got != (want == true) {
+		t.Errorf("%s: schemaAccept mismatch — got %v, want %v (version=%q)",
+			fx.Scenario, got, want, version)
+	}
+}
+
+func strFromAny(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // jsonEqual compares two values via a JSON round-trip so numeric/slice types

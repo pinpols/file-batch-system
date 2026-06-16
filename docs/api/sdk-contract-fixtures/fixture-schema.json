@@ -105,7 +105,9 @@
                 "retry-then-drop",
                 "cancel",
                 "backpressure",
-                "graceful-stop"
+                "graceful-stop",
+                "client-error",
+                "not-found"
               ],
               "description": "Primary SDK action the response/message must trigger."
             },
@@ -152,6 +154,24 @@
               "type": "integer",
               "minimum": 0,
               "description": "Hard wall-clock bound the action must complete within (e.g. stop timeout)."
+            },
+            "requestBodyIncludes": {
+              "type": "object",
+              "description": "Request-side assertion: the SDK's OUTGOING request body (the one it would construct for this call) must DEEP-CONTAIN every key/value here (subset match — extra keys allowed). Each language runner builds the outgoing request from given.config/given.state via its decision core and asserts containment. Guards report field-name red-lines (outputs/success:bool) and partitionInvocationId pass-through."
+            },
+            "requestBodyExcludes": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Request-side assertion: the SDK's OUTGOING request body MUST NOT contain any of these top-level keys (e.g. legacy mis-names output/errorClass/errorMessage/status, or apiKey which belongs in a header)."
+            },
+            "requestHeaders": {
+              "type": "object",
+              "additionalProperties": { "type": "string" },
+              "description": "Request-side assertion: the SDK's OUTGOING request headers must contain each key; the value is treated as a regex the actual header value must fully match (e.g. Idempotency-Key '^[a-z]+-[0-9a-f-]{8,}$'). Use to lock the apiKey→header rule and per-call idempotency-key uniqueness."
+            },
+            "schemaAccept": {
+              "type": "boolean",
+              "description": "Kafka-only: whether the SDK ACCEPTS this dispatch message given its schemaVersion (§A). true = process; false = reject and do NOT commit offset (unknown major v3+)."
             }
           }
         }

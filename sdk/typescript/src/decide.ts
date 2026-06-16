@@ -79,7 +79,7 @@ export function classifyHttp(
   }
   // 404 — give up this request, caller decides
   if (status === 404) {
-    return { action: "not-found", retry: false };
+    return { action: "not-found", retry: false, failFast: false };
   }
   // 409 — idempotent success (already claimed / lease reclaimed)
   if (status === 409) {
@@ -96,7 +96,7 @@ export function classifyHttp(
     if (nextCount >= CLIENT_ERROR_FAIL_FAST_THRESHOLD) {
       return { action: "fail-fast", failFast: true, retry: false };
     }
-    return { action: "client-error", retry: false };
+    return { action: "client-error", retry: false, failFast: false };
   }
   // 5xx and transport errors (status <= 0 or >= 500) — exponential backoff
   return {
@@ -286,4 +286,133 @@ export function decideRegister(idempotent = false): RegisterDecision {
     result.idempotent = true;
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Outgoing request construction (request-side conformance)
+// ---------------------------------------------------------------------------
+//
+// These builders model the OUTGOING request body + headers the SDK would send
+// for register / claim / renew / report. They mirror the Java wire DTOs
+// (RegisterRequest / ClaimRequest / RenewRequest / ReportRequest) and the
+// PlatformHttpClient header policy. The conformance runner drives them from a
+// fixture's given.config + given.state.request and asserts requestBodyIncludes
+// / requestBodyExcludes / requestHeaders. This is what locks the report
+// field-name red-line (outputs/success:bool, not output/errorClass/status) and
+// the partitionInvocationId pass-through across every language.
+
+export interface OutgoingRequest {
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+}
+
+/** Boot config the request builders read (subset of the SDK client config). */
+export interface RequestBuildConfig {
+  tenantId: string;
+  workerCode: string;
+  apiKey?: string | null;
+}
+
+/** Describes which outgoing call to build, from a fixture's given.state.request. */
+export interface RequestSpec {
+  kind: "register" | "claim" | "renew" | "report";
+  taskId?: number;
+  /** partitionInvocationId stored at claim time; absent → omitted (NON_NULL). */
+  partitionInvocationId?: string | null;
+  /** idempotency key for write ops; absent → builder mints one. */
+  idempotencyKey?: string;
+  /** report payload (success/outputs/errorCode/...) from the fixture. */
+  report?: {
+    success?: boolean;
+    outputs?: Record<string, unknown>;
+    errorCode?: string;
+    resultSummary?: string;
+    failureClass?: string;
+  };
+}
+
+/** Drop null/undefined values so NON_NULL semantics match the Java DTOs. */
+function dropNullish(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== null && v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** Common auth/tenant headers every /internal/* call carries. */
+function baseHeaders(config: RequestBuildConfig): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Batch-Tenant-Id": config.tenantId,
+  };
+  if (config.apiKey != null && config.apiKey !== "") {
+    headers["X-Batch-Api-Key"] = config.apiKey;
+  }
+  return headers;
+}
+
+/**
+ * Build the outgoing request (body + headers) for a register/claim/renew/report
+ * call. Field names and NON_NULL omission mirror the platform wire DTOs; apiKey
+ * lives only in the header, never the body.
+ */
+export function buildRequest(
+  spec: RequestSpec,
+  config: RequestBuildConfig,
+): OutgoingRequest {
+  const headers = baseHeaders(config);
+  switch (spec.kind) {
+    case "register": {
+      const body = dropNullish({
+        tenantId: config.tenantId,
+        workerCode: config.workerCode,
+        workerGroup: "sdk-self-hosted",
+        status: "RUNNING",
+      });
+      return { body, headers };
+    }
+    case "claim":
+    case "renew": {
+      const body = dropNullish({
+        tenantId: config.tenantId,
+        workerId: config.workerCode,
+        partitionInvocationId: spec.partitionInvocationId,
+      });
+      // write op → per-call idempotency key header
+      headers["Idempotency-Key"] =
+        spec.idempotencyKey ?? `ts-${randomUuid()}`;
+      return { body, headers };
+    }
+    case "report": {
+      const r = spec.report ?? {};
+      const body = dropNullish({
+        taskId: spec.taskId,
+        tenantId: config.tenantId,
+        workerId: config.workerCode,
+        success: r.success,
+        outputs: r.outputs,
+        errorCode: r.errorCode,
+        resultSummary: r.resultSummary,
+        failureClass: r.failureClass,
+        partitionInvocationId: spec.partitionInvocationId,
+      });
+      headers["Idempotency-Key"] =
+        spec.idempotencyKey ?? `ts-${randomUuid()}`;
+      return { body, headers };
+    }
+    default:
+      throw new Error(`unknown request kind: ${(spec as RequestSpec).kind}`);
+  }
+}
+
+/** Minimal RFC-4122-ish v4 uuid (no deps); only the shape matters here. */
+function randomUuid(): string {
+  const hex = (n: number) =>
+    Array.from({ length: n }, () =>
+      Math.floor(Math.random() * 16).toString(16),
+    ).join("");
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-${hex(4)}-${hex(12)}`;
 }

@@ -1,0 +1,21 @@
+{
+  "scenario": "kafka-schema-version-v2-accept",
+  "description": "schemaVersion §A:已知 major v2 → accept 并正常处理。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 },
+    "state": { "inFlight": 0 }
+  },
+  "when": {
+    "channel": "kafka",
+    "method": "RECEIVE",
+    "body": { "schemaVersion": "v2", "tenantId": "acme", "taskId": 12348, "jobCode": "daily-report", "workerType": "echo", "idempotencyKey": "key-12348" },
+    "responseStatus": null,
+    "responseBody": null
+  },
+  "then": {
+    "sdkExpectedAction": "accept a known major (v2) and process the message",
+    "sdkMustNot": ["reject a supported major version"],
+    "expect": { "schemaAccept": true }
+  },
+  "references": ["wire-protocol.md §A", "schema_versions_supported: [v1, v2]"]
+}

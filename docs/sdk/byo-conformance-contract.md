@@ -60,6 +60,24 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 
 > **断言规则**:runner 只断言 fixture 里**出现**的字段(缺省 = 该场景不约束此维度)。所有出现的字段都必须满足。
 
+### 2.1 请求侧断言字段(2026-06-16 增量,§5 补强)
+
+上表全是"响应→反应"维度。新增 4 个 optional 字段覆盖**SDK 发出的出向请求**(请求体 / 请求头 / kafka schemaVersion 处理),堵住 partitionInvocationId 贯穿(双跑根因)与 report 字段名红线在 Go/TS/Rust 测不到的洞:
+
+| 字段 | 类型 | runner 必须断言 |
+|---|---|---|
+| `requestBodyIncludes` | object | SDK 出向请求 body **深含**这些 key/value(子集匹配,允许多余 key)。锁 report 字段名红线(`success:bool`/`outputs`)、partitionInvocationId 回填 |
+| `requestBodyExcludes` | string[] | 出向 body **必不含**这些 top-level key(如废名 `output`/`errorClass`/`errorMessage`/`status`,或属于 header 的 `apiKey`) |
+| `requestHeaders` | object | 出向 header 必含每个 key,值当**正则**对实际 header 全匹配(如 `Idempotency-Key` 形态、`X-Batch-Api-Key`) |
+| `schemaAccept` | bool | kafka-only:按 `schemaVersion` 是否 accept(§A)。`true`=处理;`false`=reject 且不 commit offset(未知 major v3+) |
+
+**异构 runner 适配**(同一组 fixture,逐语言):
+- **TS / Go / Rust**:决策核新增 `buildRequest`/`BuildRequest`/`build_request`,从 `given.config` + `given.state.request` 构造出向 body+headers(字段名 + NON_NULL 省略对齐平台 wire DTO;apiKey 只进 header);conformance runner 对 `requestBody*`/`requestHeaders` 比对,`schemaAccept` 调 `classifySchemaVersion`。
+- **Java**:`JsonFixtureRequestSideContractTest` 用真实 wire DTO(`ReportRequest`/`RenewRequest`/`RegisterRequest`)序列化做出向 body 红线断言(report 字段名、partitionInvocationId);静态结构校验仍在 `JsonFixtureContractTest`。
+- **Python**(软门 xfail):请求侧 fixture 当前 `skip`(显式标注,不静默通过),留作 Python 后续增量。
+
+> `given.state.request` 描述出向调用:`{kind: register|claim|renew|report, taskId?, partitionInvocationId?, idempotencyKey?, report?:{success,outputs,errorCode,resultSummary,failureClass}}`。partitionInvocationId 贯穿用 state 携带 claim 阶段存的 inv-id,renew/report 回填;不带则 body 省略(反例锁"该带没带 / 不该带乱带")。
+
 ## 3. 错误码 / 退避 / schemaVersion 的等价规则
 
 机器字段之外,以下三类语义规则各语言必须**等价实现**(权威见 `wire-protocol.md`):

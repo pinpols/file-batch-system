@@ -1,0 +1,20 @@
+{
+  "scenario": "renew-404-not-found-give-up",
+  "description": "renew 收到 404(任务已被平台回收/不存在)→ not-found:放弃这次调用,不重试也不 fail-fast(单次 404 是正常的竞态收尾,非致命)。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/renew",
+    "responseStatus": 404,
+    "responseBody": { "code": "TASK_NOT_FOUND", "message": "task reclaimed" }
+  },
+  "then": {
+    "sdkExpectedAction": "classify 404 as not-found: give up this call, no retry, no fail-fast",
+    "sdkMustNot": ["retry a 404", "fail-fast on a single 404 (it is an expected reclaim race)"],
+    "expect": { "action": "not-found", "retry": false, "failFast": false }
+  },
+  "references": ["wire-protocol.md §B/§3"]
+}

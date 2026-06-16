@@ -71,12 +71,12 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      - name: Run JsonFixtureContractTest + SharedConstantsParityTest
+      - name: Run JsonFixtureContractTest + request-side + SharedConstantsParityTest
         run: |
           mvn -B -pl sdk/java -am \
             -DskipITs \
             -Dsurefire.failIfNoSpecifiedTests=false \
-            -Dtest='JsonFixtureContractTest,SharedConstantsParityTest' \
+            -Dtest='JsonFixtureContractTest,JsonFixtureRequestSideContractTest,SharedConstantsParityTest' \
             test
 
   python-contract:

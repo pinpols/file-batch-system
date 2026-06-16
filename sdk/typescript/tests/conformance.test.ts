@@ -20,6 +20,9 @@ import {
   decideBackpressure,
   planStop,
   decideRegister,
+  classifySchemaVersion,
+  buildRequest,
+  type RequestSpec,
 } from "../src/decide.ts";
 
 const FIXTURES_DIR = new URL(
@@ -41,6 +44,13 @@ interface Fixture {
   then: { expect: Record<string, any> };
 }
 
+/** Request-side expect keys handled by buildRequest, not by the decision core. */
+const REQUEST_SIDE_KEYS = new Set([
+  "requestBodyIncludes",
+  "requestBodyExcludes",
+  "requestHeaders",
+]);
+
 /** All the field names the runner can emit, matching the closed expect vocab. */
 type ComputedResult = Record<string, unknown>;
 
@@ -51,8 +61,13 @@ type ComputedResult = Record<string, unknown>;
 function compute(fx: Fixture): ComputedResult {
   const { when, given } = fx;
 
-  // ----- Kafka receive → capacity backpressure -----
+  // ----- Kafka receive → schemaVersion classification or capacity backpressure -----
   if (when.channel === "kafka") {
+    // schemaAccept fixtures assert §A version handling on the received message.
+    if ("schemaAccept" in (fx.then.expect ?? {})) {
+      const version = when.body?.schemaVersion as string | undefined;
+      return { schemaAccept: classifySchemaVersion(version) === "accept" };
+    }
     const inFlight = Number(given.state?.inFlight ?? 0);
     const maxConcurrent = Number(given.config?.maxConcurrentTasks ?? Infinity);
     return decideBackpressure(inFlight, maxConcurrent);
@@ -84,8 +99,13 @@ function compute(fx: Fixture): ComputedResult {
     return planStop(timeoutMs);
   }
 
-  // renew
+  // renew — error statuses classify by §B (404 give-up, 5xx backoff, ...);
+  // a 2xx renew applies the cancel directive from the response body.
   if (path.includes("/renew")) {
+    if (status >= 400) {
+      const clientErrorCount = Number(given.state?.clientErrorCount ?? 0);
+      return classifyHttp(status, clientErrorCount);
+    }
     return applyRenew(when.responseBody ?? {});
   }
 
@@ -93,19 +113,85 @@ function compute(fx: Fixture): ComputedResult {
   if (path.includes("/claim") || path.includes("/report")) {
     const baseMs = Number(given.config?.retryBaseDelayMs) || undefined;
     const maxAttempts = Number(given.config?.retryMaxAttempts) || undefined;
-    return classifyHttp(status, 0, baseMs as number, maxAttempts as number);
+    const clientErrorCount = Number(given.state?.clientErrorCount ?? 0);
+    return classifyHttp(
+      status,
+      clientErrorCount,
+      baseMs as number,
+      maxAttempts as number,
+    );
   }
 
   throw new Error(`no decision route for fixture ${fx.scenario} (path=${path})`);
 }
 
-const EXPECTED_FIXTURE_COUNT = 12;
+/** Build the outgoing request a fixture's given.state.request describes. */
+function computeRequest(fx: Fixture) {
+  const spec = fx.given.state?.request as RequestSpec | undefined;
+  if (spec == null) {
+    throw new Error(
+      `${fx.scenario}: request-side fixture missing given.state.request`,
+    );
+  }
+  return buildRequest(spec, {
+    tenantId: fx.given.config?.tenantId,
+    workerCode: fx.given.config?.workerCode,
+    apiKey: fx.given.config?.apiKey,
+  });
+}
+
+/** Deep-subset: every key/value in `subset` is present and equal in `actual`. */
+function assertDeepIncludes(
+  actual: Record<string, unknown>,
+  subset: Record<string, unknown>,
+  ctx: string,
+) {
+  for (const [k, v] of Object.entries(subset)) {
+    assert.ok(k in actual, `${ctx}: outgoing body missing key '${k}'`);
+    assert.deepEqual(
+      actual[k],
+      v,
+      `${ctx}: body['${k}'] mismatch — got ${JSON.stringify(actual[k])}, want ${JSON.stringify(v)}`,
+    );
+  }
+}
+
+/** Assert request-side expectations (body includes/excludes, header regexes). */
+function assertRequestSide(fx: Fixture, ctx: string) {
+  const { body, headers } = computeRequest(fx);
+  const expect = fx.then.expect;
+
+  if (expect.requestBodyIncludes) {
+    assertDeepIncludes(body, expect.requestBodyIncludes, ctx);
+  }
+  for (const key of expect.requestBodyExcludes ?? []) {
+    assert.ok(
+      !(key in body),
+      `${ctx}: outgoing body must NOT contain key '${key}' (got ${JSON.stringify(body)})`,
+    );
+  }
+  for (const [name, pattern] of Object.entries(
+    expect.requestHeaders ?? {},
+  )) {
+    const value = headers[name];
+    assert.ok(
+      value !== undefined,
+      `${ctx}: outgoing headers missing '${name}'`,
+    );
+    assert.ok(
+      new RegExp(pattern as string).test(value),
+      `${ctx}: header '${name}'='${value}' does not match /${pattern}/`,
+    );
+  }
+}
+
+const EXPECTED_FIXTURE_COUNT = 22;
 
 const fixtureFiles = readdirSync(FIXTURES_DIR)
   .filter((f) => /^\d.*\.json$/.test(f))
   .sort();
 
-test("all 12 contract fixtures are present", () => {
+test(`all ${EXPECTED_FIXTURE_COUNT} contract fixtures are present`, () => {
   assert.equal(
     fixtureFiles.length,
     EXPECTED_FIXTURE_COUNT,
@@ -119,24 +205,40 @@ for (const file of fixtureFiles) {
   );
 
   test(`conformance: ${file} (${fx.scenario})`, () => {
-    const computed = compute(fx);
     const expect = fx.then.expect;
+    const ctx = `${file} [${fx.scenario}]`;
 
     assert.ok(
       Object.keys(expect).length > 0,
       `${file}: then.expect is empty`,
     );
 
-    // assert every field PRESENT in then.expect; absent fields are unconstrained
-    for (const [field, expectedValue] of Object.entries(expect)) {
+    // Request-side assertions (body includes/excludes, header regexes) are
+    // driven by the request builder, not the response→reaction decision core.
+    const hasRequestSide = Object.keys(expect).some((k) =>
+      REQUEST_SIDE_KEYS.has(k),
+    );
+    if (hasRequestSide) {
+      assertRequestSide(fx, ctx);
+    }
+
+    // Response-side / schemaAccept fields are produced by compute().
+    const decisionFields = Object.keys(expect).filter(
+      (k) => !REQUEST_SIDE_KEYS.has(k),
+    );
+    if (decisionFields.length === 0) {
+      return;
+    }
+    const computed = compute(fx);
+    for (const field of decisionFields) {
       assert.ok(
         field in computed,
-        `${file} [${fx.scenario}]: decision core did not produce field '${field}' (computed=${JSON.stringify(computed)})`,
+        `${ctx}: decision core did not produce field '${field}' (computed=${JSON.stringify(computed)})`,
       );
       assert.deepEqual(
         computed[field],
-        expectedValue,
-        `${file} [${fx.scenario}]: field '${field}' mismatch — computed ${JSON.stringify(computed[field])}, expected ${JSON.stringify(expectedValue)}`,
+        expect[field],
+        `${ctx}: field '${field}' mismatch — computed ${JSON.stringify(computed[field])}, expected ${JSON.stringify(expect[field])}`,
       );
     }
   });
