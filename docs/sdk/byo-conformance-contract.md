@@ -74,9 +74,37 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 **异构 runner 适配**(同一组 fixture,逐语言):
 - **TS / Go / Rust**:决策核新增 `buildRequest`/`BuildRequest`/`build_request`,从 `given.config` + `given.state.request` 构造出向 body+headers(字段名 + NON_NULL 省略对齐平台 wire DTO;apiKey 只进 header);conformance runner 对 `requestBody*`/`requestHeaders` 比对,`schemaAccept` 调 `classifySchemaVersion`。
 - **Java**:`JsonFixtureRequestSideContractTest` 用真实 wire DTO(`ReportRequest`/`RenewRequest`/`RegisterRequest`)序列化做出向 body 红线断言(report 字段名、partitionInvocationId);静态结构校验仍在 `JsonFixtureContractTest`。
-- **Python**(软门 xfail):请求侧 fixture 当前 `skip`(显式标注,不静默通过),留作 Python 后续增量。
+- **Python**(2026-06-16 **转硬**):请求侧不再 `skip`。`test_contract_runner.py` 用 fixture 的 `given.state.request` 复刻出向请求,经**真实** `PlatformHttpClient` 打到 `pytest_httpx`,捕获实际出向 body+headers 断言 `requestBody*`/`requestHeaders`;`schemaAccept` 复用 SDK 的 `SCHEMA_VERSIONS_SUPPORTED`;响应侧分类(§B/§C)断言 typed exception + 累计 4xx fail-fast 阈值。idempotency-key mint 直接复用 SDK 的 `_new_idempotency_key()`(`sdk-py-<uuid4>`)。
 
 > `given.state.request` 描述出向调用:`{kind: register|claim|renew|report, taskId?, partitionInvocationId?, idempotencyKey?, report?:{success,outputs,errorCode,resultSummary,failureClass}}`。partitionInvocationId 贯穿用 state 携带 claim 阶段存的 inv-id,renew/report 回填;不带则 body 省略(反例锁"该带没带 / 不该带乱带")。
+
+### 2.1.1 增量 2/3(2026-06-16):动态背压 + §C 豁免 + 前向兼容
+
+在 §2.1 基础上补 7 条 fixture(23–29),新增 1 个 optional 字段:
+
+| 字段 | 类型 | runner 必须断言 |
+|---|---|---|
+| `effectiveMaxConcurrent` | int | 心跳 `desiredMaxConcurrent>0` 时 SDK 把有效本地并发上限收敛到该值(§2.1 动态背压);`null`/缺省则省略(沿用本地 config) |
+
+覆盖项(fixture → 维度):
+
+- **23** claim 非 401/409 的 4xx 累计第 5 次 → `fail-fast`(防活锁,与 21 首次不 fail-fast 成对)。
+- **24** report 未给 idempotencyKey → SDK **自 mint** `<前缀>-<uuid4>`;正则 `^[a-z-]+[0-9a-f]{8}-[0-9a-f-]{8,}$` 锁"非固定值"(固定 `report-{taskId}` 凑不出 hex8 → 拒);前缀类放宽到 `[a-z-]`,兼容 Python 的多段 `sdk-py-` 与 go-/ts-/rs-/sdk- 单段(与 20 显式键透传互补)。
+- **25** heartbeat 503 → §C 豁免:单次失败不退避(`retry:false`/`maxAttempts:1`),跳过本 tick。
+- **26** 心跳 `platformStatus:DEGRADED` → `fsmTransition:DEGRADED` 且不 pause Kafka(`kafka:none`)。
+- **27** 心跳 `desiredMaxConcurrent:2` → `effectiveMaxConcurrent:2`。
+- **28** 收到 `workerType ∈ pausedTaskTypes` 的 Kafka 消息 → `kafka:drop-message`(不 commit offset,平台 unpause 后重投)。
+- **29** 已知 major(v1)消息带未知前向字段 → `schemaAccept:true`(`ignoreUnknown`,不崩不拒;与 18 未知 major v3 reject 正交)。
+
+**异构 runner 适配**:TS/Go/Rust 决策核新增 `classifyHeartbeatRenewError`(§C 豁免)+ `decidePausedTaskType`(paused drop),`applyHeartbeatDirective` 补 `DEGRADED` 分支与 `effectiveMaxConcurrent`,`classifyHttp` 已带累计 4xx 阈值(23)。Java `JsonFixtureContractTest` 静态校验全部 29 条(verb + OpenAPI path);请求侧 body 红线仍只覆盖带 `requestBody*` 的 fixture。Python 见下表。
+
+**Python 后续清单(增量 2/3)**:
+
+- [x] 23/24/26/27/29 + 21/22:转硬,真实 `PlatformHttpClient` / 分类断言全绿。
+- [ ] **25-heartbeat-503-no-backoff**:Python `heartbeat` 复用通用 `with_retry`,对所有 5xx 做指数退避,缺 §C 单次豁免分支。补 per-端点 no-backoff 是独立 production retry 行为变更,超出本增量范围 → 暂 `xfail(strict)`,标后续。
+- [ ] **28-kafka-paused-task-type-drop**:Python `dispatcher.apply_platform_directive` 当前只落 `runtimeState`,未在 `on_message` 按 `pausedTaskTypes` 做 per-message drop(directive 已能解析 paused 集合,但不据此丢消息)→ 暂 `xfail(strict)`,补 drop 后驱动 `on_message` 断言不 claim 即转硬。
+
+> 这两条 Python 后续项均为 strict `xfail`(真实违约才 xfail,实现后会 XPASS 报警提醒转硬),不是静默 skip;TS/Go/Rust/Java 对这两条均已硬断言,parity 不红。
 
 ## 3. 错误码 / 退避 / schemaVersion 的等价规则
 

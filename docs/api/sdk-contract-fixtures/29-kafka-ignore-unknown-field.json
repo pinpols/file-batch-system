@@ -1,0 +1,21 @@
+{
+  "scenario": "kafka-ignore-unknown-field",
+  "description": "前向兼容 ignoreUnknown(wire-protocol §A):平台给 dispatch 消息加了一个未来才有的未知字段(futureRoutingHint),已知 major(v1)的旧 SDK 必须照常接受并 dispatch、不因未知字段崩溃或拒收。schemaAccept:true 锁'未知字段不影响 accept';与 18(未知 major v3 → reject)正交——这条测的是已知 major + 未知字段。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 },
+    "state": { "inFlight": 0 }
+  },
+  "when": {
+    "channel": "kafka",
+    "method": "RECEIVE",
+    "body": { "schemaVersion": "v1", "tenantId": "acme", "taskId": 12351, "jobCode": "daily-report", "workerType": "echo", "idempotencyKey": "key-12351", "futureRoutingHint": { "region": "eu", "weight": 7 } },
+    "responseStatus": null,
+    "responseBody": null
+  },
+  "then": {
+    "sdkExpectedAction": "accept and process (dispatch) a known-major (v1) message even though it carries an unknown forward-compat field; ignore the unknown field",
+    "sdkMustNot": ["reject or crash on an unknown field in a known-major message", "fail to commit offset for an otherwise-valid message"],
+    "expect": { "schemaAccept": true }
+  },
+  "references": ["wire-protocol.md §A ignoreUnknown", "SdkPlatformContractTest:74"]
+}

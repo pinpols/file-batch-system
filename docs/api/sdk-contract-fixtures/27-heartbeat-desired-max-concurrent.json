@@ -1,0 +1,25 @@
+{
+  "scenario": "heartbeat-desired-max-concurrent",
+  "description": "动态压并发(wire-protocol §2.1):心跳下发 desiredMaxConcurrent:2 → SDK 把有效本地并发上限收敛到 2(effectiveMaxConcurrent:2)。schema 新增 optional 字段 effectiveMaxConcurrent,各决策核在 apply-heartbeat 时,当 desiredMaxConcurrent>0 则产出该字段;null/缺省则省略(沿用本地配置,见 03)。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/w-1/heartbeat",
+    "responseStatus": 200,
+    "responseBody": {
+      "platformStatus": "NORMAL",
+      "shouldDrain": false,
+      "pausedTaskTypes": [],
+      "desiredMaxConcurrent": 2
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "adjust (clamp) the effective local concurrency cap down to the platform-suggested desiredMaxConcurrent (2)",
+    "sdkMustNot": ["ignore desiredMaxConcurrent", "raise concurrency above the suggested cap"],
+    "expect": { "fsmTransition": "NORMAL", "effectiveMaxConcurrent": 2 }
+  },
+  "references": ["wire-protocol.md §2.1", "HeartbeatDirective.desiredMaxConcurrent", "scheduler setMaxConcurrent hook"]
+}

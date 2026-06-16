@@ -41,6 +41,7 @@ type Decision struct {
 	Kafka                   *string  `json:"kafka,omitempty"`
 	StartSchedulers         []string `json:"startSchedulers,omitempty"`
 	HeartbeatNextIntervalMs *int     `json:"heartbeatNextIntervalMs,omitempty"`
+	EffectiveMaxConcurrent  *int     `json:"effectiveMaxConcurrent,omitempty"`
 	CancelRequested         *bool    `json:"cancelRequested,omitempty"`
 	Idempotent              *bool    `json:"idempotent,omitempty"`
 	ReportFailure           *bool    `json:"reportFailure,omitempty"`
@@ -118,6 +119,17 @@ func ClassifyHTTP(status, clientErrorCount, baseMs, attempts int) Decision {
 			MaxAttempts:    intPtr(attempts),
 		}
 	}
+}
+
+// ClassifyHeartbeatRenewError classifies a heartbeat / leaseRenew transport
+// failure (wire-protocol §C exemption). Unlike register/claim/report (which run
+// the full exponential-retry sequence), heartbeat and leaseRenew do NOT back off
+// internally on a single failure — they skip this tick and retry on the next
+// scheduled tick. So a 503 (or any transport-level failure) yields a single
+// attempt with no retry. (A 4xx like 404 on renew is still classified by
+// ClassifyHTTP → not-found/give-up.)
+func ClassifyHeartbeatRenewError() Decision {
+	return Decision{Action: "retry-then-drop", Retry: boolPtr(false), MaxAttempts: intPtr(1)}
 }
 
 // ---------------------------------------------------------------------------
@@ -233,7 +245,28 @@ func ApplyHeartbeatDirective(resp HeartbeatResponse) Decision {
 		d.HeartbeatNextIntervalMs = intPtr(ms)
 	}
 
+	// §2.1 dynamic backpressure: platform-suggested concurrency cap. Only a
+	// positive value constrains; null/absent leaves local config in effect.
+	if resp.DesiredMaxConcurrent != nil && *resp.DesiredMaxConcurrent > 0 {
+		d.EffectiveMaxConcurrent = intPtr(*resp.DesiredMaxConcurrent)
+	}
+
 	return d
+}
+
+// ---------------------------------------------------------------------------
+// Paused task types (heartbeat directive) — Kafka drop
+// ---------------------------------------------------------------------------
+
+// DecidePausedTaskType decides what to do with a freshly received Kafka dispatch
+// message whose taskType is in the platform's pausedTaskTypes set (wire-protocol
+// §2.1). A paused taskType is dropped WITHOUT committing the offset (platform
+// redelivers after unpausing); a non-paused taskType is processed (kafka:none).
+func DecidePausedTaskType(taskType string, pausedTaskTypes []string) Decision {
+	if slices.Contains(pausedTaskTypes, taskType) {
+		return Decision{Action: "apply-directive", Kafka: strPtr("drop-message")}
+	}
+	return Decision{Action: "apply-directive", Kafka: strPtr("none")}
 }
 
 // ---------------------------------------------------------------------------

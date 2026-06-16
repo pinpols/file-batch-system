@@ -1,0 +1,29 @@
+{
+  "scenario": "report-idempotency-key-minted-not-fixed",
+  "description": "幂等键每次写操作独立(反例锁):本 fixture **不**提供 given.state.request.idempotencyKey,强制各语言 SDK 自己 mint 一个 <lang 前缀>-<uuid4> 形态键。requestHeaders 正则 ^[a-z-]+[0-9a-f]{8}-[0-9a-f-]{8,}$ 要求:小写/连字符前缀(覆盖 go-/ts-/rs-/sdk- 单段与 Python 的 sdk-py- 多段)+ uuid4 的 8 位 hex 段 + hex/连字符尾。固定的 report-{taskId}(如 report-12345)的 12345 段凑不出 [0-9a-f]{8} hex8 → 被拒,从而把'非固定值'这条红线机器化。与 20(显式给定键透传)互补:20 测透传,24 测 mint 形态。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state": {
+      "request": {
+        "kind": "report",
+        "taskId": 12345,
+        "report": { "success": true, "outputs": { "rows": 100 } }
+      }
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/report",
+    "responseStatus": 200,
+    "responseBody": { "accepted": true }
+  },
+  "then": {
+    "sdkExpectedAction": "mint a fresh per-call Idempotency-Key of the form <lang>-<uuid4> when none is supplied; never a fixed report-{taskId}",
+    "sdkMustNot": ["use a fixed key like report-12345", "reuse one key across distinct report calls"],
+    "expect": {
+      "requestHeaders": { "Idempotency-Key": "^[a-z-]+[0-9a-f]{8}-[0-9a-f-]{8,}$" }
+    }
+  },
+  "references": ["wire-protocol.md §C", "PlatformHttpClient: Idempotency-Key header", "Python P0-3"]
+}
