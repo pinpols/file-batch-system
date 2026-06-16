@@ -20,6 +20,13 @@ import org.junit.jupiter.api.Test;
  *
  * <p>新模块加守护时只需 {@code class XxxMapperXmlTenantGuardArchTest extends
  * BaseMapperXmlTenantGuardArchTest}, 必要时 override 白名单方法即可。详见 CLAUDE.md §多租隔离。
+ *
+ * <p><b>⚠️ 守护边界(2026-06-16 审计澄清):本测只做"防回退的文件名白名单",不验证运行时隔离。</b>白名单里的 mapper(含用户可达的
+ * WorkflowNode/FileArrivalGroup/OperationAudit 等)其可空 {@code <if tenantId>} 方法, 安全**完全依赖调用方先经 {@code
+ * resolveTenant}/{@code ConsoleTenantGuard} 拿到非空 tenantId**——租户角色下
+ * 该值恒非空,故当前调用链安全。但本测**无法**保证未来新增/重构的调用方不会直接传 {@code request.getTenantId()} (可为 null →
+ * 全租户扫描)且**测试不会因此变红**(mapper 已在白名单)。**红线**:这些 mapper 的可空-tenant 方法 只允许从已校验 global-role
+ * 的服务调用;新写调用方必须走 {@code resolveTenant},不得裸传可空 tenantId。 真正的隔离靠运行时纪律,不靠本静态白名单。
  */
 public abstract class BaseMapperXmlTenantGuardArchTest {
 
