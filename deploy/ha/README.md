@@ -65,6 +65,33 @@ kubectl apply -f deploy/ha/40-minio-tenant.yaml
 | 2 MinIO | `delete` 1 minio pod | 纠删码读写不中断 |
 | 3 备份 | 触发恢复演练 | 逻辑全量 + PITR 成功,记 RTO(`backup-and-pitr.md` §2) |
 
+## Kafka broker HA(P0-1)·启用 + 验证细节
+
+> 目标:broker≥3 + topic RF=3 + `min.insync.replicas=2` + `unclean.leader.election=false`,配 producer `acks=all`(已在 `batch-defaults.yml`)→ **已确认在途事件 RPO=0(0 丢)**。
+> 配置已全部就位(本目录 `20-kafka-strimzi.yaml` 的 `Kafka` CR + `KafkaNodePool` replicas=3),以下是 **ops 启用步骤**。
+
+1. **建集群**(broker / 内部 topic RF):`apply-stage123.sh` 已含 `20-kafka-strimzi.yaml`——CR 内 `default.replication.factor=3` / `min.insync.replicas=2` / `offsets.topic.replication.factor=3` / `transaction.state.log.replication.factor=3` / `transaction.state.log.min.isr=2`,`auto.create.topics.enable=false`(应用显式建 topic、防误配单副本)。
+2. **建业务 topic**(应用 topic RF / min.insync):跑 topic init 时带——
+   ```bash
+   KAFKA_BOOTSTRAP_SERVER=batch-kafka-bootstrap.kafka.svc:9092 \
+   KAFKA_TOPIC_REPLICATION_FACTOR=3 \
+   KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2 \
+     sh scripts/data/init-kafka-topics.sh
+   ```
+   (`KAFKA_TOPIC_MIN_INSYNC_REPLICAS` 会随 `--config min.insync.replicas=2` 落到每个 topic。)
+3. **存量 RF=1 topic 提副本**:`kafka-reassign-partitions --generate/--execute` 把 RF 提到 3(在线扩,不可在线降)。
+4. **生产推荐项核对**:`unclean.leader.election.enable=false`(默认 Kafka 4.x 即 false;显式确认)、producer 侧 `acks=all` + `enable.idempotence=true`(仓内已配)。
+
+**验证**:
+```bash
+# RF=3 / ISR=3 / 含 min.insync.replicas=2
+kubectl -n kafka exec batch-kafka-pool-0 -- bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --describe --topic batch.task.dispatch.import
+# 滚动重启 1 broker：生产/消费不中断；ISR 短暂掉到 2（≥ min.insync，仍可写），恢复后回 3
+kubectl -n kafka delete pod batch-kafka-pool-1
+```
+本地无集群时,用根目录 `docker-compose.kafka-ha.yml`(可选 3 broker override,默认不启用)先验同一套行为,命令见该文件头注释 §验证。
+
 ## 占位符清单(apply 前必改)
 
 `STORAGE_CLASS` / 镜像 tag / `*_REPLICAS` / `NODE_POOL` 反亲和标签 / 各 Secret(`*-credentials`)/ 资源 requests-limits / `DOMAIN`。

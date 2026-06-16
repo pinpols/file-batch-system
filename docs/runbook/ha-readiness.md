@@ -16,10 +16,15 @@
 ## P0(没有这些不谈生产 HA;与 Citus 无关、都得做)
 
 ### P0-1 Kafka 多 broker + RF≥3
-- **现状**:dev compose 单 broker、`*_REPLICATION_FACTOR=1`(硬单点)。
-- **① 运维件**:3 broker(Strimzi `KafkaNodePool` replicas=3,或 MSK 3-AZ);topic `replication.factor=3` + `min.insync.replicas=2`;`offsets.topic.replication.factor=3` / `transaction.state.log.replication.factor=3`。
+- **现状**:dev compose 默认单 broker、RF=1(单机 dev 默认,不变)。**配置已就位**——多 broker / RF=3 / min.insync=2 的可部署配置全部落地,不再"靠 ops 凭空建":
+  - **prod(K8s)**:`deploy/ha/20-kafka-strimzi.yaml`(Strimzi `KafkaNodePool` replicas=3 + `Kafka` CR `default.replication.factor=3` / `min.insync.replicas=2` / offsets/txn 内部 topic RF=3 / `auto.create.topics.enable=false`)。
+  - **本地演练**:`docker-compose.kafka-ha.yml`(可选 override,3 broker + RF=3 + min.insync=2,**默认不启用**,单 broker dev 不受影响)。
+  - **topic 创建**:`scripts/data/init-kafka-topics.sh` / `init-tenant-topics.sh` 的 RF 与 min.insync.replicas 均**可配**(`KAFKA_TOPIC_REPLICATION_FACTOR` 默认 1 / `KAFKA_TOPIC_MIN_INSYNC_REPLICAS` 默认空;prod 设 3 / 2,建 topic 时随 `--config min.insync.replicas=2` 一并落地)。
+  - **helm**:`helm/values-prod.yaml` `kafka.broker.{replicas=3,replicationFactor=3,minInsyncReplicas=2}` 声明期望拓扑(chart 不自建 broker,值须与 Strimzi CR 一致)。
+- **① 运维件(ops 启用步骤)**:① 装 Strimzi operator(`scripts/ha/install-operators.sh`);② 改 `deploy/ha/20-kafka-strimzi.yaml` 占位符(`STORAGE_CLASS` 等)后 `scripts/ha/apply-stage123.sh`;③ 建业务 topic 时带 `KAFKA_TOPIC_REPLICATION_FACTOR=3 KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2`;④ 存量 RF=1 topic 用 `kafka-reassign-partitions` 提到 RF=3。MSK 路径:3-AZ broker,topic/内部 topic RF=3 + min.insync=2 同理。
 - **② 应用侧**:✅ **已做**——producer `acks=all` + `enable.idempotence=true` + `retries=5` + `delivery.timeout.ms`(`batch-defaults.yml`);consumer `ack-mode=manual_immediate`(at-least-once)+ CLAIM 唯一性防重复执行。
-- **验证**:滚动重启 1 broker,生产/消费不中断、无丢消息;`kafka-topics --describe` 看 ISR=3。
+- **RPO 目标**:**RF=3 + min.insync.replicas=2 + producer acks=all 下,已确认(acked)的在途事件 RPO=0(0 丢)**——写入要求至少 2 个同步副本落盘才返回成功,单 broker 盘损不丢已 ack 事件;配 `unclean.leader.election=false`(Strimzi CR 推荐)杜绝落后副本当 leader 造成已确认数据回退。对照:当前单 broker RF=1,broker 盘损=在途事件只能靠 outbox republish 兜底,无硬 RPO。
+- **验证**:滚动重启 1 broker,生产/消费不中断、无丢消息;`kafka-topics --describe` 看 RF=3 / ISR=3 / Configs 含 `min.insync.replicas=2`。本地用 `docker-compose.kafka-ha.yml`(见其头注释 §验证)先验;真集群按 `deploy/ha/README.md` §验证表(阶段 2)。
 - **回滚**:topic RF 不可在线降;先扩 broker 再 `kafka-reassign-partitions` 提 RF。
 
 ### P0-2 PG / Citus coordinator 自动 failover
@@ -74,4 +79,5 @@
 
 ## 关联
 - `playbooks/pg-primary-failover.md` / `backup-and-pitr.md` / `redis-shedlock-down.md` / `citus-deployment.md`
-- `helm/values-prod.yaml`(基础件连接地址)、`docker/observability/prometheus-batch-rules.yml`(HA 告警)
+- `helm/values-prod.yaml`(基础件连接地址 + Kafka broker 期望拓扑)、`docker/observability/prometheus-batch-rules.yml`(HA 告警)
+- **Kafka broker HA**:`deploy/ha/20-kafka-strimzi.yaml`(prod CR) + `deploy/ha/README.md`(apply/验证) + `docker-compose.kafka-ha.yml`(本地 3 broker 演练 override) + `scripts/data/init-kafka-topics.sh`(RF / min.insync 可配)

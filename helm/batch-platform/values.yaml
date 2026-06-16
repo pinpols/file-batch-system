@@ -31,6 +31,13 @@ postgresql:
 
 kafka:
   bootstrapServers: "kafka:9092"
+  # Kafka broker HA 由 chart 外的 Strimzi operator 提供（chart 只连地址，不自建 broker）。
+  # 以下 broker.* 仅作“期望拓扑”的声明，供 ops 对照 deploy/ha/20-kafka-strimzi.yaml；
+  # chart 不渲染 broker（无 Kafka 自建模板）。dev/单 broker 时这些值无意义，留默认即可。
+  broker:
+    replicas: 1                 # dev 默认单 broker；prod 见 values-prod.yaml（≥3）
+    replicationFactor: 1        # topic 副本因子；prod=3
+    minInsyncReplicas: 1        # ISR 下限；prod=2（配 RF=3 + producer acks=all → 在途事件 0 丢）
 
 redis:
   host: "redis"

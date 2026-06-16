@@ -1,0 +1,138 @@
+# =============================================================================
+# docker-compose.kafka-ha.yml —— 可选的 Kafka 3 broker HA 叠加层（默认不启用）
+# =============================================================================
+# 用途：在单机 dev 默认（docker-compose.yml 单 broker、RF=1）之外，提供一个
+#       **本地可起的 3 broker + RF=3 + min.insync.replicas=2** 示例栈，用于：
+#         - 本地验证 producer acks=all + RF=3 的“在途事件 0 丢”行为；
+#         - 滚动重启 1 broker 时生产/消费不中断的演练（broker HA 验证）；
+#         - 作为 prod（Strimzi `deploy/ha/20-kafka-strimzi.yaml`）拓扑的低配镜像。
+#
+# 这是 **override 叠加层**，不是独立栈。它把基础 compose 的单 `kafka` 服务覆盖成
+# 3 节点 KRaft 仲裁，并把 kafka-init 的 RF / min.insync 提到 3 / 2。
+#
+# ─── 启用方式（默认不启用，单 broker dev 完全不受影响） ────────────────────────
+#   # 仅起 HA 依赖栈（3 broker + init），不带应用：
+#   docker compose -f docker-compose.yml -f docker-compose.kafka-ha.yml \
+#       up -d kafka kafka-2 kafka-3 kafka-init
+#
+#   # 或叠加应用（app.yml 连的还是 service 名 kafka:29092，无需改应用配置）：
+#   docker compose -f docker-compose.yml -f docker-compose.kafka-ha.yml \
+#       -f docker/compose/app.yml up -d
+#
+# ─── 验证（broker HA + 0 丢） ────────────────────────────────────────────────
+#   # 1) topic RF=3 且 ISR=3：
+#   docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh \
+#       --bootstrap-server kafka:29092 --describe --topic batch.task.dispatch.import
+#       # 期望：ReplicationFactor: 3，Isr 列出 3 个 broker，Configs 含 min.insync.replicas=2
+#   # 2) 滚动重启 1 broker，生产/消费不中断：
+#   docker restart batch-kafka-2          # 杀 leader 候选之一
+#       # 期望：应用日志无消息丢失；describe 后 ISR 短暂掉到 2（≥ min.insync=2，仍可写），恢复后回 3
+#
+# 注：不改任何 .env / 应用配置即可用 —— RF/min.insync 通过本文件覆盖 kafka-init 环境变量注入，
+#     走的是 scripts/data/init-kafka-topics.sh 已有的 KAFKA_TOPIC_REPLICATION_FACTOR /
+#     KAFKA_TOPIC_MIN_INSYNC_REPLICAS 可配开关（默认 dev 1 / 空，这里覆盖成 3 / 2）。
+# =============================================================================
+
+x-kafka-broker-common: &kafka-broker-common
+  image: apache/kafka:${KAFKA_IMAGE_TAG}
+  restart: unless-stopped
+  environment: &kafka-broker-env
+    LANG: ${BATCH_LOCALE:-C.UTF-8}
+    LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+    BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+    TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+    KAFKA_PROCESS_ROLES: broker,controller
+    KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+    KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+    # 3 节点 KRaft 仲裁（controller quorum）：失任意 1 个仍有多数。
+    KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093,2@kafka-2:9093,3@kafka-3:9093
+    KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS}
+    # HA 承重：内部 topic（offsets / txn）也要 RF=3 + min.isr=2，否则 broker 掉一台仍会卡。
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "3"
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+    KAFKA_DEFAULT_REPLICATION_FACTOR: "3"
+    KAFKA_MIN_INSYNC_REPLICAS: "2"
+    # 防脏选举：不让落后副本当 leader（牺牲可用换不丢，与 0 丢目标一致）。
+    KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+  networks:
+    - batch-network
+  healthcheck:
+    interval: 10s
+    timeout: 10s
+    retries: 18
+
+services:
+  # broker 1 —— 覆盖基础 compose 的单 broker 服务（仍叫 kafka，应用零改动连 kafka:29092）。
+  kafka:
+    <<: *kafka-broker-common
+    container_name: batch-kafka
+    ports:
+      - "${KAFKA_HOST_PORT}:9092"
+    environment:
+      <<: *kafka-broker-env
+      KAFKA_NODE_ID: "1"
+      KAFKA_LISTENERS: PLAINTEXT://:29092,PLAINTEXT_HOST://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${KAFKA_HOST_PORT}
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list >/dev/null 2>&1"]
+
+  kafka-2:
+    <<: *kafka-broker-common
+    container_name: batch-kafka-2
+    # 不映射宿主端口（避免与 broker1 的 KAFKA_HOST_PORT 撞）；集群内部互通即可。
+    environment:
+      <<: *kafka-broker-env
+      KAFKA_NODE_ID: "2"
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:29092
+    volumes:
+      - kafka-data-2:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-2:29092 --list >/dev/null 2>&1"]
+
+  kafka-3:
+    <<: *kafka-broker-common
+    container_name: batch-kafka-3
+    environment:
+      <<: *kafka-broker-env
+      KAFKA_NODE_ID: "3"
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:29092
+    volumes:
+      - kafka-data-3:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-3:29092 --list >/dev/null 2>&1"]
+
+  # topic 初始化：等 3 broker 全就绪后建 topic，RF=3 + min.insync.replicas=2。
+  kafka-init:
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    # YAML 锚点不跨文件——这里直接给值（与基础 kafka-init 合并，覆盖 RF=3 / min.insync=2）。
+    environment:
+      LANG: ${BATCH_LOCALE:-C.UTF-8}
+      LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+      TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+      KAFKA_BOOTSTRAP_SERVER: kafka:29092
+      KAFKA_TOPICS: ${KAFKA_TOPICS}
+      KAFKA_TOPIC_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS}
+      KAFKA_TOPIC_REPLICATION_FACTOR: "3"
+      KAFKA_TOPIC_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_PARTITIONS_DISPATCH: ${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_DEFAULT_PARTITIONS}}
+      KAFKA_PARTITIONS_RESULT: ${KAFKA_PARTITIONS_RESULT:-${KAFKA_DEFAULT_PARTITIONS}}
+      KAFKA_PARTITIONS_RETRY: ${KAFKA_PARTITIONS_RETRY:-${KAFKA_DEFAULT_PARTITIONS}}
+      KAFKA_PARTITIONS_DEAD_LETTER: ${KAFKA_PARTITIONS_DEAD_LETTER:-${KAFKA_DEFAULT_PARTITIONS}}
+
+volumes:
+  kafka-data-2:
+  kafka-data-3:

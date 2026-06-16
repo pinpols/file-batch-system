@@ -27,6 +27,18 @@ postgresql:
 
 kafka:
   bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+  # broker HA 拓扑由 Strimzi operator 落地（deploy/ha/20-kafka-strimzi.yaml），chart 不自建 broker。
+  # 这里的 broker.* 是“期望值”声明，必须与 Strimzi Kafka CR 一致；改这里不会改集群，需同步改 CR。
+  #   - replicas=3：KafkaNodePool.spec.replicas=3，散在不同 node（podAntiAffinity）。
+  #   - replicationFactor=3 / minInsyncReplicas=2：CR config 的 default.replication.factor=3 +
+  #     min.insync.replicas=2 + offsets/txn 内部 topic RF=3；建业务 topic 时由 init 脚本注入
+  #     KAFKA_TOPIC_REPLICATION_FACTOR=3 / KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2。
+  #     配 producer acks=all（已在 batch-defaults.yml）→ 同步副本下在途事件 RPO=0（0 丢）。
+  #   - unclean.leader.election=false（CR 推荐）：不让落后副本当 leader，宁可短暂不可用也不丢已确认事件。
+  broker:
+    replicas: 3
+    replicationFactor: 3
+    minInsyncReplicas: 2
 
 objectStorage:
   endpoint: "http://minio.minio.svc.cluster.local:9000"
