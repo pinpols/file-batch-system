@@ -1,0 +1,30 @@
+{
+  "scenario": "report-idempotency-key-header",
+  "description": "幂等键(P1-6):写操作(claim/report)必须带 Idempotency-Key header,格式 <lang>-<uuid> 等价的每次独立键(非固定 report-{taskId})。请求侧断言:report 出向 header 含 Idempotency-Key 且匹配 <prefix>-<hex> 形态。各语言前缀不同(sdk-/go-/ts-/rs-/py-),正则放宽到非空前缀 + 连字符 + 十六进制串。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state": {
+      "request": {
+        "kind": "report",
+        "taskId": 12345,
+        "idempotencyKey": "sdk-0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+        "report": { "success": true, "outputs": { "rows": 100 } }
+      }
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/report",
+    "responseStatus": 200,
+    "responseBody": { "accepted": true }
+  },
+  "then": {
+    "sdkExpectedAction": "attach a per-call Idempotency-Key header of the form <lang>-<uuid>; never a fixed report-{taskId}",
+    "sdkMustNot": ["reuse a fixed idempotency key across distinct report calls"],
+    "expect": {
+      "requestHeaders": { "Idempotency-Key": "^[a-z]+-[0-9a-f]{8}-[0-9a-f-]{8,}$" }
+    }
+  },
+  "references": ["wire-protocol.md §C", "PlatformHttpClient: Idempotency-Key header", "Python P0-3"]
+}

@@ -50,6 +50,18 @@
 | `10-renew-cancel-requested.json` | renew 200, cancelRequested=true → 触发 CancellationSignal, handler 中止 |
 | `11-kafka-partition-pause-on-capacity.json` | in-flight 满 → Kafka assignment.pause(partitions), 处理完 resume |
 | `12-stop-with-timeout.json` | stop(30s) → draining=true, Kafka wakeup, drain in-flight, deactivate, 不超 30s |
+| `13-report-field-names-redline.json` | **请求侧**:report 出向 body 必含 `success:bool`/`taskId`/`tenantId`/`workerId`/`outputs`,必不含废名 `output`/`errorClass`/`errorMessage`/`status` |
+| `14-partition-invocation-id-passthrough.json` | **请求侧**:claim 存的 `partitionInvocationId=inv-1` → renew 出向 body 回填同一 id |
+| `15-partition-invocation-id-absent-when-unclaimed.json` | **请求侧**(反例):claim 没存 inv-id → renew body 不捏造 partitionInvocationId |
+| `16-kafka-schema-version-missing-accept.json` | schemaVersion 缺失 → 当 v1,accept |
+| `17-kafka-schema-version-v2-accept.json` | schemaVersion=v2(已知 major)→ accept |
+| `18-kafka-schema-version-v3-reject.json` | schemaVersion=v3(未知 major)→ reject,不 commit offset |
+| `19-register-apikey-in-header-not-body.json` | **请求侧**:apiKey 走 `X-Batch-Api-Key` header,不进 register body |
+| `20-report-idempotency-key-header.json` | **请求侧**:report 带 `Idempotency-Key` header(`<lang>-<uuid>` 形态) |
+| `21-claim-4xx-client-error-no-failfast.json` | 单次非 401/409 的 4xx → client-error,不重试不 fail-fast(累计阈值 5) |
+| `22-renew-404-not-found-give-up.json` | renew 404 → not-found,放弃不重试不 fail-fast |
+
+> **请求侧** fixture(13/14/15/19/20)用 `then.expect.requestBodyIncludes`/`requestBodyExcludes`/`requestHeaders` 断言 SDK **出向**请求;`schemaAccept`(16-18)断言 kafka 消息按 schemaVersion accept/reject。字段语义见 `docs/sdk/byo-conformance-contract.md` §2.1。
 
 ## 实现这套 runner 的建议
 

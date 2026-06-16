@@ -107,6 +107,7 @@ pub fn classify_http(status: i64, client_error_count: i64, base_ms: i64, attempt
         // 404 — give up this request, caller decides
         let mut d = Decision::with_action("not-found");
         d.retry = Some(false);
+        d.fail_fast = Some(false);
         d
     } else if status == 409 {
         // 409 — idempotent success (already claimed / lease reclaimed)
@@ -125,6 +126,7 @@ pub fn classify_http(status: i64, client_error_count: i64, base_ms: i64, attempt
         } else {
             let mut d = Decision::with_action("client-error");
             d.retry = Some(false);
+            d.fail_fast = Some(false);
             d
         }
     } else {
@@ -372,6 +374,184 @@ pub fn decide_register(idempotent: bool) -> Decision {
         d.idempotent = Some(true);
     }
     d
+}
+
+// ---------------------------------------------------------------------------
+// Outgoing request construction (request-side conformance)
+// ---------------------------------------------------------------------------
+//
+// These builders model the OUTGOING request body + headers the SDK would send
+// for register / claim / renew / report. They mirror the Java wire DTOs
+// (RegisterRequest / ClaimRequest / RenewRequest / ReportRequest) and the
+// platform HTTP client header policy. The conformance runner drives them from a
+// fixture's given.config + given.state.request and asserts requestBodyIncludes
+// / requestBodyExcludes / requestHeaders. This is what locks the report
+// field-name red-line (outputs/success:bool, not output/errorClass/status) and
+// the partitionInvocationId pass-through across every language.
+
+use std::collections::BTreeMap;
+
+/// A request-body value (a std-only JSON-ish leaf/tree the runner can compare).
+#[derive(Debug, Clone, PartialEq)]
+pub enum BodyValue {
+    Bool(bool),
+    Num(f64),
+    Str(String),
+    Obj(BTreeMap<String, BodyValue>),
+}
+
+/// Boot-config subset the request builders read.
+#[derive(Debug, Clone, Default)]
+pub struct RequestBuildConfig {
+    pub tenant_id: String,
+    pub worker_code: String,
+    pub api_key: Option<String>,
+}
+
+/// Report-specific payload (success/outputs/errorCode/...) from the fixture.
+#[derive(Debug, Clone, Default)]
+pub struct ReportPayload {
+    pub success: Option<bool>,
+    pub outputs: Option<BTreeMap<String, BodyValue>>,
+    pub error_code: Option<String>,
+    pub result_summary: Option<String>,
+    pub failure_class: Option<String>,
+}
+
+/// Describes which outgoing call to build (from given.state.request).
+#[derive(Debug, Clone)]
+pub enum RequestSpec {
+    Register,
+    /// claim/renew share the same body shape (tenantId/workerId/partitionInvocationId).
+    ClaimOrRenew {
+        partition_invocation_id: Option<String>,
+        idempotency_key: Option<String>,
+    },
+    Report {
+        task_id: Option<i64>,
+        partition_invocation_id: Option<String>,
+        idempotency_key: Option<String>,
+        report: ReportPayload,
+    },
+}
+
+/// The built request: ordered body + headers.
+#[derive(Debug, Clone)]
+pub struct OutgoingRequest {
+    pub body: BTreeMap<String, BodyValue>,
+    pub headers: BTreeMap<String, String>,
+}
+
+fn base_headers(cfg: &RequestBuildConfig) -> BTreeMap<String, String> {
+    let mut h = BTreeMap::new();
+    h.insert("Content-Type".to_string(), "application/json".to_string());
+    h.insert("X-Batch-Tenant-Id".to_string(), cfg.tenant_id.clone());
+    if let Some(key) = cfg.api_key.as_ref().filter(|k| !k.is_empty()) {
+        h.insert("X-Batch-Api-Key".to_string(), key.clone());
+    }
+    h
+}
+
+fn idempotency_key(provided: &Option<String>) -> String {
+    match provided {
+        Some(k) if !k.is_empty() => k.clone(),
+        _ => format!("rs-{}", random_uuid()),
+    }
+}
+
+/// Build the outgoing request (body + headers) for a register/claim/renew/report
+/// call. Field names and NON_NULL omission mirror the platform wire DTOs; apiKey
+/// lives only in the header, never the body.
+pub fn build_request(spec: &RequestSpec, cfg: &RequestBuildConfig) -> OutgoingRequest {
+    let mut headers = base_headers(cfg);
+    let mut body: BTreeMap<String, BodyValue> = BTreeMap::new();
+    match spec {
+        RequestSpec::Register => {
+            body.insert("tenantId".into(), BodyValue::Str(cfg.tenant_id.clone()));
+            body.insert("workerCode".into(), BodyValue::Str(cfg.worker_code.clone()));
+            body.insert(
+                "workerGroup".into(),
+                BodyValue::Str("sdk-self-hosted".into()),
+            );
+            body.insert("status".into(), BodyValue::Str("RUNNING".into()));
+        }
+        RequestSpec::ClaimOrRenew {
+            partition_invocation_id,
+            idempotency_key: idk,
+        } => {
+            body.insert("tenantId".into(), BodyValue::Str(cfg.tenant_id.clone()));
+            body.insert("workerId".into(), BodyValue::Str(cfg.worker_code.clone()));
+            if let Some(inv) = partition_invocation_id {
+                body.insert("partitionInvocationId".into(), BodyValue::Str(inv.clone()));
+            }
+            headers.insert("Idempotency-Key".into(), idempotency_key(idk));
+        }
+        RequestSpec::Report {
+            task_id,
+            partition_invocation_id,
+            idempotency_key: idk,
+            report,
+        } => {
+            body.insert("tenantId".into(), BodyValue::Str(cfg.tenant_id.clone()));
+            body.insert("workerId".into(), BodyValue::Str(cfg.worker_code.clone()));
+            if let Some(t) = task_id {
+                body.insert("taskId".into(), BodyValue::Num(*t as f64));
+            }
+            if let Some(inv) = partition_invocation_id {
+                body.insert("partitionInvocationId".into(), BodyValue::Str(inv.clone()));
+            }
+            if let Some(s) = report.success {
+                body.insert("success".into(), BodyValue::Bool(s));
+            }
+            if let Some(o) = report.outputs.as_ref() {
+                body.insert("outputs".into(), BodyValue::Obj(o.clone()));
+            }
+            if let Some(c) = report.error_code.as_ref() {
+                body.insert("errorCode".into(), BodyValue::Str(c.clone()));
+            }
+            if let Some(rs) = report.result_summary.as_ref() {
+                body.insert("resultSummary".into(), BodyValue::Str(rs.clone()));
+            }
+            if let Some(fc) = report.failure_class.as_ref() {
+                body.insert("failureClass".into(), BodyValue::Str(fc.clone()));
+            }
+            headers.insert("Idempotency-Key".into(), idempotency_key(idk));
+        }
+    }
+    OutgoingRequest { body, headers }
+}
+
+/// An RFC-4122-ish v4 uuid (std-only; only the shape matters for assertions).
+fn random_uuid() -> String {
+    // Seed a tiny xorshift PRNG from the system clock — no external rand crate.
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let mut state = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x9e3779b97f4a7c15)
+        | 1;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let mut bytes = [0u8; 16];
+    for chunk in bytes.chunks_mut(8) {
+        let r = next().to_le_bytes();
+        chunk.copy_from_slice(&r[..chunk.len()]);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..32],
+    )
 }
 
 // ---------------------------------------------------------------------------

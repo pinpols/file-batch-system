@@ -1,0 +1,21 @@
+{
+  "scenario": "kafka-schema-version-missing-accept",
+  "description": "schemaVersion §A:派单消息缺 schemaVersion 字段 → 当 v1 处理(legacy orchestrator 兼容),accept。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 },
+    "state": { "inFlight": 0 }
+  },
+  "when": {
+    "channel": "kafka",
+    "method": "RECEIVE",
+    "body": { "tenantId": "acme", "taskId": 12347, "jobCode": "daily-report", "workerType": "echo", "idempotencyKey": "key-12347" },
+    "responseStatus": null,
+    "responseBody": null
+  },
+  "then": {
+    "sdkExpectedAction": "treat missing schemaVersion as v1 and process the message",
+    "sdkMustNot": ["reject a message merely because schemaVersion is absent"],
+    "expect": { "schemaAccept": true }
+  },
+  "references": ["wire-protocol.md §A", "TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS"]
+}

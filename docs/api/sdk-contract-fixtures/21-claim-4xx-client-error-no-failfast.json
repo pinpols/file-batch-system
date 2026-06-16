@@ -1,0 +1,21 @@
+{
+  "scenario": "claim-4xx-client-error-no-failfast",
+  "description": "非401/409 的 4xx(如 400/422)单次 → client-error,不重试也不 fail-fast(等累计到阈值才 fail-fast,防活锁)。given.state.clientErrorCount=0(首次)。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state": { "clientErrorCount": 0 }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/claim",
+    "responseStatus": 422,
+    "responseBody": { "code": "VALIDATION_FAILED", "message": "bad partition" }
+  },
+  "then": {
+    "sdkExpectedAction": "classify a single non-auth 4xx as client-error: no retry, no fail-fast (below threshold)",
+    "sdkMustNot": ["retry a 4xx client error", "fail-fast on the first non-auth 4xx"],
+    "expect": { "action": "client-error", "retry": false, "failFast": false }
+  },
+  "references": ["wire-protocol.md §B/§C clientErrorFailFastThreshold=5"]
+}
