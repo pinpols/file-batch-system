@@ -38,6 +38,7 @@ import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineSte
 import com.example.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.TenantScope;
 import com.example.batch.console.web.query.FileChainQueryRequest;
 import java.time.Instant;
 import java.util.List;
@@ -211,7 +212,7 @@ public class ConsoleFileQueryService {
     List<FileArrivalGroupEntity> rows =
         fileMappers.fileArrivalGroupMapper.selectByQuery(
             new FileArrivalGroupQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 request.getFileGroupCode(),
                 request.getArrivalState(),
                 null,
@@ -220,7 +221,7 @@ public class ConsoleFileQueryService {
     long total =
         fileMappers.fileArrivalGroupMapper.countByQuery(
             new FileArrivalGroupQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 request.getFileGroupCode(),
                 request.getArrivalState(),
                 null,

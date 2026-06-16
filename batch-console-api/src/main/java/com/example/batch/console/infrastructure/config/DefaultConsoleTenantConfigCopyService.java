@@ -289,7 +289,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setWorkflowType(e.getWorkflowType());
       s.setEnabled(e.getEnabled());
 
-      // nodes
+      // nodes —— definition-id 作用域:tenantId 故意为 null,靠已经过 ofTenant 过滤的
+      // workflowDefinitionId(FK)收敛,非跨租扫描。此处**不**走 TenantScope.requireTenant。
       WorkflowNodeQuery nodeQuery =
           WorkflowNodeQuery.ofDefinition(e.getId(), new PageRequest(1, MAX_PAGE_SIZE));
       List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(nodeQuery);

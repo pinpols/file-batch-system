@@ -7,6 +7,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.TenantScope;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -75,7 +76,7 @@ public class ConsoleWorkflowQueryService {
     List<WorkflowNodeEntity> rows =
         workflowMappers.workflowNodeMapper.selectByQuery(
             new WorkflowNodeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
                 request.getNodeCode(),
@@ -85,7 +86,7 @@ public class ConsoleWorkflowQueryService {
     long total =
         workflowMappers.workflowNodeMapper.countByQuery(
             new WorkflowNodeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
                 request.getNodeCode(),
@@ -100,7 +101,7 @@ public class ConsoleWorkflowQueryService {
     List<WorkflowEdgeEntity> rows =
         workflowMappers.workflowEdgeMapper.selectByQuery(
             new WorkflowEdgeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
                 request.getFromNodeCode(),
@@ -111,7 +112,7 @@ public class ConsoleWorkflowQueryService {
     long total =
         workflowMappers.workflowEdgeMapper.countByQuery(
             new WorkflowEdgeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
                 request.getFromNodeCode(),
@@ -202,7 +203,7 @@ public class ConsoleWorkflowQueryService {
     List<WorkflowNodeEntity> nodes =
         workflowMappers.workflowNodeMapper.selectByQuery(
             new WorkflowNodeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 selectedDefinition.getId(),
                 null,
                 null,
@@ -212,7 +213,7 @@ public class ConsoleWorkflowQueryService {
     List<WorkflowEdgeEntity> edges =
         workflowMappers.workflowEdgeMapper.selectByQuery(
             new WorkflowEdgeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
+                TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
                 selectedDefinition.getId(),
                 null,
                 null,
