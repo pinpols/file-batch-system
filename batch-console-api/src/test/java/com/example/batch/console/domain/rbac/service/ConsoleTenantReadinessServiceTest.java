@@ -80,6 +80,11 @@ class ConsoleTenantReadinessServiceTest {
     assertThat(r.blocking()).hasSize(1);
     assertThat(r.blocking().get(0).item()).isEqualTo("template");
     assertThat(r.blocking().get(0).ref()).isEqualTo("exp1");
+    // hint / docRef 是「报怎么补」引导:blocking 项必须给出可操作提示 + 文档引用。
+    assertThat(r.blocking().get(0).hint())
+        .contains("file_template_config")
+        .contains("default_query_sql");
+    assertThat(r.blocking().get(0).docRef()).contains("first-tenant-config-quickstart.md");
   }
 
   @Test
@@ -158,6 +163,8 @@ class ConsoleTenantReadinessServiceTest {
     assertThat(r.blocking()).hasSize(1);
     assertThat(r.blocking().get(0).item()).isEqualTo("queue");
     assertThat(r.blocking().get(0).ref()).isEqualTo("job1");
+    assertThat(r.blocking().get(0).hint()).contains("resource_queue").contains("q-missing");
+    assertThat(r.blocking().get(0).docRef()).contains("first-tenant-config-quickstart.md");
   }
 
   @Test

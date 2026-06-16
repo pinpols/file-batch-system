@@ -35,6 +35,12 @@ public class ConsoleTenantReadinessService {
   /** config_json 视为「未配置」的占位形态。 */
   private static final Set<String> EMPTY_JSON_PLACEHOLDERS = Set.of("", "{}", "null");
 
+  /** quickstart 文档路径(由主进程另建);readiness 只在 docRef 里引用,不负责生成。 */
+  private static final String DOC_QUICKSTART = "docs/runbook/first-tenant-config-quickstart.md";
+
+  /** 配置模板内字段说明 / 四类Worker示例 sheet 的口径引用。 */
+  private static final String DOC_FIELD_GUIDE = DOC_QUICKSTART + " #字段说明 / 配置模板『字段说明』sheet";
+
   private final TenantMapper tenantMapper;
   private final FileTemplateConfigMapper templateMapper;
   private final FileChannelConfigMapper channelMapper;
@@ -72,7 +78,15 @@ public class ConsoleTenantReadinessService {
                 + (missingQuery ? "default_query_sql " : "")
                 + (missingMappings ? "field_mappings" : "");
         if (enabled) {
-          blocking.add(new ReadinessItem("template", reason.trim(), code));
+          String hint =
+              "在配置模板 file_template_config sheet 为模板 '"
+                  + code
+                  + "' 填写 "
+                  + (missingQuery ? "default_query_sql(EXPORT 导出 SQL)" : "")
+                  + (missingQuery && missingMappings ? " 和 " : "")
+                  + (missingMappings ? "field_mappings(字段映射)" : "")
+                  + "；结构参考『四类Worker示例』sheet 与『字段说明』的填写示例列。";
+          blocking.add(new ReadinessItem("template", reason.trim(), code, hint, DOC_FIELD_GUIDE));
         } else {
           warnings.add(
               new ReadinessItem(
@@ -93,7 +107,13 @@ public class ConsoleTenantReadinessService {
       if (needsCredential && noConfig) {
         String reason = "channel auth_type=" + authType + " but config_json (credential) is empty";
         if (enabled) {
-          blocking.add(new ReadinessItem("channel", reason, code));
+          String hint =
+              "在配置模板 file_channel_config sheet 为通道 '"
+                  + code
+                  + "' 的 config_json 填写凭据(auth_type="
+                  + authType
+                  + " 需 endpoint + auth + credentials)；结构参考『字段说明』config_json 的填写示例列。";
+          blocking.add(new ReadinessItem("channel", reason, code, hint, DOC_FIELD_GUIDE));
         } else {
           warnings.add(new ReadinessItem("channel", "disabled " + reason, code));
         }
@@ -108,9 +128,19 @@ public class ConsoleTenantReadinessService {
       String queueCode = str(row, "queue_code");
       String jobCode = str(row, "job_code");
       if (!isBlank(queueCode) && !existing.contains(queueCode)) {
+        String hint =
+            "在配置模板 resource_queue sheet 新增 queue_code='"
+                + queueCode
+                + "'(作业 '"
+                + jobCode
+                + "' 引用)，或把作业 queue_code 改为已存在的队列；resource_queue 是可选 sheet，引用时必填。";
         blocking.add(
             new ReadinessItem(
-                "queue", "job references missing queue_code '" + queueCode + "'", jobCode));
+                "queue",
+                "job references missing queue_code '" + queueCode + "'",
+                jobCode,
+                hint,
+                DOC_QUICKSTART));
       }
     }
   }
