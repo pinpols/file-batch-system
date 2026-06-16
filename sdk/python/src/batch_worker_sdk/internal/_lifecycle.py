@@ -194,6 +194,8 @@ async def _phase_deactivate(client: Any) -> None:
       ``http`` 只读属性)。若可接受参数,以 ``(worker_code, body)`` 调用;
       否则无参调用。
     """
+    from batch_worker_sdk.scheduler._heartbeat import _utc_now_iso  # noqa: PLC0415
+
     deactivate = getattr(client, "deactivate", None)
     if deactivate is None:
         http = getattr(client, "_http", None) or getattr(client, "http", None)
@@ -207,7 +209,18 @@ async def _phase_deactivate(client: Any) -> None:
         if config is not None:
             worker_code = getattr(config, "worker_code", "")
             tenant_id = getattr(config, "tenant_id", "")
-            await deactivate(worker_code, {"tenantId": tenant_id, "workerCode": worker_code})
+            # openapi WorkerHeartbeatDto required=[tenantId, workerCode, status,
+            # heartbeatAt]:deactivate body 必须带全 4 个必填字段,否则平台
+            # @Valid 校验 400。status=OFFLINE 表达优雅下线意图。
+            await deactivate(
+                worker_code,
+                {
+                    "tenantId": tenant_id,
+                    "workerCode": worker_code,
+                    "status": "OFFLINE",
+                    "heartbeatAt": _utc_now_iso(),
+                },
+            )
         else:
             await deactivate()
     except Exception as exc:

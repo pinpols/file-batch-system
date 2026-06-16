@@ -44,6 +44,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Object>> {
 
+  /** 进程 kill 后 stdout/stderr reader 线程的有界 join 超时(ms),防 grandchild 持管道致永久挂死。 */
+  private static final long READER_JOIN_TIMEOUT_MS = 5000L;
+
   private final ShellAtomicConfig config;
 
   public ShellAtomicHandler(ShellAtomicConfig config) {
@@ -127,14 +130,15 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
     boolean finished = process.waitFor(config.timeoutSeconds(), TimeUnit.SECONDS);
     if (!finished) {
       process.destroyForcibly();
-      stdoutThread.join();
-      stderrThread.join();
+      // 有界 join:grandchild 可能持有管道导致流不关、reader 永不返回,无界 join 会挂死 dispatch worker 线程。
+      stdoutThread.join(READER_JOIN_TIMEOUT_MS);
+      stderrThread.join(READER_JOIN_TIMEOUT_MS);
       throw new TimeoutException(
           "shell command timeout after " + config.timeoutSeconds() + "s: " + cmd.get(0));
     }
 
-    stdoutThread.join();
-    stderrThread.join();
+    stdoutThread.join(READER_JOIN_TIMEOUT_MS);
+    stderrThread.join(READER_JOIN_TIMEOUT_MS);
 
     int exitCode = process.exitValue();
     return Map.of(

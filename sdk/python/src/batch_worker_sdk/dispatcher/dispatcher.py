@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -44,6 +45,8 @@ from batch_worker_sdk.exceptions import AuthError, PlatformError
 from batch_worker_sdk.handler.handler import SdkTaskHandler
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.task.cancellation import CancellationSignal
+from batch_worker_sdk.task.context import SdkTaskContext
+from batch_worker_sdk.task.result import SdkTaskResult
 from batch_worker_sdk.task.state import WorkerRuntimeState
 
 
@@ -61,9 +64,22 @@ def _new_idempotency_key() -> str:
 
 logger = logging.getLogger(__name__)
 
-# Python SDK 能识别的 schema 主版本前缀。对齐 Java
+# Python SDK 能识别的 schema 主版本 token。对齐 Java
 # ``TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2")``。
-_SUPPORTED_SCHEMA_PREFIXES = ("v1", "v2")
+# 注意:必须按"主版本 token"精确匹配,**不能**用 ``startswith``——后者会把
+# ``"v10"`` 误判为受支持(``"v10".startswith("v1") is True``)。
+_SUPPORTED_SCHEMA_MAJORS = frozenset({"v1", "v2"})
+
+# 提取 schemaVersion 的前导主版本 token(``^[a-zA-Z0-9]+``):``"v2.1"`` →
+# ``"v2"``、``"v10"`` → ``"v10"``、``"v1-beta"`` → ``"v1"``。对齐 Java 端
+# 按 major token 比对的语义。
+_SCHEMA_MAJOR_RE = re.compile(r"^[a-zA-Z0-9]+")
+
+
+def _schema_major(schema: str) -> str:
+    """取 schemaVersion 的前导主版本 token;无匹配时返回空串。"""
+    m = _SCHEMA_MAJOR_RE.match(schema)
+    return m.group(0) if m else ""
 
 
 class TaskDispatcher:
@@ -95,6 +111,12 @@ class TaskDispatcher:
         # thread-safe**(与 _in_flight 一致,owner 是 dispatcher 所在的
         # 唯一 asyncio loop)。
         self._cancel_signals: dict[int, CancellationSignal] = {}
+        # task_id → partitionInvocationId(可能为 None)。在 CLAIM 时从
+        # ``msg.runtimeAttributes`` 提取并缓存,供 LeaseRenewalScheduler 组装
+        # renew body 时回读(openapi TaskHeartbeatRequest 要求带上,fixture 10)。
+        # 与 ``_cancel_signals`` 同生命周期:on_message 入队即建,done_callback
+        # cleanup 时清。**single-event-loop only; not thread-safe**。
+        self._partition_invocation_ids: dict[int, str | None] = {}
         self._draining: bool = False
         self._fatal: bool = False
         self._runtime_state: WorkerRuntimeState = WorkerRuntimeState.NORMAL
@@ -181,6 +203,15 @@ class TaskDispatcher:
         signal = self._cancel_signals.get(task_id)
         return signal is not None and signal.is_cancellation_requested
 
+    def partition_invocation_id(self, task_id: int) -> str | None:
+        """返回 CLAIM 时缓存的 ``partitionInvocationId``(无则 ``None``)。
+
+        供 :class:`LeaseRenewalScheduler._renew_one` 组装 renew body —— openapi
+        ``TaskHeartbeatRequest`` 要求续约时回带分区调用 id(fixture 10)。未知
+        task_id(已 cleanup / 从未 claim)返回 ``None``。
+        """
+        return self._partition_invocation_ids.get(task_id)
+
     # ─── 消息入口 ────────────────────────────────────────────────────
 
     async def on_message(self, msg: dict[str, Any]) -> None:  # noqa: PLR0911
@@ -206,7 +237,7 @@ class TaskDispatcher:
         # schemaVersion 校验:拒绝未知大版本,避免老的 Python SDK 静默
         # 误解未来 ``v3`` 信封。
         schema = msg.get("schemaVersion") or ""
-        if not any(schema.startswith(p) for p in _SUPPORTED_SCHEMA_PREFIXES):
+        if _schema_major(schema) not in _SUPPORTED_SCHEMA_MAJORS:
             logger.warning(
                 "rejecting kafka task dispatch message with unsupported schemaVersion=%r taskId=%s",
                 schema,
@@ -249,6 +280,7 @@ class TaskDispatcher:
         def _cleanup(_t: asyncio.Task[None], tid: int = task_id) -> None:
             self._in_flight.pop(tid, None)
             self._cancel_signals.pop(tid, None)
+            self._partition_invocation_ids.pop(tid, None)
 
         task.add_done_callback(_cleanup)
 
@@ -258,8 +290,11 @@ class TaskDispatcher:
         """单个任务的 CLAIM → 执行 → REPORT 流水线。
 
         异常被吸收:``AuthError`` 设 fatal 并停止后续摄入;其他
-        ``PlatformError`` 让任务自然等待租约超时重投递。后续可补一条
-        结构化的"REPORT failure"路径处理 handler 抛错;当前实现只记日志。
+        ``PlatformError``(CLAIM 阶段)让任务自然等待租约超时重投递。
+        handler 抛错走 REPORT failure 路径(不让异常从后台 asyncio.Task
+        泄漏)。CLAIM 命中 409(已被自己/他人 claim)按 wire-protocol §B 视
+        为幂等成功:**直接返回**,既不执行 handler 也不 REPORT(否则会污染
+        平台的 success=false 计数器,违反 fixture 08)。
         """
         # wire-protocol §A:每次写操作独立 UUID,5xx 重试由 with_retry 内部
         # 复用同 key。若上游 kafka msg 显式带 idempotencyKey 则尊重之(平台
@@ -270,12 +305,16 @@ class TaskDispatcher:
             "workerId": self._config.worker_code,
         }
         runtime_attrs = msg.get("runtimeAttributes") or {}
-        p_inv = runtime_attrs.get("partitionInvocationId")
+        p_inv_raw = runtime_attrs.get("partitionInvocationId")
+        p_inv = str(p_inv_raw) if p_inv_raw is not None else None
+        # 在 CLAIM 时缓存 partitionInvocationId,供 LeaseRenewalScheduler 组装
+        # renew body(openapi TaskHeartbeatRequest / fixture 10)。
+        self._partition_invocation_ids[task_id] = p_inv
         if p_inv is not None:
-            claim_body["partitionInvocationId"] = str(p_inv)
+            claim_body["partitionInvocationId"] = p_inv
 
         try:
-            await self._http.claim(task_id, idem_claim, claim_body)
+            _claim_resp, status = await self._http.claim_status(task_id, idem_claim, claim_body)
         except AuthError:
             # wire-protocol §B:401/403 视为持久错误,设 fatal 让
             # KafkaTaskConsumer 停止灌入消息;K8s liveness probe 会回收 pod。
@@ -286,6 +325,13 @@ class TaskDispatcher:
             logger.warning(
                 "CLAIM failed for taskId=%s, leaving to lease redelivery: %s", task_id, ex
             )
+            return
+
+        if status == 409:
+            # 幂等已被 claim(Kafka at-least-once 重投 / 对端 worker 抢先)。
+            # 按 fixture 08:INFO 记录,提交 offset,**不** 执行 handler、
+            # **不** REPORT。
+            logger.info("task %s already claimed by peer (HTTP 409); skipping execution", task_id)
             return
 
         worker_type = msg.get("workerType") or ""
@@ -300,12 +346,63 @@ class TaskDispatcher:
             await self._report_failure(task_id, msg, f"no handler for workerType={worker_type!r}")
             return
 
-        # 当前仅保留 handler 调用骨架:完整的 SdkTaskContext 构造 +
-        # handler.execute 调用 + SdkTaskResult 汇报留待后续完善。这里
-        # 先 REPORT 一个合成成功,把端到端链路跑通。
-        await self._report_success(task_id, msg)
+        # 构造执行上下文并调用 handler。handler.execute 是 async,直接 await;
+        # 防御性地兼容返回非 coroutine 的实现(同步 handler)。
+        ctx = self._build_context(task_id, msg, worker_type, runtime_attrs)
+        try:
+            raw = handler.execute(ctx)
+            result: Any = await raw if asyncio.iscoroutine(raw) else raw
+        except Exception as ex:
+            # handler 抛错:REPORT failure(而不是让异常从后台 asyncio.Task
+            # 泄漏,那样只会进 done_callback 后被吞)。
+            logger.exception("handler for taskId=%s raised; reporting failure", task_id)
+            await self._report_failure(task_id, msg, f"handler error: {ex}")
+            return
 
-    async def _report_success(self, task_id: int, msg: dict[str, Any]) -> None:
+        if not isinstance(result, SdkTaskResult):
+            logger.error(
+                "handler for workerType=%r taskId=%s returned %r (expected SdkTaskResult)",
+                worker_type,
+                task_id,
+                type(result).__name__,
+            )
+            await self._report_failure(task_id, msg, "handler returned non-SdkTaskResult")
+            return
+
+        if result.success:
+            await self._report_success(task_id, msg, result)
+        else:
+            reason = result.message or "handler reported failure"
+            await self._report_failure(task_id, msg, reason, result=result)
+
+    def _build_context(
+        self,
+        task_id: int,
+        msg: dict[str, Any],
+        worker_type: str,
+        runtime_attrs: dict[str, Any],
+    ) -> SdkTaskContext:
+        """从 Kafka 派发信封物化 :class:`SdkTaskContext`。
+
+        ``cancel_signal`` 取 on_message 入队时建好的同一份引用,使
+        LeaseRenewalScheduler 的取消信号能被 handler 通过 ctx 观察到。
+        """
+        return SdkTaskContext(
+            tenant_id=str(msg.get("tenantId") or self._config.tenant_id),
+            task_id=task_id,
+            worker_code=self._config.worker_code,
+            task_type=worker_type,
+            parameters=dict(msg.get("parameters") or {}),
+            runtime_attributes=dict(runtime_attrs),
+            cancel_signal=self._cancel_signals.get(task_id),
+        )
+
+    async def _report_success(
+        self,
+        task_id: int,
+        msg: dict[str, Any],
+        result: SdkTaskResult | None = None,
+    ) -> None:
         # P0-1:对齐平台 ``TaskExecutionReportDto`` —— success(bool) 字段,
         # 不是 status(string)。Jackson @JsonIgnoreProperties(ignoreUnknown=true)
         # 会静默丢弃未知字段,旧版 status="SUCCESS" 会导致 success 默认 false,
@@ -316,21 +413,36 @@ class TaskDispatcher:
             "workerId": self._config.worker_code,
             "success": True,
         }
-        trace_id = msg.get("traceId")
-        if trace_id:
-            body["traceId"] = trace_id
-        runtime_attrs = msg.get("runtimeAttributes") or {}
-        p_inv = runtime_attrs.get("partitionInvocationId")
-        if p_inv is not None:
-            body["partitionInvocationId"] = str(p_inv)
+        if result is not None:
+            if result.output:
+                body["outputs"] = dict(result.output)
+            if result.message:
+                body["resultSummary"] = result.message
+        self._attach_report_meta(body, msg)
         try:
             await self._http.report(task_id, _new_idempotency_key(), body)
         except PlatformError as ex:
             logger.warning("REPORT success failed for taskId=%s: %s", task_id, ex)
 
-    async def _report_failure(self, task_id: int, msg: dict[str, Any], reason: str) -> None:
+    async def _report_failure(
+        self,
+        task_id: int,
+        msg: dict[str, Any],
+        reason: str,
+        result: SdkTaskResult | None = None,
+    ) -> None:
         # P0-1:失败侧字段:success=false + resultSummary(自由文本)+
         # errorCode(机器可读分类)。已废弃 errorMessage,平台读不到。
+        # handler 通过 SdkTaskResult.fail(code, ...) 给出的 errorCode/errorClass
+        # 放在 result.output;无 result(no-handler / handler 抛错)回落到
+        # SdkDispatchError。
+        error_code = "SdkDispatchError"
+        outputs: dict[str, Any] = {}
+        if result is not None:
+            outputs = dict(result.output)
+            ec = outputs.get("errorCode")
+            if isinstance(ec, str) and ec:
+                error_code = ec
         body: dict[str, Any] = {
             "taskId": task_id,
             "tenantId": msg.get("tenantId"),
@@ -338,8 +450,18 @@ class TaskDispatcher:
             "success": False,
             "message": reason,
             "resultSummary": reason,
-            "errorCode": "SdkDispatchError",
+            "errorCode": error_code,
         }
+        if outputs:
+            body["outputs"] = outputs
+        self._attach_report_meta(body, msg)
+        try:
+            await self._http.report(task_id, _new_idempotency_key(), body)
+        except PlatformError as ex:
+            logger.warning("REPORT failure failed for taskId=%s: %s", task_id, ex)
+
+    def _attach_report_meta(self, body: dict[str, Any], msg: dict[str, Any]) -> None:
+        """给 REPORT body 补 traceId / partitionInvocationId(若存在)。"""
         trace_id = msg.get("traceId")
         if trace_id:
             body["traceId"] = trace_id
@@ -347,10 +469,6 @@ class TaskDispatcher:
         p_inv = runtime_attrs.get("partitionInvocationId")
         if p_inv is not None:
             body["partitionInvocationId"] = str(p_inv)
-        try:
-            await self._http.report(task_id, _new_idempotency_key(), body)
-        except PlatformError as ex:
-            logger.warning("REPORT failure failed for taskId=%s: %s", task_id, ex)
 
     # ─── 生命周期 ────────────────────────────────────────────────────
 

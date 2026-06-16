@@ -285,9 +285,10 @@ class TaskDispatcherClaimRetryTest {
 
     dispatcher.processInWorkerThread(msg());
 
-    // CLAIM 成功归零,REPORT 401 是鉴权类(!isAuthError 守卫)→ 不 +1
+    // CLAIM 成功归零,REPORT 401 是鉴权类(!isAuthError 守卫)→ 不计入连续 4xx 计数器
     assertThat(dispatcher.consecutiveClientErrors()).isZero();
-    assertThat(dispatcher.isFatal()).isFalse();
+    // 但 reportWithRetry 对 401/403 同样 fail-fast(与 CLAIM 一致),标记 dispatcher fatal
+    assertThat(dispatcher.isFatal()).isTrue();
   }
 
   @Test

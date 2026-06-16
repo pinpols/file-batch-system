@@ -41,6 +41,12 @@ impl FakePlatform {
         self
     }
 
+    /// Queue a claim response (default 200).
+    pub fn given_claim(&self, status: i64) -> &Self {
+        self.transport.queue_claim(HttpResponse::new(status, "{}"));
+        self
+    }
+
     /// Queue a report response (default 200).
     pub fn given_report(&self, status: i64) -> &Self {
         self.transport.queue_report(HttpResponse::new(status, "{}"));
@@ -69,7 +75,16 @@ impl FakePlatform {
     ) -> Option<TaskResult> {
         match self.consume(record, in_flight) {
             MessageOutcome::Accept { .. } => {
-                let ctx = TaskContext::new(&record.task_id, &record.tenant_id, &record.task_type);
+                // CLAIM before execute (§1.1): the worker must take the lease
+                // before running the handler. The claim body carries the
+                // partitionInvocationId threaded from the dispatch record.
+                let claim_body = record
+                    .partition_invocation_id
+                    .clone()
+                    .unwrap_or_default();
+                let _ = self.transport.claim(&record.task_id, &claim_body);
+                let ctx = TaskContext::new(&record.task_id, &record.tenant_id, &record.task_type)
+                    .with_partition_invocation_id(record.partition_invocation_id.clone());
                 let result = handler.execute(&ctx);
                 // Report terminal status to the platform.
                 let _ = self.transport.report(&record.task_id, &result.error_code);
@@ -95,6 +110,7 @@ pub fn run_happy_path<H: TaskHandler>(
     record: &TaskRecord,
 ) -> (WorkerState, Option<TaskResult>, StopReport) {
     platform.given_register(200);
+    platform.given_claim(200);
     platform.given_report(200);
     platform.given_deactivate(200);
 
@@ -129,11 +145,12 @@ mod tests {
 
         assert_eq!(state, WorkerState::Draining);
         assert_eq!(result.unwrap().result_summary, "echoed");
-        // register -> report -> deactivate in order.
+        // register -> claim -> report -> deactivate in order (full lease cycle).
         assert_eq!(
             platform.call_log(),
             vec![
                 "register".to_string(),
+                "claim".to_string(),
                 "report".to_string(),
                 "deactivate".to_string()
             ]

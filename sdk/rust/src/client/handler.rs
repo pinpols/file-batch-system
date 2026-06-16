@@ -84,6 +84,10 @@ pub struct TaskContext {
     pub task_id: String,
     pub tenant_id: String,
     pub task_type: String,
+    /// `partitionInvocationId` — threaded through to the claim/renew/report
+    /// bodies the lease lifecycle builds (ADR-014, fixture 10). `None` when the
+    /// dispatch message omits it.
+    pub partition_invocation_id: Option<String>,
     /// `runtimeAttributes.traceId` passthrough (OTel link), empty if absent.
     pub trace_id: String,
     /// Effective task config / business parameters (claim response snapshot).
@@ -99,11 +103,19 @@ impl TaskContext {
             task_id: task_id.to_string(),
             tenant_id: tenant_id.to_string(),
             task_type: task_type.to_string(),
+            partition_invocation_id: None,
             trace_id: String::new(),
             parameters: BTreeMap::new(),
             cancellation: CancellationSignal::new(),
             progress: Box::new(NoopProgressReporter),
         }
+    }
+
+    /// Builder-style: attach the `partitionInvocationId` so the lease lifecycle
+    /// can include it in claim/renew/report bodies.
+    pub fn with_partition_invocation_id(mut self, id: Option<String>) -> Self {
+        self.partition_invocation_id = id;
+        self
     }
 
     /// Shorthand for `self.cancellation.is_cancelled()`.

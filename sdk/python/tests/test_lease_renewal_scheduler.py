@@ -22,9 +22,10 @@ from batch_worker_sdk.scheduler._lease import LeaseRenewalScheduler
 
 
 class _Dispatcher:
-    def __init__(self, ids: set[int]) -> None:
+    def __init__(self, ids: set[int], partition_ids: dict[int, str] | None = None) -> None:
         self.ids = ids
         self.cancel_calls: list[tuple[int, str]] = []
+        self.partition_ids = partition_ids or {}
 
     def in_flight_count(self) -> int:
         return len(self.ids)
@@ -38,16 +39,21 @@ class _Dispatcher:
     def mark_cancel_requested(self, task_id: int, reason: str) -> None:
         self.cancel_calls.append((task_id, reason))
 
+    def partition_invocation_id(self, task_id: int) -> str | None:
+        return self.partition_ids.get(task_id)
+
 
 class _Http:
     def __init__(self) -> None:
         self.calls: list[int] = []
+        self.bodies: list[dict[str, Any]] = []
         # Map task_id → response/exception
         self.responses: dict[int, dict[str, Any]] = {}
         self.errors: dict[int, BaseException] = {}
 
     async def renew(self, task_id: int, body: dict[str, Any]) -> dict[str, Any]:
         self.calls.append(task_id)
+        self.bodies.append(dict(body))
         if task_id in self.errors:
             raise self.errors[task_id]
         return dict(self.responses.get(task_id, {}))
@@ -70,6 +76,31 @@ async def test_tick_with_empty_inflight_makes_no_http_calls() -> None:
     # No assertion needed beyond "no exception" + no HTTP calls; if the
     # dispatcher's empty set triggered network I/O this test would hang
     # waiting on _Http's missing mock.
+
+
+async def test_renew_body_includes_partition_invocation_id() -> None:
+    """fixture 10 / openapi TaskHeartbeatRequest:renew body 必须带
+    CLAIM 时缓存的 partitionInvocationId。"""
+    dispatcher = _Dispatcher({101}, partition_ids={101: "inv-1"})
+    http = _Http()
+    sched = LeaseRenewalScheduler(_cfg(), http, dispatcher)  # type: ignore[arg-type]
+
+    await sched.tick()
+
+    assert http.bodies == [
+        {"tenantId": "acme", "workerId": "w-1", "partitionInvocationId": "inv-1"}
+    ]
+
+
+async def test_renew_body_omits_partition_invocation_id_when_absent() -> None:
+    """非分区任务(无缓存 partitionInvocationId)→ renew body 不带该字段。"""
+    dispatcher = _Dispatcher({102})
+    http = _Http()
+    sched = LeaseRenewalScheduler(_cfg(), http, dispatcher)  # type: ignore[arg-type]
+
+    await sched.tick()
+
+    assert http.bodies == [{"tenantId": "acme", "workerId": "w-1"}]
 
 
 async def test_cancel_requested_triggers_dispatcher_mark() -> None:

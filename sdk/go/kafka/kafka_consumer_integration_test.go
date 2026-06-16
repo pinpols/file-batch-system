@@ -66,19 +66,19 @@ func TestKafkaConsumer_Integration(t *testing.T) {
 		TaskID:        "task-" + suffix,
 		TenantID:      tenant,
 		SchemaVersion: "v1",
-		TaskType:      "http",
+		WorkerType:    "http",
 	}
 	foreignMsg := client.TaskDispatchMessage{
 		TaskID:        "foreign-" + suffix,
 		TenantID:      "other-tenant",
 		SchemaVersion: "v1",
-		TaskType:      "http",
+		WorkerType:    "http",
 	}
 	badSchemaMsg := client.TaskDispatchMessage{
 		TaskID:        "badschema-" + suffix,
 		TenantID:      tenant,
 		SchemaVersion: "v3",
-		TaskType:      "http",
+		WorkerType:    "http",
 	}
 	produce(t, brokers, topic, validMsg, foreignMsg, badSchemaMsg)
 

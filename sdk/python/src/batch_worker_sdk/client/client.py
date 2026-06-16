@@ -213,6 +213,7 @@ class BatchPlatformClient:
 
     def _build_register_body(self) -> dict[str, Any]:
         """构造 worker-register 请求体,字段形状对齐 Java ``WorkerHeartbeatDto``。"""
+        from batch_worker_sdk.constants import SCHEMA_VERSIONS_SUPPORTED  # noqa: PLC0415
         from batch_worker_sdk.scheduler._heartbeat import _utc_now_iso  # noqa: PLC0415
 
         body: dict[str, Any] = {
@@ -224,6 +225,10 @@ class BatchPlatformClient:
             "currentLoad": 0,
             "capabilityTags": sorted(self._handlers.keys()),
             "sdkVersion": self._config.sdk_version,
+            # SDK-#536 register-time protocol-version gate: advertise the SDK's
+            # current major (last of SCHEMA_VERSIONS_SUPPORTED) so the platform
+            # identifies + accepts us. Register only — heartbeat carries null.
+            "protocolVersion": SCHEMA_VERSIONS_SUPPORTED[-1],
         }
         # SDK-P5-3 运行指纹:host/pid 尽力采集,None 字段不写入。
         host_name = _fingerprint.host_name()

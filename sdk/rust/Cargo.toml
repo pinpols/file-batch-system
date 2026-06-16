@@ -25,11 +25,17 @@ path = "src/lib.rs"
 # Real Kafka consumer adapter (rdkafka). Off by default → default build stays
 # std-only and the phase-1/2 tests are unaffected.
 kafka = ["dep:rdkafka", "dep:serde", "dep:serde_json"]
+# Real blocking control-plane HTTP transport (reqwest). Off by default → the
+# core crate stays dependency-light. `rustls-tls` avoids OpenSSL; `serde` +
+# `serde_json` are pulled for ergonomic JSON (de)serialize with ignore-unknown.
+http = ["dep:reqwest", "dep:serde", "dep:serde_json"]
 
 [dependencies]
-# All optional + behind the `kafka` feature. `default-features = true` keeps
+# All optional + behind a feature. `default-features = true` on rdkafka keeps
 # librdkafka's bundled build/SSL/SASL features that SCRAM-SHA-512 + SSL need.
 rdkafka = { version = "0.36", optional = true, default-features = true }
+# reqwest behind `http`: blocking client, JSON helpers, rustls (no OpenSSL).
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", optional = true, features = ["derive"] }
 serde_json = { version = "1", optional = true }
 

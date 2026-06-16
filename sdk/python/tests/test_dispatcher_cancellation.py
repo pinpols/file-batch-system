@@ -47,15 +47,15 @@ async def test_mark_cancel_flips_signal_for_in_flight_task() -> None:
     cfg = _cfg()
     blocker = asyncio.Event()
 
-    async def slow_claim(*_a: Any, **_kw: Any) -> dict[str, Any]:
+    async def slow_claim(*_a: Any, **_kw: Any) -> tuple[dict[str, Any], int]:
         await blocker.wait()
-        return {}
+        return {}, 200
 
     async def fake_report(*_a: Any, **_kw: Any) -> dict[str, Any]:
         return {}
 
     http = PlatformHttpClient(cfg)
-    http.claim = slow_claim  # type: ignore[method-assign]
+    http.claim_status = slow_claim  # type: ignore[method-assign]
     http.report = fake_report  # type: ignore[method-assign]
     dispatcher = TaskDispatcher(cfg, http)
     try:
@@ -103,14 +103,14 @@ async def test_mark_cancel_on_unknown_task_id_logs_debug_no_raise(
 async def test_cleanup_pops_signal_when_task_completes() -> None:
     cfg = _cfg()
 
-    async def fast_claim(*_a: Any, **_kw: Any) -> dict[str, Any]:
-        return {}
+    async def fast_claim(*_a: Any, **_kw: Any) -> tuple[dict[str, Any], int]:
+        return {}, 200
 
     async def fast_report(*_a: Any, **_kw: Any) -> dict[str, Any]:
         return {}
 
     http = PlatformHttpClient(cfg)
-    http.claim = fast_claim  # type: ignore[method-assign]
+    http.claim_status = fast_claim  # type: ignore[method-assign]
     http.report = fast_report  # type: ignore[method-assign]
     dispatcher = TaskDispatcher(cfg, http)
     try:

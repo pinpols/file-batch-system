@@ -159,14 +159,26 @@ pub trait MessageHandler {
 /// `parameters` / `runtimeAttributes` maps are exposed as raw JSON for handlers.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct DispatchMessage {
+    /// `taskId` — the BE publishes this as a JSON **number** (`integer/int64`),
+    /// so it must deserialize to `i64`; binding it to `String` makes serde fail
+    /// on every real dispatch message (decode-error loop). Downstream string ids
+    /// are produced with [`DispatchMessage::task_id_str`] / `.to_string()`.
     #[serde(rename = "taskId", default)]
-    pub task_id: String,
+    pub task_id: i64,
     #[serde(rename = "tenantId", default)]
     pub tenant_id: String,
     #[serde(rename = "schemaVersion", default)]
     pub schema_version: Option<String>,
-    #[serde(rename = "taskType", default)]
+    /// Bound to wire `workerType` (the consumer-side routing key). `taskType` was
+    /// removed in the v2 envelope (it was redundant with `workerType`); the
+    /// `alias` keeps v1 payloads decoding. Kept named `task_type` internally so
+    /// the rest of the engine (which decides on "task type") is unchanged.
+    #[serde(alias = "taskType", rename = "workerType", default)]
     pub task_type: String,
+    /// `partitionInvocationId` — the per-partition invocation token threaded into
+    /// claim/renew/report bodies (ADR-014, fixture 10). `nullable` on the wire.
+    #[serde(rename = "partitionInvocationId", default)]
+    pub partition_invocation_id: Option<String>,
     /// Remaining fields (parameters, runtimeAttributes, idempotencyKey, …) kept
     /// as raw JSON so handlers can read them without this struct having to
     /// enumerate the whole schema.
@@ -175,14 +187,23 @@ pub struct DispatchMessage {
 }
 
 impl DispatchMessage {
-    /// Project to the engine's [`TaskRecord`] (the subset the pipeline decides on).
+    /// The task id as the string form the control-plane path / report body uses
+    /// (`/internal/tasks/{id}/…`).
+    pub fn task_id_str(&self) -> String {
+        self.task_id.to_string()
+    }
+
+    /// Project to the engine's [`TaskRecord`] (the subset the pipeline decides
+    /// on), carrying through the `partitionInvocationId` so the real adapter can
+    /// include it in claim/renew/report.
     fn to_record(&self) -> TaskRecord {
         TaskRecord::new(
-            &self.task_id,
+            &self.task_id_str(),
             &self.tenant_id,
             &self.task_type,
             self.schema_version.as_deref(),
         )
+        .with_partition_invocation_id(self.partition_invocation_id.clone())
     }
 }
 
@@ -481,17 +502,30 @@ mod tests {
 
     #[test]
     fn dispatch_message_ignores_unknown_fields() {
-        let raw = br#"{"taskId":"t1","tenantId":"tenant-a","schemaVersion":"v1",
-            "taskType":"import","idempotencyKey":"k","parameters":{"a":1},
-            "somethingNew":42}"#;
+        // taskId is an int64 number on the wire; taskType is the v1 alias for
+        // the v2 `workerType` routing key.
+        let raw = br#"{"taskId":1,"tenantId":"tenant-a","schemaVersion":"v1",
+            "taskType":"import","partitionInvocationId":"pinv-9",
+            "idempotencyKey":"k","parameters":{"a":1},"somethingNew":42}"#;
         let m: DispatchMessage = serde_json::from_slice(raw).expect("decode");
-        assert_eq!(m.task_id, "t1");
+        assert_eq!(m.task_id, 1);
+        assert_eq!(m.task_id_str(), "1");
         assert_eq!(m.tenant_id, "tenant-a");
         assert_eq!(m.schema_version.as_deref(), Some("v1"));
         assert_eq!(m.task_type, "import");
+        assert_eq!(m.partition_invocation_id.as_deref(), Some("pinv-9"));
         // unknown/extra fields are preserved in `extra`, not rejected.
         assert!(m.extra.contains_key("idempotencyKey"));
         assert!(m.extra.contains_key("somethingNew"));
+    }
+
+    #[test]
+    fn dispatch_message_binds_worker_type() {
+        // v2 envelope: routing key is `workerType` (taskType removed).
+        let raw = br#"{"taskId":7,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"export"}"#;
+        let m: DispatchMessage = serde_json::from_slice(raw).expect("decode");
+        assert_eq!(m.task_id, 7);
+        assert_eq!(m.task_type, "export");
     }
 
     // ── Live-broker integration test (CI only) ────────────────────────────
@@ -502,7 +536,7 @@ mod tests {
     }
     impl MessageHandler for CollectingHandler {
         fn on_accepted(&mut self, msg: &DispatchMessage) -> Result<(), String> {
-            self.accepted.lock().unwrap().push(msg.task_id.clone());
+            self.accepted.lock().unwrap().push(msg.task_id_str());
             Ok(())
         }
     }
@@ -531,9 +565,9 @@ mod tests {
             .set("bootstrap.servers", &bootstrap)
             .create()
             .expect("producer");
-        let good = br#"{"taskId":"ok-1","tenantId":"tenant-a","schemaVersion":"v1","taskType":"import"}"#;
-        let foreign = br#"{"taskId":"foreign-1","tenantId":"tenant-b","schemaVersion":"v1","taskType":"import"}"#;
-        let bad_schema = br#"{"taskId":"badv3-1","tenantId":"tenant-a","schemaVersion":"v3","taskType":"import"}"#;
+        let good = br#"{"taskId":1,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#;
+        let foreign = br#"{"taskId":2,"tenantId":"tenant-b","schemaVersion":"v1","workerType":"import"}"#;
+        let bad_schema = br#"{"taskId":3,"tenantId":"tenant-a","schemaVersion":"v3","workerType":"import"}"#;
         for payload in [good.as_slice(), foreign.as_slice(), bad_schema.as_slice()] {
             producer
                 .send(BaseRecord::<(), [u8]>::to(&topic).payload(payload))
@@ -556,20 +590,20 @@ mod tests {
         while std::time::Instant::now() < deadline {
             let disp = consumer.poll_once(&if_read).expect("poll");
             if let Some(RecordDisposition::Accepted) = disp {
-                if accepted.lock().unwrap().iter().any(|t| t == "ok-1") {
+                if accepted.lock().unwrap().iter().any(|t| t == "1") {
                     break;
                 }
             }
         }
 
         let got = accepted.lock().unwrap().clone();
-        assert!(got.contains(&"ok-1".to_string()), "good record must be accepted");
+        assert!(got.contains(&"1".to_string()), "good record must be accepted");
         assert!(
-            !got.contains(&"foreign-1".to_string()),
+            !got.contains(&"2".to_string()),
             "foreign-tenant record must be dropped (§1.9)"
         );
         assert!(
-            !got.contains(&"badv3-1".to_string()),
+            !got.contains(&"3".to_string()),
             "unknown-schema record must be rejected (§A)"
         );
     }

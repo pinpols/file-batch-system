@@ -31,6 +31,7 @@ SENSITIVE_KEYWORDS: Final[tuple[str, ...]] = (
     "apikey",
     "privatekey",
     "accesskey",
+    "clientsecret",
 )
 
 

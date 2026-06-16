@@ -27,6 +27,8 @@ export interface ConsumerRecord {
 export interface DispatchMessage {
   taskId: string;
   tenantId: string;
+  /** routing metadata: the consumer accepts only messages whose workerType it serves. */
+  workerType: string;
   schemaVersion?: string | null;
   parameters?: Record<string, unknown>;
   runtimeAttributes?: { traceId?: string } & Record<string, unknown>;
@@ -69,11 +71,18 @@ export type PipelineOutcome =
   | { kind: "accepted"; message: DispatchMessage; committed: boolean }
   | { kind: "rejected-schema"; committed: false }
   | { kind: "dropped-tenant"; committed: false }
+  | { kind: "not-for-worker"; committed: false }
   | { kind: "parse-error"; committed: false }
   | { kind: "backpressure"; message: DispatchMessage; committed: false };
 
 export interface MessagePipelineDeps {
   tenantId: string;
+  /**
+   * workerTypes this worker serves; a message whose `workerType` is not in this
+   * set is "not-for-us" and is NOT committed so another worker in the group can
+   * reprocess it. Empty / omitted → serve all (no routing filter).
+   */
+  workerTypes?: readonly string[];
   /** current in-flight task count (live read). */
   inFlight: () => number;
   maxConcurrent: number;
@@ -91,10 +100,16 @@ export interface MessagePipelineDeps {
 export class MessagePipeline {
   #deps: MessagePipelineDeps;
   #logger: Logger;
+  #workerTypes: ReadonlySet<string> | undefined;
 
   constructor(deps: MessagePipelineDeps) {
     this.#deps = deps;
     this.#logger = deps.logger ?? consoleLogger;
+    // undefined / empty → no routing filter (serve every workerType).
+    this.#workerTypes =
+      deps.workerTypes && deps.workerTypes.length > 0
+        ? new Set(deps.workerTypes)
+        : undefined;
   }
 
   async onMessage(record: ConsumerRecord): Promise<PipelineOutcome> {
@@ -126,6 +141,17 @@ export class MessagePipeline {
         taskId: msg.taskId,
       });
       return { kind: "dropped-tenant", committed: false };
+    }
+
+    // 3b. workerType routing — a message not meant for this worker's type must
+    // NOT be committed, so another worker in the group reprocesses it.
+    if (this.#workerTypes && !this.#workerTypes.has(msg.workerType)) {
+      this.#logger.warn("message workerType not served here; not-for-us, not committing", {
+        served: [...this.#workerTypes],
+        actual: msg.workerType,
+        taskId: msg.taskId,
+      });
+      return { kind: "not-for-worker", committed: false };
     }
 
     // 4. capacity backpressure

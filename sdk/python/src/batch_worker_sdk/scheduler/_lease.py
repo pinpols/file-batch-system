@@ -94,6 +94,12 @@ class LeaseRenewalScheduler:
             "tenantId": self._config.tenant_id,
             "workerId": self._config.worker_code,
         }
+        # openapi TaskHeartbeatRequest / fixture 10:续约必须回带 CLAIM 时拿到
+        # 的 partitionInvocationId。dispatcher 在 CLAIM 时缓存,这里回读;无则
+        # 不写(普通非分区任务)。
+        p_inv = self._dispatcher.partition_invocation_id(task_id)
+        if p_inv is not None:
+            body["partitionInvocationId"] = p_inv
         try:
             resp = await self._http.renew(task_id, body)
         except PlatformError as ex:
