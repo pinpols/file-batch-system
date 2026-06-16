@@ -90,6 +90,10 @@ public class RuntimeBasedPartitionCountResolver implements PartitionCountResolve
     if (dividend <= 0 || divisor <= 0) {
       return 1;
     }
-    return (int) ((dividend + divisor - 1) / divisor);
+    // 溢出安全:dividend 接近 Long.MAX_VALUE 时 (dividend + divisor - 1) 会溢出为负,
+    // 导致分区数静默退化为 1。改用 (dividend-1)/divisor + 1,并对 Integer.MAX_VALUE 封顶
+    // (后续 normalizePartitionCount 还会按 max 收口)。对照 SizeBasedPartitionCountResolver。
+    long result = (dividend - 1) / divisor + 1;
+    return (int) Math.min(result, Integer.MAX_VALUE);
   }
 }
