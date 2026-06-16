@@ -81,7 +81,7 @@ public class DefaultConsoleFileDownloadApplicationService
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
     }
     if (Texts.hasText(approvalId)) {
-      requireApprovedApproval(effectiveTenant, approvalId);
+      requireApprovedApproval(effectiveTenant, approvalId, fileId);
     }
     String bucket = stringValue(fileRecord.get("storage_bucket"));
     if (!Texts.hasText(bucket)) {
@@ -221,7 +221,15 @@ public class DefaultConsoleFileDownloadApplicationService
         || truthy(security.get("content_encryption_enabled"));
   }
 
-  private void requireApprovedApproval(String tenantId, String approvalNo) {
+  /**
+   * 校验该审批单在本租户为 APPROVED/EXECUTED,<b>且</b>其目标资源（{@code targetType=FILE} 的 {@code targetId}）正是当前下载的
+   * {@code fileId}。
+   *
+   * <p>不绑定 fileId 会导致同租越权:租户内任一已 APPROVED 的下载审批单都能解锁<b>任意</b>加密文件下载。 审批创建侧（{@code
+   * DefaultConsoleFileApplicationService#presignDownload}）以 {@code targetType="FILE"} + {@code
+   * targetId=fileId} 落库,这里据此 1:1 比对。
+   */
+  private void requireApprovedApproval(String tenantId, String approvalNo, Long fileId) {
     RestClient restClient = orchestratorInternalRestClient.build();
     ApprovalRecordResponse response =
         restClient
@@ -236,6 +244,17 @@ public class DefaultConsoleFileDownloadApplicationService
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
     }
+    if (!matchesTargetFile(record, fileId)) {
+      throw BizException.of(ResultCode.FORBIDDEN, "error.approval.target_file_mismatch");
+    }
+  }
+
+  /** 审批单的目标资源必须是 FILE 类型且 targetId 等于当前 fileId,否则视为越权使用他单。 */
+  private boolean matchesTargetFile(ApprovalRecordResponse.ApprovalRecord record, Long fileId) {
+    if (fileId == null || !"FILE".equalsIgnoreCase(record.targetType())) {
+      return false;
+    }
+    return String.valueOf(fileId).equals(record.targetId());
   }
 
   private boolean truthy(Object value) {
@@ -250,6 +269,6 @@ public class DefaultConsoleFileDownloadApplicationService
   }
 
   private record ApprovalRecordResponse(ApprovalRecord record) {
-    private record ApprovalRecord(String approvalStatus) {}
+    private record ApprovalRecord(String approvalStatus, String targetType, String targetId) {}
   }
 }
