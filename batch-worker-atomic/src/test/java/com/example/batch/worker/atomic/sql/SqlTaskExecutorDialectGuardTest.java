@@ -1,7 +1,6 @@
 package com.example.batch.worker.atomic.sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -19,7 +18,8 @@ import org.springframework.beans.factory.BeanFactory;
  *
  * <ul>
  *   <li>PostgreSQL → 走 {@code pg_roles} 查询(已被 IT 覆盖)
- *   <li>非 PostgreSQL → log.warn + 直接返回,不抛异常(避免假阴性)
+ *   <li>非 PostgreSQL → <b>fail-closed 抛 {@link SqlTaskExecutor.SqlValidationException}</b>:运维显式要求禁
+ *       OS 角色、 而本闸在该方言下无法核验,静默放行等于安全控制 no-op,故拒绝执行(要跑非 PG 须显式 {@code forbidOsCapableRole=false})。
  * </ul>
  */
 class SqlTaskExecutorDialectGuardTest {
@@ -36,33 +36,40 @@ class SqlTaskExecutorDialectGuardTest {
   }
 
   @Test
-  void shouldSkipSilently_whenDatabaseIsMySql() throws SQLException {
+  void shouldFailClosed_whenDatabaseIsMySql() throws SQLException {
     Connection conn = mock(Connection.class);
     DatabaseMetaData md = mock(DatabaseMetaData.class);
     when(conn.getMetaData()).thenReturn(md);
     when(md.getDatabaseProductName()).thenReturn("MySQL");
 
-    assertThatCode(() -> executor.requireNonOsCapableRole(conn)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> executor.requireNonOsCapableRole(conn))
+        .isInstanceOf(SqlTaskExecutor.SqlValidationException.class)
+        .hasMessageContaining("PostgreSQL-only")
+        .hasMessageContaining("fail-closed");
   }
 
   @Test
-  void shouldSkipSilently_whenDatabaseIsOracle() throws SQLException {
+  void shouldFailClosed_whenDatabaseIsOracle() throws SQLException {
     Connection conn = mock(Connection.class);
     DatabaseMetaData md = mock(DatabaseMetaData.class);
     when(conn.getMetaData()).thenReturn(md);
     when(md.getDatabaseProductName()).thenReturn("Oracle");
 
-    assertThatCode(() -> executor.requireNonOsCapableRole(conn)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> executor.requireNonOsCapableRole(conn))
+        .isInstanceOf(SqlTaskExecutor.SqlValidationException.class)
+        .hasMessageContaining("fail-closed");
   }
 
   @Test
-  void shouldSkipSilently_whenDatabaseProductNameNull() throws SQLException {
+  void shouldFailClosed_whenDatabaseProductNameNull() throws SQLException {
     Connection conn = mock(Connection.class);
     DatabaseMetaData md = mock(DatabaseMetaData.class);
     when(conn.getMetaData()).thenReturn(md);
     when(md.getDatabaseProductName()).thenReturn(null);
 
-    assertThatCode(() -> executor.requireNonOsCapableRole(conn)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> executor.requireNonOsCapableRole(conn))
+        .isInstanceOf(SqlTaskExecutor.SqlValidationException.class)
+        .hasMessageContaining("fail-closed");
   }
 
   @Test

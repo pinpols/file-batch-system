@@ -14,9 +14,6 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
@@ -31,18 +28,26 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Dns;
+import okhttp3.Headers;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
 /**
- * HTTP task SPI 实现 — 用 JDK {@link HttpClient} 发出口 HTTP 请求,带域名白名单 / 超时 / 响应截断 / 简单重试 / 基础鉴权。
+ * HTTP task SPI 实现 — 用 OkHttp 发出口 HTTP 请求,带域名白名单 / 超时 / 响应截断 / 简单重试 / 基础鉴权。
  *
  * <p>启用方式:{@code batch.worker.executors.http.enabled=true}(默认 false)。
  *
- * <p>选用 JDK HttpClient 而非 RestClient / OkHttp:避免引第三方依赖 + 原生支持 sync timeout + 同步 API
- * 符合本类执行语义(单步任务,不需要 reactive)。
+ * <p>选用 OkHttp 而非 JDK HttpClient:OkHttp 的 {@code dns} 回调支持 <b>resolve-then-connect</b>——在真正建连前
+ * 把已校验的 IP 交给连接层,杜绝 JDK HttpClient "校验时解析一次、连接时再独立解析一次"的 DNS-rebinding TOCTOU (攻击者权威 DNS 第二次返回内网/云
+ * metadata 即可绕过 {@link #validateResolvedIp})。与 worker-dispatch 出口同款。
  *
  * <p>parameters 协议:
  *
@@ -87,7 +92,58 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
   private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "PUT", "DELETE");
 
+  /** OkHttp 方法集中要求带 body 的方法(POST/PUT/PATCH/DELETE 可带);GET/HEAD 必须无 body。 */
+  private static final Set<String> METHODS_REQUIRE_BODY = Set.of("POST", "PUT", "PATCH");
+
   private final HttpExecutorProperties props;
+
+  /**
+   * 共享 OkHttp 基础客户端(懒构造,因 dns 回调依赖注入的 props)。每次请求经 {@code newBuilder()} 派生 per-invocation
+   * 超时,复用连接池/dispatcher。dns 回调做 resolve-then-connect SSRF 校验。
+   */
+  private volatile OkHttpClient sharedClient;
+
+  private OkHttpClient client() {
+    OkHttpClient c = sharedClient;
+    if (c == null) {
+      synchronized (this) {
+        c = sharedClient;
+        if (c == null) {
+          c =
+              new OkHttpClient.Builder()
+                  .followRedirects(false) // 重定向 target 不会再过 validateHost/dns 校验,显式禁
+                  .followSslRedirects(false)
+                  .retryOnConnectionFailure(false) // 重试由本类 runWithRetry 控制,避免双重重试
+                  .dns(guardedDns())
+                  .build();
+          sharedClient = c;
+        }
+      }
+    }
+    return c;
+  }
+
+  /**
+   * resolve-then-connect SSRF 防护:在 OkHttp 真正建连前回调,解析主机名并对解析出的每个 IP 复用本类 {@link #isBlockedAddress}
+   * 黑名单校验(回环/私网/link-local/metadata),命中即抛 {@link UnknownHostException} 阻止建连。把"已校验的同一组
+   * IP"交给连接层,杜绝二次解析的 rebinding 窗口。 {@code blockPrivateIps=false}(dev/联调)时直接系统解析放行,与 {@link
+   * #validateResolvedIp} 同语义。
+   */
+  private Dns guardedDns() {
+    return hostname -> {
+      List<InetAddress> resolved = List.of(InetAddress.getAllByName(hostname));
+      if (!props.isBlockPrivateIps()) {
+        return resolved;
+      }
+      for (InetAddress addr : resolved) {
+        if (isBlockedAddress(addr)) {
+          throw new UnknownHostException(
+              "host resolves to blocked address: " + hostname + " -> " + addr.getHostAddress());
+        }
+      }
+      return resolved;
+    };
+  }
 
   @Override
   public String taskType() {
@@ -442,7 +498,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
                 ? AtomicErrorCode.EXECUTION_FAILED
                 : AtomicErrorCode.valueOf(existingCode);
         return AtomicErrorCode.fail(code, result.message());
-      } catch (IOException | InterruptedException ex) {
+      } catch (IOException ex) {
+        // OkHttp 同步 execute 把超时/连接失败/被 dns 守护拦截(UnknownHostException)统一抛 IOException。
         lastException = ex;
         if (Thread.currentThread().isInterrupted()) {
           Thread.currentThread().interrupt();
@@ -468,60 +525,81 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         lastException);
   }
 
-  private TaskResult runOnce(Invocation inv, int attempt) throws IOException, InterruptedException {
-    // 显式禁止跟随重定向:重定向 target 不会再过 validateHost/validateResolvedIp,
-    // 否则攻击者可用 30x 把请求重定向到内网 / metadata,绕过上面的 SSRF 校验。
-    HttpClient client =
-        HttpClient.newBuilder()
+  private TaskResult runOnce(Invocation inv, int attempt) throws IOException {
+    // 共享客户端的 dns 回调做 resolve-then-connect SSRF 校验(防 rebinding);followRedirects=false
+    // 已在 client() 构造期设定(重定向 target 不会再过 validateHost/dns 校验)。
+    OkHttpClient call =
+        client()
+            .newBuilder()
             .connectTimeout(inv.timeout)
-            .followRedirects(HttpClient.Redirect.NEVER)
+            .readTimeout(inv.timeout)
+            .writeTimeout(inv.timeout)
+            .callTimeout(inv.timeout)
             .build();
 
-    HttpRequest.Builder req = HttpRequest.newBuilder(inv.uri).timeout(inv.timeout);
-    inv.headers.forEach(req::header);
+    Request.Builder req = new Request.Builder().url(inv.uri.toString());
+    Headers.Builder headers = new Headers.Builder();
+    inv.headers.forEach(headers::add);
+    req.headers(headers.build());
 
-    HttpRequest.BodyPublisher bodyPub =
-        inv.body == null
-            ? HttpRequest.BodyPublishers.noBody()
-            : HttpRequest.BodyPublishers.ofString(inv.body);
-    switch (inv.method) {
-      case "GET" -> req.GET();
-      case "DELETE" -> req.DELETE();
-      case "POST", "PUT", "PATCH", "HEAD" -> req.method(inv.method, bodyPub);
-      default -> req.method(inv.method, bodyPub);
-    }
-
-    HttpResponse<byte[]> resp = client.send(req.build(), HttpResponse.BodyHandlers.ofByteArray());
-
-    byte[] raw = resp.body();
-    boolean truncated = false;
-    byte[] kept = raw;
-    if (raw != null && raw.length > props.getMaxResponseBytes()) {
-      kept = new byte[props.getMaxResponseBytes()];
-      System.arraycopy(raw, 0, kept, 0, props.getMaxResponseBytes());
-      truncated = true;
-      log.warn("http response truncated at {} bytes", props.getMaxResponseBytes());
-    }
-    String responseBody = kept == null ? "" : new String(kept, StandardCharsets.UTF_8);
+    RequestBody body = toRequestBody(inv);
+    req.method(inv.method, body);
 
     Map<String, Object> output = new HashMap<>();
-    output.put("statusCode", resp.statusCode());
-    // P2-3(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
-    // 出口 HTTP response 会被 worker 上报到 task_result.output JSONB(后续可被
-    // console / forensic export 读到),Set-Cookie / Authorization 这类回声头若透传落
-    // 库就形成"出口请求 session 泄露"。SensitiveDataValidator 只扫入参,响应需在此前置脱敏。
-    output.put("responseHeaders", sanitizeResponseHeaders(resp.headers().map()));
-    output.put("responseBody", responseBody);
-    output.put("responseTruncated", truncated);
+    int statusCode;
+    try (Response resp = call.newCall(req.build()).execute()) {
+      statusCode = resp.code();
+      byte[] raw = resp.body() == null ? new byte[0] : resp.body().bytes();
+      int max = props.getMaxResponseBytes();
+      boolean truncated = raw.length > max;
+      byte[] kept = raw;
+      if (truncated) {
+        kept = new byte[max];
+        System.arraycopy(raw, 0, kept, 0, max);
+        log.warn("http response truncated at {} bytes", max);
+      }
+      String responseBody = new String(kept, StandardCharsets.UTF_8);
 
-    boolean expectMatch =
-        inv.expectedStatus.isEmpty() || inv.expectedStatus.contains(resp.statusCode());
+      output.put("statusCode", statusCode);
+      // P2-3(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
+      // 出口 HTTP response 会被 worker 上报到 task_result.output JSONB(后续可被
+      // console / forensic export 读到),Set-Cookie / Authorization 这类回声头若透传落
+      // 库就形成"出口请求 session 泄露"。SensitiveDataValidator 只扫入参,响应需在此前置脱敏。
+      output.put("responseHeaders", sanitizeResponseHeaders(resp.headers().toMultimap()));
+      output.put("responseBody", responseBody);
+      output.put("responseTruncated", truncated);
+    }
+
+    boolean expectMatch = inv.expectedStatus.isEmpty() || inv.expectedStatus.contains(statusCode);
     if (!expectMatch) {
       return AtomicErrorCode.fail(
           AtomicErrorCode.EXECUTION_FAILED,
-          "status " + resp.statusCode() + " not in expected " + inv.expectedStatus);
+          "status " + statusCode + " not in expected " + inv.expectedStatus);
     }
-    return TaskResult.ok("status=" + resp.statusCode(), output);
+    return TaskResult.ok("status=" + statusCode, output);
+  }
+
+  /** GET/HEAD 必须无 body;其余方法 body 缺省给空体(OkHttp 要求 POST/PUT/PATCH 非 null)。 */
+  private RequestBody toRequestBody(Invocation inv) {
+    if ("GET".equals(inv.method) || "HEAD".equals(inv.method)) {
+      return null;
+    }
+    String content = inv.body == null ? "" : inv.body;
+    if (inv.body == null && !METHODS_REQUIRE_BODY.contains(inv.method)) {
+      return null; // DELETE 等可无 body
+    }
+    MediaType type = mediaTypeOf(inv.headers);
+    return RequestBody.create(content.getBytes(StandardCharsets.UTF_8), type);
+  }
+
+  /** 从请求头取 Content-Type 作为 body MediaType;缺省 null(OkHttp 不强制)。 */
+  private static MediaType mediaTypeOf(Map<String, String> headers) {
+    for (Map.Entry<String, String> e : headers.entrySet()) {
+      if ("content-type".equalsIgnoreCase(e.getKey()) && e.getValue() != null) {
+        return MediaType.parse(e.getValue());
+      }
+    }
+    return null;
   }
 
   /**
