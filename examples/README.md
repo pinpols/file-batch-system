@@ -3,20 +3,31 @@
 本目录放**给业务方复制的可运行示范**。每个子目录是一个独立 module / project(**不挂主 reactor**),
 演示一种扩展方式。复制改改即用,**不用 PR 回主仓**。
 
-| 示范 | 演示的扩展模型 | 产出 | 部署到哪 |
-|---|---|---|---|
-| [`sftp-push-executor`](sftp-push-executor/) | **Task SPI 插件** | 一个 jar | 平台 worker 的 classpath |
-| [`sample-tenant-worker-java`](sample-tenant-worker-java/) | **自托管 SDK worker · Java**(纯 main wiring)| 一个独立进程 | 租户自己的机房 |
-| [`sample-tenant-worker-java-spring`](sample-tenant-worker-java-spring/) | **自托管 SDK worker · Java**(Spring Boot starter)| 一个独立进程 | 租户自己的机房 |
-| [`sample-tenant-worker-python`](sample-tenant-worker-python/) | **自托管 SDK worker · Python**(`@batch_task` 装饰器 + asyncio)| 一个独立进程 | 租户自己的机房 |
-| [`sample-tenant-worker-go`](sample-tenant-worker-go/) | **自托管 SDK worker · Go**(`sdk/go` 运行时 + kafka 适配器)| 一个独立进程 | 租户自己的机房 |
-| [`sample-tenant-worker-typescript`](sample-tenant-worker-typescript/) | **自托管 SDK worker · TypeScript**(`sdk/typescript` 运行时 + kafkajs)| 一个独立进程 | 租户自己的机房 |
-| [`sample-tenant-worker-rust`](sample-tenant-worker-rust/) | **自托管 SDK worker · Rust**(`sdk/rust` + rdkafka;示意·待 reqwest 适配器)| 一个独立进程 | 租户自己的机房 |
-| [`batch-worker-sdk-template`](batch-worker-sdk-template/) | **自托管 SDK 生产 template**(Java + Dockerfile + CI)| fork 起点 | 租户 fork 后部署 |
+**按扩展模型分两组**(目录即分组):
 
-> **「示范」vs「template」**:`sample-tenant-worker*` 是**教学样例**(尽量短,纯演示 API 用法);
-> `batch-worker-sdk-template` 是**生产起点**(含 Dockerfile / `.env.example` / `run.sh` / GitHub Actions CI),
-> 租户直接 fork 改改 handler 即可起容器。
+```
+examples/
+  self-hosted-sdk/     # 自托管 SDK worker(ADR-035):整个 worker 跑在租户侧,数据/凭据不出域
+  task-spi-plugin/     # Task SPI 插件(ADR-029):给平台 worker 装一种新 taskType 的 jar
+```
+
+### self-hosted-sdk/ — 自托管 SDK worker(独立进程,跑在租户机房)
+| 示范 | 接入方式 | 选它的场景 |
+|---|---|---|
+| [`sample-tenant-worker-java`](self-hosted-sdk/sample-tenant-worker-java/) | 纯 Java main wiring(无 Spring)| 用 Java 但不要 Spring(短启动 / Lambda / FaaS)|
+| [`sample-tenant-worker-java-spring`](self-hosted-sdk/sample-tenant-worker-java-spring/) | Java + Spring Boot starter | 已用 Spring Boot,要自动装配 |
+| [`sample-tenant-worker-python`](self-hosted-sdk/sample-tenant-worker-python/) | Python 3.12+ asyncio(`@batch_task`)| 主语言 Python,handler 用 async def |
+| [`sample-tenant-worker-go`](self-hosted-sdk/sample-tenant-worker-go/) | Go(`sdk/go` 运行时 + kafka-go)| 主语言 Go(BYO SDK)|
+| [`sample-tenant-worker-typescript`](self-hosted-sdk/sample-tenant-worker-typescript/) | TypeScript(`sdk/typescript` + kafkajs)| 主语言 Node(BYO SDK)|
+| [`sample-tenant-worker-rust`](self-hosted-sdk/sample-tenant-worker-rust/) | Rust(`sdk/rust` + rdkafka;示意·待 reqwest)| 主语言 Rust(BYO SDK)|
+
+### task-spi-plugin/ — Task SPI 插件(jar,装进平台 worker)
+| 示范 | 产出 | 部署到哪 |
+|---|---|---|
+| [`sftp-push-executor`](task-spi-plugin/sftp-push-executor/) | 一个 jar(实现 `BatchTaskExecutor`)| 平台 worker 的 classpath(ServiceLoader 自动发现)|
+
+> 6 个 `sample-tenant-worker-<lang>` 是**教学样例**(尽量短,纯演示 API);要 **Spring Boot starter** 看
+> `sample-tenant-worker-java-spring`;要上生产自带 Dockerfile/CI,fork 该样例自补即可。
 >
 > `sample-tenant-worker-{java/java-spring/python/go/typescript/rust}` 演示**同一自托管能力的多语言接入**,按租户技术栈选:
 > - **`sample-tenant-worker-java`**(纯 Java):租户用 Java 但不要 Spring(短启动 / Lambda / FaaS)
@@ -73,8 +84,7 @@
 └─ 跑在我自己机房 / 数据要驻留 → sample-tenant-worker* 模式(自托管 SDK)
      ├─ 我是 Java 玩家
      │   ├─ 想 starter 自动装配  → sample-tenant-worker-java-spring
-     │   ├─ 要短启动 / 无 Spring → sample-tenant-worker-java(纯 main)
-     │   └─ 直接生产起步 fork    → batch-worker-sdk-template
+     │   └─ 要短启动 / 无 Spring → sample-tenant-worker-java(纯 main)
      ├─ 我是 Python / 数据团队  → sample-tenant-worker-python
      ├─ 我是 Go 玩家            → sample-tenant-worker-go
      ├─ 我是 Node/TS 玩家       → sample-tenant-worker-typescript
