@@ -3,6 +3,7 @@ package com.example.batch.sdk.handler;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
+import com.example.batch.sdk.task.SdkTaskStoppedException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -33,6 +34,15 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
       SdkTaskResult r = doExecute(ctx);
       after(ctx, r);
       return r == null ? SdkTaskResult.fail("handler returned null SdkTaskResult") : r;
+    } catch (SdkTaskStoppedException stopped) {
+      // ADR-037 决策三:协作式取消停在已提交安全点 → cancelled 终态,而非 fail。
+      log.info(
+          "SDK handler {} stopped cooperatively (taskType={}, taskId={}) at {}",
+          getClass().getSimpleName(),
+          taskType(),
+          ctx == null ? null : ctx.taskId(),
+          stopped.breakPosition());
+      return SdkTaskResult.cancelled(stopped.breakPosition());
     } catch (Throwable t) {
       log.error(
           "SDK handler {} failed (taskType={}, taskId={}): {}",

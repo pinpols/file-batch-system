@@ -48,4 +48,20 @@ public record SdkTaskResult(
     Objects.requireNonNull(message, "message");
     return new SdkTaskResult(false, message, Map.of(), error);
   }
+
+  /**
+   * ADR-037 决策三 — 协作式取消的终态。语义上是「正常停止在安全点」而非「失败」:{@code success=false} 复用失败通道(orchestrator 不再推进
+   * SUCCESS),但 output 打上 {@code cancelled=true} 标记 + 停止时的断点坐标,供运维 / 续跑区分「被取消」与「真失败」。续跑模板顶层捕获 {@link
+   * SdkTaskStoppedException} 后落本终态。
+   *
+   * @param breakPosition 取消生效时已提交的断点(续跑从此处往后)
+   */
+  public static SdkTaskResult cancelled(Map<String, Object> breakPosition) {
+    Map<String, Object> safe = breakPosition == null ? Map.of() : Map.copyOf(breakPosition);
+    return new SdkTaskResult(
+        false,
+        "task cancelled at safe commit point",
+        Map.of("cancelled", true, "breakPosition", safe),
+        null);
+  }
 }
