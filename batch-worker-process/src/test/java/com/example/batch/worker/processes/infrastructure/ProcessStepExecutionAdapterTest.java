@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,7 @@ import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.core.support.PipelineCompensationHook;
 import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
 import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
@@ -46,7 +48,8 @@ class ProcessStepExecutionAdapterTest {
             stepTemplateProvider,
             new ObjectMapper(),
             runtimeRepository,
-            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class));
+            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     when(runtimeRepository.ensurePipelineDefinition(
             eq("tenant-a"),
             eq("job-process"),
@@ -89,7 +92,8 @@ class ProcessStepExecutionAdapterTest {
             stepTemplateProvider,
             objectMapper,
             runtimeRepository,
-            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class));
+            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     when(runtimeRepository.ensurePipelineDefinition(
             eq("tenant-a"),
             eq("job-process"),
@@ -120,6 +124,9 @@ class ProcessStepExecutionAdapterTest {
     assertThat(response.message()).isEqualTo("error.common.invalid_argument");
     assertThat(response.errorKey()).isEqualTo("error.common.invalid_argument");
     assertThat(response.errorArgs()).isEqualTo("[\"bad spec\"]");
+    // 安全增量补偿默认 off（无 compensation hook bean）：失败直接 FAILED，绝不经过 COMPENSATING。
+    verify(runtimeRepository).markPipelineFailed(eq(20L), any(), any());
+    verify(runtimeRepository, never()).markPipelineCompensating(any());
   }
 
   private PipelineStepDefinition processStep() {

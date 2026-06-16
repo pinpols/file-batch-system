@@ -6,6 +6,7 @@ import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
+import com.example.batch.worker.core.support.PipelineCompensationHook;
 import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
@@ -34,8 +35,9 @@ public class ExportStepExecutionAdapter
       ExportStageExecutor exportStageExecutor,
       ObjectMapper objectMapper,
       PlatformFileRuntimeRepository runtimeRepository,
-      ObjectProvider<PipelineVerifierHook> verifierHookProvider) {
-    super(runtimeRepository, verifierHookProvider);
+      ObjectProvider<PipelineVerifierHook> verifierHookProvider,
+      ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
+    super(runtimeRepository, verifierHookProvider, compensationHookProvider);
     this.exportStageExecutor = exportStageExecutor;
     this.objectMapper = objectMapper;
   }
