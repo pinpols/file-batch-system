@@ -59,11 +59,13 @@ class SdkWireContractTest {
             Instant.parse("2026-05-31T10:00:00Z"),
             List.of("echo", "sleep"),
             3,
-            null);
+            null,
+            "v2");
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
 
+    assertThat(platformSide.protocolVersion()).isEqualTo("v2");
     assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
     assertThat(platformSide.workerCode()).isEqualTo("worker-1");
     assertThat(platformSide.workerGroup()).isEqualTo("sdk-self-hosted");
@@ -104,7 +106,8 @@ class SdkWireContractTest {
             Instant.parse("2026-05-31T10:00:00Z"),
             List.of("tenant_acme_import"),
             0,
-            List.of(descriptor));
+            List.of(descriptor),
+            "v1");
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);

@@ -22,7 +22,11 @@ public record WorkerHeartbeatDto(
     // 2026-06-03 docs/design/pipeline-stage-progress-display.md:流式 stage(IMPORT LOAD /
     // EXPORT GENERATE)行级进度上报。仅这两个 stage 在跑时非空,FE 据此显示计数器 + ETA。
     Long rowsProcessed,
-    Long totalRowsHint) {
+    Long totalRowsHint,
+    // SDK 协议门禁:worker 上报的 wire 协议 schema 主版本(如 "v1" / "v2");仅 register 带,heartbeat 不带(null)。
+    // 缺字段=老 SDK / 非 SDK worker,平台按 legacy 接纳;present-but-unsupported(如 "v3")register 拒绝。
+    // 校验逻辑见 SdkProtocolVersions;权威集合 = sdk-shared-constants.yaml schema_versions_supported。
+    String protocolVersion) {
   public WorkerHeartbeatDto {
     Integer normalizedCurrentLoad = currentLoad;
     if (normalizedCurrentLoad == null || normalizedCurrentLoad < 0) {

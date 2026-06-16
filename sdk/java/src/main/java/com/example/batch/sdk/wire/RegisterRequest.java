@@ -39,4 +39,16 @@ public record RegisterRequest(
     List<String> capabilityTags,
     Integer currentLoad,
     // SDK Phase 3 M3.1 — 自定义 taskType 描述符;heartbeat 不带,仅 register 上报。
-    List<SdkTaskTypeDescriptor> taskTypes) {}
+    List<SdkTaskTypeDescriptor> taskTypes,
+    // 本 SDK 实现的 wire 协议 schema 主版本(register 准入门禁用);平台不支持则拒绝注册。
+    // 值见 {@link #CURRENT_PROTOCOL_VERSION};与平台 sdk-shared-constants.yaml schema_versions_supported
+    // 对齐。
+    String protocolVersion) {
+
+  /**
+   * 本 SDK 当前声明的 wire 协议 schema 主版本(register 上报)。取平台支持集合 {@code {v1, v2}} 的最高版本 —— SDK 同时兼容 v1/v2
+   * 入站派单,注册时向平台声明可工作于 v2。平台不认此版本(如平台仅 v1)则 register 拒绝。改动须同步 {@code
+   * docs/api/sdk-shared-constants.yaml}。
+   */
+  public static final String CURRENT_PROTOCOL_VERSION = "v2";
+}

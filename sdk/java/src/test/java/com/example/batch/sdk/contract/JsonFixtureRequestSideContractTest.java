@@ -137,6 +137,7 @@ class JsonFixtureRequestSideContractTest {
             null,
             null,
             null,
+            null,
             null);
       case "claim":
       case "renew":

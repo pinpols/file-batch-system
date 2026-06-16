@@ -1,8 +1,11 @@
 package com.example.batch.orchestrator.service;
 
+import com.example.batch.common.dto.SdkProtocolVersions;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.dto.WorkerTaskTypeDescriptorDto;
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.security.SensitiveDataValidator;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
@@ -49,6 +52,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   @Override
   @Transactional
   public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
+    rejectUnsupportedProtocolVersion(request);
     WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
     String newStatus =
@@ -107,6 +111,28 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     }
     upsertDeclaredTaskTypes(request);
     return saved;
+  }
+
+  /**
+   * SDK 协议门禁:worker register 携带的 {@code protocolVersion} 主版本若不在平台支持集合内,直接拒绝注册(400)。
+   *
+   * <p>向后兼容:{@code protocolVersion} 为空(老 SDK / 非 SDK 平台 worker)按 legacy
+   * 放行;present-but-unsupported(如 {@code "v3"})才拒。支持集合权威源 {@link
+   * SdkProtocolVersions#SUPPORTED_MAJOR_VERSIONS}(镜像 sdk-shared-constants.yaml),与 console-api
+   * 兼容告警({@code WorkerCompatibilityEvaluator})同源,互补:此处是注册准入硬门禁, 后者是运行期只读可见性提示。
+   */
+  private void rejectUnsupportedProtocolVersion(WorkerHeartbeatDto request) {
+    String protocolVersion = request.protocolVersion();
+    if (protocolVersion == null || protocolVersion.isBlank()) {
+      return;
+    }
+    if (!SdkProtocolVersions.isSupportedMajor(protocolVersion)) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR,
+          "error.worker.unsupported_protocol_version",
+          protocolVersion,
+          SdkProtocolVersions.SUPPORTED_MAJOR_VERSIONS);
+    }
   }
 
   /**
