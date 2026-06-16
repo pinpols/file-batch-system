@@ -1,5 +1,5 @@
--- Stage 6d trigger outbox retry injection.
--- Required psql variable: request_prefix
+-- Stage 6d 注入 trigger outbox 重试。
+-- 需要的 psql 变量:request_prefix
 
 UPDATE batch.trigger_outbox_event
 SET publish_status = 'FAILED',

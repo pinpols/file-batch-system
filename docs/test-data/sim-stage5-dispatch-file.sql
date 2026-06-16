@@ -1,5 +1,5 @@
--- Stage 5 Dispatch source file_record.
--- Required psql variables: batch_no, biz_date
+-- Stage 5 Dispatch 源 file_record。
+-- 必需的 psql 变量:batch_no, biz_date
 
 WITH ins AS (
   INSERT INTO batch.file_record (

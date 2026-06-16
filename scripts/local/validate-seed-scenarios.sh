@@ -625,7 +625,7 @@ fi
 if [[ "$ADVANCED" == "1" ]]; then
   section "9. Advanced (ADVANCED=1): orch /internal/* + console auth + trigger cron"
 
-  # 9.1 Outbox cleanup smoke
+  # 9.1 Outbox cleanup 冒烟
   resp=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
     -X POST "http://localhost:${ORCH_PORT}/internal/outbox/cleanup?tenantId=ta&retainDays=99999" \
     -H "X-Internal-Secret: $INTERNAL_SECRET" 2>/dev/null)
@@ -677,7 +677,7 @@ if [[ "$ADVANCED" == "1" ]]; then
     *) result fail "Compensate API" "HTTP $resp — $body_short" ;;
   esac
 
-  # 9.4 Console-api auth gate
+  # 9.4 Console-api 鉴权门禁
   resp=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
     "http://localhost:${CONSOLE_PORT}/api/console/queries/job-definitions?tenantId=ta&pageNo=1&pageSize=5" 2>/dev/null)
   case "$resp" in

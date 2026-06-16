@@ -1,5 +1,5 @@
--- Stage 4b Process source data, idempotent rerun update.
--- Required psql variable: biz_date
+-- Stage 4b Process 源数据,幂等重跑更新。
+-- 必需的 psql 变量:biz_date
 
 DELETE FROM biz.process_stage4_source
 WHERE tenant_id = 'ta'

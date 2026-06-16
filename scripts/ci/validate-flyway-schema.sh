@@ -76,7 +76,7 @@ echo "✅ All migrations are non-empty"
 
 # ── 校验 4: BOM / CRLF ─────────────────────────────────────────────────────
 for file in "$MIGRATION_DIR"/V*.sql; do
-  # BOM = EF BB BF at offset 0
+  # BOM = 文件偏移 0 处的 EF BB BF
   first3=$(head -c 3 "$file" | od -An -tx1 | tr -d ' ')
   if [[ "$first3" == "efbbbf" ]]; then
     echo "❌ ERROR: $(basename "$file") starts with UTF-8 BOM (causes Flyway checksum drift)"

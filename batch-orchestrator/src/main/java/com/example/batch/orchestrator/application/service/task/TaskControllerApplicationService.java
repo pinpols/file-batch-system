@@ -147,10 +147,9 @@ public class TaskControllerApplicationService {
   }
 
   /**
-   * ADR-016: batch renew — one HTTP roundtrip for many tasks; per-item outcome without throwing.
+   * ADR-016:批量续租 —— 一次 HTTP 往返处理多个 task;逐项返回结果而不抛异常。
    *
-   * <p>ORCH-P4-1: batch renew also returns {@code cancelRequested}; worker-core uses it to
-   * interrupt long-running tasks instead of waiting for lease timeout.
+   * <p>ORCH-P4-1:批量续租同时返回 {@code cancelRequested};worker-core 据此中断长时间运行的 task, 而不必等待租约超时。
    */
   public TaskLeaseRenewBatchResponse renewBatch(TaskLeaseRenewBatchRequest request) {
     List<TaskLeaseRenewItemPayload> items =

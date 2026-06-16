@@ -1,4 +1,4 @@
--- Stage 2c Import load-mode matrix business fixture.
+-- Stage 2c Import load-mode 矩阵的业务 fixture。
 
 CREATE TABLE IF NOT EXISTS biz.import_stage2c_customer (
     id                BIGSERIAL PRIMARY KEY,

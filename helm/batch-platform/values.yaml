@@ -1,12 +1,12 @@
-# Default values for batch-platform.
-# Override with -f values-prod.yaml or --set key=value.
+# batch-platform 的默认值。
+# 用 -f values-prod.yaml 或 --set key=value 覆盖。
 
 # ── Image ─────────────────────────────────────────────────────────────────────
 # tag 留空时 fallback 到 Chart.appVersion；Chart.appVersion 跟随 **最近一次 GA 版本**
 # （非 main 分支的 SNAPSHOT；详见 docs/runbook/releasing.md §Release flow 的 helm 同步步骤）。
 # 仅临时覆盖才填（如 "latest" / "sha-abc123" / "1.0.1-rc1"）
 image:
-  registry: ""          # e.g. registry.example.com/batch-platform
+  registry: ""          # 例如 registry.example.com/batch-platform
   tag: ""               # 为空则用 Chart.appVersion
   pullPolicy: IfNotPresent
 
@@ -14,14 +14,14 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# ── Infrastructure ─────────────────────────────────────────────────────────────
+# ── 基础设施 ─────────────────────────────────────────────────────────────
 
 postgresql:
   # P1-17 reWriteBatchedInserts=true: pgjdbc 把 batchUpdate 重写成多值 INSERT,batch 写入吞吐 3-5x
   platform:
     url: "jdbc:postgresql://postgresql:5432/batch_platform?reWriteBatchedInserts=true"
     username: "batch_user"
-    # password: set via --set or external secret
+    # password: 通过 --set 或外部密钥管理设置
     password: ""
   business:
     url: "jdbc:postgresql://postgresql:5432/batch_business?reWriteBatchedInserts=true"
@@ -43,18 +43,18 @@ objectStorage:
   secretKey: ""
   bucket: "batch-prod"
 
-# ── Cross-service ──────────────────────────────────────────────────────────────
+# ── 跨服务 ──────────────────────────────────────────────────────────────
 
 # orchestrator Service DNS（集群内）。端口必须和 orchestrator.port 一致，否则 worker 注册挂。
 orchestratorBaseUrl: "http://batch-orchestrator:18082"
 
 security:
   bypassMode: "false"
-  # Internal service-to-service secret for /internal/** APIs.
-  # Leave empty in default chart values so application defaults still apply in non-prod.
-  # Production must set this via --set, values overlay, or external secret manager.
+  # /internal/** API 的服务间内部密钥。
+  # 默认 chart values 留空,让非生产环境仍走应用默认值。
+  # 生产必须通过 --set、values overlay 或外部密钥管理设置。
   internalSecret: ""
-  # Console JWT HMAC secret. Production must provide a strong value.
+  # Console JWT HMAC 密钥。生产必须提供强值。
   consoleJwtSecret: ""
   # Console 登录请求体 RSA+AES 混合加密(对应 BE ConsoleLoginKeyPairService)。
   # multi-replica prod 必须显式提供 keypair —— 否则每个 pod 启动期各自生成,
@@ -549,7 +549,7 @@ podDisruptionBudget:
   maxUnavailable: 1
   # minAvailable: 1          # 等价配法；启用 minAvailable 时请注释 maxUnavailable
 
-# ── Pod scheduling ─────────────────────────────────────────────────────────────
+# ── Pod 调度 ─────────────────────────────────────────────────────────────
 
 podAnnotations: {}
 podSecurityContext:
@@ -568,13 +568,13 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# ── JVM tuning ─────────────────────────────────────────────────────────────────
+# ── JVM 调优 ─────────────────────────────────────────────────────────────────
 #
 # 完整参数说明见 docs/runbook/jvm-tuning-and-profiling.md。
 #
-# 两层 override:
+# 两层覆盖:
 #   javaOpts             — 全模块共享基础(容器 / OOM / GC log / JFR / UTF-8)
-#   <service>.javaOptsExtra  — per-service 追加(heap 大小 / GC 类型 / direct mem)
+#   <service>.javaOptsExtra  — 单服务追加(heap 大小 / GC 类型 / direct mem)
 #                              通过 deployment env 注入,优先级高于 envFrom-configmap
 #
 # 调整内存:不直接改 -Xmx,改 resources.limits.memory + MaxRAMPercentage 让容器边界驱动。
@@ -600,15 +600,15 @@ javaOpts: >-
   --enable-native-access=ALL-UNNAMED
   -Dspring.main.lazy-initialization=true
 
-# ── OpenTelemetry Collector (sidecar-less gateway mode) ────────────
+# ── OpenTelemetry Collector(无 sidecar 的 gateway 模式)────────────
 otelCollector:
-  enabled: false        # set true to deploy Collector alongside apps
+  enabled: false        # 置 true 则与应用一起部署 Collector
   imageTag: "0.116.0"
   replicaCount: 1
   deploymentEnvironment: "production"
   memoryLimitMib: 512
-  jaegerEndpoint: "jaeger:4317"            # override with actual Jaeger address
-  lokiEndpoint: "http://loki:3100"         # override with actual Loki address
+  jaegerEndpoint: "jaeger:4317"            # 用实际 Jaeger 地址覆盖
+  lokiEndpoint: "http://loki:3100"         # 用实际 Loki 地址覆盖
   resources:
     requests:
       cpu: "100m"
@@ -617,11 +617,11 @@ otelCollector:
       cpu: "500m"
       memory: "640Mi"
 
-# ── OTEL env vars injected into all app pods (via ConfigMap) ────────
+# ── 注入所有应用 pod 的 OTEL 环境变量(经 ConfigMap)────────
 otel:
-  endpoint: "http://batch-platform-otel-collector:4318"  # within cluster
+  endpoint: "http://batch-platform-otel-collector:4318"  # 集群内地址
   samplingProbability: "0.1"
-  logFormat: "ecs"                                        # structured JSON
+  logFormat: "ecs"                                        # 结构化 JSON
 
 # ── Phase D · per-tenant worker pool（大租户物理隔离，默认空=不渲染）────────────
 # 见 docs/runbook/per-tenant-worker-onboarding.md。核心代码已 ready，这里只列要独立

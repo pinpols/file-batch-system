@@ -114,7 +114,7 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
     git diff -U0 "$BASE_REF...HEAD" -- "$f" 2>/dev/null | \
       awk -v file="$f" '
         /^@@/ {
-          # @@ -a,b +c,d @@ format
+          # @@ -a,b +c,d @@ 格式
           match($0, /\+[0-9]+/)
           line = substr($0, RSTART+1, RLENGTH-1) + 0
           line--

@@ -1,5 +1,5 @@
 -- =========================================================
--- batch_business.biz business tables (import/export demo model)
+-- batch_business.biz 业务表（导入/导出演示模型）
 -- 非 Flyway：由以下三种方式执行，哪种都要保证最终落在 batch_business 库。
 --
 -- ⚠️  目标库 = batch_business（不是 batch_platform）
@@ -16,20 +16,20 @@
 --   3) 运维手工：必须 `psql -d batch_business -f scripts/db/business/create_biz_tables.sql`，
 --      不要在 batch_platform 会话里 \i 该文件。
 --
--- Scope:
--- 1) customer import target table
--- 2) settlement export source tables
--- 3) tb transaction import target（IMP-TRANSACTION-CSV）
--- 4) tc risk_score import target（IMP-RISK-SCORE-JSON）
--- 5) tc risk_alert export source（EXP-RISK-ALERT-JSON）
+-- 范围：
+-- 1) 客户导入目标表
+-- 2) 结算导出源表
+-- 3) tb 交易导入目标表（IMP-TRANSACTION-CSV）
+-- 4) tc 风险评分导入目标表（IMP-RISK-SCORE-JSON）
+-- 5) tc 风险预警导出源表（EXP-RISK-ALERT-JSON）
 -- =========================================================
 
 CREATE SCHEMA IF NOT EXISTS biz;
 CREATE SCHEMA IF NOT EXISTS batch;
 
--- PROCESS WAP staging table lives with PROCESS business source/target tables.
--- sqlTransformCompute uses processBusinessDataSource for source, staging and target so
--- INSERT ... SELECT ... COMMIT can stay inside one physical database.
+-- PROCESS WAP 暂存表与 PROCESS 业务源表/目标表放在同一处。
+-- sqlTransformCompute 的源、暂存、目标都用 processBusinessDataSource，
+-- 使 INSERT ... SELECT ... COMMIT 能留在同一个物理库内。
 --
 -- 按 staged_at 天级 RANGE 分区(2026-06 起):staging 行批次写满即清,但 DELETE 不缩文件,
 -- 长期高水位会把堆膨胀到历史最大暂存量并再不回收(实测撑爆磁盘)。分区后由
@@ -299,7 +299,7 @@ CREATE INDEX IF NOT EXISTS idx_risk_alert_entity
     ON biz.risk_alert (tenant_id, entity_id, alert_date);
 
 -- ---------------------------------------------------------
--- PROCESS WAP demo: order event source + account summary target.
+-- PROCESS WAP 演示：订单事件源表 + 账户汇总目标表。
 -- 用于 sqlTransformCompute e2e:聚合 process_order_event → process_account_summary。
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS biz.process_order_event (
@@ -319,9 +319,9 @@ CREATE TABLE IF NOT EXISTS biz.process_account_summary (
     PRIMARY KEY (tenant_id, account_id, biz_date)
 );
 
--- PROCESS load-test target for one-source-row -> one-staging-row pressure.
--- Unlike process_account_summary, this table keeps cardinality equal to source rows
--- so benchmark can measure staging write and publish throughput separately from aggregation.
+-- PROCESS 压测目标表：用于「单源行 -> 单暂存行」的压力场景。
+-- 与 process_account_summary 不同，本表保持行数与源行一致，
+-- 让基准测试能把暂存写入与发布吞吐和聚合分开度量。
 CREATE TABLE IF NOT EXISTS biz.process_event_copy (
     tenant_id        VARCHAR(32)    NOT NULL,
     event_id         BIGINT         NOT NULL,

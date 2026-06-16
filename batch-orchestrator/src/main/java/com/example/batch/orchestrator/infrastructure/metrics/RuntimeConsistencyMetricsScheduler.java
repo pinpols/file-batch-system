@@ -13,7 +13,7 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Samples runtime consistency invariants that are too domain-specific for actuator. */
+/** 采样运行态一致性不变量(这些指标过于业务化,不适合放进 actuator)。 */
 @Slf4j
 @Component
 @RequiredArgsConstructor

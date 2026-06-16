@@ -30,9 +30,9 @@ public class DispatchChannelGateway {
   private final DispatchDeliveryMetrics deliveryMetrics;
   private final DispatchChannelHealthService healthService;
 
-  // Adapter lookup cache keyed by channelType (case-sensitive as supplied) — avoids the prior
-  // O(n) adapters.stream().filter().findFirst() on every dispatch. Populated lazily on first miss
-  // so the dynamic supports() contract (adapters mock different types in unit tests) is preserved.
+  // 以 channelType(按传入值大小写敏感)为 key 的 adapter 查找缓存 —— 避免每次 dispatch 都做
+  // O(n) 的 adapters.stream().filter().findFirst()。首次未命中时懒加载填充,
+  // 从而保留动态 supports() 契约(单测里 adapter 会 mock 不同类型)。
   private final ConcurrentMap<String, DispatchChannelAdapter> adapterCache =
       new ConcurrentHashMap<>();
 

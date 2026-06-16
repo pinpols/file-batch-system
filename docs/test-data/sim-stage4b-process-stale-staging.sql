@@ -1,5 +1,5 @@
--- Stage 4b Process stale staging simulation.
--- Required psql variable: batch_key
+-- Stage 4b Process 陈旧 staging 模拟。
+-- 必需的 psql 变量：batch_key
 
 DELETE FROM batch.process_staging
 WHERE tenant_id = 'ta'

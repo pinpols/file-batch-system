@@ -12,8 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Reconciles compensation commands left RUNNING after a JVM crash between command insert and
- * terminal status update.
+ * 对账那些在「命令插入」与「终态更新」之间发生 JVM 崩溃、被遗留为 RUNNING 的补偿命令。
  *
  * <p>无需事务包裹：{@link CompensationCommandMapper#markStaleRunningFailed} 是单条带 LIMIT 的批量 UPDATE，
  * 在数据库层就是原子操作。

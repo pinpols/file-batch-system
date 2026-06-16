@@ -1,5 +1,5 @@
--- Stage 2b Import fixture: LOAD failure + partition COPY guard.
--- Prerequisite: docs/test-data/sim-e2e-bootstrap.sql has been applied.
+-- Stage 2b Import fixture：LOAD 失败 + partition COPY 守卫。
+-- 前置条件：docs/test-data/sim-e2e-bootstrap.sql 已应用。
 
 WITH src AS (
   SELECT *

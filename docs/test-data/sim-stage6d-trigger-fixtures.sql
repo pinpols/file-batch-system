@@ -1,9 +1,9 @@
--- Stage 6d trigger pressure fixtures.
--- Required psql variables: batch_no, biz_date
+-- Stage 6d trigger 压力 fixtures。
+-- 必需的 psql 变量:batch_no, biz_date
 --
--- This fixture assumes sim-stage6c-trigger-fixtures.sql has already created the
--- TA_TRIGGER_STAGE6C_* scheduled jobs and pipelines. Stage6d tightens the cron
--- cadence and resets runtime state for deterministic local verification.
+-- 本 fixture 假定 sim-stage6c-trigger-fixtures.sql 已经创建了
+-- TA_TRIGGER_STAGE6C_* 调度作业与 pipeline。Stage6d 收紧 cron 节奏并重置
+-- 运行态,以便本地做确定性验证。
 
 WITH targets AS (
   SELECT id

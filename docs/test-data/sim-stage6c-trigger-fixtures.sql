@@ -1,5 +1,5 @@
--- Stage 6c Trigger wheel fixtures.
--- Required psql variables: batch_no, biz_date
+-- Stage 6c Trigger wheel fixtures。
+-- 必需的 psql 变量:batch_no, biz_date
 
 INSERT INTO batch.business_calendar (
     tenant_id, calendar_code, calendar_name, timezone, holiday_roll_rule,

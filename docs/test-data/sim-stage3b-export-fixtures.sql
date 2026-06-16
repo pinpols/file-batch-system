@@ -1,5 +1,5 @@
--- Stage 3b Export fixture: STATIC 4-shard keyset-range export.
--- Prerequisite: docs/test-data/sim-e2e-bootstrap.sql has been applied.
+-- Stage 3b Export fixture：STATIC 4 分片 keyset-range 导出。
+-- 前置：docs/test-data/sim-e2e-bootstrap.sql 已执行。
 
 WITH src AS (
   SELECT *

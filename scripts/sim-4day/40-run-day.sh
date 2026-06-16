@@ -15,10 +15,10 @@ BDC="${BD//-/}"   # yyyymmdd
 TRG="${TRIGGER_BASE_URL}"
 SECRET="${BATCH_INTERNAL_SECRET}"
 
-# archetype: retail(ta-like) / bank(tb-like) / risk(tc-like)
+# archetype 原型:retail(类 ta) / bank(类 tb) / risk(类 tc)
 arche() { case "$1" in ta|t04|t07|t10) echo retail;; tb|t05|t08) echo bank;; tc|t06|t09) echo risk;; *) echo retail;; esac; }
 
-launch() { # tenant job bizDate paramsJson
+launch() { # 参数:tenant job bizDate paramsJson
   local t="$1" job="$2" bd="$3" params="$4" rid; rid="sim-${BDC}-${t}-${job}-$(date +%s%N|tail -c 7)"
   local body; body=$(python3 -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'jobCode':sys.argv[2],'triggerType':'API','bizDate':sys.argv[3],'requestId':sys.argv[4],'params':json.loads(sys.argv[5])}))" "$t" "$job" "$bd" "$rid" "$params")
   local resp; resp=$(curl -sf --max-time 40 -X POST "$TRG/api/triggers/launch" \
@@ -27,7 +27,7 @@ launch() { # tenant job bizDate paramsJson
   if echo "$resp" | grep -qE '"code"\s*:\s*"(SUCCESS|OK)"'; then printf '.'; return 0; else printf 'x'; return 1; fi
 }
 
-import_content() { # tenant tpl header rowgen
+import_content() { # 参数:tenant tpl header rowgen
   local t="$1" tpl="$2" header="$3" gen="$4"
   local csv; csv=$(printf '%s\n' "$header"; eval "$gen")
   local params; params=$(python3 -c "import json,sys;print(json.dumps({'templateCode':sys.argv[1],'content':sys.argv[2]}))" "$tpl" "$csv")
@@ -35,7 +35,7 @@ import_content() { # tenant tpl header rowgen
 }
 
 # DISPATCH 需绑定一个已生成文件 + 渠道:取该租户最新 GENERATED 文件分发(自然形成 export→dispatch 链)。
-dispatch_latest() { # tenant job channelCode
+dispatch_latest() { # 参数:tenant job channelCode
   local t="$1" job="$2" ch="$3" fid
   fid=$(docker exec -i batch-postgres-primary psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
     "select id from batch.file_record where tenant_id='$t' and file_status='GENERATED' order by id desc limit 1" 2>/dev/null)

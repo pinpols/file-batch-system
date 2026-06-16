@@ -1,5 +1,5 @@
 -- ============================================================================
--- Stage 5b dispatch fixture:TB_DISPATCH_STAGE5_FAIL_ONCE job + tb_api_fail channel
+-- Stage 5b dispatch fixture：TB_DISPATCH_STAGE5_FAIL_ONCE job + tb_api_fail channel 用例
 --
 -- 这俩 fixture 在单机由 created_by='sim-e2e' 的外部 seed 建立,但 docs/test-data
 -- 漏带定义文件,导致 14 的 preflight "missing TB_DISPATCH_STAGE5_FAIL_ONCE fixture"

@@ -10,7 +10,7 @@
 --   psql -d batch_business -f scripts/db/business/rls-phase-a-rollback-to-transition.sql
 --
 -- 效果:
---   - DROP strict policy
+--   - 删除 strict policy
 --   - 重建 transition policy(允许 IS NULL/空 兜底)
 --   - 漏 SET 的应用代码恢复正常工作
 --

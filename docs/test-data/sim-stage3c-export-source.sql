@@ -1,5 +1,5 @@
--- Stage 3c Export source data for 8-shard and multi-tenant smoke.
--- Required psql variable: batch_no
+-- Stage 3c 导出源数据,用于 8 分片与多租户冒烟。
+-- 必需的 psql 变量:batch_no
 
 INSERT INTO biz.customer_account (
     tenant_id, customer_no, customer_name, customer_type, certificate_no,

@@ -54,7 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Column schema for every sheet in the tenant config package workbook. */
+/** 租户配置包工作簿中每个 sheet 的列 schema。 */
 public final class ConfigPackageExcelSchema {
 
   private ConfigPackageExcelSchema() {}

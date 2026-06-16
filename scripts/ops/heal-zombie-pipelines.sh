@@ -34,7 +34,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=env.sh
 source "$ROOT/scripts/ops/env.sh"
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# ── 配置 ─────────────────────────────────────────────────────────────
 DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 MAX_AGE="${BATCH_HEAL_ZOMBIE_MAX_AGE_SECONDS:-604800}"
 TENANT="${BATCH_HEAL_ZOMBIE_TENANT:-}"
@@ -46,7 +46,7 @@ psql_file() {
        -v tenant="$TENANT" "$@"
 }
 
-# ── inspect ───────────────────────────────────────────────────────────────────
+# ── 巡检 ───────────────────────────────────────────────────────────────────
 echo "==> heal-zombie-pipelines.sh"
 echo "    DRY_RUN  = $DRY_RUN"
 echo "    MAX_AGE  = ${MAX_AGE}s ($((MAX_AGE / 86400)) days)"
@@ -68,7 +68,7 @@ if [ "$COUNT" = "0" ]; then
   exit 0
 fi
 
-# ── execute ───────────────────────────────────────────────────────────────────
+# ── 执行 ───────────────────────────────────────────────────────────────────
 if [ "$DRY_RUN" = "true" ]; then
   echo
   echo "[DRY-RUN] 不执行 UPDATE; 设 BATCH_HEAL_DRY_RUN=false 实际执行"

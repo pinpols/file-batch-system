@@ -27,13 +27,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Conservative recovery for launch T1/T2 split failures.
+ * launch T1/T2 拆分事务失败时的保守恢复。
  *
- * <p>DefaultLaunchService first commits job_instance=CREATED in T1, then creates partitions/tasks
- * and marks RUNNING in T2. If the process dies between those transactions, the instance has no
- * executable children and Kafka lag stays at zero. This scheduler only re-drives T2 for
- * non-workflow instances that are still CREATED, still tied to ACCEPTED trigger_request, and have
- * zero partition/task rows.
+ * <p>DefaultLaunchService 先在 T1 提交 job_instance=CREATED,再在 T2 创建 partition/task 并标记 RUNNING。
+ * 若进程在两个事务之间崩溃,实例就没有可执行的子项、Kafka lag 也始终为零。本调度器只为仍是 CREATED、 仍关联 ACCEPTED 的 trigger_request、且
+ * partition/task 行数为零的非 workflow 实例补跑 T2。
  */
 @Slf4j
 @Component

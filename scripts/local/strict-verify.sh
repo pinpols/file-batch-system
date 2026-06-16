@@ -182,7 +182,7 @@ runs_count=$(echo "$simple" | python3 -c "import sys,json;print(len(json.load(sy
   && pass "简单 expr (0 0 2 * * ?) → valid=true, 3 runs" "tz=Asia/Shanghai" \
   || fail "简单 expr 异常" "valid=$valid_field runs=$runs_count"
 
-# Quartz L (last Friday of month)
+# Quartz L 表达式（当月最后一个周五）
 quartz_l=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 15 10 ? * 6L" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
 l_valid=$(echo "$quartz_l" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 [[ "$l_valid" == "True" ]] \
@@ -344,7 +344,7 @@ print(','.join(sorted(schema.get('properties', {}).keys())))
     fail "MaintenanceStatus schema 漂移" "yaml=[$yaml_fields] be=[$be_fields]"
   fi
 
-  # CronPreview schema
+  # CronPreview 的 schema 结构
   yaml_cron=$(python3 -c "
 import yaml
 with open('$OPENAPI_YAML') as f:

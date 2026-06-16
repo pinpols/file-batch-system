@@ -18,10 +18,10 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=env.sh
 source "$ROOT/scripts/ops/env.sh"
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# ── 配置 ─────────────────────────────────────────────────────────────
 STALE_HEARTBEAT_MINUTES="${BATCH_INSPECT_STALE_HEARTBEAT_MINUTES:-5}"
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── 辅助函数 ───────────────────────────────────────────────────────────────────
 failures=0
 warnings=0
 
@@ -51,7 +51,7 @@ check_connectivity() {
   fi
 }
 
-# ── 1. worker status summary ──────────────────────────────────────────────────
+# ── 1. worker 状态汇总 ──────────────────────────────────────────────────
 check_worker_summary() {
   log "Worker registry summary:"
   psql_file -f "$OPS_SQL_DIR/inspect-workers-summary.sql" 2>/dev/null \
@@ -60,7 +60,7 @@ check_worker_summary() {
     done
 }
 
-# ── 2. DRAINING workers past deadline ────────────────────────────────────────
+# ── 2. 超过 deadline 的 DRAINING worker ────────────────────────────────────────
 check_drain_timeout() {
   local overdue
   overdue="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-drain-timeout-count.sql" 2>/dev/null)" || { warn "Cannot query worker_registry drain_deadline_at"; return; }
@@ -79,7 +79,7 @@ check_drain_timeout() {
   fi
 }
 
-# ── 3. stale heartbeat (ONLINE but silent) ────────────────────────────────────
+# ── 3. 心跳失联(ONLINE 但已静默) ────────────────────────────────────
 check_stale_heartbeat() {
   local stale
   stale="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-stale-heartbeat-count.sql" 2>/dev/null)" || { warn "Cannot query worker_registry heartbeat_at"; return; }
@@ -92,9 +92,9 @@ check_stale_heartbeat() {
   fi
 }
 
-# ── 4. decommissioned workers with active task claims ────────────────────────
+# ── 4. 已下线 worker 仍持有活跃任务认领 ────────────────────────
 check_decommissioned_with_tasks() {
-  # Check if task_assignment table exists
+  # 检查 task_assignment 表是否存在
   local table_exists
   table_exists="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-task-assignment-table-exists.sql" 2>/dev/null)" || table_exists=0
 
@@ -112,7 +112,7 @@ check_decommissioned_with_tasks() {
   fi
 }
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── 主流程 ──────────────────────────────────────────────────────────────────────
 require_psql
 check_connectivity
 check_worker_summary

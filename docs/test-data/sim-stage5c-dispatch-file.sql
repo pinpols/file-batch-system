@@ -1,5 +1,5 @@
--- Stage 5c Dispatch source file_record.
--- Required psql variables: batch_no, biz_date, storage_path
+-- Stage 5c Dispatch 的源 file_record。
+-- 需要的 psql 变量:batch_no、biz_date、storage_path
 
 WITH old_rows AS (
   SELECT id
