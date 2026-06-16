@@ -102,26 +102,71 @@ jobs:
       - name: Run shared-constants parity stub
         run: pytest tests/test_shared_constants_parity.py -v
 
+  # --- BYO SDKs (Go / TypeScript / Rust): each runs its own conformance runner
+  # over the shared fixtures' then.expect + shared-constants parity. Contract:
+  # docs/sdk/byo-conformance-contract.md §1.3.
+  typescript-contract:
+    name: typescript contract (decision core + conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run conformance + parity (node --test, type-stripped)
+        run: node --test --experimental-strip-types 'batch-worker-sdk-typescript/**/*.test.ts'
+
+  go-contract:
+    name: go contract (decision core + conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run conformance + parity + unit
+        working-directory: batch-worker-sdk-go
+        run: go vet ./... && go test ./...
+
+  rust-contract:
+    name: rust contract (decision core + conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Run conformance + parity + unit
+        working-directory: batch-worker-sdk-rust
+        run: cargo test
+
   # Parity report — soft-mode: log diff between Java and Python pass sets,
   # but never fail the build (Python is xfail until Lane Q lands). When
   # Lane Q is done and we expect symmetric pass sets, remove `|| true`.
   parity-report:
     name: parity report (log-only)
     runs-on: ubuntu-latest
-    needs: [java-contract, python-contract]
-    if: always() && (needs.java-contract.result == 'success' || needs.python-contract.result == 'success')
+    needs: [java-contract, python-contract, typescript-contract, go-contract, rust-contract]
+    if: always()
     steps:
       - uses: actions/checkout@v4
       - name: Summarize
         env:
           JAVA_RESULT: ${{ needs.java-contract.result }}
           PYTHON_RESULT: ${{ needs.python-contract.result }}
+          TS_RESULT: ${{ needs.typescript-contract.result }}
+          GO_RESULT: ${{ needs.go-contract.result }}
+          RUST_RESULT: ${{ needs.rust-contract.result }}
         run: |
           {
             echo "## SDK contract parity (log-only)"
             echo ""
             echo "- Java contract job: ${JAVA_RESULT}"
             echo "- Python contract job: ${PYTHON_RESULT}"
+            echo "- TypeScript contract job: ${TS_RESULT}"
+            echo "- Go contract job: ${GO_RESULT}"
+            echo "- Rust contract job: ${RUST_RESULT}"
             echo ""
-            echo "Python is xfail until Lane Q completes. Once Lane Q closes, tighten this job to fail on pass-set diff."
+            echo "Python is xfail until Lane Q completes. Go/TS/Rust are hard-gated by their own jobs above."
           } >> "$GITHUB_STEP_SUMMARY"

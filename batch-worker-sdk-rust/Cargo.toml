@@ -1,0 +1,16 @@
+[package]
+name = "batch-worker-sdk"
+version = "1.1.0"
+edition = "2021"
+description = "BYO worker SDK decision core + conformance runner (Rust reference impl, zero-dependency)"
+license = "Apache-2.0"
+
+[lib]
+name = "batch_worker_sdk"
+path = "src/lib.rs"
+
+# Zero external dependencies: the decision core, the conformance runner, the
+# constants-parity test, and the minimal JSON / YAML parsers are all std-only.
+[dependencies]
+
+[dev-dependencies]
