@@ -1,5 +1,5 @@
--- Stage 3b Export source data.
--- Required psql variable: batch_no
+-- Stage 3b 导出源数据。
+-- 必需的 psql 变量:batch_no
 
 -- 先清理本 stage 专用的 EXP3B-% 行再 seed:固定 40 行(generate_series 1..40),保证 Stage 3b
 -- 的 4 分片 keyset 导出行数断言(40)精确可复现。原仅 ON CONFLICT 幂等,无法清除历史更大范围

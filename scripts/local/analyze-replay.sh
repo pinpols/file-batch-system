@@ -83,7 +83,7 @@ def count_of(r):
 def iso_to_sec(v):
     if not v: return None
     if isinstance(v, (int, float)):
-        # epoch millis? assume sec if < 1e12
+        # epoch 毫秒?小于 1e12 当作秒
         return float(v) if v < 1e12 else float(v)/1000.0
     s = str(v).replace('Z', '+00:00')
     try:
@@ -234,7 +234,7 @@ for k, prow in prod_idx.items():
         paths = payload_diff_paths(pp, rp)
         pd_diff = bool(paths)
     item['payloadDiff'] = pd_diff
-    item['payloadDiffPaths'] = paths[:20]  # cap noise
+    item['payloadDiffPaths'] = paths[:20]  # 截断噪声
     if pd_diff: summary['payloadDrift'] += 1
 
     if not (sd or item['errorDiff'] or pd_diff

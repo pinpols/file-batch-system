@@ -21,14 +21,14 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=env.sh
 source "$ROOT/scripts/ops/env.sh"
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# ── 配置 ─────────────────────────────────────────────────────────────
 STUCK_JOB_MINUTES="${BATCH_INSPECT_STUCK_JOB_MINUTES:-60}"
 OUTBOX_LAG_SECONDS="${BATCH_INSPECT_OUTBOX_LAG_SECONDS:-120}"
 DLQ_WARN_COUNT="${BATCH_INSPECT_DLQ_WARN_COUNT:-50}"
 RETRY_WARN_COUNT="${BATCH_INSPECT_RETRY_WARN_COUNT:-200}"
 ALERT_LOOKBACK_MINUTES="${BATCH_INSPECT_ALERT_LOOKBACK_MINUTES:-60}"
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── 辅助函数 ───────────────────────────────────────────────────────────────────
 failures=0
 warnings=0
 
@@ -52,7 +52,7 @@ require_psql() {
   fi
 }
 
-# ── 1. connectivity ───────────────────────────────────────────────────────────
+# ── 1. 连通性 ───────────────────────────────────────────────────────────
 check_connectivity() {
   local result
   if ! result="$(psql_file -f "$OPS_SQL_DIR/common-connectivity.sql" 2>&1)"; then
@@ -62,7 +62,7 @@ check_connectivity() {
   ok "DB connection to ${PGHOST}:${PGPORT}/${PGDATABASE}"
 }
 
-# ── 2. Flyway migration history ───────────────────────────────────────────────
+# ── 2. Flyway 迁移历史 ───────────────────────────────────────────────
 check_flyway() {
   local flyway_scope="schema"
   local failed_count
@@ -91,7 +91,7 @@ check_flyway() {
   fi
 }
 
-# ── 3. recent alert events ────────────────────────────────────────────────────
+# ── 3. 近期告警事件 ────────────────────────────────────────────────────
 check_alert_events() {
   local critical warning
   critical="$(psql_file -f "$OPS_SQL_DIR/inspect-db-alert-critical-count.sql" 2>/dev/null)" || { warn "Cannot query alert_event"; return; }
@@ -107,7 +107,7 @@ check_alert_events() {
   fi
 }
 
-# ── 4. stuck job instances ────────────────────────────────────────────────────
+# ── 4. 卡住的 job 实例 ────────────────────────────────────────────────────
 check_stuck_jobs() {
   local stuck
   stuck="$(psql_file -f "$OPS_SQL_DIR/inspect-db-stuck-jobs-count.sql" 2>/dev/null)" || { warn "Cannot query job_instance"; return; }
@@ -120,7 +120,7 @@ check_stuck_jobs() {
   fi
 }
 
-# ── 5. outbox backlog ─────────────────────────────────────────────────────────
+# ── 5. outbox 积压 ─────────────────────────────────────────────────────────
 check_outbox_backlog() {
   local pending
   pending="$(psql_file -f "$OPS_SQL_DIR/inspect-db-outbox-backlog-count.sql" 2>/dev/null)" || { warn "Cannot query outbox_event"; return; }
@@ -139,7 +139,7 @@ check_outbox_backlog() {
   fi
 }
 
-# ── 6. dead letter backlog ────────────────────────────────────────────────────
+# ── 6. 死信积压 ────────────────────────────────────────────────────
 check_dead_letters() {
   local new_dlq
   new_dlq="$(psql_file -f "$OPS_SQL_DIR/inspect-db-dead-letter-new-count.sql" 2>/dev/null)" || { warn "Cannot query dead_letter_task"; return; }
@@ -153,7 +153,7 @@ check_dead_letters() {
   fi
 }
 
-# ── 7. retry schedule backlog ─────────────────────────────────────────────────
+# ── 7. 重试调度积压 ─────────────────────────────────────────────────
 check_retry_backlog() {
   local waiting overdue
   waiting="$(psql_file -f "$OPS_SQL_DIR/inspect-db-retry-waiting-count.sql" 2>/dev/null)" || { warn "Cannot query retry_schedule"; return; }
@@ -169,7 +169,7 @@ check_retry_backlog() {
   fi
 }
 
-# ── 8. terminal job instances with active children ───────────────────────────
+# ── 8. 终态 job 实例仍有活跃子行 ───────────────────────────────
 check_terminal_instance_active_children() {
   local inconsistent
   inconsistent="$(psql_file -f "$OPS_SQL_DIR/inspect-db-terminal-active-children-count.sql" 2>/dev/null)" || { warn "Cannot query terminal job child consistency"; return; }
@@ -182,7 +182,7 @@ check_terminal_instance_active_children() {
   fi
 }
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── 主流程 ──────────────────────────────────────────────────────────────────────
 require_psql
 check_connectivity
 check_flyway

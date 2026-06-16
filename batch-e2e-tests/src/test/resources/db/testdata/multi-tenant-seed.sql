@@ -1,7 +1,7 @@
--- Test seed data: multi-tenant setup for ta, tb, tc
--- Covers: job definitions, quota policies, resource queues, batch windows, business calendars,
---         worker registrations, template configs per tenant
--- Tenant roles:
+-- 测试种子数据：ta、tb、tc 三个租户的多租户配置
+-- 覆盖：每租户的 job definition、配额策略、资源队列、批处理窗口、业务日历、
+--         worker 注册、模板配置
+-- 租户角色：
 --   ta = 零售业务  (retail)
 --   tb = 金融业务  (finance)
 --   tc = 风控业务  (risk management)
@@ -73,7 +73,7 @@ WHERE (tenant_id, job_code) IN (
     ('tb', 'TB_WF_RECONCILE')
 );
 
--- ── quota policies ─────────────────────────────────────────────────────────────
+-- ── 配额策略 ─────────────────────────────────────────────────────────────
 
 INSERT INTO batch.tenant_quota_policy
   (tenant_id, policy_code, enabled,
@@ -99,7 +99,7 @@ VALUES
    now(), now())
 ON CONFLICT DO NOTHING;
 
--- ── resource queues ────────────────────────────────────────────────────────────
+-- ── 资源队列 ────────────────────────────────────────────────────────────
 
 INSERT INTO batch.resource_queue
   (tenant_id, queue_code, queue_name, queue_type,
@@ -140,7 +140,7 @@ VALUES
    true, 'TC risk dispatch queue',   now(), now())
 ON CONFLICT DO NOTHING;
 
--- ── batch windows ──────────────────────────────────────────────────────────────
+-- ── 批处理窗口 ──────────────────────────────────────────────────────────────
 
 INSERT INTO batch.batch_window
   (tenant_id, window_code, window_name, timezone,
@@ -161,7 +161,7 @@ VALUES
    true,  true, 'TC risk always-open window', now(), now())
 ON CONFLICT DO NOTHING;
 
--- ── business calendars ─────────────────────────────────────────────────────────
+-- ── 业务日历 ─────────────────────────────────────────────────────────
 
 INSERT INTO batch.business_calendar
   (tenant_id, calendar_code, calendar_name, timezone,
@@ -182,7 +182,7 @@ VALUES
    true, now(), now())
 ON CONFLICT DO NOTHING;
 
--- ── worker registry ────────────────────────────────────────────────────────────
+-- ── worker 注册表 ────────────────────────────────────────────────────────────
 
 INSERT INTO batch.worker_registry
   (tenant_id, worker_code, worker_group, capability_tags, resource_tag,
@@ -202,7 +202,7 @@ VALUES
    'OFFLINE', now(),                        0, null, null)
 ON CONFLICT DO NOTHING;
 
--- ── import template configs ────────────────────────────────────────────────────
+-- ── 导入模板配置 ────────────────────────────────────────────────────
 
 INSERT INTO batch.file_template_config
   (tenant_id, template_code, template_name, template_type, biz_type,
@@ -270,7 +270,7 @@ VALUES
    true, 1, 'test')
 ON CONFLICT DO NOTHING;
 
--- ── export template configs ────────────────────────────────────────────────────
+-- ── 导出模板配置 ────────────────────────────────────────────────────
 
 INSERT INTO batch.file_template_config
   (tenant_id, template_code, template_name, template_type, biz_type,

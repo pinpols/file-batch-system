@@ -1,7 +1,7 @@
--- Test seed data: file_template_config entries covering all export formats
--- Covers: DELIMITED (CSV/pipe/tab, quote policies), FIXED_WIDTH, EXCEL, JSON (cursor pagination),
---         Settlement export (sql_template_export with batch+detail JOIN)
--- All records use tenant_id='t1'.
+-- 测试种子数据:覆盖全部导出格式的 file_template_config 记录
+-- 覆盖:DELIMITED(CSV/竖线/制表符,各种引号策略)、FIXED_WIDTH、EXCEL、JSON(游标分页)、
+--      结算导出(sql_template_export,batch+detail JOIN)
+-- 所有记录均使用 tenant_id='t1'。
 
 INSERT INTO batch.file_template_config
   (tenant_id, template_code, template_name, template_type, biz_type,
@@ -17,7 +17,7 @@ INSERT INTO batch.file_template_config
    export_data_ref)
 VALUES
 
--- 1. CSV export (comma, quote policy REQUIRED, double-quote escape)
+-- 1. CSV 导出(逗号分隔,引号策略 REQUIRED,双引号转义)
 ('t1', 'EXP-CUSTOMER-CSV', 'Customer Export CSV', 'EXPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  ',', '"', '"',
@@ -43,7 +43,7 @@ VALUES
  true, 1, 'test',
  'sql_template_export'),
 
--- 2. Pipe-delimited export (ALL quote policy)
+-- 2. 竖线分隔导出(引号策略 ALL)
 ('t1', 'EXP-CUSTOMER-PIPE', 'Customer Export Pipe-delimited', 'EXPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  '|', '"', '"',
@@ -62,7 +62,7 @@ VALUES
  true, 1, 'test',
  null),
 
--- 3. Tab-separated export (no header, backslash escape)
+-- 3. 制表符分隔导出(无表头,反斜杠转义)
 ('t1', 'EXP-CUSTOMER-TAB-NOHEADER', 'Customer Export Tab No-Header', 'EXPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  '\t', null, E'\\',
@@ -81,7 +81,7 @@ VALUES
  true, 1, 'test',
  null),
 
--- 4. Fixed-width export (record_length=80)
+-- 4. 定长导出(record_length=80)
 ('t1', 'EXP-CUSTOMER-FW', 'Customer Export Fixed-Width', 'EXPORT', 'CUSTOMER',
  'FIXED_WIDTH', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -105,7 +105,7 @@ VALUES
  true, 1, 'test',
  null),
 
--- 5. Excel export (.xlsx, sheet name "客户清单", max 31 chars enforced)
+-- 5. Excel 导出(.xlsx,sheet 名 "客户清单",强制最长 31 字符)
 ('t1', 'EXP-CUSTOMER-EXCEL', 'Customer Export Excel', 'EXPORT', 'CUSTOMER',
  'EXCEL', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -130,7 +130,7 @@ VALUES
  true, 1, 'test',
  null),
 
--- 6. JSON export (cursor pagination, 1000 per page)
+-- 6. JSON 导出(游标分页,每页 1000 条)
 ('t1', 'EXP-CUSTOMER-JSON', 'Customer Export JSON', 'EXPORT', 'CUSTOMER',
  'JSON', 'UTF-8', 'UTF-8', false,
  null, null, null,
@@ -153,7 +153,7 @@ VALUES
  true, 1, 'test',
  null),
 
--- 7. Encrypted GZIP CSV export (AES encryption + GZIP, download requires approval)
+-- 7. 加密 GZIP CSV 导出(AES 加密 + GZIP,下载需审批)
 ('t1', 'EXP-CUSTOMER-CSV-ENC-GZ', 'Customer Export CSV Encrypted GZIP', 'EXPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  ',', '"', '"',
@@ -173,9 +173,9 @@ VALUES
  true, 1, 'test',
  null),
 
--- 8. Settlement export CSV (migrated from SettlementExportDataPlugin)
---    Uses sql_template_export: batch + detail joined in a single SELECT,
---    reproducing the 9 columns formerly hardcoded in describeDelimitedColumns.
+-- 8. 结算导出 CSV(从 SettlementExportDataPlugin 迁移而来)
+--    使用 sql_template_export:在单条 SELECT 中 join batch + detail,
+--    复现原先在 describeDelimitedColumns 里硬编码的 9 列。
 ('t1', 'EXP-SETTLEMENT-CSV', 'Settlement Export CSV', 'EXPORT', 'SETTLEMENT',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
  ',', '"', '"',
@@ -210,7 +210,7 @@ VALUES
  true, 1, 'migration',
  'sql_template_export'),
 
--- 9. Settlement export JSON (same query, JSON output)
+-- 9. 结算导出 JSON(同一查询,JSON 输出)
 ('t1', 'EXP-SETTLEMENT-JSON', 'Settlement Export JSON', 'EXPORT', 'SETTLEMENT',
  'JSON', 'UTF-8', 'UTF-8', false,
  null, null, null,

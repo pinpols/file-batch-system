@@ -20,8 +20,8 @@ public class SqlTransformComputeSecurityProperties {
   private boolean forbidSelectStar = true;
 
   /**
-   * 禁止在表达式 / FROM / WHERE 中调用的 PG 函数(按解析后 AST 的函数节点名大小写不敏感比对,含 schema 限定尾段与去引号)。 覆盖:连接 dblink / 系统级
-   * pg_terminate_backend / 文件系统 pg_read_server_files / 任意命令 copy_from_program 等。
+   * 禁止在表达式 / FROM / WHERE 中调用的 PG 函数(大小写不敏感子串匹配)。覆盖:连接 dblink / 系统级 pg_terminate_backend / 文件系统
+   * pg_read_server_files / 任意命令 copy_from_program 等。
    */
   private List<String> forbiddenFunctions =
       new ArrayList<>(

@@ -57,8 +57,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 
 /**
- * Generates Excel workbooks (export, template, preview) for the tenant config package. Extracted
- * from DefaultConsoleTenantConfigPackageExcelApplicationService to reduce class size.
+ * 为租户配置包生成 Excel 工作簿(导出、模板、预览)。从 DefaultConsoleTenantConfigPackageExcelApplicationService 抽出以缩减类体积。
  */
 public class ConfigPackageExcelWorkbookWriter {
 

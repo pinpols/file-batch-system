@@ -1,5 +1,5 @@
--- Stage 6d pause simulation for wheel scheduler.
--- Required psql variable: job_code
+-- Stage 6d 时间轮调度器的暂停模拟。
+-- 必填 psql 变量:job_code
 
 WITH target AS (
   UPDATE batch.job_definition

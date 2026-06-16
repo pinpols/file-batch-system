@@ -24,12 +24,12 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=env.sh
 source "$ROOT/scripts/ops/env.sh"
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# ── 配置 ─────────────────────────────────────────────────────────────
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 # 超过此秒数未投递的 outbox 视为卡住
 OUTBOX_STUCK_SECONDS="${BATCH_HEAL_OUTBOX_STUCK_SECONDS:-300}"
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── 辅助函数 ───────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
 psql_file() {
@@ -45,19 +45,19 @@ require_tools() {
   fi
 }
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── 主流程 ──────────────────────────────────────────────────────────────────────
 require_tools
 
 log "heal-stuck-outbox: BATCH_HEAL_DRY_RUN=${BATCH_HEAL_DRY_RUN}"
 log "Stuck threshold: ${OUTBOX_STUCK_SECONDS}s"
 
-# Check connectivity
+# 检查连通性
 psql_file -f "$OPS_SQL_DIR/common-connectivity.sql" >/dev/null || {
   log "ERROR: DB connection failed"
   exit 1
 }
 
-# Count stuck events
+# 统计卡住的事件数
 stuck_count="$(psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-count.sql" 2>/dev/null)" || {
   log "ERROR: cannot query outbox_event"
   exit 1
@@ -90,12 +90,12 @@ if [[ "${BATCH_HEAL_DRY_RUN}" == "true" ]]; then
   exit 0
 fi
 
-# Execute reset
+# 执行重置
 updated="$(psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-reset.sql" 2>/dev/null | grep -c '^[0-9]')" || updated=0
 
 log "Reset ${updated} outbox event(s) — OutboxPollScheduler will retry on next poll."
 
-# Attempt DB NOTIFY to wake up the poller immediately
+# 尝试发 DB NOTIFY 立即唤醒轮询器
 if psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-notify.sql" >/dev/null 2>&1; then
   log "Sent NOTIFY outbox_publisher to wake up poll scheduler."
 else

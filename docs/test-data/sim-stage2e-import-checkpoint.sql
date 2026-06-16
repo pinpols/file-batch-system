@@ -1,5 +1,5 @@
--- Stage 2e: Import checkpoint crash-resume fixture.
--- SQL only prepares deterministic runtime data; scripts own orchestration and process kill/retry.
+-- Stage 2e：Import checkpoint 崩溃续跑 fixture。
+-- SQL 只准备确定性的运行态数据；编排与进程 kill/retry 由脚本负责。
 
 UPDATE batch.file_template_config
    SET chunk_size = 50,

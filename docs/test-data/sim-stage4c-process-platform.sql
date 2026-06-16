@@ -1,4 +1,4 @@
--- Stage 4c Process platform fixture: sharded process + long-running cancel job.
+-- Stage 4c Process 平台 fixture:分片 process + 长时运行可取消 job。
 
 BEGIN;
 

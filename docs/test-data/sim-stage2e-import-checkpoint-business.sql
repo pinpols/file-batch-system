@@ -1,4 +1,4 @@
--- Stage 2e business DB cleanup for checkpoint crash-resume profile.
+-- Stage 2e checkpoint 崩溃恢复场景的业务库清理。
 
 DELETE FROM biz.customer_account
  WHERE tenant_id = 'ta'

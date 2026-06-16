@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Lane P (drift guard): validate every fixture JSON against fixture-schema.json.
-# Used by CI sdk-contract-parity.yml and locally before pushing.
+# Lane P(漂移守护):用 fixture-schema.json 校验每个 fixture JSON。
+# 由 CI sdk-contract-parity.yml 调用,推送前也在本地跑。
 #
-# Requires: python3 with `jsonschema` package (pip install jsonschema).
-# Exit codes:
-#   0 = all fixtures valid
-#   1 = one or more fixtures violate schema
-#   2 = environment problem (missing python / jsonschema)
+# 依赖:python3 + `jsonschema` 包(pip install jsonschema)。
+# 退出码:
+#   0 = 所有 fixture 合法
+#   1 = 一个或多个 fixture 违反 schema
+#   2 = 环境问题(缺 python / jsonschema)
 
 set -euo pipefail
 

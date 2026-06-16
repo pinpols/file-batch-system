@@ -88,7 +88,7 @@ public class ConsoleKafkaLagQueryService {
     Map<TopicPartition, OffsetAndMetadata> committedOffsets =
         offsetsResult.partitionsToOffsetAndMetadata().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-    // Query end offsets for the same partitions
+    // 查询相同分区的 end offset
     Map<TopicPartition, OffsetSpec> endOffsetRequests = new LinkedHashMap<>();
     committedOffsets.keySet().forEach(tp -> endOffsetRequests.put(tp, OffsetSpec.latest()));
     ListOffsetsResult endOffsetsResult = admin.listOffsets(endOffsetRequests);

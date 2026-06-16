@@ -50,7 +50,7 @@ BATCH_HEAL_RETRY_PARTITION_STATUS="${BATCH_HEAL_RETRY_PARTITION_STATUS:-FAILED}"
 BATCH_HEAL_RETRY_BATCH_SIZE="${BATCH_HEAL_RETRY_BATCH_SIZE:-50}"
 BATCH_HEAL_RETRY_SLEEP_MS="${BATCH_HEAL_RETRY_SLEEP_MS:-500}"
 
-# ── helpers ────────────────────────────────────────────────────────────────────
+# ── 辅助函数 ────────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
 psql_file() {

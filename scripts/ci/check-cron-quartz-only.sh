@@ -18,7 +18,7 @@
 # 用法:
 #   ./scripts/ci/check-cron-quartz-only.sh                          # 默认扫所有 SQL
 #   ./scripts/ci/check-cron-quartz-only.sh path1.sql path2.sql ...  # 只扫指定文件
-#   BATCH_CI_SKIP_CRON_GATE=1 ./scripts/ci/check-cron-quartz-only.sh # escape hatch
+#   BATCH_CI_SKIP_CRON_GATE=1 ./scripts/ci/check-cron-quartz-only.sh # 应急逃生开关
 
 set -euo pipefail
 
