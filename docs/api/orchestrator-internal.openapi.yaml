@@ -553,6 +553,7 @@ components:
           items: {$ref: '#/components/schemas/WorkerTaskTypeDescriptorDto'}
           description: "SDK Phase 3 M3.1 自定义 taskType 描述符;仅 register 上报,heartbeat 不带(null)"
           nullable: true
+        protocolVersion: {type: string, nullable: true, description: "SDK wire 协议 schema 主版本(v1/v2);仅 register 上报。缺=legacy 放行,不支持的版本(如 v3)register 拒绝(400 error.worker.unsupported_protocol_version)"}
       required: [tenantId, workerCode, status, heartbeatAt]
 
     WorkerTaskTypeDescriptorDto:

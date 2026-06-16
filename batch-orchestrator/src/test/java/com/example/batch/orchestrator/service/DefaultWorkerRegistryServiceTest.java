@@ -62,6 +62,10 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   private WorkerHeartbeatDto dto(String status) {
+    return dto(status, null);
+  }
+
+  private WorkerHeartbeatDto dto(String status, String protocolVersion) {
     return new WorkerHeartbeatDto(
         "ta",
         "w1",
@@ -77,7 +81,8 @@ class DefaultWorkerRegistryServiceTest {
         1,
         null,
         null,
-        null);
+        null,
+        protocolVersion);
   }
 
   private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
@@ -95,6 +100,7 @@ class DefaultWorkerRegistryServiceTest {
         List.of(),
         1,
         taskTypes,
+        null,
         null,
         null);
   }
@@ -194,6 +200,51 @@ class DefaultWorkerRegistryServiceTest {
     verify(mapper).insert(any());
     verify(mapper, never()).updateById(any());
     assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 支持的 protocolVersion(v2)→ 正常注册")
+  void registerSupportedProtocolVersionAccepted() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code(), "v2"));
+
+    verify(mapper).insert(any());
+    assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 缺 protocolVersion(老 SDK / 非 SDK worker)→ legacy 放行")
+  void registerAbsentProtocolVersionAccepted() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code(), null));
+
+    verify(mapper).insert(any());
+    assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 不支持的 protocolVersion(v3)→ 拒绝(VALIDATION_ERROR),不落库")
+  void registerUnsupportedProtocolVersionRejected() {
+    assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "v3")))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("unsupported_protocol_version");
+
+    verify(mapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
+    verify(mapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("register: 无法解析的 protocolVersion(garbage)→ 拒绝,不落库")
+  void registerUnparseableProtocolVersionRejected() {
+    assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "abc")))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("unsupported_protocol_version");
+
+    verify(mapper, never()).insert(any());
   }
 
   @Test
