@@ -28,6 +28,8 @@ tenants_csv="${TENANTS:?TENANTS env required, e.g. TENANTS=bigcorp,acme}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
 partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
+# 空 = 不下发 topic 级 min.insync.replicas（dev 默认）；prod 设 2，与平台 topic 一致。
+min_insync_replicas="${KAFKA_TOPIC_MIN_INSYNC_REPLICAS:-}"
 
 # 与 BatchTopicResolver.safe(): [^a-zA-Z0-9._-] -> _
 sanitize() {
@@ -52,13 +54,24 @@ ensure_topic() {
   topic="$1"
   current="$(topic_partitions "${topic}")"
   if [ -z "${current}" ]; then
-    /opt/kafka/bin/kafka-topics.sh \
-      --bootstrap-server "${bootstrap_server}" \
-      --create \
-      --if-not-exists \
-      --topic "${topic}" \
-      --partitions "${partitions}" \
-      --replication-factor "${replication_factor}"
+    if [ -n "${min_insync_replicas}" ]; then
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server "${bootstrap_server}" \
+        --create \
+        --if-not-exists \
+        --topic "${topic}" \
+        --partitions "${partitions}" \
+        --replication-factor "${replication_factor}" \
+        --config "min.insync.replicas=${min_insync_replicas}"
+    else
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server "${bootstrap_server}" \
+        --create \
+        --if-not-exists \
+        --topic "${topic}" \
+        --partitions "${partitions}" \
+        --replication-factor "${replication_factor}"
+    fi
     return
   fi
   if [ "${current}" -lt "${partitions}" ]; then
