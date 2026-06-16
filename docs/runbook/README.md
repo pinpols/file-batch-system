@@ -56,6 +56,7 @@
 | 22 | [ci.md](./ci.md) | CI 流水线说明（pr-gate / full-ci-gate + 触发时机 + 超时）|
 | 23 | [console-login-encryption.md](./console-login-encryption.md) | Console 登录请求体 RSA+AES 加密 + 密钥轮换 SOP |
 | 24 | [jvm-tuning-and-profiling.md](./jvm-tuning-and-profiling.md) | JVM 参数(按模块分档)+ profiling 工具链 + 生产 5 类症状 SOP |
+| 25 | [credential-matrix.md](./credential-matrix.md) | **凭据矩阵**:各类凭据(片级账密/渠道/密码/内部密钥/JWT/KMS/对象存储/DB)存哪、怎么注入、prod 强校验、上线必配否、谁负责 |
 
 ## 角色路径
 
@@ -63,7 +64,7 @@
 |---|---|
 | 本地起服务 | 07 → 06 → 05 |
 | 上 staging | 05 → 06 → 11 → 18 |
-| 上 prod | 11（部署前 checklist） → 10 → 18 → 02 |
+| 上 prod | 25（凭据矩阵:逐行核对必配 + prod fail-fast 项）→ 11（部署前 checklist） → 10 → 18 → 02 |
 | 救火（卡死 / 数据异常） | 02 → 03 → 04 |
 | 容量评估 / 上量 | [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) → 11 → 12 → 13 |
 | Quartz → Wheel 切换 | 16 → 15 |
