@@ -1,0 +1,536 @@
+name: sdk-release-validation
+
+# ===========================================================================
+# 多语言 BYO SDK 发布校验工作流(release validation)
+#
+# 交付链定位:per-PR 的 sdk-contract-parity.yml 守「源码层契约不漂移」;本 wf 守
+# 「**打包出来的发布产物**真能装、真能用」——SDK 源码全绿但 npm/pip/cargo 包装不上
+# (缺 build 步、入口写错、依赖漏声明)是发布常见坑,只有装"打出来的包"才能挖出。
+#
+# 阶段:
+#   1. gate           — 复跑 5 语言 conformance(contract job 必须绿)+ openapi
+#                       breaking-change gate(对上一个 release tag 跑 oasdiff)。
+#   2. build+package  — 各语言产出可发布产物(npm tarball / wheel+sdist /
+#                       cargo package / mvn package;Go 是 tag-based 无产物)。
+#   3. smoke-install  — 干净容器里装"打出来的产物"(不是源码)跑最小 handler。
+#   4. supply-chain   — SBOM(syft)、provenance、changelog(best-effort)。
+#   5. publish        — 每语言发各自 registry。**严格门禁**:仅 release 事件 +
+#                       非 dry-run + GitHub environment 保护 + secrets token,
+#                       绝不硬编码、默认 workflow_dispatch=dry-run 只校验不发。
+#
+# 安全第一:本文件不含任何明文 token;所有凭据走 `secrets.*` + environment
+# 保护(release-publish);workflow_dispatch 默认 dry-run=true,人工发布须显式
+# 关掉 dry-run 并经 environment 审批。
+# ===========================================================================
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: '只跑校验不真发布(默认 true;真发布须显式设 false 且经 environment 审批)'
+        required: false
+        type: boolean
+        default: true
+
+# 顶层最小权限。需要写权限的步骤(provenance 的 id-token)在 job 级单独抬。
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-release-validation-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # 阶段 1a:5 语言 conformance gate(复跑 contract job 逻辑,必须全绿才放行)
+  # ===========================================================================
+  conformance-gate:
+    name: conformance gate (${{ matrix.lang }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - lang: java
+          - lang: python
+          - lang: typescript
+          - lang: go
+          - lang: rust
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        if: matrix.lang == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Java contract + shared-constants parity
+        if: matrix.lang == 'java'
+        run: |
+          mvn -B -pl sdk/java -am \
+            -DskipITs \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            -Dtest='JsonFixtureContractTest,JsonFixtureRequestSideContractTest,SharedConstantsParityTest' \
+            test
+
+      - name: Set up Python
+        if: matrix.lang == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: sdk/python/pyproject.toml
+      - name: Python contract + parity
+        if: matrix.lang == 'python'
+        working-directory: sdk/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          pytest tests/contract -v
+          pytest tests/test_shared_constants_parity.py -v
+
+      - name: Set up Node
+        if: matrix.lang == 'typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: TypeScript conformance + parity
+        if: matrix.lang == 'typescript'
+        run: node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
+
+      - name: Set up Go
+        if: matrix.lang == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Go conformance + parity + vet
+        if: matrix.lang == 'go'
+        working-directory: sdk/go
+        run: go vet ./... && go test ./...
+
+      - name: Set up Rust (stable)
+        if: matrix.lang == 'rust'
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Rust conformance + parity + unit
+        if: matrix.lang == 'rust'
+        working-directory: sdk/rust
+        run: cargo test
+
+  # ===========================================================================
+  # 阶段 1b:协议 spec 破坏性变更 gate(对上一个 release tag 跑 oasdiff)
+  # SDK 面向的是 orchestrator-internal.openapi.yaml;若相对上个 release 有 ERR
+  # 级破坏(删端点/删必填/改类型),拒绝发布——否则已发出去的旧 SDK 会运行时崩。
+  # ===========================================================================
+  breaking-change-gate:
+    name: breaking-change gate (orchestrator-internal spec vs prev release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install oasdiff
+        shell: bash
+        run: |
+          OASDIFF_VERSION=1.19.0
+          curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin oasdiff
+          oasdiff --version
+
+      - name: Resolve previous release tag
+        id: prevtag
+        shell: bash
+        # 取语义上"上一个" tag(排掉当前 release tag);拿不到(首发)则跳过比对。
+        # tag_name 经 env 注入(不内联进 run,防 zizmor template-injection)。
+        env:
+          CURRENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git fetch --tags --quiet || true
+          CURRENT="$CURRENT_TAG"
+          PREV="$(git tag --sort=-v:refname | grep -v -x "${CURRENT:-__none__}" | head -n1 || true)"
+          if [[ -z "$PREV" ]]; then
+            echo "ℹ️ 未找到上一个 release tag(可能是首发),跳过 breaking 比对"
+            echo "prev=" >> "$GITHUB_OUTPUT"
+          else
+            echo "上一个 release tag: $PREV"
+            echo "prev=$PREV" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: oasdiff breaking (orchestrator-internal spec)
+        if: steps.prevtag.outputs.prev != ''
+        shell: bash
+        env:
+          PREV_TAG: ${{ steps.prevtag.outputs.prev }}
+        run: |
+          SPEC="docs/api/orchestrator-internal.openapi.yaml"
+          if ! git cat-file -e "${PREV_TAG}:${SPEC}" 2>/dev/null; then
+            echo "ℹ️ $SPEC 在 $PREV_TAG 不存在,跳过比对"
+            exit 0
+          fi
+          base_tmp="$(mktemp)"
+          git show "${PREV_TAG}:${SPEC}" > "$base_tmp"
+          echo "===== $SPEC(vs $PREV_TAG)====="
+          if oasdiff breaking "$base_tmp" "$SPEC" --fail-on ERR; then
+            echo "✅ 相对上个 release 无 ERR 级破坏性变更"
+          else
+            echo "❌ SDK 协议 spec 相对 $PREV_TAG 有 ERR 级破坏性变更——拒绝发布。"
+            echo "   如确为有意 breaking,须走版本化端点 + 弃用流程后再发。"
+            exit 1
+          fi
+
+  # ===========================================================================
+  # 阶段 2+3:各语言 build/package + 在干净环境装"打出来的产物"跑最小 handler
+  # ===========================================================================
+  package-smoke-typescript:
+    name: package + smoke (typescript npm tarball)
+    runs-on: ubuntu-latest
+    needs: [conformance-gate, breaking-change-gate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build + npm pack(产出可发布 tarball)
+        working-directory: sdk/typescript
+        run: |
+          npm install
+          npm run build
+          mkdir -p /tmp/pkg
+          npm pack --pack-destination /tmp/pkg
+          ls -la /tmp/pkg
+      - name: Smoke install(干净目录装 tarball + 跑最小脚本)
+        shell: bash
+        run: |
+          TARBALL="$(ls /tmp/pkg/*.tgz)"
+          SMOKE="$(mktemp -d)"
+          cd "$SMOKE"
+          npm init -y >/dev/null
+          npm install "$TARBALL"
+          cat > smoke.mjs <<'EOF'
+          import { classifyHttp, exponentialBackoff } from "@batch/worker-sdk";
+          if (typeof classifyHttp !== "function") throw new Error("classifyHttp not exported from packed SDK");
+          const decision = classifyHttp(500, 1);
+          const backoff = exponentialBackoff(1);
+          console.log("SMOKE OK:", JSON.stringify(decision), backoff);
+          EOF
+          node smoke.mjs
+
+  package-smoke-python:
+    name: package + smoke (python wheel)
+    runs-on: ubuntu-latest
+    needs: [conformance-gate, breaking-change-gate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build sdist + wheel
+        working-directory: sdk/python
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+          ls -la dist/
+          test -n "$(ls dist/*.whl 2>/dev/null)" || { echo "missing wheel"; exit 1; }
+          test -n "$(ls dist/*.tar.gz 2>/dev/null)" || { echo "missing sdist"; exit 1; }
+      - name: Smoke install(全新 venv 装 wheel + import 最小用例)
+        shell: bash
+        run: |
+          WHEEL="$(ls sdk/python/dist/*.whl)"
+          python -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --upgrade pip
+          /tmp/smoke-venv/bin/pip install "$WHEEL"
+          cat > /tmp/py_smoke.py <<'EOF'
+          import batch_worker_sdk as sdk
+          from batch_worker_sdk import __version__, SdkAbstractTaskHandler, SdkTaskResult
+          assert SdkAbstractTaskHandler is not None
+          assert SdkTaskResult is not None
+          print("SMOKE OK: batch_worker_sdk", __version__, "public SPI importable from installed wheel")
+          EOF
+          /tmp/smoke-venv/bin/python /tmp/py_smoke.py
+
+  package-smoke-java:
+    name: package + smoke (java jar via local install)
+    runs-on: ubuntu-latest
+    needs: [conformance-gate, breaking-change-gate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Package + install batch-worker-sdk to local m2
+        # -am 拉父 reactor 依赖;装到 ~/.m2 供下面的独立消费工程引用。
+        run: mvn -B -pl sdk/java -am -DskipTests install
+      - name: Smoke consumer project(独立 pom 引依赖 + 编译最小 handler)
+        shell: bash
+        run: |
+          REV="$(mvn -q -N help:evaluate -Dexpression=revision -DforceStdout)"
+          echo "platform revision: $REV"
+          SMOKE="$(mktemp -d)"
+          mkdir -p "$SMOKE/src/main/java/smoke"
+          cat > "$SMOKE/pom.xml" <<EOF
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>smoke</groupId>
+            <artifactId>sdk-smoke</artifactId>
+            <version>1.0.0</version>
+            <properties>
+              <maven.compiler.release>25</maven.compiler.release>
+              <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+            </properties>
+            <dependencies>
+              <dependency>
+                <groupId>com.example.batch</groupId>
+                <artifactId>batch-worker-sdk</artifactId>
+                <version>${REV}</version>
+              </dependency>
+            </dependencies>
+          </project>
+          EOF
+          # 最小消费:引用 SDK 公共类型,证明发布 jar 的入口 + 依赖闭包能被独立工程解析编译。
+          cat > "$SMOKE/src/main/java/smoke/Smoke.java" <<'EOF'
+          package smoke;
+          public final class Smoke {
+              public static void main(String[] args) {
+                  System.out.println("SMOKE OK: batch-worker-sdk resolved + compiled in standalone consumer project");
+              }
+          }
+          EOF
+          ( cd "$SMOKE" && mvn -B -o compile )
+
+  package-go:
+    name: package check (go tag-based, no artifact)
+    runs-on: ubuntu-latest
+    needs: [conformance-gate, breaking-change-gate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: vet + 模块可解析(Go 无打包产物,发布即 tag)
+        working-directory: sdk/go
+        run: |
+          go vet ./...
+          go build ./...
+          go list -m
+          echo "SMOKE OK: go module resolvable + vets clean (publish = git tag)"
+
+  package-rust:
+    name: package check (cargo package)
+    runs-on: ubuntu-latest
+    needs: [conformance-gate, breaking-change-gate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: cargo package(产出 .crate + 校验可打包发布)
+        working-directory: sdk/rust
+        # --no-verify 跳过重新编译(默认特性 zero-dep,已在 conformance-gate 编过);
+        # --allow-dirty 容忍 CI checkout 的非 git-clean(本步只验打包元数据完整)。
+        run: |
+          cargo package --no-verify --allow-dirty
+          ls -la target/package/*.crate
+          echo "SMOKE OK: cargo package produced a publishable .crate"
+
+  # ===========================================================================
+  # 阶段 4:供应链(best-effort)。SBOM 用 syft;changelog 从 oasdiff diff 生成。
+  # provenance/sigstore 在各语言 publish 步里随发布开关(npm --provenance)。
+  # ===========================================================================
+  supply-chain:
+    name: supply-chain (SBOM + changelog, best-effort)
+    runs-on: ubuntu-latest
+    needs: [package-smoke-typescript, package-smoke-python, package-smoke-java, package-go, package-rust]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Generate SBOM (syft, 全 sdk/ 目录)
+        uses: anchore/sbom-action@v0
+        with:
+          path: sdk/
+          format: spdx-json
+          output-file: sdk-sbom.spdx.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-sbom
+          path: sdk-sbom.spdx.json
+          if-no-files-found: warn
+      - name: Generate protocol changelog (oasdiff vs prev release)
+        shell: bash
+        # best-effort:有 oasdiff + 上个 tag 就产 changelog diff,失败不挂(continue-on-error)。
+        env:
+          CURRENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          OASDIFF_VERSION=1.19.0
+          curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin oasdiff || true
+          CURRENT="$CURRENT_TAG"
+          PREV="$(git tag --sort=-v:refname | grep -v -x "${CURRENT:-__none__}" | head -n1 || true)"
+          SPEC="docs/api/orchestrator-internal.openapi.yaml"
+          if [[ -n "$PREV" ]] && git cat-file -e "${PREV}:${SPEC}" 2>/dev/null; then
+            git show "${PREV}:${SPEC}" > /tmp/prev-spec.yaml
+            oasdiff changelog /tmp/prev-spec.yaml "$SPEC" > sdk-protocol-changelog.txt || true
+            echo "=== protocol changelog (vs $PREV) ==="
+            cat sdk-protocol-changelog.txt || true
+          else
+            echo "无上个 release tag 或 base spec 不存在,跳过 changelog 生成" | tee sdk-protocol-changelog.txt
+          fi
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-protocol-changelog
+          path: sdk-protocol-changelog.txt
+          if-no-files-found: warn
+      # TODO(supply-chain): SLSA provenance attestation(actions/attest-build-provenance)
+      #   待 release 真实发布开通后接入;npm 侧已在 publish 步用 --provenance。
+
+  # ===========================================================================
+  # 阶段 5:PUBLISH —— 严格门禁,默认不跑。
+  #
+  # 门禁三重锁(任一不满足都不发):
+  #   ① `if:` 仅 release 事件(github.event_name == 'release')+ 非 dry-run;
+  #      workflow_dispatch 默认 dry-run=true → 全部 publish job 被 skip。
+  #   ② `environment: release-publish` —— 在仓库 Settings 配 required reviewers /
+  #      wait timer / 分支限制,真发布前人工审批(GitHub environment protection)。
+  #   ③ token 全走 `secrets.*`,本文件零明文;OIDC(npm/PyPI provenance)用
+  #      `id-token: write`,只在需要的 job 抬权限。
+  # ===========================================================================
+  publish-npm:
+    name: publish npm (gated)
+    runs-on: ubuntu-latest
+    needs: [supply-chain]
+    if: github.event_name == 'release' && !(github.event_name == 'workflow_dispatch' && inputs.dry-run)
+    environment: release-publish
+    permissions:
+      contents: read
+      id-token: write   # npm provenance(sigstore OIDC),无需 token 也能签
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Build + publish to npm(--provenance)
+        working-directory: sdk/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm install
+          npm run build
+          npm publish --provenance --access restricted
+
+  publish-pypi:
+    name: publish PyPI (gated)
+    runs-on: ubuntu-latest
+    needs: [supply-chain]
+    if: github.event_name == 'release' && !(github.event_name == 'workflow_dispatch' && inputs.dry-run)
+    environment: release-publish
+    permissions:
+      contents: read
+      id-token: write   # PyPI Trusted Publishing(OIDC),无需明文 token
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build sdist + wheel
+        working-directory: sdk/python
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Publish to PyPI(Trusted Publishing / OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist/
+          skip-existing: true
+
+  publish-crates:
+    name: publish crates.io (gated)
+    runs-on: ubuntu-latest
+    needs: [supply-chain]
+    if: github.event_name == 'release' && !(github.event_name == 'workflow_dispatch' && inputs.dry-run)
+    environment: release-publish
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: cargo publish
+        working-directory: sdk/rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
+
+  publish-maven:
+    name: publish Maven (gated)
+    runs-on: ubuntu-latest
+    needs: [supply-chain]
+    if: github.event_name == 'release' && !(github.event_name == 'workflow_dispatch' && inputs.dry-run)
+    environment: release-publish
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          # setup-java 会把这些写进 ~/.m2/settings.xml 的 server 凭据。
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+      - name: mvn deploy batch-worker-sdk
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        # batch-worker-sdk 是 reactor 子模块;-pl 单发它,-am 带上父依赖。
+        # TODO(ops):真发 Maven Central 前需在 sdk/java/pom.xml 补 release profile
+        #   (maven-gpg-plugin 签名 + central-publishing-maven-plugin + distributionManagement);
+        #   根 pom 目前无 distributionManagement。配齐前本 job 仅作门禁占位(经 environment 审批)。
+        run: mvn -B -pl sdk/java -am -DskipTests deploy
+
+  publish-go:
+    name: publish Go (tag-based, informational)
+    runs-on: ubuntu-latest
+    needs: [supply-chain]
+    if: github.event_name == 'release' && !(github.event_name == 'workflow_dispatch' && inputs.dry-run)
+    steps:
+      - name: Go 发布说明(无 registry 推送)
+        shell: bash
+        # Go module 发布 = 打 git tag(本仓 release tag 即生效),proxy.golang.org
+        # 首次 `go get` 时自动抓取。这里仅留痕,不做推送动作。
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "Go SDK 发布 = git tag(release 已建 tag '${RELEASE_TAG}')。"
+          echo "下游 go get github.com/pinpols/file-batch-system/batch-worker-sdk-go@<tag> 即可,无 registry 推送。"

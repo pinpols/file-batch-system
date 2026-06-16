@@ -1,0 +1,27 @@
+{
+  // Build config for the *publishable* package. Source ships as raw .ts for the
+  // contract jobs (node --experimental-strip-types), but Node refuses to strip
+  // types under node_modules — so the npm tarball MUST carry compiled .js + .d.ts.
+  // rewriteRelativeImportExtensions (TS 5.7+) turns the explicit "./x.ts"
+  // specifiers into "./x.js" in the emitted output so the package resolves
+  // without any flags in a consumer.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "types": ["node"],
+    "lib": ["ES2023"],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["test", "tests", "kafka"]
+}
