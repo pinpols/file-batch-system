@@ -56,6 +56,7 @@ class DefaultConsoleAiApplicationServiceTest {
   @Mock private ConsoleAiAuthorizationService authorizationService;
   @Mock private ConsoleAiPromptGuard promptGuard;
   @Mock private ConsoleAiAuditService auditService;
+  @Mock private ConsoleAiKnowledgeBase knowledgeBase;
 
   private ConsoleAiProperties aiProperties;
   private DefaultConsoleAiApplicationService service;
@@ -73,7 +74,8 @@ class DefaultConsoleAiApplicationServiceTest {
             requestMetadataResolver,
             authorizationService,
             promptGuard,
-            auditService);
+            auditService,
+            knowledgeBase);
   }
 
   private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
