@@ -17,6 +17,7 @@ public class ConsoleWorkerFingerprintQueryService {
   private final WorkerFingerprintMapper mapper;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleQueryCacheService cacheService;
+  private final WorkerCompatibilityEvaluator compatibilityEvaluator;
 
   public List<WorkerFingerprintResponse> list(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
@@ -26,7 +27,10 @@ public class ConsoleWorkerFingerprintQueryService {
         new TypeReference<List<WorkerFingerprintResponse>>() {},
         () ->
             mapper.selectFingerprintsByTenant(resolved).stream()
-                .map(WorkerFingerprintResponse::from)
+                .map(
+                    row ->
+                        WorkerFingerprintResponse.from(
+                            row, compatibilityEvaluator.evaluate(row.getSdkVersion())))
                 .toList());
   }
 
