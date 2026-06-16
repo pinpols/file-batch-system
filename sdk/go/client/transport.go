@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
@@ -21,9 +22,54 @@ type Transport interface {
 	Register(ctx context.Context, req RegisterRequest) (RegisterResult, error)
 	Heartbeat(ctx context.Context, workerCode string, req HeartbeatRequest) (protocol.HeartbeatResponse, error)
 	Deactivate(ctx context.Context, workerCode string) error
-	Claim(ctx context.Context, taskID, idempotencyKey string) (ClaimResult, error)
-	Report(ctx context.Context, taskID, idempotencyKey string, result TaskResult) error
-	Renew(ctx context.Context, taskID string, req RenewRequest) (protocol.RenewResponse, error)
+	Claim(ctx context.Context, taskID, idempotencyKey string, req ClaimRequest) (ClaimResult, error)
+	Report(ctx context.Context, taskID, idempotencyKey string, req ReportRequest) error
+	Renew(ctx context.Context, taskID string, req RenewRequest) (RenewResult, error)
+}
+
+// ClaimRequest is the TaskClaimRequest body (openapi). claim / renew share the
+// schema; workerId == workerCode (ADR-035 §9). partitionInvocationId is optional.
+type ClaimRequest struct {
+	TenantID              string `json:"tenantId"`
+	WorkerID              string `json:"workerId"`
+	PartitionInvocationID string `json:"partitionInvocationId,omitempty"`
+}
+
+// ReportRequest is the TaskExecutionReportDto wire body (openapi). Required
+// fields [taskId, tenantId, workerId, success] are always populated; the
+// handler-supplied TaskResult fields (errorCode / outputs / resultSummary) are
+// folded in. Field names are a HARD contract — errorCode (not errorClass),
+// outputs (not output).
+type ReportRequest struct {
+	TaskID        string             `json:"taskId"`
+	TenantID      string             `json:"tenantId"`
+	WorkerID      string             `json:"workerId"`
+	Success       bool               `json:"success"`
+	ErrorCode     protocol.ErrorCode `json:"errorCode,omitempty"`
+	Outputs       map[string]any     `json:"outputs,omitempty"`
+	ResultSummary string             `json:"resultSummary,omitempty"`
+}
+
+// NewReportRequest folds a handler TaskResult into the wire report DTO, filling
+// the openapi-required identity + success fields.
+func NewReportRequest(taskID, tenantID, workerID string, result TaskResult) ReportRequest {
+	return ReportRequest{
+		TaskID:        taskID,
+		TenantID:      tenantID,
+		WorkerID:      workerID,
+		Success:       result.IsSuccess(),
+		ErrorCode:     result.ErrorCode,
+		Outputs:       result.Outputs,
+		ResultSummary: result.ResultSummary,
+	}
+}
+
+// RenewResult carries the decoded renew response plus the Revoked flag, set when
+// the platform returned 409 (lease reclaimed / zombie claim). On Revoked the
+// caller MUST stop the handler and abandon the report (openapi renew 409).
+type RenewResult struct {
+	protocol.RenewResponse
+	Revoked bool
 }
 
 // RegisterRequest is the WorkerHeartbeatDto fingerprint sent at startup
@@ -61,10 +107,11 @@ type ClaimResult struct {
 	Idempotent bool `json:"-"`
 }
 
-// RenewRequest is the TaskHeartbeatRequest lease-renew body.
+// RenewRequest is the TaskHeartbeatRequest lease-renew body (openapi). The
+// platform reads workerId (== workerCode, ADR-035 §9); tenantId is required.
 type RenewRequest struct {
-	WorkerCode string `json:"workerCode"`
-	TenantID   string `json:"tenantId"`
+	WorkerID string `json:"workerId"`
+	TenantID string `json:"tenantId"`
 }
 
 // ---------------------------------------------------------------------------
@@ -133,8 +180,10 @@ type HTTPTransport struct {
 	baseURL    string
 	httpClient *http.Client
 	// clientErrorCount accumulates non-auth 4xx errors toward the fail-fast
-	// threshold (protocol.ClientErrorFailFastThreshold).
-	clientErrorCount int
+	// threshold (protocol.ClientErrorFailFastThreshold). Accessed from multiple
+	// goroutines (heartbeat / lease / consume loops share one transport), so it
+	// is atomic.
+	clientErrorCount atomic.Int32
 	// sleep is injectable so tests don't pay real backoff time; defaults to
 	// time.Sleep (real backoff, per spec).
 	sleep func(time.Duration)
@@ -246,7 +295,7 @@ func (t *HTTPTransport) call(ctx context.Context, method, path string, body any,
 			status = 0 // transport error -> classify as retryable
 		}
 
-		decision := protocol.ClassifyHTTP(status, t.clientErrorCount, baseMs, attempts)
+		decision := protocol.ClassifyHTTP(status, int(t.clientErrorCount.Load()), baseMs, attempts)
 		switch decision.Action {
 		case "success":
 			return raw, false, nil
@@ -257,12 +306,12 @@ func (t *HTTPTransport) call(ctx context.Context, method, path string, body any,
 				return nil, false, &FatalError{Status: status, Op: op}
 			}
 			// 4xx fail-fast threshold reached.
-			t.clientErrorCount++
+			t.clientErrorCount.Add(1)
 			return nil, false, &FatalError{Status: status, Op: op}
 		case "not-found":
 			return nil, false, &NotFoundError{Op: op}
 		case "client-error":
-			t.clientErrorCount++
+			t.clientErrorCount.Add(1)
 			return nil, false, &ClientError{Status: status, Op: op}
 		case "retry-then-drop":
 			if status >= 500 {
@@ -320,9 +369,9 @@ func (t *HTTPTransport) Deactivate(ctx context.Context, workerCode string) error
 
 // Claim claims a dispatched task. Idempotency-Key dedups retries; 409 -> already
 // claimed/reclaimed (idempotent).
-func (t *HTTPTransport) Claim(ctx context.Context, taskID, idempotencyKey string) (ClaimResult, error) {
+func (t *HTTPTransport) Claim(ctx context.Context, taskID, idempotencyKey string, req ClaimRequest) (ClaimResult, error) {
 	var out ClaimResult
-	raw, idem, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/claim", nil, idempotencyKey, "claim")
+	raw, idem, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/claim", req, idempotencyKey, "claim")
 	if err != nil {
 		return out, err
 	}
@@ -335,21 +384,25 @@ func (t *HTTPTransport) Claim(ctx context.Context, taskID, idempotencyKey string
 	return out, nil
 }
 
-// Report posts the terminal TaskResult. Idempotency-Key dedups retries.
-func (t *HTTPTransport) Report(ctx context.Context, taskID, idempotencyKey string, result TaskResult) error {
-	_, _, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/report", result, idempotencyKey, "report")
+// Report posts the terminal TaskExecutionReportDto. Idempotency-Key dedups
+// retries.
+func (t *HTTPTransport) Report(ctx context.Context, taskID, idempotencyKey string, req ReportRequest) error {
+	_, _, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/report", req, idempotencyKey, "report")
 	return err
 }
 
-// Renew renews a task lease and decodes cancelRequested.
-func (t *HTTPTransport) Renew(ctx context.Context, taskID string, req RenewRequest) (protocol.RenewResponse, error) {
-	var out protocol.RenewResponse
-	raw, _, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/renew", req, "", "renew")
+// Renew renews a task lease and decodes cancelRequested. A 409 (lease reclaimed
+// / zombie claim) surfaces as RenewResult.Revoked=true with no error so the
+// caller stops the handler and abandons the report (openapi renew 409).
+func (t *HTTPTransport) Renew(ctx context.Context, taskID string, req RenewRequest) (RenewResult, error) {
+	var out RenewResult
+	raw, revoked, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/renew", req, "", "renew")
 	if err != nil {
 		return out, err
 	}
+	out.Revoked = revoked
 	if len(raw) > 0 {
-		if jerr := json.Unmarshal(raw, &out); jerr != nil {
+		if jerr := json.Unmarshal(raw, &out.RenewResponse); jerr != nil {
 			return out, fmt.Errorf("decode renew response: %w", jerr)
 		}
 	}

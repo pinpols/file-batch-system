@@ -95,16 +95,16 @@ func (c Config) groupID() string {
 // equivalent in effect to assignment.pause(). Offsets already fetched are not
 // committed until Commit() is called after pipeline acceptance.
 type Consumer struct {
-	cfg     Config
-	logger  *log.Logger
-	dialer  *kgo.Dialer
-	client  *kgo.Client
+	cfg    Config
+	logger *log.Logger
+	dialer *kgo.Dialer
+	client *kgo.Client
 
-	mu      sync.Mutex
-	reader  *kgo.Reader
-	topics  []string
-	paused  bool
-	woken   bool
+	mu     sync.Mutex
+	reader *kgo.Reader
+	topics []string
+	paused bool
+	woken  bool
 
 	// pending holds messages fetched-but-not-yet-committed, so Commit() can
 	// acknowledge exactly the offsets the pipeline accepted.
@@ -259,31 +259,34 @@ func (c *Consumer) newReader(topics []string) *kgo.Reader {
 // rebuilds the reader so newly created <taskType> topics get consumed. Any
 // uncommitted pending messages are dropped on rebuild (they will be redelivered
 // since they were never committed), preserving at-least-once.
-func (c *Consumer) maybeRefreshTopics() {
+//
+// It is called with c.mu held. The old reader is NOT closed here — closing a
+// kafka-go reader can block (it leaves the group), and doing so under c.mu would
+// stall a concurrent Wakeup()/Close()/Commit(). Instead the displaced reader is
+// returned so the caller can Close() it AFTER releasing the lock.
+func (c *Consumer) maybeRefreshTopics() (old *kgo.Reader) {
 	interval := c.cfg.TopicRefreshInterval
 	if interval <= 0 {
 		interval = DefaultTopicRefreshInterval
 	}
 	if time.Since(c.lastRefresh) < interval {
-		return
+		return nil
 	}
 	c.lastRefresh = time.Now()
 	topics, err := c.discoverTopics()
 	if err != nil {
 		c.logger.Printf("WARN kafka topic refresh failed: %v", err)
-		return
+		return nil
 	}
 	if len(topics) == 0 || sameTopics(topics, c.topics) {
-		return
+		return nil
 	}
 	c.logger.Printf("INFO kafka topic set changed old=%v new=%v; rebuilding reader", c.topics, topics)
-	old := c.reader
+	old = c.reader
 	c.reader = c.newReader(topics)
 	c.topics = topics
 	c.pending = nil
-	if old != nil {
-		_ = old.Close()
-	}
+	return old
 }
 
 // sameTopics compares two topic sets ignoring order.
@@ -324,9 +327,15 @@ func (c *Consumer) Poll() ([]client.Record, bool) {
 				return nil, false
 			}
 		}
-		c.maybeRefreshTopics()
+		oldReader := c.maybeRefreshTopics()
 		reader := c.reader
 		c.mu.Unlock()
+
+		// Close the displaced reader outside the lock (it can block leaving the
+		// group); a nil-check keeps the common no-refresh path allocation-free.
+		if oldReader != nil {
+			_ = oldReader.Close()
+		}
 
 		fetchCtx, cancel := context.WithTimeout(c.ctx, c.fetchTimeout())
 		msg, err := reader.FetchMessage(fetchCtx)

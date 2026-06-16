@@ -235,13 +235,15 @@ class TaskDispatcherTest {
     verify(http, never()).report(anyLong(), anyString(), any());
   }
 
-  // ─── REPORT 失败:不再 retry,等 orchestrator lease 超时 ──────────────────────
+  // ─── REPORT 传输失败:5xx/IO 退避重试,耗尽后吞掉,等 orchestrator lease 超时 ──────────
 
   @Test
   void reportFailureSwallowed() throws Exception {
+    // 关掉 report 重试(0 次)让本用例只验"吞异常不外抛 + 调一次"语义,避免退避 sleep 拖慢测试。
+    BatchPlatformClientConfig noRetryConfig = config.toBuilder().claimMax5xxRetries(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.report(anyLong(), anyString(), any())).thenThrow(new IOException("503 down"));
-    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+    dispatcher = new TaskDispatcher(noRetryConfig, Map.of("tt", noopHandler()), http);
 
     // 不应抛
     dispatcher.processInWorkerThread(msg("tt"));

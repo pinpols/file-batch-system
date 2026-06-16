@@ -42,6 +42,8 @@ test("transport: 503 then 200 → retry with backoff, eventual success", async (
   const slept: number[] = [];
   const transport = new HttpTransport({
     baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
     retryBaseMs: 5,
     retryMaxAttempts: 3,
     sleep: async (ms) => {
@@ -68,6 +70,8 @@ test("transport: 401 → FatalTransportError, no retry", async () => {
 
   const transport = new HttpTransport({
     baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
     sleep: async () => {},
   });
 
@@ -88,7 +92,7 @@ test("transport: 409 → idempotent success (register idempotent=true)", async (
     res.end("already");
   });
 
-  const transport = new HttpTransport({ baseUrl: srv.url, sleep: async () => {} });
+  const transport = new HttpTransport({ baseUrl: srv.url, tenantId: "tenant-A", workerCode: "w1", sleep: async () => {} });
   const ack = await transport.register({ workerCode: "w1" });
   assert.equal(ack.idempotent, true);
 
@@ -96,17 +100,93 @@ test("transport: 409 → idempotent success (register idempotent=true)", async (
   await srv.close();
 });
 
-test("transport: sets Idempotency-Key on claim/report", async () => {
+test("transport: sets Idempotency-Key + required tenantId/workerId on claim", async () => {
   let claimKey: string | undefined;
+  let claimBody = "";
   const srv = await startServer((req, res) => {
     claimKey = req.headers["idempotency-key"] as string | undefined;
-    res.statusCode = 200;
-    res.end("{}");
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      claimBody = Buffer.concat(chunks).toString("utf8");
+      res.statusCode = 200;
+      res.end("{}");
+    });
   });
 
-  const transport = new HttpTransport({ baseUrl: srv.url, sleep: async () => {} });
+  const transport = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
+    sleep: async () => {},
+  });
   await transport.claim("task-9", "my-idem-key");
   assert.equal(claimKey, "my-idem-key");
+  // TaskClaimRequest required fields: tenantId + workerId(==workerCode)
+  assert.deepEqual(JSON.parse(claimBody), { tenantId: "tenant-A", workerId: "w1" });
+
+  (transport as unknown as { close(): void }).close();
+  await srv.close();
+});
+
+test("transport: report carries tenantId/workerId + result fields + partitionInvocationId", async () => {
+  let reportBody = "";
+  const srv = await startServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      reportBody = Buffer.concat(chunks).toString("utf8");
+      res.statusCode = 200;
+      res.end("{}");
+    });
+  });
+
+  const transport = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
+    sleep: async () => {},
+  });
+  await transport.report(
+    "task-9",
+    { success: true, outputs: { rows: 2 }, partitionInvocationId: "inv-7" },
+    "rk",
+  );
+  const parsed = JSON.parse(reportBody);
+  assert.equal(parsed.tenantId, "tenant-A");
+  assert.equal(parsed.workerId, "w1");
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.outputs, { rows: 2 });
+  assert.equal(parsed.partitionInvocationId, "inv-7");
+
+  (transport as unknown as { close(): void }).close();
+  await srv.close();
+});
+
+test("transport: deactivate sends OFFLINE WorkerHeartbeatDto", async () => {
+  let body = "";
+  const srv = await startServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      body = Buffer.concat(chunks).toString("utf8");
+      res.statusCode = 200;
+      res.end("{}");
+    });
+  });
+
+  const transport = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
+    sleep: async () => {},
+  });
+  await transport.deactivate("w1");
+  const parsed = JSON.parse(body);
+  assert.equal(parsed.tenantId, "tenant-A");
+  assert.equal(parsed.workerCode, "w1");
+  assert.equal(parsed.status, "OFFLINE");
+  assert.ok(typeof parsed.heartbeatAt === "string" && parsed.heartbeatAt.length > 0);
 
   (transport as unknown as { close(): void }).close();
   await srv.close();
@@ -127,6 +207,8 @@ test("transport: request timeout aborts a hung request (treated as transport err
   const slept: number[] = [];
   const transport = new HttpTransport({
     baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
     timeoutMs: 50,
     retryBaseMs: 1,
     retryMaxAttempts: 3,

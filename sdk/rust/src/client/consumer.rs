@@ -26,6 +26,10 @@ pub struct TaskRecord {
     pub task_type: String,
     /// `schemaVersion` (`None` / empty → treated as v1).
     pub schema_version: Option<String>,
+    /// `partitionInvocationId` — the per-partition invocation token the real
+    /// adapter threads into claim/renew/report bodies (ADR-014, fixture 10).
+    /// `None` when the dispatch message omits it.
+    pub partition_invocation_id: Option<String>,
 }
 
 impl TaskRecord {
@@ -35,7 +39,15 @@ impl TaskRecord {
             tenant_id: tenant_id.to_string(),
             task_type: task_type.to_string(),
             schema_version: schema_version.map(|s| s.to_string()),
+            partition_invocation_id: None,
         }
+    }
+
+    /// Builder-style: attach the `partitionInvocationId` carried by the dispatch
+    /// message so it can flow into claim/renew/report.
+    pub fn with_partition_invocation_id(mut self, id: Option<String>) -> Self {
+        self.partition_invocation_id = id;
+        self
     }
 }
 

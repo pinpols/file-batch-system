@@ -1,6 +1,7 @@
 package com.example.batch.sdk.dispatcher;
 
 import com.example.batch.sdk.task.SdkSchedulingContext;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
@@ -20,7 +21,8 @@ import java.util.Set;
  * @param taskId orchestrator 主键
  * @param tenantId 租户 ID
  * @param jobCode 作业编码
- * @param taskType 任务类型(SDK 用它路由到对应 {@link com.example.batch.sdk.task.SdkTaskHandler})
+ * @param taskType 任务类型(SDK 用它路由到对应 {@link com.example.batch.sdk.task.SdkTaskHandler});绑定平台 v2 JSON
+ *     字段 {@code workerType}(v1 旧名 {@code taskType} 经 {@link JsonAlias} 向后兼容)
  * @param taskInstanceId 本次执行的 instance ID
  * @param parameters 业务参数(jackson 反序列化)
  * @param runtimeAttributes 框架属性(traceId / bizDate / pipelineInstanceId 等)
@@ -32,7 +34,7 @@ public record TaskDispatchMessage(
     @JsonProperty("taskId") Long taskId,
     @JsonProperty("tenantId") String tenantId,
     @JsonProperty("jobCode") String jobCode,
-    @JsonProperty("taskType") String taskType,
+    @JsonProperty("workerType") @JsonAlias("taskType") String taskType,
     @JsonProperty("taskInstanceId") String taskInstanceId,
     @JsonProperty("parameters") Map<String, Object> parameters,
     @JsonProperty("runtimeAttributes") Map<String, Object> runtimeAttributes,

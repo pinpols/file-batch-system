@@ -31,6 +31,7 @@ function fakeAssignment(): Assignment & { paused: boolean } {
 
 function pipeline(opts: {
   tenantId?: string;
+  workerTypes?: readonly string[];
   inFlight?: number;
   maxConcurrent?: number;
   assignment?: Assignment;
@@ -38,6 +39,7 @@ function pipeline(opts: {
 }) {
   return new MessagePipeline({
     tenantId: opts.tenantId ?? "tenant-A",
+    workerTypes: opts.workerTypes,
     inFlight: () => opts.inFlight ?? 0,
     maxConcurrent: opts.maxConcurrent ?? 4,
     assignment: opts.assignment ?? fakeAssignment(),
@@ -78,6 +80,42 @@ test("consumer: drops foreign tenantId (§1.9), no commit", async () => {
   assert.equal(out.kind, "dropped-tenant");
   assert.equal(out.committed, false);
   assert.equal(accepted, false);
+});
+
+test("consumer: drops message whose workerType is not served, no commit", async () => {
+  let accepted = false;
+  const p = pipeline({
+    workerTypes: ["IMPORT"],
+    onAccepted: async () => { accepted = true; },
+  });
+  const out = await p.onMessage({
+    value: JSON.stringify({ taskId: "t6", tenantId: "tenant-A", workerType: "EXPORT" }),
+  });
+  assert.equal(out.kind, "not-for-worker");
+  assert.equal(out.committed, false);
+  assert.equal(accepted, false);
+});
+
+test("consumer: accepts message whose workerType is served", async () => {
+  let accepted = false;
+  const p = pipeline({
+    workerTypes: ["IMPORT", "EXPORT"],
+    onAccepted: async () => { accepted = true; },
+  });
+  const out = await p.onMessage({
+    value: JSON.stringify({ taskId: "t7", tenantId: "tenant-A", workerType: "EXPORT" }),
+  });
+  assert.equal(out.kind, "accepted");
+  assert.equal(out.committed, true);
+  assert.equal(accepted, true);
+});
+
+test("consumer: no workerTypes configured → serves all (no routing filter)", async () => {
+  const p = pipeline({});
+  const out = await p.onMessage({
+    value: JSON.stringify({ taskId: "t8", tenantId: "tenant-A", workerType: "ANYTHING" }),
+  });
+  assert.equal(out.kind, "accepted");
 });
 
 test("consumer: backpressure pauses assignment when in-flight at cap", async () => {

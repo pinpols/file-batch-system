@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -196,7 +197,10 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 // terminal result. Runs the handler in a goroutine bounded by maxConcurrent via
 // the in-flight registry (backpressure gate already enforced upstream).
 func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
-	claim, err := w.transport.Claim(ctx, msg.TaskID, msg.IdempotencyKey)
+	claim, err := w.transport.Claim(ctx, msg.TaskID, msg.IdempotencyKey, ClaimRequest{
+		TenantID: w.cfg.TenantID,
+		WorkerID: w.cfg.WorkerCode,
+	})
 	if err != nil {
 		if _, ok := errAsDrop(err); ok {
 			w.logger.Printf("WARN claim dropped taskId=%s: %v", msg.TaskID, err)
@@ -224,10 +228,18 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 				w.consumer.Resume()
 			}
 		}()
+		// A panicking handler must not crash the worker process: recover, log,
+		// and report the failure as a terminal result.
+		defer func() {
+			if r := recover(); r != nil {
+				w.logger.Printf("ERROR handler panic taskId=%s: %v", msg.TaskID, r)
+				w.report(msg, Fail(protocol.ErrorCodeExecutionFailed, fmt.Sprintf("panic: %v", r)))
+			}
+		}()
 
 		// §1.8 parameters-path sensitive scan -> SECURITY_REJECTED.
 		if res, rejected := w.validator.ValidateParameters(claim.EffectiveConfig); rejected {
-			w.report(ctx, msg, res)
+			w.report(msg, res)
 			return
 		}
 
@@ -243,13 +255,19 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 		if sig.IsCancellationRequested() && result.IsSuccess() {
 			result = Fail(protocol.ErrorCodeCancelled, "task cancelled")
 		}
-		w.report(ctx, msg, result)
+		w.report(msg, result)
 	}()
 }
 
-// report posts the terminal result with the dispatch idempotency key.
-func (w *Worker) report(ctx context.Context, msg TaskDispatchMessage, result TaskResult) {
-	if err := w.transport.Report(ctx, msg.TaskID, msg.IdempotencyKey, result); err != nil {
+// report posts the terminal result with the dispatch idempotency key. It uses a
+// fresh background context (NOT rootCtx) so the terminal report still lands
+// during graceful Stop, which cancels rootCtx (§1.6 — a cancelled report would
+// otherwise lose the task outcome).
+func (w *Worker) report(msg TaskDispatchMessage, result TaskResult) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req := NewReportRequest(msg.TaskID, w.cfg.TenantID, w.cfg.WorkerCode, result)
+	if err := w.transport.Report(ctx, msg.TaskID, msg.IdempotencyKey, req); err != nil {
 		w.logger.Printf("WARN report failed taskId=%s code=%s: %v", msg.TaskID, result.ErrorCode, err)
 	}
 }

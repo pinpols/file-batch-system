@@ -6,7 +6,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { WorkerLifecycle } from "../src/client/lifecycle.ts";
-import { FakePlatform } from "../src/client/testkit.ts";
+import { FakePlatform, fatalClaimTransport } from "../src/client/testkit.ts";
+import { FakeConsumer } from "../src/client/consumer.ts";
 import {
   taskSuccess,
   type TaskContext,
@@ -63,6 +64,63 @@ test("lifecycle: start registers, starts schedulers, then runs claim→execute�
   assert.equal(seenCtx?.traceId, "trace-1");
 
   await lc.stop(200);
+});
+
+test("lifecycle: threads partitionInvocationId from claim into report (+ default bodies carry required ids)", async () => {
+  const platform = new FakePlatform(
+    { claim: { effectiveConfig: {}, partitionInvocationId: "inv-42" } },
+  );
+  platform.feedMessages({ taskId: "task-pi", tenantId: "tenant-A", workerType: "IMPORT" });
+
+  const handler: TaskHandler = { execute: async () => taskSuccess() };
+  const lc = new WorkerLifecycle({
+    config: baseConfig,
+    transport: platform.transport,
+    consumer: platform.consumer,
+    handler,
+    logger: silentLogger,
+    installSignalHandlers: false,
+  });
+
+  await lc.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  const claim = platform.transport.calls.find((c) => c.op === "claim")!;
+  // claim body (args[1] is idempotencyKey for FakeTransport.claim; body asserted via HttpTransport tests)
+  const report = platform.transport.calls.find((c) => c.op === "report")!;
+  const body = report.args[1] as Record<string, unknown>;
+  assert.equal(body.partitionInvocationId, "inv-42", "report echoes the claim invocation id");
+  assert.ok(claim, "claim happened");
+
+  await lc.stop(200);
+
+  // deactivate default body carries the OFFLINE WorkerHeartbeatDto via HttpTransport;
+  // here FakeTransport.deactivate only records workerCode, so assert it ran.
+  assert.ok(platform.transport.countOf("deactivate") >= 1);
+});
+
+test("lifecycle: 401 on claim fails fast (stops + deactivates)", async () => {
+  const transport = fatalClaimTransport(401);
+  const consumer = new FakeConsumer([
+    { value: JSON.stringify({ taskId: "task-401", tenantId: "tenant-A", workerType: "IMPORT" }) },
+  ]);
+  const handler: TaskHandler = { execute: async () => taskSuccess() };
+
+  const lc = new WorkerLifecycle({
+    config: baseConfig,
+    transport,
+    consumer,
+    handler,
+    logger: silentLogger,
+    installSignalHandlers: false,
+  });
+
+  await lc.start();
+  // allow the task IIFE (claim → 401 → fail-fast stop) to run
+  await new Promise((r) => setTimeout(r, 60));
+
+  assert.equal(lc.fsm, "DRAINING", "auth failure drove a fail-fast stop");
+  assert.ok(lc.isDraining, "draining after 401");
 });
 
 test("lifecycle: stop drains in-flight then deactivates (order)", async () => {

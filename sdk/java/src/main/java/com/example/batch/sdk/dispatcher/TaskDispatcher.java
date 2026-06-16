@@ -278,11 +278,14 @@ public class TaskDispatcher {
     String partitionInvocationId = extractPartitionInvocation(msg);
     if (partitionInvocationId != null) {
       claimBody.put("partitionInvocationId", partitionInvocationId);
-      // 留存供 renew(只有 taskId、拿不到 msg)+ report 带上,贯穿分区不变量。
-      partitionInvocations.put(msg.taskId(), partitionInvocationId);
     }
     if (!claimWithRetry(msg, idemClaim, claimBody)) {
+      // claim 失败直接返回,不进 finally 清理块 —— partitionInvocations 必须在 claim 成功后才落,否则泄漏。
       return;
+    }
+    if (partitionInvocationId != null) {
+      // 留存供 renew(只有 taskId、拿不到 msg)+ report 带上,贯穿分区不变量。
+      partitionInvocations.put(msg.taskId(), partitionInvocationId);
     }
     inFlight.add(msg.taskId());
     CancellationSignal cancellation = new CancellationSignal();
@@ -335,7 +338,7 @@ public class TaskDispatcher {
         body.put("errorCode", result.error().getClass().getSimpleName());
         body.put("resultSummary", result.error().getMessage());
       }
-      httpClient.report(msg.taskId(), idemReport, body);
+      reportWithRetry(msg.taskId(), idemReport, body);
       resetClientErrorStreak();
     } catch (PlatformHttpException httpEx) {
       // REPORT 失败:orchestrator 会因 lease 超时自动 retry 派单。非鉴权 4xx 计入连续错误,持续则 fail-fast(P7-2)。
@@ -511,6 +514,90 @@ public class TaskDispatcher {
   }
 
   /**
+   * REPORT 重试 + 分类(复用 CLAIM 的同一套 5xx 指数退避配置 {@link
+   * BatchPlatformClientConfig#getClaimMax5xxRetries()} / {@link
+   * BatchPlatformClientConfig#getClaimRetryBaseDelay()}):
+   *
+   * <ul>
+   *   <li>2xx → 正常返回
+   *   <li>401/403 → 标记 dispatcher fatal,直接抛出(重试无益,等运维介入)
+   *   <li>其它 4xx(含 409)→ 不重试,直接抛出(交由调用方 catch 分类计数 / 记 log)
+   *   <li>5xx / 传输错误 → 指数退避重试 {@code maxRetries} 次,耗尽后抛出最后一次异常
+   * </ul>
+   *
+   * <p>契约见 {@code docs/api/sdk-contract-fixtures/09-report-5xx-retry-backoff.json}:5xx 必须指数退避
+   * (200/400/800ms),不能定长、不能无限重试、不能阻塞心跳调度。退避 sleep 被打断时抛出 {@link IOException} 停止重试。
+   */
+  void reportWithRetry(Long taskId, String idemKey, Map<String, Object> body)
+      throws IOException, PlatformHttpException {
+    int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
+    long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
+    int attempt = 0;
+    while (true) {
+      try {
+        httpClient.report(taskId, idemKey, body);
+        return;
+      } catch (PlatformHttpException httpEx) {
+        if (httpEx.isAuthError()) {
+          fatal.set(true);
+          log.error(
+              "REPORT auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
+                  + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
+              httpEx.statusCode(),
+              taskId);
+          throw httpEx;
+        }
+        if (!httpEx.isServerError()) {
+          // 其它 4xx(含 409):客户端构造问题 / 已被处理,重试无益,交回调用方分类。
+          throw httpEx;
+        }
+        if (attempt >= maxRetries) {
+          throttledLog.warn(
+              "report_5xx_exhausted",
+              "REPORT 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
+                  + "(orchestrator will reclaim on lease timeout)",
+              httpEx.statusCode(),
+              taskId,
+              maxRetries);
+          throw httpEx;
+        }
+        long delayMs = backoffWithJitter(baseDelayMs, attempt); // 200 / 400 / 800 ms ... + jitter
+        log.info(
+            "REPORT 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
+            httpEx.statusCode(),
+            taskId,
+            attempt + 1,
+            delayMs);
+        if (!sleepInterruptible(delayMs)) {
+          throw new IOException("report retry interrupted for taskId=" + taskId);
+        }
+        attempt++;
+      } catch (IOException ioEx) {
+        if (attempt >= maxRetries) {
+          throttledLog.warn(
+              "report_transport_exhausted",
+              "REPORT transport error for taskId={} exhausted {} retries, giving up: {}",
+              taskId,
+              maxRetries,
+              ioEx.getMessage());
+          throw ioEx;
+        }
+        long delayMs = backoffWithJitter(baseDelayMs, attempt);
+        log.info(
+            "REPORT transport error for taskId={} attempt={} retry in {}ms: {}",
+            taskId,
+            attempt + 1,
+            delayMs,
+            ioEx.getMessage());
+        if (!sleepInterruptible(delayMs)) {
+          throw new IOException("report retry interrupted for taskId=" + taskId, ioEx);
+        }
+        attempt++;
+      }
+    }
+  }
+
+  /**
    * P7-2:记一次(非鉴权、非 409)4xx 客户端错误。连续达阈值 → fatal。{@code op} 仅用于日志(CLAIM / REPORT)。 阈值 ≤ 0
    * 时关闭(只计数不触发)。
    */
@@ -577,7 +664,7 @@ public class TaskDispatcher {
         body.put("errorCode", error.getClass().getSimpleName());
         body.put("resultSummary", error.getMessage());
       }
-      httpClient.report(msg.taskId(), idem, body);
+      reportWithRetry(msg.taskId(), idem, body);
     } catch (Exception ex) {
       log.error("reportFailure failed for taskId={}: {}", msg.taskId(), ex.getMessage());
     }

@@ -47,6 +47,7 @@ pub use scheduler::{
 };
 pub use sensitive::{SensitiveValidator, Validation};
 pub use testkit::FakePlatform;
+#[allow(deprecated)] // HttpTransport is a deprecated stub re-exported to pin the trait surface
 pub use transport::{
     classify_response, outcome_from_decision, FakeTransport, HttpResponse, HttpTransport,
     Transport, TransportOutcome,

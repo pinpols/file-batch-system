@@ -108,6 +108,18 @@ pub trait Transport: Send + Sync {
 /// panics by design — it exists to pin the trait surface and document the §1.1
 /// HTTP-client requirements (keep-alive pool, custom `Idempotency-Key` header,
 /// `timeout < heartbeat/3`).
+///
+/// # Not a working transport
+/// **Every method panics (`unimplemented!`).** This type is an unimplemented
+/// stub kept only to pin the [`Transport`] surface; do **not** wire it into a
+/// worker. Use [`FakeTransport`] in tests, and a real client-backed adapter in
+/// production. The `#[deprecated]` is a compile-time tripwire so a tenant cannot
+/// accidentally construct/use it without a warning.
+#[deprecated(
+    note = "HttpTransport is an unimplemented stub — every method panics. Pins the \
+            Transport trait surface only (待 reqwest/ureq adapter). Use FakeTransport \
+            in tests or a real client-backed Transport in production; do not wire this in."
+)]
 #[derive(Debug, Clone)]
 pub struct HttpTransport {
     pub base_url: String,
@@ -115,6 +127,7 @@ pub struct HttpTransport {
     pub timeout_ms: i64,
 }
 
+#[allow(deprecated)] // the stub's own impl legitimately names the deprecated type
 impl HttpTransport {
     pub fn new(base_url: &str) -> Self {
         Self {
@@ -133,6 +146,7 @@ impl HttpTransport {
     }
 }
 
+#[allow(deprecated)] // the stub's own impl legitimately names the deprecated type
 impl Transport for HttpTransport {
     fn register(&self, _worker_code: &str, _body: &str) -> HttpResponse {
         Self::unimplemented("register")
