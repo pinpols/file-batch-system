@@ -1,13 +1,22 @@
 name: sdk-contract-parity
 
-# Lane P (drift guard): enforce Java SDK ↔ Python SDK ↔ shared-constants/fixtures
-# stay in lockstep. Three independent jobs run in parallel; any one failing
-# blocks the PR.
+# Lane P (drift guard): enforce Java SDK ↔ Python SDK ↔ (future Go/TS/Rust BYO SDKs)
+# ↔ shared-constants/fixtures stay in lockstep. Each language runs an independent
+# contract job in parallel; any one failing blocks the PR.
 #
-# Triggered ONLY by Java SDK, Python SDK, fixture or shared-constants changes —
-# unrelated PRs do not pay the Maven cold-start cost. Matches the pr-gate
-# paths-ignore for `.github/workflows/**` so a workflow-only PR still runs
-# this file via the workflow-lint pipeline rather than re-triggering Maven.
+# Conformance contract (what makes a BYO SDK compliant) is pinned in
+# docs/sdk/byo-conformance-contract.md. Every new-language SDK MUST:
+#   (a) consume docs/api/sdk-shared-constants.yaml (no re-authored literals),
+#   (b) pass every fixture's machine-assertable `then.expect` block,
+#   (c) add its `<lang>-contract` job + path here.
+# The per-language jobs below get added as each SDK lands; the `paths:` entries
+# for batch-worker-sdk-{go,typescript,rust} are pre-wired so their first PR
+# triggers this workflow.
+#
+# Triggered ONLY by SDK, fixture or shared-constants/contract changes — unrelated
+# PRs do not pay the Maven cold-start cost. Matches the pr-gate paths-ignore for
+# `.github/workflows/**` so a workflow-only PR still runs this file via the
+# workflow-lint pipeline rather than re-triggering Maven.
 
 on:
   pull_request:
@@ -18,9 +27,14 @@ on:
       - 'batch-common/src/main/java/com/example/batch/common/enums/**'
       - 'batch-common/src/main/java/com/example/batch/common/security/**'
       - 'batch-worker-sdk-python/**'
+      # BYO SDKs (pre-wired; per-language contract jobs added when each lands)
+      - 'batch-worker-sdk-go/**'
+      - 'batch-worker-sdk-typescript/**'
+      - 'batch-worker-sdk-rust/**'
       - 'docs/api/sdk-contract-fixtures/**'
       - 'docs/api/sdk-shared-constants.yaml'
       - 'docs/api/orchestrator-internal.openapi.yaml'
+      - 'docs/sdk/byo-conformance-contract.md'
       - '.github/workflows/sdk-contract-parity.yml'
   workflow_dispatch:
 
@@ -88,26 +102,85 @@ jobs:
       - name: Run shared-constants parity stub
         run: pytest tests/test_shared_constants_parity.py -v
 
+  # --- BYO SDKs (Go / TypeScript / Rust): each runs its own conformance runner
+  # over the shared fixtures' then.expect + shared-constants parity. Contract:
+  # docs/sdk/byo-conformance-contract.md §1.3.
+  typescript-contract:
+    name: typescript contract (decision core + conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Unit + conformance live under test/; the broker integration test (kafka/*.integration.test.ts)
+      # needs kafkajs + a live broker and is run locally/manually, NOT in this broker-free job.
+      - name: Run conformance + parity (node --test, type-stripped)
+        run: node --test --experimental-strip-types 'batch-worker-sdk-typescript/test/**/*.test.ts'
+
+  go-contract:
+    name: go contract (decision core + conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run conformance + parity + unit (root module, zero-dep)
+        working-directory: batch-worker-sdk-go
+        run: go vet ./... && go test ./...
+      - name: Build Kafka adapter (nested module, segmentio/kafka-go)
+        working-directory: batch-worker-sdk-go/kafka
+        run: go build ./... && go vet ./...
+
+  rust-contract:
+    name: rust contract (decision core + conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Run conformance + parity + unit (default features, zero-dep)
+        working-directory: batch-worker-sdk-rust
+        run: cargo test
+      # Kafka adapter is feature-gated (rdkafka builds librdkafka via cmake).
+      # Best-effort compile-check; not a hard gate until a broker-capable runner exists.
+      - name: Install librdkafka build deps
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev
+        continue-on-error: true
+      - name: Compile-check Kafka adapter (--features kafka)
+        working-directory: batch-worker-sdk-rust
+        run: cargo check --features kafka
+        continue-on-error: true
+
   # Parity report — soft-mode: log diff between Java and Python pass sets,
   # but never fail the build (Python is xfail until Lane Q lands). When
   # Lane Q is done and we expect symmetric pass sets, remove `|| true`.
   parity-report:
     name: parity report (log-only)
     runs-on: ubuntu-latest
-    needs: [java-contract, python-contract]
-    if: always() && (needs.java-contract.result == 'success' || needs.python-contract.result == 'success')
+    needs: [java-contract, python-contract, typescript-contract, go-contract, rust-contract]
+    if: always()
     steps:
       - uses: actions/checkout@v4
       - name: Summarize
         env:
           JAVA_RESULT: ${{ needs.java-contract.result }}
           PYTHON_RESULT: ${{ needs.python-contract.result }}
+          TS_RESULT: ${{ needs.typescript-contract.result }}
+          GO_RESULT: ${{ needs.go-contract.result }}
+          RUST_RESULT: ${{ needs.rust-contract.result }}
         run: |
           {
             echo "## SDK contract parity (log-only)"
             echo ""
             echo "- Java contract job: ${JAVA_RESULT}"
             echo "- Python contract job: ${PYTHON_RESULT}"
+            echo "- TypeScript contract job: ${TS_RESULT}"
+            echo "- Go contract job: ${GO_RESULT}"
+            echo "- Rust contract job: ${RUST_RESULT}"
             echo ""
-            echo "Python is xfail until Lane Q completes. Once Lane Q closes, tighten this job to fail on pass-set diff."
+            echo "Python is xfail until Lane Q completes. Go/TS/Rust are hard-gated by their own jobs above."
           } >> "$GITHUB_STEP_SUMMARY"

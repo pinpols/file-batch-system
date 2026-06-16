@@ -1,0 +1,28 @@
+[package]
+name = "batch-worker-sdk"
+version = "1.1.0"
+edition = "2021"
+description = "BYO worker SDK decision core + conformance runner (Rust reference impl, zero-dependency)"
+license = "Apache-2.0"
+
+[lib]
+name = "batch_worker_sdk"
+path = "src/lib.rs"
+
+# The default build is zero-dependency: the decision core, the conformance
+# runner, the constants-parity test, and the minimal JSON / YAML parsers are all
+# std-only. The OPTIONAL `kafka` feature (phase-3 adapter, src/kafka.rs) is the
+# only thing that pulls external crates, and only when explicitly enabled.
+[features]
+# Real Kafka consumer adapter (rdkafka). Off by default → default build stays
+# std-only and the phase-1/2 tests are unaffected.
+kafka = ["dep:rdkafka", "dep:serde", "dep:serde_json"]
+
+[dependencies]
+# All optional + behind the `kafka` feature. `default-features = true` keeps
+# librdkafka's bundled build/SSL/SASL features that SCRAM-SHA-512 + SSL need.
+rdkafka = { version = "0.36", optional = true, default-features = true }
+serde = { version = "1", optional = true, features = ["derive"] }
+serde_json = { version = "1", optional = true }
+
+[dev-dependencies]

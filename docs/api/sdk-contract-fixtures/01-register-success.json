@@ -37,7 +37,8 @@
   },
   "then": {
     "sdkExpectedAction": "transition FSM to NORMAL; start HeartbeatScheduler (30s interval); start LeaseRenewalScheduler (60s interval); start Kafka consumer subscribe to topic pattern",
-    "sdkMustNot": ["block on register response > httpTimeout", "include apiKey in request body (走 Authorization header)"]
+    "sdkMustNot": ["block on register response > httpTimeout", "include apiKey in request body (走 Authorization header)"],
+    "expect": { "action": "register-online", "fsmTransition": "NORMAL", "startSchedulers": ["heartbeat", "leaseRenew"], "kafka": "subscribe" }
   },
   "references": ["wire-protocol.md §4", "openapi: /internal/workers/register"]
 }
