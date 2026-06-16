@@ -58,8 +58,15 @@ public class ConsoleLoginService {
     }
     String tenantId = account.tenantId();
     long sessionVersion = sessionRegistry.nextSessionVersion(account.username(), tenantId);
-    return jwtService.issueToken(
-        account.username(), tenantId, new LinkedHashSet<>(account.authorities()), sessionVersion);
+    // 登录响应带 mustChangePassword 标记:FE 据此跳转改密页;敏感操作拦截见
+    // ConsoleMustChangePasswordGuard(改密前仅放行 auth/改密端点)。
+    return jwtService
+        .issueToken(
+            account.username(),
+            tenantId,
+            new LinkedHashSet<>(account.authorities()),
+            sessionVersion)
+        .withMustChangePassword(account.mustChangePassword());
   }
 
   private BizException invalidCredentials() {

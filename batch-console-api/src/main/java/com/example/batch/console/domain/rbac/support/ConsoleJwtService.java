@@ -257,7 +257,8 @@ public class ConsoleJwtService {
         expiresAt,
         username,
         tenantId,
-        authorities == null ? Set.of() : new LinkedHashSet<>(authorities));
+        authorities == null ? Set.of() : new LinkedHashSet<>(authorities),
+        false);
   }
 
   public ConsolePrincipal authenticate(String token) {

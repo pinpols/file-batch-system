@@ -3,6 +3,7 @@ package com.example.batch.console.domain.rbac.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -91,7 +92,8 @@ class ConsoleUserAccountControllerTest {
 
     service.resetPassword(42L, "newSecurePass");
 
-    verify(userAccountMapper).updatePasswordHash(42L, "$argon2id$...");
+    // 管理员 reset 置 must_change_password=true,要求被重置者下次登录强制改密
+    verify(userAccountMapper).updatePasswordHashAndMustChange(42L, "$argon2id$...", true);
     verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
   }
 
@@ -107,7 +109,8 @@ class ConsoleUserAccountControllerTest {
                 assertThat(((BizException) ex).getMessageArgs())
                     .anyMatch(a -> a != null && a.toString().contains("user account not found")));
 
-    verify(userAccountMapper, never()).updatePasswordHash(anyLong(), anyString());
+    verify(userAccountMapper, never())
+        .updatePasswordHashAndMustChange(anyLong(), anyString(), anyBoolean());
     verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
   }
 

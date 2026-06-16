@@ -11,18 +11,32 @@
         <result column="password_hash" property="passwordHash"/>
         <result column="authorities_csv" property="authoritiesCsv"/>
         <result column="enabled" property="enabled"/>
+        <result column="must_change_password" property="mustChangePassword"/>
     </resultMap>
 
     <!-- 认证路径专用：返回完整 entity 含 password_hash，供 spring security UserDetailsService 加载。 -->
     <select id="findByUsernameIgnoreCase" resultMap="userAccountEntityMap">
-        select id, tenant_id, username, display_name, password_hash, authorities_csv, enabled
+        select id, tenant_id, username, display_name, password_hash, authorities_csv, enabled,
+               must_change_password
           from batch.console_user_account
          where lower(username) = lower(#{username})
          limit 1
     </select>
 
+    <!-- 启动期默认密码守护:只取内置系统账号的 hash + must_change 标志比对出厂弱口令。 -->
+    <select id="selectBuiltinSystemAccounts" resultMap="userAccountEntityMap">
+        select id, tenant_id, username, display_name, password_hash, authorities_csv, enabled,
+               must_change_password
+          from batch.console_user_account
+         where tenant_id = 'system'
+           and username in
+        <foreach collection="usernames" item="u" open="(" separator="," close=")">
+            #{u}
+        </foreach>
+    </select>
+
     <select id="selectByQuery" resultType="map">
-        select id, tenant_id, username, display_name, authorities_csv, enabled, created_at, updated_at
+        select id, tenant_id, username, display_name, authorities_csv, enabled, must_change_password, created_at, updated_at
         from batch.console_user_account
         <where>
             <if test="tenantId != null and tenantId != ''">
@@ -52,14 +66,14 @@
     </select>
 
     <select id="selectById" resultType="map">
-        select id, tenant_id, username, display_name, authorities_csv, enabled, created_at, updated_at
+        select id, tenant_id, username, display_name, authorities_csv, enabled, must_change_password, created_at, updated_at
         from batch.console_user_account
         where id = #{id}
         limit 1
     </select>
 
     <select id="selectByUsername" resultType="map">
-        select id, tenant_id, username, display_name, authorities_csv, enabled, created_at, updated_at
+        select id, tenant_id, username, display_name, authorities_csv, enabled, must_change_password, created_at, updated_at
         from batch.console_user_account
         where lower(username) = lower(#{username})
         limit 1
@@ -84,6 +98,14 @@
         update batch.console_user_account
         set password_hash = #{passwordHash},
             updated_at    = current_timestamp
+        where id = #{id}
+    </update>
+
+    <update id="updatePasswordHashAndMustChange">
+        update batch.console_user_account
+        set password_hash        = #{passwordHash},
+            must_change_password = #{mustChangePassword},
+            updated_at           = current_timestamp
         where id = #{id}
     </update>
 

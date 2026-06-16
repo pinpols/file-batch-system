@@ -28,4 +28,10 @@ public interface FileTemplateConfigMapper {
   int deleteById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   int upsertFileTemplateConfig(@Param("p") FileTemplateConfigUpsertParam p);
+
+  /**
+   * 租户就绪自检专用:返回未删除模板的最小完整性字段 (templateCode, templateType, enabled, default_query_sql,
+   * field_mappings, naming_rule)。只读,供 readiness 端点判定关键字段是否空占位。
+   */
+  List<Map<String, Object>> selectReadinessRows(@Param("tenantId") String tenantId);
 }
