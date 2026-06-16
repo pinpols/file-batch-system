@@ -20,6 +20,8 @@ allowed_file() {
   # 历史遗留脚本白名单。白名单只允许继续存在,不代表推荐新增同类写法。
   case "$1" in
     scripts/ci/check-sql-config-boundaries.sh) return 0 ;;
+    # 守护脚本:故意内联 SQL/DDL 关键词(on conflict / DROP TABLE 等)作检测模式,非真实执行。
+    scripts/ci/check-db-scripts-safety.sh) return 0 ;;
     load-tests/scripts/cleanup-worker-load-data.sh) return 0 ;;
     load-tests/scripts/prepare-worker-load-data.sh) return 0 ;;
     load-tests/scripts/run-control-plane-worker-benchmark.sh) return 0 ;;
