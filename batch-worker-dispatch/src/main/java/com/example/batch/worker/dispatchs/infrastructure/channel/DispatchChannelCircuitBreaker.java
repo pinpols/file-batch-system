@@ -47,10 +47,23 @@ public class DispatchChannelCircuitBreaker {
     if (!properties.isEnabled()) {
       return;
     }
-    int n = failures.computeIfAbsent(key, k -> new AtomicInteger()).incrementAndGet();
-    if (n >= properties.getFailureThreshold()) {
+    int threshold = properties.getFailureThreshold();
+    // 原子地累加并在达阈值时清零：compute 的 remapping function 在该 key 的 bin 锁内执行，
+    // 与并发的 compute/merge 互斥，消除"incrementAndGet 后再 remove"两步之间的 check-then-act
+    // 窗口（旧实现里 remove 与并发 computeIfAbsent 之间会丢失失败计数、熔断略延）。
+    // 返回 null 表示从 map 删除该 entry（达阈值后清零计数）；否则保留累加后的计数器。
+    AtomicInteger remaining =
+        failures.compute(
+            key,
+            (k, current) -> {
+              AtomicInteger counter = current == null ? new AtomicInteger() : current;
+              if (counter.incrementAndGet() >= threshold) {
+                return null;
+              }
+              return counter;
+            });
+    if (remaining == null) {
       openUntil.put(key, BatchDateTimeSupport.utcNow().plusMillis(properties.getCooldownMillis()));
-      failures.remove(key);
     }
   }
 

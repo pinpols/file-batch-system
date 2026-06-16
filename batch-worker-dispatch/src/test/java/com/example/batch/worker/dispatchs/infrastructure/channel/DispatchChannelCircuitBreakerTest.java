@@ -3,6 +3,10 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -96,6 +100,52 @@ class DispatchChannelCircuitBreakerTest {
 
     // a different channel is unaffected
     assertThat(circuitBreaker.allow("ch-good")).isTrue();
+  }
+
+  @Test
+  void shouldOpenCircuitWhenFailuresArriveConcurrently() throws InterruptedException {
+    // arrange: 高阈值 + 多线程并发累加，验证 compute 原子累加不丢计数、恰好达阈值即熔断。
+    // 旧实现 incrementAndGet 后 remove 的 check-then-act 窗口在并发下会偶发丢失计数 → 熔断略延。
+    int threshold = 200;
+    properties.setFailureThreshold(threshold);
+    DispatchChannelCircuitBreaker breaker = new DispatchChannelCircuitBreaker(properties);
+
+    int threads = 16;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    CountDownLatch start = new CountDownLatch(1);
+    CountDownLatch done = new CountDownLatch(threads);
+    int perThread = threshold / threads; // 16 * 12 = 192 < threshold，熔断前不能触发
+
+    // act
+    for (int t = 0; t < threads; t++) {
+      pool.submit(
+          () -> {
+            try {
+              start.await();
+              for (int i = 0; i < perThread; i++) {
+                breaker.recordFailure(CHANNEL);
+              }
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            } finally {
+              done.countDown();
+            }
+          });
+    }
+    start.countDown();
+    assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+    pool.shutdownNow();
+
+    // assert: 192 次失败（< 200 阈值）一次都不能丢，否则会提前熔断；此时仍允许通行
+    assertThat(breaker.allow(CHANNEL)).isTrue();
+    assertThat(breaker.currentOpenCircuits()).isEqualTo(0);
+
+    // 再补满到阈值，必须恰好熔断
+    for (int i = perThread * threads; i < threshold; i++) {
+      breaker.recordFailure(CHANNEL);
+    }
+    assertThat(breaker.allow(CHANNEL)).isFalse();
+    assertThat(breaker.currentOpenCircuits()).isEqualTo(1);
   }
 
   // --- helpers ---

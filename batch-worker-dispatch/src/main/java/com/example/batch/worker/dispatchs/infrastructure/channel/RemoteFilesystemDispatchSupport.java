@@ -27,9 +27,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -73,7 +75,7 @@ final class RemoteFilesystemDispatchSupport {
       Integer.getInteger("batch.dispatch.oss-max-inline-mib", 512) * 1024 * 1024;
   private static final ExecutorService NAS_COPY_EXECUTOR =
       Executors.newCachedThreadPool(
-          new java.util.concurrent.ThreadFactory() {
+          new ThreadFactory() {
             private final AtomicLong index = new AtomicLong();
 
             @Override
@@ -114,7 +116,7 @@ final class RemoteFilesystemDispatchSupport {
       future.cancel(true);
       Thread.currentThread().interrupt();
       throw new IOException("NAS Files.copy interrupted", ie);
-    } catch (java.util.concurrent.ExecutionException ee) {
+    } catch (ExecutionException ee) {
       Throwable cause = ee.getCause();
       if (cause instanceof IOException ioe) {
         throw ioe;
