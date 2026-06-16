@@ -109,6 +109,33 @@ class SqlTransformComputeSqlValidatorTest {
   }
 
   @Test
+  void validateSelect_rejectsForbiddenFunctionWithCommentInjection() {
+    // 回归:老子串方案被"函数名与左括号间插块注释"绕过(右侧紧跟 ( 判定只跳空白不跳注释 → 漏判)。
+    // 现走 AST 函数节点,仍拒。
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () -> validator.validateSelect("select pg_read_server_files/**/('/etc/passwd') as c"),
+        "forbidden function 'pg_read_server_files'");
+  }
+
+  @Test
+  void validateSelect_rejectsForbiddenFunctionNestedInExpression() {
+    // AST 遍历应深入嵌套表达式 / 函数参数,不止顶层 select item。
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select upper(coalesce(pg_terminate_backend(pid), 'x')) from biz.t"),
+        "forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
   void validateSelect_rejectsPgTerminateBackend() {
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));

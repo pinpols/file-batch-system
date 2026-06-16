@@ -5,7 +5,11 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Texts;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
@@ -84,7 +88,7 @@ public class SqlTransformComputeSqlValidator {
     if (security != null
         && security.getForbiddenFunctions() != null
         && !security.getForbiddenFunctions().isEmpty()) {
-      checkNoForbiddenFunctions(sql, security.getForbiddenFunctions());
+      checkNoForbiddenFunctions(statement, security.getForbiddenFunctions());
     }
     // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
     if (enforceSchemaAllowlist && security != null && security.isRequireLimit()) {
@@ -94,37 +98,49 @@ public class SqlTransformComputeSqlValidator {
   }
 
   /**
-   * 子串匹配大小写不敏感地拒禁用函数(dblink / pg_terminate_backend 等)。比 AST 遍历简单且能覆盖大小写/空格变体。 用 `\bname\b` 边界匹配避免
-   * "dblink" 误命中 "dblink_connect_u" 列名 — 实际上禁用列表都是带括号 调用的函数名,在 SQL 中后跟 '(',我们以此为强信号。
+   * 遍历已解析 AST 的所有函数调用节点,命中禁用列表(dblink / pg_terminate_backend / pg_read_server_files 等)即拒。
+   *
+   * <p>改用 AST 而非子串匹配:子串方案被注释绕过——{@code pg_read_server_files/**}{@code /('x')} 这类
+   * "函数名与左括号之间插注释"的写法,jsqlparser 正常解析为函数调用,但子串的"右侧紧跟 {@code (}"判定只跳空白不跳注释 → 漏判放行;带引号标识符 {@code
+   * "pg_..."(...)} 同样逃逸。AST 遍历直接看函数节点名,杜绝这两类绕过。
    */
-  private static void checkNoForbiddenFunctions(String sql, List<String> forbidden) {
-    String lower = sql.toLowerCase();
+  private static void checkNoForbiddenFunctions(Statement statement, List<String> forbidden) {
+    Set<String> called = collectFunctionNames(statement);
+    Set<String> forbiddenLower = new HashSet<>();
     for (String fn : forbidden) {
-      String needle = fn.toLowerCase();
-      int idx = 0;
-      while ((idx = lower.indexOf(needle, idx)) >= 0) {
-        int after = idx + needle.length();
-        boolean leftBoundary = idx == 0 || !isIdentifierPart(lower.charAt(idx - 1));
-        boolean rightCallSite = after < lower.length() && nextIsLParen(lower, after);
-        if (leftBoundary && rightCallSite) {
-          throw BizException.of(
-              ResultCode.INVALID_ARGUMENT,
-              ERR_KEY,
-              "sqlTransformCompute SQL calls forbidden function '" + fn + "'");
-        }
-        idx = after;
+      forbiddenLower.add(fn.toLowerCase(Locale.ROOT));
+    }
+    for (String name : called) {
+      // 既比对裸名,也比对 schema 限定名的尾段(pg_catalog.pg_read_server_files → pg_read_server_files)。
+      String bare = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : name;
+      if (forbiddenLower.contains(name) || forbiddenLower.contains(bare)) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            ERR_KEY,
+            "sqlTransformCompute SQL calls forbidden function '" + name + "'");
       }
     }
   }
 
-  private static boolean isIdentifierPart(char c) {
-    return Character.isLetterOrDigit(c) || c == '_';
-  }
-
-  private static boolean nextIsLParen(String s, int from) {
-    int i = from;
-    while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
-    return i < s.length() && s.charAt(i) == '(';
+  /**
+   * 收集语句 AST 里所有函数调用节点的名字(小写)。复用 {@link TablesNamesFinder} 的全树遍历(它本就走遍 SELECT 各子句 + 子查询 + 函数参数),覆写
+   * {@code visit(Function)} 作为副作用采集,{@code getTables} 触发 init+accept。
+   */
+  private static Set<String> collectFunctionNames(Statement statement) {
+    Set<String> names = new HashSet<>();
+    TablesNamesFinder<Void> finder =
+        new TablesNamesFinder<>() {
+          @Override
+          public <S> Void visit(Function function, S context) {
+            if (function.getName() != null) {
+              // 去引号:防 "pg_read_server_files"(...) 这类带引号标识符逃逸比对。
+              names.add(function.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
+            }
+            return super.visit(function, context);
+          }
+        };
+    finder.getTables(statement); // 触发全树遍历;副作用填充 names
+    return names;
   }
 
   /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
