@@ -6,13 +6,27 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
+import java.util.Map;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Component;
 
-/** 生成 Excel（.xlsx）文件，使用流式 SXSSF 工作簿以控制大数据量写入时的堆内存占用。 */
+/**
+ * 生成 Excel(.xlsx)文件,使用流式 SXSSF 工作簿以控制大数据量写入时的堆内存占用。
+ *
+ * <p>三项可选增强(均向后兼容,不配=历史全文本 / 单 sheet / 无样式):
+ *
+ * <ul>
+ *   <li><b>类型化写入</b>:列声明 {@code type=NUMBER/DATE/BOOL} 时按真类型 {@code setCellValue},数字可求和、日期可筛选、
+ *       大数字不再变科学计数法;{@code numberFormat} / {@code dateFormat} 走按列缓存的 {@link
+ *       org.apache.poi.ss.usermodel.CellStyle}(SXSSF 下 cell style 有数量上限,绝不每 cell
+ *       新建)。解析失败回退文本,不中断导出。
+ *   <li><b>多 sheet 自动拆分</b>:{@code template_config.rows_per_sheet} 达阈值滚下一个 sheet(名带序号),每 sheet
+ *       复制表头。 规避 .xlsx 单 sheet 1048576 行硬限。Excel 格式本就不参与 ADR-038 字节位点续跑(workbook 末尾整体 write、
+ *       checkpoint 恒为 null,见 {@code ExportFormatContext}),故多 sheet 与续跑无交叉,不破坏续跑位点。
+ *   <li><b>表头样式</b>:{@code template_config.header_style.bold/background/freeze_header/auto_width} +
+ *       可选 {@code header_groups}(分组合并表头)。合并仅作用于第 0 行表头区(SXSSF 当前窗口内),不跨数据行,避开 SXSSF 合并窗口限制。
+ * </ul>
+ */
 @Component
 public class ExcelExportFormat extends AbstractExportFormat {
 
@@ -34,6 +48,11 @@ public class ExcelExportFormat extends AbstractExportFormat {
         resolveExcelColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
     DelimitedFormatConfig formatConfig =
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
+    Map<String, Object> templateConfig = ctx.dataCtx().templateConfig();
+    ExcelStyleOptions styleOptions = ExcelStyleOptions.from(templateConfig, this);
+    int rowsPerSheet = resolveRowsPerSheet(templateConfig);
+    String sheetName = resolveSheetName(templateConfig);
+    int headerRows = Math.max(1, formatConfig.headerRows());
 
     // workbook 必须纳入 try-with-resources:旧写法把 workbook 放外面 + finally close,
     // 若 Files.newOutputStream 抛异常(磁盘满 / 权限),控制流不进 try/finally → workbook
@@ -46,36 +65,31 @@ public class ExcelExportFormat extends AbstractExportFormat {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE)) {
-      Sheet sheet = workbook.createSheet(resolveSheetName(ctx.dataCtx().templateConfig()));
-      int[] rowNoHolder = {0};
-      rowNoHolder[0] =
-          writeExcelHeaderRows(sheet, columns, rowNoHolder[0], formatConfig.headerRows());
+      ExcelSheetWriter writer =
+          new ExcelSheetWriter(
+              workbook, columns, sheetName, headerRows, rowsPerSheet, styleOptions, this);
       long recordCount =
           generatePaged(
-              ctx,
-              firstPage,
-              (batch, detail, rowIndex) -> {
-                Row row = sheet.createRow(rowNoHolder[0]++);
-                for (int i = 0; i < columns.size(); i++) {
-                  Cell cell = row.createCell(i);
-                  cell.setCellValue(
-                      textValue(resolveDelimitedValue(batch, detail, columns.get(i).source())));
-                }
-              });
+              ctx, firstPage, (batch, detail, rowIndex) -> writer.writeDataRow(batch, detail));
       workbook.write(outputStream);
       return recordCount;
     }
   }
 
-  private int writeExcelHeaderRows(
-      Sheet sheet, List<ColumnLayout> columns, int rowNo, int headerRows) {
-    int effectiveHeaderRows = Math.max(1, headerRows);
-    for (int i = 0; i < effectiveHeaderRows; i++) {
-      Row row = sheet.createRow(rowNo++);
-      for (int c = 0; c < columns.size(); c++) {
-        row.createCell(c).setCellValue(columns.get(c).header());
-      }
+  /**
+   * 解析每 sheet 数据行数阈值。未配置 / ≤0 = 不拆(单 sheet,历史行为);配置时夹在 {@code [1, 1048575]}(.xlsx 单 sheet 1048576
+   * 行硬限,留一行给表头)。
+   */
+  private int resolveRowsPerSheet(Map<String, Object> templateConfig) {
+    if (templateConfig == null || templateConfig.isEmpty()) {
+      return 0;
     }
-    return rowNo;
+    Integer raw =
+        integerValue(
+            firstNonNull(templateConfig.get("rows_per_sheet"), templateConfig.get("rowsPerSheet")));
+    if (raw == null || raw <= 0) {
+      return 0;
+    }
+    return Math.min(raw, ExcelSheetWriter.MAX_DATA_ROWS_PER_SHEET);
   }
 }
