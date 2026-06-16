@@ -1,0 +1,17 @@
+[package]
+name = "sample-tenant-worker-rust"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Illustrative self-hosted tenant worker built on the Rust BYO SDK (batch-worker-sdk)."
+license = "Apache-2.0"
+
+[[bin]]
+name = "sample-tenant-worker-rust"
+path = "src/main.rs"
+
+[dependencies]
+# The Rust BYO SDK, pulled from the sibling reference crate. The `kafka` feature
+# enables the real rdkafka consumer adapter (src/kafka.rs); without it the SDK
+# stays std-only and zero-dependency.
+batch-worker-sdk = { path = "../../sdk/rust", features = ["kafka"] }
