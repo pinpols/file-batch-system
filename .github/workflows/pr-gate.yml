@@ -254,7 +254,7 @@ jobs:
         # -am 编译上游;-DskipITs=true 跳 failsafe IT;跳 PMD/Spotless(在 static-checks job)
         # IT 由 full-ci-gate(main push 后)+ staging-gate(nightly)兜底
         run: |
-          mvn test -pl batch-orchestrator,batch-worker-core,batch-worker-sdk,batch-worker-sdk-spring-boot-starter,batch-worker-sdk-testkit -am \
+          mvn test -pl batch-orchestrator,batch-worker-core,sdk/java,sdk/java-spring,sdk/java-testkit -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 

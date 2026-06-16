@@ -90,12 +90,12 @@ jobs:
         shell: bash
         # -am 编译上游,跳 PMD/Spotless(已在 static-checks job)
         run: |
-          mvn verify -pl batch-orchestrator,batch-worker-core,batch-worker-sdk,batch-worker-sdk-spring-boot-starter,batch-worker-sdk-testkit -am \
+          mvn verify -pl batch-orchestrator,batch-worker-core,sdk/java,sdk/java-spring,sdk/java-testkit -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
           # 覆盖率门禁(BUNDLE 25% LINE + 15 个核心类 80% lock-in 棘轮)。原仅本地 strict-verify 跑,
           # 现上 CI。只查本 shard 跑了测试的目标模块,不带 -am(否则上游模块 0% 覆盖误判失败)。
-          mvn jacoco:check@check -pl batch-orchestrator,batch-worker-core,batch-worker-sdk,batch-worker-sdk-spring-boot-starter,batch-worker-sdk-testkit -B
+          mvn jacoco:check@check -pl batch-orchestrator,batch-worker-core,sdk/java,sdk/java-spring,sdk/java-testkit -B
 
       - name: Upload Surefire Reports
         if: always()

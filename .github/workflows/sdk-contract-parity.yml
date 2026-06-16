@@ -23,7 +23,7 @@ on:
     branches:
       - main
     paths:
-      - 'batch-worker-sdk/**'
+      - 'sdk/java/**'
       - 'batch-common/src/main/java/com/example/batch/common/enums/**'
       - 'batch-common/src/main/java/com/example/batch/common/security/**'
       - 'sdk/python/**'
@@ -73,7 +73,7 @@ jobs:
           cache: maven
       - name: Run JsonFixtureContractTest + SharedConstantsParityTest
         run: |
-          mvn -B -pl batch-worker-sdk -am \
+          mvn -B -pl sdk/java -am \
             -DskipITs \
             -Dsurefire.failIfNoSpecifiedTests=false \
             -Dtest='JsonFixtureContractTest,SharedConstantsParityTest' \
