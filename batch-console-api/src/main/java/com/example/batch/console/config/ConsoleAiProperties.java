@@ -21,8 +21,14 @@ public class ConsoleAiProperties {
   /** AI 总开关。生产高敏租户应关闭，避免数据出域。 */
   private boolean enabled = false;
 
-  /** OpenAI 模型 ID。{@code gpt-4o-mini} = 默认低成本模型。 */
-  private String model = "gpt-4o-mini";
+  /**
+   * 聊天模型提供方:{@code anthropic}(默认,走 Claude,推理质量更高)或 {@code openai}。 嵌入(RAG 向量化)始终走 OpenAI
+   * embedding,与本项无关。
+   */
+  private String provider = "anthropic";
+
+  /** 聊天模型 ID(仅用于审计记录展示;实际模型由对应 provider 的 spring.ai 配置决定)。 */
+  private String model = "claude-opus-4-8";
 
   /** Prompt 长度上限（字符）。超长直接拒绝，避免成本失控 + DoS。 */
   private int maxPromptLength = 4000;
@@ -94,4 +100,27 @@ public class ConsoleAiProperties {
               "密码",
               "口令",
               "私钥"));
+
+  /** 检索增强(RAG)配置:把系统自身语料向量化后注入提示词,让模型基于事实作答。 */
+  private Rag rag = new Rag();
+
+  /** RAG 检索参数。 */
+  @Data
+  public static class Rag {
+
+    /** RAG 开关。开启需 OpenAI embedding 可用;不可用会自动降级为「仅 primer」回答,不影响整体可用。 */
+    private boolean enabled = true;
+
+    /** 每次注入的最相关片段数。 */
+    private int topK = 4;
+
+    /** 余弦相似度阈值,低于此值的片段视为不相关、丢弃。 */
+    private double minScore = 0.5;
+
+    /** 注入提示词的检索上下文总字符上限,超出按片段顺序截断,防止 token 失控。 */
+    private int maxContextChars = 6000;
+
+    /** 知识库语料位置(Spring Resource pattern)。默认内置知识包;可追加挂载的 docs 目录。 */
+    private List<String> locations = new ArrayList<>(List.of("classpath:ai-knowledge/*.md"));
+  }
 }

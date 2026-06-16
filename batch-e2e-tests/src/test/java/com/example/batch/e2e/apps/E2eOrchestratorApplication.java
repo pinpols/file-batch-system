@@ -33,6 +33,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableAutoConfiguration(
     exclude = {
       com.example.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
+      org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration.class,
       org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration.class,
       org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration.class,
       org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
