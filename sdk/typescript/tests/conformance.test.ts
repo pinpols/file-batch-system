@@ -21,6 +21,8 @@ import {
   planStop,
   decideRegister,
   classifySchemaVersion,
+  classifyHeartbeatRenewError,
+  decidePausedTaskType,
   buildRequest,
   type RequestSpec,
 } from "../src/decide.ts";
@@ -61,12 +63,20 @@ type ComputedResult = Record<string, unknown>;
 function compute(fx: Fixture): ComputedResult {
   const { when, given } = fx;
 
-  // ----- Kafka receive → schemaVersion classification or capacity backpressure -----
+  // ----- Kafka receive → schemaVersion / pausedTaskTypes drop / capacity backpressure -----
   if (when.channel === "kafka") {
     // schemaAccept fixtures assert §A version handling on the received message.
     if ("schemaAccept" in (fx.then.expect ?? {})) {
       const version = when.body?.schemaVersion as string | undefined;
       return { schemaAccept: classifySchemaVersion(version) === "accept" };
+    }
+    // pausedTaskTypes drop: message whose taskType is paused → drop-message.
+    const paused = given.state?.pausedTaskTypes as string[] | undefined;
+    if (paused != null) {
+      const taskType = String(
+        when.body?.workerType ?? when.body?.taskType ?? "",
+      );
+      return decidePausedTaskType(taskType, paused);
     }
     const inFlight = Number(given.state?.inFlight ?? 0);
     const maxConcurrent = Number(given.config?.maxConcurrentTasks ?? Infinity);
@@ -85,8 +95,12 @@ function compute(fx: Fixture): ComputedResult {
     return decideRegister(idempotent);
   }
 
-  // heartbeat
+  // heartbeat — a non-2xx heartbeat is a §C-exempt single-attempt failure
+  // (skip this tick, no internal backoff); a 2xx heartbeat applies the directive.
   if (path.includes("/heartbeat")) {
+    if (status >= 400) {
+      return classifyHeartbeatRenewError();
+    }
     return applyHeartbeatDirective(when.responseBody ?? {});
   }
 
@@ -185,7 +199,7 @@ function assertRequestSide(fx: Fixture, ctx: string) {
   }
 }
 
-const EXPECTED_FIXTURE_COUNT = 22;
+const EXPECTED_FIXTURE_COUNT = 29;
 
 const fixtureFiles = readdirSync(FIXTURES_DIR)
   .filter((f) => /^\d.*\.json$/.test(f))

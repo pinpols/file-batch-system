@@ -141,6 +141,11 @@
               "minimum": 0,
               "description": "Effective next heartbeat interval after applying nextHeartbeatHint."
             },
+            "effectiveMaxConcurrent": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Effective local concurrency cap after applying a heartbeat desiredMaxConcurrent directive (§2.1 dynamic backpressure). Absent directive → unconstrained (field omitted)."
+            },
             "cancelRequested": { "type": "boolean" },
             "idempotent": { "type": "boolean" },
             "reportFailure": {

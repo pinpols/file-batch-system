@@ -1,0 +1,20 @@
+{
+  "scenario": "heartbeat-503-no-backoff",
+  "description": "heartbeat/leaseRenew 豁免内部退避(wire-protocol §C):单次失败不走 register/claim/report 的指数退避序列,而是跳过本 tick、等下一个调度 tick 再试。heartbeat 返 503 → retry:false,maxAttempts:1。与 09(report 5xx 走 [200,400,800]×3 退避)成对照,锁定'这俩单次失败等下一 tick'的豁免。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/w-1/heartbeat",
+    "responseStatus": 503,
+    "responseBody": { "code": "SERVICE_UNAVAILABLE", "message": "control plane busy" }
+  },
+  "then": {
+    "sdkExpectedAction": "skip this heartbeat tick on a single 503; do NOT run the exponential backoff sequence; retry on the next scheduled tick",
+    "sdkMustNot": ["back off internally on a heartbeat failure", "treat a single heartbeat 503 as fatal"],
+    "expect": { "retry": false, "maxAttempts": 1 }
+  },
+  "references": ["wire-protocol.md §C heartbeat/renew exemption"]
+}

@@ -70,11 +70,14 @@
 
 ## 6. 落地顺序(增量、每步 parity CI 绿)
 
-1. **增量 1(P0 结构):** schema bump(请求体/请求头断言 + `client-error`/`not-found` enum) + fixtures P0-2(report 字段名)、P0-1(partitionInvocationId 贯穿)、P0-3(schemaVersion reject) + 5 语言 runner 适配请求侧断言。**这一刀堵住最致命的跨语言漏网。**
-2. **增量 2(P1):** 4xx 累计 fail-fast / 404 放弃 / idempotency-key 独立 / apiKey-header / heartbeat-renew 不退避。
-3. **增量 3(P2):** DEGRADED / desiredMaxConcurrent / pausedTaskTypes drop / ignoreUnknown。
+1. **增量 1(P0 结构)— ✅ 已落(PR #530/#531):** schema bump(请求体/请求头断言 + `client-error`/`not-found` enum) + fixtures P0-2(report 字段名)、P0-1(partitionInvocationId 贯穿)、P0-3(schemaVersion reject) + 5 语言 runner 适配请求侧断言。**这一刀堵住最致命的跨语言漏网。**
+2. **增量 2/3(P1+P2)— ✅ 已落(本 PR,2026-06-16):** 合并施工。fixtures 23–29 + schema 加 `effectiveMaxConcurrent`:
+   - P1:23 4xx 累计第 5 次 fail-fast(与 21 成对)/ 24 idempotency-key 独立 mint(`^[a-z-]+[0-9a-f]{8}-[0-9a-f-]{8,}$`,前缀类放宽兼容 Python `sdk-py-`)/ 25 heartbeat-renew 不退避(§C 豁免)。404 放弃(22)、apiKey-header(19)已在增量 1 覆盖,本轮 Python 一并转硬。
+   - P2:26 DEGRADED / 27 desiredMaxConcurrent→effectiveMaxConcurrent / 28 pausedTaskTypes drop / 29 ignoreUnknown。
+   - 各语言接法:**TS/Go/Rust** 决策核加 `classifyHeartbeatRenewError`+`decidePausedTaskType`、`applyHeartbeatDirective` 补 DEGRADED + effectiveMaxConcurrent、`classifyHttp` 累计阈值;**Java** `JsonFixtureContractTest` 静态全覆盖 29 条;**Python 请求侧 + 响应侧分类转硬**(真实 `PlatformHttpClient` + typed exception + fail-fast 阈值,不再 skip)。
+   - **仍留后续(仅 Python,strict xfail,parity 不红)**:25(heartbeat 复用通用 `with_retry`,缺 §C no-backoff 分支)、28(`apply_platform_directive` 未在 `on_message` 按 pausedTaskTypes drop)。两条均为 production 行为变更,超出 conformance 增量范围;TS/Go/Rust/Java 对这两条已硬断言。详见 `byo-conformance-contract.md` §2.1.1。
 
-> 约束:5 语言 parity CI 同时门禁,新字段必须各 runner 同步支持(Java 静态 + TS/Go/Rust 决策核 + Python 软门),否则断言形同虚设或 CI 红;Rust/Go 本机构建受限(见记忆),靠 CI 跑。每个增量独立 PR、parity CI 绿再下一步。
+> 约束:5 语言 parity CI 同时门禁,新字段必须各 runner 同步支持(Java 静态 + TS/Go/Rust 决策核 + Python 真实断言),否则断言形同虚设或 CI 红;Rust 本机构建受限(见记忆),靠 CI 跑(本轮 Rust 最小正则匹配器扩 `[a-z-]` 类已用等价 Python 端口仿真验证)。本地已验 Java/TS/Go/Python 全绿。
 
 ## 7. 一句话判断
 
