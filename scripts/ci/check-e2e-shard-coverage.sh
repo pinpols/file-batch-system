@@ -22,8 +22,11 @@ WORKFLOWS=(
   ".github/workflows/staging-gate.yml"
 )
 
-# 全仓实际存在的 *E2eIT 类名(去路径去后缀)。
-actual="$(find . -name '*E2eIT.java' -not -path '*/target/*' \
+# e2e shard 实跑的是 batch-e2e-tests 模块(failsafe 只抓该模块 **/*E2eIT.java),
+# 故覆盖比对的"实际"集合限定在 batch-e2e-tests,而非全仓。
+# (全仓 find 会把别模块里误命名为 *E2eIT 的测试拽进来——它们不在 shard 跑的模块里,既无法被 shard 执行,
+#  又逼清单虚列 → 与 check-e2e-run-completeness「列了必须真跑」冲突。误命名的应改回 *IntegrationTest。)
+actual="$(find batch-e2e-tests -name '*E2eIT.java' -not -path '*/target/*' \
   | sed -E 's#.*/##; s/\.java$//' | sort -u)"
 
 if [[ -z "$actual" ]]; then
