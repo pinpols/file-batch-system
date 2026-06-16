@@ -62,17 +62,39 @@ public class ConsoleSecurityConfiguration {
     return new ConsoleRateLimitFilter(rateLimiter, rateLimitProperties, responseWriter, properties);
   }
 
+  /**
+   * 把过滤器链装配所需的协作 bean 聚合成单一持有类,避免 {@link #consoleSecurityFilterChain} 参数 ≥ 7 触发 PMD
+   * ExcessiveParameterList(CLAUDE.md 红线 #2)。Spring 按类型逐个注入各成员,装配语义不变。
+   */
   @Bean
-  public SecurityFilterChain consoleSecurityFilterChain(
-      HttpSecurity http,
+  public ConsoleSecurityFilterChainComponents consoleSecurityFilterChainComponents(
       ConsoleAuthenticationFilter consoleAuthenticationFilter,
       ConsoleRateLimitFilter consoleRateLimitFilter,
       MaintenanceModeFilter maintenanceModeFilter,
       ConsoleMustChangePasswordGuard mustChangePasswordGuard,
       ConsoleSecurityResponseWriter responseWriter,
       ConsoleSecurityHeadersWriter securityHeadersWriter,
-      CorsConfigurationSource consoleCorsConfigurationSource)
-      throws Exception {
+      CorsConfigurationSource consoleCorsConfigurationSource) {
+    return new ConsoleSecurityFilterChainComponents(
+        consoleAuthenticationFilter,
+        consoleRateLimitFilter,
+        maintenanceModeFilter,
+        mustChangePasswordGuard,
+        responseWriter,
+        securityHeadersWriter,
+        consoleCorsConfigurationSource);
+  }
+
+  @Bean
+  public SecurityFilterChain consoleSecurityFilterChain(
+      HttpSecurity http, ConsoleSecurityFilterChainComponents components) throws Exception {
+    ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
+    ConsoleRateLimitFilter consoleRateLimitFilter = components.rateLimitFilter();
+    MaintenanceModeFilter maintenanceModeFilter = components.maintenanceModeFilter();
+    ConsoleMustChangePasswordGuard mustChangePasswordGuard = components.mustChangePasswordGuard();
+    ConsoleSecurityResponseWriter responseWriter = components.responseWriter();
+    ConsoleSecurityHeadersWriter securityHeadersWriter = components.securityHeadersWriter();
+    CorsConfigurationSource consoleCorsConfigurationSource = components.corsConfigurationSource();
     http.cors(cors -> cors.configurationSource(consoleCorsConfigurationSource));
     // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
     // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
@@ -163,6 +185,19 @@ public class ConsoleSecurityConfiguration {
             ResultCode.FORBIDDEN,
             CommonErrorMessages.ACCESS_DENIED);
   }
+
+  /**
+   * 过滤器链装配协作 bean 聚合体。仅承载注入,不持有行为;成员均为 Spring 单例 bean,由 {@link
+   * #consoleSecurityFilterChainComponents} 工厂按类型注入。
+   */
+  public record ConsoleSecurityFilterChainComponents(
+      ConsoleAuthenticationFilter authenticationFilter,
+      ConsoleRateLimitFilter rateLimitFilter,
+      MaintenanceModeFilter maintenanceModeFilter,
+      ConsoleMustChangePasswordGuard mustChangePasswordGuard,
+      ConsoleSecurityResponseWriter responseWriter,
+      ConsoleSecurityHeadersWriter securityHeadersWriter,
+      CorsConfigurationSource corsConfigurationSource) {}
 
   /** Spring Security 6 默认延迟生成 CSRF token;SPA 需要在首次 GET 时拿到 XSRF-TOKEN cookie。 */
   private static final class CsrfCookieMaterializeFilter extends OncePerRequestFilter {
