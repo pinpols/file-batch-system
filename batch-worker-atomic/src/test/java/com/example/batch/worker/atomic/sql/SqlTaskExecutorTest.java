@@ -134,6 +134,28 @@ class SqlTaskExecutorTest {
       assertThat(SqlTaskExecutor.splitStatements("SELECT 1;;;SELECT 2;"))
           .containsExactly("SELECT 1", "SELECT 2");
     }
+
+    @Test
+    void ignoresSemicolonInDollarQuotedBody() {
+      // $$...$$ 体内的 ; 不应被误切(PG 函数体/含分号字面量常见)
+      assertThat(SqlTaskExecutor.splitStatements("SELECT $$a;b;c$$ AS v; SELECT 2"))
+          .containsExactly("SELECT $$a;b;c$$ AS v", "SELECT 2");
+    }
+
+    @Test
+    void ignoresSemicolonInTaggedDollarQuote() {
+      assertThat(
+              SqlTaskExecutor.splitStatements(
+                  "DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$; SELECT 9"))
+          .containsExactly("DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$", "SELECT 9");
+    }
+
+    @Test
+    void positionalParamDollarIsNotDollarQuote() {
+      // $1 是位置参数,不是 dollar-quote 开标签;此处 ; 仍应正常切分
+      assertThat(SqlTaskExecutor.splitStatements("SELECT $1 WHERE a=$1; SELECT 2"))
+          .containsExactly("SELECT $1 WHERE a=$1", "SELECT 2");
+    }
   }
 
   // ─── Type detection ─────────────────────────────────────────────────────────

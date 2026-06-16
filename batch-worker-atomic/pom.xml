@@ -54,6 +54,12 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
+        <!-- HttpTaskExecutor 出口 HTTP:用 OkHttp + DnsResolveGuard 做 resolve-then-connect SSRF 防护
+             (与 worker-dispatch 出口同款,消除 JDK HttpClient 连接期二次解析的 DNS-rebinding TOCTOU)。 -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+        </dependency>
         <!-- sql / stored-proc executor 需要 DataSource;worker 运行时(claim/lease/report)也需平台库。
              注意:本 worker 应配独立低权限 datasource,不连业务库(最小权限,见 ADR-029)。 -->
         <dependency>
