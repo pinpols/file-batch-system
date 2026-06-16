@@ -9280,6 +9280,7 @@ components:
           format: date-time
         compatibility:
           $ref: '#/components/schemas/WorkerCompatibility'
+      required: [id, tenantId, workerCode, status]
     WorkerCompatibility:
       type: object
       description: |
