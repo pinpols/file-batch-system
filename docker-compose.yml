@@ -26,6 +26,19 @@ services:
       - wal_keep_size=64
       - -c
       - hot_standby=on
+      # ── WAL 连续归档(PITR 第 B 层)——**默认关闭,生产再开** ──────────────
+      # dev 默认不开:开了会持续往 /wal-archive 写 WAL 段,本地联调无意义且占盘。
+      # 生产启用步骤(见 docs/runbook/backup-and-pitr.md §1.1):
+      #   1) 解开下面 3 行注释(archive_mode/archive_command/archive_timeout);
+      #   2) 把 archive_command 的目标指向**独立故障域**(S3 `aws s3 cp` / 专用 NFS),
+      #      **绝不能**和 PGDATA 同一块盘(盘坏时 base 和 WAL 一起没);
+      #   3) 挂一个归档卷(下方 volumes 里示例的 wal-archive),并监控其可写性。
+      # - -c
+      # - archive_mode=on
+      # - -c
+      # - archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f
+      # - -c
+      # - archive_timeout=300
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -43,6 +56,9 @@ services:
     volumes:
       - postgres-primary-data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      # WAL 归档卷(配合上面 archive_mode,默认关闭)。生产开 PITR 时解开,
+      # 并把目标换成独立故障域(本地卷仅示例,不满足"独立盘"要求)。
+      # - wal-archive:/wal-archive
     networks:
       - batch-network
     healthcheck:
@@ -255,6 +271,9 @@ volumes:
   kafka-data:
   minio-data:
   valkey-data:
+  # WAL 归档卷(PITR 第 B 层,默认不创建/不挂载)。生产启用见
+  # docs/runbook/backup-and-pitr.md §1.1,且应改用独立故障域而非本地卷。
+  # wal-archive:
 
 networks:
   batch-network:

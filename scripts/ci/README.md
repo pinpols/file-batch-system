@@ -63,3 +63,32 @@ python3 scripts/ci/check-dependency-boundaries.py
 ```
 
 成功时打印 `OK: dependency boundaries satisfied.` 并以退出码 `0` 结束；违反约束时打印错误并以 `1` 结束。
+
+## `check-db-scripts-safety.sh`
+
+补 `check-migration-safety.sh`(squawk 只扫 `db/migration`)的盲区:`scripts/db/**`(尤其 `business/` 不走 Flyway、`partition-migration/`)下的手工 DDL 脚本同样能跑危险变更。
+
+- **WARN**(不阻断):脚本含 `ON CONFLICT` → 提示核对幂等契约是否受约束变更影响。
+- **FAIL**:脚本含承重墙级危险 DDL(改 UNIQUE/PK 列集 / `DROP TABLE` / `DROP CONSTRAINT`)**且**文件头部无禁令标记(🔴/⚠/DANGER/禁止执行/破坏性…)→ 强制要求头注释显式声明风险与前置条件。
+
+接入 `pr-gate.yml` 的 `static-checks` job。排除 `*-seed`。
+
+```bash
+bash scripts/ci/check-db-scripts-safety.sh
+```
+
+## `check-version-alignment.sh`
+
+校验版本一致性:根 `pom.xml <revision>` ↔ helm `Chart.yaml appVersion`(预发态下 appVersion 合法地停在上一 GA,仅 GA 态强制相等)↔ `load-tests/pom.xml`(独立 reactor,版本手工同步,CLAUDE.md 点名高危点);并校验 `.env.*` 的 `*_IMAGE_TAG` 不漂移。接入 `pr-gate.yml` 的 `static-checks` job。
+
+```bash
+bash scripts/ci/check-version-alignment.sh
+```
+
+## `check-e2e-run-completeness.sh`
+
+e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本在每个 e2e shard 跑完后比对:该 shard 实际产出的 surefire testsuite report 数 == 清单声明的类数,不等则 fail。与 `check-e2e-shard-coverage.sh`(静态:清单 ⊇ 仓库实际)互补。接入 `full-ci-gate.yml` / `staging-gate.yml` 的 `e2e-shard` job。
+
+```bash
+bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-reports-dir>
+```

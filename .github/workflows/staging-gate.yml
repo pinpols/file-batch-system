@@ -119,6 +119,15 @@ jobs:
             -Dtest="$TESTS" \
             -Dsurefire.failIfNoSpecifiedTests=false -B
 
+      - name: Verify E2E shard ${{ matrix.shard.id }} run completeness
+        shell: bash
+        # 运行侧闭环:failIfNoSpecifiedTests=false 会把「清单列了但没真跑」吞成绿色。
+        # 比对本 shard 实际产出的 surefire testsuite report 数 == 清单声明的类数,不等则 fail。
+        run: |
+          bash scripts/ci/check-e2e-run-completeness.sh \
+            "${{ matrix.shard.tests }}" \
+            batch-e2e-tests/target/surefire-reports
+
       - name: Upload E2E shard ${{ matrix.shard.id }} reports
         if: always()
         uses: actions/upload-artifact@v7

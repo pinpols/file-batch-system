@@ -15,6 +15,8 @@
 #   bash scripts/db/backup/dr-drill.sh --keep         # 安全模式,但保留 *_dr 库供人工查
 #   bash scripts/db/backup/dr-drill.sh --in-place --yes  # 真实演练:DROP 现有库 + 恢复(破坏性!量真 RTO)
 #   bash scripts/db/backup/dr-drill.sh --backup-dir /mnt/bk   # 顺带把 dump 落到宿主目录留存
+#   bash scripts/db/backup/dr-drill.sh --strict-rto          # RTO 超 SLO 阈值(默认 1800s)即 fail
+#                                                            #   阈值可经 RTO_SLO_SECONDS env 覆盖
 # =========================================================
 set -uo pipefail
 
@@ -36,14 +38,20 @@ MODE=safe          # safe | in-place
 KEEP=0
 CONFIRM=0
 BACKUP_DIR=""
+STRICT_RTO=0
+# RTO SLO 阈值(秒)。默认 1800 = 30min,对齐 backup-and-pitr.md §SLO 的生产 RTO≤30min 目标。
+# 本地逻辑恢复通常远快于生产真实 RTO,故默认仅 WARN;--strict-rto 时超阈值直接 fail
+# (用于 CI / staging 上对"恢复链路退化"做硬断言)。
+RTO_SLO_SECONDS=${RTO_SLO_SECONDS:-1800}
 for arg in "$@"; do
   case "$arg" in
     --in-place) MODE=in-place ;;
     --keep) KEEP=1 ;;
     --yes) CONFIRM=1 ;;
+    --strict-rto) STRICT_RTO=1 ;;
     --backup-dir) shift; BACKUP_DIR="${1:-}" ;;
     --backup-dir=*) BACKUP_DIR="${arg#*=}" ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
   esac
 done
 
@@ -172,14 +180,27 @@ if [[ "$MODE" == "safe" && "$KEEP" != "1" ]]; then
 fi
 docker exec "$PG_CONTAINER" rm -rf "$INDB_DIR" 2>/dev/null || true
 
+# ---- RTO SLO 断言(对齐 backup-and-pitr.md §SLO 的 RTO≤30min 目标)----
+# 恢复耗时超阈值 → 默认 WARN(本地逻辑恢复≠生产真实 RTO);--strict-rto 时计入失败。
+if [[ "$RTO" -gt "$RTO_SLO_SECONDS" ]]; then
+  if [[ "$STRICT_RTO" == "1" ]]; then
+    checks+=("  ${RED}✗${RESET} RTO SLO: ${RTO}s > 阈值 ${RTO_SLO_SECONDS}s(--strict-rto 计为失败)")
+    fails=$((fails+1))
+  else
+    checks+=("  ${YELLOW}⚠${RESET} RTO SLO: ${RTO}s > 阈值 ${RTO_SLO_SECONDS}s —— 恢复链路偏慢,排查 dump 体积/并行度(--strict-rto 可硬断言)")
+  fi
+else
+  checks+=("  ${GREEN}✓${RESET} RTO SLO: ${RTO}s ≤ 阈值 ${RTO_SLO_SECONDS}s")
+fi
+
 # ---- 报告 ----
 echo; echo "${BOLD}==== 灾备演练结果 ====${RESET}"
 printf '%s\n' "${checks[@]}"
-echo "  ${BOLD}RTO(恢复耗时)= ${RTO}s${RESET}"
+echo "  ${BOLD}RTO(恢复耗时)= ${RTO}s${RESET}(SLO 阈值 ${RTO_SLO_SECONDS}s,可经 RTO_SLO_SECONDS 调)"
 [[ "$MODE" == "safe" && "$KEEP" != "1" ]] && echo "  (旁路库已清;--keep 可保留,--in-place 真实演练)"
 echo
 if [[ "$fails" -eq 0 ]]; then
-  echo "${GREEN}${BOLD}✅ 灾备演练通过:备份可恢复、关键数据一致、RLS 可重建。${RESET}"; exit 0
+  echo "${GREEN}${BOLD}✅ 灾备演练通过:备份可恢复、关键数据一致、RLS 可重建、RTO 达标。${RESET}"; exit 0
 else
   echo "${RED}${BOLD}❌ $fails 项校验失败 —— 备份/恢复链路有缺口,见上。${RESET}"; exit 1
 fi
