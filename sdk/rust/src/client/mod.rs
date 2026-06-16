@@ -34,6 +34,12 @@ pub mod sensitive;
 pub mod testkit;
 pub mod transport;
 
+/// Real blocking control-plane transport (reqwest), behind the optional `http`
+/// feature. The default build excludes this module entirely, keeping the core
+/// crate std-only — mirroring how the `kafka` feature gates the Kafka adapter.
+#[cfg(feature = "http")]
+pub mod reqwest_transport;
+
 // Ergonomic re-exports mirroring the TS/Go phase-2 surface.
 pub use consumer::{Consumer, FakeConsumer, MessageOutcome, TaskRecord};
 pub use handler::{
@@ -52,3 +58,5 @@ pub use transport::{
     classify_response, outcome_from_decision, FakeTransport, HttpResponse, HttpTransport,
     Transport, TransportOutcome,
 };
+#[cfg(feature = "http")]
+pub use reqwest_transport::{ReqwestConfig, ReqwestTransport, TransportBuildError};

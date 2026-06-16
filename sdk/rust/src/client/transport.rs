@@ -102,23 +102,20 @@ pub trait Transport: Send + Sync {
     fn renew(&self, task_id: &str, body: &str) -> HttpResponse;
 }
 
-/// Documented future adapter. std has **no** HTTP client and this crate is
-/// zero-dependency, so a real implementation lives behind a feature/adapter
-/// that brings its own client (reqwest / ureq / hyper). Calling any method here
-/// panics by design — it exists to pin the trait surface and document the §1.1
-/// HTTP-client requirements (keep-alive pool, custom `Idempotency-Key` header,
-/// `timeout < heartbeat/3`).
+/// Legacy no-feature stub. The **real** production transport is now
+/// [`ReqwestTransport`](super::reqwest_transport::ReqwestTransport), available
+/// behind the `http` cargo feature. This type stays only to pin the
+/// [`Transport`] surface for a core-only build; calling any method panics.
 ///
 /// # Not a working transport
-/// **Every method panics (`unimplemented!`).** This type is an unimplemented
-/// stub kept only to pin the [`Transport`] surface; do **not** wire it into a
-/// worker. Use [`FakeTransport`] in tests, and a real client-backed adapter in
-/// production. The `#[deprecated]` is a compile-time tripwire so a tenant cannot
-/// accidentally construct/use it without a warning.
+/// **Every method panics (`unimplemented!`).** Do **not** wire it into a worker.
+/// Enable `--features http` and use `ReqwestTransport` in production, or
+/// [`FakeTransport`] in tests. The `#[deprecated]` is a compile-time tripwire so
+/// a tenant cannot accidentally construct/use it without a warning.
 #[deprecated(
-    note = "HttpTransport is an unimplemented stub — every method panics. Pins the \
-            Transport trait surface only (待 reqwest/ureq adapter). Use FakeTransport \
-            in tests or a real client-backed Transport in production; do not wire this in."
+    note = "HttpTransport is an unimplemented stub — every method panics. The real \
+            transport is ReqwestTransport behind the `http` feature. Use that in \
+            production, or FakeTransport in tests; do not wire this stub in."
 )]
 #[derive(Debug, Clone)]
 pub struct HttpTransport {
