@@ -57,8 +57,6 @@ class DispatcherLike(Protocol):
     def mark_cancel_requested(self, task_id: int, reason: str) -> None: ...
 
 
-
-
 def _utc_now_iso() -> str:
     """RFC 3339 时间戳,与 Java ``Instant.now().toString()`` 字符串一致。"""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")

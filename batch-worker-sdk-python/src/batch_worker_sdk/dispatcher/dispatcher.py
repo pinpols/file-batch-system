@@ -58,6 +58,7 @@ def _new_idempotency_key() -> str:
     """
     return f"sdk-py-{uuid.uuid4()}"
 
+
 logger = logging.getLogger(__name__)
 
 # Python SDK 能识别的 schema 主版本前缀。对齐 Java

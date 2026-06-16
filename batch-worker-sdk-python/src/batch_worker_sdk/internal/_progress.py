@@ -8,6 +8,7 @@
 - stage 结束调 ``clear()`` 避免心跳带上残留
 - ``totalRowsHint=None`` = FE 退化为只显示计数器不显 ETA
 """
+
 from __future__ import annotations
 
 _state: dict[str, int | None] = {"rowsProcessed": None, "totalRowsHint": None}

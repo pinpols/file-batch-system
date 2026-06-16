@@ -34,9 +34,7 @@ _BASE = "http://orch:8081"
 _TENANT = "acme"
 _WORKER = "w-1"
 
-_ISO_INSTANT_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$"
-)
+_ISO_INSTANT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
 
 
 def _cfg(*, build_id: str | None = "build-2026-06-03") -> BatchPlatformClientConfig:
