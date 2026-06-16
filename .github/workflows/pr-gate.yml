@@ -192,6 +192,19 @@ jobs:
         # 只扫本 PR 新增/改动的 db/migration,拦危险 DDL(DROP COLUMN / 改类型 / 加 UNIQUE 长锁等)。
         run: bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
 
+      - name: DB scripts safety lint (scripts/db/** 手工 DDL)
+        shell: bash
+        # 补 squawk 盲区:batch_business 不走 Flyway,partition-migration / business 下的手工
+        # DDL 脚本(改 UNIQUE/PK 列集 / DROP TABLE)不在迁移守护内。本步要求这类危险脚本头部
+        # 必带禁令标记,并对 ON CONFLICT 提示核对幂等契约(CLAUDE.md 红线)。
+        run: bash scripts/ci/check-db-scripts-safety.sh
+
+      - name: Version alignment (pom revision ↔ Chart appVersion ↔ load-tests)
+        shell: bash
+        # 校验根 pom <revision> 与 helm Chart appVersion、load-tests/pom.xml 版本字面量一致。
+        # load-tests 是独立 reactor,版本手工同步(CLAUDE.md 点名高危点)。
+        run: bash scripts/ci/check-version-alignment.sh
+
       - name: OpenAPI breaking-change (oasdiff)
         shell: bash
         # 比 base 的 openapi,删端点/删必填/改类型等 ERR 级破坏即 fail。
