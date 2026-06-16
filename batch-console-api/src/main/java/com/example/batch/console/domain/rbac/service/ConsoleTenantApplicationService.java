@@ -18,6 +18,8 @@ import com.example.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import com.example.batch.console.domain.rbac.support.ConsoleRoles;
 import com.example.batch.console.domain.rbac.web.response.BatchCreateTenantsResponse;
 import com.example.batch.console.domain.rbac.web.response.ConsoleTenantResponse;
+import com.example.batch.console.domain.rbac.web.response.ProvisionTenantResponse;
+import com.example.batch.console.domain.rbac.web.response.TenantReadinessResponse;
 import com.example.batch.console.domain.workflow.mapper.WorkflowRunMapper;
 import com.example.batch.console.support.naming.ReservedPrefixGuard;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;
@@ -51,6 +53,7 @@ public class ConsoleTenantApplicationService {
   private final WorkflowRunMapper workflowRunMapper;
   private final ConsoleTriggerProxyService triggerProxyService;
   private final ConsoleTenantConfigCopyService configCopyService;
+  private final ConsoleTenantReadinessService readinessService;
   // bypassMode=true(本地/E2E)时关守卫,允许 e2e-/test- 前缀;production 时拒绝
   private final org.springframework.core.env.Environment environment;
 
@@ -128,6 +131,29 @@ public class ConsoleTenantApplicationService {
         passwordHasher.encode(cmd.plainPassword()),
         cmd.operator());
     return toResponse(tenantMapper.selectByTenantId(cmd.tenantId()));
+  }
+
+  /**
+   * 一键 provision 编排:建租户 →(可选)复制源租户默认配置 → 就绪自检,一次调用闭环返回。
+   *
+   * <p>{@code init} 为 null / disabled 时退化为「只建租户 + 就绪自检」,不复制配置(保持向后兼容)。 配置复制复用 {@code
+   * batchCreateTenants} 同一条 {@code configCopyService.copy} 路径,不另起逻辑。
+   */
+  @Transactional
+  public ProvisionTenantResponse provisionTenant(CreateTenantCommand cmd, ConfigInitOption init) {
+    ConsoleTenantResponse tenant = createTenant(cmd);
+    TenantConfigBatchInitResponse configInit = null;
+    if (init != null && init.enabled()) {
+      TenantConfigCopyRequest copyRequest = new TenantConfigCopyRequest();
+      copyRequest.setSourceTenantId(init.sourceTenantId());
+      copyRequest.setTargetTenantIds(List.of(tenant.tenantId()));
+      copyRequest.setMode(init.mode() != null ? init.mode() : InitMode.SKIP_EXISTING);
+      configInit =
+          configCopyService.copy(copyRequest, cmd.operator(), UUID.randomUUID().toString());
+    }
+    // 建完(并复制配置后)立即跑就绪自检,把「建租户→复制配置→就绪校验」收敛到一次响应。
+    TenantReadinessResponse readiness = readinessService.check(tenant.tenantId());
+    return new ProvisionTenantResponse(tenant, configInit, readiness);
   }
 
   @Transactional

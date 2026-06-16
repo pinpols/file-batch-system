@@ -227,4 +227,18 @@
             is_deleted = false,
             updated_at = current_timestamp
     </insert>
+
+    <!-- 租户就绪自检:只取完整性判定所需列,未删除模板。 -->
+    <select id="selectReadinessRows" resultType="map">
+        select
+            template_code,
+            template_type,
+            enabled,
+            default_query_sql,
+            field_mappings,
+            naming_rule
+        from batch.file_template_config
+        where tenant_id = #{tenantId}
+          and is_deleted = false
+    </select>
 </mapper>

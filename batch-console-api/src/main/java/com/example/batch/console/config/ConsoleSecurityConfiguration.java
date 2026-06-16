@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
+import com.example.batch.console.domain.rbac.support.ConsoleMustChangePasswordGuard;
 import com.example.batch.console.domain.rbac.support.ConsoleRoles;
 import com.example.batch.console.domain.rbac.support.ConsoleSecurityHeadersWriter;
 import com.example.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
@@ -67,6 +68,7 @@ public class ConsoleSecurityConfiguration {
       ConsoleAuthenticationFilter consoleAuthenticationFilter,
       ConsoleRateLimitFilter consoleRateLimitFilter,
       MaintenanceModeFilter maintenanceModeFilter,
+      ConsoleMustChangePasswordGuard mustChangePasswordGuard,
       ConsoleSecurityResponseWriter responseWriter,
       ConsoleSecurityHeadersWriter securityHeadersWriter,
       CorsConfigurationSource consoleCorsConfigurationSource)
@@ -132,6 +134,8 @@ public class ConsoleSecurityConfiguration {
         .addFilterBefore(consoleAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
         .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
+        // 首登强制改密守护:认证之后拦截 must_change 账号的一切写操作(白名单除外)。
+        .addFilterAfter(mustChangePasswordGuard, ConsoleRateLimitFilter.class)
         .build();
   }
 

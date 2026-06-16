@@ -19,11 +19,18 @@ public record ConsoleAuthTokenResponse(
     Instant expiresAt,
     String username,
     String tenantId,
-    Set<String> authorities) {
+    Set<String> authorities,
+    boolean mustChangePassword) {
 
   /** 抹掉 accessToken 字段,用于 controller 在写完 cookie 后返回给客户端的安全版本。 */
   public ConsoleAuthTokenResponse withoutToken() {
     return new ConsoleAuthTokenResponse(
-        null, tokenType, issuedAt, expiresAt, username, tenantId, authorities);
+        null, tokenType, issuedAt, expiresAt, username, tenantId, authorities, mustChangePassword);
+  }
+
+  /** 标注「首次登录强制改密」标志,保留其余字段。 */
+  public ConsoleAuthTokenResponse withMustChangePassword(boolean flag) {
+    return new ConsoleAuthTokenResponse(
+        accessToken, tokenType, issuedAt, expiresAt, username, tenantId, authorities, flag);
   }
 }

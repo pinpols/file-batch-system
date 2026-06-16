@@ -4,6 +4,7 @@ import com.example.batch.console.domain.job.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.domain.job.query.JobDefinitionQuery;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface JobDefinitionMapper {
@@ -35,4 +36,7 @@ public interface JobDefinitionMapper {
   /** BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, jobName)。 */
   List<com.example.batch.console.domain.workflow.web.response.CodeNameOption> selectActiveCodeNames(
       @Param("tenantId") String tenantId);
+
+  /** 租户就绪自检专用:返回 enabled job 的 (jobCode, queueCode),供判定 queue_code 是否悬空。只读。 */
+  List<Map<String, Object>> selectEnabledJobQueueRefs(@Param("tenantId") String tenantId);
 }

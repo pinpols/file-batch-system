@@ -160,6 +160,7 @@ class ConsoleAuthApplicationServiceTest {
         BatchDateTimeSupport.utcNow().plusSeconds(3600),
         "admin",
         "t1",
-        Set.of("ROLE_ADMIN"));
+        Set.of("ROLE_ADMIN"),
+        false);
   }
 }

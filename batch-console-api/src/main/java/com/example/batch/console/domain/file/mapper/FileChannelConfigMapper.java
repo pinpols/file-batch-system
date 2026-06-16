@@ -37,4 +37,10 @@ public interface FileChannelConfigMapper {
   int insertFileChannelConfig(@Param("p") FileChannelConfigUpsertParam p);
 
   int updateFileChannelConfig(@Param("p") FileChannelConfigUpdateParam param);
+
+  /**
+   * 租户就绪自检专用:返回渠道的最小完整性字段 (channelCode, channelType, authType, enabled, config_json,
+   * target_endpoint)。只读,供 readiness 端点判定凭据 / 端点是否配齐。
+   */
+  List<Map<String, Object>> selectReadinessRows(@Param("tenantId") String tenantId);
 }

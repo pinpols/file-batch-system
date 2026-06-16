@@ -8,9 +8,11 @@ import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.domain.observability.service.SseTicketService;
 import com.example.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
+import com.example.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import com.example.batch.console.domain.rbac.support.ConsoleJwtService;
 import com.example.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
 import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
+import com.example.batch.console.domain.rbac.web.request.ChangeOwnPasswordRequest;
 import com.example.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
 import com.example.batch.console.domain.rbac.web.response.ConsoleAuthProfileResponse;
 import com.example.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
@@ -45,6 +47,7 @@ public class ConsoleAuthController {
   private final ConsoleSecurityProperties securityProperties;
   private final ConsoleJwtService jwtService;
   private final ConsoleLoginKeyPairService loginKeyPairService;
+  private final ConsoleUserAccountService userAccountService;
 
   private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
 
@@ -188,6 +191,34 @@ public class ConsoleAuthController {
         .maxAge(maxAge)
         .build()
         .toString();
+  }
+
+  /**
+   * 本人改密(首登强制改密落地路径)。
+   *
+   * <p>username 取自已认证 principal,不接受客户端指定;校验旧密码 → 写新密码 → 清除 must_change_password 标志 →
+   * 踢旧会话(强制用新密码重登)。 此端点在 must_change 期间必须可达(见 {@code ConsoleMustChangePasswordGuard} 白名单)。
+   */
+  @PostMapping("/change-password")
+  @PreAuthorize("isAuthenticated()")
+  @AuditAction(action = "auth.changePassword", aggregateType = "auth", recordParams = false)
+  public CommonResponse<Void> changePassword(
+      @Validated @RequestBody ChangeOwnPasswordRequest request, Authentication authentication) {
+    String username = resolveUsername(authentication);
+    userAccountService.changeOwnPassword(
+        username, request.getCurrentPassword(), request.getNewPassword());
+    return responseFactory.success(null);
+  }
+
+  private String resolveUsername(Authentication authentication) {
+    if (authentication != null
+        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+      return principal.username();
+    }
+    if (authentication == null || authentication.getName() == null) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
+    }
+    return authentication.getName();
   }
 
   /** 当前用户画像（租户、角色、菜单）。 */

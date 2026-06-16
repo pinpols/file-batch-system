@@ -206,4 +206,12 @@
           and enabled = true
         order by job_code asc
     </select>
+
+    <!-- 租户就绪自检:enabled job 的 (jobCode, queueCode),供判定 queue_code 是否悬空。 -->
+    <select id="selectEnabledJobQueueRefs" resultType="map">
+        select job_code, queue_code
+        from batch.job_definition
+        where tenant_id = #{tenantId}
+          and enabled = true
+    </select>
 </mapper>

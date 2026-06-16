@@ -181,6 +181,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuthTokenResponse'
+  /api/console/auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change own password (first-login forced change landing path)
+      description: |
+        本人改密:username 取自已认证 principal(不接受 body 指定)。校验旧密码 → 写新密码 →
+        清除 must_change_password 标志 → 踢旧会话(强制用新密码重登)。
+        must_change_password=true 期间此端点必须可达(改密守护白名单)。
+        旧密码错误 401;新旧密码相同 400。
+      operationId: changeOwnPassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 256
+                newPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 256
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/auth/me:
     get:
       tags: [Auth]
@@ -7607,7 +7642,13 @@ paths:
                 $ref: '#/components/schemas/CommonResponseObject'
     post:
       tags: [Tenants]
-      summary: Create tenant
+      summary: Create tenant (one-click provision)
+      description: |
+        创建租户并绑定一个 ROLE_TENANT_ADMIN 首账号。
+        可选 `initConfigFrom` 非空时,建完租户后自动复制源租户配置(复用批量路径 configCopyService);
+        无论是否复制配置,创建后都会运行租户就绪自检并把结果一并返回(建租户→复制配置→就绪校验一次闭环)。
+        默认不传 `initConfigFrom` 即不复制配置,保持现行为(向后兼容)。
+        响应从单纯 tenant 改为 `{tenant, configInit?, readiness}`(superset,向后兼容)。
       operationId: createTenant
       security:
         - bearerAuth: []
@@ -7636,15 +7677,25 @@ paths:
                   minLength: 2
                   maxLength: 128
                   pattern: '^[a-zA-Z0-9][a-zA-Z0-9._\-]*$'
-                  description: Initial operator account username (ROLE_TENANT_USER)
+                  description: Initial operator account username (ROLE_TENANT_ADMIN)
                 password:
                   type: string
                   minLength: 8
                   maxLength: 256
                   description: Initial operator account password (Argon2id hashed on server)
+                initConfigFrom:
+                  type: string
+                  maxLength: 64
+                  nullable: true
+                  description: 可选;非空时建完租户后复制该源租户配置(如 default)。默认 null=不复制。
+                initMode:
+                  type: string
+                  enum: [SKIP_EXISTING, UPSERT]
+                  nullable: true
+                  description: 配置复制模式,默认 SKIP_EXISTING;仅 initConfigFrom 非空时生效。
       responses:
         '200':
-          description: Created tenant
+          description: Provision result (tenant + optional configInit + readiness)
           content:
             application/json:
               schema:
@@ -7792,6 +7843,33 @@ paths:
       responses:
         '200':
           description: Updated tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/tenants/{tenantId}/readiness:
+    get:
+      tags: [Tenants]
+      summary: Tenant readiness self-check (read-only)
+      description: |
+        只读扫描该租户的配置闭环,返回 blocking / warning 清单。
+        检查项:enabled 模板关键字段空占位(default_query_sql / field_mappings)、
+        enabled 渠道凭据缺(非 NONE 鉴权但 config_json 空)、enabled job 引用的 queue_code 悬空。
+        ADR-026 dry-run 边界内:只看「配置完整性 / 会不会跑」,不执行取数、不比对业务结果。
+        blocking 为空即就绪(ready=true)。
+      operationId: tenantReadiness
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Readiness result (blocking / warnings)
           content:
             application/json:
               schema:
@@ -11904,7 +11982,10 @@ components:
           type: array
           items:
             type: string
-      required: [tokenType, issuedAt, expiresAt, username, tenantId, authorities]
+        mustChangePassword:
+          type: boolean
+          description: 首次登录强制改密标志;true 时 FE 应跳改密页,改密前敏感(写)操作被守护拦截为 403。
+      required: [tokenType, issuedAt, expiresAt, username, tenantId, authorities, mustChangePassword]
     ConsoleSseTicketResponse:
       type: object
       description: 一次性 SSE ticket（5min TTL），用作 EventSource 连接的 `?ticket=` 查询参数。

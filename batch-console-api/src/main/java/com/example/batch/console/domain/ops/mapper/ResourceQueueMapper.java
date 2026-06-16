@@ -34,4 +34,7 @@ public interface ResourceQueueMapper {
 
   int toggleEnabled(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+
+  /** 租户就绪自检专用:返回该租户所有(含 disabled)队列 code 集合,供判定 job.queue_code 是否悬空。 */
+  List<String> selectQueueCodes(@Param("tenantId") String tenantId);
 }

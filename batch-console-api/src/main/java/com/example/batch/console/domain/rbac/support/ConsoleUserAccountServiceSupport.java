@@ -32,7 +32,8 @@ public class ConsoleUserAccountServiceSupport {
         entity.getDisplayName(),
         entity.getPasswordHash(),
         parseAuthorities(entity.getAuthoritiesCsv()),
-        entity.isEnabled());
+        entity.isEnabled(),
+        entity.isMustChangePassword());
   }
 
   private Set<String> parseAuthorities(String raw) {
