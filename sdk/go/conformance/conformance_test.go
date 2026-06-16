@@ -24,7 +24,7 @@ import (
 // into the closed then.expect vocabulary.
 
 const (
-	fixturesDir          = "../../docs/api/sdk-contract-fixtures"
+	fixturesDir          = "../../../docs/api/sdk-contract-fixtures"
 	expectedFixtureCount = 12
 )
 

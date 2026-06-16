@@ -12,7 +12,7 @@ import (
 // Uses a tiny hand-rolled parser for the simple `key:\n  - value` list structure
 // in sdk-shared-constants.yaml (NO yaml dependency — zero runtime deps).
 
-const yamlRelPath = "../../docs/api/sdk-shared-constants.yaml"
+const yamlRelPath = "../../../docs/api/sdk-shared-constants.yaml"
 
 var (
 	listItemRe = regexp.MustCompile(`^\s+-\s+(.+?)\s*$`)

@@ -10,7 +10,7 @@ name: sdk-contract-parity
 #   (b) pass every fixture's machine-assertable `then.expect` block,
 #   (c) add its `<lang>-contract` job + path here.
 # The per-language jobs below get added as each SDK lands; the `paths:` entries
-# for batch-worker-sdk-{go,typescript,rust} are pre-wired so their first PR
+# for sdk/{go,typescript,rust} are pre-wired so their first PR
 # triggers this workflow.
 #
 # Triggered ONLY by SDK, fixture or shared-constants/contract changes — unrelated
@@ -26,11 +26,11 @@ on:
       - 'batch-worker-sdk/**'
       - 'batch-common/src/main/java/com/example/batch/common/enums/**'
       - 'batch-common/src/main/java/com/example/batch/common/security/**'
-      - 'batch-worker-sdk-python/**'
+      - 'sdk/python/**'
       # BYO SDKs (pre-wired; per-language contract jobs added when each lands)
-      - 'batch-worker-sdk-go/**'
-      - 'batch-worker-sdk-typescript/**'
-      - 'batch-worker-sdk-rust/**'
+      - 'sdk/go/**'
+      - 'sdk/typescript/**'
+      - 'sdk/rust/**'
       - 'docs/api/sdk-contract-fixtures/**'
       - 'docs/api/sdk-shared-constants.yaml'
       - 'docs/api/orchestrator-internal.openapi.yaml'
@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: batch-worker-sdk-python
+        working-directory: sdk/python
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -92,7 +92,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: batch-worker-sdk-python/pyproject.toml
+          cache-dependency-path: sdk/python/pyproject.toml
       - name: Install
         run: |
           python -m pip install --upgrade pip
@@ -117,7 +117,7 @@ jobs:
       # Unit + conformance live under test/; the broker integration test (kafka/*.integration.test.ts)
       # needs kafkajs + a live broker and is run locally/manually, NOT in this broker-free job.
       - name: Run conformance + parity (node --test, type-stripped)
-        run: node --test --experimental-strip-types 'batch-worker-sdk-typescript/test/**/*.test.ts'
+        run: node --test --experimental-strip-types 'sdk/typescript/test/**/*.test.ts'
 
   go-contract:
     name: go contract (decision core + conformance)
@@ -129,10 +129,10 @@ jobs:
         with:
           go-version: '1.25'
       - name: Run conformance + parity + unit (root module, zero-dep)
-        working-directory: batch-worker-sdk-go
+        working-directory: sdk/go
         run: go vet ./... && go test ./...
       - name: Build Kafka adapter (nested module, segmentio/kafka-go)
-        working-directory: batch-worker-sdk-go/kafka
+        working-directory: sdk/go/kafka
         run: go build ./... && go vet ./...
 
   rust-contract:
@@ -143,7 +143,7 @@ jobs:
       - name: Set up Rust (stable)
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - name: Run conformance + parity + unit (default features, zero-dep)
-        working-directory: batch-worker-sdk-rust
+        working-directory: sdk/rust
         run: cargo test
       # Kafka adapter is feature-gated (rdkafka builds librdkafka via cmake).
       # Best-effort compile-check; not a hard gate until a broker-capable runner exists.
@@ -151,7 +151,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev
         continue-on-error: true
       - name: Compile-check Kafka adapter (--features kafka)
-        working-directory: batch-worker-sdk-rust
+        working-directory: sdk/rust
         run: cargo check --features kafka
         continue-on-error: true
 

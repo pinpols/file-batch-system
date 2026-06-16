@@ -70,7 +70,7 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 
 ## 4. 落地清单(每新增一种语言)
 
-- [ ] SDK 目录 `batch-worker-sdk-<lang>/`(core 保持平台运行时无关)
+- [ ] SDK 目录 `sdk/<lang>/`(core 保持平台运行时无关)
 - [ ] 常量 codegen / loader 从 `sdk-shared-constants.yaml` 取值 + parity 测试
 - [ ] contract runner 跑全部 fixtures 的 `then.expect`,100% 覆盖
 - [ ] `sdk-contract-parity.yml`:加 `paths` + `<lang>-contract` job + 接入 parity-report

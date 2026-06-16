@@ -16,7 +16,7 @@ import {
 } from "../src/constants.ts";
 
 const YAML_PATH = new URL(
-  "../../docs/api/sdk-shared-constants.yaml",
+  "../../../docs/api/sdk-shared-constants.yaml",
   import.meta.url,
 );
 

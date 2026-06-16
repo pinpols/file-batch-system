@@ -23,7 +23,7 @@ import {
 } from "../src/decide.ts";
 
 const FIXTURES_DIR = new URL(
-  "../../docs/api/sdk-contract-fixtures/",
+  "../../../docs/api/sdk-contract-fixtures/",
   import.meta.url,
 );
 

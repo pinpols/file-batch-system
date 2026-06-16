@@ -35,7 +35,7 @@ _WORKER = "w-1"
 _TASK_ID = 12345
 
 # <repo>/sdk-python/tests/contract/test_wire_report.py -> <repo>
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _FIXTURE_REPORT = (
     _REPO_ROOT / "docs" / "api" / "sdk-contract-fixtures" / "09-report-5xx-retry-backoff.json"
 )

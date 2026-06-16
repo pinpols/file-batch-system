@@ -21,7 +21,7 @@ from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.testkit import FakeBatchPlatform, make_test_config
 
 # <repo>/sdk-python/tests/contract/<file> -> <repo>
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _FIXTURES_DIR = _REPO_ROOT / "docs" / "api" / "sdk-contract-fixtures"
 
 

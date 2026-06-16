@@ -26,7 +26,7 @@ import pytest
 
 from batch_worker_sdk import constants
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 _YAML_PATH = _REPO_ROOT / "docs" / "api" / "sdk-shared-constants.yaml"
 
 # (yaml key, python module attribute) pairs covered by this parity test.

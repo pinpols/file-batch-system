@@ -23,7 +23,7 @@ use json::Json;
 const EXPECTED_FIXTURE_COUNT: usize = 12;
 
 fn fixtures_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/api/sdk-contract-fixtures")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/api/sdk-contract-fixtures")
 }
 
 /// Numeric coercion from a `given.config` / `given.state` JSON value.

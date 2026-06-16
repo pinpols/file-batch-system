@@ -12,7 +12,7 @@ use batch_worker_sdk::constants::{
 };
 
 fn yaml_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/api/sdk-shared-constants.yaml")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/api/sdk-shared-constants.yaml")
 }
 
 /// Strip an unquoted trailing `# comment` (preceded by whitespace) from a line.
