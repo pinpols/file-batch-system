@@ -22,6 +22,10 @@ on:
       - '.gitignore'
       - '.editorconfig'
       - '.claude/**'
+      # BYO 多语言 SDK(sdk/{python,go,rust,typescript})不进 Java reactor,由
+      # sdk-contract-parity.yml + sdk-python.yml 自验;纯 sdk 改动不触发 75min 全量 + e2e。
+      # 注意:Java SDK 模块 batch-worker-sdk* 是 reactor 模块,不在此列(照常跑)。
+      - 'sdk/**'
 
 permissions:
   contents: read
