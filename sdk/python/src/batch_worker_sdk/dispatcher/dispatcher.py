@@ -39,7 +39,7 @@ import logging
 import re
 import uuid
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import AuthError, PlatformError
@@ -50,6 +50,31 @@ from batch_worker_sdk.task.cancellation import CancellationSignal
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.result import SdkTaskResult
 from batch_worker_sdk.task.state import WorkerRuntimeState
+
+if TYPE_CHECKING:
+    from batch_worker_sdk.scheduler._directive import ParsedDirective
+
+
+def _directive_fields(
+    directive: ParsedDirective | dict[str, Any],
+) -> tuple[str | None, int | None]:
+    """从 directive(``ParsedDirective`` 强类型 **或** 原始 ``dict``)抽取
+    ``(runtimeState, desiredMaxConcurrent)``。
+
+    鸭子类型分派,避免 dispatcher → scheduler 的运行时 import:``dict`` 走
+    ``.get``;``ParsedDirective`` 走属性。``ParsedDirective.platform_status`` 是
+    ``WorkerRuntimeState`` 枚举,取其 ``.value`` 归一成字符串。
+    """
+    if isinstance(directive, dict):
+        raw_state = directive.get("runtimeState")
+        state = str(raw_state) if raw_state is not None else None
+        desired_raw = directive.get("desiredMaxConcurrent")
+        desired = int(desired_raw) if isinstance(desired_raw, int) else None
+        return state, desired
+    # ParsedDirective(或任何带这些属性的对象)。
+    status = directive.platform_status
+    state = status.value if status is not None else None
+    return state, directive.desired_max_concurrent
 
 
 def _new_idempotency_key() -> str:
@@ -151,6 +176,9 @@ class TaskDispatcher:
         self._draining: bool = False
         self._fatal: bool = False
         self._runtime_state: WorkerRuntimeState = WorkerRuntimeState.NORMAL
+        # 平台动态压并发(wire-protocol §2.1 desiredMaxConcurrent):None 表示沿用
+        # 本地配置 max_concurrent_tasks;>0 时收敛到平台建议值(取 min,不抬高)。
+        self._effective_max_concurrent: int | None = None
 
     # ─── 对外可观察状态 ───────────────────────────────────────────────
 
@@ -166,6 +194,19 @@ class TaskDispatcher:
     def runtime_state(self) -> WorkerRuntimeState:
         """当前由平台下发的运行态。"""
         return self._runtime_state
+
+    @property
+    def effective_max_concurrent(self) -> int:
+        """当前生效的并发上限 = min(本地配置, 平台 desiredMaxConcurrent)。
+
+        平台未下发 / 下发 ``None`` / ``<=0`` 时沿用本地 ``max_concurrent_tasks``;
+        下发正值时收敛到其与本地配置的较小者(只下压、不抬高,对齐 fixture 27
+        与 Go/Java ``effectiveMaxConcurrent`` 语义)。
+        """
+        local = self._config.max_concurrent_tasks
+        if self._effective_max_concurrent is None:
+            return local
+        return min(local, self._effective_max_concurrent)
 
     @property
     def is_fatal(self) -> bool:
@@ -188,20 +229,38 @@ class TaskDispatcher:
 
     # ─── 平台 directive 应用 ──────────────────────────────────────────
 
-    def apply_platform_directive(self, directive: dict[str, Any]) -> None:
+    def apply_platform_directive(self, directive: ParsedDirective | dict[str, Any]) -> None:
         """应用一次心跳响应中携带的 directive。
 
-        目前实现仅读取 ``runtimeState``(四个 ``WorkerRuntimeState`` 之一)
-        并落到本地状态。后续可扩展 drain deadline 追踪、并发调整提示、配置
-        热更等。
+        接受两种形态(向后兼容):
+
+        - :class:`ParsedDirective` —— ``HeartbeatScheduler`` 解析后回灌的强类型
+          视图(**生产路径**)。早先这里只认 ``dict``,对 ``ParsedDirective`` 会
+          ``AttributeError`` 被心跳循环吞掉,导致心跳下发的 FSM 切换 / 并发收敛
+          **永不生效**(directive 覆盖缺口)。
+        - ``dict`` —— 直接传原始 directive 块(测试 / 旧调用方)。
+
+        应用两件事:
+
+        1. ``runtimeState`` → 本地四态 FSM(NORMAL/DEGRADED/PAUSED/DRAINING)。
+           PAUSED/DRAINING 会让 ``accepts_new_tasks()`` 返回 False,驱动 Kafka
+           pause;DEGRADED/NORMAL 继续接单(DEGRADED 不 pause)。
+        2. ``desiredMaxConcurrent`` → 收敛 ``effective_max_concurrent``(只下压)。
+
+        其余字段(``pausedTaskTypes`` per-message drop 等)仍属后续扩展。
         """
-        raw = directive.get("runtimeState")
-        if raw is None:
-            return
-        try:
-            self._runtime_state = WorkerRuntimeState(raw)
-        except ValueError:
-            logger.warning("ignoring unknown runtimeState=%r in platform directive", raw)
+        state_raw, desired = _directive_fields(directive)
+        if state_raw is not None:
+            try:
+                self._runtime_state = WorkerRuntimeState(state_raw)
+            except ValueError:
+                logger.warning("ignoring unknown runtimeState=%r in platform directive", state_raw)
+        # desiredMaxConcurrent:>0 收敛;None / <=0 → 清回本地配置(沿用 03 语义)。
+        if desired is not None and desired > 0:
+            self._effective_max_concurrent = desired
+        elif desired is not None:
+            # 显式下发 0 / 负值:视为「撤销收敛」,回落本地配置。
+            self._effective_max_concurrent = None
 
     # ─── 取消信号 ────────────────────────────────────────────────────
 

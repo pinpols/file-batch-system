@@ -50,6 +50,8 @@ from batch_worker_sdk.dispatcher.dispatcher import (
 from batch_worker_sdk.exceptions import PersistentClientError, TransientError
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.internal._kafka import KafkaTaskConsumer
+from batch_worker_sdk.scheduler._heartbeat import HeartbeatScheduler
+from batch_worker_sdk.task.state import WorkerRuntimeState
 
 # <repo>/sdk-python/tests/contract/test_contract_runner.py -> <repo>
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -78,6 +80,21 @@ _P1_HTTP_FIXTURES: set[str] = {
 # 副作用(无 HTTP wire)。
 _P2_KAFKA_FIXTURES: set[str] = {
     "11-kafka-partition-pause-on-capacity",
+}
+
+# 心跳 directive **应用侧**硬断言(#11 补齐):此前 03/04/05/06/26/27 只在 P1
+# 走「响应体回显」断言,对 directive 的实际生效(FSM 切换 / Kafka pause/none /
+# effectiveMaxConcurrent / heartbeatNextIntervalMs)**零断言**,26/27 更是既不断言
+# 也不 xfail。这里驱动**真实** HeartbeatScheduler.tick →(经生产路径)解析 directive
+# → 回灌 dispatcher.apply_platform_directive + _apply_hint,再用真实
+# KafkaTaskConsumer.apply_backpressure 验 kafka 维度,断言 then.expect 各字段。
+_DIRECTIVE_APPLY_FIXTURES: set[str] = {
+    "03-heartbeat-directive-normal",
+    "04-heartbeat-directive-draining",
+    "05-heartbeat-directive-paused",
+    "06-heartbeat-next-interval-hint",
+    "26-heartbeat-directive-degraded",
+    "27-heartbeat-desired-max-concurrent",
 }
 
 # 其它仍 pending 的。
@@ -214,7 +231,7 @@ async def _invoke(client: PlatformHttpClient, when: dict[str, Any]) -> dict[str,
 
 @pytest.mark.contract
 @pytest.mark.parametrize("fixture_path", _FIXTURES, ids=_FIXTURE_IDS)
-async def test_contract_fixture(  # noqa: PLR0912 — fixture 路由表,分支随 fixture 类别线性增长
+async def test_contract_fixture(  # noqa: PLR0911, PLR0912 — fixture 路由表,分支随 fixture 类别线性增长
     fixture_path: Path,
     httpx_mock: HTTPXMock,
     request: pytest.FixtureRequest,
@@ -237,6 +254,11 @@ async def test_contract_fixture(  # noqa: PLR0912 — fixture 路由表,分支�
     # SCHEMA_VERSIONS_SUPPORTED,与 TS/Go/Rust 决策核同一规则硬断言。
     if fixture_id in _SCHEMA_ACCEPT_FIXTURES:
         _assert_schema_accept_fixture(fixture_id)
+        return
+
+    # 心跳 directive 应用侧硬断言(#11)。
+    if fixture_id in _DIRECTIVE_APPLY_FIXTURES:
+        await _assert_directive_apply_fixture(fixture_id, httpx_mock, request)
         return
 
     if fixture_id in _DEFERRED_FIXTURES:
@@ -400,19 +422,132 @@ async def _assert_kafka_fixture(
             assert mock_consumer.resume.call_count == 0
             assert consumer.paused is True
 
-            # 掉一个 in-flight → 期望 resume。
-            done_tid = next(iter(dispatcher._in_flight))
-            dispatcher._in_flight[done_tid].cancel()
-            dispatcher._in_flight.pop(done_tid)
+            # 容量维度 resume 带 hysteresis(对齐 Java max/2):掉到 max-1 仍 paused,
+            # 直到 in_flight < max//2 才 resume。先掉一个验证「不抖动」。
+            first_tid = next(iter(dispatcher._in_flight))
+            dispatcher._in_flight[first_tid].cancel()
+            dispatcher._in_flight.pop(first_tid)
+            consumer.apply_backpressure()
+            assert mock_consumer.resume.call_count == 0, (
+                f"{fixture_id}: hysteresis — must NOT resume at max-1 (still >= max//2)"
+            )
+            assert consumer.paused is True
 
+            # 继续掉到 in_flight < max//2 → 期望 resume(resumeWhenDrained)。
+            while dispatcher.in_flight_count() >= max(1, max_in_flight // 2):
+                tid = next(iter(dispatcher._in_flight))
+                dispatcher._in_flight[tid].cancel()
+                dispatcher._in_flight.pop(tid)
             consumer.apply_backpressure()
             assert mock_consumer.resume.call_count == 1, (
-                f"{fixture_id}: expected resume(*assignment) when in-flight drops"
+                f"{fixture_id}: expected resume(*assignment) when in-flight drops below max//2"
             )
             assert consumer.paused is False
         finally:
             for t in list(dispatcher._in_flight.values()):
                 t.cancel()
+    finally:
+        await http.close()
+
+
+# fixture then.expect.fsmTransition 的字符串 → WorkerRuntimeState 枚举。
+_FSM_BY_NAME: dict[str, WorkerRuntimeState] = {s.value: s for s in WorkerRuntimeState}
+
+
+async def _assert_directive_apply_fixture(
+    fixture_id: str,
+    httpx_mock: HTTPXMock,
+    request: pytest.FixtureRequest,
+) -> None:
+    """#11:心跳 directive **应用侧**硬断言(03/04/05/06/26/27)。
+
+    驱动真实 ``HeartbeatScheduler.tick()`` 走生产路径:心跳 HTTP →
+    ``parse_directive`` → ``dispatcher.apply_platform_directive`` + ``_apply_hint``。
+    然后按 ``then.expect`` 断言:
+
+    - ``fsmTransition``        → ``dispatcher.runtime_state``
+    - ``kafka`` (none/pause)   → 真实 ``KafkaTaskConsumer.apply_backpressure`` 后的
+                                 ``consumer.paused``(DEGRADED/NORMAL 不 pause;
+                                 PAUSED/DRAINING pause)
+    - ``effectiveMaxConcurrent`` → ``dispatcher.effective_max_concurrent``
+    - ``heartbeatNextIntervalMs`` → ``scheduler.current_interval_s * 1000``
+
+    若某条目标 Python 确实未实现,显式 ``pytest.mark.xfail(strict=True)``;当前
+    六条全部已实现,无 xfail。
+    """
+    payload = _PAYLOADS[fixture_id]
+    given = payload.get("given") or {}
+    when = payload.get("when") or {}
+    expect = ((payload.get("then") or {}).get("expect")) or {}
+    cfg_block = dict(given.get("config") or {})
+
+    cfg = BatchPlatformClientConfig(
+        base_url="http://orch:8081",
+        tenant_id=str(cfg_block.get("tenantId", "acme")),
+        worker_code=str(cfg_block.get("workerCode", "w-1")),
+        max_concurrent_tasks=int(cfg_block.get("maxConcurrentTasks", 4)),
+        kafka_bootstrap="kafka:9092",
+        kafka_group_id="g-1",
+        kafka_topic_pattern="batch.task.dispatch.acme.*",
+    )
+
+    httpx_mock.add_response(
+        url=cfg.base_url + when["path"],
+        method=when["method"],
+        status_code=when["responseStatus"],
+        json=when.get("responseBody"),
+    )
+
+    http = PlatformHttpClient(cfg)
+    try:
+        dispatcher = TaskDispatcher(cfg, http)
+        scheduler = HeartbeatScheduler(cfg, http, dispatcher)
+
+        # 生产路径:心跳 → 解析 directive → 应用到 dispatcher + 节流提示。
+        directive = await scheduler.tick()
+        assert directive is not None, f"{fixture_id}: heartbeat tick returned None (HTTP failed)"
+
+        # ── fsmTransition ────────────────────────────────────────────────
+        if "fsmTransition" in expect:
+            want = _FSM_BY_NAME[expect["fsmTransition"]]
+            assert dispatcher.runtime_state == want, (
+                f"{fixture_id}: fsmTransition expected {want} got {dispatcher.runtime_state}"
+            )
+
+        # ── kafka(none / pause)── 用真实 backpressure 决策,而非读心。
+        if "kafka" in expect:
+            mock_consumer = MagicMock()
+            mock_consumer.assignment.return_value = {"part-0"}
+            consumer = KafkaTaskConsumer(cfg, dispatcher, consumer=mock_consumer)
+            consumer.apply_backpressure()
+            want_kafka = expect["kafka"]
+            if want_kafka == "pause":
+                assert consumer.paused is True, (
+                    f"{fixture_id}: expected kafka pause for state={dispatcher.runtime_state}"
+                )
+                assert mock_consumer.pause.call_count == 1
+            elif want_kafka == "none":
+                assert consumer.paused is False, (
+                    f"{fixture_id}: expected NO kafka pause for state={dispatcher.runtime_state}"
+                )
+                assert mock_consumer.pause.call_count == 0
+            else:
+                pytest.fail(f"{fixture_id}: unhandled expect.kafka={want_kafka!r}")
+
+        # ── effectiveMaxConcurrent ───────────────────────────────────────
+        if "effectiveMaxConcurrent" in expect:
+            assert dispatcher.effective_max_concurrent == expect["effectiveMaxConcurrent"], (
+                f"{fixture_id}: effectiveMaxConcurrent expected "
+                f"{expect['effectiveMaxConcurrent']} got {dispatcher.effective_max_concurrent}"
+            )
+
+        # ── heartbeatNextIntervalMs ──────────────────────────────────────
+        if "heartbeatNextIntervalMs" in expect:
+            got_ms = round(scheduler.current_interval_s * 1000)
+            assert got_ms == expect["heartbeatNextIntervalMs"], (
+                f"{fixture_id}: heartbeatNextIntervalMs expected "
+                f"{expect['heartbeatNextIntervalMs']} got {got_ms}"
+            )
     finally:
         await http.close()
 

@@ -22,7 +22,7 @@ from collections.abc import Awaitable
 from typing import Any
 
 from batch_worker_sdk.exceptions import SdkTaskStopped
-from batch_worker_sdk.handler._base import CANCELLED_CODE, SdkRowResult
+from batch_worker_sdk.handler._base import SdkRowResult
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.result import SdkTaskResult
 
@@ -117,9 +117,11 @@ class ResumableTemplateMixin:
         try:
             return await coro
         except SdkTaskStopped as stop:
-            return SdkTaskResult.fail(
-                CANCELLED_CODE,
-                f"task cancelled at safe-point break_position={stop.break_position}",
+            # 统一终态形状(对齐 Go/Java):errorCode=CANCELLED + outputs.breakPosition
+            # 携带已安全提交到的断点,供平台 / 后续续跑读取停点。
+            return SdkTaskResult.cancelled(
+                break_position=stop.break_position,
+                message=f"task cancelled at safe-point break_position={stop.break_position}",
             )
 
 

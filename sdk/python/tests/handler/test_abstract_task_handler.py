@@ -113,6 +113,9 @@ async def test_cancel_signal_short_circuits_before_do_execute() -> None:
     result = await _MinimalHandler().execute(ctx)
     assert result.success is False
     assert result.output["errorCode"] == CANCELLED_CODE
+    # #12 回归:CANCELLED 终态形状统一 —— 即便取消在执行前(无提交断点),也带
+    # breakPosition(空 dict),与安全点取消(_resumable._guard)一致。
+    assert result.output["breakPosition"] == {}
 
 
 def test_base_satisfies_protocol() -> None:

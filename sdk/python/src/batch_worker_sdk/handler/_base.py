@@ -144,9 +144,10 @@ class SdkAbstractTaskHandler(ABC):
             await self._before(ctx)
             started = True
             if ctx.cancel_signal is not None and ctx.cancel_signal.is_cancellation_requested:
-                return SdkTaskResult.fail(
-                    CANCELLED_CODE,
-                    f"task cancelled before execution (taskId={ctx.task_id})",
+                # 取消发生在执行前:无已提交断点,breakPosition 为空 dict,但形状
+                # 与安全点取消(_resumable._guard)统一(errorCode=CANCELLED + breakPosition)。
+                return SdkTaskResult.cancelled(
+                    message=f"task cancelled before execution (taskId={ctx.task_id})",
                 )
             result = await self._do_execute(ctx)
             # Java 语义:handler 返回 null 转成 fail

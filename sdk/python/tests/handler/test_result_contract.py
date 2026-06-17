@@ -69,6 +69,22 @@ def test_empty_output_defaults_to_empty_dict() -> None:
     assert parsed["message"] == "ok"
 
 
+def test_cancelled_result_carries_break_position_in_outputs() -> None:
+    """#12:协作取消终态 = errorCode=CANCELLED + output['breakPosition'](对齐 Go/Java)。"""
+    result = SdkTaskResult.cancelled(break_position={"id": 4096})
+    parsed = _round_trip(result)
+    assert parsed["success"] is False
+    assert parsed["output"]["errorCode"] == "CANCELLED"
+    assert parsed["output"]["breakPosition"] == {"id": 4096}
+
+
+def test_cancelled_result_empty_break_position_still_present() -> None:
+    """无断点(执行前取消)时,breakPosition 仍以空 dict 出现,保证形状一致。"""
+    result = SdkTaskResult.cancelled()
+    assert result.output["errorCode"] == "CANCELLED"
+    assert result.output["breakPosition"] == {}
+
+
 def test_three_state_coverage_matrix() -> None:
     """sanity 矩阵:成功、fail 失败、异常驱动失败三种状态产出可线区分
     的 JSON。"""
