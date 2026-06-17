@@ -367,17 +367,37 @@ pub fn apply_renew(resp: &RenewResponse) -> Decision {
 // ---------------------------------------------------------------------------
 
 /// Decide Kafka backpressure on a freshly received message given current
-/// concurrency. When in-flight has reached `max_concurrent`, pause the
-/// assignment and resume once one slot drains.
-pub fn decide_backpressure(in_flight: i64, max_concurrent: i64) -> Decision {
+/// concurrency and whether the assignment is already paused.
+///
+/// Hysteresis (aligned with Java `KafkaTaskConsumer.applyBackpressure`): pause
+/// when in-flight has reached `max_concurrent`; resume only once in-flight drops
+/// BELOW `max_concurrent / 2` (integer division, floored at 1). Pulling the
+/// pause / resume thresholds apart prevents in-flight from thrashing pause/resume
+/// in the max-1 / max band, where every resume would trigger a fresh poll burst.
+///
+/// - `in_flight >= max_concurrent`             -> backpressure / pause (idempotent if already paused)
+/// - `currently_paused && in_flight < max/2`   -> backpressure / resume
+/// - otherwise                                 -> none (stay paused in the `[max/2, max)` band)
+pub fn decide_backpressure(in_flight: i64, max_concurrent: i64, currently_paused: bool) -> Decision {
     if in_flight >= max_concurrent {
         let mut d = Decision::with_action("backpressure");
         d.kafka = Some("pause".to_string());
         d.resume_when_drained = Some(true);
         d
+    } else if currently_paused && in_flight < resume_threshold(max_concurrent) {
+        let mut d = Decision::with_action("backpressure");
+        d.kafka = Some("resume".to_string());
+        d
     } else {
         Decision::with_action("none")
     }
+}
+
+/// Hysteresis low-water mark: in-flight must fall strictly below it to resume.
+/// `max_concurrent / 2` (integer division), floored at 1 so a `max_concurrent`
+/// of 1 still has a reachable resume point.
+fn resume_threshold(max_concurrent: i64) -> i64 {
+    (max_concurrent / 2).max(1)
 }
 
 // ---------------------------------------------------------------------------
@@ -727,13 +747,55 @@ mod tests {
 
     #[test]
     fn decide_backpressure_pause_and_none() {
-        let paused = decide_backpressure(4, 4);
+        let paused = decide_backpressure(4, 4, false);
         assert_eq!(paused.action, "backpressure");
         assert_eq!(paused.kafka.as_deref(), Some("pause"));
         assert_eq!(paused.resume_when_drained, Some(true));
 
-        let none = decide_backpressure(2, 4);
+        let none = decide_backpressure(2, 4, false);
         assert_eq!(none.action, "none");
+    }
+
+    /// max/2 hysteresis (#8), aligned with Java
+    /// `KafkaTaskConsumer.applyBackpressure`: pause >= max; resume only when
+    /// in-flight drops below max/2; stay paused in the `[max/2, max)` band so the
+    /// max-1 / max boundary does not thrash pause/resume.
+    #[test]
+    fn decide_backpressure_hysteresis() {
+        // (in_flight, max, currently_paused) -> (action, kafka)
+        let cases: &[(i64, i64, bool, &str, Option<&str>)] = &[
+            // pause edge: at or over capacity always pauses (fixture 11 contract).
+            (4, 4, false, "backpressure", Some("pause")),
+            (5, 4, false, "backpressure", Some("pause")),
+            // already paused, at capacity -> still pause (idempotent), never resume.
+            (4, 4, true, "backpressure", Some("pause")),
+            // max-1 just below cap while paused: must NOT resume (in hysteresis band).
+            (3, 4, true, "none", None),
+            // in the [max/2, max) band while paused: hold paused, no flapping.
+            (2, 4, true, "none", None),
+            // drop below max/2 while paused -> resume.
+            (1, 4, true, "backpressure", Some("resume")),
+            // not paused and below cap -> nothing to do.
+            (1, 4, false, "none", None),
+            // max=10 ladder mirrors the Java hysteresis test: 6 holds, 5 holds, 4 resumes.
+            (6, 10, true, "none", None),
+            (5, 10, true, "none", None),
+            (4, 10, true, "backpressure", Some("resume")),
+            // max=1 floors resume threshold at 1: inflight 0 resumes.
+            (0, 1, true, "backpressure", Some("resume")),
+        ];
+        for &(in_flight, max, paused, action, kafka) in cases {
+            let d = decide_backpressure(in_flight, max, paused);
+            assert_eq!(
+                d.action, action,
+                "action for in_flight={in_flight} max={max} paused={paused}"
+            );
+            assert_eq!(
+                d.kafka.as_deref(),
+                kafka,
+                "kafka for in_flight={in_flight} max={max} paused={paused}"
+            );
+        }
     }
 
     #[test]

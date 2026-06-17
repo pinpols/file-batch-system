@@ -144,7 +144,10 @@ func (p *MessagePipeline) OnMessage(rec Record) (TaskDispatchMessage, MessageDis
 	}
 
 	// §1.5/§2 capacity backpressure: pause partition when in-flight is full.
-	d := protocol.DecideBackpressure(p.inFlight(), p.maxConcurrent)
+	// On the receive path in-flight is at/above max (we just got a new message),
+	// so this only ever yields pause; the hysteresis resume path runs as a slot
+	// frees (see lifecycle.go), where the decision core gates resume on max/2.
+	d := protocol.DecideBackpressure(p.inFlight(), p.maxConcurrent, p.fsm.Paused())
 	if d.Action == "backpressure" {
 		p.fsm.ApplyKafkaDirective(d.Kafka) // sets paused=true
 		p.logger.Printf("INFO backpressure: inFlight=%d max=%d paused partition taskId=%s",

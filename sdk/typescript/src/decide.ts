@@ -267,17 +267,39 @@ export interface BackpressureDecision {
 
 /**
  * Decide Kafka backpressure on a freshly received message given current
- * concurrency. When in-flight has reached maxConcurrent, pause the assignment
- * and resume once one slot drains.
+ * concurrency and whether the assignment is already paused.
+ *
+ * Hysteresis (aligned with Java `KafkaTaskConsumer.applyBackpressure`): pause
+ * when in-flight has reached `maxConcurrent`; resume only once in-flight drops
+ * BELOW `maxConcurrent / 2` (integer division, floored at 1). Pulling the
+ * pause / resume thresholds apart prevents in-flight from thrashing pause/resume
+ * in the max-1 / max band, where every resume would trigger a fresh poll burst.
+ *
+ * - `inFlight >= maxConcurrent`            → backpressure / pause (idempotent if already paused)
+ * - `currentlyPaused && inFlight < max/2`  → backpressure / resume
+ * - otherwise                              → none (stay paused in the `[max/2, max)` band)
  */
 export function decideBackpressure(
   inFlight: number,
   maxConcurrent: number,
+  currentlyPaused = false,
 ): BackpressureDecision {
   if (inFlight >= maxConcurrent) {
     return { action: "backpressure", kafka: "pause", resumeWhenDrained: true };
   }
+  if (currentlyPaused && inFlight < resumeThreshold(maxConcurrent)) {
+    return { action: "backpressure", kafka: "resume" };
+  }
   return { action: "none" };
+}
+
+/**
+ * Hysteresis low-water mark: in-flight must fall strictly below it to resume.
+ * `maxConcurrent / 2` (integer division), floored at 1 so a `maxConcurrent` of 1
+ * still has a reachable resume point.
+ */
+function resumeThreshold(maxConcurrent: number): number {
+  return Math.max(1, Math.floor(maxConcurrent / 2));
 }
 
 // ---------------------------------------------------------------------------

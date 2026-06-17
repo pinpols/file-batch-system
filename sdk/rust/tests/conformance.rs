@@ -126,7 +126,11 @@ fn compute(fx: &Json) -> Decision {
         let in_flight = num_from(state.and_then(|s| s.get("inFlight")), 0);
         let max_concurrent =
             num_from(config.and_then(|c| c.get("maxConcurrentTasks")), i64::MAX);
-        return decide_backpressure(in_flight, max_concurrent);
+        let currently_paused = state
+            .and_then(|s| s.get("currentlyPaused"))
+            .and_then(Json::as_bool)
+            .unwrap_or(false);
+        return decide_backpressure(in_flight, max_concurrent, currently_paused);
     }
 
     // ----- HTTP -----

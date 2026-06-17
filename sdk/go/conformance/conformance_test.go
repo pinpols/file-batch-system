@@ -84,7 +84,8 @@ func compute(fx fixture) (protocol.Decision, error) {
 		}
 		inFlight := numFromAny(fx.Given.State["inFlight"], 0)
 		maxConcurrent := numFromAny(fx.Given.Config["maxConcurrentTasks"], int(^uint(0)>>1))
-		return protocol.DecideBackpressure(inFlight, maxConcurrent), nil
+		currentlyPaused, _ := fx.Given.State["currentlyPaused"].(bool)
+		return protocol.DecideBackpressure(inFlight, maxConcurrent, currentlyPaused), nil
 	}
 
 	// ----- HTTP -----

@@ -112,3 +112,55 @@ func TestApplyHeartbeatDirective_HintClamp(t *testing.T) {
 		t.Fatalf("clamp: got %v, want 1000", d.HeartbeatNextIntervalMs)
 	}
 }
+
+// DecideBackpressure max/2 hysteresis (#8), aligned with Java
+// KafkaTaskConsumer.applyBackpressure: pause >= max; resume only when in-flight
+// drops below max/2; stay paused in the [max/2, max) band so the max-1 / max
+// boundary does not thrash pause/resume.
+func TestDecideBackpressure_Hysteresis(t *testing.T) {
+	kafkaOf := func(d Decision) string {
+		if d.Kafka == nil {
+			return ""
+		}
+		return *d.Kafka
+	}
+	cases := []struct {
+		name       string
+		inFlight   int
+		max        int
+		paused     bool
+		wantAction string
+		wantKafka  string
+	}{
+		// pause edge: at or over capacity always pauses (fixture 11 contract).
+		{"at-capacity pauses", 4, 4, false, "backpressure", "pause"},
+		{"over-capacity pauses", 5, 4, false, "backpressure", "pause"},
+		// already paused, at capacity -> still pause (idempotent), never resume.
+		{"paused at capacity stays pause", 4, 4, true, "backpressure", "pause"},
+		// max-1 just below cap while paused: must NOT resume (in hysteresis band).
+		{"paused max-1 no resume", 3, 4, true, "none", ""},
+		// in the [max/2, max) band while paused: hold paused, no flapping.
+		{"paused at max/2 holds (=2, not < 2)", 2, 4, true, "none", ""},
+		// drop below max/2 while paused -> resume.
+		{"paused below max/2 resumes", 1, 4, true, "backpressure", "resume"},
+		// not paused and below cap -> nothing to do.
+		{"not paused below cap none", 1, 4, false, "none", ""},
+		// max=10 ladder mirrors the Java hysteresis test: 6 holds, 5 holds, 4 resumes.
+		{"max10 inflight6 holds", 6, 10, true, "none", ""},
+		{"max10 inflight5 holds (=5 not < 5)", 5, 10, true, "none", ""},
+		{"max10 inflight4 resumes", 4, 10, true, "backpressure", "resume"},
+		// max=1 floors resume threshold at 1: inflight 0 resumes.
+		{"max1 inflight0 resumes", 0, 1, true, "backpressure", "resume"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := DecideBackpressure(c.inFlight, c.max, c.paused)
+			if d.Action != c.wantAction {
+				t.Fatalf("action = %q, want %q", d.Action, c.wantAction)
+			}
+			if got := kafkaOf(d); got != c.wantKafka {
+				t.Fatalf("kafka = %q, want %q", got, c.wantKafka)
+			}
+		})
+	}
+}
