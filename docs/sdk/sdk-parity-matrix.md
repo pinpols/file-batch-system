@@ -58,19 +58,32 @@
 | typed 模板 | Import/Export/Process/Dispatch | `_typed_import/export/process/dispatch.py` |
 | 幂等件 | Idempotent/KeyResolver/Entity/Store/Handler | `_handler/_key_resolver/_entity/_store.py` |
 
-## 4.5 Kafka offset-commit 契约(五语言**必须**一致)
+## 4.5 Kafka offset-commit 契约
 
-每条派单消息的处置决定一个 disposition,consumer 据此决定是否提交 offset。**权威源**:[`wire-protocol.md`](wire-protocol.md) §A、契约 fixture [`16/17/18-kafka-schema-version-*`](../api/sdk-contract-fixtures/) + [`28-kafka-paused-task-type-drop`](../api/sdk-contract-fixtures/)。Java `DispatchDecision` / Go `MessageDisposition` / Python `DispatchDisposition` 三套命名,语义必须等价:
+每条派单消息的处置决定一个 disposition,consumer 据此决定是否提交 offset。**权威源**:[`wire-protocol.md`](wire-protocol.md) §A、契约 fixture [`16/17/18-kafka-schema-version-*`](../api/sdk-contract-fixtures/) + [`28-kafka-paused-task-type-drop`](../api/sdk-contract-fixtures/)。命名:Java `DispatchDecision` / Go `MessageDisposition` / Python `DispatchDisposition` / Rust `MessageOutcome` / TS `PipelineOutcome`。
 
-| 场景 | disposition | 提交 offset? | 理由 |
-|---|---|---|---|
-| 成功提交执行 / 重复投递 | ACCEPTED | ✅ 提交 | 已受理,offset 前移 |
-| 解码失败 / 字段非法(taskId 非 int 等)真 poison | DROP_TERMINAL | ✅ 提交 | 重投也解不了,提交避免永久 HOL 卡分区(§A 只约束 schemaVersion,不覆盖 decode) |
-| 缺失 / 空白 schemaVersion | ACCEPTED(按 v1) | ✅ 提交 | fixture 16:缺省按 v1 **accept**,不可拒 |
-| **未知大版本(v3+)** | **RETRY_LATER** | **❌ 不提交** | **fixture 18 硬契约:`do NOT commit the offset`** / `sdkMustNot: commit offset for a rejected message (would silently drop the task)`。withhold → HOL 阻塞分区直到 SDK 升级(fail-loud,逼迫升级) |
-| fatal / draining / 平台 PAUSED|DRAINING / 跨租户 | RETRY_LATER | ❌ 不提交 | 瞬态 / 需重投到正确租户;seek 回本条 + pause 分区,平台恢复后从原位续消费 |
+**契约钉死的 4 行 —— 五语言已一致**(2026-06-17 亲核 + Rust/TS 有断言测试):
 
-**历史教训(2026-06-17)**:Java 曾对未知大版本返回 `DROP_TERMINAL`(提交 offset),**违反 fixture 18**,会静默跳过 v3 任务;Go 一直正确,Python 早期还会无差别 commit 整批(连 RETRY_LATER 也提交)。已分别在 PR #545(Python 全套 disposition + schema)/ #546(Java schema-reject)修齐。核查此类问题**必须实际读 dispatcher/consumer 的 disposition 分支 + 比对 fixture 16/17/18/28**,不能只看 happy-path。
+| 场景 | 提交 offset? | 理由 / 权威 |
+|---|---|---|
+| 成功受理 / 重复投递(ACCEPTED) | ✅ 提交 | 已受理,offset 前移 |
+| 缺失 / 空白 schemaVersion | ✅ 提交(按 v1) | fixture 16:缺省按 v1 **accept** |
+| **未知大版本(v3+)** | **❌ 不提交** | **fixture 18 硬契约 `do NOT commit`** / `sdkMustNot: commit offset for a rejected message`。withhold → HOL 阻塞直到 SDK 升级(fail-loud) |
+| fatal / draining / 平台 PAUSED\|DRAINING / 跨租户 | ❌ 不提交 | 瞬态 / 需重投到正确租户;seek 回本条 + pause 分区 |
+
+> Rust/TS(薄档)同样实现以上 4 行:Rust `MessageOutcome::{RejectSchema,DropForeignTenant}` + `should_commit_offset()`(测试 `rejects_unknown_schema_version` 断言 `!should_commit_offset()`、`null_and_empty_schema_treated_as_v1`);TS `PipelineOutcome` 各分支带 `committed` 标志(`rejected-schema`/`dropped-tenant`/`backpressure` 均 `committed:false`)。
+
+**⚠️ 未决分歧:decode / parse-error(契约未规定,§A 只管 schemaVersion,无对应 fixture)**
+
+| SDK | 损坏 / 非 JSON / 字段非法的消息 | 后果 |
+|---|---|---|
+| Java / Python | **提交**(DROP_TERMINAL) | 跳过 poison,分区继续 |
+| Go / TS | **不提交**(DECODE_ERROR / parse-error → `committed:false`) | 一条损坏消息**永久 HOL 阻塞分区**(重读→重败→永不前移) |
+| Rust | N/A | 解码是租户 adapter 的事(薄档引擎只收已解析 `TaskRecord`),提交策略由租户定 |
+
+Java/Python 的"提交跳过"在可用性上更稳(损坏字节不该 wedge 整个分区);Go/TS 的 withhold 是潜在可用性隐患。**因无 fixture 钉死,这是真设计分歧,需决策**:加一个 decode-error fixture 统一到"提交跳过"(推荐),还是留作可接受差异。
+
+**历史教训(2026-06-17)**:Java 曾对未知大版本返回 `DROP_TERMINAL`(提交,**违反 fixture 18** 静默丢 v3 任务);Python 早期无差别 commit 整批(连 RETRY_LATER 也提交)+ 缺失 schema 误拒。已在 PR #545/#546 修齐。**核查此类问题必须实际读各 SDK consumer 的 disposition 分支 + 比对 fixture 16/17/18/28,逐 SDK 看,不能只看 happy-path 或假设"一致"**——decode 行的分歧正是真去读 Rust/TS 才暴露的。
 
 ## 5. 真正"没对齐"的——是工程尾巴 / 有意边界,不是代码缺口
 
@@ -84,5 +97,5 @@
 
 **该对齐的维度(协议引擎 / ADR-037 / 幂等 / 富档 batteries / Kafka offset-commit 契约)五语言已对齐,无需改代码的缺口。** 差异项要么是两档定位的有意设计(薄档无 typed/atomic/builtin、可观测 BYO),要么是发布动作(尚未 publish)。
 
-> offset-commit 契约的对齐是 PR #545/#546 闭环的(见 §4.5);此前 Java/Python 各有违规,现 Java/Go/Python 完全一致。
+> offset-commit 契约**契约钉死的 4 行**五语言已对齐(PR #545/#546 闭环,Rust/TS 亦符合,见 §4.5);**唯一未决**是 decode/parse-error 行(契约未规定):Java/Python 提交跳过、Go/TS withhold、Rust 委托租户——需决策是否加 fixture 统一。
 </content>
