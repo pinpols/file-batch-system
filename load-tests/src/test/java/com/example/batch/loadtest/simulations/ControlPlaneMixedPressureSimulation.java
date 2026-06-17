@@ -104,7 +104,12 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
     setUp(populations.toArray(PopulationBuilder[]::new))
         .protocols(httpProtocol)
         .maxDuration(Duration.ofSeconds(GatlingConfig.DURATION_SECONDS + 60L))
-        .assertions(global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+        .assertions(
+            // 控制面混压下,launch/claim/report 写延迟会先于错误率劣化逼近瓶颈
+            // (单机~20 jobs/s 上限);仅卡错误率会"绿着已逼近瓶颈"。补全局 p95
+            // 写延迟门,使容量验收在延迟侧也有硬 SLO(slo.write.p95ms,默认 500ms)。
+            global().responseTime().percentile(95).lt(GatlingConfig.WRITE_P95_MS),
+            global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
   }
 
   private static void addLaunchPopulation(
