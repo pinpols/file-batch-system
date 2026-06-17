@@ -99,7 +99,7 @@ func TestLeaseRenew_CancelRequested(t *testing.T) {
 
 	reg := NewInFlightRegistry()
 	sig := NewCancellationSignal(context.Background())
-	reg.Add("task-1", sig)
+	reg.Add("task-1", sig, "")
 
 	ls := NewLeaseRenewalScheduler(fp, reg, "w1", "t1", WithLeaseInterval(time.Millisecond))
 	ls.RenewOnce(context.Background())
@@ -115,7 +115,7 @@ func TestLeaseRenew_NotFoundDrops(t *testing.T) {
 	fp.RenewErr = &NotFoundError{Op: "renew"}
 
 	reg := NewInFlightRegistry()
-	reg.Add("task-1", NewCancellationSignal(context.Background()))
+	reg.Add("task-1", NewCancellationSignal(context.Background()), "")
 	ls := NewLeaseRenewalScheduler(fp, reg, "w1", "t1", WithLeaseInterval(time.Millisecond))
 
 	dropped := ls.RenewOnce(context.Background())

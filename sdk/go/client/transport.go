@@ -48,19 +48,25 @@ type ReportRequest struct {
 	ErrorCode     protocol.ErrorCode `json:"errorCode,omitempty"`
 	Outputs       map[string]any     `json:"outputs,omitempty"`
 	ResultSummary string             `json:"resultSummary,omitempty"`
+	// PartitionInvocationID carries the claim-time partitionInvocationId through
+	// to report so the platform's late-invocation CAS guard isn't skipped
+	// (ADR-014, R3-P0-5; must be invariant across claim→renew→report).
+	PartitionInvocationID string `json:"partitionInvocationId,omitempty"`
 }
 
 // NewReportRequest folds a handler TaskResult into the wire report DTO, filling
-// the openapi-required identity + success fields.
-func NewReportRequest(taskID, tenantID, workerID string, result TaskResult) ReportRequest {
+// the openapi-required identity + success fields. partitionInvocationID is the
+// value cached at claim (empty for non-partition tasks).
+func NewReportRequest(taskID, tenantID, workerID, partitionInvocationID string, result TaskResult) ReportRequest {
 	return ReportRequest{
-		TaskID:        taskID,
-		TenantID:      tenantID,
-		WorkerID:      workerID,
-		Success:       result.IsSuccess(),
-		ErrorCode:     result.ErrorCode,
-		Outputs:       result.Outputs,
-		ResultSummary: result.ResultSummary,
+		TaskID:                taskID,
+		TenantID:              tenantID,
+		WorkerID:              workerID,
+		Success:               result.IsSuccess(),
+		ErrorCode:             result.ErrorCode,
+		Outputs:               result.Outputs,
+		ResultSummary:         result.ResultSummary,
+		PartitionInvocationID: partitionInvocationID,
 	}
 }
 
@@ -115,6 +121,10 @@ type ClaimResult struct {
 type RenewRequest struct {
 	WorkerID string `json:"workerId"`
 	TenantID string `json:"tenantId"`
+	// PartitionInvocationID is required for partition tasks (fixture 14): without
+	// it the platform's CAS renew fails → renewLease=false → 409 → the task is
+	// dropped + redispatched → double-run. Empty for non-partition tasks.
+	PartitionInvocationID string `json:"partitionInvocationId,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -271,16 +281,23 @@ func (t *HTTPTransport) doJSON(ctx context.Context, method, path string, body an
 // for retryable (5xx/transport) classes and mapping terminal classes to typed
 // errors. On 2xx it returns the response bytes; on 409 it returns
 // (body, idempotent=true, nil) so callers can treat it as success.
-func (t *HTTPTransport) call(ctx context.Context, method, path string, body any, idempotencyKey, op string) (data []byte, idempotent bool, err error) {
+func (t *HTTPTransport) call(ctx context.Context, method, path string, body any, idempotencyKey, op string, retryable bool) (data []byte, idempotent bool, err error) {
 	baseMs, attempts := t.retryBaseMs, t.retryAttempts
 	if attempts <= 0 {
 		attempts = protocol.DefaultRetryMaxAttempts
 	}
 	backoff := protocol.ExponentialBackoff(firstPositive(baseMs, protocol.DefaultRetryBaseMs), attempts)
+	// wire-protocol §C: heartbeat / renew are periodic ticks — a single failure
+	// waits for the next tick, NO internal backoff (fixture 25). retryable=false
+	// caps the loop at a single attempt without changing ClassifyHTTP semantics.
+	maxRetries := attempts
+	if !retryable {
+		maxRetries = 0
+	}
 
 	var lastErr error
-	// attempt 0 is the initial try; 1..attempts are retries with backoff[i-1].
-	for attempt := 0; attempt <= attempts; attempt++ {
+	// attempt 0 is the initial try; 1..maxRetries are retries with backoff[i-1].
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// honor context cancellation between retries.
 			if ctx.Err() != nil {
@@ -342,7 +359,7 @@ func firstPositive(a, b int) int {
 
 // Register posts the worker fingerprint. 200 -> fresh; 409 -> idempotent reuse.
 func (t *HTTPTransport) Register(ctx context.Context, req RegisterRequest) (RegisterResult, error) {
-	_, idem, err := t.call(ctx, http.MethodPost, "/internal/workers/register", req, "", "register")
+	_, idem, err := t.call(ctx, http.MethodPost, "/internal/workers/register", req, "", "register", true)
 	if err != nil {
 		return RegisterResult{}, err
 	}
@@ -352,7 +369,7 @@ func (t *HTTPTransport) Register(ctx context.Context, req RegisterRequest) (Regi
 // Heartbeat posts liveness and decodes the reverse-directive response.
 func (t *HTTPTransport) Heartbeat(ctx context.Context, workerCode string, req HeartbeatRequest) (protocol.HeartbeatResponse, error) {
 	var out protocol.HeartbeatResponse
-	raw, _, err := t.call(ctx, http.MethodPost, "/internal/workers/"+workerCode+"/heartbeat", req, "", "heartbeat")
+	raw, _, err := t.call(ctx, http.MethodPost, "/internal/workers/"+workerCode+"/heartbeat", req, "", "heartbeat", false)
 	if err != nil {
 		return out, err
 	}
@@ -366,7 +383,7 @@ func (t *HTTPTransport) Heartbeat(ctx context.Context, workerCode string, req He
 
 // Deactivate sends the graceful-goodbye.
 func (t *HTTPTransport) Deactivate(ctx context.Context, workerCode string) error {
-	_, _, err := t.call(ctx, http.MethodPost, "/internal/workers/"+workerCode+"/deactivate", nil, "", "deactivate")
+	_, _, err := t.call(ctx, http.MethodPost, "/internal/workers/"+workerCode+"/deactivate", nil, "", "deactivate", true)
 	return err
 }
 
@@ -374,7 +391,7 @@ func (t *HTTPTransport) Deactivate(ctx context.Context, workerCode string) error
 // claimed/reclaimed (idempotent).
 func (t *HTTPTransport) Claim(ctx context.Context, taskID, idempotencyKey string, req ClaimRequest) (ClaimResult, error) {
 	var out ClaimResult
-	raw, idem, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/claim", req, idempotencyKey, "claim")
+	raw, idem, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/claim", req, idempotencyKey, "claim", true)
 	if err != nil {
 		return out, err
 	}
@@ -390,7 +407,7 @@ func (t *HTTPTransport) Claim(ctx context.Context, taskID, idempotencyKey string
 // Report posts the terminal TaskExecutionReportDto. Idempotency-Key dedups
 // retries.
 func (t *HTTPTransport) Report(ctx context.Context, taskID, idempotencyKey string, req ReportRequest) error {
-	_, _, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/report", req, idempotencyKey, "report")
+	_, _, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/report", req, idempotencyKey, "report", true)
 	return err
 }
 
@@ -399,7 +416,7 @@ func (t *HTTPTransport) Report(ctx context.Context, taskID, idempotencyKey strin
 // caller stops the handler and abandons the report (openapi renew 409).
 func (t *HTTPTransport) Renew(ctx context.Context, taskID string, req RenewRequest) (RenewResult, error) {
 	var out RenewResult
-	raw, revoked, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/renew", req, "", "renew")
+	raw, revoked, err := t.call(ctx, http.MethodPost, "/internal/tasks/"+taskID+"/renew", req, "", "renew", false)
 	if err != nil {
 		return out, err
 	}

@@ -205,9 +205,13 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 // terminal result. Runs the handler in a goroutine bounded by maxConcurrent via
 // the in-flight registry (backpressure gate already enforced upstream).
 func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
-	claim, err := w.transport.Claim(ctx, msg.TaskID, msg.IdempotencyKey, ClaimRequest{
-		TenantID: w.cfg.TenantID,
-		WorkerID: w.cfg.WorkerCode,
+	invID := partitionInvocationID(msg)
+	// Mint a FRESH Idempotency-Key per distinct write (fixture 24); do NOT reuse
+	// the Kafka delivery key (which is also empty when the platform omits it).
+	claim, err := w.transport.Claim(ctx, msg.TaskID, protocol.NewIdempotencyKey(), ClaimRequest{
+		TenantID:              w.cfg.TenantID,
+		WorkerID:              w.cfg.WorkerCode,
+		PartitionInvocationID: invID,
 	})
 	if err != nil {
 		if _, ok := errAsDrop(err); ok {
@@ -224,7 +228,7 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 	}
 
 	sig := NewCancellationSignal(ctx)
-	w.registry.Add(msg.TaskID, sig)
+	w.registry.Add(msg.TaskID, sig, invID)
 	w.taskWg.Add(1)
 	go func() {
 		defer w.taskWg.Done()
@@ -309,10 +313,25 @@ func ResultFromError(err error) TaskResult {
 func (w *Worker) report(msg TaskDispatchMessage, result TaskResult) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	req := NewReportRequest(msg.TaskID, w.cfg.TenantID, w.cfg.WorkerCode, result)
-	if err := w.transport.Report(ctx, msg.TaskID, msg.IdempotencyKey, req); err != nil {
+	// Fresh Idempotency-Key (distinct from claim's) so a redelivered task's
+	// report cannot replay a stale outcome (fixture 24). partitionInvocationId
+	// threaded through from claim keeps the invariant across claim→renew→report.
+	req := NewReportRequest(msg.TaskID, w.cfg.TenantID, w.cfg.WorkerCode, partitionInvocationID(msg), result)
+	if err := w.transport.Report(ctx, msg.TaskID, protocol.NewIdempotencyKey(), req); err != nil {
 		w.logger.Printf("WARN report failed taskId=%s code=%s: %v", msg.TaskID, result.ErrorCode, err)
 	}
+}
+
+// partitionInvocationID extracts the optional partitionInvocationId from a
+// dispatch message's runtimeAttributes (ADR-014). Empty for non-partition tasks.
+func partitionInvocationID(msg TaskDispatchMessage) string {
+	if msg.RuntimeAttributes == nil {
+		return ""
+	}
+	if v, ok := msg.RuntimeAttributes["partitionInvocationId"].(string); ok {
+		return v
+	}
+	return ""
 }
 
 // errAsDrop reports whether the error is a 404 (drop-and-forget).
@@ -348,13 +367,13 @@ func (w *Worker) Stop(timeout time.Duration) {
 		w.draining.Store(true) // reject new Kafka messages immediately.
 		w.fsm.SetState(StateDraining)
 
-		// wake the consumer poll so consumeLoop exits.
+		// wake the consumer poll so consumeLoop exits (draining flag + woken Poll).
+		// NOTE: do NOT cancel rootCtx here — heartbeat + lease renewal run on it
+		// and MUST keep going through drain to hold the lease (else the platform
+		// reclaims still-running tasks → double-run); and the in-flight tasks'
+		// cancellation signals are children of rootCtx, so cancelling now would
+		// rewrite gracefully-completing tasks to CANCELLED. Cancel AFTER drain.
 		w.consumer.Wakeup()
-
-		// stop schedulers + consume loop.
-		if w.rootCancel != nil {
-			w.rootCancel()
-		}
 
 		drainBudget := time.Duration(float64(timeout) * 0.4)
 		execBudget := time.Duration(float64(timeout) * 0.6)
@@ -363,6 +382,12 @@ func (w *Worker) Stop(timeout time.Duration) {
 		w.waitInFlight(drainBudget)
 		// phase 2: wait for handler goroutines to finish within 60%.
 		w.waitTasks(execBudget)
+
+		// drain budget spent: now stop schedulers + consume loop (and hard-cancel
+		// any straggler handlers still past the budget).
+		if w.rootCancel != nil {
+			w.rootCancel()
+		}
 		// scheduler/consume goroutines are bounded too; don't block forever.
 		w.wg.Wait()
 
