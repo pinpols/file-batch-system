@@ -372,14 +372,19 @@ ATOMIC_JOBS=$(psql_q "select count(*) from batch.job_definition where job_type='
 if [[ -z "$ATOMIC_JOBS" || "$ATOMIC_JOBS" -eq 0 ]]; then
   skip "原子任务配置验证" "未发现 job_type='ATOMIC' 的 job 定义(原子任务未 seed / 未启用)"
 else
-  # 7.1 每个原子任务 job 的 default_params 必须携带 taskType(执行器子类型协议)
-  MISSING_TT=$(psql_q "select count(*) from batch.job_definition where job_type='ATOMIC' and (default_params->>'taskType') is null;")
+  # taskType 协议只约束走【内置 atomic 执行器】(batch-worker-atomic 的 shell/sql/
+  # stored_proc/http 读 default_params.taskType 选执行器)的 ATOMIC job。路由到
+  # 【自托管 SDK worker】(worker_group='sdk-self-hosted')的 ATOMIC job 由租户自带
+  # handler 按 workerType()='ATOMIC' 分发,不读 default_params.taskType,故豁免。
+  BUILTIN="and lower(coalesce(worker_group,'')) <> 'sdk-self-hosted'"
+  # 7.1 内置执行器原子任务的 default_params 必须携带 taskType(执行器子类型协议)
+  MISSING_TT=$(psql_q "select count(*) from batch.job_definition where job_type='ATOMIC' and (default_params->>'taskType') is null $BUILTIN;")
   [[ "$MISSING_TT" == "0" ]] \
-    && pass "原子任务 job default_params 均含 taskType" "$ATOMIC_JOBS 个原子任务 job" \
-    || fail "原子任务 job 缺 taskType" "$MISSING_TT 个原子任务 job 的 default_params 无 taskType"
+    && pass "原子任务 job default_params 均含 taskType" "$ATOMIC_JOBS 个原子任务 job(内置执行器口径)" \
+    || fail "原子任务 job 缺 taskType" "$MISSING_TT 个内置执行器原子任务 job 的 default_params 无 taskType"
 
   # 7.2 taskType 必须在已知执行器白名单内(shell/sql/stored_proc/http)
-  BAD_TT=$(psql_q "select count(*) from batch.job_definition where job_type='ATOMIC' and (default_params->>'taskType') not in ('shell','sql','stored_proc','http');")
+  BAD_TT=$(psql_q "select count(*) from batch.job_definition where job_type='ATOMIC' and (default_params->>'taskType') not in ('shell','sql','stored_proc','http') $BUILTIN;")
   [[ "$BAD_TT" == "0" ]] \
     && pass "原子任务 taskType 均在执行器白名单" "shell/sql/stored_proc/http" \
     || fail "原子任务 taskType 越界" "$BAD_TT 个原子任务 job 的 taskType 不在 {shell,sql,stored_proc,http}"
