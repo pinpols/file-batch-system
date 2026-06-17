@@ -100,11 +100,17 @@
            and status = #{status}
     </select>
 
+    <!-- worker_group 大小写不敏感匹配:与 DefaultTaskAssignmentService.isWorkerClaimable
+         (equalsIgnoreCase)及 WorkerBasedPartitionCountResolver 一致。平台自带 worker 注册大写组
+         (ATOMIC/IMPORT/...),而自托管 SDK worker 注册小写 'sdk-self-hosted'(BatchPlatformClient
+         固定值,亦 markSelfHosted 的键)。selector 曾对 partition.worker_group 做 toUpper 后精确匹配
+         → 大写查询匹配不到小写注册的自托管 worker → 分区已建(count 命中)却永不派发(select 落空),
+         自托管 worker CLAIM-eligible 却不可被选。改为 lower=lower 对齐三处语义。 -->
     <select id="selectByTenantAndWorkerGroupAndStatus" resultMap="workerRegistryMap">
         select <include refid="workerRegistrySelectColumns"/>
           from batch.worker_registry
          where tenant_id = #{tenantId}
-           and worker_group = #{workerGroup}
+           and lower(worker_group) = lower(#{workerGroup})
            and status = #{status}
     </select>
 
@@ -133,7 +139,7 @@
     <select id="countByTenantAndWorkerGroupAndStatus" resultType="long">
         select count(1) from batch.worker_registry
          where tenant_id = #{tenantId}
-           and worker_group = #{workerGroup}
+           and lower(worker_group) = lower(#{workerGroup})
            and status = #{status}
     </select>
 
