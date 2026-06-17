@@ -28,6 +28,28 @@ type TaskDispatchMessage struct {
 	Parameters        map[string]any `json:"parameters"`
 }
 
+// UnmarshalJSON decodes the dispatch payload, binding the routing key from the
+// v2 field `workerType` and falling back to the v1 legacy name `taskType`.
+// encoding/json has no alias support (a tag binds one name only), so the v1
+// fallback is done explicitly — keeping cross-language parity with Java's
+// @JsonAlias("taskType") and Rust's serde alias. Platform v2 only emits
+// `workerType`; the fallback is belt-and-suspenders. Guard:
+// consumer_test.go TestPipeline_WorkerTypeBinding_*.
+func (m *TaskDispatchMessage) UnmarshalJSON(data []byte) error {
+	type alias TaskDispatchMessage // shed methods to avoid recursion
+	aux := struct {
+		*alias
+		TaskType string `json:"taskType"`
+	}{alias: (*alias)(m)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if m.WorkerType == "" && aux.TaskType != "" {
+		m.WorkerType = aux.TaskType
+	}
+	return nil
+}
+
 // MessageDisposition is the outcome of the OnMessage pipeline for one record.
 type MessageDisposition string
 

@@ -116,7 +116,13 @@ export class MessagePipeline {
     // 1. deserialize
     let msg: DispatchMessage;
     try {
-      msg = JSON.parse(record.value) as DispatchMessage;
+      const raw = JSON.parse(record.value) as Record<string, unknown>;
+      // v1 兼容:老平台以 JSON 字段 `taskType` 承载路由键(v2 已改名 `workerType`)。统一在此归一化到
+      // workerType,与 Java @JsonAlias("taskType") / Rust serde alias 跨语言对齐(防漂移)。
+      if (raw.workerType == null && raw.taskType != null) {
+        raw.workerType = raw.taskType;
+      }
+      msg = raw as DispatchMessage;
     } catch (e) {
       this.#logger.error("dispatch JSON parse failed; not committing", {
         error: String(e),
