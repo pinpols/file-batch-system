@@ -127,6 +127,15 @@ func idempotencyKey(provided string) string {
 	return "go-" + randomUUID()
 }
 
+// NewIdempotencyKey mints a fresh `go-<uuid>` Idempotency-Key. Each distinct
+// write (claim, report) MUST use a NEW key so a retried/redelivered call does
+// not replay a stale outcome from the platform's idempotency store (fixture 24:
+// never a fixed report-{taskId}, never reuse across distinct calls). 5xx retries
+// of the SAME call reuse the key (handled inside the transport).
+func NewIdempotencyKey() string {
+	return "go-" + randomUUID()
+}
+
 // randomUUID returns an RFC-4122-ish v4 uuid (no deps); only the shape matters.
 func randomUUID() string {
 	var b [16]byte

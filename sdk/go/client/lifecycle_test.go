@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -68,8 +69,11 @@ func TestWorker_StartConsumeReportStop(t *testing.T) {
 	if report.Result.ErrorCode != protocol.ErrorCodeSuccess {
 		t.Fatalf("expected SUCCESS report, got %s", report.Result.ErrorCode)
 	}
-	if report.IdempotencyKey != "idem-task-1" {
-		t.Fatalf("expected idempotency key propagated, got %q", report.IdempotencyKey)
+	// fixture 24: report mints a FRESH go-<uuid> key, never the Kafka delivery
+	// key and never a fixed report-{taskId} — so a redelivered task's report
+	// can't replay a stale outcome from the platform idempotency store.
+	if report.IdempotencyKey == "idem-task-1" || !strings.HasPrefix(report.IdempotencyKey, "go-") {
+		t.Fatalf("expected freshly-minted go-<uuid> report key (not the Kafka key), got %q", report.IdempotencyKey)
 	}
 
 	w.Stop(time.Second)
@@ -211,4 +215,43 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("condition not met within %v", timeout)
+}
+
+// fix(Stop): a handler that completes DURING graceful drain must report its real
+// result (SUCCESS), not be rewritten to CANCELLED. Regression: Stop used to
+// rootCancel() before draining, which flipped every in-flight task's cancel
+// signal so even gracefully-finishing work landed as CANCELLED + killed the
+// lease renewal mid-drain (double-run).
+func TestWorker_DrainDoesNotCancelCompletingTask(t *testing.T) {
+	fp := NewFakePlatform()
+	started := make(chan struct{})
+	gate := make(chan struct{})
+	handler := HandlerFunc(func(ctx *TaskContext) TaskResult {
+		close(started)
+		<-gate // block until the test releases us, mid-drain
+		if ctx.IsCancelled() {
+			return Fail(protocol.ErrorCodeCancelled, "observed cancel")
+		}
+		return Success(nil, "done")
+	})
+	consumer := NewFakeConsumer([]Record{dispatchRecord("task-1")})
+	w := NewWorker(testConfig(), fp, consumer, handler, nil, quietLogger())
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	<-started
+
+	stopDone := make(chan struct{})
+	go func() { w.Stop(2 * time.Second); close(stopDone) }()
+	time.Sleep(50 * time.Millisecond) // let Stop enter drain
+	close(gate)                       // handler finishes within the drain budget
+	<-stopDone
+
+	report, ok := fp.ReportFor("task-1")
+	if !ok {
+		t.Fatalf("expected a report for task-1")
+	}
+	if report.Result.ErrorCode != protocol.ErrorCodeSuccess {
+		t.Fatalf("task completing during drain must report SUCCESS, got %s", report.Result.ErrorCode)
+	}
 }

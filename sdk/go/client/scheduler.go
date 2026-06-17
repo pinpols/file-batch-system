@@ -166,23 +166,32 @@ func (s *HeartbeatScheduler) Run(ctx context.Context) {
 // LeaseRenewalScheduler — §1.4
 // ---------------------------------------------------------------------------
 
+// inFlightEntry is the per-task state the lease scheduler needs: the cancel
+// signal + the claim-time partitionInvocationId (threaded into every renew so
+// the platform's partition CAS guard isn't skipped — fixture 14).
+type inFlightEntry struct {
+	sig                   *CancellationSignal
+	partitionInvocationID string
+}
+
 // InFlightRegistry tracks in-flight tasks so the lease scheduler can iterate
 // them and the worker can signal cancellation.
 type InFlightRegistry struct {
 	mu    sync.RWMutex
-	tasks map[string]*CancellationSignal
+	tasks map[string]*inFlightEntry
 }
 
 // NewInFlightRegistry builds an empty registry.
 func NewInFlightRegistry() *InFlightRegistry {
-	return &InFlightRegistry{tasks: map[string]*CancellationSignal{}}
+	return &InFlightRegistry{tasks: map[string]*inFlightEntry{}}
 }
 
-// Add registers a task's cancellation signal.
-func (r *InFlightRegistry) Add(taskID string, sig *CancellationSignal) {
+// Add registers a task's cancellation signal + its partitionInvocationId
+// (empty for non-partition tasks).
+func (r *InFlightRegistry) Add(taskID string, sig *CancellationSignal, partitionInvocationID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.tasks[taskID] = sig
+	r.tasks[taskID] = &inFlightEntry{sig: sig, partitionInvocationID: partitionInvocationID}
 }
 
 // Remove drops a task (completed or lease lost).
@@ -199,11 +208,11 @@ func (r *InFlightRegistry) Count() int {
 	return len(r.tasks)
 }
 
-// snapshot copies the current task->signal map for safe iteration.
-func (r *InFlightRegistry) snapshot() map[string]*CancellationSignal {
+// snapshot copies the current task->entry map for safe iteration.
+func (r *InFlightRegistry) snapshot() map[string]*inFlightEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make(map[string]*CancellationSignal, len(r.tasks))
+	out := make(map[string]*inFlightEntry, len(r.tasks))
 	for k, v := range r.tasks {
 		out[k] = v
 	}
@@ -255,10 +264,11 @@ func NewLeaseRenewalScheduler(transport Transport, registry *InFlightRegistry, w
 // tests). Returns the set of task ids dropped this round.
 func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 	var dropped []string
-	for taskID, sig := range s.registry.snapshot() {
+	for taskID, entry := range s.registry.snapshot() {
 		resp, err := s.transport.Renew(ctx, taskID, RenewRequest{
-			WorkerID: s.workerCode,
-			TenantID: s.tenantID,
+			WorkerID:              s.workerCode,
+			TenantID:              s.tenantID,
+			PartitionInvocationID: entry.partitionInvocationID,
 		})
 		if err != nil {
 			// 404 (lease gone) -> drop locally; handler's report would be
@@ -266,7 +276,7 @@ func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 			var nf *NotFoundError
 			if errors.As(err, &nf) {
 				s.logger.Printf("WARN lease gone taskId=%s, dropping: %v", taskID, err)
-				sig.MarkCancelled()
+				entry.sig.MarkCancelled()
 				s.registry.Remove(taskID)
 				dropped = append(dropped, taskID)
 				continue
@@ -278,7 +288,7 @@ func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 		// task locally, same as 404 (openapi renew 409 semantics).
 		if resp.Revoked {
 			s.logger.Printf("WARN lease revoked (409) taskId=%s, cancelling handler and dropping", taskID)
-			sig.MarkCancelled()
+			entry.sig.MarkCancelled()
 			s.registry.Remove(taskID)
 			dropped = append(dropped, taskID)
 			continue
@@ -286,7 +296,7 @@ func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 		// ApplyRenew turns cancelRequested into a cancel decision.
 		if d := protocol.ApplyRenew(resp.RenewResponse); d.CancelRequested != nil && *d.CancelRequested {
 			s.logger.Printf("INFO cancelRequested taskId=%s -> signalling handler", taskID)
-			sig.MarkCancelled()
+			entry.sig.MarkCancelled()
 		}
 	}
 	return dropped
