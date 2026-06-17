@@ -30,6 +30,7 @@ pub mod checkpoint;
 pub mod consumer;
 pub mod handler;
 pub mod lifecycle;
+pub mod resilience;
 pub mod scheduler;
 pub mod sensitive;
 pub mod testkit;
@@ -52,6 +53,11 @@ pub use handler::{
     RecordingProgressReporter, StoppableTaskHandler, TaskContext, TaskHandler, TaskResult,
 };
 pub use lifecycle::{StopReport, StopStep, Worker, WorkerState};
+pub use resilience::{
+    default_should_retry, task_id_idempotency_key, with_idempotency, with_retry, IdempotencyEntity,
+    IdempotencyHandler, InMemoryIdempotencyStore, NoopIdempotencyStore, RetryHandler, RetryPolicy,
+    SdkIdempotencyStore, IDEMPOTENT_IN_FLIGHT,
+};
 pub use scheduler::{
     HeartbeatScheduler, HeartbeatTick, LeaseRenewalScheduler, RenewTick,
     DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_LEASE_RENEW_INTERVAL_MS,

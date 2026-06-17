@@ -7,8 +7,10 @@ import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,9 +59,19 @@ class SdkIdempotentHandlerTest {
   /** 记录调用的 fake store(可预置命中结果)。 */
   static final class RecordingStore implements SdkIdempotencyStore {
     final Map<String, SdkIdempotencyEntity> map = new HashMap<>();
+    final Set<String> placeholders = new HashSet<>();
     final AtomicInteger findCalls = new AtomicInteger();
     String lastRecordKey;
     long lastTtl;
+
+    @Override
+    public boolean tryAcquire(String key, long ttlMillis) {
+      if (map.containsKey(key) || placeholders.contains(key)) {
+        return false;
+      }
+      placeholders.add(key);
+      return true;
+    }
 
     @Override
     public Optional<SdkIdempotencyEntity> find(String key) {
@@ -72,6 +84,12 @@ class SdkIdempotentHandlerTest {
       this.lastRecordKey = key;
       this.lastTtl = ttlMillis;
       map.put(key, record);
+      placeholders.remove(key);
+    }
+
+    @Override
+    public void release(String key) {
+      placeholders.remove(key);
     }
   }
 
@@ -131,6 +149,25 @@ class SdkIdempotentHandlerTest {
   }
 
   @Test
+  @DisplayName("已有执行中占位但未回填结果 → 不执行业务,返回 in-flight 失败供平台重试")
+  void shouldReturnInFlight_whenPlaceholderExistsWithoutRecord() {
+    // 准备
+    RecordingStore store = new RecordingStore();
+    store.placeholders.add("import:t1:A100");
+    AnnotatedHandler handler = new AnnotatedHandler();
+    SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
+
+    // 执行
+    SdkTaskResult result = wrapped.execute(ctx(Map.of("orderId", "A100")));
+
+    // 断言
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("in-flight");
+    assertThat(handler.executions).hasValue(0);
+    assertThat(store.findCalls).hasValue(1);
+  }
+
+  @Test
   @DisplayName("业务失败 → 不记录(留给重试)")
   void shouldNotRecord_whenBusinessFails() {
     // 准备
@@ -146,6 +183,7 @@ class SdkIdempotentHandlerTest {
     assertThat(result.success()).isFalse();
     assertThat(handler.executions).hasValue(1);
     assertThat(store.lastRecordKey).isNull();
+    assertThat(store.placeholders).doesNotContain("import:t1:A100");
   }
 
   @Test
@@ -213,17 +251,52 @@ class SdkIdempotentHandlerTest {
   /** find() 抛运行时异常的 fake store —— 验证装饰器不吞,透传给 dispatcher 兜底。 */
   static final class ThrowingStore implements SdkIdempotencyStore {
     @Override
-    public Optional<SdkIdempotencyEntity> find(String key) {
+    public boolean tryAcquire(String key, long ttlMillis) {
       throw new IllegalStateException("store backend down");
     }
 
     @Override
+    public Optional<SdkIdempotencyEntity> find(String key) {
+      return Optional.empty();
+    }
+
+    @Override
     public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {}
+
+    @Override
+    public void release(String key) {}
+  }
+
+  static final class RecordThrowingStore implements SdkIdempotencyStore {
+    final Set<String> placeholders = new HashSet<>();
+    final AtomicInteger releaseCalls = new AtomicInteger();
+
+    @Override
+    public boolean tryAcquire(String key, long ttlMillis) {
+      placeholders.add(key);
+      return true;
+    }
+
+    @Override
+    public Optional<SdkIdempotencyEntity> find(String key) {
+      return Optional.empty();
+    }
+
+    @Override
+    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
+      throw new IllegalStateException("record backend down");
+    }
+
+    @Override
+    public void release(String key) {
+      releaseCalls.incrementAndGet();
+      placeholders.remove(key);
+    }
   }
 
   @Test
-  @DisplayName("store.find() 抛异常 → 装饰器不吞,原样透传(由 dispatcher 兜底转 fail report),业务不执行")
-  void shouldPropagate_whenStoreFindThrows() {
+  @DisplayName("store.tryAcquire() 抛异常 → 装饰器不吞,原样透传(由 dispatcher 兜底转 fail report),业务不执行")
+  void shouldPropagate_whenStoreTryAcquireThrows() {
     // 准备
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, new ThrowingStore());
@@ -232,7 +305,24 @@ class SdkIdempotentHandlerTest {
     assertThatThrownBy(() -> wrapped.execute(ctx(Map.of("orderId", "A100"))))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("store backend down");
-    assertThat(handler.executions).hasValue(0); // find 先于 execute,故业务未跑
+    assertThat(handler.executions).hasValue(0); // tryAcquire 先于 execute,故业务未跑
+  }
+
+  @Test
+  @DisplayName("store.record() 抛异常 → 不释放占位,避免成功副作用后立即重复执行")
+  void shouldKeepPlaceholder_whenStoreRecordThrows() {
+    // 准备
+    AnnotatedHandler handler = new AnnotatedHandler();
+    RecordThrowingStore store = new RecordThrowingStore();
+    SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
+
+    // 执行并断言
+    assertThatThrownBy(() -> wrapped.execute(ctx(Map.of("orderId", "A100"))))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("record backend down");
+    assertThat(handler.executions).hasValue(1);
+    assertThat(store.releaseCalls).hasValue(0);
+    assertThat(store.placeholders).contains("import:t1:A100");
   }
 
   @Test
