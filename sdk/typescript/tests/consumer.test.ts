@@ -170,11 +170,13 @@ test("consumer: backpressure pauses assignment when in-flight at cap", async () 
   assert.equal(asn.paused, true);
 });
 
-test("consumer: parse error → not committed", async () => {
+test("consumer: parse error → commit-skip (committed, poison advanced)", async () => {
+  // fixture 30 / parity §4.5: an undecodable poison record is committed (skipped)
+  // so one corrupt message cannot head-of-line block the partition forever.
   const p = pipeline({});
   const out = await p.onMessage({ value: "{not json" });
   assert.equal(out.kind, "parse-error");
-  assert.equal(out.committed, false);
+  assert.equal(out.committed, true);
 });
 
 test("consumer: null/missing schemaVersion → accepted as v1", async () => {

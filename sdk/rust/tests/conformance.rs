@@ -24,7 +24,7 @@ use batch_worker_sdk::decide::{
 use batch_worker_sdk::protocol::{HeartbeatHint, HeartbeatResponse, RenewResponse};
 use json::Json;
 
-const EXPECTED_FIXTURE_COUNT: usize = 29;
+const EXPECTED_FIXTURE_COUNT: usize = 30;
 
 /// then.expect keys handled by the request builder, not the decision core.
 const REQUEST_SIDE_KEYS: &[&str] = &[
@@ -95,9 +95,20 @@ fn compute(fx: &Json) -> Decision {
 
     let channel = when.get("channel").and_then(Json::as_str).unwrap_or("");
 
-    // ----- Kafka receive -> pausedTaskTypes drop / capacity backpressure -----
+    // ----- Kafka receive -> decode / pausedTaskTypes drop / capacity backpressure -----
     // (schemaAccept is handled separately by the runner, not compute.)
     if channel == "kafka" {
+        // decode error: a present-but-non-object (unparseable) body is a poison
+        // record -> commit-skip (advance offset past it). fixture 30 / parity §4.5.
+        if let Some(body) = when.get("body") {
+            if body.as_object().is_none() {
+                return Decision {
+                    action: "apply-directive".to_string(),
+                    kafka: Some("commit-skip".to_string()),
+                    ..Default::default()
+                };
+            }
+        }
         if let Some(Json::Arr(paused)) = state.and_then(|s| s.get("pausedTaskTypes")) {
             let paused_types: Vec<String> = paused
                 .iter()
