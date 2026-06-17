@@ -61,7 +61,7 @@
 4. 从备份 + WAL 恢复到 T(记录开始/结束时间 → **RTO**)。
 5. 断言:T 之前已提交的 job **全部存在**(无丢失);T 之后的写入丢失量 ≤ RPO 窗口(< 15min)。
 6. 断言一致性:`ArchiveSchemaDriftCheck` 启动通过、outbox 无悬挂、无 job_instance 处于不可达中间态。
-> 脚本化依赖你的备份方案(pgBackRest / WAL-G / 云托管 PITR),本表给程序,落地脚本在选定备份工具后补。
+> 落地脚本:`scripts/sim/dr-drill-pitr.sh`(**备份工具无关**——演练逻辑/断言通用,实际恢复动作做成 `RESTORE_CMD` 钩子,你接 pgBackRest / WAL-G / 云托管 PIT(RDS/Aurora)均可)。它自动选 T0、快照 T0 前已提交集合(count + 指纹)、触发 `RESTORE_CMD` 计 RTO、断言 RPO(T0 前数据不丢)+ RTO ≤ 预算 + 恢复后无重复。仅在 DR/staging 跑。
 
 ## 5. Go / No-Go 门
 | 门 | 判据 |
