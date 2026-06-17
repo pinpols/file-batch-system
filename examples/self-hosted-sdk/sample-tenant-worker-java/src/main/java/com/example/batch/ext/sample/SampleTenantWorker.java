@@ -56,6 +56,11 @@ public final class SampleTenantWorker {
         BatchPlatformClient.builder(config)
             .register(new EchoHandler())
             .register(new SleepHandler())
+            // 平台 base workerType(ATOMIC)处理器:演示自托管 worker 直接承接平台 ATOMIC 派单类别。
+            // 与 sample_atomic_echo(自定义 taskType,仅 catalog/FakePlatform 演示)不同 —— 平台真实派单的
+            // 路由键 = job_definition.job_type(如 ATOMIC),只有 base workerType 能解析出 dispatch topic,
+            // 故真链路 dispatch-execute 验证(sim 06 Phase 2)走这个 handler。
+            .register(new AtomicBaseEchoHandler())
             // ADR-036 五大业务模板 sample(各 shape 一个 echo demo)
             .register(new AtomicEchoHandler())
             .register(new ImportEchoHandler())
@@ -101,6 +106,25 @@ public final class SampleTenantWorker {
     public SdkTaskResult execute(SdkTaskContext ctx) {
       log.info("echo handler taskId={} params={}", ctx.taskId(), ctx.parameters());
       return SdkTaskResult.ok("echoed", Map.copyOf(ctx.parameters()));
+    }
+  }
+
+  /**
+   * 平台 base workerType {@code ATOMIC} 处理器 —— 自托管 worker 承接平台 ATOMIC 派单类别的最小 demo。
+   *
+   * <p>taskType() 必须等于平台 {@code job_definition.job_type}(派单消息 workerType 字段),平台据此 resolve
+   * dispatch topic + 路由;sim 06 dispatch-execute 腿据 "ATOMIC base handler taskId=" 日志断言真链路执行。
+   */
+  static final class AtomicBaseEchoHandler implements SdkTaskHandler {
+    @Override
+    public String taskType() {
+      return "ATOMIC";
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      log.info("ATOMIC base handler taskId={} params={}", ctx.taskId(), ctx.parameters());
+      return SdkTaskResult.ok("atomic-echoed", Map.copyOf(ctx.parameters()));
     }
   }
 
