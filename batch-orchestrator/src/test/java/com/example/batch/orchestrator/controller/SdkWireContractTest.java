@@ -369,4 +369,52 @@ class SdkWireContractTest {
     assertThat(sdk.schemaVersion()).isEqualTo("v2");
     assertThat(sdk.isSchemaSupported()).isTrue();
   }
+
+  @Test
+  void platformWorkerTypeBindsToSdkHandlerKeyOverWire() throws Exception {
+    // 回归守护(workerType P0):平台派单消息以 JSON 字段名 `workerType` 承载路由键,SDK 必须把它绑定到
+    // 自己的 handler 路由键 taskType()(@JsonProperty("workerType") @JsonAlias("taskType"))。
+    // 任一端改名 / "瘦身"漏掉这个字段 → register 仍过,但 worker 收到派单后 handlers.get(taskType()) 拿到 null,
+    // execute 静默失败(no handler for taskType=null)。SDK 全部 conformance / SampleTenantWorkerIT 都走
+    // FakeBatchPlatform / TaskDispatchMessageBuilder,在进程内直接构造 SDK record、从不序列化平台的 `workerType`
+    // JSON,所以测不到这条跨进程契约;sim 06 dispatch-execute 腿(真过 Kafka)是它的运行期对照。
+    TaskDispatchMessage platform =
+        new TaskDispatchMessage(
+            "v2",
+            "tenant-acme",
+            10L,
+            null,
+            42L,
+            "ji-01",
+            "daily-report",
+            "echo", // workerType:派单路由键,worker 据此选 handler
+            null,
+            "MEDIUM",
+            "trace-abc",
+            "idem-1",
+            Instant.parse("2026-05-31T10:00:00Z"),
+            null);
+
+    // 平台序列化后的 JSON 字段名必须是 `workerType`(不是 `taskType`),这是契约方向锚点。
+    JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
+    assertThat(tree.hasNonNull("workerType")).isTrue();
+    assertThat(tree.get("workerType").asText()).isEqualTo("echo");
+
+    // SDK 反序列化后,handler 路由键 taskType() 必须等于平台的 workerType —— 否则 handlers.get() 必拿 null。
+    com.example.batch.sdk.dispatcher.TaskDispatchMessage sdk =
+        MAPPER.readValue(
+            MAPPER.writeValueAsBytes(platform),
+            com.example.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    assertThat(sdk.taskType())
+        .as("平台 workerType 必须绑定到 SDK handler 路由键 taskType()")
+        .isEqualTo("echo");
+    assertThat(sdk.taskId()).isEqualTo(42L);
+
+    // 向后兼容:v1 旧字段名 `taskType` 经 @JsonAlias 仍能被 SDK 解析为同一路由键。
+    com.example.batch.sdk.dispatcher.TaskDispatchMessage legacy =
+        MAPPER.readValue(
+            "{\"schemaVersion\":\"v1\",\"taskId\":7,\"taskType\":\"echo\"}",
+            com.example.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    assertThat(legacy.taskType()).isEqualTo("echo");
+  }
 }
