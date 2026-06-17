@@ -13,6 +13,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher
+from batch_worker_sdk.dispatcher.dispatcher import DispatchDisposition
 from batch_worker_sdk.internal._http import PlatformHttpClient
 
 
@@ -56,18 +57,46 @@ async def test_supported_schema_versions_accepted(schema: str, httpx_mock: HTTPX
         await http.close()
 
 
-@pytest.mark.parametrize("schema", ["v3", "v0", "", "foo"])
+@pytest.mark.parametrize("schema", ["v3", "v0", "foo"])
 async def test_unsupported_schema_versions_dropped(
     schema: str, caplog: pytest.LogCaptureFixture, httpx_mock: HTTPXMock
 ) -> None:
+
     cfg = _cfg()
     http = PlatformHttpClient(cfg)
     dispatcher = TaskDispatcher(cfg, http)
     try:
         caplog.set_level("WARNING", logger="batch_worker_sdk.dispatcher.dispatcher")
-        await dispatcher.on_message(_msg(99, schema))
+        # 未知大版本:不进 in-flight、不发 HTTP,且 offset 不提交(RETRY_LATER)——§A 契约。
+        disposition = await dispatcher.on_message(_msg(99, schema))
+        assert disposition is DispatchDisposition.RETRY_LATER
         assert dispatcher.in_flight_count() == 0
         assert httpx_mock.get_requests() == []
         assert any("unsupported schemaVersion" in r.message for r in caplog.records)
+    finally:
+        await http.close()
+
+
+async def test_missing_or_blank_schema_accepted_as_v1(httpx_mock: HTTPXMock) -> None:
+    """缺字段 / 空白 schemaVersion 按 v1 解析并 accept(对齐 Java + 契约 fixture 16)。"""
+
+    cfg = _cfg()
+    # taskId 7 = 缺 schemaVersion 字段;taskId 8 = 空白字符串。两者都应 accept → CLAIM。
+    for tid in (7, 8):
+        httpx_mock.add_response(
+            url=cfg.base_url + f"/internal/tasks/{tid}/claim", status_code=200, json={}
+        )
+        httpx_mock.add_response(
+            url=cfg.base_url + f"/internal/tasks/{tid}/report", status_code=200, json={}
+        )
+    http = PlatformHttpClient(cfg)
+    dispatcher = TaskDispatcher(cfg, http)
+    try:
+        missing = _msg(7, "")
+        del missing["schemaVersion"]  # 字段整体缺失
+        assert await dispatcher.on_message(missing) is DispatchDisposition.ACCEPTED
+        assert await dispatcher.on_message(_msg(8, "  ")) is DispatchDisposition.ACCEPTED
+        assert dispatcher.in_flight_count() == 2
+        await _drain(dispatcher)
     finally:
         await http.close()

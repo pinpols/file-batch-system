@@ -14,7 +14,11 @@ import pytest
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
 from batch_worker_sdk.internal._http import PlatformHttpClient
-from batch_worker_sdk.internal._kafka import KafkaTaskConsumer, _PauseAwareRebalanceListener
+from batch_worker_sdk.internal._kafka import (
+    KafkaTaskConsumer,
+    _jaas_field,
+    _PauseAwareRebalanceListener,
+)
 
 
 def _cfg(**overrides: object) -> BatchPlatformClientConfig:
@@ -39,6 +43,44 @@ async def _make_consumer() -> tuple[KafkaTaskConsumer, TaskDispatcher, MagicMock
     mock_consumer.assignment.return_value = {"part-0", "part-1"}
     consumer = KafkaTaskConsumer(cfg, dispatcher, consumer=mock_consumer)
     return consumer, dispatcher, mock_consumer
+
+
+def test_jaas_field_parses_double_and_single_quotes() -> None:
+    jaas = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="u1" password="p1";'
+    assert _jaas_field(jaas, "username") == "u1"
+    assert _jaas_field(jaas, "password") == "p1"
+    single = "ScramLoginModule required username='u2' password='p2';"
+    assert _jaas_field(single, "username") == "u2"
+    assert _jaas_field(single, "password") == "p2"
+    assert _jaas_field("ScramLoginModule required;", "username") is None
+
+
+async def test_resolve_sasl_credentials_prefers_explicit_then_jaas() -> None:
+    http = PlatformHttpClient(_cfg())
+    try:
+        # 显式字段优先
+        explicit = KafkaTaskConsumer(
+            _cfg(kafka_sasl_username="exp-u", kafka_sasl_password="exp-p"),
+            TaskDispatcher(_cfg(), http),
+        )
+        assert explicit._resolve_sasl_credentials() == ("exp-u", "exp-p")
+
+        # 退化到解析 Java 风格 JAAS(对齐 Java SDK 同一份配置)
+        jaas_cfg = _cfg(
+            kafka_sasl_mechanism="SCRAM-SHA-512",
+            kafka_sasl_jaas_config=(
+                "org.apache.kafka.common.security.scram.ScramLoginModule "
+                'required username="jaas-u" password="jaas-p";'
+            ),
+        )
+        jaas = KafkaTaskConsumer(jaas_cfg, TaskDispatcher(_cfg(), http))
+        assert jaas._resolve_sasl_credentials() == ("jaas-u", "jaas-p")
+
+        # 三者皆空 → PLAINTEXT,无凭据
+        plain = KafkaTaskConsumer(_cfg(), TaskDispatcher(_cfg(), http))
+        assert plain._resolve_sasl_credentials() == (None, None)
+    finally:
+        await http.close()
 
 
 async def test_build_consumer_requires_kafka_fields() -> None:

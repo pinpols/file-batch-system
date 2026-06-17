@@ -38,6 +38,7 @@ import asyncio
 import logging
 import re
 import uuid
+from enum import Enum
 from typing import Any
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
@@ -81,6 +82,30 @@ def _schema_major(schema: str) -> str:
     """取 schemaVersion 的前导主版本 token;无匹配时返回空串。"""
     m = _SCHEMA_MAJOR_RE.match(schema)
     return m.group(0) if m else ""
+
+
+# 缺字段 / 空白 schemaVersion 的 fallback 主版本,对齐 Java
+# ``TaskDispatchMessage.DEFAULT_SCHEMA_VERSION``(老 orchestrator 没填时按
+# ``v1`` 解析)。契约 fixture ``16-kafka-schema-version-missing-accept`` 要求
+# 缺省必须 accept,不能拒。
+DEFAULT_SCHEMA_VERSION = "v1"
+
+
+class DispatchDisposition(Enum):
+    """dispatcher 对单条派单消息的处理决定;``KafkaTaskConsumer`` 据此决定 offset 提交。
+
+    对齐 Java ``TaskDispatcher.DispatchDecision`` + Go ``MessageDisposition``——
+    **不能**像旧实现那样无差别 commit。
+    """
+
+    #: 已受理(成功开后台 Task / 重复投递);offset 可前移。
+    ACCEPTED = "ACCEPTED"
+    #: 消息不可恢复(解码失败 / taskId 非法);跳过并提交 offset,避免 poison 卡分区。
+    DROP_TERMINAL = "DROP_TERMINAL"
+    #: 当前 worker 不应消费(fatal / draining / 平台暂停 / 跨租户 / 未知 schema 大版本);
+    #: offset **不前移**,留待平台恢复或 SDK 升级后从原位重投。未知 schema 大版本不
+    #: 提交 offset 是 wire-protocol §A 的硬契约(避免按错版本反序列化字段错乱)。
+    RETRY_LATER = "RETRY_LATER"
 
 
 class TaskDispatcher:
@@ -220,60 +245,68 @@ class TaskDispatcher:
 
     # ─── 消息入口 ────────────────────────────────────────────────────
 
-    async def on_message(self, msg: dict[str, Any]) -> None:  # noqa: PLR0911
-        """处理一条解码后的 ``TaskDispatchMessage`` 信封。
+    async def on_message(self, msg: dict[str, Any]) -> DispatchDisposition:  # noqa: PLR0911
+        """处理一条解码后的 ``TaskDispatchMessage`` 信封,返回 offset 处置决定。
 
         必须尽快返回:实际任务执行被丢到后台 ``asyncio.Task``,确保 Kafka
-        poll 循环永不阻塞。
+        poll 循环永不阻塞。返回的 :class:`DispatchDisposition` 由
+        ``KafkaTaskConsumer`` 据此决定该条 offset 是否提交——**不再无差别
+        commit**(对齐 Java/Go 契约)。
         """
         if self._fatal:
             logger.debug("dispatcher fatal, dropping taskId=%s", msg.get("taskId"))
-            return
+            return DispatchDisposition.RETRY_LATER
         if self._draining:
             logger.info("dispatcher draining, dropping taskId=%s", msg.get("taskId"))
-            return
+            return DispatchDisposition.RETRY_LATER
         if not self._runtime_state.accepts_new_tasks():
             logger.debug(
                 "platform state=%s, dropping taskId=%s",
                 self._runtime_state,
                 msg.get("taskId"),
             )
-            return
+            return DispatchDisposition.RETRY_LATER
 
-        # schemaVersion 校验:拒绝未知大版本,避免老的 Python SDK 静默
-        # 误解未来 ``v3`` 信封。
-        schema = msg.get("schemaVersion") or ""
-        if _schema_major(schema) not in _SUPPORTED_SCHEMA_MAJORS:
+        # schemaVersion 校验:缺字段 / 空白按 v1 解析(对齐 Java + fixture 16),
+        # 仅未知大版本(如 v3)才拒;且拒时不提交 offset(§A),避免老 SDK 按错
+        # 版本反序列化字段错乱。
+        schema = msg.get("schemaVersion")
+        major = (
+            _schema_major(schema)
+            if isinstance(schema, str) and schema.strip()
+            else DEFAULT_SCHEMA_VERSION
+        )
+        if major not in _SUPPORTED_SCHEMA_MAJORS:
             logger.warning(
-                "rejecting kafka task dispatch message with unsupported schemaVersion=%r taskId=%s",
+                "rejecting kafka task dispatch message with unsupported schemaVersion=%r taskId=%s"
+                " (offset withheld per wire-protocol §A; upgrade SDK)",
                 schema,
                 msg.get("taskId"),
             )
-            return
+            return DispatchDisposition.RETRY_LATER
 
-        # 租户自检 fail-safe(对齐 Java §J1):Kafka topic pattern + consumer
-        # group + ACL 已经做了租户隔离,但任何一处漂移都可能导致跨租户
-        # 消息进入本 worker;此处 ERROR + 丢弃并依赖租约超时重投递到正确
-        # 租户。
+        # 租户自检 fail-safe(对齐 Java §J1 / Go DROPPED_FOREIGN_TENANT):Kafka topic
+        # pattern + consumer group + ACL 已做租户隔离,但任何一处漂移都可能让跨租户
+        # 消息进入本 worker;此处 ERROR + 不提交 offset,依赖租约超时重投递到正确租户。
         msg_tenant = msg.get("tenantId")
         if msg_tenant != self._config.tenant_id:
             logger.error(
-                "tenant_mismatch_drop: configured=%s got=%s taskId=%s",
+                "tenant_mismatch_drop: configured=%s got=%s taskId=%s (offset withheld)",
                 self._config.tenant_id,
                 msg_tenant,
                 msg.get("taskId"),
             )
-            return
+            return DispatchDisposition.RETRY_LATER
 
         task_id_raw = msg.get("taskId")
         if not isinstance(task_id_raw, int):
             logger.warning("dropping dispatch message with non-int taskId=%r", task_id_raw)
-            return
+            return DispatchDisposition.DROP_TERMINAL
         task_id: int = task_id_raw
 
         if task_id in self._in_flight:
-            logger.debug("taskId=%s already in-flight, dropping duplicate", task_id)
-            return
+            logger.debug("taskId=%s already in-flight, committing duplicate", task_id)
+            return DispatchDisposition.ACCEPTED
 
         # 先建 CancellationSignal:_process 未来构造 SdkTaskContext 时会从
         # ``_cancel_signals[task_id]`` 取同一份 signal 注入 ctx;
@@ -289,6 +322,7 @@ class TaskDispatcher:
             self._partition_invocation_ids.pop(tid, None)
 
         task.add_done_callback(_cleanup)
+        return DispatchDisposition.ACCEPTED
 
     # ─── 单任务流水线 ────────────────────────────────────────────────
 

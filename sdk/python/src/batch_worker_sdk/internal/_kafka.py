@@ -20,6 +20,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from aiokafka import (  # type: ignore[import-untyped]
@@ -29,6 +30,7 @@ from aiokafka import (  # type: ignore[import-untyped]
 )
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.dispatcher.dispatcher import DispatchDisposition
 from batch_worker_sdk.exceptions import PlatformError
 
 if TYPE_CHECKING:
@@ -50,6 +52,18 @@ KAFKA_START_TIMEOUT_S: float = 10.0
 
 def _notblank(s: str | None) -> bool:
     return s is not None and s.strip() != ""
+
+
+def _jaas_field(jaas: str, field: str) -> str | None:
+    """从 Java 风格 JAAS 串里抽某字段值,如 ``username="u"`` / ``password='p'``。
+
+    支持双引号或单引号包裹;命中返回引号内原文,未命中返回 ``None``。仅用于把
+    租户配在 ``kafka_sasl_jaas_config`` 的 SCRAM/PLAIN 凭据喂给 aiokafka。
+    """
+    m = re.search(rf'{field}\s*=\s*"([^"]*)"', jaas)
+    if m is None:
+        m = re.search(rf"{field}\s*=\s*'([^']*)'", jaas)
+    return m.group(1) if m else None
 
 
 class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
@@ -184,14 +198,37 @@ class KafkaTaskConsumer:
             kwargs["security_protocol"] = self._config.kafka_security_protocol
         if _notblank(self._config.kafka_sasl_mechanism):
             kwargs["sasl_mechanism"] = self._config.kafka_sasl_mechanism
-        if _notblank(self._config.kafka_sasl_jaas_config):
-            # aiokafka 不接受单一 jaas 字符串,而是分别接 plain user/password。
-            # 后续会解析 Java 风格的 ``username=... password=...`` 自动转
-            # 换;当前先把原值塞进 ``sasl_plain_password``,运维侧可在测试
-            # 中按需覆盖。
-            kwargs["sasl_plain_username"] = ""
-            kwargs["sasl_plain_password"] = self._config.kafka_sasl_jaas_config
+        username, password = self._resolve_sasl_credentials()
+        if username is not None or password is not None:
+            # aiokafka 的 SCRAM/PLAIN 走 sasl_plain_username/password(不吃 Java 单串 JAAS)。
+            kwargs["sasl_plain_username"] = username or ""
+            kwargs["sasl_plain_password"] = password or ""
         return AIOKafkaConsumer(**kwargs)
+
+    def _resolve_sasl_credentials(self) -> tuple[str | None, str | None]:
+        """解析 SCRAM/PLAIN 用户名 / 密码。
+
+        优先用显式的 ``kafka_sasl_username`` / ``kafka_sasl_password``;两者都空时
+        从 Java 风格的 ``kafka_sasl_jaas_config`` 里抽 ``username="..."`` /
+        ``password="..."``(单引号亦可),从而让租户用同一份 JAAS 同时喂 Java 与
+        Python SDK。三者皆空 → ``(None, None)``(PLAINTEXT,不配 SASL 凭据)。
+        """
+        user = self._config.kafka_sasl_username
+        pwd = self._config.kafka_sasl_password
+        if _notblank(user) or _notblank(pwd):
+            return (user or None), (pwd or None)
+        jaas = self._config.kafka_sasl_jaas_config
+        if not _notblank(jaas):
+            return None, None
+        assert jaas is not None
+        parsed_user = _jaas_field(jaas, "username")
+        parsed_pwd = _jaas_field(jaas, "password")
+        if parsed_user is None and parsed_pwd is None:
+            logger.warning(
+                "kafka_sasl_jaas_config provided but no username/password parsed; "
+                "set kafka_sasl_username/password explicitly if SASL is required"
+            )
+        return parsed_user, parsed_pwd
 
     def _subscribe(self) -> None:
         assert self._consumer is not None
@@ -214,13 +251,25 @@ class KafkaTaskConsumer:
                 batches = await self._consumer.getmany(timeout_ms=poll_ms, max_records=64)
                 if not batches:
                     continue
+                # 按分区累积「可提交到哪」的 offset:仅 ACCEPTED / DROP_TERMINAL 前移;
+                # 遇 RETRY_LATER 立刻 seek 回本条 + pause 该分区,停止处理该分区剩余记录,
+                # offset 不前移(对齐 Java seek+pause / 不再无差别 commit)。
+                commit_offsets: dict[TopicPartition, int] = {}
                 for tp, records in batches.items():
                     for rec in records:
-                        await self._handle_record(tp, rec)
-                try:
-                    await self._consumer.commit()
-                except Exception as ex:
-                    logger.warning("kafka commit failed (will retry next poll): %s", ex)
+                        disposition = await self._handle_record(tp, rec)
+                        if disposition is DispatchDisposition.RETRY_LATER:
+                            self._consumer.seek(tp, rec.offset)
+                            self._consumer.pause(tp)
+                            self._paused = True
+                            break
+                        # 下一条待消费 offset = 本条 + 1
+                        commit_offsets[tp] = rec.offset + 1
+                if commit_offsets:
+                    try:
+                        await self._consumer.commit(commit_offsets)
+                    except Exception as ex:
+                        logger.warning("kafka commit failed (will retry next poll): %s", ex)
         except asyncio.CancelledError:
             logger.info("kafka poll loop cancelled")
             raise
@@ -228,8 +277,13 @@ class KafkaTaskConsumer:
             logger.exception("KafkaTaskConsumer poll loop died")
             self._running = False
 
-    async def _handle_record(self, tp: TopicPartition, rec: Any) -> None:
-        """解码单条 ``ConsumerRecord`` 并喂给 dispatcher。"""
+    async def _handle_record(self, tp: TopicPartition, rec: Any) -> DispatchDisposition:
+        """解码单条 ``ConsumerRecord`` 并喂给 dispatcher,返回 offset 处置决定。
+
+        解码失败 / 空消息 / 非 JSON 对象都是不可恢复的 poison,返回
+        ``DROP_TERMINAL``(跳过并提交 offset,避免永久卡分区);否则把处置
+        决定透传给 :meth:`TaskDispatcher.on_message`。
+        """
         value = rec.value
         if not value:
             logger.warning(
@@ -237,7 +291,7 @@ class KafkaTaskConsumer:
                 tp.topic,
                 rec.offset,
             )
-            return
+            return DispatchDisposition.DROP_TERMINAL
         try:
             msg = json.loads(value)
         except (ValueError, TypeError) as ex:
@@ -247,7 +301,7 @@ class KafkaTaskConsumer:
                 rec.offset,
                 ex,
             )
-            return
+            return DispatchDisposition.DROP_TERMINAL
         if not isinstance(msg, dict):
             logger.error(
                 "kafka message at topic=%s offset=%s is not a JSON object: %r",
@@ -255,8 +309,8 @@ class KafkaTaskConsumer:
                 rec.offset,
                 type(msg).__name__,
             )
-            return
-        await self._dispatcher.on_message(msg)
+            return DispatchDisposition.DROP_TERMINAL
+        return await self._dispatcher.on_message(msg)
 
     # ─── 容量感知的分区暂停 ───────────────────────────────────────────
 

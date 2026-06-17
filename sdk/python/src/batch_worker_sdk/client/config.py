@@ -90,6 +90,12 @@ class BatchPlatformClientConfig(BaseModel):
     kafka_security_protocol: str | None = None
     kafka_sasl_mechanism: str | None = None
     kafka_sasl_jaas_config: str | None = None
+    # SCRAM/PLAIN 凭据。aiokafka 不吃 Java 的单串 JAAS,而是分别接 username /
+    # password。优先用这两个显式字段;留空时 _build_consumer 会从
+    # ``kafka_sasl_jaas_config`` 里解析 Java 风格 ``username="..." password="..."``
+    # (跨 SDK 配置可复用同一份 JAAS)。
+    kafka_sasl_username: str | None = None
+    kafka_sasl_password: str | None = None
 
     # ─── 校验 ────────────────────────────────────────────────────────
 
