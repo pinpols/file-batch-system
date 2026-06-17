@@ -145,6 +145,13 @@ jobs:
       - name: Run conformance + parity + unit (default features, zero-dep)
         working-directory: sdk/rust
         run: cargo test
+      # Real reqwest HTTP transport is feature-gated (`http`, rustls-tls → no
+      # system OpenSSL needed). Run its wire-contract tests (Idempotency-Key
+      # freshness, protocolVersion, path/auth headers) — they were dead in CI
+      # while only default features ran, so the production transport could rot.
+      - name: Run reqwest HTTP transport tests (--features http)
+        working-directory: sdk/rust
+        run: cargo test --features http
       # Kafka adapter is feature-gated (rdkafka builds librdkafka via cmake).
       # Best-effort compile-check; not a hard gate until a broker-capable runner exists.
       - name: Install librdkafka build deps
