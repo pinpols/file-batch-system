@@ -152,9 +152,14 @@ verify_dispatch_case() {
   batch_sql="$(sql_escape "$BATCH_FILTER")"
   batch_clause=""
   if [[ -n "$BATCH_FILTER" ]]; then
-    batch_clause="and i.params_snapshot ->> 'batchNo' = '$batch_sql'"
+    batch_clause="and coalesce(i.params_snapshot->'effectiveParams'->>'batchNo', i.params_snapshot->>'batchNo') = '$batch_sql'"
   fi
 
+  # dispatch 沉降到 SUCCESS/ACKED 有异步延迟;05-load 后立刻查会撞时序竞态
+  # (instance 还在 RUNNING / dispatch 还没 ACKED)→ 误报。poll 到 SUCCESS 或超时
+  # (默认 12×5s=60s);真不沉降仍走下方断言失败。
+  local _settle_n=0
+  while :; do
   row=$(psql_q batch_platform "
     with latest as (
       select i.id, i.tenant_id, i.job_code, i.instance_status, i.params_snapshot, i.created_at
@@ -162,7 +167,7 @@ verify_dispatch_case() {
        where i.tenant_id = '$tenant_sql'
          and i.job_code = '$job_sql'
          and i.created_at > now() - interval '$LOOKBACK_MINUTES minutes'
-         and i.params_snapshot ->> 'channelCode' = '$channel_sql'
+         and coalesce(i.params_snapshot->'effectiveParams'->>'channelCode', i.params_snapshot->>'channelCode') = '$channel_sql'
          $batch_clause
        order by i.created_at desc
        limit 1
@@ -184,7 +189,7 @@ verify_dispatch_case() {
         left join batch.file_dispatch_record d
           on d.tenant_id = l.tenant_id
          and d.channel_code = '$channel_sql'
-         and d.file_id::text = l.params_snapshot ->> 'fileId'
+         and d.file_id::text = coalesce(l.params_snapshot->'effectiveParams'->>'fileId', l.params_snapshot->>'fileId')
     )
     select task_summary.instance_id || '|' ||
            coalesce(task_summary.instance_status, '') || '|' ||
@@ -196,6 +201,12 @@ verify_dispatch_case() {
       from task_summary
       cross join dispatch_summary
   ")
+    local _st; _st="$(printf '%s' "$row" | cut -d'|' -f2)"
+    if [[ -n "$row" && "$_st" == "SUCCESS" ]]; then break; fi
+    _settle_n=$((_settle_n+1))
+    [[ $_settle_n -ge ${DISPATCH_SETTLE_ATTEMPTS:-12} ]] && break
+    sleep "${DISPATCH_SETTLE_POLL_S:-5}"
+  done
 
   local label="${tenant}/${job}/${channel}"
   if [[ -z "$row" ]]; then
