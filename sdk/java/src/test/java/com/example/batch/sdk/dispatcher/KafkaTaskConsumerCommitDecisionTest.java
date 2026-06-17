@@ -82,6 +82,31 @@ class KafkaTaskConsumerCommitDecisionTest {
             Map.of(new TopicPartition("batch.task.dispatch.tx.t0", 0), new OffsetAndMetadata(4)));
   }
 
+  @Test
+  void unsupportedSchemaWithholdsOffsetAndSeeksBack() {
+    // wire-protocol §A:未知大版本(v3)**不提交** offset(RETRY_LATER → seek+pause),
+    // 而非 DROP_TERMINAL 静默跳过。schema 校验在 dispatcher.onMessage 之前拦截。
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    @SuppressWarnings("unchecked")
+    Consumer<String, byte[]> consumer = mock(Consumer.class);
+    KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
+
+    byte[] v3 =
+        ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
+                + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
+            .getBytes(StandardCharsets.UTF_8);
+
+    kafka.handleRecordAndMaybeCommit(
+        new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
+
+    TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+    verify(dispatcher, never()).onMessage(any());
+    verify(consumer, never()).commitSync(any(Map.class));
+    verify(consumer).seek(tp, 5);
+    verify(consumer).pause(Set.of(tp));
+  }
+
   private static ConsumerRecord<String, byte[]> record(long offset, TaskDispatchMessage msg)
       throws Exception {
     ObjectMapper mapper = new ObjectMapper();
