@@ -45,9 +45,26 @@ if [ "${INFLIGHT_BEFORE:-0}" -lt 1 ]; then
 fi
 
 # ---- 2) 整队崩:kill 所有 worker 容器(SIGKILL,模拟硬崩非优雅停)---------
+# 自动清理:本演练唯一的残留是「被 kill 的 worker」。装 EXIT trap,确保无论脚本
+# 正常退出、断言失败 exit、还是 Ctrl-C/出错中断,都把被本脚本 kill 的 worker 拉回
+# running——不留 killed 容器残留。(基础设施栈 PG/Kafka/MinIO 不是本脚本起的,不动。)
+KILLED=""
+restart_killed_workers() {
+  [ -z "$KILLED" ] && return 0
+  log "清理:恢复被本演练 kill 的 worker($KILLED)"
+  for c in $KILLED; do
+    docker start "$c" >/dev/null 2>&1 || echo "⚠️ 清理时无法重启 $c(请手工 docker start $c)" >&2
+  done
+}
+trap restart_killed_workers EXIT
+
 log "整队崩:kill $WORKER_CONTAINERS"
 for c in $WORKER_CONTAINERS; do
-  docker kill "$c" >/dev/null 2>&1 || log "⚠️ kill $c 失败(可能已停)"
+  if docker kill "$c" >/dev/null 2>&1; then
+    KILLED="$KILLED $c"
+  else
+    log "⚠️ kill $c 失败(可能已停)"
+  fi
 done
 
 # ---- 3) 等待平台回收(lease/heartbeat/task 超时)+ Kafka 重投 -------------
@@ -59,6 +76,7 @@ log "重启 worker:$WORKER_CONTAINERS"
 for c in $WORKER_CONTAINERS; do
   docker start "$c" >/dev/null 2>&1 || { echo "❌ 无法重启 $c" >&2; exit 2; }
 done
+KILLED=""  # 已主动拉回,后续 EXIT trap 不再重复 start(仅在中途中断时兜底)
 
 # ---- 5) 轮询直到沉降(无 RUNNING/READY 残留)或超时 ----------------------
 log "轮询沉降(≤ ${SETTLE_TIMEOUT_S}s)"
