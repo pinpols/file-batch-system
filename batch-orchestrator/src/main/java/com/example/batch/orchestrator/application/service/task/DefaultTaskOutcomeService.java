@@ -301,6 +301,16 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           "task already finished by concurrent update: taskId=" + command.taskId());
     }
 
+    // 死锁防护(锁顺序统一):在任何对【单个分区】的写锁(下方 markStatus / updateOutputSummary)之前,
+    // 先以统一顺序(id desc)对该 instance 的【全部兄弟分区】FOR UPDATE 锁一遍,建立全局加锁序。
+    // 否则两个并发 outcome 各自先用 markStatus 锁住自己那一个分区、再到 advancePartitionAndInstance
+    // 抢全集 → 锁顺序反转 → Postgres 死锁(同一 job 的多分区近乎同时回报时偶发)。此处仅为加锁,
+    // 结果不用;后续 advancePartitionAndInstance 复读计数时对这些行是重入锁,不额外扩大锁集。
+    if (task.getJobInstanceId() != null) {
+      jobMappers.jobPartitionMapper.selectByQueryForUpdate(
+          new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
+    }
+
     if (command.success()) {
       applySuccessOutcome(command, partition);
       // ADR-030 §F：worker 上报的 ContentVerifier 失败 → 同事务写 outbox_event(verifier.failure.v1)。
