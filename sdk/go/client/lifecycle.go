@@ -234,10 +234,17 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 		defer w.taskWg.Done()
 		defer w.registry.Remove(msg.TaskID)
 		defer func() {
-			// resume partition once a slot frees if we were paused.
-			if w.fsm.Paused() && w.registry.Count() <= w.cfg.MaxConcurrentTasks {
-				w.fsm.SetPaused(false)
-				w.consumer.Resume()
+			// A slot just freed (registry.Remove ran first). Route the resume
+			// decision through the shared core so the max/2 hysteresis applies:
+			// stay paused while in-flight is still in the [max/2, max) band,
+			// resume only once it drops below max/2. This avoids pause/resume
+			// thrash at the capacity boundary.
+			if w.fsm.Paused() {
+				d := protocol.DecideBackpressure(w.registry.Count(), w.cfg.MaxConcurrentTasks, true)
+				if d.Action == "backpressure" && d.Kafka != nil && *d.Kafka == "resume" {
+					w.fsm.ApplyKafkaDirective(d.Kafka)
+					w.consumer.Resume()
+				}
 			}
 		}()
 		// A panicking handler must not crash the worker process: recover, log,

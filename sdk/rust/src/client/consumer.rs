@@ -101,10 +101,14 @@ pub fn run_pipeline(
     if record.tenant_id != config_tenant_id {
         return MessageOutcome::DropForeignTenant;
     }
-    // 4. capacity-aware backpressure.
-    let bp = decide_backpressure(in_flight, max_concurrent);
+    // 4. capacity-aware backpressure. On the receive path in-flight is at/above
+    // max (we just polled a new record), so this only ever yields pause; the
+    // hysteresis resume path (resume only once in-flight drops below max/2) is
+    // gated in the decision core and driven by the adapter as a slot frees —
+    // pass `currently_paused = false` here because arrival never resumes.
+    let bp = decide_backpressure(in_flight, max_concurrent, false);
     MessageOutcome::Accept {
-        paused: bp.action == "backpressure",
+        paused: bp.kafka.as_deref() == Some("pause"),
     }
 }
 

@@ -165,9 +165,16 @@ export class MessagePipeline {
       return { kind: "not-for-worker", committed: false };
     }
 
-    // 4. capacity backpressure
-    const bp = decideBackpressure(this.#deps.inFlight(), this.#deps.maxConcurrent);
-    if (bp.action === "backpressure") {
+    // 4. capacity backpressure. On the receive path in-flight is at/above max
+    // (we just got a new message), so this only ever yields pause; the
+    // hysteresis resume path runs as a slot frees (see lifecycle.ts), where the
+    // decision core gates resume on max/2.
+    const bp = decideBackpressure(
+      this.#deps.inFlight(),
+      this.#deps.maxConcurrent,
+      this.#deps.assignment.isPaused(),
+    );
+    if (bp.action === "backpressure" && bp.kafka === "pause") {
       this.#deps.assignment.pause();
       this.#logger.warn("at capacity; pausing assignment (backpressure)", {
         taskId: msg.taskId,
