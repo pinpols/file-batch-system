@@ -6,12 +6,15 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -144,6 +147,44 @@ class KafkaTaskConsumerCapacityPauseTest {
     // tick 4: inFlight=4 < 5 -> resume
     consumer.applyBackpressure();
     assertThat(mockConsumer.paused()).isEmpty();
+  }
+
+  /**
+   * #9 回归:一条 poison(未知 schema v3)记录被 RETRY_LATER seek+pause 该分区后,容量维度的 pause→resume 周期 **不得** 把这个
+   * poison 分区一起 resume —— 否则下一轮 poll 会重读被 seek 的 poison 记录再 RETRY_LATER,形成忙旋转。poison 分区维持 HOL
+   * 暂停,只有非 poison 分区随容量 resume。
+   */
+  @Test
+  @DisplayName("#9:容量 resume 不放开 poison(RETRY_LATER)分区,避免重读 poison 记录忙旋转")
+  void capacityResumeDoesNotResumePoisonPausedPartition() {
+    TopicPartition poison = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+    TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
+    // 容量先满(pause 整个 assignment),再跌破阈值(resume)
+    when(dispatcher.submittedCount()).thenReturn(2, 0);
+    when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
+    when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
+    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+    mockConsumer.assign(List.of(poison, healthy));
+    KafkaTaskConsumer consumer = newConsumer(mockConsumer);
+
+    // arrange: 一条 v3 poison 记录落到 t0 → RETRY_LATER → seek+pause + 记入 poison 集
+    byte[] v3 =
+        ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
+                + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
+            .getBytes(StandardCharsets.UTF_8);
+    boolean keepGoing =
+        consumer.handleRecordAndMaybeCommit(
+            new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
+    assertThat(keepGoing).isFalse();
+    assertThat(mockConsumer.paused()).contains(poison);
+
+    // act: 容量满 → pause 整个 assignment;再跌破 → resume
+    consumer.applyBackpressure(); // pause
+    assertThat(mockConsumer.paused()).contains(poison, healthy);
+    consumer.applyBackpressure(); // resume 仅非 poison
+
+    // assert: poison 分区仍 paused,healthy 分区已 resume
+    assertThat(mockConsumer.paused()).containsExactly(poison);
   }
 
   @Test
