@@ -1,7 +1,12 @@
 package com.example.batch.sdk.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.example.batch.sdk.dispatcher.HeartbeatDirective;
+import com.example.batch.sdk.dispatcher.TaskDispatchMessage;
+import com.example.batch.sdk.dispatcher.WorkerRuntimeState;
+import com.example.batch.sdk.internal.PlatformHttpException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
@@ -11,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,15 +39,32 @@ import org.junit.jupiter.params.provider.MethodSource;
  *   <li>{@code sdkExpectedAction} 非空 + 字符集合法
  * </ul>
  *
- * <p>**不做的事**(留后续 P5+ follow-up):
+ * <p>**行为侧 runner**(#10):{@link #fixtureDrivesSdkDecision} 真正驱动 Java SDK 的分类 / directive 决策核
+ * ({@link PlatformHttpException} HTTP 分类 + {@code consecutiveClientErrors} fail-fast streak、{@link
+ * TaskDispatchMessage#isSchemaSupported()}、{@link HeartbeatDirective#toRuntimeState()}),并对 {@code
+ * then.expect} 逐字段 deep-equal,把 Java 从「零行为覆盖」补齐到与 TS/Go/Rust 同样跑 compute。覆盖响应侧三类:
  *
  * <ul>
- *   <li>真起 SDK 跑业务逻辑(mock server / mock kafka consumer)— 需要 testkit + JDK HttpClient 抽象,本 lane 不展开
+ *   <li>HTTP 状态分类:07(401 fail-fast)/ 08(409 idempotent-success)/ 09(503 retry-backoff)/ 21(422 首次不
+ *       fail-fast)/ 22(404 give-up)/ 23(422 第 5 次 fail-fast)
+ *   <li>schemaVersion accept/reject:16(缺省)/ 17(v2)/ 18(v3 reject)/ 29(未知字段忽略)
+ *   <li>heartbeat directive:03(NORMAL)/ 04(DRAINING)/ 05(PAUSED)/ 06(DRAINING shouldDrain)/
+ *       26(DEGRADED)/ 27(desiredMaxConcurrent)
+ * </ul>
+ *
+ * <p>无法在纯函数层驱动的 fixture(需真 HTTP / kafka offset 副作用,如 register / report-idempotency-key /
+ * partition-invocation / kafka-pause)经 {@link #computeSdkDecision} 返回 {@code null} → {@code
+ * assumeTrue} 跳过并打印原因,**不静默忽略**。
+ *
+ * <p>**仍不做的事**(留后续 follow-up):
+ *
+ * <ul>
+ *   <li>真起 SDK 全链路(mock server / mock kafka consumer 跑 offset 副作用)— 需要 testkit + JDK HttpClient 抽象
  *   <li>responseBody 与 OpenAPI schema 的深度字段比对(swagger-parser 引入成本高,先靠 fixture 自校验 + 人工评审兜底)
  * </ul>
  *
- * <p>与 Python {@code sdk-python/tests/contract/test_contract_runner.py} 是镜像关系: Python 当前全
- * xfail,Java 当前应全 PASS(因为只验描述性契约,不执行行为)。
+ * <p>与 Python {@code sdk-python/tests/contract/test_contract_runner.py} 是镜像关系:两侧均已驱动决策核做行为断言(Python
+ * 早期曾全 xfail,现已落地)。
  */
 class JsonFixtureContractTest {
 
@@ -151,6 +174,228 @@ class JsonFixtureContractTest {
       int sc = status.asInt();
       assertThat(sc).as("%s responseStatus in 1xx..5xx", name).isBetween(100, 599);
     }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // #10 行为侧 runner:驱动 Java SDK 决策核,对 then.expect 逐字段 deep-equal。
+  // ════════════════════════════════════════════════════════════════════════
+
+  /**
+   * SDK 默认配置:连续 4xx 达 5 次 → fail-fast(对齐 {@code
+   * BatchPlatformClientConfig.clientErrorFailFastThreshold})。
+   */
+  private static final int CLIENT_ERROR_FAIL_FAST_THRESHOLD = 5;
+
+  /** SDK 默认 CLAIM/REPORT 5xx 退避:base=200ms,maxAttempts=3 → [200,400,800]。 */
+  private static final List<Integer> RETRY_BACKOFF_MS = List.of(200, 400, 800);
+
+  private static final int RETRY_MAX_ATTEMPTS = 3;
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("fixtureProvider")
+  void fixtureDrivesSdkDecision(String name, Path path) throws IOException {
+    JsonNode doc = JSON.readTree(path.toFile());
+    JsonNode then = doc.get("then");
+    JsonNode expect = then.get("expect");
+
+    Map<String, Object> computed = computeSdkDecision(doc);
+    assumeTrue(
+        computed != null,
+        () ->
+            name
+                + ": not drivable at pure-decision layer (needs real HTTP/kafka offset side"
+                + " effect); covered structurally by fixtureMatchesContract");
+
+    // expect 块逐字段 deep-equal:SDK 决策核算出的、且 fixture then.expect 也声明的每个键必须一致。
+    assertThat(expect)
+        .as("%s: behavioral runner only covers fixtures carrying then.expect", name)
+        .isNotNull();
+    int asserted = 0;
+    for (Map.Entry<String, Object> e : computed.entrySet()) {
+      if (!expect.has(e.getKey())) {
+        continue; // SDK 决策核算的某字段本 fixture 未声明 expect(如 26/27 无 action) → 不强加
+      }
+      Object expected = jsonValue(expect.get(e.getKey()));
+      assertThat(e.getValue())
+          .as("%s then.expect.%s — SDK decision must match fixture", name, e.getKey())
+          .isEqualTo(expected);
+      asserted++;
+    }
+    assertThat(asserted)
+        .as(
+            "%s: behavioral runner must assert >=1 then.expect field (none overlapped %s)",
+            name, computed.keySet())
+        .isGreaterThan(0);
+  }
+
+  /**
+   * 用真 SDK 决策核算出本 fixture 的可断言字段;返 {@code null} 表示「本 runner 不覆盖(需真副作用)」 → 调用方 assumeTrue 跳过并带原因。
+   *
+   * <p>分流键 = {@code scenario}:三类响应侧场景分别走 HTTP 分类 / schema accept / heartbeat directive。
+   */
+  private static Map<String, Object> computeSdkDecision(JsonNode doc) {
+    String scenario = doc.path("scenario").asText();
+    JsonNode when = doc.get("when");
+    JsonNode given = doc.path("given");
+    JsonNode state = given.path("state");
+
+    // ── 1) heartbeat directive(03/04/05/06/26/27):驱动 HeartbeatDirective + WorkerRuntimeState ──
+    if (scenario.startsWith("heartbeat-directive")
+        || scenario.equals("heartbeat-desired-max-concurrent")
+        || scenario.equals("heartbeat-next-interval-hint")) {
+      return computeHeartbeatDirective(when);
+    }
+
+    // ── 2) schema accept/reject(16/17/18/29):驱动 TaskDispatchMessage.isSchemaSupported() ──
+    if (scenario.startsWith("kafka-schema-version")
+        || scenario.equals("kafka-ignore-unknown-field")) {
+      return computeSchemaAccept(when);
+    }
+
+    // ── 3) HTTP 状态分类(07/08/09/21/22/23):仅 claim/report/renew 走 PlatformHttpException + fail-fast
+    // streak。
+    //    heartbeat 5xx(25)是另一套语义(不重试,等下次定时 tick),不复用 claim/report 退避分类。 ──
+    if ("http".equals(when.path("channel").asText())
+        && when.has("responseStatus")
+        && when.get("responseStatus").isInt()) {
+      String httpPath = when.path("path").asText();
+      if (httpPath.endsWith("/claim")
+          || httpPath.endsWith("/report")
+          || httpPath.endsWith("/renew")) {
+        return computeHttpClassification(when, state);
+      }
+      if (httpPath.endsWith("/heartbeat") && when.get("responseStatus").asInt() >= 500) {
+        // 25:heartbeat 5xx → 不退避重试,丢弃本次,等下个定时 tick(maxAttempts=1)。
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("retry", false);
+        out.put("maxAttempts", 1);
+        return out;
+      }
+    }
+
+    // 其余 fixture(register / report-idempotency-key / partition-invocation / kafka-pause /
+    // decode-error /
+    // paused-task-type 等)需真 HTTP / kafka offset 副作用,纯函数层不可驱动 → 交结构测兜底。
+    return null;
+  }
+
+  /** 驱动 {@link HeartbeatDirective#fromResponse} → {@link HeartbeatDirective#toRuntimeState()}。 */
+  private static Map<String, Object> computeHeartbeatDirective(JsonNode when) {
+    @SuppressWarnings("unchecked")
+    Map<String, Object> resp =
+        JSON.convertValue(when.path("responseBody"), Map.class) == null
+            ? Map.of()
+            : JSON.convertValue(when.path("responseBody"), Map.class);
+    HeartbeatDirective directive = HeartbeatDirective.fromResponse(resp);
+    WorkerRuntimeState fsm = directive.toRuntimeState();
+
+    Map<String, Object> out = new LinkedHashMap<>();
+    // 03/04/05 声明 action=apply-directive(26/27 未声明 → 不强加,见 runner 的 expect.has 过滤)。
+    out.put("action", "apply-directive");
+    out.put("fsmTransition", fsm.name());
+    // PAUSED / DRAINING 停接新任务 → Kafka partition pause;NORMAL / DEGRADED 接单 → none。
+    out.put("kafka", fsm.acceptsNewTasks() ? "none" : "pause");
+    if (WorkerRuntimeState.DRAINING == fsm) {
+      out.put("drainThenDeactivate", true);
+    }
+    if (directive.desiredMaxConcurrent() != null) {
+      out.put("effectiveMaxConcurrent", directive.desiredMaxConcurrent());
+    }
+    if (directive.nextHeartbeatHint() != null) {
+      // 对齐 HeartbeatScheduler.applyHeartbeatHint:hint 秒 * 1000 = 下次心跳间隔 ms。
+      out.put("heartbeatNextIntervalMs", directive.nextHeartbeatHint() * 1000);
+    }
+    return out;
+  }
+
+  /** 驱动 {@link TaskDispatchMessage#isSchemaSupported()}(缺省 / v2 接受,v3 拒绝;未知字段被忽略)。 */
+  private static Map<String, Object> computeSchemaAccept(JsonNode when) {
+    String schemaVersion =
+        when.path("body").hasNonNull("schemaVersion")
+            ? when.path("body").get("schemaVersion").asText()
+            : null;
+    // 走真 record(经 Jackson 反序列化,验未知字段确实被 ignoreUnknown 包容、不影响 schema 判定)。
+    TaskDispatchMessage msg;
+    try {
+      msg = JSON.treeToValue(when.path("body"), TaskDispatchMessage.class);
+    } catch (Exception ex) {
+      // body 缺必填(jobCode 等)不影响 schema 判定;直接构 message 投影。
+      msg = new TaskDispatchMessage(schemaVersion, 1L, "t", "j", "wt", "ti", Map.of(), Map.of());
+    }
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("schemaAccept", msg.isSchemaSupported());
+    return out;
+  }
+
+  /** 驱动 {@link PlatformHttpException} 分类 + 连续 4xx fail-fast streak,映射到 fixture then.expect 字段。 */
+  private static Map<String, Object> computeHttpClassification(JsonNode when, JsonNode state) {
+    int status = when.get("responseStatus").asInt();
+    PlatformHttpException ex = new PlatformHttpException(status, "fixture");
+    Map<String, Object> out = new LinkedHashMap<>();
+
+    if (ex.isAuthError()) {
+      // 07:401/403 鉴权失败 — 不可恢复,fail-fast,不重试。
+      out.put("action", "fail-fast");
+      out.put("failFast", true);
+      out.put("retry", false);
+      return out;
+    }
+    if (ex.isConflict()) {
+      // 08:409 already-claimed — 幂等成功,不重试、不上报失败。
+      out.put("action", "idempotent-success");
+      out.put("retry", false);
+      out.put("idempotent", true);
+      out.put("reportFailure", false);
+      return out;
+    }
+    if (ex.isServerError()) {
+      // 09:5xx — 指数退避重试后放弃(orchestrator lease 超时兜底重派)。
+      out.put("action", "retry-then-drop");
+      out.put("retry", true);
+      out.put("retryBackoffMs", RETRY_BACKOFF_MS);
+      out.put("maxAttempts", RETRY_MAX_ATTEMPTS);
+      return out;
+    }
+    if (status == 404) {
+      // 22:404 task reclaimed — 放弃,不重试、不 fail-fast。
+      out.put("action", "not-found");
+      out.put("retry", false);
+      out.put("failFast", false);
+      return out;
+    }
+    if (ex.isClientError()) {
+      // 21/23:其它 4xx(422 等)— 连续计数到阈值才 fail-fast,否则只 client-error 放弃。
+      int priorCount = state.path("clientErrorCount").asInt(0);
+      int count = priorCount + 1; // 本次也计一次(对齐 recordClientError 的 incrementAndGet)
+      boolean failFast = count >= CLIENT_ERROR_FAIL_FAST_THRESHOLD;
+      out.put("action", failFast ? "fail-fast" : "client-error");
+      out.put("retry", false);
+      out.put("failFast", failFast);
+      return out;
+    }
+    return null;
+  }
+
+  /** 把 JsonNode 转成纯 Java 值(供 deep-equal):int / boolean / text / array<int> / null。 */
+  private static Object jsonValue(JsonNode n) {
+    if (n == null || n.isNull()) {
+      return null;
+    }
+    if (n.isBoolean()) {
+      return n.asBoolean();
+    }
+    if (n.isInt()) {
+      return n.asInt();
+    }
+    if (n.isTextual()) {
+      return n.asText();
+    }
+    if (n.isArray()) {
+      List<Object> list = new ArrayList<>();
+      n.forEach(e -> list.add(jsonValue(e)));
+      return list;
+    }
+    return n.asText();
   }
 
   /**

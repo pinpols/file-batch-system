@@ -49,9 +49,14 @@ public record SdkTaskResult(
     return new SdkTaskResult(false, message, Map.of(), error);
   }
 
+  /** 协作式取消终态写入 {@code output['errorCode']} 的错误码,语言无关地对齐 Go/Python(均为 {@code CANCELLED})。 */
+  public static final String CANCELLED_CODE = "CANCELLED";
+
   /**
    * ADR-037 决策三 — 协作式取消的终态。语义上是「正常停止在安全点」而非「失败」:{@code success=false} 复用失败通道(orchestrator 不再推进
-   * SUCCESS),但 output 打上 {@code cancelled=true} 标记 + 停止时的断点坐标,供运维 / 续跑区分「被取消」与「真失败」。续跑模板顶层捕获 {@link
+   * SUCCESS),output 打上 {@code errorCode=CANCELLED}(对齐 Go {@code protocol.ErrorCodeCancelled} /
+   * Python {@code output['errorCode']=CANCELLED},让平台侧错误分类语言无关地识别「被取消」)+ {@code breakPosition}
+   * 停止断点坐标。保留 {@code cancelled=true} 兼容标记,供运维 / 续跑区分「被取消」与「真失败」。续跑模板顶层捕获 {@link
    * SdkTaskStoppedException} 后落本终态。
    *
    * @param breakPosition 取消生效时已提交的断点(续跑从此处往后)
@@ -61,7 +66,7 @@ public record SdkTaskResult(
     return new SdkTaskResult(
         false,
         "task cancelled at safe commit point",
-        Map.of("cancelled", true, "breakPosition", safe),
+        Map.of("errorCode", CANCELLED_CODE, "cancelled", true, "breakPosition", safe),
         null);
   }
 }
