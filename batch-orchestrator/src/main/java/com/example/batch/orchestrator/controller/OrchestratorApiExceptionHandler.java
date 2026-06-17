@@ -5,6 +5,9 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.web.AbstractApiExceptionHandler;
 import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -14,6 +17,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice(basePackageClasses = LaunchController.class)
 public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler {
+
+  private static final Logger log = LoggerFactory.getLogger(OrchestratorApiExceptionHandler.class);
 
   public OrchestratorApiExceptionHandler(BizMessageResolver bizMessageResolver) {
     super(bizMessageResolver);
@@ -50,6 +55,25 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
                 ResultCode.INVALID_ARGUMENT,
                 resolveCommonCode(
                     ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
+  }
+
+  /**
+   * 瞬时 DB 并发失败(死锁 / 锁获取超时,如并发 task-outcome 推进同一 job 多分区时的行锁竞争)→ 503 可重试, 而非落到 {@code Exception} 兜底的
+   * 500「unexpected exception」(语义=服务端 bug + 刷 ERROR 噪声)。 report / launch 等入口幂等(idempotency key + 状态机
+   * CAS),调用方(worker SDK §C)按 5xx 退避重投即收敛。 {@link TransientDataAccessException} 覆盖
+   * DeadlockLoserDataAccessException / CannotAcquireLockException / QueryTimeoutException 等一族瞬时错。
+   */
+  @ExceptionHandler(TransientDataAccessException.class)
+  public ResponseEntity<CommonResponse<Void>> handleTransientDataAccess(
+      TransientDataAccessException exception) {
+    log.warn(
+        "transient DB concurrency failure (retryable, mapped to 503): {}", exception.getMessage());
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(
+            CommonResponse.failure(
+                ResultCode.SERVICE_UNAVAILABLE,
+                resolveCommonCode(
+                    ResultCode.SERVICE_UNAVAILABLE, ResultCode.SERVICE_UNAVAILABLE.label())));
   }
 
   /** orchestrator 特有：把 Spring 的 ResponseStatusException 映射回 CommonResponse。 */

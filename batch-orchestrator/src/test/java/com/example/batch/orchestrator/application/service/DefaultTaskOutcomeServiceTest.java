@@ -2,11 +2,14 @@ package com.example.batch.orchestrator.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
@@ -20,9 +23,11 @@ import com.example.batch.orchestrator.application.service.version.ResultVersionW
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
+import com.example.batch.orchestrator.domain.statemachine.StateTransition;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -34,9 +39,11 @@ import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import com.example.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -164,5 +171,57 @@ class DefaultTaskOutcomeServiceTest {
             com.example.batch.orchestrator.domain.query.JobPartitionQuery.class);
     assertThat(partitionMethod).isNotNull();
     assertThat(partitionMethod.getReturnType()).isAssignableFrom(java.util.List.class);
+  }
+
+  /**
+   * 死锁回归守护:成功 outcome 必须**先**以统一顺序对全兄弟分区 {@code selectByQueryForUpdate}(FOR UPDATE) 加锁,**再**对自己这个分区
+   * {@code markStatus} 写锁。否则两个并发 outcome 各自先锁自己分区、再抢全集 → 锁顺序反转死锁。本测试用 InOrder 钉死「bulk lock 先于
+   * per-partition write」这一不变量。
+   */
+  @Test
+  void applyTaskOutcome_locksAllSiblingPartitionsBeforeMarkingSelf() {
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(1L);
+    task.setTenantId("t1");
+    task.setJobInstanceId(10L);
+    task.setJobPartitionId(99L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setAssignedWorkerCode("w1");
+    task.setVersion(1L);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(99L);
+    partition.setTenantId("t1");
+    partition.setJobInstanceId(10L);
+    partition.setPartitionStatus(PartitionStatus.RUNNING.code()); // 未完成 → 非终态,流程短
+    partition.setVersion(1L);
+
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(10L);
+    instance.setTenantId("t1");
+    instance.setInstanceStatus("RUNNING");
+    instance.setVersion(1L);
+    instance.setDryRun(false);
+
+    when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
+    when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
+    when(jobTaskMapper.finishTask(any())).thenReturn(1);
+    when(jobPartitionMapper.selectByQueryForUpdate(any())).thenReturn(List.of(partition));
+    when(jobPartitionMapper.markStatus(any())).thenReturn(1);
+    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
+    when(stateMachine.transition(any(), anyString()))
+        .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
+    when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
+
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder().tenantId("t1").taskId(1L).workerId("w1").success(true).build();
+
+    service.applyTaskOutcome(command);
+
+    InOrder inOrder = inOrder(jobPartitionMapper);
+    // 统一顺序的全兄弟 FOR UPDATE 锁必须先于针对自己分区的 markStatus 写锁。
+    inOrder.verify(jobPartitionMapper).selectByQueryForUpdate(any());
+    inOrder.verify(jobPartitionMapper).markStatus(any());
   }
 }

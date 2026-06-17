@@ -200,6 +200,13 @@
           and partition_status not in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4})
     </update>
 
+    <!-- reclaim 路径:整批在一个 @Transactional 内逐分区 markStatus(行锁持有到提交)。若不加
+         FOR UPDATE SKIP LOCKED,本查询按 id asc 取行、markStatus 又按 asc 持锁,会与
+         DefaultTaskOutcomeService.advancePartitionAndInstance 的「全兄弟 id desc FOR UPDATE」
+         构成 asc-vs-desc 锁顺序反转死锁(同一 instance 两分区时)。SKIP LOCKED 让 reclaim 跳过
+         正被 outcome 处理(已锁)的分区——本就不该回收在跑的分区——从而永不等待、不参与环形等待。
+         (当前生产 reclaim 走 PartitionReclaimUnit 的 per-partition REQUIRES_NEW 路径,单锁不反转;
+         本方法仅测试可达,此处为防 future footgun 的防御性硬化。) -->
     <select id="selectExpiredLeases" resultMap="JobPartitionResultMap">
         select *
         from batch.job_partition
@@ -208,6 +215,7 @@
           and lease_expire_at is not null
           and lease_expire_at &lt; current_timestamp
         order by id asc
+        for update skip locked
     </select>
 
     <select id="selectExpiredLeasesGlobal" resultMap="JobPartitionResultMap">
