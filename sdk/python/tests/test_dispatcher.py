@@ -11,6 +11,7 @@ from pytest_httpx import HTTPXMock
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
 from batch_worker_sdk.internal._http import PlatformHttpClient
+from batch_worker_sdk.scheduler._directive import parse_directive
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.result import SdkTaskResult
 
@@ -131,6 +132,45 @@ async def test_apply_platform_directive_sets_state(httpx_mock: HTTPXMock) -> Non
         assert dispatcher.accepts_new_tasks() is False
         await dispatcher.on_message(_msg(task_id=7))
         assert dispatcher.in_flight_count() == 0
+    finally:
+        await http.close()
+
+
+async def test_apply_platform_directive_accepts_parsed_directive() -> None:
+    """#11 回归:apply_platform_directive 必须接受 HeartbeatScheduler 回灌的
+    ``ParsedDirective``(生产路径),而不是只认 dict。
+
+    早先这里 ``directive.get('runtimeState')`` 对 ``ParsedDirective`` 会
+    ``AttributeError``,被心跳循环吞掉 → 心跳下发的 FSM 切换 / 并发收敛永不
+    生效(directive 覆盖缺口)。
+    """
+    dispatcher, http = await _make()
+    try:
+        parsed = parse_directive({"runtimeState": "PAUSED", "desiredMaxConcurrent": 2})
+        dispatcher.apply_platform_directive(parsed)
+        assert dispatcher.runtime_state == WorkerRuntimeState.PAUSED
+        assert dispatcher.accepts_new_tasks() is False
+        # desiredMaxConcurrent 收敛(只下压:min(本地4, 平台2)=2)。
+        assert dispatcher.effective_max_concurrent == 2
+    finally:
+        await http.close()
+
+
+async def test_effective_max_concurrent_clamps_down_only() -> None:
+    """#11/#27:effective_max_concurrent = min(本地, 平台);平台值大于本地不抬高,
+    None/0 撤销收敛回落本地。"""
+    dispatcher, http = await _make()  # 本地 max=4
+    try:
+        assert dispatcher.effective_max_concurrent == 4
+        # 平台建议 2 → 下压到 2。
+        dispatcher.apply_platform_directive({"runtimeState": "NORMAL", "desiredMaxConcurrent": 2})
+        assert dispatcher.effective_max_concurrent == 2
+        # 平台建议 10(> 本地 4)→ 不抬高,仍取 min=4。
+        dispatcher.apply_platform_directive({"runtimeState": "NORMAL", "desiredMaxConcurrent": 10})
+        assert dispatcher.effective_max_concurrent == 4
+        # 撤销收敛(None / 缺省)→ 回落本地配置。
+        dispatcher.apply_platform_directive({"runtimeState": "NORMAL"})
+        assert dispatcher.effective_max_concurrent == 4
     finally:
         await http.close()
 

@@ -70,8 +70,9 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
     """rebalance 钩子 —— 分区分配变化时清空 paused 缓存。
 
     aiokafka 的 ``pause(...)`` 是按 TopicPartition 维度的,在 poll 之间会
-    保留但在 **rebalance** 时失效。因此 rebalance 后我们把 ``_paused``
-    重置为 ``False``;若仍处饱和状态,下一次 ``apply_backpressure`` 会
+    保留但在 **rebalance** 时失效。因此 rebalance 后我们把容量维度的
+    ``_capacity_paused`` 重置为 ``False`` 并清空 poison/平台单分区 pause 账本
+    ``_poison_paused``;若仍处饱和状态,下一次 ``apply_backpressure`` 会
     重新 pause。
     """
 
@@ -84,8 +85,11 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
     async def on_partitions_assigned(self, assigned: set[TopicPartition]) -> None:
         logger.info("kafka rebalance: partitions assigned=%s", sorted(map(str, assigned)))
         # aiokafka 的 pause 状态是按 partition 维度的;清空缓存,让下一次
-        # backpressure tick 在新分配上重新评估。
-        self._parent._paused = False
+        # backpressure tick 在新分配上重新评估。容量维度与 poison/平台单分区
+        # 维度都要清(rebalance 后 Kafka 把所有新分配的分区默认置为 RESUMED,
+        # 旧的 poison pause 也不再对应新分区集合)。
+        self._parent._capacity_paused = False
+        self._parent._poison_paused.clear()
 
 
 class KafkaTaskConsumer:
@@ -118,7 +122,15 @@ class KafkaTaskConsumer:
         self._consumer: AIOKafkaConsumer | None = consumer
         self._owns_consumer = consumer is None
         self._running: bool = False
-        self._paused: bool = False
+        # 两套独立的 pause 账本(对齐 Java 但拆分维度,见 apply_backpressure /
+        # _poll_loop 注释):
+        #   _capacity_paused —— 容量 / 平台维度的「整 assignment pause」缓存,
+        #     带 hysteresis,由 apply_backpressure 独占翻转。
+        #   _poison_paused   —— poison / 未知 schema / 平台单分区 RETRY_LATER 触发
+        #     的「单分区 pause」集合;容量维度 resume **不得** 清掉它,否则会把
+        #     poison 分区重新 resume 导致忙旋转重读重拒(fixture 30 / schema-reject)。
+        self._capacity_paused: bool = False
+        self._poison_paused: set[TopicPartition] = set()
         self._poll_task: asyncio.Task[None] | None = None
 
     # ─── 公共生命周期 ────────────────────────────────────────────────
@@ -261,7 +273,12 @@ class KafkaTaskConsumer:
                         if disposition is DispatchDisposition.RETRY_LATER:
                             self._consumer.seek(tp, rec.offset)
                             self._consumer.pause(tp)
-                            self._paused = True
+                            # 记到 poison/平台单分区账本(**不是** 容量账本):
+                            # 容量维度 resume 必须跳过这些分区,否则容量正常时
+                            # 会被全量 resume 导致忙旋转重读重拒(同一条 poison /
+                            # 未知 schema 反复投递)。该分区靠 rebalance(清账)
+                            # 或平台恢复重投后正常推进。
+                            self._poison_paused.add(tp)
                             break
                         # 下一条待消费 offset = 本条 + 1
                         commit_offsets[tp] = rec.offset + 1
@@ -315,38 +332,56 @@ class KafkaTaskConsumer:
     # ─── 容量感知的分区暂停 ───────────────────────────────────────────
 
     def apply_backpressure(self) -> None:
-        """根据 dispatcher 容量决定 pause/resume 分配。
+        """根据 dispatcher 容量 / 平台状态决定整 assignment 的 pause/resume。
 
-        对齐 Java ``KafkaTaskConsumer.applyBackpressure()``:当 in-flight
-        达到 ``max_concurrent_tasks`` 或平台 directive 把状态切到
-        PAUSED/DRAINING 时,``pause(*assignment)`` 让 broker 停止为这些分
-        区拉取数据;容量恢复后 ``resume(*assignment)``。未处理消息的
-        offset 永不提交,Kafka 会在 resume 后重投递。
+        对齐 Java ``KafkaTaskConsumer.applyBackpressure()``,容量维度带
+        hysteresis(防边界抖动):
 
-        ``_paused`` 字段缓存上次决策,避免每次 poll 都发 pause/resume RPC;
-        rebalance 时由 listener 清空缓存。
+        - **pause**:``in_flight >= max`` **或** 平台不接单(PAUSED/DRAINING/
+          fatal)→ ``pause(*assignment)``。
+        - **容量维度 resume**:仅当 ``in_flight < max // 2``(整数除,至少 1)
+          且平台已接单时才 resume —— 上下边界拉开,避免 in-flight 在 ``max-1`` /
+          ``max`` 之间快速抖动时反复颠簸 Kafka client。
+        - **平台维度 resume 不受 hysteresis**:平台一旦从 PAUSED/DRAINING 恢复到
+          accept,只要容量也满足 hysteresis 即立即 resume(平台态本身不构成抖动源,
+          所以 hysteresis 只防容量抖动,不拖延平台恢复)。
+
+        未处理消息的 offset 永不提交,Kafka 会在 resume 后重投递。
+
+        ``_capacity_paused`` 缓存上次容量/平台决策,避免每次 poll 都发
+        pause/resume RPC;rebalance 时由 listener 清空。**poison/平台单分区
+        pause(``_poison_paused``)与容量维度分开记账**:容量 resume 只
+        resume「assignment 减去 poison 分区」,绝不把 poison 分区一并 resume
+        (否则忙旋转重读重拒)。
         """
         assert self._consumer is not None
         max_in_flight = self._config.max_concurrent_tasks
         in_flight = self._dispatcher.in_flight_count()
-        should_pause = in_flight >= max_in_flight or not self._dispatcher.accepts_new_tasks()
+        platform_paused = not self._dispatcher.accepts_new_tasks()
+        # 容量维度 pause:达到上限;resume:跌破 max//2(hysteresis 防抖,至少 1)。
+        capacity_pause = in_flight >= max_in_flight
+        capacity_resume_ok = in_flight < max(1, max_in_flight // 2)
         assignment = set(self._consumer.assignment())
         if not assignment:
             return
-        if should_pause and not self._paused:
+        if (capacity_pause or platform_paused) and not self._capacity_paused:
             self._consumer.pause(*assignment)
-            self._paused = True
+            self._capacity_paused = True
             logger.info(
                 "kafka consumer pause: inFlight=%d max=%d state=%s",
                 in_flight,
                 max_in_flight,
                 self._dispatcher.runtime_state,
             )
-        elif not should_pause and self._paused:
-            self._consumer.resume(*assignment)
-            self._paused = False
+        elif self._capacity_paused and not platform_paused and capacity_resume_ok:
+            # 只 resume 非 poison 分区:poison/平台单分区 pause 由各自路径
+            # (rebalance 清账 / 平台重投)推进,容量恢复不该把它们 resume。
+            resumable = assignment - self._poison_paused
+            if resumable:
+                self._consumer.resume(*resumable)
+            self._capacity_paused = False
             logger.info(
-                "kafka consumer resume: inFlight=%d max=%d state=%s",
+                "kafka consumer resume: inFlight=%d max=%d state=%s (below max//2 hysteresis)",
                 in_flight,
                 max_in_flight,
                 self._dispatcher.runtime_state,
@@ -356,8 +391,19 @@ class KafkaTaskConsumer:
 
     @property
     def paused(self) -> bool:
-        """最近一次缓存的 pause 决策(供测试 + 诊断使用)。"""
-        return self._paused
+        """最近一次缓存的**容量 / 平台维度** pause 决策(供测试 + 诊断)。
+
+        不反映 poison/平台单分区 pause(见 :meth:`poison_paused_partitions`)。
+        """
+        return self._capacity_paused
+
+    @property
+    def poison_paused_partitions(self) -> frozenset[TopicPartition]:
+        """当前因 poison / 未知 schema / 平台单分区 RETRY_LATER 被 pause 的分区快照。
+
+        与容量维度账本分开(供测试 + 诊断);容量维度 resume 不会清空此集合。
+        """
+        return frozenset(self._poison_paused)
 
     @property
     def running(self) -> bool:

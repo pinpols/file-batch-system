@@ -226,6 +226,9 @@ async def test_typed_import_cancel_yields_cancelled_terminal() -> None:
     r = await h.execute(make_ctx(parameters={"source": "x"}, checkpoint=cp, cancel=sig))
     assert r.success is False
     assert r.output["errorCode"] == CANCELLED_CODE
+    # #12 回归:CANCELLED 终态 output 必须带 breakPosition(已安全提交到的断点),
+    # 与 Go/Java 统一;且与 checkpoint 落盘的断点一致。
+    assert r.output["breakPosition"] == {"i": 1}
     # 第一批已安全提交(i=1)
     assert cp.load(42).break_position == {"i": 1}
     assert h.loaded == [[{"i": 0}, {"i": 1}]]
@@ -282,6 +285,8 @@ async def test_typed_process_cancel_terminal() -> None:
     r = await h.execute(make_ctx(checkpoint=cp, cancel=sig))
     assert r.success is False
     assert r.output["errorCode"] == CANCELLED_CODE
+    # #12 回归:breakPosition 携带最后提交批次的断点键({"o": 1})。
+    assert r.output["breakPosition"] == {"o": 1}
     assert h.upserts == [[{"o": 0}, {"o": 1}]]
 
 
@@ -338,6 +343,8 @@ async def test_typed_export_cancel_terminal() -> None:
     r = await h.execute(make_ctx(checkpoint=cp, cancel=sig))
     assert r.success is False
     assert r.output["errorCode"] == CANCELLED_CODE
+    # #12 回归:breakPosition 与落盘断点一致({"i": 1})。
+    assert r.output["breakPosition"] == {"i": 1}
     # 停在第一个 commit 安全点(写了 2 行)
     assert h.written == [{"i": 0}, {"i": 1}]
     assert cp.load(42).break_position == {"i": 1}

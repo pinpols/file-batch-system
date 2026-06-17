@@ -54,3 +54,26 @@ class SdkTaskResult(BaseModel):
         if cause is not None:
             output["errorClass"] = type(cause).__name__
         return cls(success=False, output=output, message=message)
+
+    @classmethod
+    def cancelled(
+        cls,
+        break_position: dict[str, Any] | None = None,
+        message: str | None = None,
+    ) -> Self:
+        """构造 ADR-037 协作取消的终态结果(对齐 Go/Java)。
+
+        ``errorCode`` 固定为 ``CANCELLED``,并把取消发生时已安全提交到的断点
+        ``break_position`` 放入 ``output['breakPosition']``,使平台 / 后续续跑能
+        看到任务安全停在哪里。``break_position`` 为 ``None`` / 空时仍带上
+        ``breakPosition``(空 dict),保证终态 output 形状跨语言一致。
+        """
+        output: dict[str, Any] = {
+            "errorCode": "CANCELLED",
+            "breakPosition": dict(break_position or {}),
+        }
+        return cls(
+            success=False,
+            output=output,
+            message=message or "task cancelled at committed safe point",
+        )
