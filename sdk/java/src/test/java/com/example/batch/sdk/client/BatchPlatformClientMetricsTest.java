@@ -135,6 +135,28 @@ class BatchPlatformClientMetricsTest {
   }
 
   @Test
+  void kafkaAuthFailureMakesClientUnhealthyAndMetricsReflectIt() throws Exception {
+    // Kafka SASL 认证失败:poll 线程 fail-fast 退出(非 crashed 路径),但消费已停。
+    // 必须并入 isHealthy/metrics,否则 actuator/liveness 误报 UP。
+    BatchPlatformClient client =
+        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    KafkaTaskConsumer consumer = mock(KafkaTaskConsumer.class);
+    when(dispatcher.isFatal()).thenReturn(false);
+    when(dispatcher.isDraining()).thenReturn(false);
+    when(consumer.hasCrashed()).thenReturn(false);
+    when(consumer.isFatalAuthFailure()).thenReturn(true);
+    inject(client, "started", true);
+    inject(client, "dispatcher", dispatcher);
+    inject(client, "kafkaConsumer", consumer);
+
+    assertThat(client.isHealthy()).isFalse();
+    SdkClientMetrics m = client.metrics();
+    assertThat(m.healthy()).isFalse();
+    assertThat(m.consumerCrashed()).isTrue(); // auth 失败并入 crashed 维度供运维感知
+  }
+
+  @Test
   void drainingClientStillHealthy() throws Exception {
     // drain 是 graceful 状态:Kafka 不再消费但 lease / heartbeat 仍续约,平台不应误判
     BatchPlatformClient client =

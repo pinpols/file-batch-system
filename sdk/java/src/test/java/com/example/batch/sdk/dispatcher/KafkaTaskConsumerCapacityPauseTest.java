@@ -47,7 +47,7 @@ class KafkaTaskConsumerCapacityPauseTest {
 
   @Test
   void pausesAssignedPartitionsWhenInFlightAtCapacity() {
-    when(dispatcher.inFlightCount()).thenReturn(2); // == maxConcurrentTasks
+    when(dispatcher.submittedCount()).thenReturn(2); // == maxConcurrentTasks
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
     MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
@@ -61,7 +61,7 @@ class KafkaTaskConsumerCapacityPauseTest {
 
   @Test
   void resumesAssignedPartitionsAfterInFlightDropsBelowCapacity() {
-    when(dispatcher.inFlightCount()).thenReturn(2, 0); // 第一次满,第二次空
+    when(dispatcher.submittedCount()).thenReturn(2, 0); // 第一次满,第二次空
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
     MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
@@ -79,7 +79,7 @@ class KafkaTaskConsumerCapacityPauseTest {
 
   @Test
   void doesNotRepeatPauseWhileAlreadyPaused() {
-    when(dispatcher.inFlightCount()).thenReturn(5); // 持续满
+    when(dispatcher.submittedCount()).thenReturn(5); // 持续满
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
     MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
@@ -97,7 +97,7 @@ class KafkaTaskConsumerCapacityPauseTest {
 
   @Test
   void doesNotPauseWhenInFlightBelowCapacity() {
-    when(dispatcher.inFlightCount()).thenReturn(1);
+    when(dispatcher.submittedCount()).thenReturn(1);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
     mockConsumer.assign(List.of(tp));
@@ -124,7 +124,7 @@ class KafkaTaskConsumerCapacityPauseTest {
             .kafkaGroupId("g")
             .maxConcurrentTasks(10)
             .build();
-    when(dispatcher.inFlightCount()).thenReturn(10, 6, 5, 4);
+    when(dispatcher.submittedCount()).thenReturn(10, 6, 5, 4);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
     MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
@@ -148,7 +148,7 @@ class KafkaTaskConsumerCapacityPauseTest {
 
   @Test
   void capacityPauseSkippedWhenNoPartitionsAssigned() {
-    when(dispatcher.inFlightCount()).thenReturn(10);
+    when(dispatcher.submittedCount()).thenReturn(10);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
     // 未 assign -> pause/resume 都跳过(避免 IllegalStateException)

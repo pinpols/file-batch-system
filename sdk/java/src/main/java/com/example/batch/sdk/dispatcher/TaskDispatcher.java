@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -53,6 +54,17 @@ public class TaskDispatcher {
   private final Map<String, SdkTaskHandler> handlers;
   private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
+
+  /**
+   * P0 backpressure 承重墙:把「已提交到 executor 但尚未跑完」的消息计入容量。{@link Executors#newFixedThreadPool}
+   * 的工作队列无界,单看 {@link #inFlight}(CLAIM 成功后才加)在平台 5xx / claim 慢 / HTTP 卡住时挡不住——worker 线程全卡在
+   * claim,inFlight 始终低,consumer 仍会持续把消息塞进无界队列并提交 offset;一旦进程崩,这些 「已提交 offset 但从未 CLAIM」的任务没有
+   * lease,orchestrator 的 lease-timeout 重投兜不到(TaskTimeoutEnforcer 只扫 task_status='RUNNING')。故在
+   * {@link #onMessage} 提交前 {@code tryAcquire} 一个 permit,涵盖 queued+claiming+running; 无 permit 直接
+   * {@code RETRY_LATER}(不提交 offset),permit 在 runnable 完整跑完后释放。
+   */
+  private final Semaphore capacity;
+
   private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
   /**
@@ -176,6 +188,9 @@ public class TaskDispatcher {
     this.executor =
         Executors.newFixedThreadPool(
             config.getMaxConcurrentTasks(), namedThreadFactory("batch-sdk-dispatch"));
+    // permit 数 == 线程数:提交即占 permit,跑满 max 后 onMessage 返回 RETRY_LATER → 不提交 offset + pause partition,
+    // 无界工作队列因此永不堆积(submit 数被 permit 卡在 max 以内)。
+    this.capacity = new Semaphore(config.getMaxConcurrentTasks());
   }
 
   /**
@@ -238,13 +253,41 @@ public class TaskDispatcher {
           msg.taskId());
       return DispatchDecision.RETRY_LATER;
     }
+    // P0 backpressure:提交前占容量 permit(涵盖 queued+claiming+running)。占满 → 不提交,offset 不前移,
+    // KafkaTaskConsumer 据 RETRY_LATER 做 seek+pause,平台/HTTP 恢复后从原 offset 续消费,不丢任务。
+    if (!capacity.tryAcquire()) {
+      throttledLog.info(
+          "capacity_full",
+          "dispatcher at capacity (max={}), retry later taskId={}",
+          config.getMaxConcurrentTasks(),
+          msg.taskId());
+      return DispatchDecision.RETRY_LATER;
+    }
     try {
-      executor.execute(() -> processInWorkerThread(msg));
+      executor.execute(
+          () -> {
+            try {
+              processInWorkerThread(msg);
+            } finally {
+              capacity.release();
+            }
+          });
       return DispatchDecision.SUBMITTED;
     } catch (RejectedExecutionException ex) {
+      capacity.release();
       log.warn("dispatcher executor rejected taskId={}, will retry later", msg.taskId(), ex);
       return DispatchDecision.RETRY_LATER;
     }
+  }
+
+  /**
+   * P0 backpressure 计数:当前「已提交到 executor 但未跑完」的消息数(queued + claiming + running),即被占用的容量 permit
+   * 数。KafkaTaskConsumer 的 {@link
+   * com.example.batch.sdk.dispatcher.KafkaTaskConsumer#applyBackpressure()} 据此决定 pause/resume ——
+   * 比单看 {@link #inFlightCount()}(只数 CLAIM 成功后的)更早、更准地反映真实在制工作量。
+   */
+  public int submittedCount() {
+    return config.getMaxConcurrentTasks() - capacity.availablePermits();
   }
 
   /** 单消息处理:claim → execute → report。所有异常都被 catch。 */

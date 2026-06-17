@@ -274,7 +274,10 @@ public class BatchPlatformClient {
     boolean startedSnap = started;
     boolean fatal = dispatcher != null && dispatcher.isFatal();
     boolean draining = dispatcher != null && dispatcher.isDraining();
-    boolean crashed = kafkaConsumer != null && kafkaConsumer.hasCrashed();
+    // Kafka SASL 认证失败时 poll 线程抛 BatchSdkClientException 退出(非走 catch(Throwable) 那条,故 crashed 不会被置),
+    // 但消费已实质停止。必须并入 healthy/crashed,否则 actuator/liveness 仍报 UP,starter SmartLifecycle 也以为 running。
+    boolean authFail = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
+    boolean crashed = (kafkaConsumer != null && kafkaConsumer.hasCrashed()) || authFail;
     int inFlight = dispatcher == null ? 0 : dispatcher.inFlightCount();
     long consumerLag = kafkaConsumer == null ? -1L : kafkaConsumer.consumerLagMax();
     return new SdkClientMetrics(
@@ -305,7 +308,10 @@ public class BatchPlatformClient {
     if (!started) return false;
     boolean fatal = dispatcher != null && dispatcher.isFatal();
     boolean crashed = kafkaConsumer != null && kafkaConsumer.hasCrashed();
-    return !fatal && !crashed;
+    // Kafka SASL 认证失败:poll 线程已 fail-fast 退出(消费停止),但不经 crashed 路径。纳入 liveness,否则
+    // actuator/liveness 误报 UP。详见 metrics() 同款注释。
+    boolean authFail = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
+    return !fatal && !crashed && !authFail;
   }
 
   // ─── Builder ────────────────────────────────────────────────────────────────

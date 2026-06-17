@@ -189,6 +189,67 @@ class TaskDispatcherP0HardeningTest {
     assertThat(mdc).containsEntry("taskId", "42");
   }
 
+  // ─── P0: 容量 permit backpressure(提交前占容量,满则 RETRY_LATER 不提交 offset)──────────
+
+  @Test
+  void onMessageReturnsRetryLaterWhenCapacityFullThenAcceptsAfterDrain() throws Exception {
+    BatchPlatformClientConfig cap1 =
+        BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("k:9092")
+            .kafkaTopicPattern("p.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(1)
+            .build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch gate = new CountDownLatch(1);
+    dispatcher = new TaskDispatcher(cap1, Map.of("tt", new GatedHandler(started, gate)), http);
+
+    // msg1 占满唯一 permit,worker 线程卡在 handler 内(permit 未释放)
+    TaskDispatcher.DispatchDecision d1 =
+        dispatcher.onMessage(
+            new TaskDispatchMessage(1L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+    assertThat(d1).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);
+    assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+    assertThat(dispatcher.submittedCount()).isEqualTo(1);
+
+    // 容量满 → msg2 RETRY_LATER(KafkaTaskConsumer 据此 seek+pause,offset 不前移)
+    TaskDispatcher.DispatchDecision d2 =
+        dispatcher.onMessage(
+            new TaskDispatchMessage(2L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+    assertThat(d2).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
+
+    // 放行 msg1 → permit 释放,容量恢复
+    gate.countDown();
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+    while (dispatcher.submittedCount() != 0 && System.nanoTime() < deadline) {
+      Thread.sleep(10);
+    }
+    assertThat(dispatcher.submittedCount()).isEqualTo(0);
+  }
+
+  private record GatedHandler(CountDownLatch started, CountDownLatch gate)
+      implements SdkTaskHandler {
+    @Override
+    public String taskType() {
+      return "tt";
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      started.countDown();
+      try {
+        gate.await(5, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      return SdkTaskResult.ok();
+    }
+  }
+
   private static SdkTaskHandler noopHandler() {
     return new SdkTaskHandler() {
       @Override
