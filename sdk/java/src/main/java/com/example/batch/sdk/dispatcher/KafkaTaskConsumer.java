@@ -203,7 +203,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
    */
   void applyBackpressure() {
     int max = config.getMaxConcurrentTasks();
-    int inFlight = dispatcher.inFlightCount();
+    // P0:用 submittedCount(queued+claiming+running)而非 inFlightCount(只数 CLAIM 成功后的)。
+    // claim 慢 / 平台 5xx 时 worker 卡在 claim、inFlight 偏低,只有 submitted 能如实反映在制量并及时 pause。
+    int inFlight = dispatcher.submittedCount();
     boolean platformPaused =
         !dispatcher.platformAcceptsNewTasks() || dispatcher.isFatal() || dispatcher.isDraining();
     // 容量维度 pause:inFlight 达到上限;resume:inFlight 跌破 max/2(hysteresis 防抖)
