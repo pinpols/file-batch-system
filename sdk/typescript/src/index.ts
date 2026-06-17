@@ -21,4 +21,6 @@ export * from "./client/consumer.ts";
 export * from "./client/sensitive.ts";
 export * from "./client/handler.ts";
 export * from "./client/checkpoint.ts";
+export * from "./client/retry.ts";
+export * from "./client/idempotency.ts";
 export * from "./client/testkit.ts";

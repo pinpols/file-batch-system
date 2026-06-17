@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepack": "tsc -p tsconfig.json",
-    "test": "node --test --experimental-strip-types 'test/**/*.test.ts'"
+    "test": "node --test --experimental-strip-types 'tests/**/*.test.ts'"
   },
   "engines": {
     "node": ">=25"

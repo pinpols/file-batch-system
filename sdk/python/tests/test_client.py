@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from batch_worker_sdk import BatchPlatformClient, BatchPlatformClientConfig
+from batch_worker_sdk.idempotent import InMemoryIdempotencyStore, idempotent
+from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
 from batch_worker_sdk.task.result import SdkTaskResult
 
@@ -39,6 +41,17 @@ class _StubHandler:
 
     def cancel(self, ctx: Any) -> None:  # pragma: no cover - unused
         return None
+
+
+@idempotent(key="idem:{tenant_id}:{order_id}")
+class _IdempotentStubHandler(_StubHandler):
+    def __init__(self, type_: str) -> None:
+        super().__init__(type_)
+        self.executions = 0
+
+    async def execute(self, ctx: Any) -> SdkTaskResult:
+        self.executions += 1
+        return SdkTaskResult.success_with(output={"rows": 1}, message="done")
 
 
 class _RecordingDispatcher:
@@ -149,6 +162,46 @@ async def test_start_sequences_register_then_schedulers_then_kafka() -> None:
         assert client.dispatcher is dispatcher
     finally:
         # 干净地把 heartbeat / lease 后台任务停掉。
+        await client.stop(timeout=1.0)
+
+
+async def test_client_auto_wraps_idempotent_handlers_for_custom_dispatcher_factory() -> None:
+    http = _http_mock()
+    dispatcher = _RecordingDispatcher()
+    captured_handlers: dict[str, Any] = {}
+    handler = _IdempotentStubHandler("import")
+
+    def dispatcher_factory(c: Any, h: Any, hs: dict[str, Any]) -> _RecordingDispatcher:
+        captured_handlers.update(hs)
+        return dispatcher
+
+    client = BatchPlatformClient(
+        _cfg(),
+        http=http,
+        dispatcher_factory=dispatcher_factory,
+        kafka_factory=lambda c, d: _RecordingKafka(),
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    client.register_handler(handler)
+
+    await client.start()
+    try:
+        wrapped = captured_handlers["import"]
+        ctx = SdkTaskContext(
+            tenant_id="acme",
+            task_id=1,
+            worker_code="w-1",
+            task_type="import",
+            parameters={"order_id": "A1"},
+        )
+        first = await wrapped.execute(ctx)
+        second = await wrapped.execute(ctx)
+
+        assert first.success is True
+        assert second.success is True
+        assert second.output == first.output
+        assert handler.executions == 1
+    finally:
         await client.stop(timeout=1.0)
 
 

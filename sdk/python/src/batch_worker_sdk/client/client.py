@@ -32,6 +32,7 @@ from typing import Any, Protocol
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.idempotent import SdkIdempotencyStore, wrap_idempotent
 from batch_worker_sdk.internal import _fingerprint, _lifecycle
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._heartbeat import DispatcherLike, HeartbeatScheduler
@@ -88,6 +89,7 @@ class BatchPlatformClient:
         http: PlatformHttpClient | None = None,
         dispatcher_factory: DispatcherFactory | None = None,
         kafka_factory: KafkaFactory | None = None,
+        idempotency_store: SdkIdempotencyStore | None = None,
     ) -> None:
         self._config = config
         self._http: PlatformHttpClient = http if http is not None else PlatformHttpClient(config)
@@ -95,6 +97,7 @@ class BatchPlatformClient:
         self._handlers: dict[str, SdkTaskHandler] = {}
         self._dispatcher_factory = dispatcher_factory
         self._kafka_factory = kafka_factory
+        self._idempotency_store = idempotency_store
 
         self._dispatcher: DispatcherLike | None = None
         self._kafka: _KafkaConsumerLike | None = None
@@ -257,13 +260,25 @@ class BatchPlatformClient:
         """构造 dispatcher;测试可通过 ``dispatcher_factory`` 注入,避免依赖默认实现。"""
         if self._dispatcher_factory is not None:
             built: DispatcherLike = self._dispatcher_factory(
-                self._config, self._http, dict(self._handlers)
+                self._config, self._http, self._decorated_handlers()
             )
             return built
         # 默认走 ``batch_worker_sdk.dispatcher.dispatcher.TaskDispatcher``。
         from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher  # noqa: PLC0415
 
-        return TaskDispatcher(self._config, self._http, dict(self._handlers))
+        return TaskDispatcher(
+            self._config,
+            self._http,
+            dict(self._handlers),
+            idempotency_store=self._idempotency_store,
+        )
+
+    def _decorated_handlers(self) -> dict[str, SdkTaskHandler]:
+        """返回 dispatcher 可直接使用的 handler 表,自动织入声明式幂等。"""
+        return {
+            task_type: wrap_idempotent(handler, self._idempotency_store)
+            for task_type, handler in self._handlers.items()
+        }
 
     def _build_kafka(self, dispatcher: DispatcherLike) -> _KafkaConsumerLike | None:
         """构造 Kafka 消费者,仅在显式提供 ``kafka_factory`` 时启用。

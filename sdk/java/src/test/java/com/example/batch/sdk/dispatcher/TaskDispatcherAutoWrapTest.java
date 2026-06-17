@@ -18,8 +18,10 @@ import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
 import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -227,8 +229,18 @@ class TaskDispatcherAutoWrapTest {
   /** 记录调用的 fake store(可预置命中结果)。 */
   static final class RecordingStore implements SdkIdempotencyStore {
     final Map<String, SdkIdempotencyEntity> map = new HashMap<>();
+    final Set<String> placeholders = new HashSet<>();
     final AtomicInteger findCalls = new AtomicInteger();
     final AtomicInteger recordCalls = new AtomicInteger();
+
+    @Override
+    public boolean tryAcquire(String key, long ttlMillis) {
+      if (map.containsKey(key) || placeholders.contains(key)) {
+        return false;
+      }
+      placeholders.add(key);
+      return true;
+    }
 
     @Override
     public Optional<SdkIdempotencyEntity> find(String key) {
@@ -240,6 +252,12 @@ class TaskDispatcherAutoWrapTest {
     public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
       recordCalls.incrementAndGet();
       map.put(key, record);
+      placeholders.remove(key);
+    }
+
+    @Override
+    public void release(String key) {
+      placeholders.remove(key);
     }
   }
 
@@ -276,7 +294,7 @@ class TaskDispatcherAutoWrapTest {
     // 断言
     assertThat(handler.executions.get()).isEqualTo(1);
     assertThat(store.recordCalls.get()).isEqualTo(1);
-    assertThat(store.findCalls.get()).isEqualTo(2);
+    assertThat(store.findCalls.get()).isEqualTo(1);
   }
 
   @Test
@@ -303,7 +321,7 @@ class TaskDispatcherAutoWrapTest {
     // 断言 (c)
     assertThat(handler.executions.get()).isEqualTo(2); // 没增加
     assertThat(store.recordCalls.get()).isEqualTo(1); // 没再记
-    assertThat(store.findCalls.get()).isEqualTo(2);
+    assertThat(store.findCalls.get()).isEqualTo(1);
   }
 
   @Test
@@ -350,7 +368,7 @@ class TaskDispatcherAutoWrapTest {
     // 断言:执行了 maxAttempts=3 次,失败 → 未记录(留给平台重派 / 重试)
     assertThat(handler.executions.get()).isEqualTo(3);
     assertThat(store.recordCalls.get()).isZero();
-    assertThat(store.findCalls.get()).isEqualTo(1);
+    assertThat(store.findCalls.get()).isZero();
 
     // 执行 — 同 key 再来:因上轮没记录,find 未命中,会重新进 retry 再跑 3 次
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
@@ -358,7 +376,7 @@ class TaskDispatcherAutoWrapTest {
     // 断言
     assertThat(handler.executions.get()).isEqualTo(6); // 又跑 3 次
     assertThat(store.recordCalls.get()).isZero();
-    assertThat(store.findCalls.get()).isEqualTo(2);
+    assertThat(store.findCalls.get()).isZero();
   }
 
   @Test
