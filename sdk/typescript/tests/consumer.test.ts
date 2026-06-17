@@ -118,6 +118,48 @@ test("consumer: no workerTypes configured → serves all (no routing filter)", a
   assert.equal(out.kind, "accepted");
 });
 
+// 回归守护(workerType 跨语言对齐):平台真实 JSON 以 `workerType` 承载路由键;v1 旧名 `taskType`
+// 经归一化兼容。用真实 JSON.parse 路径断言路由键绑定 —— 防止 Java 同款"路由键反序列化丢失"在 TS 复现。
+test("consumer: v2 workerType JSON binds to routing key on the parsed message", async () => {
+  let seen: string | undefined;
+  const p = pipeline({
+    workerTypes: ["echo"],
+    onAccepted: async (m) => {
+      seen = m.workerType;
+    },
+  });
+  const out = await p.onMessage({
+    value: JSON.stringify({ taskId: "t9", tenantId: "tenant-A", workerType: "echo" }),
+  });
+  assert.equal(out.kind, "accepted");
+  assert.equal(seen, "echo");
+});
+
+test("consumer: v1 taskType JSON aliases to workerType (backward compat) and routes", async () => {
+  let seen: string | undefined;
+  const p = pipeline({
+    workerTypes: ["echo"],
+    onAccepted: async (m) => {
+      seen = m.workerType;
+    },
+  });
+  const out = await p.onMessage({
+    // v1 字段名 taskType,无 workerType
+    value: JSON.stringify({ taskId: "t10", tenantId: "tenant-A", schemaVersion: "v1", taskType: "echo" }),
+  });
+  assert.equal(out.kind, "accepted");
+  assert.equal(seen, "echo");
+});
+
+test("consumer: v1 taskType not served → not-for-worker", async () => {
+  const p = pipeline({ workerTypes: ["echo"] });
+  const out = await p.onMessage({
+    value: JSON.stringify({ taskId: "t11", tenantId: "tenant-A", taskType: "shell" }),
+  });
+  assert.equal(out.kind, "not-for-worker");
+  assert.equal(out.committed, false);
+});
+
 test("consumer: backpressure pauses assignment when in-flight at cap", async () => {
   const asn = fakeAssignment();
   const p = pipeline({ inFlight: 4, maxConcurrent: 4, assignment: asn });
