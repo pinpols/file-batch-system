@@ -286,9 +286,18 @@ func ApplyRenew(resp RenewResponse) Decision {
 // ---------------------------------------------------------------------------
 
 // DecideBackpressure decides Kafka backpressure on a freshly received message
-// given current concurrency. When in-flight has reached maxConcurrent, pause the
-// assignment and resume once one slot drains.
-func DecideBackpressure(inFlight, maxConcurrent int) Decision {
+// given current concurrency and whether the assignment is already paused.
+//
+// Hysteresis (aligned with Java KafkaTaskConsumer.applyBackpressure): pause when
+// in-flight has reached maxConcurrent; resume only once in-flight drops BELOW
+// maxConcurrent/2 (integer division, floored at 1). Pulling the pause / resume
+// thresholds apart prevents in-flight from thrashing pause/resume in the
+// max-1 / max band, where every resume would trigger a fresh poll burst.
+//
+//   - inFlight >= maxConcurrent           -> backpressure / pause (idempotent if already paused)
+//   - currentlyPaused && inFlight < max/2 -> backpressure / resume
+//   - otherwise                           -> none (stay paused in the [max/2, max) band)
+func DecideBackpressure(inFlight, maxConcurrent int, currentlyPaused bool) Decision {
 	if inFlight >= maxConcurrent {
 		return Decision{
 			Action:            "backpressure",
@@ -296,7 +305,24 @@ func DecideBackpressure(inFlight, maxConcurrent int) Decision {
 			ResumeWhenDrained: boolPtr(true),
 		}
 	}
+	if currentlyPaused && inFlight < resumeThreshold(maxConcurrent) {
+		return Decision{
+			Action: "backpressure",
+			Kafka:  strPtr("resume"),
+		}
+	}
 	return Decision{Action: "none"}
+}
+
+// resumeThreshold is the hysteresis low-water mark: in-flight must fall strictly
+// below it to resume. maxConcurrent/2 (integer division), floored at 1 so a
+// maxConcurrent of 1 still has a reachable resume point.
+func resumeThreshold(maxConcurrent int) int {
+	t := maxConcurrent / 2
+	if t < 1 {
+		return 1
+	}
+	return t
 }
 
 // ---------------------------------------------------------------------------

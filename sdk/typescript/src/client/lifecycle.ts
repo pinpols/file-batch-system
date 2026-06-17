@@ -13,6 +13,7 @@
  */
 
 import {
+  decideBackpressure,
   decideRegister,
   newIdempotencyKey,
   planStop,
@@ -363,9 +364,19 @@ export class WorkerLifecycle {
         }
       } finally {
         this.#inFlight.delete(msg.taskId);
-        // a slot freed → resume assignment if it was paused for backpressure
+        // A slot just freed. Route the resume decision through the shared core so
+        // the max/2 hysteresis applies: stay paused while in-flight is still in
+        // the [max/2, max) band, resume only once it drops below max/2. This
+        // avoids pause/resume thrash at the capacity boundary.
         if (this.#consumer.isPaused() && !this.#draining) {
-          this.#consumer.resume();
+          const bp = decideBackpressure(
+            this.#inFlight.size,
+            this.#cfg.maxConcurrent,
+            true,
+          );
+          if (bp.action === "backpressure" && bp.kafka === "resume") {
+            this.#consumer.resume();
+          }
         }
       }
     })();

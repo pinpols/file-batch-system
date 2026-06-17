@@ -85,7 +85,8 @@ function compute(fx: Fixture): ComputedResult {
     }
     const inFlight = Number(given.state?.inFlight ?? 0);
     const maxConcurrent = Number(given.config?.maxConcurrentTasks ?? Infinity);
-    return decideBackpressure(inFlight, maxConcurrent);
+    const currentlyPaused = Boolean(given.state?.currentlyPaused ?? false);
+    return decideBackpressure(inFlight, maxConcurrent, currentlyPaused);
   }
 
   // ----- HTTP -----

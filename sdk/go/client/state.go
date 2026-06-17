@@ -58,9 +58,9 @@ func (f *FSM) SetPaused(p bool) {
 	f.paused = p
 }
 
-// ApplyKafkaDirective maps a decision's Kafka field ("pause"/"none"/...) onto
-// the pause flag. "pause" pauses; "none" resumes; other values (subscribe,
-// wakeup, "") are no-ops here (handled elsewhere or not pause-related).
+// ApplyKafkaDirective maps a decision's Kafka field ("pause"/"resume"/"none"/...)
+// onto the pause flag. "pause" pauses; "resume"/"none" resume; other values
+// (subscribe, wakeup, "") are no-ops here (handled elsewhere or not pause-related).
 func (f *FSM) ApplyKafkaDirective(kafka *string) {
 	if kafka == nil {
 		return
@@ -68,7 +68,7 @@ func (f *FSM) ApplyKafkaDirective(kafka *string) {
 	switch *kafka {
 	case "pause":
 		f.SetPaused(true)
-	case "none":
+	case "resume", "none":
 		f.SetPaused(false)
 	}
 }
