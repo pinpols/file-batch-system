@@ -72,7 +72,7 @@ export type PipelineOutcome =
   | { kind: "rejected-schema"; committed: false }
   | { kind: "dropped-tenant"; committed: false }
   | { kind: "not-for-worker"; committed: false }
-  | { kind: "parse-error"; committed: false }
+  | { kind: "parse-error"; committed: true }
   | { kind: "backpressure"; message: DispatchMessage; committed: false };
 
 export interface MessagePipelineDeps {
@@ -94,8 +94,11 @@ export interface MessagePipelineDeps {
 
 /**
  * Pure-ish pipeline: validates a record and either dispatches it or drops it.
- * "committed" mirrors the offset-commit decision (§A: reject/drop must NOT
- * commit so a fixed deploy can re-read).
+ * "committed" mirrors the offset-commit decision the real Kafka adapter must
+ * honor: accepted + parse-error commit (the latter commit-skips an undecodable
+ * poison record past the partition, fixture 30 / §4.5); rejected-schema /
+ * dropped-tenant / not-for-worker / backpressure withhold so a fixed deploy or
+ * another group member can re-read (§A / §1.9).
  */
 export class MessagePipeline {
   #deps: MessagePipelineDeps;
@@ -124,10 +127,12 @@ export class MessagePipeline {
       }
       msg = raw as DispatchMessage;
     } catch (e) {
-      this.#logger.error("dispatch JSON parse failed; not committing", {
+      // poison record (undecodable): commit-skip to advance past it, else one
+      // corrupt message head-of-line blocks the partition forever. fixture 30 / §4.5.
+      this.#logger.error("dispatch JSON parse failed; commit-skipping poison record", {
         error: String(e),
       });
-      return { kind: "parse-error", committed: false };
+      return { kind: "parse-error", committed: true };
     }
 
     // 2. schemaVersion (§A) — unknown major rejected, do not commit

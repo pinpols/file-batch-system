@@ -129,8 +129,8 @@
             },
             "kafka": {
               "type": "string",
-              "enum": ["none", "subscribe", "pause", "resume", "wakeup", "drop-message"],
-              "description": "Required Kafka consumer action."
+              "enum": ["none", "subscribe", "pause", "resume", "wakeup", "drop-message", "commit-skip"],
+              "description": "Required Kafka consumer action. 'drop-message' = skip WITHOUT committing offset (redeliverable: paused-type / schema-reject / foreign-tenant). 'commit-skip' = skip AND commit offset to advance past an unrecoverable poison record (decode/parse error)."
             },
             "startSchedulers": {
               "type": "array",

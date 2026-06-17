@@ -1,0 +1,21 @@
+{
+  "scenario": "kafka-decode-error-commit-skip",
+  "description": "解码失败的 poison 消息(非 JSON / 无法反序列化为 TaskDispatchMessage)→ 跳过并 commit offset 前移,避免一条损坏字节永久 head-of-line 阻塞分区。区别于 schema-reject(18)/ paused(28)/ foreign-tenant 的 drop-message(不提交、可重投):那些是有效但当前不可消费的消息,重投有意义;decode-error 是不可恢复的损坏数据,重投只会重败,必须 commit-skip。§A 只约束 schemaVersion,不覆盖 decode;本 fixture 钉死 decode 的 offset 语义,统一五语言(此前 Java/Python commit-skip、Go/TS withhold 分歧)。Rust 薄档引擎只收已解析记录,解码由租户 adapter 负责,本条对其 N/A。",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 },
+    "state": { "inFlight": 0 }
+  },
+  "when": {
+    "channel": "kafka",
+    "method": "RECEIVE",
+    "body": "not-json-garbage-bytes",
+    "responseStatus": null,
+    "responseBody": null
+  },
+  "then": {
+    "sdkExpectedAction": "skip an undecodable (non-JSON / malformed) dispatch record AND commit its offset so the partition advances past the poison record",
+    "sdkMustNot": ["withhold the offset for an undecodable record (one corrupt message would permanently head-of-line block the partition)", "dispatch a malformed message to a handler", "crash the poll loop on a decode error"],
+    "expect": { "kafka": "commit-skip" }
+  },
+  "references": ["docs/sdk/sdk-parity-matrix.md §4.5", "wire-protocol.md §A"]
+}

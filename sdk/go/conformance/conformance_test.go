@@ -25,7 +25,7 @@ import (
 
 const (
 	fixturesDir          = "../../../docs/api/sdk-contract-fixtures"
-	expectedFixtureCount = 29
+	expectedFixtureCount = 30
 )
 
 // requestSideKeys are then.expect keys handled by the request builder, not the
@@ -46,7 +46,7 @@ type fixture struct {
 		Channel        string          `json:"channel"`
 		Method         string          `json:"method"`
 		Path           string          `json:"path"`
-		Body           map[string]any  `json:"body"`
+		Body           json.RawMessage `json:"body"`
 		ResponseStatus *int            `json:"responseStatus"`
 		ResponseBody   json.RawMessage `json:"responseBody"`
 	} `json:"when"`
@@ -60,17 +60,25 @@ type fixture struct {
 func compute(fx fixture) (protocol.Decision, error) {
 	when := fx.When
 
-	// ----- Kafka receive → pausedTaskTypes drop / capacity backpressure -----
+	// ----- Kafka receive → decode / pausedTaskTypes drop / capacity backpressure -----
 	// (schemaAccept is handled separately by the runner, not compute.)
 	if when.Channel == "kafka" {
+		body := bodyMap(when.Body)
+		if body == nil {
+			// undecodable poison record (non-object body) → commit-skip: advance the
+			// offset past it so one corrupt message cannot HOL block the partition.
+			// fixture 30 / parity §4.5.
+			cs := "commit-skip"
+			return protocol.Decision{Kafka: &cs}, nil
+		}
 		if paused, ok := fx.Given.State["pausedTaskTypes"].([]any); ok {
 			pausedTypes := make([]string, 0, len(paused))
 			for _, p := range paused {
 				pausedTypes = append(pausedTypes, strFromAny(p))
 			}
-			taskType := strFromAny(when.Body["workerType"])
+			taskType := strFromAny(body["workerType"])
 			if taskType == "" {
-				taskType = strFromAny(when.Body["taskType"])
+				taskType = strFromAny(body["taskType"])
 			}
 			return protocol.DecidePausedTaskType(taskType, pausedTypes), nil
 		}
@@ -357,10 +365,23 @@ func assertRequestSide(t *testing.T, fx fixture) {
 	}
 }
 
+// bodyMap decodes a fixture when.body into a JSON object, or nil when it is
+// absent / not an object (a bare string = an undecodable poison record).
+func bodyMap(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	return m
+}
+
 // assertSchemaAccept classifies the kafka message's schemaVersion (§A).
 func assertSchemaAccept(t *testing.T, fx fixture, want any) {
 	t.Helper()
-	version := strFromAny(fx.When.Body["schemaVersion"])
+	version := strFromAny(bodyMap(fx.When.Body)["schemaVersion"])
 	got := protocol.ClassifySchemaVersion(version) == "accept"
 	if got != (want == true) {
 		t.Errorf("%s: schemaAccept mismatch — got %v, want %v (version=%q)",

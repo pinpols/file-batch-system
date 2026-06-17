@@ -186,11 +186,16 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 			case DispositionAccepted:
 				w.dispatch(ctx, msg)
 				w.consumer.Commit()
+			case DispositionDecodeError:
+				// poison record (undecodable): commit-skip to advance past it.
+				// Withholding would let one corrupt message head-of-line block the
+				// partition forever (re-read → re-fail). fixture 30 / parity §4.5.
+				w.consumer.Commit()
 			case DispositionBackpressure:
 				// partition paused; leave offset uncommitted, retry later.
 				w.consumer.Pause()
-			case DispositionRejectedSchema, DispositionDroppedForeignTenant, DispositionDecodeError:
-				// do NOT commit offset (§1.9 / §A); drop and move on.
+			case DispositionRejectedSchema, DispositionDroppedForeignTenant:
+				// do NOT commit offset (§1.9 / §A); valid-but-deferred, redeliverable.
 			}
 		}
 	}
