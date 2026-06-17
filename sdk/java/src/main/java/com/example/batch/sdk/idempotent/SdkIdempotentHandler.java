@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * A.3 — 声明式幂等的织入装饰器。包一个被 {@link Idempotent} 标注的 {@link SdkTaskHandler},在 {@code execute} 前后织入去重:命中
- * key → 跳过执行返已有结果;未命中 → 执行,成功才记录(失败不记录,留给平台 / 重试)。
+ * key → 跳过执行返已有结果;抢到执行权 → 执行,成功才记录(失败释放占位,留给平台 / 重试)。
  *
  * <p><b>为何用装饰器而非 Spring AOP</b>:SDK core 禁引 Spring,无法用 {@code @Aspect} 织入。改用显式 {@link #wrap} 在
  * worker 注册 handler 时手工包一层(或由接入方的容器在 bean 后置处理时包),零框架依赖。
@@ -92,15 +92,32 @@ public final class SdkIdempotentHandler implements SdkTaskHandler {
           ex);
     }
 
-    Optional<SdkIdempotencyEntity> existing = store.find(key);
-    if (existing.isPresent()) {
-      log.info("idempotent hit: taskType={} key={} — skipping execution", taskType(), key);
-      return existing.get().toResult();
+    boolean acquired = store.tryAcquire(key, annotation.ttlMillis());
+    if (!acquired) {
+      Optional<SdkIdempotencyEntity> existing = store.find(key);
+      if (existing.isPresent()) {
+        log.info("idempotent hit: taskType={} key={} — skipping execution", taskType(), key);
+        return existing.get().toResult();
+      }
+      log.info(
+          "idempotent in-flight: taskType={} key={} — another execution holds the key",
+          taskType(),
+          key);
+      return SdkTaskResult.fail(
+          "idempotent key " + key + " is in-flight; retry after the holder completes");
     }
 
-    SdkTaskResult result = delegate.execute(ctx);
+    SdkTaskResult result;
+    try {
+      result = delegate.execute(ctx);
+    } catch (RuntimeException | Error ex) {
+      store.release(key);
+      throw ex;
+    }
     if (result.success()) {
       store.record(key, SdkIdempotencyEntity.ofResult(result), annotation.ttlMillis());
+    } else {
+      store.release(key);
     }
     return result;
   }

@@ -43,6 +43,7 @@ from typing import Any
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import AuthError, PlatformError
 from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.idempotent import SdkIdempotencyStore, wrap_idempotent
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.task.cancellation import CancellationSignal
 from batch_worker_sdk.task.context import SdkTaskContext
@@ -100,10 +101,15 @@ class TaskDispatcher:
         config: BatchPlatformClientConfig,
         http: PlatformHttpClient,
         handlers: dict[str, SdkTaskHandler] | None = None,
+        *,
+        idempotency_store: SdkIdempotencyStore | None = None,
     ) -> None:
         self._config = config
         self._http = http
-        self._handlers: dict[str, SdkTaskHandler] = dict(handlers or {})
+        self._handlers: dict[str, SdkTaskHandler] = {
+            task_type: wrap_idempotent(handler, idempotency_store)
+            for task_type, handler in (handlers or {}).items()
+        }
         self._in_flight: dict[int, asyncio.Task[None]] = {}
         # task_id → CancellationSignal,handler 在 ctx 上持有同一引用;
         # LeaseRenewalScheduler 通过 mark_cancel_requested(task_id, reason)

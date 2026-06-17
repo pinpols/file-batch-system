@@ -9,7 +9,7 @@ closed `then.expect` vocabulary of the contract fixtures, plus the cross-languag
 shared constants kept honest against `docs/api/sdk-shared-constants.yaml`.
 
 The default build has **zero external dependencies** (std-only); the conformance
-runner drives all 12 `docs/api/sdk-contract-fixtures` by routing off each fixture's
+runner drives all `docs/api/sdk-contract-fixtures` by routing off each fixture's
 `when` shape (never `then.expect`).
 
 ## Layout
@@ -18,11 +18,11 @@ runner drives all 12 `docs/api/sdk-contract-fixtures` by routing off each fixtur
 src/
   decide.rs / protocol.rs / constants.rs   decision core + wire types + shared constants
   client/                                  runtime engine (transport / scheduler / lifecycle
-                                           / consumer / sensitive / handler / testkit)
+                                           / consumer / sensitive / handler / resilience / testkit)
   client/reqwest_transport.rs              real blocking control-plane client — feature-gated `http`
   kafka.rs                                 real Kafka consumer adapter — feature-gated `kafka`
 tests/
-  conformance.rs                           drives the 12 contract fixtures' then.expect
+  conformance.rs                           drives the contract fixtures' then.expect
   constants_parity.rs                      asserts constants == sdk-shared-constants.yaml
   runtime.rs                               runtime engine integration tests
 ```
@@ -38,6 +38,33 @@ cargo check --features kafka   # compile the rdkafka adapter (needs cmake + libs
 The `kafka` feature pulls `rdkafka` (real SASL/SCRAM consumer); it is optional so the
 core stays dependency-free. The end-to-end Kafka integration test is env-gated
 (`KAFKA_BOOTSTRAP`) and runs only against a live broker / in CI.
+
+## P1 retry / idempotency
+
+The runtime stays thin: retry and idempotency are explicit handler wrappers, not
+business templates and not framework wiring.
+
+```rust
+use std::sync::Arc;
+use std::time::Duration;
+use batch_worker_sdk::client::{
+    task_id_idempotency_key, with_idempotency, with_retry,
+    InMemoryIdempotencyStore, RetryPolicy,
+};
+
+let handler = with_retry(
+    with_idempotency(
+        my_handler,
+        Arc::new(InMemoryIdempotencyStore::new()),
+        Duration::from_secs(3600),
+        task_id_idempotency_key,
+    ),
+    RetryPolicy::default(),
+);
+```
+
+Production idempotency stores implement `SdkIdempotencyStore`; the SDK ships only
+`NoopIdempotencyStore` and `InMemoryIdempotencyStore`.
 
 ## Real HTTP transport (`http` feature)
 

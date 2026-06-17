@@ -8,7 +8,7 @@ fi
 #
 # - IMPORT:biz.* 表行数(ta=customer / tb=transaction / tc=risk_score)
 # - EXPORT:MinIO ta/tb/tc outbound prefix 下产物
-# - DISPATCH:MockServer received-request 计数(tb/callback / tb/ingest / tc/ingest)
+# - DISPATCH:DB 硬断言 task_type=DISPATCH + 终态 + dispatch_record,MockServer 请求数作旁证
 # - WORKFLOW:job_instance / workflow_run 完成数
 # =========================================================
 set -uo pipefail
@@ -17,6 +17,14 @@ PG="${PG_CONTAINER:-batch-postgres-primary}"
 MINIO="${MINIO_CONTAINER:-batch-minio}"
 BUCKET="${MINIO_BUCKET:-batch-dev}"
 MOCK_BASE="${MOCK_BASE:-http://localhost:11080}"
+LOOKBACK_MINUTES="${SIM_VERIFY_LOOKBACK_MINUTES:-30}"
+STRICT_DISPATCH="${SIM_VERIFY_STRICT_DISPATCH:-true}"
+BATCH_FILTER="${BATCH_NO:-}"
+FAILS=0
+if ! [[ "$LOOKBACK_MINUTES" =~ ^[1-9][0-9]*$ ]]; then
+  echo "❌ SIM_VERIFY_LOOKBACK_MINUTES must be a positive integer, got: $LOOKBACK_MINUTES" >&2
+  exit 2
+fi
 
 PG_USER="${PG_USER:-batch_user}"
 psql_q() { docker exec "$PG" psql -U "$PG_USER" -d "$1" -tAc "$2" 2>/dev/null; }
@@ -27,6 +35,19 @@ hdr() { printf "\n${BLUE}── %s ──${RST}\n" "$1"; }
 ok()  { printf "  ${GREEN}✓${RST} %-32s %s\n" "$1" "$2"; }
 ng()  { printf "  ${RED}✗${RST} %-32s %s\n" "$1" "$2"; }
 note(){ printf "  ${YELLOW}·${RST} %-32s %s\n" "$1" "$2"; }
+fail(){ ng "$1" "$2"; FAILS=$((FAILS + 1)); }
+
+sql_escape() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+dispatch_issue() {
+  if [[ "$STRICT_DISPATCH" == "true" ]]; then
+    fail "$1" "$2"
+  else
+    note "$1" "$2"
+  fi
+}
 
 # =========================================================
 # PREREQ:报告 0 文件的常见根因(2026-06-03)
@@ -115,9 +136,109 @@ for path in "/tb/callback" "/tb/ingest" "/tc/ingest"; do
   if [[ "$cnt" -gt 0 ]]; then
     ok "POST $path" "$cnt 次"
   else
-    note "POST $path" "0 次(DISPATCH 可能未跑)"
+    dispatch_issue "POST $path" "0 次(DISPATCH 可能未跑或 workerType 错路由)"
   fi
 done
+
+hdr "DISPATCH DB 硬断言(workerType/task/dispatch_record)"
+note "lookback" "${LOOKBACK_MINUTES} min${BATCH_FILTER:+, batchNo=$BATCH_FILTER}"
+
+verify_dispatch_case() {
+  local tenant="$1" job="$2" channel="$3" path="$4"
+  local tenant_sql job_sql channel_sql batch_sql batch_clause row
+  tenant_sql="$(sql_escape "$tenant")"
+  job_sql="$(sql_escape "$job")"
+  channel_sql="$(sql_escape "$channel")"
+  batch_sql="$(sql_escape "$BATCH_FILTER")"
+  batch_clause=""
+  if [[ -n "$BATCH_FILTER" ]]; then
+    batch_clause="and i.params_snapshot ->> 'batchNo' = '$batch_sql'"
+  fi
+
+  row=$(psql_q batch_platform "
+    with latest as (
+      select i.id, i.tenant_id, i.job_code, i.instance_status, i.params_snapshot, i.created_at
+        from batch.job_instance i
+       where i.tenant_id = '$tenant_sql'
+         and i.job_code = '$job_sql'
+         and i.created_at > now() - interval '$LOOKBACK_MINUTES minutes'
+         and i.params_snapshot ->> 'channelCode' = '$channel_sql'
+         $batch_clause
+       order by i.created_at desc
+       limit 1
+    ),
+    task_summary as (
+      select l.id as instance_id,
+             l.instance_status,
+             count(t.id) as task_count,
+             coalesce(string_agg(distinct t.task_type, ',' order by t.task_type), '') as task_types,
+             coalesce(string_agg(distinct t.task_status, ',' order by t.task_status), '') as task_statuses
+        from latest l
+        left join batch.job_task t on t.job_instance_id = l.id
+       group by l.id, l.instance_status
+    ),
+    dispatch_summary as (
+      select count(d.id) as dispatch_count,
+             coalesce(string_agg(distinct d.dispatch_status, ',' order by d.dispatch_status), '') as dispatch_statuses
+        from latest l
+        left join batch.file_dispatch_record d
+          on d.tenant_id = l.tenant_id
+         and d.channel_code = '$channel_sql'
+         and d.file_id::text = l.params_snapshot ->> 'fileId'
+    )
+    select task_summary.instance_id || '|' ||
+           coalesce(task_summary.instance_status, '') || '|' ||
+           task_summary.task_count || '|' ||
+           task_summary.task_types || '|' ||
+           task_summary.task_statuses || '|' ||
+           dispatch_summary.dispatch_count || '|' ||
+           dispatch_summary.dispatch_statuses
+      from task_summary
+      cross join dispatch_summary
+  ")
+
+  local label="${tenant}/${job}/${channel}"
+  if [[ -z "$row" ]]; then
+    dispatch_issue "$label" "未找到近 ${LOOKBACK_MINUTES}min DISPATCH job_instance${BATCH_FILTER:+ (batchNo=$BATCH_FILTER)}"
+    return
+  fi
+
+  local instance_id instance_status task_count task_types task_statuses dispatch_count dispatch_statuses
+  IFS='|' read -r instance_id instance_status task_count task_types task_statuses dispatch_count dispatch_statuses <<< "$row"
+
+  if [[ "$instance_status" != "SUCCESS" ]]; then
+    dispatch_issue "$label instance" "instance=$instance_id status=${instance_status:-<empty>}, expected SUCCESS"
+    return
+  fi
+  if [[ "${task_count:-0}" -le 0 ]]; then
+    dispatch_issue "$label task" "instance=$instance_id 无 job_task"
+    return
+  fi
+  if [[ "$task_types" != "DISPATCH" ]]; then
+    dispatch_issue "$label workerType" "instance=$instance_id task_type=${task_types:-<empty>}, expected DISPATCH"
+    return
+  fi
+  if [[ "$task_statuses" != "SUCCESS" ]]; then
+    dispatch_issue "$label task_status" "instance=$instance_id task_status=${task_statuses:-<empty>}, expected SUCCESS"
+    return
+  fi
+  if [[ "${dispatch_count:-0}" -le 0 ]]; then
+    dispatch_issue "$label dispatch_record" "instance=$instance_id 无 file_dispatch_record(channel=$channel)"
+    return
+  fi
+  case "$dispatch_statuses" in
+    SENT|ACKED|SENT,ACKED|ACKED,SENT)
+      ok "$label" "instance=$instance_id task_type=$task_types task=$task_statuses dispatch=$dispatch_statuses path=$path"
+      ;;
+    *)
+      dispatch_issue "$label dispatch_status" "instance=$instance_id dispatch_status=${dispatch_statuses:-<empty>}, expected SENT/ACKED"
+      ;;
+  esac
+}
+
+verify_dispatch_case "tb" "TB_DISPATCH_SETTLE" "tb_api_push" "/tb/callback"
+verify_dispatch_case "tb" "TB_DISPATCH_SETTLE" "tb_api_ingest" "/tb/ingest"
+verify_dispatch_case "tc" "TC_DISPATCH_REVIEW" "tc_api_risk_push" "/tc/ingest"
 
 hdr "WORKFLOW + 全局 job_instance 状态"
 psql_q batch_platform "select instance_status, count(*) from batch.job_instance where created_at > now() - interval '10 min' group by instance_status order by instance_status" | head -10 | sed 's/^/    /'
@@ -132,4 +253,8 @@ else
 fi
 
 echo
+if [[ "$FAILS" -gt 0 ]]; then
+  echo "==> 验收失败:strict dispatch failures=$FAILS"
+  exit 1
+fi
 echo "==> 验收完毕"
