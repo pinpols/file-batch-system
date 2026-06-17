@@ -453,6 +453,16 @@ export function buildRequest(
   }
 }
 
+/**
+ * Mint a fresh `ts-<uuid>` Idempotency-Key. Each distinct write (claim, report)
+ * MUST use a NEW key so a retried/redelivered call cannot replay a stale outcome
+ * from the platform idempotency store (fixture 24: never a fixed `report-{taskId}`,
+ * never reuse across distinct calls).
+ */
+export function newIdempotencyKey(): string {
+  return `ts-${randomUuid()}`;
+}
+
 /** Minimal RFC-4122-ish v4 uuid (no deps); only the shape matters here. */
 function randomUuid(): string {
   const hex = (n: number) =>

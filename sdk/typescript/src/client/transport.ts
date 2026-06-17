@@ -83,6 +83,19 @@ export class NotFoundTransportError extends Error {
   }
 }
 
+/**
+ * A renew returned 409 — the lease was reclaimed (zombie claim). The lease
+ * scheduler must cancel the handler + drop the task locally (openapi renew 409).
+ * Distinct from claim's 409, which is an idempotent-success (already claimed).
+ */
+export class RevokedTransportError extends Error {
+  readonly status = 409;
+  constructor(message: string) {
+    super(message);
+    this.name = "RevokedTransportError";
+  }
+}
+
 export interface HttpTransportOptions {
   baseUrl: string; // e.g. "http://127.0.0.1:18080"
   /** owning tenant — injected as `tenantId` into claim/renew/report/deactivate bodies. */
@@ -231,7 +244,13 @@ export class HttpTransport implements Transport {
 
       switch (decision.action) {
         case "success":
+          return res;
         case "idempotent-success":
+          // renew 409 = lease reclaimed (zombie claim) → surface as revoked so
+          // the scheduler cancels + drops; claim 409 = already-claimed success.
+          if (op === "renew") {
+            throw new RevokedTransportError(`${op} lease revoked (409)`);
+          }
           return res;
         case "fail-fast":
           throw new FatalTransportError(

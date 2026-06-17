@@ -9,6 +9,10 @@ import {
   LeaseRenewalScheduler,
 } from "../src/client/scheduler.ts";
 import { FakeTransport } from "../src/client/testkit.ts";
+import {
+  NotFoundTransportError,
+  RevokedTransportError,
+} from "../src/client/transport.ts";
 import { SimpleCancellationSignal } from "../src/client/handler.ts";
 import type { FsmState, KafkaAction } from "../src/protocol.ts";
 
@@ -119,27 +123,57 @@ test("leaseRenewal: cancelRequested=true → cancellation signal flips", async (
   assert.equal(transport.countOf("renew"), 1);
 });
 
-test("leaseRenewal: renew throwing (lease gone) → task dropped locally", async () => {
-  const transport = new FakeTransport();
-  (transport as unknown as { renew: () => Promise<never> }).renew = async () => {
-    throw new Error("404 lease gone");
-  };
-  const sig = new SimpleCancellationSignal();
-  let dropped: string | undefined;
-
-  const lr = new LeaseRenewalScheduler(
+function leaseScheduler(
+  transport: FakeTransport,
+  sig: SimpleCancellationSignal,
+  onDrop: (id: string) => void,
+): LeaseRenewalScheduler {
+  return new LeaseRenewalScheduler(
     transport,
     {
       inFlight: () => [{ taskId: "task-1", cancellation: sig }],
       buildBody: (taskId) => ({ taskId }),
-      dropTask: (id) => {
-        dropped = id;
-      },
+      dropTask: onDrop,
       logger: silentLogger,
     },
     60_000,
   );
+}
 
-  await lr.tick();
+test("leaseRenewal: 404 NotFound → cancel handler + drop task locally", async () => {
+  const transport = new FakeTransport();
+  (transport as unknown as { renew: () => Promise<never> }).renew = async () => {
+    throw new NotFoundTransportError("renew not found (404)");
+  };
+  const sig = new SimpleCancellationSignal();
+  let dropped: string | undefined;
+  await leaseScheduler(transport, sig, (id) => (dropped = id)).tick();
   assert.equal(dropped, "task-1");
+  assert.equal(sig.isCancellationRequested, true);
+});
+
+test("leaseRenewal: 409 Revoked → cancel handler + drop task locally", async () => {
+  const transport = new FakeTransport();
+  (transport as unknown as { renew: () => Promise<never> }).renew = async () => {
+    throw new RevokedTransportError("renew lease revoked (409)");
+  };
+  const sig = new SimpleCancellationSignal();
+  let dropped: string | undefined;
+  await leaseScheduler(transport, sig, (id) => (dropped = id)).tick();
+  assert.equal(dropped, "task-1");
+  assert.equal(sig.isCancellationRequested, true);
+});
+
+test("leaseRenewal: transient error (5xx/network) → NOT dropped, retried next tick", async () => {
+  // A transient renew failure must keep the task in-flight (else lease expiry →
+  // double-run). Regression: any thrown error used to drop the task.
+  const transport = new FakeTransport();
+  (transport as unknown as { renew: () => Promise<never> }).renew = async () => {
+    throw new Error("503 transient");
+  };
+  const sig = new SimpleCancellationSignal();
+  let dropped: string | undefined;
+  await leaseScheduler(transport, sig, (id) => (dropped = id)).tick();
+  assert.equal(dropped, undefined);
+  assert.equal(sig.isCancellationRequested, false);
 });
