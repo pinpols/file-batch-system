@@ -2,6 +2,7 @@ package com.example.batch.sdk.dispatcher;
 
 import com.example.batch.sdk.task.SdkSchedulingContext;
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
@@ -39,6 +40,19 @@ public record TaskDispatchMessage(
     @JsonProperty("parameters") Map<String, Object> parameters,
     @JsonProperty("runtimeAttributes") Map<String, Object> runtimeAttributes,
     @JsonProperty("schedulingContext") SdkSchedulingContext schedulingContext) {
+
+  /**
+   * 显式标注 canonical 构造器为 Jackson creator。
+   *
+   * <p>**workerType P0 回归守护**:本 record 声明了 8 参 / 7 参兼容构造器,多构造器场景下 Jackson 的"隐式 canonical
+   * creator"自动探测会失效 —— 退化成按 record 组件名直接绑定,组件名与 JSON 字段名一致的(schemaVersion / taskId)还能绑上, 但靠 {@link
+   * JsonProperty}/{@link JsonAlias} 改名的 {@code taskType}(读平台 JSON 的 {@code workerType})被忽略 → {@code
+   * taskType} 反序列化为 null → {@code handlers.get(null)} 拿不到 handler,派单静默失败。加 {@link JsonCreator} 把
+   * canonical 构造器钉成唯一 creator,使组件上的 {@code @JsonProperty("workerType") @JsonAlias("taskType")} 生效。
+   * 守护见 {@code SdkWireContractTest.platformWorkerTypeBindsToSdkHandlerKeyOverWire}。
+   */
+  @JsonCreator
+  public TaskDispatchMessage {}
 
   /**
    * 当前 SDK 兼容的 major 版本集合(决策 #4:字符串 {@code "v1"} / {@code "v2"})。 收到不在集合的版本 → dispatcher reject +
