@@ -4,6 +4,7 @@
 > **协议权威源(双轨)**:[`docs/sdk/wire-protocol.md`](wire-protocol.md)(读者视图)+ [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml)(机器视图)。
 > **行为对账**:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) — language-agnostic JSON 契约用例,任何实现都可写 runner 跑通验证。
 > **配套**:[ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) §3/§4/§9/§11、[`docs/sdk/quickstart.md`](quickstart.md)(Java SDK 五分钟接入)、[`docs/sdk/troubleshooting.md`](troubleshooting.md)。
+> **五语言对齐矩阵(亲核、带 `文件:行号` 证据)**:[`docs/sdk/sdk-parity-matrix.md`](sdk-parity-matrix.md) —— 回答"哪些对齐 / 哪些没对齐",并记录了自动化审查在此题上系统性误报的根因与复核守则。
 
 ---
 
