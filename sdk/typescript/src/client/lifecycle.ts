@@ -14,6 +14,7 @@
 
 import {
   decideRegister,
+  newIdempotencyKey,
   planStop,
 } from "../decide.ts";
 import type { FsmState, KafkaAction } from "../protocol.ts";
@@ -275,7 +276,8 @@ export class WorkerLifecycle {
   /** claim → execute → report for one accepted, in-tenant message. */
   async #handleAccepted(msg: DispatchMessage): Promise<void> {
     const cancellation = new SimpleCancellationSignal();
-    const idemKey = `claim-${msg.taskId}`;
+    // fixture 24: mint a FRESH key per distinct write — never a fixed claim-{id}.
+    const idemKey = newIdempotencyKey();
 
     const run = (async (): Promise<void> => {
       try {
@@ -376,7 +378,9 @@ export class WorkerLifecycle {
   }
 
   async #report(taskId: string, body: ReportBody): Promise<void> {
-    await this.#transport.report(taskId, body, `report-${taskId}`);
+    // fixture 24: fresh key, never a fixed report-{taskId} (a redelivered task's
+    // report would otherwise replay the platform's stale first outcome).
+    await this.#transport.report(taskId, body, newIdempotencyKey());
   }
 
   /**
@@ -397,7 +401,10 @@ export class WorkerLifecycle {
       await this.#consumer.wakeup();
     }
 
-    this.#heartbeat.stop();
+    // Keep heartbeat + lease renewal running THROUGH drain: a worker that stops
+    // heartbeating during the (up to timeoutMs) drain window can be flagged dead
+    // by the platform's missed-heartbeat reaper and have its still-running
+    // in-flight tasks redispatched (double-run). Stop both AFTER drain.
 
     // phase 1: drain in-flight within 40% of the window
     const drainDeadline = Date.now() + timeoutMs * 0.4;
@@ -407,6 +414,7 @@ export class WorkerLifecycle {
     const execDeadline = Date.now() + timeoutMs * 0.6;
     await this.#awaitInFlight(execDeadline);
 
+    this.#heartbeat.stop();
     this.#leaseRenewal.stop();
 
     // deactivate last (§4)

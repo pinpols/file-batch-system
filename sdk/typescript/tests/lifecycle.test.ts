@@ -66,6 +66,34 @@ test("lifecycle: start registers, starts schedulers, then runs claimâ†’executeâ†
   await lc.stop(200);
 });
 
+test("lifecycle: claim + report mint fresh ts-<uuid> keys (never fixed claim-/report-{id})", async () => {
+  // fixture 24: a redelivered task's report must not replay a stale outcome.
+  const platform = new FakePlatform({ claim: { effectiveConfig: {} } });
+  platform.feedMessages({ taskId: "task-1", tenantId: "tenant-A", schemaVersion: "v1" });
+  const lc = new WorkerLifecycle({
+    config: baseConfig,
+    transport: platform.transport,
+    consumer: platform.consumer,
+    handler: { execute: async () => taskSuccess() },
+    logger: silentLogger,
+    installSignalHandlers: false,
+  });
+  await lc.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  const claimKey = platform.transport.calls.find((c) => c.op === "claim")!
+    .args[1] as string;
+  const reportKey = platform.transport.calls.find((c) => c.op === "report")!
+    .args[2] as string;
+  for (const [name, key] of [["claim", claimKey], ["report", reportKey]] as const) {
+    assert.ok(key.startsWith("ts-"), `${name} key must be minted ts-<uuid>, got ${key}`);
+    assert.notEqual(key, `${name}-task-1`, `${name} must not use a fixed key`);
+  }
+  assert.notEqual(claimKey, reportKey, "claim and report must use distinct keys");
+
+  await lc.stop(200);
+});
+
 test("lifecycle: threads partitionInvocationId from claim into report (+ default bodies carry required ids)", async () => {
   const platform = new FakePlatform(
     { claim: { effectiveConfig: {}, partitionInvocationId: "inv-42" } },

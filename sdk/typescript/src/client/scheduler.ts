@@ -14,6 +14,10 @@
 import { applyHeartbeatDirective, applyRenew } from "../decide.ts";
 import type { FsmState, KafkaAction } from "../protocol.ts";
 import type { Transport } from "./transport.ts";
+import {
+  NotFoundTransportError,
+  RevokedTransportError,
+} from "./transport.ts";
 import type { CancellationSignal } from "./handler.ts";
 import type { Logger } from "./consumer.ts";
 import { consoleLogger } from "./consumer.ts";
@@ -189,12 +193,26 @@ export class LeaseRenewalScheduler {
           });
         }
       } catch (e) {
-        // 404/409 surface as transport errors here → lease gone, drop locally
-        this.#logger.warn("renew failed; dropping task locally", {
-          taskId: task.taskId,
-          error: String(e),
-        });
-        this.#hooks.dropTask(task.taskId);
+        // Only a definitive lease-gone (404 NotFound / 409 Revoked) drops the
+        // task + cancels the handler. A transient error (5xx / network / auth)
+        // must NOT drop — that would stop renewing a still-running task, let the
+        // lease expire, and cause a double-run. Keep it and retry next tick.
+        if (
+          e instanceof NotFoundTransportError ||
+          e instanceof RevokedTransportError
+        ) {
+          this.#logger.warn("renew: lease gone; cancelling handler + dropping", {
+            taskId: task.taskId,
+            error: String(e),
+          });
+          task.cancellation.markCancelled();
+          this.#hooks.dropTask(task.taskId);
+        } else {
+          this.#logger.warn("renew failed transiently; retrying next tick", {
+            taskId: task.taskId,
+            error: String(e),
+          });
+        }
       }
     }
   }
