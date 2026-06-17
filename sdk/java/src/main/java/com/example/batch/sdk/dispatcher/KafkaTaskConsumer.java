@@ -2,6 +2,7 @@ package com.example.batch.sdk.dispatcher;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.client.BatchSdkClientException;
+import com.example.batch.sdk.internal.ThrottledLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.Collection;
@@ -65,6 +66,12 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
    * deactivate(凭据已坏,HTTP 也会 401)。
    */
   private final AtomicBoolean fatalAuthFailure = new AtomicBoolean(false);
+
+  /**
+   * 未知 schema 大版本被拒后走 RETRY_LATER(§A 不提交 offset)→ seek+pause,分区 resume 后会反复重读重拒; 节流该 WARN(同 key 60s
+   * 一条),避免一条 v3 poison 把日志刷爆。
+   */
+  private final ThrottledLogger throttledLog = ThrottledLogger.create(log, Duration.ofSeconds(60));
 
   /**
    * Lane E #5:消费线程引用 —— {@link #close(Duration)} 用来 join 等其退出,确保 offset commit / {@code
@@ -308,16 +315,21 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           ex.getMessage());
       return TaskDispatcher.DispatchDecision.DROP_TERMINAL;
     }
-    // Phase 0 §2.1:reject 未知 major schema(避免老 SDK 误解平台新 v3 消息)
+    // Phase 0 §2.1:reject 未知 major schema(避免老 SDK 误解平台新 v3 消息)。
+    // wire-protocol §A 硬契约:未知大版本 **不提交 offset**(RETRY_LATER),而非 DROP_TERMINAL——
+    // 提交会静默跳过该 v3 任务;不提交则该消息 HOL 阻塞分区直到 SDK 升级(§A 本意:fail-loud,
+    // 逼迫升级)。对齐 Go(DispositionRejectedSchema 不提交)+ Python(RETRY_LATER)。正常情况下
+    // v3 本不该被投到 v2-only worker(consumer-group / 能力协商前置拦截),此分支只在协商失效时触发。
     if (!msg.isSchemaSupported()) {
-      log.warn(
+      throttledLog.warn(
+          "unsupported_schema",
           "rejecting kafka task dispatch message with unsupported schemaVersion={} at topic={},"
-              + " offset={}, taskId={}; upgrade SDK",
+              + " offset={}, taskId={}; offset withheld per wire-protocol §A, upgrade SDK",
           msg.schemaVersion(),
           rec.topic(),
           rec.offset(),
           msg.taskId());
-      return TaskDispatcher.DispatchDecision.DROP_TERMINAL;
+      return TaskDispatcher.DispatchDecision.RETRY_LATER;
     }
     TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(msg);
     return decision == null ? TaskDispatcher.DispatchDecision.RETRY_LATER : decision;
