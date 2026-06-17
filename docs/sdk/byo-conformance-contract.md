@@ -47,7 +47,7 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 | `maxAttempts` | int | 最大尝试次数(含首发) |
 | `failFast` | bool | 置 dispatcher fatal、后续 onMessage 拒收 |
 | `fsmTransition` | enum/null | worker 状态机目标态:`NORMAL`/`DEGRADED`/`PAUSED`/`DRAINING`,null = 不变 |
-| `kafka` | enum | consumer 动作:`none`/`subscribe`/`pause`/`resume`/`wakeup`/`drop-message` |
+| `kafka` | enum | consumer 动作:`none`/`subscribe`/`pause`/`resume`/`wakeup`/`drop-message`/`commit-skip`。`drop-message`=跳过**不提交** offset(可重投:paused/schema-reject/foreign-tenant);`commit-skip`=跳过**并提交** offset(不可恢复的 decode poison,fixture 30) |
 | `startSchedulers` | string[] | 启动的调度器:`heartbeat` / `leaseRenew` |
 | `heartbeatNextIntervalMs` | int | 应用 `nextHeartbeatHint` 后的有效心跳间隔(注意各语言 clamp 边界须一致) |
 | `cancelRequested` | bool | 经 renew 响应触发 CancellationSignal |
@@ -95,8 +95,9 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 - **27** 心跳 `desiredMaxConcurrent:2` → `effectiveMaxConcurrent:2`。
 - **28** 收到 `workerType ∈ pausedTaskTypes` 的 Kafka 消息 → `kafka:drop-message`(不 commit offset,平台 unpause 后重投)。
 - **29** 已知 major(v1)消息带未知前向字段 → `schemaAccept:true`(`ignoreUnknown`,不崩不拒;与 18 未知 major v3 reject 正交)。
+- **30** 不可解码的 poison 记录(非 JSON / 字段非法)→ `kafka:commit-skip`(跳过**并提交** offset,避免一条损坏消息永久 HOL 阻塞分区;区别于 28 的 `drop-message` 不提交)。
 
-**异构 runner 适配**:TS/Go/Rust 决策核新增 `classifyHeartbeatRenewError`(§C 豁免)+ `decidePausedTaskType`(paused drop),`applyHeartbeatDirective` 补 `DEGRADED` 分支与 `effectiveMaxConcurrent`,`classifyHttp` 已带累计 4xx 阈值(23)。Java `JsonFixtureContractTest` 静态校验全部 29 条(verb + OpenAPI path);请求侧 body 红线仍只覆盖带 `requestBody*` 的 fixture。Python 见下表。
+**异构 runner 适配**:TS/Go/Rust 决策核新增 `classifyHeartbeatRenewError`(§C 豁免)+ `decidePausedTaskType`(paused drop),`applyHeartbeatDirective` 补 `DEGRADED` 分支与 `effectiveMaxConcurrent`,`classifyHttp` 已带累计 4xx 阈值(23)。Java `JsonFixtureContractTest` 静态校验全部 30 条(verb + OpenAPI path);请求侧 body 红线仍只覆盖带 `requestBody*` 的 fixture。Python 见下表。
 
 **Python 后续清单(增量 2/3)**:
 

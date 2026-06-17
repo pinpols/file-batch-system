@@ -42,7 +42,11 @@ from batch_worker_sdk import (
     BatchPlatformClientConfig,
 )
 from batch_worker_sdk.constants import SCHEMA_VERSIONS_SUPPORTED
-from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher, _new_idempotency_key
+from batch_worker_sdk.dispatcher.dispatcher import (
+    DispatchDisposition,
+    TaskDispatcher,
+    _new_idempotency_key,
+)
 from batch_worker_sdk.exceptions import PersistentClientError, TransientError
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.internal._kafka import KafkaTaskConsumer
@@ -131,6 +135,12 @@ _SCHEMA_ACCEPT_FIXTURES: set[str] = {
     "29-kafka-ignore-unknown-field",
 }
 
+# decode 错误 commit-skip(kafka-only):不可解码的 poison 消息 → DROP_TERMINAL
+# (跳过并提交 offset),避免损坏消息永久 HOL 阻塞分区。parity §4.5 / fixture 30。
+_DECODE_COMMIT_SKIP_FIXTURES: set[str] = {
+    "30-kafka-decode-error-commit-skip",
+}
+
 
 def _discover_fixtures() -> list[Path]:
     """返回所有 contract fixture,跳过同目录下的 drift-guard metadata
@@ -204,7 +214,7 @@ async def _invoke(client: PlatformHttpClient, when: dict[str, Any]) -> dict[str,
 
 @pytest.mark.contract
 @pytest.mark.parametrize("fixture_path", _FIXTURES, ids=_FIXTURE_IDS)
-async def test_contract_fixture(
+async def test_contract_fixture(  # noqa: PLR0912 — fixture 路由表,分支随 fixture 类别线性增长
     fixture_path: Path,
     httpx_mock: HTTPXMock,
     request: pytest.FixtureRequest,
@@ -259,6 +269,10 @@ async def test_contract_fixture(
 
     if fixture_id in _P2_KAFKA_FIXTURES:
         await _assert_kafka_fixture(given, when, fixture_id)
+        return
+
+    if fixture_id in _DECODE_COMMIT_SKIP_FIXTURES:
+        await _assert_kafka_decode_commit_skip()
         return
 
     if when.get("channel") != "http":
@@ -573,6 +587,30 @@ async def _assert_response_side_fixture(fixture_id: str, httpx_mock: HTTPXMock) 
             )
     finally:
         await client.close()
+
+
+async def _assert_kafka_decode_commit_skip() -> None:
+    """30-kafka-decode-error-commit-skip 的契约断言。
+
+    不可解码的 poison 记录(非 JSON / 无法反序列化)→ consumer 返回
+    ``DROP_TERMINAL``,poll loop 据此提交 offset 跳过(commit-skip),避免一条
+    损坏消息永久 head-of-line 阻塞分区。驱动真实 ``KafkaTaskConsumer._handle_record``。
+    """
+    cfg = _cfg_from_fixture({"tenantId": "acme", "workerCode": "w-1"})
+    http = PlatformHttpClient(cfg)
+    try:
+        consumer = KafkaTaskConsumer(cfg, TaskDispatcher(cfg, http))
+        rec = MagicMock()
+        rec.value = b"not-json-garbage"
+        rec.offset = 5
+        tp = MagicMock()
+        tp.topic = "batch.task.dispatch.acme.t0"
+        disp = await consumer._handle_record(tp, rec)
+        assert disp is DispatchDisposition.DROP_TERMINAL, (
+            f"undecodable record must be DROP_TERMINAL (commit-skip), got {disp}"
+        )
+    finally:
+        await http.close()
 
 
 async def _assert_paused_drop_fixture(fixture_id: str) -> None:

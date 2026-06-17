@@ -63,8 +63,13 @@ type ComputedResult = Record<string, unknown>;
 function compute(fx: Fixture): ComputedResult {
   const { when, given } = fx;
 
-  // ----- Kafka receive → schemaVersion / pausedTaskTypes drop / capacity backpressure -----
+  // ----- Kafka receive → decode / schemaVersion / pausedTaskTypes drop / capacity backpressure -----
   if (when.channel === "kafka") {
+    // decode error: a non-object (unparseable) body is a poison record →
+    // commit-skip (advance offset past it). fixture 30 / parity §4.5.
+    if (typeof when.body !== "object" || when.body === null) {
+      return { kafka: "commit-skip" };
+    }
     // schemaAccept fixtures assert §A version handling on the received message.
     if ("schemaAccept" in (fx.then.expect ?? {})) {
       const version = when.body?.schemaVersion as string | undefined;
@@ -199,7 +204,7 @@ function assertRequestSide(fx: Fixture, ctx: string) {
   }
 }
 
-const EXPECTED_FIXTURE_COUNT = 29;
+const EXPECTED_FIXTURE_COUNT = 30;
 
 const fixtureFiles = readdirSync(FIXTURES_DIR)
   .filter((f) => /^\d.*\.json$/.test(f))

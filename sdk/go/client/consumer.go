@@ -60,7 +60,9 @@ const (
 	DispositionRejectedSchema MessageDisposition = "REJECTED_SCHEMA"
 	// DispositionDroppedForeignTenant — tenant self-check failed (§1.9); dropped.
 	DispositionDroppedForeignTenant MessageDisposition = "DROPPED_FOREIGN_TENANT"
-	// DispositionDecodeError — payload could not be parsed.
+	// DispositionDecodeError — payload could not be parsed (poison); offset IS
+	// committed (commit-skip) to advance past it, else one corrupt record would
+	// head-of-line block the partition forever. fixture 30 / parity §4.5.
 	DispositionDecodeError MessageDisposition = "DECODE_ERROR"
 	// DispositionBackpressure — at capacity; partition paused, message resumed later (§1.5/§2).
 	DispositionBackpressure MessageDisposition = "BACKPRESSURE"
@@ -116,9 +118,10 @@ func NewMessagePipeline(tenantID string, fsm *FSM, maxConcurrent int, inFlight f
 
 // OnMessage runs one record through the gate chain. The decoded message is
 // returned on DispositionAccepted (and on DispositionBackpressure, since the
-// message is valid but deferred). For all other dispositions msg is the
-// zero/partial value and the offset must NOT be committed (schema reject /
-// foreign tenant drop both withhold the offset per §1.9 / §A).
+// message is valid but deferred). Offset-commit policy is the CALLER's (see
+// lifecycle consume loop), keyed on disposition: Accepted + DecodeError commit
+// (the latter commit-skip past poison); RejectedSchema / DroppedForeignTenant /
+// Backpressure withhold (valid-but-deferred, redeliverable per §1.9 / §A).
 func (p *MessagePipeline) OnMessage(rec Record) (TaskDispatchMessage, MessageDisposition) {
 	var msg TaskDispatchMessage
 	if err := json.Unmarshal(rec.Value, &msg); err != nil {
@@ -222,3 +225,4 @@ func (f *FakeConsumer) Close() { f.mu.Lock(); defer f.mu.Unlock(); f.Closed = tr
 // counters returns synchronized snapshots for test assertions.
 func (f *FakeConsumer) wakeups() int { f.mu.Lock(); defer f.mu.Unlock(); return f.Wakeups }
 func (f *FakeConsumer) closed() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.Closed }
+func (f *FakeConsumer) commits() int { f.mu.Lock(); defer f.mu.Unlock(); return f.Commits }

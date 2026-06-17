@@ -128,6 +128,34 @@ func TestWorker_ForeignTenantNotExecuted(t *testing.T) {
 	}
 }
 
+// Undecodable poison record is commit-skipped (offset committed, handler never
+// runs) so one corrupt message cannot head-of-line block the partition.
+// fixture 30 / parity §4.5.
+func TestWorker_DecodeErrorCommitSkips(t *testing.T) {
+	fp := NewFakePlatform()
+	poison := Record{Topic: "x", Value: []byte(`not-json-garbage`)}
+	consumer := NewFakeConsumer([]Record{poison})
+	w := NewWorker(testConfig(), fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult {
+			t.Error("handler must not run for an undecodable record")
+			return Success(nil, "")
+		}),
+		nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	w.Stop(time.Second)
+
+	if len(fp.ClaimCalls) != 0 {
+		t.Fatalf("poison record must not be claimed, got %d claims", len(fp.ClaimCalls))
+	}
+	if consumer.commits() == 0 {
+		t.Fatalf("poison record must commit-skip (advance offset), got 0 commits")
+	}
+}
+
 // SIGTERM path: cancelling the signal.NotifyContext parent triggers Stop(30s).
 func TestWorker_SignalTriggersStop(t *testing.T) {
 	fp := NewFakePlatform()
