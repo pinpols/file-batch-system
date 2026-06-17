@@ -198,6 +198,36 @@ async def test_handler_success_is_executed_and_reported(httpx_mock: HTTPXMock) -
     assert body["resultSummary"] == "done"
 
 
+async def test_v2_workertype_routes_to_handler(httpx_mock: HTTPXMock) -> None:
+    """回归守护(workerType 跨语言对齐):平台真实 dict 以 `workerType` 承载路由键 → 路由到 handler。
+
+    走真实 on_message 解析路径,守护 Java 同款"路由键反序列化丢失"不在 Python 复现。
+    """
+    handler = _RecordingHandler("echo", SdkTaskResult.success_with())
+    report_reqs = await _run_with_handler(handler, _msg(task_id=72), httpx_mock)
+    assert len(handler.calls) == 1
+    assert _report_body(report_reqs)["success"] is True
+
+
+async def test_v1_tasktype_alias_routes_to_handler(httpx_mock: HTTPXMock) -> None:
+    """v1 旧名 `taskType`(无 workerType)经兜底兼容,路由到 handler 并执行。
+
+    与 Java @JsonAlias("taskType") / Rust serde alias / Go UnmarshalJSON 兜底跨语言对齐。
+    """
+    handler = _RecordingHandler("echo", SdkTaskResult.success_with())
+    v1_msg = {
+        "schemaVersion": "v1",
+        "tenantId": "acme",
+        "taskId": 71,
+        "jobCode": "daily",
+        "taskType": "echo",  # v1 字段名,无 workerType
+        "idempotencyKey": "key-71",
+    }
+    report_reqs = await _run_with_handler(handler, v1_msg, httpx_mock)
+    assert len(handler.calls) == 1
+    assert _report_body(report_reqs)["success"] is True
+
+
 async def test_handler_failure_result_reports_failure(httpx_mock: HTTPXMock) -> None:
     """handler 返回 success=False → REPORT success=false + errorCode 透传。"""
     handler = _RecordingHandler("echo", SdkTaskResult.fail("MY_ERR", "boom"))
