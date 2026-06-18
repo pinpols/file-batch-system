@@ -24,6 +24,8 @@ batch:
             - { title: 自助服务, path: /self-service, icon: Tickets, minRole: TENANT_ADMIN }
             - { title: Atomic 运行时, path: /ops/atomic-runtime, icon: Cpu, minRole: TENANT_ADMIN }
             - { title: 运维诊断, path: /ops/diagnostic, icon: Tools, minRole: ADMIN }
+            - { title: 分片目录, path: /ops/shard-catalog, icon: Connection, minRole: ADMIN }
+            - { title: 租户分片, path: /ops/tenant-placements, icon: Collection, minRole: ADMIN }
         - key: config
           title: 配置与发布
           icon: Operation
