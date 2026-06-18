@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.rbac.support;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -38,6 +39,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class ConsoleMustChangePasswordGuard extends OncePerRequestFilter {
 
   private final ConsoleUserAccountMapper userAccountMapper;
+  private final BatchSecurityProperties batchSecurityProperties;
 
   /** must_change 期间仍放行的登录态端点(改密自助 + 会话管理 + 只读画像)。 */
   private static final Set<String> ALLOWED_PATHS =
@@ -79,6 +81,11 @@ public class ConsoleMustChangePasswordGuard extends OncePerRequestFilter {
   }
 
   private boolean isGuarded(HttpServletRequest request) {
+    // bypass-mode(仅本地/联调/E2E;prod 启动期 fail-fast 已禁)放行,与 CSRF 的 bypass 处置一致:
+    // 该环境本就关认证/CSRF,改密守卫继续拦会让默认账号(admin123)的全部写 e2e 403、无法自动化。
+    if (batchSecurityProperties.isBypassMode()) {
+      return false;
+    }
     if (!WRITE_METHODS.contains(request.getMethod())) {
       return false;
     }
