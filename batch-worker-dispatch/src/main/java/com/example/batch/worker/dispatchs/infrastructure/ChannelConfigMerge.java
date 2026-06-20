@@ -36,6 +36,8 @@ public final class ChannelConfigMerge {
           "target_endpoint",
           "dispatch_manifest_enabled",
           "dispatch_manifest_suffix",
+          // ADR-041 Phase1.5:投递后回读校验 opt-in 开关
+          "readback_verify_enabled",
           // ── SFTP ──
           "sftp_host",
           "sftp_port",
