@@ -51,6 +51,11 @@ public class WorkflowRunManagementApplicationService {
 
   private static final Set<String> CANCELLABLE = Set.of("CREATED", "RUNNING");
   private static final Set<String> TERMINABLE = Set.of("RUNNING");
+  // ADR-044:仅 RUNNING 可暂停 DAG 推进;PAUSED 可恢复回 RUNNING。
+  private static final Set<String> PAUSABLE = Set.of("RUNNING");
+  private static final Set<String> RESUMABLE = Set.of("PAUSED");
+  private static final String STATUS_PAUSED = "PAUSED";
+  private static final String STATUS_RUNNING = "RUNNING";
 
   private final WorkflowRunMapper workflowRunMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;
@@ -82,6 +87,47 @@ public class WorkflowRunManagementApplicationService {
           "cannot terminate from " + run.getRunStatus());
     }
     return flipToTerminated(run, TERMINABLE);
+  }
+
+  /** ADR-044 暂停 RUNNING → PAUSED:停止推进下游 DAG 节点,在途节点自然终结。 */
+  @Transactional
+  public Map<String, Object> pause(String tenantId, Long id) {
+    return lifecycleFlip(tenantId, id, PAUSABLE, STATUS_PAUSED);
+  }
+
+  /** ADR-044 恢复 PAUSED → RUNNING:重新推进 DAG。 */
+  @Transactional
+  public Map<String, Object> resume(String tenantId, Long id) {
+    return lifecycleFlip(tenantId, id, RESUMABLE, STATUS_RUNNING);
+  }
+
+  /**
+   * 非终态生命周期翻转(pause/resume 专用)。
+   *
+   * <p>复用 expectedStatuses 守护做 CAS;不动 finished_at、不发 outbox(非终态)。
+   */
+  private Map<String, Object> lifecycleFlip(
+      String tenantId, Long id, Set<String> expectedFrom, String targetStatus) {
+    WorkflowRunEntity run = findRun(tenantId, id);
+    if (!expectedFrom.contains(run.getRunStatus())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
+          "cannot transition from " + run.getRunStatus() + " to " + targetStatus);
+    }
+    int updated =
+        workflowRunMapper.updateStatus(
+            UpdateWorkflowRunStatusParam.builder()
+                .tenantId(tenantId)
+                .id(id)
+                .runStatus(targetStatus)
+                .currentNodeCode(run.getCurrentNodeCode())
+                .expectedStatuses(expectedFrom)
+                .build());
+    if (updated <= 0) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+    }
+    return Map.of("id", id, "status", targetStatus);
   }
 
   /** 老入口,backward-compat;新代码请传 operatorId / reason。 */
