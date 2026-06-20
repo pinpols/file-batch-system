@@ -124,11 +124,7 @@ public class FileGovernanceProperties {
     /** 文件齐全时是否自动触发下游。false → 仅打标，等人工 confirm。 */
     private boolean triggerOnComplete = true;
 
-    /**
-     * 触发前是否要求组内每个成员都「完整性已背书」（{@code file_record.checksum_type != NONE}，即入站
-     * MANIFEST 模式注入了 checksum）。默认 false（仅文件名凑齐即触发，向后兼容）；true 时文件名虽齐，
-     * 若有成员缺校验背书则保持 WAITING_ARRIVAL（reason {@code ARRIVED_PENDING_VERIFY}），超时仍走 timeoutAction。
-     */
+    /** 触发前是否要求每个成员都已完整性背书(checksum_type!=NONE);默认 false。详见 file-pipeline-design。 */
     private boolean requireVerified = false;
 
     /** {@code MANUAL_CONFIRM} 模式下"延长等待"按钮单次延长秒数。 */
