@@ -148,6 +148,35 @@ if effective.isEmpty():
 "columnMappings": [ {"from":"phone","to":"mobile_no"} ]   // 其余 5 列自动推断
 ```
 
+### 4.5 映射基数:强制 1:1,冲突 fail-fast(回答"一个名字映射两个列")
+
+当前实现对两类"非 1:1"是**静默**的,本设计要把它们显式化:
+
+| 形态 | 例 | 现状(`GenericJdbcMappedImportLoadPlugin`) | 本设计决策 |
+|---|---|---|---|
+| **A. 一个 `from` → 多个 `to`**(fan-out) | `{from:no,to:a},{from:no,to:b}` | `orderedInsertColumns:224` `to` 不同都加入,a/b 都填 `row[no]` → **能跑**(同值复写) | **默认 reject**。复写需求走 `systemBindings` 或 DB 侧,不进列映射;保持心智简单 |
+| **B. 多个 `from` → 一个 `to`**(碰撞) | `{from:no,to:c},{from:legacy,to:c}` | `:224` 去重只留 `c`,`valueForColumn:253-256` 取**首个**匹配 → `row[no]`,`legacy` **被静默丢弃** | **必须 reject**(与推断无关的真 bug 修复):一列被两源争抢是语义二义 |
+
+**统一不变量(对 merge 后的 effective 集)**:`from` 唯一 ∧ `to` 唯一(双向单射)。
+
+- merge 的 override 会先把"同 `from` 的 inferred 与 explicit"塌缩成 1 条;塌缩后 `from` 仍出现 ≥2 次 ⇒ 用户写了真正的 fan-out ⇒ reject(形态 A)。
+- `to` 出现 ≥2 次 ⇒ 碰撞 ⇒ reject(形态 B),报错指明是哪两个 `from` 撞了同一 `to`。
+- 这把今天两处静默(A 默默复写 / B 默默丢列)都变成**显式失败 + 可定位文案**。
+
+> 取舍:形态 A 的"默认 reject"是**策略选择可回退**——若将来确有大量复写需求,可改为显式开关放开;但默认从严,契合"只配置明确差异"。
+
+### 4.6 对应靠"名字"不靠"位置"(回答"列数对齐?顺序可不一致?")
+
+关键事实(`DelimitedFormatParser.java:70-94`):**带表头的格式按表头名建 `Map<header→value>`,LOAD 的 `columnMappings.from` 按名字取值(`row.get(m.from())`),与文件物理列序无关。**
+
+| 问题 | 答案 |
+|---|---|
+| **默认是"列数跟文件列对齐"吗?** | **不是按文件物理列数/位置**。驱动映射的是 **`field_mappings` 声明的字段**,按**名字**对齐。文件多出的列 → 忽略;`field_mappings` 声明而文件没有的列 → 该值 null(required 由 VALIDATE 拦)。写入 DB 的列数 = 入库的 `field_mappings` 条数,不是文件列数。 |
+| **顺序可以不一致吗?**(带表头:CSV 带 header / JSON / Excel / XML) | **可以**。按名匹配,文件列序随便排;DB INSERT 列序由 `columnMappings`/`field_mappings` 顺序决定(`orderedInsertColumns`),独立于文件。 |
+| **无表头格式**(headerless CSV / FIXED_WIDTH) | **顺序与列数都必须对齐**——无表头只能**按位置**绑定。此时位置 schema 应取 `field_mappings` 的声明顺序。**现状 gap**:headerless CSV 当前回退到硬编码 `ParseSupport.defaultHeaders():241`(7 列 customer schema),对通用 jdbc_mapped 会错位——本设计建议把 headerless 的位置 schema 改为按 `field_mappings` 顺序(评审确认是否纳入本次,或单列 follow-up)。 |
+
+> ⚠️ 另一个独立的名字匹配脆点(不在本次默认推断范围、但相关):`from`→文件表头是**精确字符串匹配**(`row.get(m.from())`),大小写/空格不一致会导致"整列变 null"(quickstart §6 已记此坑)。§4.2 的归一化目前只作用于 `name→DB列(to)` 侧;是否对 `from→表头` 侧也做大小写/trim 容错是更敏感的改动(动用户文件数据),列为待评审点而非默认纳入。
+
 ---
 
 ## 5. 兼容性
@@ -198,3 +227,6 @@ if effective.isEmpty():
 2. `persist:false` 的字段开关命名 / 默认值是否可接受(默认全入库 vs 默认沿用 columnMappings 白名单语义)。
 3. `biz_table_schema` 列白名单是否纳入本次推断校验。
 4. `normalizeColumn` 工具落 `batch-common` 还是 import/export 各自实现(避免无谓共享耦合)。
+5. **(§4.5)** fan-out(一 `from` → 多 `to`)默认 reject 是否接受(用户倾向不允许);碰撞(多 `from` → 一 `to`)改 reject 无异议。
+6. **(§4.6)** headerless CSV 的位置 schema 从硬编码 `defaultHeaders()` 改为 `field_mappings` 顺序——本次纳入还是单列 follow-up。
+7. **(§4.6 脚注)** 是否对 `from`→文件表头匹配也加大小写/trim 容错(动用户文件数据,更敏感)。
