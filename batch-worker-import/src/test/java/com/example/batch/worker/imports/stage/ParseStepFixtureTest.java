@@ -230,6 +230,32 @@ class ParseStepFixtureTest {
     assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(10L);
   }
 
+  @Test
+  void shouldPeelValidTrailerControlRecord() {
+    String content = "id,name,amount\n1,Alice,10.00\n2,Bob,20.00\nT,2,30.00\n";
+    ImportJobContext ctx = buildContext(content, "DELIMITED", ",", 1, null);
+    withTrailerTemplate(ctx);
+
+    ImportStageResult result = parseStep.execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(2L);
+    assertThat(ctx.getAttributes().get("declaredRecordCount")).isEqualTo(2L);
+    assertThat(String.valueOf(ctx.getAttributes().get("declaredControlTotal"))).isEqualTo("30.00");
+  }
+
+  @Test
+  void shouldFailWhenTrailerTemplatePresentButLastLineIsNotTrailer() {
+    String content = "id,name,amount\n1,Alice,10.00\n2,Bob,20.00\n";
+    ImportJobContext ctx = buildContext(content, "DELIMITED", ",", 1, null);
+    withTrailerTemplate(ctx);
+
+    ImportStageResult result = parseStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
+  }
+
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private String loadFixture(String resourcePath) throws IOException {
@@ -331,5 +357,29 @@ class ParseStepFixtureTest {
     attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, Base64.getDecoder().decode(contentBase64));
     context.setAttributes(attrs);
     return context;
+  }
+
+  private void withTrailerTemplate(ImportJobContext context) {
+    context
+        .getAttributes()
+        .put(
+            PipelineRuntimeKeys.TEMPLATE_CONFIG,
+            Map.of(
+                "jdbc_mapped_import",
+                Map.of(),
+                "trailer_template",
+                Map.of(
+                    "present",
+                    true,
+                    "delimiter",
+                    ",",
+                    "recordType",
+                    "T",
+                    "recordTypeIndex",
+                    0,
+                    "recordCountIndex",
+                    1,
+                    "controlTotalIndex",
+                    2)));
   }
 }

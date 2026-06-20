@@ -35,6 +35,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -241,20 +242,85 @@ public class ParseStep implements ImportStageStep {
     int idx = Math.max(body.lastIndexOf('\n'), body.lastIndexOf('\r'));
     String trailerLine = body.substring(idx + 1);
     TrailerControlRecord trailer = TrailerControlRecord.parse(trailerLine, trailerTemplate);
+    if (!isValidTrailer(trailer, trailerTemplate, trailerLine)) {
+      throw new IllegalArgumentException(
+          "trailer_template.present=true but last line is not a valid trailer control record");
+    }
     if (trailer.declaredRecordCount() != null) {
       attrs.put(TrailerControlRecord.ATTR_DECLARED_RECORD_COUNT, trailer.declaredRecordCount());
     }
     if (trailer.declaredControlTotal() != null) {
       attrs.put(TrailerControlRecord.ATTR_DECLARED_CONTROL_TOTAL, trailer.declaredControlTotal());
     }
-    if (!trailer.isPresent()) {
-      log.warn(
-          "trailer present=true but no declared count/total parsed from last line: "
-              + "tenantId={}, fileId={}",
-          context.getTenantId(),
-          attrs.get(PipelineRuntimeKeys.FILE_ID));
-    }
     return idx < 0 ? "" : body.substring(0, idx);
+  }
+
+  private boolean isValidTrailer(
+      TrailerControlRecord trailer, Map<String, Object> trailerTemplate, String trailerLine) {
+    if (!recordTypeMatches(trailerTemplate, trailerLine)) {
+      return false;
+    }
+    boolean expectsCount = hasConfiguredIndex(trailerTemplate, "recordCountIndex");
+    boolean expectsTotal = hasConfiguredIndex(trailerTemplate, "controlTotalIndex");
+    if (!expectsCount && !expectsTotal) {
+      return trailer.isPresent();
+    }
+    return (!expectsCount || trailer.declaredRecordCount() != null)
+        && (!expectsTotal || trailer.declaredControlTotal() != null);
+  }
+
+  private boolean recordTypeMatches(Map<String, Object> template, String trailerLine) {
+    Object marker = template == null ? null : template.get("recordType");
+    if (marker == null) {
+      marker = template == null ? null : template.get("record_type");
+    }
+    String expected = marker == null ? null : String.valueOf(marker).trim();
+    if (!Texts.hasText(expected)) {
+      return true;
+    }
+    String delimiter = strOr(template.get("delimiter"), ",");
+    String[] fields = trailerLine.split(Pattern.quote(delimiter), -1);
+    int index = intOr(template.get("recordTypeIndex"), 0);
+    if (index < 0 || index >= fields.length) {
+      return false;
+    }
+    return expected.equals(fields[index].trim());
+  }
+
+  private boolean hasConfiguredIndex(Map<String, Object> template, String key) {
+    Object value = template == null ? null : template.get(key);
+    if (value == null) {
+      return false;
+    }
+    if (value instanceof Number number) {
+      return number.intValue() >= 0;
+    }
+    try {
+      return Integer.parseInt(String.valueOf(value).trim()) >= 0;
+    } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
+      return false;
+    }
+  }
+
+  private String strOr(Object value, String fallback) {
+    if (value == null) {
+      return fallback;
+    }
+    String text = String.valueOf(value).trim();
+    return Texts.hasText(text) ? text : fallback;
+  }
+
+  private int intOr(Object value, int fallback) {
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    try {
+      return value == null ? fallback : Integer.parseInt(String.valueOf(value).trim());
+    } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
+      return fallback;
+    }
   }
 
   private Map<String, Object> trailerTemplate(Object templateConfig) {
