@@ -98,12 +98,17 @@ public class ImportIngressScanner {
     }
     String suffix = scannerProperties.getBatchManifestSuffix();
     List<BatchManifest> result = new ArrayList<>();
-    for (String objectName : snapshots.keySet()) {
-      if (objectName.endsWith(suffix)) {
-        BatchManifest manifest = readBatchManifest(objectName);
-        if (manifest != null) {
-          result.add(manifest);
-        }
+    for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
+      if (!entry.getKey().endsWith(suffix)) {
+        continue;
+      }
+      // ADR-040 Phase3 自完整性:批次清单也过稳定窗口,防读到半写清单 → 误判当天预期文件集合
+      if (!isStable(entry.getValue())) {
+        continue;
+      }
+      BatchManifest manifest = readBatchManifest(entry.getKey());
+      if (manifest != null) {
+        result.add(manifest);
       }
     }
     return result;
