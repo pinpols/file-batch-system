@@ -4913,6 +4913,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
+  /api/console/instances/{id}/pause:
+    post:
+      tags: [Instances]
+      summary: Pause a RUNNING job instance (ADR-044, reversible)
+      operationId: pauseJobInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/instances/{id}/resume:
+    post:
+      tags: [Instances]
+      summary: Resume a PAUSED job instance (ADR-044)
+      operationId: resumeJobInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
 
   # ─── P0: Trigger management ───────────────────────────────────────────────────
   /api/console/ops/triggers:
@@ -6659,6 +6713,60 @@ paths:
       tags: [WorkflowRuns]
       summary: Terminate a workflow run
       operationId: terminateWorkflowRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-runs/{id}/pause:
+    post:
+      tags: [WorkflowRuns]
+      summary: Pause a RUNNING workflow run (ADR-044, halts DAG advance)
+      operationId: pauseWorkflowRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-runs/{id}/resume:
+    post:
+      tags: [WorkflowRuns]
+      summary: Resume a PAUSED workflow run (ADR-044)
+      operationId: resumeWorkflowRun
       security:
         - bearerAuth: []
       parameters:
