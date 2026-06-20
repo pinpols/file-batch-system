@@ -17,6 +17,7 @@ import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.event.TriggerOutboxDomainEventPublisher;
+import com.example.batch.trigger.infrastructure.readiness.UpstreamReadinessChecker;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TenantStatusMapper;
 import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
@@ -71,6 +72,7 @@ public class DefaultTriggerService implements TriggerService {
   private final BusinessCalendarMapper businessCalendarMapper;
   private final TenantStatusMapper tenantStatusMapper;
   private final PlatformTransactionManager transactionManager;
+  private final UpstreamReadinessChecker upstreamReadinessChecker;
 
   private record PendingApprovalTarget(
       TriggerRequestEntity request, Long pendingId, boolean approvePending) {}
@@ -91,8 +93,36 @@ public class DefaultTriggerService implements TriggerService {
     if (launchRequest.bizDate() == null) {
       return skipScheduled(command);
     }
+    if (!upstreamReady(command, launchRequest)) {
+      return skipScheduledNotReady(command);
+    }
     String dedupKey = buildScheduledDedupKey(command);
     return persistAndForward(launchRequest, dedupKey);
+  }
+
+  /**
+   * ADR-043 依赖感知 fire 闸:声明了 dependsOnJobCode 的触发器,fire 前查上游就绪。
+   *
+   * <p>无声明(绝大多数存量触发器)→ 直接放行,行为不变。
+   */
+  private boolean upstreamReady(ScheduledTriggerCommand command, LaunchRequest launchRequest) {
+    String dependsOn = command.descriptor().getDependsOnJobCode();
+    if (!Texts.hasText(dependsOn)) {
+      return true;
+    }
+    return upstreamReadinessChecker.isReady(
+        launchRequest.tenantId(), dependsOn, launchRequest.bizDate());
+  }
+
+  private LaunchResponse skipScheduledNotReady(ScheduledTriggerCommand command) {
+    log.info(
+        "scheduled trigger skipped: upstream not ready: tenantId={}, jobCode={}, dependsOn={},"
+            + " fireTime={}",
+        command.descriptor().getTenantId(),
+        command.descriptor().getJobCode(),
+        command.descriptor().getDependsOnJobCode(),
+        command.fireTime());
+    return LaunchResponse.skipped(command.traceId());
   }
 
   @Override

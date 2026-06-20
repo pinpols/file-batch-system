@@ -22,5 +22,9 @@ public class TriggerDescriptor {
   private String calendarCode;
   private String catchUpPolicy;
   private Integer catchUpMaxDays;
+
+  /** ADR-043:上游 job code(可空)。非空则 fire 前要求该 job 同 bizDate 已 SUCCESS,否则跳过本次。 */
+  private String dependsOnJobCode;
+
   private boolean enabled;
 }
