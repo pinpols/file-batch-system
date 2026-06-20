@@ -12,6 +12,13 @@ public class ImportScannerProperties {
   private int batchSize = 200;
   private String prefix = "ingress/";
   private boolean requireDoneFile = false;
+
+  /** 完成标记后缀(含点),默认 .done;上游用 .chk / .ok 时改此值。 */
+  private String doneFileSuffix = ".done";
+
+  /** 标记命名:APPEND_FULL_NAME(默认,全名+后缀)或 REPLACE_EXTENSION(去末段扩展名,旧行为)。 */
+  private String doneFileNaming = "APPEND_FULL_NAME";
+
   private long stabilityWindowSeconds = 30L;
   private String sourceType = "SYSTEM";
   private String defaultBizType = "IMPORT_SCAN";
