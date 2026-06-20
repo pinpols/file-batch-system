@@ -41,8 +41,7 @@ class TrailerControlRecordTest {
   @Test
   @DisplayName("自定义分隔符(|)")
   void customDelimiter() {
-    Map<String, Object> tmpl =
-        Map.of("present", true, "delimiter", "|", "recordCountIndex", 0);
+    Map<String, Object> tmpl = Map.of("present", true, "delimiter", "|", "recordCountIndex", 0);
     assertThat(TrailerControlRecord.parse("42|x", tmpl).declaredRecordCount()).isEqualTo(42L);
   }
 }

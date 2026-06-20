@@ -129,7 +129,8 @@ public class DatasetRuleEvaluator {
       return;
     }
     log.warn(
-        "control-record count mismatch (alert-only): declared={}, actual={}, tenantId={}, fileId={}",
+        "control-record count mismatch (alert-only): declared={}, actual={}, tenantId={},"
+            + " fileId={}",
         declaredCount,
         actualCount,
         session.context().getTenantId(),

@@ -58,7 +58,8 @@ class DatasetRuleEvaluatorControlRecordTest {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
     evaluator.evaluate(
-        session(Map.of("controlRecordCheck", Map.of("enabled", true)), 10L, 1000L, issues, applied));
+        session(
+            Map.of("controlRecordCheck", Map.of("enabled", true)), 10L, 1000L, issues, applied));
     assertThat(issues).isEmpty();
     assertThat(applied).contains("control_record_check");
   }

@@ -52,7 +52,8 @@ public final class TrailerControlRecord {
   }
 
   /** {@code trailerTemplate.present=true} 时按分隔符切 trailer 行取声明值;空模板 / 非 present 返回空记录。 */
-  public static TrailerControlRecord parse(String trailerLine, Map<String, Object> trailerTemplate) {
+  public static TrailerControlRecord parse(
+      String trailerLine, Map<String, Object> trailerTemplate) {
     if (trailerLine == null
         || trailerTemplate == null
         || trailerTemplate.isEmpty()
@@ -74,7 +75,8 @@ public final class TrailerControlRecord {
     try {
       return Long.parseLong(raw.trim());
     } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(TrailerControlRecord.class, "catch:NumberFormatException", ignored);
+      SwallowedExceptionLogger.info(
+          TrailerControlRecord.class, "catch:NumberFormatException", ignored);
       return null;
     }
   }
@@ -87,7 +89,8 @@ public final class TrailerControlRecord {
     try {
       return new BigDecimal(raw.trim());
     } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(TrailerControlRecord.class, "catch:NumberFormatException", ignored);
+      SwallowedExceptionLogger.info(
+          TrailerControlRecord.class, "catch:NumberFormatException", ignored);
       return null;
     }
   }
@@ -97,7 +100,9 @@ public final class TrailerControlRecord {
   }
 
   private static String strOr(Object value, String fallback) {
-    return value == null || !Texts.hasText(String.valueOf(value)) ? fallback : String.valueOf(value);
+    return value == null || !Texts.hasText(String.valueOf(value))
+        ? fallback
+        : String.valueOf(value);
   }
 
   private static int intOr(Object value, int fallback) {
