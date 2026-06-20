@@ -150,6 +150,17 @@ public interface JobInstanceMapper {
       @Param("expectedVersion") Long expectedVersion);
 
   /**
+   * 非终态生命周期状态 CAS 更新(ADR-044 pause/resume)。
+   *
+   * <p>仅当 version 匹配且当前非终态时推进,不动 finished_at。返回 0 表示版本冲突或已终态。
+   */
+  int updateLifecycleStatus(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("instanceStatus") String instanceStatus,
+      @Param("expectedVersion") Long expectedVersion);
+
+  /**
    * 取同一 (tenantId, jobDefinitionId) 下最近一次完整成功(仅 SUCCESS)实例。 用于增量模式启动新实例时把上一次的 {@code
    * high_water_mark_out} 当作本次 IN。
    *

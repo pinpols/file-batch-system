@@ -514,6 +514,17 @@
           <include refid="NotFromTerminalAllowSelf"/>
     </update>
 
+    <update id="updateLifecycleStatus">
+        update batch.job_instance
+        set instance_status = #{instanceStatus},
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          <include refid="NotFromTerminal"/>
+    </update>
+
     <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次"全成功"(SUCCESS only)实例,
          供新实例启动时把上一次的 high_water_mark_out 当成本次 IN。
          不取 PARTIAL_FAILED:partial 完成意味着部分 partition 未覆盖,若把它的水位推给下次,
