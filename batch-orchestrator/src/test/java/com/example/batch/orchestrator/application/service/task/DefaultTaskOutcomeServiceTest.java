@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
+import com.example.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import com.example.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
@@ -102,7 +104,8 @@ class DefaultTaskOutcomeServiceTest {
             resultVersionWriter,
             batchDayReplayReconciler,
             failureClassifier,
-            jobLifecycleMetricsRecorder);
+            jobLifecycleMetricsRecorder,
+            mock(CountContinuityOutboxService.class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 
