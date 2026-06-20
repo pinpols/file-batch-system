@@ -10,6 +10,7 @@ import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -612,6 +613,30 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       return ' ';
     }
     return padChar.charAt(0);
+  }
+
+  /** ADR-041 Phase1.4:控制总额累加用的金额解析;非数字/空返回 null(不计入累加)。 */
+  protected BigDecimal decimalValue(Object value) {
+    if (value instanceof BigDecimal bigDecimal) {
+      return bigDecimal;
+    }
+    if (value instanceof Number number) {
+      return new BigDecimal(number.toString());
+    }
+    if (value == null) {
+      return null;
+    }
+    String text = String.valueOf(value).trim();
+    if (!Texts.hasText(text)) {
+      return null;
+    }
+    try {
+      return new BigDecimal(text);
+    } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.warn(
+          AbstractExportFormat.class, "catch:NumberFormatException", ignored);
+      return null;
+    }
   }
 
   /**

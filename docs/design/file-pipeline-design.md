@@ -541,6 +541,22 @@ BIN / 二进制文件导出**不作为一期标准能力**，但应通过 `FileG
 - 尾记录中总笔数、总金额与明细闭合校验
 - 生成后再计算 hash，避免“登记的是中间态文件”
 
+**出站内嵌 trailer 控制记录（ADR-041 Phase1.4，默认关闭，opt-in）**
+
+`trailer_template.present=true` 时,DELIMITED 导出在数据行之后追加一行 trailer 控制记录,供下游带内对账(与入站 P1.1 解析对称)。
+
+```jsonc
+// template_config
+"trailer_template": {
+  "present": true, "recordType": "T", "recordTypeIndex": 0,
+  "recordCountIndex": 1, "controlTotalIndex": 2, "fieldCount": 3,
+  "amountField": "amount"   // 配了才累加控制总额;不配只写笔数
+}
+```
+
+- **笔数**始终正确(取 generate 返回的全量行数);**控制总额**仅在「非续跑全量跑」时累加写入,ADR-038 续跑场景退化为只写笔数、金额列留空(续跑只见本段行,避免写错总额)。
+- 当前覆盖 DELIMITED;FIXED_WIDTH/定长定宽 trailer 作为 1.4b 快速跟进(复用 `OutboundTrailerRecord`)。
+
 **6）导出字符集与编码规则**
 
 导出至少应支持：
