@@ -25,7 +25,8 @@ import org.junit.jupiter.api.Test;
  *   <li>{@code QUEUE_DEFER} → ResourceCheck.waitForCapacity — partition 留 WAITING 等下 tick
  *   <li>{@code DEGRADE_PRIORITY} → waitForCapacity 但 reasonCode 末尾打 _DEGRADED 标记， 供
  *       DefaultResourceScheduler 把决策 priority/band 砍到最低
- *   <li>null / 未识别策略 → 默认 REJECT（向后兼容）
+ *   <li>null / 未配策略 → 走平台默认 {@code batch.resource-scheduler.default-exceeded-strategy} （ADR-041
+ *       Phase2.3 起默认 {@code QUEUE_DEFER} 有界队列,洪峰不误拒）
  * </ul>
  */
 class QuotaExceededStrategyLimiterTest {
@@ -34,6 +35,7 @@ class QuotaExceededStrategyLimiterTest {
   private JobInstanceMapper jobInstanceMapper;
   private OrchestratorConfigCacheService configCache;
   private QuotaRuntimeStateService quotaRuntime;
+  private ResourceSchedulerProperties resScheduler;
 
   @BeforeEach
   void setUp() {
@@ -42,10 +44,12 @@ class QuotaExceededStrategyLimiterTest {
     quotaRuntime = mock(QuotaRuntimeStateService.class);
     BatchOrchestratorGovernanceProperties governance =
         mock(BatchOrchestratorGovernanceProperties.class);
-    ResourceSchedulerProperties resScheduler = mock(ResourceSchedulerProperties.class);
+    resScheduler = mock(ResourceSchedulerProperties.class);
     when(governance.resourceScheduler()).thenReturn(resScheduler);
     when(resScheduler.getGlobalMaxRunningJobs()).thenReturn(0L); // 关掉全局闸门
     when(resScheduler.getQuotaResetSlidingWindowHours()).thenReturn(24);
+    // ADR-041 Phase2.3:平台默认有界队列(QUEUE_DEFER),与生产 ResourceSchedulerProperties 默认一致。
+    when(resScheduler.getDefaultExceededStrategy()).thenReturn("QUEUE_DEFER");
 
     limiter =
         new DefaultConcurrencyLimiter(jobInstanceMapper, configCache, quotaRuntime, governance);
@@ -85,12 +89,25 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
-  void nullStrategy_shouldFallBackToReject() {
+  void nullStrategy_shouldDeferByPlatformDefault() {
+    // ADR-041 Phase2.3:租户未配策略 → 平台默认 QUEUE_DEFER(有界队列),defer 而非硬拒。
     arrangeBurstExceeded(null);
 
     ResourceCheck check = limiter.check(request(), null);
 
     assertThat(check.allowed()).isFalse();
+    assertThat(check.failFast()).isFalse();
+    assertThat(check.reasonCode()).isEqualTo("TENANT_JOB_LIMIT");
+  }
+
+  @Test
+  void nullStrategy_withRejectPlatformDefault_stillRejects() {
+    // 平台默认可配回 REJECT 恢复旧硬拒语义。
+    when(resScheduler.getDefaultExceededStrategy()).thenReturn("REJECT");
+    arrangeBurstExceeded(null);
+
+    ResourceCheck check = limiter.check(request(), null);
+
     assertThat(check.failFast()).isTrue();
   }
 
