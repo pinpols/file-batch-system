@@ -308,10 +308,10 @@ return switch (joinRule.joinMode()) {
 
 | 场景 | 现状 | 替代 |
 |---|---|---|
-| **跨 workflow 依赖**（workflow_A 完了触发 workflow_B） | 不直接支持。`workflow_node.related_job_code` 只查同 workflow_definition 内的 job | 让 workflow_A 末节点写一个事件，workflow_B 配 `schedule_type=EVENT` 监听该事件 key |
+| **跨 workflow 依赖**（workflow_A 依赖 workflow_B） | 分两种形态：① **同步嵌套**（支持）——JOB 节点 `related_job_code` 指向一个 `job_type=WORKFLOW` 的 job，父 workflow 把子 workflow 作为子 `job_instance` 拉起并等待其终态（见 §5 `JOB`、§225「子作业可以是 WORKFLOW」、下方环检测说明）；② **异步解耦触发**（不内建）——A 完成后让独立调度的 B 自动启动 | 同步依赖直接用 JOB 节点嵌套；异步解耦让 workflow_A 末节点写一个事件，workflow_B 配 `schedule_type=EVENT` 监听该事件 key |
 | **跨 tenant 依赖** | 不允许。`related_job_code` 在同 `tenant_id` 下查 `job_definition` | 设计如此（多租户隔离）。需要的话拆成两个 workflow 通过事件桥接 |
 | **依赖外部系统就绪** | 没有"等外部 API 返回 OK"节点 | 接 `EVENT` 触发：外部系统调 `/api/triggers/launch` 推一条事件，workflow 里 listen |
-| **环 / 自循环** | 强制 DAG，启动时 `WorkflowDagService` 校验拒绝 | 重试已经在 `retry_policy` 里实现，不要用边模拟循环 |
+| **环 / 自循环** | 强制 DAG，三道防线：① 单 workflow 内的边环，配置期 `WorkflowDagValidator.validate` Kahn 拒绝；② 跨 workflow 嵌套环（A 的 JOB 节点→B，B 又→A，或自引用），**配置期** `WorkflowDagValidator.validateNoCrossWorkflowCycle` 在 `fullUpdate` 保存时沿「JOB→WORKFLOW」展开 workflow 图 DFS 检测，命中抛 `error.workflow.dag.cross_workflow_cycle_detected`；③ 同样的跨 workflow 嵌套环，**运行期** `ChildJobLaunchSupport` 在拉起子作业前沿 `parent_instance_id` 链上溯检测祖先 job_code，命中抛 `error.workflow.nested_cycle_detected` fail-fast（兜底定义漂移/绕过保存校验的情况） | 重试用 `retry_policy`，不要用边或嵌套模拟循环 |
 | **动态依赖**（运行时根据数据决定下个节点） | 静态 DAG。能用 CONDITION 边在配置层做有限分支 | 复杂动态分支建议拆成多个 workflow + 事件触发 |
 
 ---
