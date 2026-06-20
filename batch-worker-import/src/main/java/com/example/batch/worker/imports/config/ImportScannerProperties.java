@@ -53,9 +53,11 @@ public class ImportScannerProperties {
   @Data
   public static class EventArrival {
     /**
-     * 事件驱动到达开关(默认关)。开启后 worker 暴露内部 inbound 通知端点 {@code
-     * POST /internal/import/events/object-arrival},收到对象到达通知即时触发一次扫描,把发现延迟从最长一个轮询周期
-     * (默认 30s)降到接近实时;关闭时端点存在但只回 {@code triggered=false},行为完全等价历史纯轮询。
+     * 事件驱动到达开关(默认关)。
+     *
+     * <p>开启后 worker 暴露 inbound 到达通知端点,收到通知即时触发一次扫描,把发现延迟降到接近实时。
+     *
+     * <p>关闭时端点存在但只回 triggered=false,行为完全等价历史纯轮询。
      */
     private boolean enabled = false;
   }

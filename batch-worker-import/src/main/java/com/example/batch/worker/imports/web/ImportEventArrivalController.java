@@ -16,11 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 事件驱动到达 inbound 通知控制器(路线图 4.1)。仅供内部对象存储事件源调用,不对外暴露。
  *
- * <p>对象落地时事件源 POST 一条通知,本端点即时触发一次 {@link ImportIngressScanner#scan()},把到达发现延迟从「最长一个轮询周期
- * (默认 30s)」降到接近实时;扫描器只做「安全发现 + 登记」,不绕过 Trigger/Orchestrator 直接起任务,故事件驱动只是「提前扫」,语义与轮询完全一致。
+ * <p>对象落地时事件源 POST 一条通知,本端点即时触发一次 {@link ImportIngressScanner#scan()}。
  *
- * <p>开关 {@code batch.worker.import.scanner.event-arrival.enabled} 默认关:关闭时端点只回 {@code
- * triggered=false},等价历史纯轮询。{@link AtomicBoolean} 在途守护让密集通知合并为「至多一次在途扫描」,避免事件风暴把扫描器打爆。
+ * <p>到达发现延迟从「最长一个轮询周期(默认 30s)」降到接近实时。
+ *
+ * <p>扫描器只做「安全发现 + 登记」,不绕过 Trigger/Orchestrator 直接起任务,事件驱动只是「提前扫」。
+ *
+ * <p>开关 {@code batch.worker.import.scanner.event-arrival.enabled} 默认关,关闭时只回 {@code triggered=false}。
+ *
+ * <p>{@link AtomicBoolean} 在途守护让密集通知合并为「至多一次在途扫描」,避免事件风暴打爆扫描器。
  */
 @Slf4j
 @RestController
