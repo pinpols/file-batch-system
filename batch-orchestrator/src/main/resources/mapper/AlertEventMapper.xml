@@ -49,4 +49,27 @@
         order by last_seen_at desc
         limit #{limit}
     </select>
+
+    <select id="selectOverdueForEscalation"
+            resultType="com.example.batch.common.persistence.entity.AlertEventEntity">
+        select *
+        from batch.alert_event
+        where status = 'OPEN'
+          and escalation_tier &lt; #{maxTier}
+          and last_seen_at &lt; current_timestamp
+              - make_interval(mins =&gt; #{slaMinutes} * (escalation_tier + 1))
+        order by last_seen_at asc
+        limit #{limit}
+    </select>
+
+    <update id="markEscalated">
+        update batch.alert_event
+        set escalation_tier = escalation_tier + 1,
+            escalated_at = current_timestamp,
+            updated_at = current_timestamp
+        where id = #{id}
+          and tenant_id = #{tenantId}
+          and status = 'OPEN'
+          and escalation_tier = #{expectedTier}
+    </update>
 </mapper>

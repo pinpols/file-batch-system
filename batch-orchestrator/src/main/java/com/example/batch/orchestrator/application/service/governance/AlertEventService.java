@@ -6,4 +6,14 @@ import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 public interface AlertEventService {
 
   void emit(AlertEmitRequest request);
+
+  /**
+   * 对超过 ack-SLA 仍未确认的 OPEN 告警执行一次升级 sweep:逐条把 {@code escalation_tier} +1 并放大可见度。
+   *
+   * @param slaMinutes 每级静默阈值基数(分钟),第 N 级需静默 {@code slaMinutes*N} 分钟
+   * @param maxTier 升级到此 tier 后停止
+   * @param batchLimit 单次最多处理条数
+   * @return 实际升级的告警条数
+   */
+  int escalateOverdue(int slaMinutes, int maxTier, int batchLimit);
 }
