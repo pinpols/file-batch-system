@@ -22,7 +22,10 @@ public class ReadinessService {
   private final JobInstanceMapper jobInstanceMapper;
 
   /**
-   * 上游 job 在指定批次日是否已就绪(存在实盘 SUCCESS 实例)。
+   * 上游 job 在指定批次日是否已就绪(**最新一次 attempt** 为 SUCCESS)。
+   *
+   * <p>口径用"最新 attempt"而非"存在任意 SUCCESS":先成功后 rerun 失败 / rerun 正在跑时,最新 attempt 非 SUCCESS → not
+   * ready,避免下游按已被推翻的过期结果启动(结算级误放行)。
    *
    * @param tenantId 租户
    * @param jobCode 上游 job code
@@ -32,8 +35,8 @@ public class ReadinessService {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
       return ReadinessResult.ofNotReady("invalid-readiness-query");
     }
-    long successCount = jobInstanceMapper.countSuccessByBizDate(tenantId, jobCode, bizDate);
-    return successCount > 0
+    String latestStatus = jobInstanceMapper.selectLatestStatusByBizDate(tenantId, jobCode, bizDate);
+    return "SUCCESS".equals(latestStatus)
         ? ReadinessResult.ofReady()
         : ReadinessResult.ofNotReady("upstream-job-not-success");
   }

@@ -11,9 +11,11 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportDataQualityService;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import com.example.batch.worker.imports.infrastructure.quality.ControlTotalEvaluator;
+import com.example.batch.worker.imports.infrastructure.quality.DatasetRuleEvaluator;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationIssue;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationSession;
 import com.example.batch.worker.imports.stage.support.ImportStageSupport;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -163,10 +165,44 @@ public class ValidateStep implements ImportStageStep {
   private ValidationSession openValidationSession(ImportJobContext context) {
     List<String> schemaFields = stringList(context.getAttributes().get("schemaFields"));
     long totalCount = numberValue(context.getAttributes().get("totalCount"));
+    injectManifestExpectedCount(context);
     ValidationSession session =
         dataQualityService.beginValidation(context, totalCount, schemaFields);
     dataQualityService.validateDataset(session);
     return session;
+  }
+
+  /**
+   * ADR-040:把 file_record.metadata_json 里 sidecar(.chk manifest)声明的 expectedRecordCount 塞进 context
+   * 属性,供 {@link DatasetRuleEvaluator} 在行数校验时对账"声明行数 vs 实际累加行数"。
+   *
+   * <p>此前 scanner 只写 metadata.expectedRecordCount 无人消费;此处补上读取-对账闭环。读取失败/缺失 时静默跳过(不影响主校验,只是少了
+   * manifest 对账)。
+   */
+  private void injectManifestExpectedCount(ImportJobContext context) {
+    String fileIdRaw = context.getFileId();
+    if (!Texts.hasText(fileIdRaw)) {
+      return;
+    }
+    try {
+      Map<String, Object> fileRecord =
+          runtimeRepository.loadFileRecord(context.getTenantId(), Long.valueOf(fileIdRaw.trim()));
+      Object metadataJson = fileRecord == null ? null : fileRecord.get("metadata_json");
+      if (metadataJson == null) {
+        return;
+      }
+      Map<String, Object> metadata = objectMapper.readValue(String.valueOf(metadataJson), MAP_TYPE);
+      Object expected = metadata.get(DatasetRuleEvaluator.ATTR_EXPECTED_RECORD_COUNT);
+      if (expected != null) {
+        context.getAttributes().put(DatasetRuleEvaluator.ATTR_EXPECTED_RECORD_COUNT, expected);
+      }
+    } catch (NumberFormatException | JsonProcessingException e) {
+      log.warn(
+          "manifest expectedRecordCount 读取失败,跳过行数对账: tenantId={} fileId={} cause={}",
+          context.getTenantId(),
+          fileIdRaw,
+          e.getMessage());
+    }
   }
 
   private ImportStageResult processDatasetIssues(
