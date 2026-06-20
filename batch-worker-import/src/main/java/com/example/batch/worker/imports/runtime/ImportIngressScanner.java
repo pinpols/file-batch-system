@@ -508,7 +508,8 @@ public class ImportIngressScanner {
       return;
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
-    putArrivalMetadata(metadata, matched.fileGroupCode(), String.join(",", matched.requiredFiles()));
+    putArrivalMetadata(
+        metadata, matched.fileGroupCode(), String.join(",", matched.requiredFiles()));
     runtimeRepository.updateFileMetadata(fileId, metadata);
     log.info(
         "batch manifest backfilled arrival group for registered file: tenantId={}, fileId={},"
