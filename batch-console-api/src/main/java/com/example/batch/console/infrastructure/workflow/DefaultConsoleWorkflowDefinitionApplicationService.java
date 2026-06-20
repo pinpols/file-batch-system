@@ -194,6 +194,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
 
     // BE 兜底:DAG 拓扑 + 引用完整性校验(范围 = 拓扑;业务对错见 ADR-021,不在此处)
     dagValidator.validate(resolvedTenant, body);
+    // 跨 workflow 嵌套环检测:JOB 节点指向 WORKFLOW 类型 job 时,配置期就拦住 A→B→A / 自引用
+    // (workflowCode 不可变,用持久化 def 的 code 作 root)。运行期另有 ChildJobLaunchSupport 兜底。
+    dagValidator.validateNoCrossWorkflowCycle(resolvedTenant, def.getWorkflowCode(), body);
 
     int rows =
         definitionMapper.updateAndBumpVersion(
