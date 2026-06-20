@@ -177,6 +177,40 @@ public class WheelMetrics {
         .increment();
   }
 
+  public static final String READINESS_DEFERRED = "batch.trigger.wheel.readiness.deferred";
+  public static final String READINESS_TIMEOUT = "batch.trigger.wheel.readiness.timeout";
+
+  private final ConcurrentMap<String, Counter> readinessDeferredByGroup = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Counter> readinessTimeoutByGroup = new ConcurrentHashMap<>();
+
+  /** ADR-043:依赖未就绪、窗口内 defer 重检一次(同一 bizDate 不丢批)。 */
+  public void incrementReadinessDeferred(String jobGroup) {
+    readinessDeferredByGroup
+        .computeIfAbsent(
+            jobGroup,
+            g ->
+                Counter.builder(READINESS_DEFERRED)
+                    .description(
+                        "upstream not ready; fire deferred within readinessWindow (ADR-043)")
+                    .tags(Tags.of("group", g))
+                    .register(registry))
+        .increment();
+  }
+
+  /** ADR-043:等待超 readinessWindow 仍未就绪,放弃本 bizDate(已 ERROR 告警)。运维应关注此 counter。 */
+  public void incrementReadinessTimeout(String jobGroup) {
+    readinessTimeoutByGroup
+        .computeIfAbsent(
+            jobGroup,
+            g ->
+                Counter.builder(READINESS_TIMEOUT)
+                    .description(
+                        "upstream not ready past readinessWindow; gave up this bizDate (ADR-043)")
+                    .tags(Tags.of("group", g))
+                    .register(registry))
+        .increment();
+  }
+
   public void incrementLeaderAcquire() {
     leaderAcquireCounter.increment();
   }

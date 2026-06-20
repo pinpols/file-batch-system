@@ -55,6 +55,19 @@ public class WheelSchedulerProperties {
   /** misfire 阈值(秒):next_fire_time 比 now() 早超过此值视为 misfire。 */
   private int misfireThresholdSeconds = 60;
 
+  /**
+   * ADR-043 readiness defer:依赖上游未就绪时,等其就绪的最长容忍窗口(秒)。窗口内每 {@link #readinessRecheckIntervalSeconds}
+   * 秒重检一次(同一 bizDate,不丢批);超窗仍未就绪 → 放弃本 bizDate(推进到下一真 cron + WAITING_READINESS_TIMEOUT +
+   * ERROR/metric)。默认 7200=2h。
+   */
+  private int readinessWindowSeconds = 7200;
+
+  /**
+   * ADR-043 readiness defer:未就绪时的重检间隔(秒)。defer 期 next_fire_time 设为 now+本值。 须 &lt; {@link
+   * #misfireThresholdSeconds} 以免重检触发被误判为 misfire。默认 30。
+   */
+  private int readinessRecheckIntervalSeconds = 30;
+
   /** misfire AUTO 策略 catch-up 限流(每秒最多 fire 次数);防雪崩。 */
   private double catchUpRatePerSecond = 10.0;
 

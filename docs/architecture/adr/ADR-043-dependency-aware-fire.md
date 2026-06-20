@@ -64,6 +64,8 @@
   - 有 `PENDING` 且未超 `readinessWindow` → **defer**:不 fire,不前移 `next_fire_time`,标记一条 pending-readiness,留待下一扫描窗重评(类似 misfire pending 但语义是「等就绪」)。
   - 超 `readinessWindow` 仍 `PENDING` → 落 `trigger_misfire_pending`,走既有 misfire 策略(AUTO 补跑 / MANUAL_APPROVAL 等)。
 
+> **实现状态(2026-06):defer 已落地**。`HashedWheelTriggerScheduler` 未就绪不再 skip 丢批:窗口内重检(把 `next_fire_time` 设为重检时钟 `now+recheckInterval`、`trigger_runtime_state.readiness_deferred_since` 记原始触发时刻 pin 住 bizDate、`last_fire_status=WAITING_READINESS`),超窗推进到下一 cron 并标 `WAITING_READINESS_TIMEOUT` + ERROR/metric。**与本节差异**:超窗 give-up 当前是"推进+告警+人工 replay",**未**自动落 `trigger_misfire_pending` 走 misfire 策略(避免 AUTO 无限 catch-up 循环);该 misfire 路由留作后续增强。配置/metric 见 `docs/runbook/dependency-aware-fire.md`。
+
 ### 3. 边界与一致性
 
 - trigger **只读** orchestrator 就绪状态,经 internal API,**不直连状态表**(守读写分离 + 模块边界)。

@@ -60,6 +60,15 @@ public class TriggerRuntimeStateEntity {
    */
   private Integer fireSequence;
 
+  /**
+   * ADR-043:依赖未就绪首次 defer 的原始 scheduled fire 时刻。非空 = 正在等上游就绪。
+   *
+   * <p>用于 (a) 算已等待时长是否超 readinessWindow;(b) 把 bizDate pin 到原始触发时刻——defer 期间 next_fire_time
+   * 被改成"重检时钟"(now+recheckInterval),command 的 fireTime 仍用本字段防 bizDate 漂移到下一业务日。就绪 fire / 超窗 give-up
+   * 后清回 NULL。
+   */
+  private Instant readinessDeferredSince;
+
   private Instant createdAt;
   private Instant updatedAt;
 }
