@@ -59,6 +59,16 @@ public interface TriggerRuntimeStateMapper {
       @Param("fireSequence") Integer fireSequence);
 
   /**
+   * ADR-043 readiness defer:上游未就绪且未超 readinessWindow → 不前移真 cron,把 next_fire_time 改成 重检时钟({@code
+   * recheckAt} = now + recheckInterval),记 {@code deferredSince}(首次 defer 的原始 scheduled fire
+   * 时刻;后续重检传同值保持不变),释放 marker 让下个扫描窗重检。
+   */
+  int deferForReadiness(
+      @Param("id") Long id,
+      @Param("recheckAt") Instant recheckAt,
+      @Param("deferredSince") Instant deferredSince);
+
+  /**
    * 周期(每 2 min)清理超 5 min 未释放的 marker,避免 leader 崩溃后 trigger 永久卡住。
    *
    * @return 释放的行数

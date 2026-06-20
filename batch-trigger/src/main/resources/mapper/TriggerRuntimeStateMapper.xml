@@ -19,6 +19,7 @@
         <result column="scheduled_local_date" property="scheduledLocalDate"/>
         <result column="scheduled_local_time" property="scheduledLocalTime"/>
         <result column="fire_sequence" property="fireSequence"/>
+        <result column="readiness_deferred_since" property="readinessDeferredSince"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -65,6 +66,24 @@
                scheduled_local_date = #{scheduledLocalDate},
                scheduled_local_time = #{scheduledLocalTime},
                fire_sequence = #{fireSequence},
+               scheduled_fire_marker = null,
+               scheduled_at = null,
+               readiness_deferred_since = null,
+               version = version + 1,
+               updated_at = now()
+         where id = #{id}
+    </update>
+
+    <!--
+      ADR-043 readiness defer:上游未就绪且未超 readinessWindow → 不前移真 cron,把 next_fire_time
+      改成"重检时钟"(now+recheckInterval),记 readiness_deferred_since(首次=原始 scheduled fire
+      时刻;后续重检保持不变),释放 marker 让下个扫描窗重检。不动 misfire_count / fire_sequence。
+    -->
+    <update id="deferForReadiness">
+        update batch.trigger_runtime_state
+           set next_fire_time = #{recheckAt},
+               readiness_deferred_since = #{deferredSince},
+               last_fire_status = 'WAITING_READINESS',
                scheduled_fire_marker = null,
                scheduled_at = null,
                version = version + 1,

@@ -94,7 +94,13 @@ public class DefaultTriggerService implements TriggerService {
       return skipScheduled(command);
     }
     if (!upstreamReady(command, launchRequest)) {
-      return skipScheduledNotReady(command);
+      // ADR-043:依赖未就绪不再返回 skipped 直接丢批,改抛 UpstreamNotReadyException,
+      // 由 wheel 调度器走 readiness defer(窗口内同 bizDate 重检 / 超窗 give-up),防日批晚到上游丢当天。
+      throw new UpstreamNotReadyException(
+          launchRequest.tenantId(),
+          command.descriptor().getJobCode(),
+          command.descriptor().getDependsOnJobCode(),
+          launchRequest.bizDate());
     }
     String dedupKey = buildScheduledDedupKey(command);
     return persistAndForward(launchRequest, dedupKey);
@@ -112,17 +118,6 @@ public class DefaultTriggerService implements TriggerService {
     }
     return upstreamReadinessChecker.isReady(
         launchRequest.tenantId(), dependsOn, launchRequest.bizDate());
-  }
-
-  private LaunchResponse skipScheduledNotReady(ScheduledTriggerCommand command) {
-    log.info(
-        "scheduled trigger skipped: upstream not ready: tenantId={}, jobCode={}, dependsOn={},"
-            + " fireTime={}",
-        command.descriptor().getTenantId(),
-        command.descriptor().getJobCode(),
-        command.descriptor().getDependsOnJobCode(),
-        command.fireTime());
-    return LaunchResponse.skipped(command.traceId());
   }
 
   @Override
