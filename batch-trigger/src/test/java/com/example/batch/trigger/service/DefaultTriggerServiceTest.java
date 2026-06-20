@@ -22,6 +22,7 @@ import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.event.TriggerOutboxDomainEventPublisher;
+import com.example.batch.trigger.infrastructure.readiness.UpstreamReadinessChecker;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TenantStatusMapper;
 import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
@@ -50,6 +51,7 @@ class DefaultTriggerServiceTest {
   @Mock private TenantStatusMapper tenantStatusMapper;
   @Mock private PlatformTransactionManager transactionManager;
   @Mock private TransactionStatus transactionStatus;
+  @Mock private UpstreamReadinessChecker upstreamReadinessChecker;
 
   private DefaultTriggerService service;
 
@@ -65,7 +67,8 @@ class DefaultTriggerServiceTest {
             triggerOutboxPublisher,
             businessCalendarMapper,
             tenantStatusMapper,
-            transactionManager);
+            transactionManager,
+            upstreamReadinessChecker);
   }
 
   @Test
