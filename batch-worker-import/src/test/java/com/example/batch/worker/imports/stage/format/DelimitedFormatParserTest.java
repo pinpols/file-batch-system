@@ -1,7 +1,9 @@
 package com.example.batch.worker.imports.stage.format;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.exception.BizException;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +58,44 @@ class DelimitedFormatParserTest {
 
     assertThat(count).isEqualTo(1L);
     assertThat(sink.toString()).contains("customerNo").contains("C001");
+  }
+
+  @Test
+  void headeredFailsFastWhenRequiredColumnMissingFromHeader() {
+    String csv = "customerNo,customerName\nC001,Alice\n";
+    Map<String, Object> tpl =
+        Map.of(
+            "header_rows",
+            1,
+            "field_mappings",
+            List.of(
+                Map.of("name", "customerNo", "required", true),
+                // email 必填,但文件表头里没有 → PARSE 期 fail-fast
+                Map.of("name", "email", "required", true)));
+    StringWriter sink = new StringWriter();
+
+    assertThatThrownBy(() -> parser.parse(context(), request(csv, tpl), new BufferedWriter(sink)))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("delimited_header_missing");
+  }
+
+  @Test
+  void headeredAllowsOptionalColumnAbsent() {
+    String csv = "customerNo\nC001\n";
+    Map<String, Object> tpl =
+        Map.of(
+            "header_rows",
+            1,
+            "field_mappings",
+            List.of(
+                Map.of("name", "customerNo", "required", true),
+                // email 非必填 → 表头缺失允许
+                Map.of("name", "email")));
+    StringWriter sink = new StringWriter();
+
+    long count = parser.parse(context(), request(csv, tpl), new BufferedWriter(sink));
+
+    assertThat(count).isEqualTo(1L);
   }
 
   private ImportJobContext context() {

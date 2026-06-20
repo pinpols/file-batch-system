@@ -1,5 +1,7 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -72,6 +74,9 @@ public class DelimitedFormatParser implements FormatParser {
         if ((withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1)) {
           if (nonBlankLineNo == 1) {
             headers = toHeaders(row);
+            // 与 Excel 对齐:配了 field_mappings 时,required 列必须在文件表头里找到——
+            // 缺列即 PARSE 期 fail-fast 报"缺哪列",而非静默整列 null 让 VALIDATE 误报"字段缺失"。
+            validateRequiredHeaders(headers, templateConfig);
             context.getAttributes().put(KEY_SCHEMA_FIELDS, new ArrayList<>(headers));
           }
           continue;
@@ -142,6 +147,45 @@ public class DelimitedFormatParser implements FormatParser {
       headers.add(value == null ? "" : value);
     }
     return headers;
+  }
+
+  /**
+   * 表头存在性校验(仅 required 列):配了 {@code field_mappings} 时,每个 {@code required:true} 列的来源名 （{@code
+   * name},兼容 {@code source}）必须出现在文件实际表头里;缺列即 fail-fast 报"缺哪列"。 可选列允许缺失。
+   */
+  private void validateRequiredHeaders(List<String> headers, Object templateConfig) {
+    Object fieldMappings = support.templateFieldMappings(templateConfig);
+    if (!(fieldMappings instanceof List<?> list) || list.isEmpty()) {
+      return;
+    }
+    List<String> missing = new ArrayList<>();
+    for (Object item : list) {
+      if (!(item instanceof Map<?, ?> map) || !isRequired(map.get("required"))) {
+        continue;
+      }
+      Object src = map.get("name") != null ? map.get("name") : map.get("source");
+      if (src == null || !Texts.hasText(String.valueOf(src))) {
+        continue;
+      }
+      String source = String.valueOf(src).trim();
+      if (!headers.contains(source)) {
+        missing.add(source);
+      }
+    }
+    if (!missing.isEmpty()) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.import.parse.delimited_header_missing",
+          missing.toString(),
+          headers.toString());
+    }
+  }
+
+  private static boolean isRequired(Object value) {
+    if (value instanceof Boolean b) {
+      return b;
+    }
+    return value != null && "true".equalsIgnoreCase(String.valueOf(value).trim());
   }
 
   private static boolean isAllBlank(String[] row) {
