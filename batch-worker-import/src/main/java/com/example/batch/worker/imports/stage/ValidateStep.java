@@ -10,6 +10,7 @@ import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportDataQualityService;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import com.example.batch.worker.imports.infrastructure.quality.ControlTotalEvaluator;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationIssue;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationSession;
 import com.example.batch.worker.imports.stage.support.ImportStageSupport;
@@ -59,6 +60,7 @@ public class ValidateStep implements ImportStageStep {
   private final ImportRecordGovernanceService recordGovernanceService;
   private final ImportDataQualityService dataQualityService;
   private final ImportWorkerConfiguration workerConfiguration;
+  private final ControlTotalEvaluator controlTotalEvaluator;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -112,6 +114,12 @@ public class ValidateStep implements ImportStageStep {
         // writer 此时已随 processValidationBatch 的 try-with-resources 关闭，安全 delete
         deleteQuietly(validatedRecordsPath);
         return streamResult.failure();
+      }
+      // ADR-041 Phase1.2:全量记录累加完毕,控制金额对账(声明总额 vs 实际累加和)。
+      ImportStageResult controlTotalFailure =
+          processControlTotal(context, session, validatedRecordsPath);
+      if (controlTotalFailure != null) {
+        return controlTotalFailure;
       }
       writeValidationResult(
           context,
@@ -192,6 +200,31 @@ public class ValidateStep implements ImportStageStep {
             MSG_SKIP_THRESHOLD_EXCEEDED,
             objectMapper);
       }
+    }
+    return null;
+  }
+
+  /**
+   * ADR-041 Phase1.2:控制金额对账。声明总额与累加和不符且 blocker=true 时,记失败记录并以 IMPORT_VALIDATE_CONTROL_TOTAL
+   * 失败整个阶段;默认告警(evaluator 内部 log.warn)则返回 null 放行。
+   */
+  private ImportStageResult processControlTotal(
+      ImportJobContext context, ValidationSession session, Path validatedRecordsPath) {
+    ValidationIssue issue = controlTotalEvaluator.finalizeCheck(session);
+    if (issue == null) {
+      return null;
+    }
+    ValidationErrorOutcome outcome =
+        recordValidationError(context, 0L, issue.errorCode(), issue.errorMessage(), null);
+    if (outcome.stop()) {
+      deleteQuietly(validatedRecordsPath);
+      return ImportStageResult.failure(
+          stage(),
+          outcome.errorCode(),
+          "error.import.validate.row_invalid",
+          new Object[] {outcome.errorMessage()},
+          outcome.errorMessage(),
+          objectMapper);
     }
     return null;
   }
@@ -336,6 +369,9 @@ public class ValidateStep implements ImportStageStep {
       long chunkStartRecordNo,
       BufferedWriter writer)
       throws Exception {
+    // ADR-041 Phase1.2:控制金额对账按到达的全量记录累加(含将被判无效的行——trailer 声明的是上游发出的总额,
+    // 对账「数对不对/全不全」,在 finalize 比对前于每 chunk 累加)。
+    controlTotalEvaluator.accumulate(session, chunk);
     Map<Long, ValidationIssue> issues =
         dataQualityService.validateChunkRows(session, chunk, chunkStartRecordNo);
     long validCount = 0L;
