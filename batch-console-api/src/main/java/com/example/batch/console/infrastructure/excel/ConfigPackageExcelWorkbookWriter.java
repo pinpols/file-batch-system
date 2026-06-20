@@ -175,10 +175,10 @@ public class ConfigPackageExcelWorkbookWriter {
 
   /** export 的 default_query_sql：命名参数 :tenantId/:batchNo，单条安全 SELECT。 */
   private static final String EXAMPLE_EXPORT_QUERY_SQL =
-      "SELECT customer_no, customer_name, status FROM biz.customer_account "
-          + "WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)"
-          + "\n怎么填: 单条 SELECT(禁 UPDATE/DELETE/SELECT *); 命名参数用 :tenantId/:status(运行时绑定,"
-          + "别写 ? 占位符); 必须按 tenant_id = :tenantId 过滤本租户; SELECT 列名需与 field_mappings.sourceColumn 对齐。";
+      "SELECT customer_no, customer_name, status FROM biz.customer_account WHERE tenant_id ="
+          + " :tenantId AND (:status IS NULL OR status = :status)\n"
+          + "怎么填: 单条 SELECT(禁 UPDATE/DELETE/SELECT *); 命名参数用 :tenantId/:status(运行时绑定,别写 ? 占位符); 必须按"
+          + " tenant_id = :tenantId 过滤本租户; SELECT 列名需与 field_mappings.sourceColumn 对齐。";
 
   /** validation_rule_set（import）：maxErrorRate/stopOnFirstError/duplicateKeyCheck。 */
   private static final String EXAMPLE_IMPORT_VALIDATION_RULE_SET =
@@ -1071,12 +1071,10 @@ public class ConfigPackageExcelWorkbookWriter {
             requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
         Map.entry(
             ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
-            optionalColumn(
-                "节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
+            optionalColumn("节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
         Map.entry(
             ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
-            optionalColumn(
-                "补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
+            optionalColumn("补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
         Map.entry(
             ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_MAX_DAYS,
             requiredColumn("最大补跑天数。", GUIDE_INT, "0")),

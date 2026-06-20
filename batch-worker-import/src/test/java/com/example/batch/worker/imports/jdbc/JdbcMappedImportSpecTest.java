@@ -219,13 +219,19 @@ class JdbcMappedImportSpecTest {
         Map.of(
             "jdbc_mapped_import",
             Map.of(
-                "schema", "biz",
-                "table", "customer_account",
-                "tenantColumn", "tenant_id",
-                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
-                "standardAuditBindings", true,
+                "schema",
+                "biz",
+                "table",
+                "customer_account",
+                "tenantColumn",
+                "tenant_id",
+                "columnMappings",
+                List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "standardAuditBindings",
+                true,
                 // 用户显式 created_by 覆盖标准默认
-                "systemBindings", Map.of("created_by", "${customWorker}")));
+                "systemBindings",
+                Map.of("created_by", "${customWorker}")));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
