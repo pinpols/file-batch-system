@@ -197,27 +197,7 @@ public class ImportIngressScanner {
     if (scannerProperties.getArrival().isEnabled()
         && Texts.hasText(effectiveGroupCode)
         && Texts.hasText(effectiveRequiredFileSet)) {
-      metadata.put("fileGroupCode", effectiveGroupCode);
-      metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
-      metadata.put("requiredFileSet", effectiveRequiredFileSet);
-      metadata.put(
-          "arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
-      metadata.put(
-          "expectedArrivalTime",
-          BatchDateTimeSupport.utcNow()
-              .plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds())
-              .toString());
-      metadata.put(
-          "latestTolerableTime",
-          BatchDateTimeSupport.utcNow()
-              .plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds())
-              .toString());
-      metadata.put("arrivalState", "WAITING_ARRIVAL");
-      metadata.put("triggerOnComplete", scannerProperties.getArrival().isTriggerOnComplete());
-      metadata.put("allowEmptyRun", scannerProperties.getArrival().isAllowEmptyRun());
-      metadata.put("allowSkipBizDate", scannerProperties.getArrival().isAllowSkipBizDate());
-      metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
-      metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
+      putArrivalMetadata(metadata, effectiveGroupCode, effectiveRequiredFileSet);
     }
     if (manifest != null) {
       metadata.put("manifestSchemaVersion", manifest.schemaVersion());
@@ -465,6 +445,31 @@ public class ImportIngressScanner {
           ex.getMessage());
       return null;
     }
+  }
+
+  /** 写入到达组 metadata(到达组 SLA + 凑齐判定所需);group/requiredFileSet 已按批次清单或静态配置解析。 */
+  private void putArrivalMetadata(
+      Map<String, Object> metadata, String groupCode, String requiredFileSet) {
+    metadata.put("fileGroupCode", groupCode);
+    metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
+    metadata.put("requiredFileSet", requiredFileSet);
+    metadata.put("arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
+    metadata.put(
+        "expectedArrivalTime",
+        BatchDateTimeSupport.utcNow()
+            .plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds())
+            .toString());
+    metadata.put(
+        "latestTolerableTime",
+        BatchDateTimeSupport.utcNow()
+            .plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds())
+            .toString());
+    metadata.put("arrivalState", "WAITING_ARRIVAL");
+    metadata.put("triggerOnComplete", scannerProperties.getArrival().isTriggerOnComplete());
+    metadata.put("allowEmptyRun", scannerProperties.getArrival().isAllowEmptyRun());
+    metadata.put("allowSkipBizDate", scannerProperties.getArrival().isAllowSkipBizDate());
+    metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
+    metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
   }
 
   /** 命中规则:成员文件名 ∈ 某清单 requiredFiles 且租户匹配;返回首个命中清单,无则 null。 */
