@@ -248,4 +248,43 @@ public class ParseSupport {
         "email",
         "status");
   }
+
+  /**
+   * 表头/字段名的容错匹配键:全小写 + 去掉下划线/连字符/空格。让 {@code Phone}/{@code PHONE}/{@code phone} 与 {@code
+   * mobile_no}/{@code mobileNo} 这类纯写法差异在匹配时等价——用于 {@code from}↔文件表头 的大小写/分隔符容错。
+   */
+  public static String matchKey(String value) {
+    if (value == null) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder(value.length());
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      if (c == '_' || c == '-' || c == ' ') {
+        continue;
+      }
+      sb.append(Character.toLowerCase(c));
+    }
+    return sb.toString();
+  }
+
+  /** 无表头分隔文件的位置列名:取 field_mappings 的 name 顺序,缺省回退 defaultHeaders。 */
+  public List<String> positionalHeaders(Object templateConfigObject) {
+    Object fieldMappings = templateFieldMappings(templateConfigObject);
+    if (fieldMappings instanceof List<?> list) {
+      List<String> names = new ArrayList<>();
+      for (Object item : list) {
+        if (item instanceof Map<?, ?> m) {
+          Object name = m.get("name");
+          if (name != null && Texts.hasText(String.valueOf(name))) {
+            names.add(String.valueOf(name).trim());
+          }
+        }
+      }
+      if (!names.isEmpty()) {
+        return names;
+      }
+    }
+    return defaultHeaders();
+  }
 }
