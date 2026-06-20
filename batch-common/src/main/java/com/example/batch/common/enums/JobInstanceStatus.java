@@ -12,6 +12,8 @@ public enum JobInstanceStatus implements DictEnum {
   WAITING("WAITING", "等待中"),
   READY("READY", "待执行"),
   RUNNING("RUNNING", "执行中"),
+  /** ADR-044 可逆暂停态:停发新分区、在途自然终结,resume 回 RUNNING。 */
+  PAUSED("PAUSED", "已暂停"),
   PARTIAL_FAILED("PARTIAL_FAILED", "部分失败"),
   SUCCESS("SUCCESS", "成功"),
   FAILED("FAILED", "失败"),
@@ -32,6 +34,8 @@ public enum JobInstanceStatus implements DictEnum {
       case WAITING -> BatchLifecycleStatus.WAITING;
       case READY -> BatchLifecycleStatus.READY;
       case RUNNING -> BatchLifecycleStatus.RUNNING;
+      // PAUSED 是可逆非终态;对外生命周期投影归入 RUNNING(仍在运行生命周期内,只是暂停派发)。
+      case PAUSED -> BatchLifecycleStatus.RUNNING;
       case SUCCESS, SUCCESS_DRY_RUN -> BatchLifecycleStatus.SUCCESS;
       case PARTIAL_FAILED, FAILED, FAILED_DRY_RUN -> BatchLifecycleStatus.FAILED;
       case CANCELLED -> BatchLifecycleStatus.CANCELLED;
