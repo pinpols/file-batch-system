@@ -14,6 +14,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.PipelineCompensationHook;
 import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
@@ -23,8 +24,10 @@ import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
 import com.example.batch.worker.processes.stage.ProcessStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -127,6 +130,54 @@ class ProcessStepExecutionAdapterTest {
     // 安全增量补偿默认 off（无 compensation hook bean）：失败直接 FAILED，绝不经过 COMPENSATING。
     verify(runtimeRepository).markPipelineFailed(eq(20L), any(), any());
     verify(runtimeRepository, never()).markPipelineCompensating(any());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  @DisplayName("ADR-041 Phase1.3:buildSuccessResponse 输出归一化 count 信封 inputCount/outputCount")
+  void buildSuccessResponse_emitsNormalizedCountEnvelope() {
+    ProcessStepExecutionAdapter adapter =
+        new ProcessStepExecutionAdapter(
+            processStageExecutor,
+            stepTemplateProvider,
+            new ObjectMapper(),
+            runtimeRepository,
+            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    ProcessJobContext context = new ProcessJobContext();
+    Map<String, Object> attributes = new LinkedHashMap<>();
+    attributes.put("processedCount", 1000L);
+    attributes.put("publishedCount", 950L);
+
+    adapter.buildSuccessResponse(context, List.of(), attributes);
+
+    Map<String, Object> outputs =
+        (Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
+    assertThat(outputs).containsEntry("inputCount", 1000L).containsEntry("outputCount", 950L);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  @DisplayName("publishedCount 缺省时 outputCount 回落 stagedCount")
+  void buildSuccessResponse_outputCountFallsBackToStaged() {
+    ProcessStepExecutionAdapter adapter =
+        new ProcessStepExecutionAdapter(
+            processStageExecutor,
+            stepTemplateProvider,
+            new ObjectMapper(),
+            runtimeRepository,
+            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    ProcessJobContext context = new ProcessJobContext();
+    Map<String, Object> attributes = new LinkedHashMap<>();
+    attributes.put("processedCount", 1000L);
+    attributes.put("stagedCount", 1000L);
+
+    adapter.buildSuccessResponse(context, List.of(), attributes);
+
+    Map<String, Object> outputs =
+        (Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
+    assertThat(outputs).containsEntry("outputCount", 1000L);
   }
 
   private PipelineStepDefinition processStep() {

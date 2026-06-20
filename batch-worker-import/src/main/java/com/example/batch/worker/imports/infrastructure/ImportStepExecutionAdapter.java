@@ -109,6 +109,10 @@ public class ImportStepExecutionAdapter
     putIfPresent(outputs, "parsedCount", attributes.get("parsedCount"));
     putIfPresent(outputs, "validatedCount", attributes.get("validatedCount"));
     putIfPresent(outputs, "skippedCount", attributes.get("skippedCount"));
+    // ADR-041 Phase1.3:归一化跨阶段 count 信封,供 orchestrator 核 import→process→export 连续性。
+    // import:input=文件原始行数(totalCount),output=入库行数(loadedCount)。
+    putIfPresent(outputs, "inputCount", attributes.get("totalCount"));
+    putIfPresent(outputs, "outputCount", attributes.get("loadedCount"));
     putIfPresent(outputs, "bizDate", context.getBizDate());
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
