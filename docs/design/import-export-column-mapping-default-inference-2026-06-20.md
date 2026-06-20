@@ -230,3 +230,34 @@ if effective.isEmpty():
 5. **(§4.5)** fan-out(一 `from` → 多 `to`)默认 reject 是否接受(用户倾向不允许);碰撞(多 `from` → 一 `to`)改 reject 无异议。
 6. ~~**(§4.6)** headerless CSV 的位置 schema 从硬编码 `defaultHeaders()` 改为 `field_mappings` 顺序~~ — **已修(2026-06-20)**:`ParseSupport.positionalHeaders()` + `DelimitedFormatParser` 无表头分支改造,模板无 `field_mappings` 才回退旧默认。
 7. **(§4.6 脚注)** 是否对 `from`→文件表头匹配也加大小写/trim 容错(动用户文件数据,更敏感)。
+
+---
+
+## 10. 配套落地:默认化简(B1/B2/B3)+ 预览期校验加固(已实现)
+
+围绕"减少用户配置负担"与"脏配置早拦截",本支同时落地了以下配套改动(均已实现、带单测)。
+
+### 10.1 默认化简
+
+| 项 | 内容 | 位置 |
+|---|---|---|
+| **B1** Excel 必填↔DB 默认对齐 | 已有 DB 列 `DEFAULT` 的枚举不再 Excel 必填,留空回退默认:`checksum_type`/`compress_type`/`encrypt_type`(NONE)、`priority_policy`(FIFO)、`end_strategy`(FINISH_RUNNING)/`out_of_window_action`(WAIT)、`holiday_roll_rule`(SKIP)/`catch_up_policy`(NONE) | `AbstractSingleSheetExcelService.optionalEnum` + 4 个 `*ExcelRowParser` + 字段说明 sheet |
+| **B2** `conflictColumns` 自动补 tenant | 非空但漏 tenant 列时自动前置(多租 UNIQUE 必含 tenant_id);空列表不动 | `JdbcMappedImportSpec.ensureTenantInConflicts` |
+| **B3** `standardAuditBindings` 开关 | `=true` 一键展开标准审计 `systemBindings`(显式项覆盖),省手写 `${...}` 样板 | `JdbcMappedImportSpec.withStandardAuditBindings` |
+
+> Channel `auth_type`/`receipt_policy` 的可选化**未做**:无独立 RowParser 默认通路,留空会写 NULL 绕过 DB DEFAULT,单列 follow-up。
+
+### 10.2 预览期校验加固(脏配置不留到运行期)
+
+`ConfigPackageExcelValidator` 新增(上传预览即 fail-fast):
+
+- **#2** `schedule_type=CRON` → `schedule_expr` 必填且须 Quartz 6/7 字段(挡 Linux 5 字段)。
+- **#1** JSON 深层结构:`field_mappings` 每项必含非空 `name`;`query_param_schema.jdbcMappedImport` 必含 `table`/`tenantColumn`、`jdbcMappedExport` 必含 `batchTable`/`detailTable`。**`columnMappings` 不强制**(对齐 §4 推断)。
+- **#3** `default_query_sql` 轻治理:仅 SELECT/WITH、禁 `SELECT *`、禁 DML/DDL(worker 期仍跑 JSqlParser 全治理)。
+- **#4a** `file_format_type=DELIMITED` → `delimiter` 必填。
+
+**#4b**(`node_type=TASK` 必须关联 job/pipeline)**不做**:工作流 topology 测试套件有意把无关联裸 TASK 视为合法,且此类工作流语义既定留 enable 时 orchestrator 兜底。
+
+### 10.3 Excel「填写示例」强化
+
+`ConfigPackageExcelWorkbookWriter` 的 `field_mappings`/`query_param_schema`/`default_query_sql`/`validation_rule_set` 填写示例补了逐项「怎么填」说明,并演示本支新能力(差异项推断 / 自动补 tenant / 一键审计绑定)。

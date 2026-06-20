@@ -11,6 +11,8 @@
 - **默认实现**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`（通用 JDBC UPSERT）
 - **通用 JDBC（少写类）**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`
   - 模板 **`query_param_schema.jdbcMappedImport`**（或 **`jdbc_mapped_import`**）里声明：`schema`、`table`、`tenantColumn`、`columnMappings`（`from`/`to`）、可选 `conflictColumns`（UPSERT）、`systemBindings`（`${traceId}` 等占位符）。
+  - **列映射默认化简**：`columnMappings` 可缺省（不写 / 空 `[]`），此时按模板顶层 `field_mappings` 推断——`to` 取 `targetColumn`，缺省则对 `name` 做大小写/下划线归一（`customerNo`→`customer_no`）；显式项按 `from` 覆盖、只写"名字对不上"的差异列；`field_mappings[*].persist:false` 的列只校验不入库。有效映射强制 **1:1**（fan-out / 碰撞 fail-fast）。
+  - **幂等键 / 审计绑定省心写法**：`conflictColumns` 漏写 tenant 列时自动前置 `tenantColumn`；`standardAuditBindings:true` 一键展开标准审计 `systemBindings`（显式 `systemBindings` 覆盖）。
   - `loadStrategy` 默认 `BATCH_UPSERT`，保持原 JDBC batch INSERT / UPSERT 语义。高吞吐整分区刷新可显式设为 `PARTITION_REPLACE_COPY`：
     - LOAD 开始前先按 `replacePartitionColumns` 执行 `DELETE FROM schema.table WHERE ...` 清理一个逻辑分区；如果目标表是 PG 分区表，谓词需覆盖分区键以触发 partition pruning。
     - 后续 chunk 使用 PostgreSQL `COPY FROM STDIN WITH (FORMAT csv, NULL '\N')` 追加。
