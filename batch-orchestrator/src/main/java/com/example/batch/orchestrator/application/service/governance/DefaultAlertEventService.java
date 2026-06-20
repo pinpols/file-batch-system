@@ -8,7 +8,9 @@ import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * insertOrMerge} 依赖 DB 唯一约束做 UPSERT，重复告警合并到同一行（更新 last_triggered_at 等）， 避免同一故障刷屏污染告警表；同时在
  * Micrometer 上打 {@code batch.alert.events} 计数便于监控。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DefaultAlertEventService implements AlertEventService {
@@ -59,5 +62,41 @@ public class DefaultAlertEventService implements AlertEventService {
         .counter(
             "batch.alert.events", Tags.of("alert_type", request.alertType(), "severity", severity))
         .increment();
+  }
+
+  @Override
+  @Transactional
+  public int escalateOverdue(int slaMinutes, int maxTier, int batchLimit) {
+    if (slaMinutes <= 0 || maxTier <= 0 || batchLimit <= 0) {
+      return 0;
+    }
+    List<AlertEventEntity> overdue =
+        alertEventMapper.selectOverdueForEscalation(slaMinutes, maxTier, batchLimit);
+    int escalated = 0;
+    for (AlertEventEntity alert : overdue) {
+      int currentTier = alert.getEscalationTier() == null ? 0 : alert.getEscalationTier();
+      int updated = alertEventMapper.markEscalated(alert.getId(), alert.getTenantId(), currentTier);
+      if (updated == 0) {
+        // 被并发 ack 或其它节点抢先升级,跳过。
+        continue;
+      }
+      int newTier = currentTier + 1;
+      escalated++;
+      meterRegistry
+          .counter(
+              "batch.alert.escalations",
+              Tags.of("alert_type", alert.getAlertType(), "tier", String.valueOf(newTier)))
+          .increment();
+      log.error(
+          "Alert escalated to tier {} after staying OPEN past ack-SLA: alertId={} tenantId={} "
+              + "alertType={} severity={} traceId={}",
+          newTier,
+          alert.getId(),
+          alert.getTenantId(),
+          alert.getAlertType(),
+          alert.getSeverity(),
+          alert.getTraceId());
+    }
+    return escalated;
   }
 }

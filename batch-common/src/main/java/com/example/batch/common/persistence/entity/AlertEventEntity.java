@@ -19,6 +19,8 @@ public class AlertEventEntity {
   private Instant lastSeenAt;
   private String traceId;
   private String status;
+  private Integer escalationTier;
+  private Instant escalatedAt;
   private Instant createdAt;
   private Instant updatedAt;
 }
