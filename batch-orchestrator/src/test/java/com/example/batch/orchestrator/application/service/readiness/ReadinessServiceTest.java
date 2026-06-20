@@ -27,10 +27,11 @@ class ReadinessServiceTest {
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 6, 20);
 
   @Test
-  @DisplayName("上游该批次日存在 SUCCESS 实例 → ready")
-  void shouldBeReady_whenUpstreamSuccessExists() {
+  @DisplayName("上游该批次日最新 attempt 为 SUCCESS → ready")
+  void shouldBeReady_whenLatestAttemptSuccess() {
     // arrange
-    when(jobInstanceMapper.countSuccessByBizDate("t1", "UP_JOB", BIZ_DATE)).thenReturn(1L);
+    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE))
+        .thenReturn("SUCCESS");
 
     // act
     ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
@@ -41,10 +42,40 @@ class ReadinessServiceTest {
   }
 
   @Test
-  @DisplayName("上游该批次日无 SUCCESS → not ready,带原因码")
-  void shouldNotBeReady_whenNoUpstreamSuccess() {
+  @DisplayName("先成功后 rerun 失败:最新 attempt=FAILED → not ready(不被过期成功误放行)")
+  void shouldNotBeReady_whenLatestAttemptFailedAfterEarlierSuccess() {
+    // arrange —— selectLatestStatusByBizDate 已按 run_attempt desc 取最新,返回 rerun 的 FAILED
+    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE))
+        .thenReturn("FAILED");
+
+    // act
+    ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
+
+    // assert
+    assertThat(result.ready()).isFalse();
+    assertThat(result.reason()).isEqualTo("upstream-job-not-success");
+  }
+
+  @Test
+  @DisplayName("rerun 正在跑:最新 attempt=RUNNING → not ready")
+  void shouldNotBeReady_whenLatestAttemptRunning() {
     // arrange
-    when(jobInstanceMapper.countSuccessByBizDate("t1", "UP_JOB", BIZ_DATE)).thenReturn(0L);
+    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE))
+        .thenReturn("RUNNING");
+
+    // act
+    ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
+
+    // assert
+    assertThat(result.ready()).isFalse();
+    assertThat(result.reason()).isEqualTo("upstream-job-not-success");
+  }
+
+  @Test
+  @DisplayName("该批次日无任何实例:返回 null → not ready")
+  void shouldNotBeReady_whenNoInstance() {
+    // arrange
+    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE)).thenReturn(null);
 
     // act
     ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
@@ -63,7 +94,7 @@ class ReadinessServiceTest {
     // assert
     assertThat(result.ready()).isFalse();
     assertThat(result.reason()).isEqualTo("invalid-readiness-query");
-    verify(jobInstanceMapper, never()).countSuccessByBizDate(any(), any(), any());
+    verify(jobInstanceMapper, never()).selectLatestStatusByBizDate(any(), any(), any());
   }
 
   @Test
@@ -74,6 +105,6 @@ class ReadinessServiceTest {
 
     // assert
     assertThat(result.ready()).isFalse();
-    verify(jobInstanceMapper, never()).countSuccessByBizDate(eq("t1"), eq("UP_JOB"), any());
+    verify(jobInstanceMapper, never()).selectLatestStatusByBizDate(eq("t1"), eq("UP_JOB"), any());
   }
 }

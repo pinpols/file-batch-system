@@ -122,6 +122,11 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
           "Workflow definition already exists: " + request.getWorkflowCode());
     }
 
+    // BE 兜底:与 fullUpdate 同源的 DAG 拓扑 + 引用完整性 + 跨 workflow 环校验。
+    // 防脚本 / 旧前端经 create 入口写入单 workflow 环、跨 workflow 嵌套环或坏引用(绕过 fullUpdate 的校验)。
+    dagValidator.validate(resolvedTenant, request);
+    dagValidator.validateNoCrossWorkflowCycle(resolvedTenant, request.getWorkflowCode(), request);
+
     WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
     entity.setTenantId(resolvedTenant);
     entity.setWorkflowCode(request.getWorkflowCode());
@@ -146,6 +151,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     WorkflowDefinitionEntity def =
         Guard.requireFound(
             definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+
+    // BE 兜底:与 fullUpdate 同源校验。update 不改 workflowCode,用持久化 def 的 code 作环检测 root。
+    dagValidator.validate(resolvedTenant, request);
+    dagValidator.validateNoCrossWorkflowCycle(resolvedTenant, def.getWorkflowCode(), request);
 
     definitionMapper.updateWorkflowDefinition(
         resolvedTenant,
