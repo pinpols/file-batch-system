@@ -235,6 +235,74 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  void launchScheduled_upstreamNotReady_throwsUpstreamNotReadyException() {
+    // ADR-043:声明了 dependsOn 且上游未就绪 → 不再返回 skipped 丢批,改抛 UpstreamNotReadyException,
+    // 由 wheel 走 readiness defer。
+    TriggerDescriptor descriptor = scheduledDescriptor();
+    descriptor.setDependsOnJobCode("UPSTREAM_SETTLE");
+    ScheduledTriggerCommand command =
+        new ScheduledTriggerCommand(
+            descriptor,
+            Instant.parse("2026-03-28T18:00:00Z"),
+            TriggerType.SCHEDULED,
+            "req-nr",
+            "trace-nr");
+    LaunchRequest launchRequest =
+        new LaunchRequest(
+            "t1",
+            "IMPORT_JOB",
+            LocalDate.of(2026, 3, 28),
+            TriggerType.SCHEDULED,
+            "req-nr",
+            "trace-nr",
+            Map.of("calendarCode", "BIZ_CAL"));
+
+    when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
+    when(upstreamReadinessChecker.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, 3, 28)))
+        .thenReturn(false);
+
+    assertThatThrownBy(() -> service.launchScheduled(command))
+        .isInstanceOf(UpstreamNotReadyException.class);
+
+    // 既不落 trigger_request 也不发 outbox(未 fire)
+    verify(triggerRequestMapper, never()).insert(any());
+    verify(triggerOutboxPublisher, never())
+        .publishRaw(anyString(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void launchScheduled_upstreamReady_proceedsToForward() {
+    TriggerDescriptor descriptor = scheduledDescriptor();
+    descriptor.setDependsOnJobCode("UPSTREAM_SETTLE");
+    ScheduledTriggerCommand command =
+        new ScheduledTriggerCommand(
+            descriptor,
+            Instant.parse("2026-03-28T18:00:00Z"),
+            TriggerType.SCHEDULED,
+            "req-ok",
+            "trace-ok");
+    LaunchRequest launchRequest =
+        new LaunchRequest(
+            "t1",
+            "IMPORT_JOB",
+            LocalDate.of(2026, 3, 28),
+            TriggerType.SCHEDULED,
+            "req-ok",
+            "trace-ok",
+            Map.of("calendarCode", "BIZ_CAL"));
+
+    when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
+    when(upstreamReadinessChecker.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, 3, 28)))
+        .thenReturn(true);
+
+    LaunchResponse response = service.launchScheduled(command);
+
+    // 就绪 → 正常 persistAndForward(落 trigger_request)
+    assertThat(response).isNotNull();
+    verify(triggerRequestMapper).insert(any());
+  }
+
+  @Test
   void createPendingCatchUpShouldLinkMisfirePendingToCatchUpRequest() {
     ScheduledTriggerCommand command =
         new ScheduledTriggerCommand(
