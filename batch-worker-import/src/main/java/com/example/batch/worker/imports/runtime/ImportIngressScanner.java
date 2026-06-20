@@ -12,6 +12,7 @@ import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -97,12 +98,17 @@ public class ImportIngressScanner {
     }
     String suffix = scannerProperties.getBatchManifestSuffix();
     List<BatchManifest> result = new ArrayList<>();
-    for (String objectName : snapshots.keySet()) {
-      if (objectName.endsWith(suffix)) {
-        BatchManifest manifest = readBatchManifest(objectName);
-        if (manifest != null) {
-          result.add(manifest);
-        }
+    for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
+      if (!entry.getKey().endsWith(suffix)) {
+        continue;
+      }
+      // ADR-040 Phase3 自完整性:批次清单也过稳定窗口,防读到半写清单 → 误判当天预期文件集合
+      if (!isStable(entry.getValue())) {
+        continue;
+      }
+      BatchManifest manifest = readBatchManifest(entry.getKey());
+      if (manifest != null) {
+        result.add(manifest);
       }
     }
     return result;
@@ -168,12 +174,11 @@ public class ImportIngressScanner {
     }
     if (runtimeRepository.existsFileRecordByStoragePath(
         resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName())) {
+      // ADR-040 Phase2:数据文件先到、清单后到 —— 对已登记成员回填 required_file_set(幂等)
+      backfillBatchManifestArrival(snapshot, resolvedTenant, batchManifests);
       return;
     }
-    String fileName =
-        snapshot.objectName().contains("/")
-            ? snapshot.objectName().substring(snapshot.objectName().lastIndexOf('/') + 1)
-            : snapshot.objectName();
+    String fileName = baseName(snapshot.objectName());
     LocalDate bizDate = resolveScannerBizDate(snapshot.objectName());
     if (bizDate == null) {
       return;
@@ -470,6 +475,64 @@ public class ImportIngressScanner {
     metadata.put("allowSkipBizDate", scannerProperties.getArrival().isAllowSkipBizDate());
     metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
     metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
+  }
+
+  private String baseName(String objectName) {
+    return objectName.contains("/")
+        ? objectName.substring(objectName.lastIndexOf('/') + 1)
+        : objectName;
+  }
+
+  /**
+   * ADR-040 Phase2 回填:数据文件先到、批次清单后到时,对已登记成员补 required_file_set + 到达组 metadata。 幂等:已带
+   * requiredFileSet 的记录跳过,避免每轮 tick 抖 updated_at。
+   */
+  private void backfillBatchManifestArrival(
+      ObjectSnapshot snapshot, String tenantId, List<BatchManifest> batchManifests) {
+    if (!scannerProperties.isBatchManifestEnabled() || batchManifests.isEmpty()) {
+      return;
+    }
+    BatchManifest matched =
+        matchBatchManifest(batchManifests, tenantId, baseName(snapshot.objectName()));
+    if (matched == null) {
+      return;
+    }
+    Map<String, Object> record =
+        runtimeRepository.loadFileRecordByStoragePath(
+            tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
+    if (record == null || record.isEmpty() || hasRequiredFileSet(record)) {
+      return;
+    }
+    Long fileId = runtimeRepository.toLong(record.get("id"));
+    if (fileId == null) {
+      return;
+    }
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    putArrivalMetadata(
+        metadata, matched.fileGroupCode(), String.join(",", matched.requiredFiles()));
+    runtimeRepository.updateFileMetadata(fileId, metadata);
+    log.info(
+        "batch manifest backfilled arrival group for registered file: tenantId={}, fileId={},"
+            + " fileGroupCode={}",
+        tenantId,
+        fileId,
+        matched.fileGroupCode());
+  }
+
+  /** 已登记记录的 metadata_json 是否已含非空 requiredFileSet(回填幂等判据)。 */
+  private boolean hasRequiredFileSet(Map<String, Object> record) {
+    Object metadataJson = record.get("metadata_json");
+    if (metadataJson == null) {
+      return false;
+    }
+    try {
+      Map<String, Object> meta =
+          objectMapper.readValue(String.valueOf(metadataJson), new TypeReference<>() {});
+      Object value = meta.get("requiredFileSet");
+      return value != null && Texts.hasText(String.valueOf(value));
+    } catch (Exception ex) {
+      return false;
+    }
   }
 
   /** 命中规则:成员文件名 ∈ 某清单 requiredFiles 且租户匹配;返回首个命中清单,无则 null。 */
