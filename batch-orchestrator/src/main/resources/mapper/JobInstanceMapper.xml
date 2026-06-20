@@ -102,6 +102,15 @@
           and dedup_key = #{dedupKey}
     </select>
 
+    <select id="countSuccessByBizDate" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+          and biz_date = #{bizDate}
+          and instance_status = 'SUCCESS'
+    </select>
+
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobInstanceEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_instance (
