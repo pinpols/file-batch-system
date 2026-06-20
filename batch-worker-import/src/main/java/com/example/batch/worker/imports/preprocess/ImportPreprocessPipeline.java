@@ -253,11 +253,7 @@ public final class ImportPreprocessPipeline {
     }
   }
 
-  /**
-   * 解 tar 容器:取 {@code entryName}(step 配置或 payload.metadata 的 {@code tarEntryName})指定条目; 未指定时取首个普通文件条目(跳过目录 /
-   * pax 扩展头 / GNU longname 等非普通文件条目)。解压后字节同样过 {@link #boundedReadAll} 防压缩炸弹。tar.gz / tgz 由调用端先
-   * {@link #gunzip} 再进入本方法。
-   */
+  /** 解 tar:取 entryName 指定条目,缺省首个普通文件;复用 boundedReadAll 防炸弹。 */
   private static byte[] untar(byte[] input, Map<String, Object> step, ImportPayload payload) {
     String entryName = stringProp(step, "entryName");
     if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
@@ -266,8 +262,7 @@ public final class ImportPreprocessPipeline {
         entryName = String.valueOf(v);
       }
     }
-    try (TarArchiveInputStream tis =
-        new TarArchiveInputStream(new ByteArrayInputStream(input))) {
+    try (TarArchiveInputStream tis = new TarArchiveInputStream(new ByteArrayInputStream(input))) {
       TarArchiveEntry entry;
       while ((entry = tis.getNextEntry()) != null) {
         if (entry.isDirectory() || !entry.isFile()) {

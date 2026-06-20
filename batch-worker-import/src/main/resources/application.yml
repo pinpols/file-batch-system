@@ -112,6 +112,9 @@ batch:
         require-done-file: ${BATCH_WORKER_IMPORT_SCANNER_REQUIRE_DONE_FILE:false}
         # 完成标记文件后缀（含点）：默认 .done；上游协议用 .chk / .ok 等时改这里
         done-file-suffix: ${BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX:.done}
+        # 标记命名规则：APPEND_FULL_NAME（默认，全名+后缀，如 orders.tar.gz -> orders.tar.gz.chk）
+        #             / REPLACE_EXTENSION（去末段扩展名+后缀，如 orders.csv -> orders.chk，旧 .done 行为）
+        done-file-naming: ${BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_NAMING:APPEND_FULL_NAME}
         # 稳定窗口（秒）：对象在该窗口内不再变化才认为可处理
         stability-window-seconds: ${BATCH_WORKER_IMPORT_SCANNER_STABILITY_WINDOW_SECONDS:30}
         # 来源类型（SYSTEM/…）：用于审计/策略

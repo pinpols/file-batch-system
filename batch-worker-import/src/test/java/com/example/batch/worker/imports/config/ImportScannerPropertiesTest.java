@@ -20,4 +20,10 @@ class ImportScannerPropertiesTest {
     props.setDoneFileSuffix(".chk");
     assertThat(props.getDoneFileSuffix()).isEqualTo(".chk");
   }
+
+  @Test
+  @DisplayName("标记命名默认 APPEND_FULL_NAME(全名+后缀,统一无歧义)")
+  void doneFileNaming_defaultsToAppendFullName() {
+    assertThat(new ImportScannerProperties().getDoneFileNaming()).isEqualTo("APPEND_FULL_NAME");
+  }
 }
