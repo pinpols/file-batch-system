@@ -4,6 +4,7 @@ import static com.example.batch.worker.imports.infrastructure.quality.Validation
 import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.KEY_MAX;
 import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.KEY_MIN;
 import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.MSG_ACTUAL_SUFFIX;
+import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.booleanValue;
 import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.digest;
 import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.enabled;
 import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
@@ -19,9 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** 数据集级别校验:行数/checksum/schema 字段。 */
+/** 数据集级别校验:行数/checksum/schema 字段 + trailer 控制记录笔数(ADR-041 Phase1.1)。 */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class DatasetRuleEvaluator {
@@ -31,6 +34,7 @@ public class DatasetRuleEvaluator {
   public void evaluate(ValidationSession session) {
     evaluateRowCount(
         session.totalCount(), session.ruleSet(), session.datasetIssues(), session.appliedChecks());
+    evaluateControlRecord(session);
     evaluateChecksum(
         session.normalizedPayload(),
         session.importPayload(),
@@ -83,6 +87,54 @@ public class DatasetRuleEvaluator {
               "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
               Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
     }
+  }
+
+  // ADR-041 Phase1.1:trailer 声明笔数 vs 实际解析记录数对账。
+  // 声明笔数由 ParseStep 剥离 trailer 后写入 context attributes;未配 trailer / 解析不出笔数则不参与。
+  // 默认告警(log.warn),blocker=true 才升级为阻断性 ValidationIssue。控制总额(金额合计)对账留待 Phase1.2。
+  private void evaluateControlRecord(ValidationSession session) {
+    Map<String, Object> rule =
+        configSupport.firstMap(session.ruleSet(), "controlRecordCheck", "control_record_check");
+    if (rule.isEmpty() || !enabled(rule)) {
+      return;
+    }
+    Object declared =
+        session.context().getAttributes().get(TrailerControlRecord.ATTR_DECLARED_RECORD_COUNT);
+    if (!(declared instanceof Number declaredNumber)) {
+      // 配了 controlRecordCheck 但 trailer 没带出笔数:告警提示配置/文件不一致,但不阻断。
+      log.warn(
+          "control-record check enabled but no declared count from trailer: tenantId={}, fileId={}",
+          session.context().getTenantId(),
+          session.context().getFileId());
+      return;
+    }
+    session.appliedChecks().add("control_record_check");
+    long declaredCount = declaredNumber.longValue();
+    long actualCount = session.totalCount();
+    if (declaredCount == actualCount) {
+      return;
+    }
+    if (booleanValue(rule.get("blocker"), false)) {
+      session
+          .datasetIssues()
+          .add(
+              new ValidationIssue(
+                  null,
+                  "IMPORT_VALIDATE_CONTROL_RECORD",
+                  "control-record count mismatch, declared="
+                      + declaredCount
+                      + MSG_ACTUAL_SUFFIX
+                      + actualCount,
+                  Map.of("declared", declaredCount, KEY_ACTUAL, actualCount)));
+      return;
+    }
+    log.warn(
+        "control-record count mismatch (alert-only): declared={}, actual={}, tenantId={},"
+            + " fileId={}",
+        declaredCount,
+        actualCount,
+        session.context().getTenantId(),
+        session.context().getFileId());
   }
 
   private void evaluateChecksum(
