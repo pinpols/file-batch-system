@@ -116,6 +116,9 @@ public class ExportStepExecutionAdapter
     putIfPresent(outputs, "fileSizeBytes", attributes.get("fileSizeBytes"));
     putIfPresent(outputs, "checksumValue", attributes.get("checksumValue"));
     putIfPresent(outputs, "checksumType", attributes.get("checksumType"));
+    // ADR-041 Phase1.3:归一化 count 信封。export 读=写,input/output 同取 recordCount(导出行数)。
+    putIfPresent(outputs, "inputCount", attributes.get("recordCount"));
+    putIfPresent(outputs, "outputCount", attributes.get("recordCount"));
     putIfPresent(outputs, "bizDate", context.getBizDate());
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
