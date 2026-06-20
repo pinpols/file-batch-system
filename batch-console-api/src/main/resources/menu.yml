@@ -22,7 +22,6 @@ batch:
             - { title: 审批中心, path: /approvals, icon: Stamp, minRole: TENANT_ADMIN }
             - { title: 导出中心, path: /reports, icon: Download, minRole: VIEWER }
             - { title: 自助服务, path: /self-service, icon: Tickets, minRole: TENANT_ADMIN }
-            - { title: Atomic 运行时, path: /ops/atomic-runtime, icon: Cpu, minRole: TENANT_ADMIN }
             - { title: 运维诊断, path: /ops/diagnostic, icon: Tools, minRole: ADMIN }
             - { title: 分片目录, path: /ops/shard-catalog, icon: Connection, minRole: ADMIN }
             - { title: 租户分片, path: /ops/tenant-placements, icon: Collection, minRole: ADMIN }
@@ -32,7 +31,6 @@ batch:
           minRole: TENANT_ADMIN
           children:
             - { title: 配置发布, path: /config/releases, icon: DocumentChecked, minRole: TENANT_ADMIN }
-            - { title: Excel 维护, path: /config/excel, icon: List, minRole: TENANT_ADMIN }
             - { title: 合并导入, path: /config/tenant-package, icon: Box, minRole: TENANT_ADMIN }
             - { title: 配置管理, path: /config/management, icon: Memo, minRole: TENANT_ADMIN }
             - { title: 标签管理, path: /system/tags, icon: PriceTag, minRole: TENANT_ADMIN }
@@ -43,6 +41,7 @@ batch:
           children:
             - { title: 文件列表, path: /files/list, icon: Files, minRole: VIEWER }
             - { title: 文件模板, path: /files/templates, icon: Document, minRole: VIEWER }
+            - { title: 文件渠道, path: /files/channels, icon: Connection, minRole: VIEWER }
             - { title: 文件组到达治理, path: /files/arrival-groups, icon: CollectionTag, minRole: VIEWER }
             - { title: 流水线观测, path: /files/pipeline-obs, icon: DataAnalysis, minRole: VIEWER }
         - key: jobs
@@ -81,6 +80,8 @@ batch:
             - { title: 批次日与窗口, path: /scheduler/batch-days, icon: Calendar, minRole: VIEWER }
             - { title: 批次日重放, path: /ops/batch-day-replay, icon: RefreshRight, minRole: TENANT_ADMIN }
             - { title: Catch-up 审批, path: /scheduler/catch-up-approvals, icon: Memo, minRole: VIEWER }
+            - { title: 业务日历, path: /governance/calendars, icon: Calendar, minRole: TENANT_ADMIN }
+            - { title: 批次窗口, path: /governance/windows, icon: Clock, minRole: TENANT_ADMIN }
             - { title: 租户配额, path: /governance/quota, icon: Briefcase, minRole: TENANT_ADMIN }
             - { title: 队列 & 窗口, path: /governance/queues, icon: Tools, minRole: TENANT_ADMIN }
             - { title: Worker 管理, path: /workers/management, icon: Cpu, minRole: TENANT_ADMIN }
