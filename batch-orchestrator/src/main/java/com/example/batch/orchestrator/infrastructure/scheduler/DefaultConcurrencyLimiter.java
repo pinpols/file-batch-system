@@ -123,16 +123,6 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
   }
 
   /**
-   * V89: 把租户级超额检查的结果按 {@link QuotaExceededStrategy} 转换。
-   *
-   * <ul>
-   *   <li>{@code REJECT} → fail-fast，launch 立刻抛 BizException
-   *   <li>{@code QUEUE_DEFER} → 维持 V89 之前的隐式行为（{@code waitForCapacity}），partition 留 WAITING
-   *   <li>{@code DEGRADE_PRIORITY} → 仍 defer 但 reasonCode 加 {@code _DEGRADED} 后缀， {@code
-   *       DefaultResourceScheduler} 见此后缀会把决策 priority/band 砍到最低， fairnessScore 自然落到 WAITING 队尾
-   * </ul>
-   */
-  /**
    * ADR-041 Phase2.3:租户显式配了 {@code exceeded_strategy} 以其为准;未配则走平台默认 {@code
    * batch.resource-scheduler.default-exceeded-strategy}(默认 {@code QUEUE_DEFER} 有界队列 + 背压), 而非旧的硬拒默认
    * —— 洪峰下不误拒未单独配策略的正常租户。
@@ -144,6 +134,16 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     return QuotaExceededStrategy.from(governance.resourceScheduler().getDefaultExceededStrategy());
   }
 
+  /**
+   * V89: 把租户级超额检查的结果按 {@link QuotaExceededStrategy} 转换。
+   *
+   * <ul>
+   *   <li>{@code REJECT} → fail-fast，launch 立刻抛 BizException
+   *   <li>{@code QUEUE_DEFER} → 维持 V89 之前的隐式行为（{@code waitForCapacity}），partition 留 WAITING
+   *   <li>{@code DEGRADE_PRIORITY} → 仍 defer 但 reasonCode 加 {@code _DEGRADED} 后缀， {@code
+   *       DefaultResourceScheduler} 见此后缀会把决策 priority/band 砍到最低， fairnessScore 自然落到 WAITING 队尾
+   * </ul>
+   */
   private static ResourceCheck applyStrategy(
       QuotaExceededStrategy strategy, String reasonCode, String reasonMessage) {
     return switch (strategy) {
