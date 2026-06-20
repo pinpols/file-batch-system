@@ -46,10 +46,18 @@ public class DelimitedExportFormat extends AbstractExportFormat {
                 templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate")));
     boolean trailerEnabled = OutboundTrailerRecord.enabled(trailerTemplate);
     boolean resuming = isResuming(ctx);
-    // 控制总额累加仅在「非续跑全量跑」时正确(续跑只见本段行);续跑场景退化为只写笔数,金额列留空并告警。
-    String amountField =
-        trailerEnabled && !resuming ? OutboundTrailerRecord.amountField(trailerTemplate) : null;
+    String amountField = trailerEnabled ? OutboundTrailerRecord.amountField(trailerTemplate) : null;
+    BigDecimal resumeControlTotal =
+        trailerEnabled && resuming && amountField != null ? batchControlTotal(ctx) : null;
+    if (trailerEnabled && resuming && amountField != null && resumeControlTotal == null) {
+      throw new IllegalStateException(
+          "DELIMITED trailer control total cannot resume without batch total_amount/totalAmount");
+    }
+    String accumulationField = resuming ? null : amountField;
     BigDecimal[] controlTotal = {amountField == null ? null : BigDecimal.ZERO};
+    if (resumeControlTotal != null) {
+      controlTotal[0] = resumeControlTotal;
+    }
 
     // ADR-038 P3:首页仅用于列解析(只读、幂等);续跑时 generatePaged 会忽略它、从 resumeCursor 续拉。
     try (ResumableExportFile file = openExportFile(ctx)) {
@@ -71,8 +79,8 @@ public class DelimitedExportFormat extends AbstractExportFormat {
                 }
                 writer.write(joiner.toString());
                 writer.newLine();
-                if (amountField != null) {
-                  BigDecimal value = decimalValue(detail.get(amountField));
+                if (accumulationField != null) {
+                  BigDecimal value = decimalValue(detail.get(accumulationField));
                   if (value != null) {
                     controlTotal[0] = controlTotal[0].add(value);
                   }
@@ -104,6 +112,19 @@ public class DelimitedExportFormat extends AbstractExportFormat {
   private Object templateValue(ExportFormatContext ctx, String key) {
     Map<String, Object> templateConfig = ctx.dataCtx().templateConfig();
     return templateConfig == null ? null : templateConfig.get(key);
+  }
+
+  private BigDecimal batchControlTotal(ExportFormatContext ctx) {
+    Map<String, Object> batch = ctx.batch();
+    if (batch == null || batch.isEmpty()) {
+      return null;
+    }
+    return decimalValue(
+        firstNonNull(
+            batch.get("total_amount"),
+            batch.get("totalAmount"),
+            batch.get("control_total"),
+            batch.get("controlTotal")));
   }
 
   private void writeDelimitedHeaderRows(
