@@ -2,7 +2,7 @@ package com.example.batch.console.infrastructure.excel;
 
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.normalize;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
-import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireEnum;
+import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireInteger;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
@@ -50,8 +50,9 @@ public final class BusinessCalendarExcelRowParser {
             .calendarName(requireText(values, COL_CALENDAR_NAME, 256, issues))
             .timezone(requireText(values, COL_TIMEZONE, 64, issues))
             .holidayRollRule(
-                requireEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, issues))
-            .catchUpPolicy(requireEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, issues))
+                optionalEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, "SKIP", issues))
+            .catchUpPolicy(
+                optionalEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, "NONE", issues))
             .catchUpMaxDays(requireInteger(values, COL_CATCH_UP_MAX_DAYS, 0, issues))
             .holidays(parseHolidays(values.get(COL_HOLIDAYS), issues))
             .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
