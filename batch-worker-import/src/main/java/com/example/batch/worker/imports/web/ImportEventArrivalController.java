@@ -53,14 +53,19 @@ public class ImportEventArrivalController {
       log.info(
           "Event-driven arrival notification received, triggering immediate ingress scan: "
               + "tenantId={} bucket={} objectKey={}",
-          notification == null ? null : notification.getTenantId(),
-          notification == null ? null : notification.getBucket(),
-          notification == null ? null : notification.getObjectKey());
+          logSafe(notification == null ? null : notification.getTenantId()),
+          logSafe(notification == null ? null : notification.getBucket()),
+          logSafe(notification == null ? null : notification.getObjectKey()));
       importIngressScanner.scan();
       meterRegistry.counter("batch.import.event_arrival.scans").increment();
       return CommonResponse.success(Map.of("triggered", true));
     } finally {
       scanInFlight.set(false);
     }
+  }
+
+  /** 去除 CR/LF,防外部通知体里的换行伪造日志行(log forging)。 */
+  private static String logSafe(String value) {
+    return value == null ? null : value.replaceAll("[\\r\\n]", "_");
   }
 }
