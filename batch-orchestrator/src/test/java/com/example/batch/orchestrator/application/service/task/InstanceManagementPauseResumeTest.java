@@ -56,7 +56,8 @@ class InstanceManagementPauseResumeTest {
     when(jobInstanceMapper.selectById("t1", 1L)).thenReturn(instance("WAITING"));
 
     assertThatThrownBy(() -> service.pause("t1", 1L)).isInstanceOf(BizException.class);
-    verify(jobInstanceMapper, never()).updateLifecycleStatus(eq("t1"), eq(1L), eq("PAUSED"), eq(3L));
+    verify(jobInstanceMapper, never())
+        .updateLifecycleStatus(eq("t1"), eq(1L), eq("PAUSED"), eq(3L));
   }
 
   @Test
