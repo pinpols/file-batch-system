@@ -1034,7 +1034,7 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry("resource_tag", optionalColumn("资源标签。", GUIDE_STR, "standard")),
         Map.entry(
             "priority_policy",
-            requiredColumn("优先级策略。", GUIDE_ENUM, "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
+            optionalColumn("优先级策略。", GUIDE_ENUM, "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
         Map.entry("fair_share_weight", requiredColumn("公平调度权重。", GUIDE_INT, "1")),
         Map.entry(
             COL_ENABLED,
@@ -1057,10 +1057,12 @@ public class ConfigPackageExcelWorkbookWriter {
             requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
         Map.entry(
             ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
-            requiredColumn("节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
+            optionalColumn(
+                "节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
         Map.entry(
             ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
-            requiredColumn("补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
+            optionalColumn(
+                "补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
         Map.entry(
             ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_MAX_DAYS,
             requiredColumn("最大补跑天数。", GUIDE_INT, "0")),
@@ -1084,10 +1086,10 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry("end_time", requiredColumn("结束时间 HH:mm 或 HH:mm:ss。", "时间", "23:59")),
         Map.entry(
             "end_strategy",
-            requiredColumn(
+            optionalColumn(
                 "窗口结束策略。", GUIDE_ENUM, "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
         Map.entry(
-            "out_of_window_action", requiredColumn("窗口外动作。", GUIDE_ENUM, "WAIT", "WAIT", "FAIL")),
+            "out_of_window_action", optionalColumn("窗口外动作。", GUIDE_ENUM, "WAIT", "WAIT", "FAIL")),
         Map.entry(
             "allow_cross_day",
             optionalColumn("是否允许跨日。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
@@ -1544,13 +1546,13 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry("trailer_template", optionalColumn("导出尾部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
         Map.entry(
             "checksum_type",
-            requiredColumn("校验类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA256")),
+            optionalColumn("校验类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA256")),
         Map.entry(
             "compress_type",
-            requiredColumn("压缩类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "ZIP", "GZIP")),
+            optionalColumn("压缩类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "ZIP", "GZIP")),
         Map.entry(
             "encrypt_type",
-            requiredColumn("加密类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "PGP", "AES")),
+            optionalColumn("加密类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "PGP", "AES")),
         Map.entry("naming_rule", optionalColumn("文件命名规则。", GUIDE_STR, "customer_${batchDate}.csv")),
         Map.entry(
             "field_mappings",

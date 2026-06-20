@@ -203,6 +203,29 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     return upper;
   }
 
+  /** 可选枚举:留空回退 {@code defaultValue}(对齐 DB 列 DEFAULT),非空时按 {@code allowed} 校验。 */
+  protected static String optionalEnum(
+      Map<String, String> values,
+      String key,
+      Set<String> allowed,
+      int maxLength,
+      String defaultValue,
+      List<String> issues) {
+    String normalized = normalize(values.get(key));
+    if (!Texts.hasText(normalized)) {
+      return defaultValue;
+    }
+    if (normalized.length() > maxLength) {
+      issues.add(key + " too long (max " + maxLength + ")");
+      normalized = normalized.substring(0, maxLength);
+    }
+    String upper = normalized.toUpperCase(Locale.ROOT);
+    if (!allowed.contains(upper)) {
+      issues.add(key + " must be one of " + allowed);
+    }
+    return upper;
+  }
+
   protected static Integer optionalInteger(
       Map<String, String> values, String key, int min, int defaultValue, List<String> issues) {
     String normalized = normalize(values.get(key));

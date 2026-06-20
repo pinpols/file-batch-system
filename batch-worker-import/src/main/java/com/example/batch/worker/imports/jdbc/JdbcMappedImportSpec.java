@@ -65,8 +65,16 @@ public record JdbcMappedImportSpec(
           "jdbc_mapped_import.columnMappings is required and could not be inferred from"
               + " field_mappings (declare columnMappings or field_mappings[*].name/targetColumn)");
     }
-    List<String> conflicts = parseStringList(root.get("conflictColumns"));
+    // B2:conflictColumns 非空但漏了 tenant 列时自动前置——多租隔离下幂等键几乎必含 tenant_id,
+    // 漏填基本是跨租户冲突 bug。空列表(不走 UPSERT)不动。
+    List<String> conflicts =
+        ensureTenantInConflicts(parseStringList(root.get("conflictColumns")), tenantColumn);
+    // B3:standardAuditBindings=true 一键展开标准审计绑定(用户显式 systemBindings 覆盖同名项),
+    // 省掉逐条手写 ${...} 样板。是 opt-in 开关而非默认注入,目标表是否有这些列由配置方负责。
     Map<String, String> system = parseSystemBindings(root.get("systemBindings"));
+    if (Boolean.TRUE.equals(toBoolean(root.get("standardAuditBindings")))) {
+      system = withStandardAuditBindings(system);
+    }
     // 地区维度(per-run):defaultRegion 触发未传 region 时兜底;allowedRegions 非空时作字典校验。
     Object dr = root.get("defaultRegion");
     String defaultRegion = dr == null ? null : String.valueOf(dr).trim();
@@ -328,6 +336,31 @@ public record JdbcMappedImportSpec(
             out.put(String.valueOf(k).trim(), String.valueOf(v).trim());
           }
         });
+    return out;
+  }
+
+  /** B3 标准审计绑定:平台运行时变量 → 常见审计列。用户显式 systemBindings 同名项优先。 */
+  private static final Map<String, String> STANDARD_AUDIT_BINDINGS =
+      Map.of(
+          "source_file_name", "${sourceFileName}",
+          "source_batch_no", "${batchNo}",
+          "source_trace_id", "${traceId}",
+          "created_by", "${workerId}",
+          "updated_by", "${workerId}");
+
+  private static Map<String, String> withStandardAuditBindings(Map<String, String> explicit) {
+    Map<String, String> out = new LinkedHashMap<>(STANDARD_AUDIT_BINDINGS);
+    out.putAll(explicit); // 用户显式项覆盖标准默认
+    return out;
+  }
+
+  private static List<String> ensureTenantInConflicts(List<String> conflicts, String tenantColumn) {
+    if (conflicts.isEmpty() || conflicts.contains(tenantColumn)) {
+      return conflicts;
+    }
+    List<String> out = new ArrayList<>(conflicts.size() + 1);
+    out.add(tenantColumn);
+    out.addAll(conflicts);
     return out;
   }
 

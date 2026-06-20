@@ -181,9 +181,9 @@ public final class FileTemplateExcelRowParser {
         .footerRows(optionalInteger(values, "footer_rows", 0, 0, issues))
         .headerTemplateJson(optionalJson(values, "header_template", issues))
         .trailerTemplateJson(optionalJson(values, "trailer_template", issues))
-        .checksumType(requireEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, 32, issues))
-        .compressType(requireEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, 32, issues))
-        .encryptType(requireEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, 32, issues))
+        .checksumType(optionalEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, 32, "NONE", issues))
+        .compressType(optionalEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, 32, "NONE", issues))
+        .encryptType(optionalEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, 32, "NONE", issues))
         .namingRule(optionalText(values, "naming_rule", 512, issues))
         .fieldMappingsJson(optionalJson(values, "field_mappings", issues))
         .validationRuleSetJson(optionalJson(values, "validation_rule_set", issues));

@@ -162,6 +162,80 @@ class JdbcMappedImportSpecTest {
         .isEqualTo("customer_http_url");
   }
 
+  @Test
+  void conflictColumnsAutoPrependsTenantWhenMissing() {
+    Map<String, Object> template =
+        Map.of(
+            "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "customer_account",
+                "tenantColumn", "tenant_id",
+                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "conflictColumns", List.of("customer_no")));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.conflictColumns()).containsExactly("tenant_id", "customer_no");
+  }
+
+  @Test
+  void conflictColumnsKeptWhenTenantAlreadyPresent() {
+    Map<String, Object> template =
+        Map.of(
+            "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "customer_account",
+                "tenantColumn", "tenant_id",
+                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "conflictColumns", List.of("tenant_id", "customer_no")));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.conflictColumns()).containsExactly("tenant_id", "customer_no");
+  }
+
+  @Test
+  void emptyConflictColumnsStayEmpty() {
+    Map<String, Object> template =
+        Map.of(
+            "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "customer_account",
+                "tenantColumn", "tenant_id",
+                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no"))));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.conflictColumns()).isEmpty();
+  }
+
+  @Test
+  void standardAuditBindingsExpandWithExplicitOverride() {
+    Map<String, Object> template =
+        Map.of(
+            "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "customer_account",
+                "tenantColumn", "tenant_id",
+                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "standardAuditBindings", true,
+                // 用户显式 created_by 覆盖标准默认
+                "systemBindings", Map.of("created_by", "${customWorker}")));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.systemBindings())
+        .containsEntry("source_batch_no", "${batchNo}")
+        .containsEntry("source_trace_id", "${traceId}")
+        .containsEntry("source_file_name", "${sourceFileName}")
+        .containsEntry("updated_by", "${workerId}")
+        .containsEntry("created_by", "${customWorker}");
+  }
+
   private static JdbcMappedImportSpec mappingSpec(
       List<JdbcMappedImportSpec.ColumnMapping> mappings) {
     return new JdbcMappedImportSpec(
