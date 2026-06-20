@@ -39,6 +39,8 @@
       "Bash(find /Users/dengchao/Downloads/file-batch-system -name testcontainers*)",
       "Bash(mvn compile:*)",
       "Bash(cp .mvn/jvm.config /tmp/jvm.config.bak)",
+      "Read(//tmp/**)",
+      "Bash(timeout 400 mvn -q -pl batch-worker-import spotless:apply)",
       "Bash(timeout 480 mvn -q -pl batch-orchestrator spotless:apply)"
     ],
     "defaultMode": "bypassPermissions"

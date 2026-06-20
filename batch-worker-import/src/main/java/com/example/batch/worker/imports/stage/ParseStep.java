@@ -13,6 +13,7 @@ import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import com.example.batch.worker.imports.infrastructure.quality.TrailerControlRecord;
 import com.example.batch.worker.imports.stage.format.DelimitedFormatParser;
 import com.example.batch.worker.imports.stage.format.ExcelFormatParser;
 import com.example.batch.worker.imports.stage.format.FixedWidthFormatParser;
@@ -31,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -103,6 +105,7 @@ public class ParseStep implements ImportStageStep {
     try {
       String payloadText =
           String.valueOf(attrs.getOrDefault("normalizedPayload", context.getRawPayload()));
+      payloadText = peelTrailerControlRecord(context, payloadText, attrs);
       ImportPayload importPayload =
           attrs.get("importPayload") instanceof ImportPayload payload ? payload : null;
       stagingFile = createStagingFile(context, "parsed");
@@ -208,6 +211,65 @@ public class ParseStep implements ImportStageStep {
         }
       }
     }
+  }
+
+  // ADR-041 Phase1.1:opt-in 剥离 trailer 控制记录(末行)。仅 trailer_template.present=true 生效,
+  // 只支持 in-memory 文本路径(spool 落盘 / 二进制 payload 跳过并告警)。trailer 是结构性末行(非数据行),
+  // present=true 时一律剥离;声明笔数 / 控制总额 stash 进 attributes 交 VALIDATE 的 controlRecordCheck 对账。默认关闭。
+  private String peelTrailerControlRecord(
+      ImportJobContext context, String payloadText, Map<String, Object> attrs) {
+    Map<String, Object> trailerTemplate =
+        trailerTemplate(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+    if (!TrailerControlRecord.isPresentEnabled(trailerTemplate)) {
+      return payloadText;
+    }
+    if (resolveSpoolPath(context) != null
+        || attrs.get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD) != null) {
+      log.warn(
+          "trailer peel skipped for spool/binary payload: tenantId={}, fileId={}",
+          context.getTenantId(),
+          attrs.get(PipelineRuntimeKeys.FILE_ID));
+      return payloadText;
+    }
+    if (!Texts.hasText(payloadText)) {
+      return payloadText;
+    }
+    String body = payloadText;
+    while (body.endsWith("\n") || body.endsWith("\r")) {
+      body = body.substring(0, body.length() - 1);
+    }
+    int idx = Math.max(body.lastIndexOf('\n'), body.lastIndexOf('\r'));
+    String trailerLine = body.substring(idx + 1);
+    TrailerControlRecord trailer = TrailerControlRecord.parse(trailerLine, trailerTemplate);
+    if (trailer.declaredRecordCount() != null) {
+      attrs.put(TrailerControlRecord.ATTR_DECLARED_RECORD_COUNT, trailer.declaredRecordCount());
+    }
+    if (trailer.declaredControlTotal() != null) {
+      attrs.put(TrailerControlRecord.ATTR_DECLARED_CONTROL_TOTAL, trailer.declaredControlTotal());
+    }
+    if (!trailer.isPresent()) {
+      log.warn(
+          "trailer present=true but no declared count/total parsed from last line: "
+              + "tenantId={}, fileId={}",
+          context.getTenantId(),
+          attrs.get(PipelineRuntimeKeys.FILE_ID));
+    }
+    return idx < 0 ? "" : body.substring(0, idx);
+  }
+
+  private Map<String, Object> trailerTemplate(Object templateConfig) {
+    if (templateConfig instanceof Map<?, ?> tc) {
+      Object raw = tc.get("trailer_template");
+      if (raw == null) {
+        raw = tc.get("trailerTemplate");
+      }
+      if (raw instanceof Map<?, ?> templateMap) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        templateMap.forEach((key, value) -> result.put(String.valueOf(key), value));
+        return result;
+      }
+    }
+    return Map.of();
   }
 
   private long parsePayloads(
