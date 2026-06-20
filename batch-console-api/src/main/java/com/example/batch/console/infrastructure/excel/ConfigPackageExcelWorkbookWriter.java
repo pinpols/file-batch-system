@@ -133,14 +133,20 @@ public class ConfigPackageExcelWorkbookWriter {
       "[{\"name\":\"customerNo\",\"targetColumn\":\"customer_no\",\"type\":\"STRING\","
           + "\"required\":true,\"maxLength\":32},"
           + "{\"name\":\"openDate\",\"targetColumn\":\"open_date\",\"type\":\"DATE\","
-          + "\"required\":true,\"format\":\"yyyy-MM-dd\"}]";
+          + "\"required\":true,\"format\":\"yyyy-MM-dd\"}]"
+          + "\n怎么填: name=文件里的列名; targetColumn=入库的表列名(与 name 同名时可不填,"
+          + "系统按大小写/下划线自动归一,如 customerNo→customer_no);"
+          + "type 取 STRING/DATE/DECIMAL 等; required/maxLength/format 是质量校验项;"
+          + "想校验但不入库的列加 \"persist\":false。";
 
   /** export 的 field_mappings：sourceColumn/header/format（numberFormat 走 format 如 #,##0.00）。 */
   private static final String EXAMPLE_EXPORT_FIELD_MAPPINGS =
       "[{\"name\":\"customerNo\",\"sourceColumn\":\"customer_no\",\"type\":\"STRING\","
           + "\"header\":\"customerNo\"},"
           + "{\"name\":\"creditLimit\",\"sourceColumn\":\"credit_limit\",\"type\":\"DECIMAL\","
-          + "\"header\":\"creditLimit\",\"format\":\"#,##0.00\"}]";
+          + "\"header\":\"creditLimit\",\"format\":\"#,##0.00\"}]"
+          + "\n怎么填: name=逻辑名; sourceColumn=取数 SQL 的结果列名; header=导出文件的表头文字;"
+          + "DECIMAL/DATE 可用 format 控制格式(如 #,##0.00、yyyy-MM-dd)。";
 
   /**
    * import 的
@@ -149,10 +155,14 @@ public class ConfigPackageExcelWorkbookWriter {
   private static final String EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA =
       "{\"jdbcMappedImport\":{\"schema\":\"biz\",\"table\":\"customer_account\","
           + "\"tenantColumn\":\"tenant_id\","
-          + "\"columnMappings\":[{\"from\":\"customerNo\",\"to\":\"customer_no\"},"
-          + "{\"from\":\"phone\",\"to\":\"mobile_no\"}],"
-          + "\"conflictColumns\":[\"tenant_id\",\"customer_no\"],"
-          + "\"systemBindings\":{\"source_batch_no\":\"${batchNo}\",\"created_by\":\"${workerId}\"}}}";
+          + "\"columnMappings\":[{\"from\":\"phone\",\"to\":\"mobile_no\"}],"
+          + "\"conflictColumns\":[\"customer_no\"],"
+          + "\"standardAuditBindings\":true}}"
+          + "\n怎么填: schema/table=落库的库.表; tenantColumn=租户列(一般 tenant_id);"
+          + "columnMappings 只写名字对不上的列(如 phone→mobile_no),其余与 field_mappings 同名列自动推断"
+          + "(大小写/下划线兼容);conflictColumns 是重跑幂等键,系统会自动补 tenant_id;"
+          + "standardAuditBindings=true 一键写入标准审计列(source_file_name/batch_no/trace_id/created_by/"
+          + "updated_by),不想用就改写 systemBindings 显式声明。";
 
   /**
    * export 的 query_param_schema：JSON Schema 参数声明，或 sqlTemplateExport.cursorColumn /
@@ -166,12 +176,16 @@ public class ConfigPackageExcelWorkbookWriter {
   /** export 的 default_query_sql：命名参数 :tenantId/:batchNo，单条安全 SELECT。 */
   private static final String EXAMPLE_EXPORT_QUERY_SQL =
       "SELECT customer_no, customer_name, status FROM biz.customer_account "
-          + "WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)";
+          + "WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)"
+          + "\n怎么填: 单条 SELECT(禁 UPDATE/DELETE/SELECT *); 命名参数用 :tenantId/:status(运行时绑定,"
+          + "别写 ? 占位符); 必须按 tenant_id = :tenantId 过滤本租户; SELECT 列名需与 field_mappings.sourceColumn 对齐。";
 
   /** validation_rule_set（import）：maxErrorRate/stopOnFirstError/duplicateKeyCheck。 */
   private static final String EXAMPLE_IMPORT_VALIDATION_RULE_SET =
       "{\"maxErrorRate\":0.05,\"stopOnFirstError\":false,"
-          + "\"duplicateKeyCheck\":{\"enabled\":true,\"keys\":[\"customerNo\"]}}";
+          + "\"duplicateKeyCheck\":{\"enabled\":true,\"keys\":[\"customerNo\"]}}"
+          + "\n怎么填: maxErrorRate=坏行率阈值(0.05=5%,超过则整批失败); stopOnFirstError=遇首个坏行即停;"
+          + "duplicateKeyCheck.keys 取 field_mappings.name(批内重复键检测)。";
 
   /** 渠道 config_json：endpoint + auth + credentials（DISPATCH 用）。 */
   private static final String EXAMPLE_CHANNEL_CONFIG_JSON =

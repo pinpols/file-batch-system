@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure.excel;
 
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
+import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalInteger;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalJson;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalText;

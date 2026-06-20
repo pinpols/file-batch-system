@@ -37,7 +37,8 @@ class JdbcMappedImportSpecTest {
     assertThat(spec.table()).isEqualTo("imp_orders");
     assertThat(spec.tenantColumn()).isEqualTo("tenant_id");
     assertThat(spec.columnMappings()).hasSize(1);
-    assertThat(spec.conflictColumns()).containsExactly("id");
+    // B2: tenant 列(tenant_id)缺失时自动前置到 conflictColumns
+    assertThat(spec.conflictColumns()).containsExactly("tenant_id", "id");
     assertThat(spec.loadStrategy()).isEqualTo(ImportLoadStrategy.BATCH_UPSERT);
   }
 

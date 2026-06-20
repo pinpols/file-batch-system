@@ -2,8 +2,8 @@ package com.example.batch.console.infrastructure.excel;
 
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.normalize;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
+import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalText;
-import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
 
