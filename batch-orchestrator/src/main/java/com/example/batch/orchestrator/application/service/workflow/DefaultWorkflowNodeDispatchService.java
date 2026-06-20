@@ -6,6 +6,7 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
+import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
@@ -96,6 +97,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       String sourcePayload,
       String traceId) {
     if (jobInstance == null || workflowRun == null || node == null) {
+      return 0;
+    }
+    // ADR-044:workflow_run 暂停时不推进下游节点,resume 后再继续。
+    if (WorkflowRunStatus.PAUSED.code().equals(workflowRun.getRunStatus())) {
       return 0;
     }
     // P1-4：先取 FOR UPDATE 行锁再做 readiness 检查。原顺序（先 readiness 后 lock）有 TOCTOU：

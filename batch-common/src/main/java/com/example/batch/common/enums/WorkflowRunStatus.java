@@ -10,6 +10,8 @@ import lombok.experimental.Accessors;
 public enum WorkflowRunStatus implements DictEnum {
   CREATED("CREATED", "已创建"),
   RUNNING("RUNNING", "执行中"),
+  /** ADR-044 可逆暂停态:停发下游 DAG 节点,在途自然终结,resume 回 RUNNING。 */
+  PAUSED("PAUSED", "已暂停"),
   SUCCESS("SUCCESS", "成功"),
   FAILED("FAILED", "失败"),
   TERMINATED("TERMINATED", "已终止"),

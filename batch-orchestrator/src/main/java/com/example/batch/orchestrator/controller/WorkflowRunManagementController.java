@@ -29,6 +29,18 @@ public class WorkflowRunManagementController {
     return workflowRunManagementApplicationService.terminate(tenantId, id);
   }
 
+  @PostMapping("/{id}/pause")
+  public Map<String, Object> pause(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return workflowRunManagementApplicationService.pause(tenantId, id);
+  }
+
+  @PostMapping("/{id}/resume")
+  public Map<String, Object> resume(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return workflowRunManagementApplicationService.resume(tenantId, id);
+  }
+
   @PostMapping("/{id}/skip-node")
   public Map<String, Object> skipNode(
       @PathVariable Long id,
