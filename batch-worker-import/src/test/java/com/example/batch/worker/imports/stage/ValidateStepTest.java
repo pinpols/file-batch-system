@@ -17,6 +17,8 @@ import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportDataQualityService;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import com.example.batch.worker.imports.infrastructure.quality.ControlTotalEvaluator;
+import com.example.batch.worker.imports.infrastructure.quality.ValidationConfigSupport;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationIssue;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationSession;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,8 +68,16 @@ class ValidateStepTest {
             new FileProcessing(true, 1000, 1000, 2),
             Boolean.FALSE);
     objectMapper = new ObjectMapper();
+    ControlTotalEvaluator controlTotalEvaluator =
+        new ControlTotalEvaluator(new ValidationConfigSupport(objectMapper));
     step =
-        new ValidateStep(runtimeRepository, governance, qualityService, workerConfig, objectMapper);
+        new ValidateStep(
+            runtimeRepository,
+            governance,
+            qualityService,
+            workerConfig,
+            controlTotalEvaluator,
+            objectMapper);
   }
 
   @AfterEach
