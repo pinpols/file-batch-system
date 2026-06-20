@@ -34,8 +34,9 @@ class JobInstanceStatusTest {
   }
 
   @Test
-  void shouldContainElevenValues() {
-    // 9 业务终态 + ADR-026 dry-run 2 个终态 (SUCCESS_DRY_RUN / FAILED_DRY_RUN)
-    assertThat(JobInstanceStatus.values()).hasSize(11);
+  void shouldContainTwelveValues() {
+    // 9 业务态 + ADR-026 dry-run 2 个终态 + ADR-044 可逆 PAUSED
+    assertThat(JobInstanceStatus.values()).hasSize(12);
+    assertThat(JobInstanceStatus.PAUSED.code()).isEqualTo("PAUSED");
   }
 }
