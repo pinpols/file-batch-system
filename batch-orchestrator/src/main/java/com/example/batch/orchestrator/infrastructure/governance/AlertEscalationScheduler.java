@@ -12,12 +12,11 @@ import org.springframework.stereotype.Component;
 /**
  * 告警升级阶梯调度器(运维告警闭环)。
  *
- * <p>默认每 60 秒 sweep 一次,委托 {@link AlertEventService#escalateOverdue} 把长期停留在 {@code OPEN}(无人 ack)
- * 且超过 ack-SLA 的告警逐级抬升 {@code escalation_tier},每升一级打 ERROR 日志 + {@code batch.alert.escalations}
- * 计数,让卡住的告警在日志/指标侧持续放大可见度,而不是静默淹没。
+ * <p>默认每 60 秒 sweep 一次,把超过 ack-SLA 仍 OPEN 的告警逐级抬升 escalation_tier。
  *
- * <p>ShedLock 锁名 {@code alert_escalation_sweep},单节点执行避免重复升级;orchestrator 优雅停机时跳过;
- * {@code batch.alert.escalation.enabled=false} 可整体关闭。
+ * <p>每升一级打 ERROR 日志 + batch.alert.escalations 计数,在日志/指标侧放大可见度。
+ *
+ * <p>ShedLock 单节点执行避免重复升级,优雅停机时跳过,enabled=false 可整体关闭。
  */
 @Slf4j
 @Component
@@ -29,10 +28,7 @@ public class AlertEscalationScheduler {
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
   @Scheduled(fixedDelayString = "${batch.alert.escalation.poll-interval-millis:60000}")
-  @SchedulerLock(
-      name = "alert_escalation_sweep",
-      lockAtMostFor = "PT2M",
-      lockAtLeastFor = "PT10S")
+  @SchedulerLock(name = "alert_escalation_sweep", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
   public void sweep() {
     if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
       return;
