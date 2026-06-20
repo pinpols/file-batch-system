@@ -656,6 +656,13 @@ outbound/{bizType}/{bizDate}/{batchNo}/{fileNo}/v{version}/{storedName}
 4. **RETRY / COMPENSATE**：失败重试、死信、人工补发
 5. **COMPLETE**：分发完成并记录审计、对账、闭环结果
 
+**投递后回读校验（ADR-041 Phase1.5，默认关闭，opt-in）**
+
+`channel_config.readback_verify_enabled=true` 时,DISPATCH 投递成功后从**目的端**回读已落地对象的字节数,与 `file_record.file_size_bytes` 期望大小对账,抓传输损坏 / 半写。大小不符 → `markFailed` + 路由 RETRY + 失败码 `DISPATCH_READBACK_MISMATCH`。
+
+- 回读能力由渠道适配器**可选实现** `DispatchReadbackCapable`(只读 stat,不改目的端);未实现的渠道(`gateway.readbackSize` 返回 empty)→ 校验静默跳过并告警(opt-in 但能力缺失不误杀)。
+- 当前落 opt-in 校验闭环(接口 + gateway 路由 + DELIVER wiring);各渠道(LOCAL/SFTP/OSS)的 `readbackSize` 具体实现作 1.5b 跟进。checksum 回读(强于 size)亦留待 1.5b。
+
 #### 文件分发标准链路图
 
 ```mermaid
