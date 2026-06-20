@@ -27,8 +27,9 @@ public interface JobInstanceMapper {
       @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
 
   /**
-   * 指定租户 + jobCode + bizDate 下终态 SUCCESS(实盘,不含 dry-run)的实例数。供 ADR-043 依赖感知 fire 的就绪查询:
-   * {@code > 0} 即上游该批次日已成功。
+   * 指定租户 + jobCode + bizDate 下终态 SUCCESS(实盘,不含 dry-run)的实例数。
+   *
+   * <p>供 ADR-043 依赖感知 fire 就绪查询:{@code > 0} 即上游该批次日已成功。
    */
   long countSuccessByBizDate(
       @Param("tenantId") String tenantId,
