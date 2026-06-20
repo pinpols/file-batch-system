@@ -1,12 +1,14 @@
-# 导入/导出列映射:默认推断 + 差异覆盖设计
+# 列映射配置体验:IMPORT 默认推断,EXPORT 列归 SELECT
 
 > 日期:2026-06-20 · 状态:设计草案(待评审,未改码)
-> 范围:`batch-worker-import` / `batch-worker-export` 的 `jdbc_mapped` 列映射配置体验
+> 范围:IMPORT `columnMappings` 默认推断 + 差异覆盖为主;EXPORT 维持列显式(SQL 投影),仅一处可选去重
 > 关联:`docs/architecture/worker-plugins.md`、`docs/runbook/first-tenant-config-quickstart.md`、ADR 范围纪律(文件交付闭环,不扩张为数据治理)
 
 ## 0. 一句话
 
-`columnMappings`(import)/ `detailSelectColumns`(export)目前**全量必填、无任何默认**,而它们要表达的列信息**在 `field_mappings` 里已经声明过一遍**。本设计让两侧在显式列映射缺省时**从 `field_mappings` 自动推断**,其中 snake_case / 下划线 / 大小写的写法差异**默认归一化兼容**;显式配置只保留**真正名字对不上的语义差异项**,把"几十列逐列手写两遍"的负担降为零。
+**IMPORT** 的 `columnMappings` 目前全量必填,而它要表达的列信息**在 `field_mappings` 里已经声明过一遍**——本设计让它缺省时从 `field_mappings` 自动推断,snake_case / 下划线 / 大小写的写法差异**默认归一化兼容**,显式配置只保留**真正名字对不上的语义差异项**。
+
+**EXPORT** 不同:导出的列本质是 **SQL 投影**(`sql_template_export` 写在 SELECT 里、`jdbc_mapped_export` 写在 `detailSelectColumns` 里),归查询管、天然显式,**不做"默认列"**;仅在 jdbc_mapped 路径消除与 `field_mappings.sourceColumn` 的一处重复(可选去重)。
 
 ---
 
@@ -62,12 +64,25 @@ if (batchCols.isEmpty() || detailCols.isEmpty()) {
 
 ---
 
-## 3. 设计目标(本次确认的四个方向)
+## 3. 设计目标(2026-06-20 收窄后)
 
-1. **IMPORT 加列名自动映射兜底** — `columnMappings` 缺省时从 `field_mappings` 推断。
-2. **EXPORT 同样补默认** — `detailSelectColumns` 缺省时从 `field_mappings.sourceColumn` 推断;`batchSelectColumns` 缺省时退化为最小集 `[id]`(+ 必要列)。
-3. **显式映射只写差异项** — 显式 `columnMappings`/`detailSelectColumns` 与推断结果**合并**而非互斥,用户只需写"名字对不上"的少数列。
+1. **IMPORT 加列名自动映射兜底** — `columnMappings` 缺省时从 `field_mappings` 推断,显式项只写"名字对不上"的语义差异。这是本设计的**主战场**。
+2. **写法差异默认归一化** — snake_case / 下划线 / 大小写差异默认兼容,不需用户配置(见 4.2)。
+3. **EXPORT 不做"默认列"** — 导出的列本质是 **SQL 投影**,归查询管,不是该被默认掉的样板(见 §3.1)。仅在 `jdbc_mapped_export` 路径消除 `sourceColumn` 与 `detailSelectColumns` 的**一处重复声明**(定性为去重,非自动默认)。
 4. **先出设计、不改码** — 本文档即交付物。
+
+### 3.1 为什么 EXPORT 不该"默认列"(2026-06-20 用户澄清)
+
+> "导出应该是 SELECT 语句里面自己支持的吧,这个没法默认吧?"
+
+成立。导出有两条路径,列的归属都在查询侧:
+
+| 导出路径 | 列从哪来 | 能否默认 |
+|---|---|---|
+| `sql_template_export`(写 `default_query_sql`) | **就在 SELECT 里**(`SELECT customer_no, customer_name ...`) | **不能也不该**。写 SELECT 本身就是列声明;`field_mappings` 这条路径只提供 `header`(表头),是独立信息不是冗余 |
+| `jdbc_mapped_export`(不写 SQL,用 `detailSelectColumns`) | `detailSelectColumns` 即插件拼出的 SELECT 投影(`SELECT <detailSelectColumns> FROM detailTable`) | 本质仍是"写 SELECT",天然显式。唯一可收的是它与 `field_mappings[*].sourceColumn` 的**重复**——见 4.3,按去重处理 |
+
+结论:EXPORT 列选择是**投影问题**,保持显式;不引入"默认导出列"。`batchSelectColumns` 等保持现状必填(它是 batch/detail 两表 join 的连接列,非用户可省的展示列)。
 
 ---
 
@@ -114,15 +129,15 @@ if effective.isEmpty():
 - 归一化是**确定函数**,不做"相似度模糊匹配"——它把写法差异消成同一规范形,而不是猜近义。真正语义不同的列(`phone` vs `mobile_no`)归一化后仍不同,**必须**靠显式 `columnMappings` 表达,这正是"只配置明确差异"的边界。
 - 因此正常路径要么命中 `targetColumn`(优先级 1),要么命中归一化(优先级 2),**不存在"猜不出就静默丢列"**;归一化结果非法时报错并指明该列需显式 `targetColumn`。
 
-### 4.3 EXPORT 兜底
+### 4.3 EXPORT:仅消除一处重复,不做默认列
 
-`JdbcMappedExportSpec.parse` 两条列分别处理:
+按 §3.1,导出列保持显式。本设计对 EXPORT 只做一件**可选的去重**(非自动默认):
 
-- `detailSelectColumns` 缺省 → 取 `field_mappings[*].sourceColumn`(去重、保序);仍为空才报错。
-- `batchSelectColumns` 缺省 → 退化为 `[id]`(满足 FK join 硬约束),如配置了 `batchNoColumn` 则为 `[id, batchNoColumn]` 去重。
-- 显式值与推断值**合并**,显式优先;`batchSelectColumns` 合并后仍强制含 `id`(保留 `:83-85` 校验)。
+- `jdbc_mapped_export` 路径下,`detailSelectColumns` 缺省时可取 `field_mappings[*].sourceColumn`(去重、保序),避免用户把"导出哪些列"写两遍。这是**去重**,语义上等价于"投影列表的单一来源",不是"系统替你猜要导出什么"。
+- `batchSelectColumns`、`batchNoColumn`、`detailFkColumn` 等**保持现状必填**——它们是 batch/detail 两表 join 的结构连接列,非用户可省的展示列,且 `batchSelectColumns` 必须含 `id`(`:83-85`)。
+- `sql_template_export` 路径(`default_query_sql`)**完全不动**:列在 SELECT 里自决,`field_mappings` 只管 `header`。
 
-> `sql_template_export` 路径(`default_query_sql`)本就把列写在 SQL 里、`field_mappings` 只管 `header`,**不受本设计影响**,无需 `selectColumns`。
+> 取舍提示:若评审认为"`detailSelectColumns` 写一遍本就清晰、不值得引入隐式来源",可**只做 IMPORT、EXPORT 一处都不动**——EXPORT 的收益本就小,本节标记为可选。
 
 ### 4.4 合并语义(差异覆盖)统一定义
 
@@ -167,7 +182,7 @@ if effective.isEmpty():
 | 类型 | 位置 | 改动 |
 |---|---|---|
 | 代码 | `JdbcMappedImportSpec.parse` | 空 `columnMappings` 改为推断+合并;新增 `inferFromFieldMappings` / `normalizeColumn` |
-| 代码 | `JdbcMappedExportSpec.parse` | `detail`/`batch` SelectColumns 推断兜底 + 合并 |
+| 代码(可选) | `JdbcMappedExportSpec.parse` | 仅 `detailSelectColumns` 缺省时取 `field_mappings.sourceColumn` 去重;`batchSelectColumns` 等不动;sql_template 路径不动 |
 | 代码 | 共用 | `normalizeColumn` 工具(放 `batch-common` 还是各 worker?评审定) |
 | 文档 | `worker-plugins.md` | 标注 `columnMappings`/`selectColumns` 可缺省 + 推断规则 |
 | 文档 | `first-tenant-config-quickstart.md` §3 | 改写为"只写差异项"的精简样例 |
