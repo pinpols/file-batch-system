@@ -81,7 +81,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       return ResourceCheck.allow();
     }
 
-    QuotaExceededStrategy strategy = QuotaExceededStrategy.from(quotaPolicy.exceededStrategy());
+    QuotaExceededStrategy strategy = resolveStrategy(quotaPolicy.exceededStrategy());
 
     if (Texts.hasText(quotaPolicy.fairShareGroup())
         && quotaPolicy.groupSharedMaxRunningJobs() != null
@@ -120,6 +120,18 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     }
 
     return ResourceCheck.allow();
+  }
+
+  /**
+   * ADR-041 Phase2.3:租户显式配了 {@code exceeded_strategy} 以其为准;未配则走平台默认 {@code
+   * batch.resource-scheduler.default-exceeded-strategy}(默认 {@code QUEUE_DEFER} 有界队列 + 背压), 而非旧的硬拒默认
+   * —— 洪峰下不误拒未单独配策略的正常租户。
+   */
+  private QuotaExceededStrategy resolveStrategy(String configured) {
+    if (Texts.hasText(configured)) {
+      return QuotaExceededStrategy.from(configured);
+    }
+    return QuotaExceededStrategy.from(governance.resourceScheduler().getDefaultExceededStrategy());
   }
 
   /**

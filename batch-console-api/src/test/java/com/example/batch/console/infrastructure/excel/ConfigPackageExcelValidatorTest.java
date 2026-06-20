@@ -120,6 +120,105 @@ class ConfigPackageExcelValidatorTest {
             });
   }
 
+  @Test
+  void flagsCronScheduleMissingExpr() {
+    PackageExcelSession session =
+        session(
+            List.of(),
+            List.of(
+                Map.of(
+                    "tenant_id", "t1",
+                    "job_code", "J1",
+                    "job_name", "n",
+                    "job_type", "IMPORT",
+                    "schedule_type", "CRON")));
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue ->
+                assertThat(issue.message())
+                    .contains("schedule_expr is required when schedule_type=CRON"));
+  }
+
+  @Test
+  void flagsCronScheduleWithLinuxFiveFieldExpr() {
+    PackageExcelSession session =
+        session(
+            List.of(),
+            List.of(
+                Map.of(
+                    "tenant_id", "t1",
+                    "job_code", "J1",
+                    "job_name", "n",
+                    "job_type", "IMPORT",
+                    "schedule_type", "CRON",
+                    "schedule_expr", "0 2 * * *")));
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.message()).contains("Quartz 6 or 7-field cron"));
+  }
+
+  @Test
+  void flagsDelimitedFormatMissingDelimiter() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.remove("delimiter");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue ->
+                assertThat(issue.message())
+                    .contains("delimiter is required when file_format_type=DELIMITED"));
+  }
+
+  @Test
+  void flagsJdbcMappedImportMissingTable() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("query_param_schema", "{\"jdbcMappedImport\":{\"tenantColumn\":\"tenant_id\"}}");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue ->
+                assertThat(issue.message())
+                    .contains("query_param_schema.jdbcMappedImport.table is required"));
+  }
+
+  @Test
+  void flagsFieldMappingsEntryWithoutName() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("field_mappings", "[{\"targetColumn\":\"c\"}]");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue ->
+                assertThat(issue.message())
+                    .contains("field_mappings entries must each have a non-blank 'name'"));
+  }
+
+  @Test
+  void flagsExportSqlSelectStar() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("default_query_sql", "SELECT * FROM biz.customer_account WHERE tenant_id = :tenantId");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.message()).contains("must not use SELECT *"));
+  }
+
   private static ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),
@@ -183,6 +282,7 @@ class ConfigPackageExcelValidatorTest {
     row.put("template_name", "客户导入模板");
     row.put("template_type", "IMPORT");
     row.put("file_format_type", "DELIMITED");
+    row.put("delimiter", ",");
     row.put("checksum_type", "NONE");
     row.put("compress_type", "NONE");
     row.put("encrypt_type", "NONE");

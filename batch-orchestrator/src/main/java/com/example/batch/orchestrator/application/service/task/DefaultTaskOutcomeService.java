@@ -14,6 +14,7 @@ import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import com.example.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
@@ -115,7 +116,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       FailureClassifier failureClassifier,
       // ⑦ follow-up: worker REPORT 终态写路径也要打 JobLifecycleMetrics,与
       // JobInstanceTerminalStatusApplicationService 走同一 helper 复用 afterCommit 调度。
-      JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder) {}
+      JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
+      // ADR-041 Phase1.3b:节点产出落库后跨阶段 count 连续性核对(仅告警)。
+      CountContinuityOutboxService countContinuityOutboxService) {}
 
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
@@ -225,8 +228,16 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             // ADR-009 Stage 1.2: success 路径写 worker 上报的 outputs JSON,失败路径保持 null。
             .output(command.success() ? command.outputJson() : null)
             .build());
-    return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-        command.workflowRunId(), command.nodeCode());
+    WorkflowNodeRunEntity finished =
+        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+            command.workflowRunId(), command.nodeCode());
+    // ADR-041 Phase1.3b:本节点产出已落库,同事务核跨阶段 count 连续性(仅告警,不翻转状态)。
+    if (command.success()) {
+      collaborators
+          .countContinuityOutboxService()
+          .checkContinuity(command.workflowRunId(), command.nodeCode(), command.outputJson());
+    }
+    return finished;
   }
 
   @Override

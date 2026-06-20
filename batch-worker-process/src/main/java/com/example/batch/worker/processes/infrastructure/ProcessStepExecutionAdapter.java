@@ -140,6 +140,14 @@ public class ProcessStepExecutionAdapter
     putIfPresent(outputs, "processedCount", attributes.get("processedCount"));
     putIfPresent(outputs, "stagedCount", attributes.get("stagedCount"));
     putIfPresent(outputs, "publishedCount", attributes.get("publishedCount"));
+    // ADR-041 Phase1.3:归一化 count 信封。process:input=processedCount,output=publishedCount(缺省回落
+    // stagedCount)。
+    Object processOutputCount = attributes.get("publishedCount");
+    if (processOutputCount == null) {
+      processOutputCount = attributes.get("stagedCount");
+    }
+    putIfPresent(outputs, "inputCount", attributes.get("processedCount"));
+    putIfPresent(outputs, "outputCount", processOutputCount);
     putIfPresent(outputs, "batchKey", context.getBatchKey());
     putIfPresent(
         outputs, "highWaterMarkOut", attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));

@@ -11,10 +11,14 @@ import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
+import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
+import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchReadbackVerifier;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.OptionalLong;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,6 +29,7 @@ import org.springframework.stereotype.Component;
  * <p><b>结果处理</b>：投递成功时调用 {@code markSent}，回执状态取决于渠道是否即时确认（ACKED/PENDING/NONE）； 投递失败时调用 {@code
  * markFailed}，将下一步跳转强制设为 {@code RETRY} 阶段并返回失败。 文件状态同步推进为 {@code DISPATCHING}。
  */
+@Slf4j
 @Component
 public class DeliverDispatchStep implements DispatchStageStep {
 
@@ -155,7 +160,74 @@ public class DeliverDispatchStep implements DispatchStageStep {
           "failed to mark sent",
           ERROR_OBJECT_MAPPER);
     }
+    // ADR-041 Phase1.5:opt-in 投递后回读校验(readback_verify_enabled),抓传输损坏 / 半写。
+    DispatchStageResult readbackFailure =
+        verifyReadback(context, fileId, dispatchPayload, fileRecord, channelConfig);
+    if (readbackFailure != null) {
+      return readbackFailure;
+    }
     attrs.put("dispatchRecord", dispatchPayload);
     return DispatchStageResult.success(stage());
+  }
+
+  /**
+   * ADR-041 Phase1.5:投递成功后从目的端回读字节数,与登记的期望大小对账。开关关 / 无期望大小 / 渠道不支持回读 → 直通(仅告警); 大小不符 → markFailed +
+   * 路由 RETRY + 返回失败。默认关闭。
+   */
+  private DispatchStageResult verifyReadback(
+      DispatchJobContext context,
+      Long fileId,
+      DispatchPayload dispatchPayload,
+      Map<String, Object> fileRecord,
+      Map<String, Object> channelConfig) {
+    if (!DispatchReadbackVerifier.enabled(channelConfig)) {
+      return null;
+    }
+    Long expected = DispatchReadbackVerifier.expectedSizeBytes(fileRecord);
+    if (expected == null) {
+      log.warn(
+          "readback verify enabled but no expected file_size_bytes: tenantId={}, fileId={}",
+          context.getTenantId(),
+          fileId);
+      return null;
+    }
+    Object traceId = context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID);
+    OptionalLong actual =
+        dispatchChannelGateway.readbackSize(
+            new DispatchCommand(
+                context.getTenantId(),
+                traceId == null ? null : String.valueOf(traceId),
+                fileRecord,
+                channelConfig,
+                dispatchPayload));
+    if (actual.isEmpty()) {
+      log.warn(
+          "readback verify enabled but channel does not support readback (skipped): "
+              + "tenantId={}, fileId={}, channel={}",
+          context.getTenantId(),
+          fileId,
+          dispatchPayload.channelCode());
+      return null;
+    }
+    if (actual.getAsLong() == expected) {
+      return null;
+    }
+    context.getAttributes().put("retryRequested", Boolean.TRUE);
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
+    fileDispatchRepository.markFailed(
+        context.getTenantId(),
+        fileId,
+        dispatchPayload.channelCode(),
+        "DISPATCH_READBACK_MISMATCH",
+        "readback size " + actual.getAsLong() + " != expected " + expected);
+    return DispatchStageResult.failure(
+        stage(),
+        "DISPATCH_READBACK_MISMATCH",
+        "error.dispatch.readback.mismatch",
+        new Object[] {expected, actual.getAsLong()},
+        "readback size mismatch",
+        ERROR_OBJECT_MAPPER);
   }
 }

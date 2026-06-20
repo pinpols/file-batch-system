@@ -431,8 +431,34 @@ public class ConfigPackageExcelValidator {
         normalizeEnum(row.get(COL_SHARD_STRATEGY)), "shard_strategy", SHARD_STRATEGIES, ri);
     optionalEnum(normalizeEnum(row.get(COL_EXECUTION_MODE)), "execution_mode", EXECUTION_MODES, ri);
     validateJsonField(row.get(COL_PARAM_SCHEMA), "param_schema", false, ri);
+    validateCronSchedule(row, ri);
     if (hasText(jobCode) && !seen.add(tenantId + KEY_SEP_HASH + jobCode)) {
       ri.add("duplicate job_code in excel: " + jobCode);
+    }
+  }
+
+  /**
+   * #2 schedule_type=CRON 时 schedule_expr 必填且须为 Quartz 6/7 字段(对齐 {@link CronExpressionFormatRule}),
+   * 把 Linux 5 字段等脏 cron 挡在预览期,而非运行期 trigger 才 fail。
+   */
+  private static void validateCronSchedule(Map<String, String> row, List<String> ri) {
+    if (!"CRON".equals(normalizeEnum(row.get(COL_SCHEDULE_TYPE)))) {
+      return;
+    }
+    String expr = normalize(row.get(COL_SCHEDULE_EXPR));
+    if (!hasText(expr)) {
+      ri.add("schedule_expr is required when schedule_type=CRON");
+      return;
+    }
+    int fields = expr.trim().split("\\s+").length;
+    if (fields != 6 && fields != 7) {
+      ri.add(
+          "schedule_expr must be a Quartz 6 or 7-field cron (sec min hour dom mon dow [year]);"
+              + " found "
+              + fields
+              + " fields: '"
+              + expr
+              + "'");
     }
   }
 
@@ -476,6 +502,9 @@ public class ConfigPackageExcelValidator {
     for (Map<String, String> row : rows) {
       List<String> ri = new ArrayList<>();
       TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      validateFormatConditionals(row, ri);
+      validateExportSql(row, ri);
+      validateTemplateJsonStructure(row, ri);
       String key = templateKey(template.templateCode(), template.version());
       if (hasText(template.templateCode()) && !seen.add(key)) {
         ri.add("duplicate template_code + version in excel: " + key);
@@ -487,6 +516,86 @@ public class ConfigPackageExcelValidator {
       rowNo++;
     }
     return new SheetResult(FILE_TEMPLATE_SHEET, rows.size(), valid, issues);
+  }
+
+  private static final Pattern SELECT_STAR = Pattern.compile("(?i)select\\s+\\*");
+  private static final Pattern FORBIDDEN_SQL =
+      Pattern.compile("(?i)\\b(UPDATE|DELETE|INSERT|DROP|ALTER|TRUNCATE|GRANT|MERGE|EXEC)\\b");
+
+  /** #4a file_format_type=DELIMITED 时 delimiter 必填(否则 CSV 解析无分隔符,运行期才炸)。 */
+  private static void validateFormatConditionals(Map<String, String> row, List<String> ri) {
+    if ("DELIMITED".equals(normalizeEnum(row.get("file_format_type")))
+        && !hasText(normalize(row.get("delimiter")))) {
+      ri.add("delimiter is required when file_format_type=DELIMITED");
+    }
+  }
+
+  /**
+   * #3 default_query_sql 预览期轻治理:只允许 SELECT/WITH,禁 SELECT * 与 DML/DDL(worker 期仍做 JSqlParser 全治理)。
+   */
+  private static void validateExportSql(Map<String, String> row, List<String> ri) {
+    String sql = normalize(row.get("default_query_sql"));
+    if (!hasText(sql)) {
+      return;
+    }
+    String upper = sql.trim().toUpperCase(Locale.ROOT);
+    if (!upper.startsWith("SELECT") && !upper.startsWith("WITH")) {
+      ri.add("default_query_sql must be a single SELECT/WITH query");
+    }
+    if (SELECT_STAR.matcher(sql).find()) {
+      ri.add("default_query_sql must not use SELECT * (list columns explicitly)");
+    }
+    if (FORBIDDEN_SQL.matcher(sql).find()) {
+      ri.add("default_query_sql must not contain DML/DDL keywords (UPDATE/DELETE/INSERT/...)");
+    }
+  }
+
+  /**
+   * #1 JSON 字段深层结构校验(语法已由 parser 校验):field_mappings 每项须有非空 name; query_param_schema 的
+   * jdbcMappedImport 须有 table/tenantColumn、jdbcMappedExport 须有 batchTable/detailTable。 不强制
+   * columnMappings(可从 field_mappings 推断)。
+   */
+  private void validateTemplateJsonStructure(Map<String, String> row, List<String> ri) {
+    JsonNode fieldMappings = tryReadJson(normalize(row.get("field_mappings")));
+    if (fieldMappings != null && fieldMappings.isArray()) {
+      for (JsonNode entry : fieldMappings) {
+        if (!hasText(firstText(entry, "name"))) {
+          ri.add("field_mappings entries must each have a non-blank 'name'");
+          break;
+        }
+      }
+    }
+    JsonNode qps = tryReadJson(normalize(row.get("query_param_schema")));
+    if (qps == null) {
+      return;
+    }
+    JsonNode imp = qps.get("jdbcMappedImport");
+    if (imp != null && imp.isObject()) {
+      requireJsonText(imp, "query_param_schema.jdbcMappedImport.table", ri, "table");
+      requireJsonText(imp, "query_param_schema.jdbcMappedImport.tenantColumn", ri, "tenantColumn");
+    }
+    JsonNode exp = qps.get("jdbcMappedExport");
+    if (exp != null && exp.isObject()) {
+      requireJsonText(exp, "query_param_schema.jdbcMappedExport.batchTable", ri, "batchTable");
+      requireJsonText(exp, "query_param_schema.jdbcMappedExport.detailTable", ri, "detailTable");
+    }
+  }
+
+  private static void requireJsonText(JsonNode node, String label, List<String> ri, String field) {
+    if (!hasText(firstText(node, field))) {
+      ri.add(label + " is required");
+    }
+  }
+
+  private JsonNode tryReadJson(String text) {
+    if (!hasText(text)) {
+      return null;
+    }
+    try {
+      return objectMapper.readTree(text);
+    } catch (JsonProcessingException e) {
+      return null; // 语法错误已由 parser 的 JSON 合法性校验单独报出
+    }
   }
 
   private SheetResult validatePipelineRows(String tenantId, List<Map<String, String>> rows) {

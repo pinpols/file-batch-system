@@ -4,6 +4,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +75,24 @@ public class DispatchChannelGateway {
         channelConfig, result.success(), result.message(), result.evidenceRef());
     deliveryMetrics.recordDelivery(channelType, result.success(), false);
     return result;
+  }
+
+  /**
+   * ADR-041 Phase1.5:解析渠道适配器,若其实现 {@link DispatchReadbackCapable} 则回读目的端字节数;否则(不支持回读) 返回
+   * empty。仅在投递成功后调用(adapter 必能解析),故不会触发 unsupported 异常。
+   */
+  public OptionalLong readbackSize(DispatchCommand command) {
+    Map<String, Object> channelConfig = command.channelConfig();
+    Object rawChannelType =
+        channelConfig == null ? null : channelConfig.get(DispatchGatewayConstants.CHANNEL_TYPE_KEY);
+    if (rawChannelType == null || !Texts.hasText(String.valueOf(rawChannelType))) {
+      return OptionalLong.empty();
+    }
+    DispatchChannelAdapter adapter = resolveAdapter(String.valueOf(rawChannelType));
+    if (adapter instanceof DispatchReadbackCapable capable) {
+      return capable.readbackSize(command);
+    }
+    return OptionalLong.empty();
   }
 
   private DispatchChannelAdapter resolveAdapter(String channelType) {

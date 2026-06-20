@@ -99,29 +99,26 @@ curl -X POST /api/console/tenants \
 ```
 
 ```jsonc
-// query_param_schema:落库映射。★这是新人最容易卡的字段★
+// query_param_schema:落库映射。配合上面的 field_mappings,这里可极简。
 {"jdbcMappedImport":{
   "schema":"biz", "table":"customer_account", "tenantColumn":"tenant_id",
-  // columnMappings:文件字段名(from,对应上面 field_mappings.name)→ 目标表列名(to)。
-  // 不在这里的字段(如 creditLimit)= 解析校验了但不入库。
-  "columnMappings":[
-    {"from":"customerNo",   "to":"customer_no"},
-    {"from":"customerName", "to":"customer_name"},
-    {"from":"customerType", "to":"customer_type"},
-    {"from":"email",        "to":"email"},
-    {"from":"status",       "to":"status"}
-  ],
-  // conflictColumns:ON CONFLICT 幂等键(重跑同一批不会重复入库)。必须含 tenant_id。
-  "conflictColumns":["tenant_id","customer_no"],
-  // systemBindings:平台自动注入的审计列,${...} 是运行时变量,照抄即可。
-  "systemBindings":{
-    "source_file_name":"${sourceFileName}", "source_batch_no":"${batchNo}",
-    "source_trace_id":"${traceId}", "created_by":"${workerId}", "updated_by":"${workerId}"
-  }
+  // ① columnMappings 可整段省略:留空时按 field_mappings 自动推断——
+  //    to 取 field_mappings.targetColumn;没写 targetColumn 时对 name 做大小写/下划线归一
+  //    (customerNo→customer_no)。只有"文件列名和表列名真不一样"才写差异项,例如文件叫
+  //    phone、表列叫 mobile_no 时写:  "columnMappings":[{"from":"phone","to":"mobile_no"}]
+  //    想"校验但不入库"的列,在 field_mappings 给它加 "persist":false。
+  // ② conflictColumns:ON CONFLICT 幂等键(重跑不重复)。漏写 tenant_id 会被系统自动补到最前。
+  "conflictColumns":["customer_no"],
+  // ③ standardAuditBindings:true → 一键写入标准审计列(source_file_name / source_batch_no /
+  //    source_trace_id / created_by / updated_by),免逐条手写 systemBindings;
+  //    要自定义就写 systemBindings(显式项覆盖标准默认)。
+  "standardAuditBindings": true
 }}
 ```
 
-> 字段速查:`schema/table`=落哪张业务表;`tenantColumn`=租户隔离列(几乎都是 `tenant_id`);`columnMappings.from`=文件列名、`.to`=表列名;`conflictColumns`=幂等键。
+> 字段速查:`schema/table`=落哪张业务表;`tenantColumn`=租户隔离列(几乎都是 `tenant_id`);`columnMappings`=**可省**(从 field_mappings 推断,只写差异列);`conflictColumns`=幂等键(自动补 tenant_id);`standardAuditBindings:true`=一键审计列。
+>
+> 注:上传配置包时**预览期**会校验 `jdbcMappedImport` 必含 `table`/`tenantColumn`、`field_mappings` 每项必含 `name`、CRON 作业必含合法 `schedule_expr`、DELIMITED 模板必含 `delimiter`、导出 SQL 禁 `SELECT *`——脏配置不会留到运行期才炸。
 
 ### 3b. 导出 → 文件(CSV / Excel)
 

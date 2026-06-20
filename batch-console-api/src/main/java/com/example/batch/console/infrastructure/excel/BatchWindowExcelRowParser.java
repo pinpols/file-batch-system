@@ -2,8 +2,8 @@ package com.example.batch.console.infrastructure.excel;
 
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.normalize;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
+import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalText;
-import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
 
@@ -41,9 +41,11 @@ public final class BatchWindowExcelRowParser {
             .timezone(requireText(values, "timezone", 64, issues))
             .startTime(requireTime(values, "start_time", issues))
             .endTime(requireTime(values, "end_time", issues))
-            .endStrategy(requireEnum(values, "end_strategy", END_STRATEGIES, 32, issues))
+            .endStrategy(
+                optionalEnum(values, "end_strategy", END_STRATEGIES, 32, "FINISH_RUNNING", issues))
             .outOfWindowAction(
-                requireEnum(values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, issues))
+                optionalEnum(
+                    values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, "WAIT", issues))
             .allowCrossDay(optionalBoolean(values, "allow_cross_day", false, issues))
             .enabled(optionalBoolean(values, "enabled", true, issues))
             .description(optionalText(values, "description", 512, issues))

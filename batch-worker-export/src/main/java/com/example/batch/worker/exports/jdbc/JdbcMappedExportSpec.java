@@ -7,6 +7,7 @@ import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +45,13 @@ public record JdbcMappedExportSpec(
     String detailTable = required(root, "detailTable");
     String detailFk = required(root, "detailFkColumn");
     String orderCol = required(root, "detailOrderByColumn");
+    // detailSelectColumns 缺省(不写 / 空 [])时,从模板 field_mappings[*].sourceColumn 去重推断,
+    // 避免把"导出哪些列"在 field_mappings 与 detailSelectColumns 里写两遍。这是去重而非自动默认:
+    // 列归属仍是 SQL 投影,batchSelectColumns 等结构连接列保持显式必填。
     List<String> detailCols = parseStringList(root.get("detailSelectColumns"));
+    if (detailCols.isEmpty()) {
+      detailCols = inferDetailColumnsFromFieldMappings(templateConfig, objectMapper);
+    }
     if (batchCols.isEmpty() || detailCols.isEmpty()) {
       throw new IllegalArgumentException("batchSelectColumns and detailSelectColumns are required");
     }
@@ -142,5 +149,42 @@ public record JdbcMappedExportSpec(
       }
     }
     return out;
+  }
+
+  /** 从模板顶层 {@code field_mappings[*].sourceColumn} 去重保序推断导出明细列。 */
+  private static List<String> inferDetailColumnsFromFieldMappings(
+      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+    if (templateConfig == null) {
+      return List.of();
+    }
+    Object raw = templateConfig.get("field_mappings");
+    if (raw == null) {
+      return List.of();
+    }
+    List<?> list;
+    if (raw instanceof List<?> l) {
+      list = l;
+    } else {
+      String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
+      if (!Texts.hasText(text)) {
+        return List.of();
+      }
+      try {
+        list = objectMapper.readValue(text, List.class);
+      } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(JdbcMappedExportSpec.class, "catch:Exception", ignored);
+        return List.of();
+      }
+    }
+    LinkedHashSet<String> out = new LinkedHashSet<>();
+    for (Object item : list) {
+      if (item instanceof Map<?, ?> m) {
+        Object src = m.get("sourceColumn");
+        if (src != null && Texts.hasText(String.valueOf(src))) {
+          out.add(String.valueOf(src).trim());
+        }
+      }
+    }
+    return new ArrayList<>(out);
   }
 }

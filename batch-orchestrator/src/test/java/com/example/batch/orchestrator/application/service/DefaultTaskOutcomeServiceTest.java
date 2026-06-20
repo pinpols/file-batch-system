@@ -100,7 +100,10 @@ class DefaultTaskOutcomeServiceTest {
             mock(ResultVersionWriter.class),
             mock(BatchDayReplayTerminalReconciler.class),
             mock(FailureClassifier.class),
-            mock(JobLifecycleMetricsRecorder.class));
+            mock(JobLifecycleMetricsRecorder.class),
+            mock(
+                com.example.batch.orchestrator.application.engine.CountContinuityOutboxService
+                    .class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 
