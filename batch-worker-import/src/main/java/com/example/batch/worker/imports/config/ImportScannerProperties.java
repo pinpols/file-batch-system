@@ -48,6 +48,20 @@ public class ImportScannerProperties {
 
   private final Arrival arrival = new Arrival();
 
+  private final EventArrival eventArrival = new EventArrival();
+
+  @Data
+  public static class EventArrival {
+    /**
+     * 事件驱动到达开关(默认关)。
+     *
+     * <p>开启后 worker 暴露 inbound 到达通知端点,收到通知即时触发一次扫描,把发现延迟降到接近实时。
+     *
+     * <p>关闭时端点存在但只回 triggered=false,行为完全等价历史纯轮询。
+     */
+    private boolean enabled = false;
+  }
+
   @Data
   public static class Arrival {
     private boolean enabled = false;
