@@ -12,7 +12,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @DisplayName("import worker 内部接口共享密钥过滤器")
 class ImportInternalAuthFilterTest {
 
-  private static final String SECRET = "strong-internal-secret-0001";
+  // 测试用占位密钥(非真实凭据);低熵 + gitleaks:allow,避免 secret 扫描误报。
+  private static final String SECRET = "super-secret"; // gitleaks:allow
 
   private BatchSecurityProperties props(boolean bypass) {
     BatchSecurityProperties p = new BatchSecurityProperties();
