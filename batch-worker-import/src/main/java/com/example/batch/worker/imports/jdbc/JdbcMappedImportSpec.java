@@ -167,9 +167,9 @@ public record JdbcMappedImportSpec(
   }
 
   /**
-   * 从模板顶层 {@code field_mappings} 推断列映射:每个声明字段产出一条 {@code from(name) -> to}。{@code to}
-   * 优先取显式 {@code targetColumn},缺省则对 {@code name} 做 {@link #normalizeColumn} 归一化(驼峰/下划线/大小写
-   * 写法差异默认兼容)。{@code persist:false} 的字段只参与解析校验、不入库,故不进推断集。
+   * 从模板顶层 {@code field_mappings} 推断列映射:每个声明字段产出一条 {@code from(name) -> to}。{@code to} 优先取显式 {@code
+   * targetColumn},缺省则对 {@code name} 做 {@link #normalizeColumn} 归一化(驼峰/下划线/大小写 写法差异默认兼容)。{@code
+   * persist:false} 的字段只参与解析校验、不入库,故不进推断集。
    */
   private static List<ColumnMapping> inferFromFieldMappings(
       Map<String, Object> templateConfig, ObjectMapper objectMapper) {
@@ -196,8 +196,8 @@ public record JdbcMappedImportSpec(
   }
 
   /**
-   * 合并推断项与显式项:显式按 {@code from} 覆盖同名推断项,其余显式项追加。顺序 = 未被覆盖的推断项在前、显式项在后。
-   * 不在此塌缩重复(fan-out / 碰撞),交由 {@link #validateMappingCardinality} 显式拒绝。
+   * 合并推断项与显式项:显式按 {@code from} 覆盖同名推断项,其余显式项追加。顺序 = 未被覆盖的推断项在前、显式项在后。 不在此塌缩重复(fan-out / 碰撞),交由
+   * {@link #validateMappingCardinality} 显式拒绝。
    */
   private static List<ColumnMapping> mergeMappings(
       List<ColumnMapping> inferred, List<ColumnMapping> explicit) {
@@ -271,9 +271,9 @@ public record JdbcMappedImportSpec(
   }
 
   /**
-   * 字段名 → snake_case 列名的确定性归一化:驼峰/连续大写边界切分 + 全小写 + 下划线/连字符/空格折叠为单下划线。
-   * {@code customerNo}/{@code CUSTOMER_NO}/{@code customer_no} 都归一为 {@code customer_no};{@code
-   * customerHTTPUrl} → {@code customer_http_url}。仅消写法差异,不做相似度模糊匹配。
+   * 字段名 → snake_case 列名的确定性归一化:驼峰/连续大写边界切分 + 全小写 + 下划线/连字符/空格折叠为单下划线。 {@code customerNo}/{@code
+   * CUSTOMER_NO}/{@code customer_no} 都归一为 {@code customer_no};{@code customerHTTPUrl} → {@code
+   * customer_http_url}。仅消写法差异,不做相似度模糊匹配。
    */
   static String normalizeColumn(String name) {
     if (name == null) {
@@ -395,8 +395,8 @@ public record JdbcMappedImportSpec(
   }
 
   /**
-   * 列映射基数强制 1:1。fan-out(一个 {@code from} 映射多个 {@code to})与碰撞(多个 {@code from} 落同一
-   * {@code to})都 fail-fast——后者在历史实现里是静默 first-wins 丢列,这里改为显式拒绝并指明冲突双方。
+   * 列映射基数强制 1:1。fan-out(一个 {@code from} 映射多个 {@code to})与碰撞(多个 {@code from} 落同一 {@code to})都
+   * fail-fast——后者在历史实现里是静默 first-wins 丢列,这里改为显式拒绝并指明冲突双方。
    */
   private void validateMappingCardinality() {
     Map<String, String> byFrom = new LinkedHashMap<>();
