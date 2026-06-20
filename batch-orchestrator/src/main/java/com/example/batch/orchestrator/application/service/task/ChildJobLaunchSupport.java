@@ -73,8 +73,8 @@ public class ChildJobLaunchSupport {
 
   /**
    * 跨 workflow 嵌套环检测上溯 parent_instance_id 链的硬上限。环本身在每次拉起前就会被拦截(见 {@link
-   * #guardAgainstNestingCycle}),链上不会真正出现"不同 job_code 的环",故上溯必然终止于根;此上限只为给
-   * rerun 长链 / 异常数据兜底,避免万一脏数据导致无界 DB 读。命中视为异常但 fail-open(放行)——真正的环已在更早层被拦。
+   * #guardAgainstNestingCycle}),链上不会真正出现"不同 job_code 的环",故上溯必然终止于根;此上限只为给 rerun 长链 /
+   * 异常数据兜底,避免万一脏数据导致无界 DB 读。命中视为异常但 fail-open(放行)——真正的环已在更早层被拦。
    */
   private static final int MAX_ANCESTOR_WALK = 256;
 
@@ -140,12 +140,12 @@ public class ChildJobLaunchSupport {
   }
 
   /**
-   * 跨 workflow 嵌套环检测：在拉起子作业之前,沿 {@code parent_instance_id} 链上溯收集所有祖先 job_code(含当前父作业自身),
-   * 若待拉起的 {@code refJobCode} 已在祖先集合中,判定为环并 fail-fast。
+   * 跨 workflow 嵌套环检测：在拉起子作业之前,沿 {@code parent_instance_id} 链上溯收集所有祖先 job_code(含当前父作业自身), 若待拉起的
+   * {@code refJobCode} 已在祖先集合中,判定为环并 fail-fast。
    *
-   * <p>因为判定发生在"每次拉起之前",一个不同 job_code 的环最多展开一层就会被拦截(A→B 拉起时 B 不在 {A} 中放行;B→A 拉起时
-   * A 已在 {B,A} 中被拦),所以正常链上不会真正出现环,上溯必然终止于根(parentInstanceId == null)。rerun 链虽会把同一
-   * job_code 重复挂在 parent 链上,但收进 Set 后不产生误报。
+   * <p>因为判定发生在"每次拉起之前",一个不同 job_code 的环最多展开一层就会被拦截(A→B 拉起时 B 不在 {A} 中放行;B→A 拉起时 A 已在 {B,A}
+   * 中被拦),所以正常链上不会真正出现环,上溯必然终止于根(parentInstanceId == null)。rerun 链虽会把同一 job_code 重复挂在 parent 链上,但收进
+   * Set 后不产生误报。
    */
   private void guardAgainstNestingCycle(
       JobInstanceEntity parent, String refJobCode, String nodeCode) {
