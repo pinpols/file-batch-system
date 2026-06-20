@@ -71,7 +71,9 @@ final class ValidationCoercions {
       return bigDecimal;
     }
     if (value instanceof Number number) {
-      return BigDecimal.valueOf(number.doubleValue());
+      // 经 number.toString() 而非 doubleValue():Long/BigInteger 超过 double 53 位精度时
+      // doubleValue() 会静默丢精度,导致 range 校验(min/max 边界)对高精度金额/大整数误判。
+      return new BigDecimal(number.toString());
     }
     if (value == null) {
       return null;
