@@ -102,13 +102,14 @@
           and dedup_key = #{dedupKey}
     </select>
 
-    <select id="countSuccessByBizDate" resultType="long">
-        select count(1)
+    <select id="selectLatestStatusByBizDate" resultType="java.lang.String">
+        select instance_status
         from batch.job_instance
         where tenant_id = #{tenantId}
           and job_code = #{jobCode}
           and biz_date = #{bizDate}
-          and instance_status = 'SUCCESS'
+        order by run_attempt desc, id desc
+        limit 1
     </select>
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobInstanceEntity"
