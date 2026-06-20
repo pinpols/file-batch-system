@@ -12,6 +12,13 @@ public class ImportScannerProperties {
   private int batchSize = 200;
   private String prefix = "ingress/";
   private boolean requireDoneFile = false;
+
+  /**
+   * 完成标记文件后缀（含点），默认 {@code .done}。某些上游交付协议用 {@code .chk} / {@code .ok} 等，配成对应值即可。
+   * {@link #requireDoneFile}=true 时数据文件须存在「同名基名 + 此后缀」的标记对象方可登记，且该后缀的对象自身被扫描器跳过（不当数据文件处理）。
+   */
+  private String doneFileSuffix = ".done";
+
   private long stabilityWindowSeconds = 30L;
   private String sourceType = "SYSTEM";
   private String defaultBizType = "IMPORT_SCAN";

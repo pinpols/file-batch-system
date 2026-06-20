@@ -103,7 +103,8 @@ public class ImportIngressScanner {
   }
 
   private void tryRegister(ObjectSnapshot snapshot, Set<String> currentObjects) {
-    if (snapshot == null || snapshot.objectName().endsWith(".done")) {
+    if (snapshot == null
+        || snapshot.objectName().endsWith(scannerProperties.getDoneFileSuffix())) {
       return;
     }
     if (scannerProperties.isRequireDoneFile()
@@ -365,11 +366,12 @@ public class ImportIngressScanner {
   }
 
   private String resolveDoneMarker(String objectName) {
+    String suffix = scannerProperties.getDoneFileSuffix();
     int dotIndex = objectName.lastIndexOf('.');
     if (dotIndex > objectName.lastIndexOf('/')) {
-      return objectName.substring(0, dotIndex) + ".done";
+      return objectName.substring(0, dotIndex) + suffix;
     }
-    return objectName + ".done";
+    return objectName + suffix;
   }
 
   private String resolveFileFormatType(String fileName) {

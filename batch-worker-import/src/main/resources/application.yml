@@ -110,6 +110,8 @@ batch:
         prefix: ${BATCH_WORKER_IMPORT_SCANNER_PREFIX:ingress/}
         # 是否要求存在 done 文件（用于“上传完成”信号）
         require-done-file: ${BATCH_WORKER_IMPORT_SCANNER_REQUIRE_DONE_FILE:false}
+        # 完成标记文件后缀（含点）：默认 .done；上游协议用 .chk / .ok 等时改这里
+        done-file-suffix: ${BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX:.done}
         # 稳定窗口（秒）：对象在该窗口内不再变化才认为可处理
         stability-window-seconds: ${BATCH_WORKER_IMPORT_SCANNER_STABILITY_WINDOW_SECONDS:30}
         # 来源类型（SYSTEM/…）：用于审计/策略

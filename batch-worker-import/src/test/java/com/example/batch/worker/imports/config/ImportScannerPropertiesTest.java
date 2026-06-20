@@ -1,0 +1,23 @@
+package com.example.batch.worker.imports.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+class ImportScannerPropertiesTest {
+
+  @Test
+  @DisplayName("done-file 后缀默认 .done(向后兼容承诺,不可静默改)")
+  void doneFileSuffix_defaultsToDotDone() {
+    assertThat(new ImportScannerProperties().getDoneFileSuffix()).isEqualTo(".done");
+  }
+
+  @Test
+  @DisplayName("done-file 后缀可配成 .chk 等上游协议后缀")
+  void doneFileSuffix_isConfigurable() {
+    ImportScannerProperties props = new ImportScannerProperties();
+    props.setDoneFileSuffix(".chk");
+    assertThat(props.getDoneFileSuffix()).isEqualTo(".chk");
+  }
+}
