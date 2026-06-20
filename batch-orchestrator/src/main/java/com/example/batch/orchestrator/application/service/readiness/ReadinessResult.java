@@ -8,11 +8,11 @@ package com.example.batch.orchestrator.application.service.readiness;
  */
 public record ReadinessResult(boolean ready, String reason) {
 
-  public static ReadinessResult ready() {
+  public static ReadinessResult ofReady() {
     return new ReadinessResult(true, null);
   }
 
-  public static ReadinessResult notReady(String reason) {
+  public static ReadinessResult ofNotReady(String reason) {
     return new ReadinessResult(false, reason);
   }
 }

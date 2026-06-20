@@ -30,11 +30,11 @@ public class ReadinessService {
    */
   public ReadinessResult checkJobReady(String tenantId, String jobCode, LocalDate bizDate) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
-      return ReadinessResult.notReady("invalid-readiness-query");
+      return ReadinessResult.ofNotReady("invalid-readiness-query");
     }
     long successCount = jobInstanceMapper.countSuccessByBizDate(tenantId, jobCode, bizDate);
     return successCount > 0
-        ? ReadinessResult.ready()
-        : ReadinessResult.notReady("upstream-job-not-success");
+        ? ReadinessResult.ofReady()
+        : ReadinessResult.ofNotReady("upstream-job-not-success");
   }
 }
