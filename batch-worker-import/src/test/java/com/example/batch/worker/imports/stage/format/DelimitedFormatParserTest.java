@@ -80,7 +80,7 @@ class DelimitedFormatParserTest {
   }
 
   @Test
-  void headeredAllowsOptionalColumnAbsent() {
+  void headeredAllowsOptionalColumnAbsent() throws Exception {
     String csv = "customerNo\nC001\n";
     Map<String, Object> tpl =
         Map.of(
