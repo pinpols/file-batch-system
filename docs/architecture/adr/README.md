@@ -37,7 +37,18 @@
 | 028 | [ADR-028-sensor-wait-node.md](./ADR-028-sensor-wait-node.md)                             | Sensor WAIT 节点：workflow_node_type=WAIT + 4 类 sensor（HTTP/FILE/KAFKA/TIME）+ 终态后下游派发 + V16 静态校验（Accepted） |
 | 029 | [ADR-029-shared-config-defaults-module.md](./ADR-029-shared-config-defaults-module.md)   | 共享配置基线 `batch-defaults.yml` 位于 `batch-common/src/main/resources/`,由 `ConfigDriftGuardTest` 守护 classpath 存在性 + OWNED_KEYS(Revised:Accepted,2026-05-16;原独立模块方案被驳回为过度抽象) |
 | 030 | [ADR-030-content-verifier-spi.md](./ADR-030-content-verifier-spi.md)                     | 产物内容验收 SPI：`ContentVerifier` + `ContentVerifierRegistry` + Micrometer Timer/Counter；首发实现 ExportFileNonEmptyVerifier；stage hot path 接入由后续 PR 按需做（Accepted）   |
+| 031 | [ADR-031-dual-track-pagination.md](./ADR-031-dual-track-pagination.md)                   | 双轨分页：列表用 offset 分页(可跳页),大数据导出 / 深翻用 cursor(keyset)分页,二者并存按场景选（Accepted） |
+| 032 | [ADR-032-four-role-rbac-redesign.md](./ADR-032-four-role-rbac-redesign.md)               | 控制台 4 角色 RBAC 重设计:平台 vs 租户 × 写 vs 只读 二维矩阵(`ROLE_ADMIN`/`ROLE_AUDITOR`/`ROLE_TENANT_ADMIN`/`ROLE_TENANT_USER`);`ROLE_USER` 保留为兼容常量,新代码禁用（Accepted） |
+| 033 | [ADR-033-quartz-to-wheel-scheduler.md](./ADR-033-quartz-to-wheel-scheduler.md)           | 调度器由 Quartz 替换为时间轮(HashedWheelTimer),去掉 Quartz 表 / 线程池开销,贴合海量短延时定时触发（Accepted） |
 | 034 | [ADR-034-cap-positioning.md](./ADR-034-cap-positioning.md)                               | CAP 定位:核心调度链路 = **CP**(任务 CLAIM / 状态机 / outbox / RBAC / 租户 / 审批必须强一致,牺牲可用),只读 / 观测层 = **AP**(Dashboard / trigger list 等走 `DownstreamFallback` 降级,允许 stale)。例外 + 落地机制 + 何时升级见 ADR(Accepted) |
+| 035 | [ADR-035-tenant-self-hosted-worker-sdk.md](./ADR-035-tenant-self-hosted-worker-sdk.md)   | 平台定位收敛为「纯调度面」,租户 worker 走 `batch-worker-sdk` 自托管:调度面(trigger/orchestrator/console)+ 平台内建 worker 代运维,租户进程引 SDK 只经 HTTP + Kafka 接调度（Accepted） |
+| 036 | [ADR-036-sdk-task-handler-templates.md](./ADR-036-sdk-task-handler-templates.md)         | SDK 在 `SdkTaskHandler` 之上提供 5 个抽象基类(Atomic/Import/Export/Process/Dispatch),template method 锁执行序(`final execute` + protected 钩子),租户只填钩子（Accepted） |
+| 037 | [ADR-037-sdk-checkpoint-resume-and-reliable-commit.md](./ADR-037-sdk-checkpoint-resume-and-reliable-commit.md) | SDK 分片级断点续跑原语 `SdkCheckpoint`(断点 = 数据主键 / 范围,非 offset;语义由 SDK 定义,持久化由 business 实现)+ 可靠提交 / 协作 cancel / 流式分片模板（Accepted） |
+| 038 | [ADR-038-platform-worker-checkpoint-resume.md](./ADR-038-platform-worker-checkpoint-resume.md) | 平台 Worker(Import LOAD / Export GENERATE)分片级断点续跑:`ProcessingPosition` 位点持久化,chunk 业务写与位点更新合到同一事务（Accepted） |
+| 039 | [ADR-039-credential-env-reference.md](./ADR-039-credential-env-reference.md)             | 凭据字段 `envRef` 风格(`${ENV_NAME}` / `${ENV_NAME:-default}` / `${secret:provider://path}`)替代关键字扫描,根治明文凭据落库（Accepted） |
+| 040 | [ADR-040-batch-manifest-driven-arrival-group.md](./ADR-040-batch-manifest-driven-arrival-group.md) | 清单驱动的动态到达组:上游批次清单(`batch-manifest-v1`,默认 `.batch.json`)声明当天预期文件,scanner 据此组装动态到达组（Accepted,协议 + 时序 + 分阶段） |
+| 041 | [ADR-041-control-total-continuity-gate.md](./ADR-041-control-total-continuity-gate.md)   | 控制总额贯穿闸:trailer/header 控制记录(笔数 / 金额)端到端对账,文件传输完整性 gate（Phase0 设计 + Phase1.1-1.5 已落,**默认全部关闭**） |
+| 042 | [ADR-042-admission-bounded-queue-backpressure.md](./ADR-042-admission-bounded-queue-backpressure.md) | 超容准入默认由硬拒翻为有界队列 + 背压:`default-exceeded-strategy` 默认 `QUEUE_DEFER`(设回 `REJECT` 恢复旧硬拒)（Accepted,已落地） |
 
 ### 优先级 + 范围边界纪律
 
