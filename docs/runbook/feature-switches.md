@@ -27,8 +27,15 @@
 | `batch.datasource.business.routing.enabled` | import/export/process worker | **false**（单片无损，全租户落 shard-0=现库） | **false** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED`；开后按 `placement-source`（CONFIG/TABLE）+ `shards[*]` 路由,详见 [`biz-tenant-routing.md`](./biz-tenant-routing.md) §8 |
 | `batch.datasource.business.routing.placement-source` | 同上 | **CONFIG**（hash+silo） | **CONFIG** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE`=CONFIG/TABLE；TABLE 读 `batch.business_tenant_placement`（在线维护,见 console `/api/console/ops/tenant-placements`） |
 | ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
+| `batch.resource-scheduler.default-exceeded-strategy` | orchestrator | **QUEUE_DEFER**（有界队列+背压，洪峰不误拒） | **QUEUE_DEFER** | 🟡 中 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY`=QUEUE_DEFER/REJECT；ADR-042 Phase2.3 **改了平台默认行为**（旧默认硬拒 REJECT）→ 设 `REJECT` 可回退。仅作用于未显式配 `exceeded_strategy` 的租户，显式配的以租户策略为准 |
+| `batch.worker.import.scanner.done-file-format` | worker-import | **MARKER** | **MARKER** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT`=MARKER/JSON；JSON 即 sidecar manifest 强校验（#570），配合 `batch-manifest-enabled` |
+| `batch.worker.import.scanner.done-file-suffix` | worker-import | **`.done`** | **`.done`** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX`；done 文件后缀可配（#569） |
+| `batch.worker.import.scanner.batch-manifest-enabled` | worker-import | **false** | **false** | 🟡 中 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED`；开后扫描期强校验批次清单（文件完整性，#570）|
+| `batch.file-governance.arrival.require-verified` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED`；开后到达组要求文件已校验通过才放行（#570）|
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。
+>
+> **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读(#578/580/582/584)是模板/渠道级配置(`trailer_template` / control-total rule / `readback_verify_enabled`),归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md);本表只收全局 yml/env 开关。
 
 ### 1.1 Fail-open 速查（代码核实，2026-04-26）
 

@@ -194,6 +194,9 @@ batch:
     quota-reset-scan-interval-millis: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SCAN_INTERVAL_MILLIS:60000}
     # 全局并发上限（所有租户合计运行中任务数）：<=0 表示关闭
     global-max-running-jobs: ${BATCH_RESOURCE_SCHEDULER_GLOBAL_MAX_RUNNING_JOBS:0}
+    # ADR-042 Phase2.3：租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。
+    # QUEUE_DEFER=有界队列+背压（默认，洪峰不误拒）；REJECT=恢复旧的硬拒默认。仅作用于未显式配策略的租户。
+    default-exceeded-strategy: ${BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY:QUEUE_DEFER}
   rate-limit:
     # 是否启用显式限流（时间窗/令牌桶）：默认关闭，避免影响现有行为
     enabled: ${BATCH_RATE_LIMIT_ENABLED:false}
