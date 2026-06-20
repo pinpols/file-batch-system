@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 /**
@@ -33,13 +35,13 @@ import org.mockito.Mockito;
 class FileGovernanceArrivalGroupGuardTest {
 
   private FileGovernanceRepository repository;
+  private FileGovernanceProperties properties;
   private FileGovernanceScheduler scheduler;
 
   @BeforeEach
   void setUp() {
     repository = mock(FileGovernanceRepository.class);
-    FileGovernanceProperties properties =
-        mock(FileGovernanceProperties.class, Mockito.RETURNS_DEEP_STUBS);
+    properties = mock(FileGovernanceProperties.class, Mockito.RETURNS_DEEP_STUBS);
     when(properties.getArrival().isEnabled()).thenReturn(true);
     when(properties.getArrival().getBatchSize()).thenReturn(100);
     when(properties.getArrival().isTriggerOnComplete()).thenReturn(true);
@@ -95,6 +97,43 @@ class FileGovernanceArrivalGroupGuardTest {
 
     verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5300L), any());
     verify(repository, times(1)).appendAudit(any());
+  }
+
+  @Test
+  void shouldHoldWhenRequireVerifiedAndMemberMissingChecksum() {
+    // require-verified=true:文件名虽齐,但成员 checksum_type=NONE(无 manifest 背书)→ 不放行,保持等待
+    when(properties.getArrival().isRequireVerified()).thenReturn(true);
+    Map<String, Object> file =
+        baseFile(5400L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    file.put("required_file_set", "ready.csv");
+    file.put("checksum_type", "NONE");
+    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+
+    scheduler.manageFileArrivalGroups();
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5400L), captor.capture());
+    assertThat(captor.getValue().get("arrivalState")).isEqualTo("WAITING_ARRIVAL");
+    assertThat(captor.getValue().get("arrivalReason")).isEqualTo("ARRIVED_PENDING_VERIFY");
+  }
+
+  @Test
+  void shouldTriggerWhenRequireVerifiedAndAllMembersHaveChecksum() {
+    // require-verified=true + 成员 checksum_type 非 NONE(有 manifest 背书)→ 正常触发
+    when(properties.getArrival().isRequireVerified()).thenReturn(true);
+    Map<String, Object> file =
+        baseFile(5401L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    file.put("required_file_set", "ready.csv");
+    file.put("checksum_type", "SHA-256");
+    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+
+    scheduler.manageFileArrivalGroups();
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5401L), captor.capture());
+    assertThat(captor.getValue().get("arrivalState")).isEqualTo("TRIGGERED");
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

@@ -498,6 +498,15 @@ public class FileGovernanceScheduler {
       return new ArrivalGroupDecision(STATUS_TRIGGERED);
     }
     if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
+      if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
+        // 文件名虽齐,但有成员缺完整性背书(checksum_type=NONE)→ 保持等待,不放行;超时已在上方走 timeoutAction
+        updateGroupState(
+            new ArrivalGroupUpdateContext(
+                key,
+                new ArrivalGroupUpdateState("WAITING_ARRIVAL", "ARRIVED_PENDING_VERIFY", now),
+                new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+        return new ArrivalGroupDecision("WAITING_ARRIVAL");
+      }
       if (triggerOnComplete) {
         updateGroupState(
             new ArrivalGroupUpdateContext(
@@ -671,6 +680,17 @@ public class FileGovernanceScheduler {
 
       return null;
     }
+  }
+
+  /** 组内每个成员都有完整性背书(checksum_type 非空且非 NONE,即入站 MANIFEST 注入了 checksum)。 */
+  private boolean allMembersVerified(List<Map<String, Object>> groupFiles) {
+    for (Map<String, Object> file : groupFiles) {
+      String checksumType = text(file.get("checksum_type"));
+      if (checksumType == null || checksumType.isBlank() || "NONE".equalsIgnoreCase(checksumType)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private Set<String> parseRequiredFileSet(String value) {

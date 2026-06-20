@@ -26,4 +26,18 @@ class ImportScannerPropertiesTest {
   void doneFileNaming_defaultsToAppendFullName() {
     assertThat(new ImportScannerProperties().getDoneFileNaming()).isEqualTo("APPEND_FULL_NAME");
   }
+
+  @Test
+  @DisplayName("标记格式默认 MARKER(空标记,向后兼容);MANIFEST 模式才启用 JSON 强校验")
+  void doneFileFormat_defaultsToMarker() {
+    assertThat(new ImportScannerProperties().getDoneFileFormat()).isEqualTo("MARKER");
+  }
+
+  @Test
+  @DisplayName("批次清单默认关闭,后缀默认 .batch.json(ADR-040)")
+  void batchManifest_defaults() {
+    ImportScannerProperties props = new ImportScannerProperties();
+    assertThat(props.isBatchManifestEnabled()).isFalse();
+    assertThat(props.getBatchManifestSuffix()).isEqualTo(".batch.json");
+  }
 }
