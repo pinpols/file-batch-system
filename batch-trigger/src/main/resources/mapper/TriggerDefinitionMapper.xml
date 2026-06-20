@@ -12,6 +12,7 @@
         <result column="calendar_code" property="calendarCode"/>
         <result column="catch_up_policy" property="catchUpPolicy"/>
         <result column="catch_up_max_days" property="catchUpMaxDays"/>
+        <result column="depends_on_job_code" property="dependsOnJobCode"/>
         <result column="enabled" property="enabled"/>
     </resultMap>
 
@@ -26,6 +27,7 @@
         jd.calendar_code,
         coalesce(bc.catch_up_policy, 'NONE') as catch_up_policy,
         coalesce(bc.catch_up_max_days, 0) as catch_up_max_days,
+        jd.depends_on_job_code,
         jd.enabled
     </sql>
 
