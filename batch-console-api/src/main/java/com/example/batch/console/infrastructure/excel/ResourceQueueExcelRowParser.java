@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure.excel;
 
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
+import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalText;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireEnum;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireInteger;
@@ -42,7 +43,8 @@ public final class ResourceQueueExcelRowParser {
             .maxQps(requireInteger(values, "max_qps", 0, issues))
             .workerGroup(optionalText(values, "worker_group", 128, issues))
             .resourceTag(optionalText(values, "resource_tag", 64, issues))
-            .priorityPolicy(requireEnum(values, "priority_policy", PRIORITY_POLICIES, 32, issues))
+            .priorityPolicy(
+                optionalEnum(values, "priority_policy", PRIORITY_POLICIES, 32, "FIFO", issues))
             .fairShareWeight(requireInteger(values, "fair_share_weight", 1, issues))
             .enabled(optionalBoolean(values, "enabled", true, issues))
             .description(optionalText(values, "description", 512, issues))
