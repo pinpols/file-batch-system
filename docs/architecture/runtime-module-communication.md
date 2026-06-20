@@ -101,6 +101,10 @@ flowchart LR
   - **i18n 三元组**（V77/V78 后）：`errorKey` + `errorArgs`（JSON 数组）随 BizException.of 跨进程传递，落库 11 张表的 `error_key` + `error_args` JSONB 列；console 读路径过 `LocalizedErrorRenderer` 按当前 Locale 重渲染
   - **节点产出**（ADR-009 Stage 1.2）：`outputs: Map<String, Object>` 字段，worker SUCCESS 时上报 fileId / recordCount / receiptCode 等关键字段，orchestrator 序列化写 `workflow_node_run.output` JSONB 列，供下游 workflow 节点 `$.nodes.<X>.output.<key>` DSL 引用
 
+### 其它内部 HTTP 端点（2026-06-20 新增）
+- **`GET /internal/readiness/job`**(orchestrator,#592 / ADR-043 Phase A):trigger 在 fire 前查上游就绪。trigger **严禁直连 orchestrator 状态表**(读写分离仅 console-api),故就绪判定由 orchestrator 暴露只读 internal API,trigger 携 `X-Internal-Secret` 调用。入参 tenantId/jobCode/bizDate,返回 `ReadinessResult{ready, reason}`(该批次日 SUCCESS 实例数 >0 即就绪)。v1 仅 JOB 就绪。
+- **`POST /internal/import/events/object-arrival`**(worker-import,#589 / 路线图 4.1,**默认关**):对象存储到达事件通知 → 即时触发一次 ingress 扫描(替代纯轮询)。body `ObjectArrivalNotification{tenantId,bucket,objectKey}`;`batch.worker.import.scanner.event-arrival.enabled=false` 默认;扫描在途则合并本次通知(防事件风暴)。日志侧对通知字段做白名单过滤防 log injection。
+
 ### biz 数据源可选租户分片路由（#473，默认关）
 - worker 连 `batch_business` 的数据源外层包 `BusinessRoutingDataSource`（Spring `AbstractRoutingDataSource`，已接 import/export/process 的 `BusinessDataSourceConfiguration`），按 `BusinessPlacementResolver` 把当前租户路由到某个 biz 分片。
 - `batch.datasource.business.routing.enabled=false` **默认 → 单片 shard-0 = 现库,透明无变更**(故上图 `JDBC → batch_business` 单库语义不变)。
