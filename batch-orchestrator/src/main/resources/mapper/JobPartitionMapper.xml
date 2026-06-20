@@ -258,6 +258,12 @@
         select *
         from batch.job_partition
         where partition_status = #{waitingStatus}
+          and not exists (
+              select 1
+              from batch.job_instance ji
+              where ji.id = job_partition.job_instance_id
+                and ji.instance_status = 'PAUSED'
+          )
         order by id asc
         limit #{batchSize}
     </select>

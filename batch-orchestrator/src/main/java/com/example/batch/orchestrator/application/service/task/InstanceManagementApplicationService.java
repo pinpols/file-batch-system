@@ -29,6 +29,9 @@ public class InstanceManagementApplicationService {
   private static final Set<String> CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
   private static final Set<String> TERMINABLE = Set.of("RUNNING");
   private static final Set<String> PARTITION_CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
+  // ADR-044:仅 RUNNING 可暂停(停发新分区,在途自然终结);PAUSED 可恢复回 RUNNING。
+  private static final Set<String> PAUSABLE = Set.of("RUNNING");
+  private static final Set<String> RESUMABLE = Set.of("PAUSED");
 
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
@@ -56,6 +59,39 @@ public class InstanceManagementApplicationService {
 
   public Map<String, Object> terminate(String tenantId, Long id) {
     return transition(tenantId, id, TERMINABLE, "TERMINATED");
+  }
+
+  /** ADR-044 暂停 RUNNING → PAUSED:停发新分区,在途自然终结,不破坏性 kill。 */
+  public Map<String, Object> pause(String tenantId, Long id) {
+    return lifecycleTransition(tenantId, id, PAUSABLE, "PAUSED");
+  }
+
+  /** ADR-044 恢复 PAUSED → RUNNING:重新纳入派发,已成功分区不重跑(靠幂等)。 */
+  public Map<String, Object> resume(String tenantId, Long id) {
+    return lifecycleTransition(tenantId, id, RESUMABLE, "RUNNING");
+  }
+
+  /**
+   * 非终态生命周期 CAS 转换(pause/resume 专用)。
+   *
+   * <p>不走终态 reconcile、不动 finished_at,仅 allowedFrom + version 守护。
+   */
+  private Map<String, Object> lifecycleTransition(
+      String tenantId, Long id, Set<String> allowedFrom, String targetStatus) {
+    JobInstanceEntity instance =
+        Guard.requireFound(jobInstanceMapper.selectById(tenantId, id), "job instance not found");
+    if (!allowedFrom.contains(instance.getInstanceStatus())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
+          "cannot transition from " + instance.getInstanceStatus() + " to " + targetStatus);
+    }
+    int rows =
+        jobInstanceMapper.updateLifecycleStatus(tenantId, id, targetStatus, instance.getVersion());
+    if (rows == 0) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+    }
+    return Map.of("id", id, "instanceNo", instance.getInstanceNo(), "status", targetStatus);
   }
 
   public Map<String, Object> cancelPartition(String tenantId, Long id) {

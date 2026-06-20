@@ -29,6 +29,18 @@ public class InstanceManagementController {
     return instanceManagementApplicationService.terminate(tenantId, id);
   }
 
+  @PostMapping("/{id}/pause")
+  public Map<String, Object> pause(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return instanceManagementApplicationService.pause(tenantId, id);
+  }
+
+  @PostMapping("/{id}/resume")
+  public Map<String, Object> resume(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return instanceManagementApplicationService.resume(tenantId, id);
+  }
+
   @PostMapping("/partitions/{id}/cancel")
   public Map<String, Object> cancelPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
