@@ -11,6 +11,7 @@ import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,7 +60,8 @@ class ImportIngressScannerTest {
             workerConfiguration,
             scannerProperties,
             s3StorageProperties,
-            objectStore);
+            objectStore,
+            new ObjectMapper());
   }
 
   @Test

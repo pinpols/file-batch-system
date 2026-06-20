@@ -253,6 +253,9 @@ batch:
       default-timeout-action: ${BATCH_FILE_GOVERNANCE_ARRIVAL_DEFAULT_TIMEOUT_ACTION:MANUAL_CONFIRM}
       # 文件处于 complete 状态时是否触发到达事件
       trigger-on-complete: ${BATCH_FILE_GOVERNANCE_ARRIVAL_TRIGGER_ON_COMPLETE:true}
+      # 触发前是否要求组内每个成员都已完整性背书（checksum_type != NONE，即入站 MANIFEST 注入了 checksum）。
+      # 默认 false（仅文件名凑齐即触发）；true 时缺校验背书的成员会让组保持等待（超时仍走 timeout-action）。
+      require-verified: ${BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED:false}
       # 人工等待延长期（秒）：用于人工确认前延长窗口
       manual-wait-extension-seconds: ${BATCH_FILE_GOVERNANCE_ARRIVAL_MANUAL_WAIT_EXTENSION_SECONDS:1800}
     access:
