@@ -32,4 +32,12 @@ class ImportScannerPropertiesTest {
   void doneFileFormat_defaultsToMarker() {
     assertThat(new ImportScannerProperties().getDoneFileFormat()).isEqualTo("MARKER");
   }
+
+  @Test
+  @DisplayName("批次清单默认关闭,后缀默认 .batch.json(ADR-040)")
+  void batchManifest_defaults() {
+    ImportScannerProperties props = new ImportScannerProperties();
+    assertThat(props.isBatchManifestEnabled()).isFalse();
+    assertThat(props.getBatchManifestSuffix()).isEqualTo(".batch.json");
+  }
 }
