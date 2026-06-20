@@ -12,6 +12,8 @@ import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -59,7 +61,11 @@ public class ImportIngressScanner {
   private final ImportScannerProperties scannerProperties;
   private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
+  private final ObjectMapper objectMapper;
   private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
+
+  /** sidecar manifest(.chk JSON)上限,防异常大对象拖垮扫描;manifest 本应是 KB 级小文件。 */
+  private static final long MAX_MANIFEST_BYTES = 64L * 1024;
 
   /** 扫描器只负责“安全发现 + 登记”，不绕过 Trigger/Orchestrator 直接起任务。 */
   @Scheduled(fixedDelayString = "${batch.worker.import.scanner.poll-interval-millis:30000}")
@@ -106,9 +112,18 @@ public class ImportIngressScanner {
     if (snapshot == null || snapshot.objectName().endsWith(scannerProperties.getDoneFileSuffix())) {
       return;
     }
-    if (scannerProperties.isRequireDoneFile()
-        && !currentObjects.contains(resolveDoneMarker(snapshot.objectName()))) {
-      return;
+    SidecarManifest manifest = null;
+    if (scannerProperties.isRequireDoneFile()) {
+      String marker = resolveDoneMarker(snapshot.objectName());
+      if (!currentObjects.contains(marker)) {
+        return;
+      }
+      if (isManifestMode()) {
+        manifest = readAndVerifyManifest(marker, snapshot);
+        if (manifest == null) {
+          return; // manifest 缺失 / 解析失败 / size 不符 → 视为未完整,不登记(下轮重试或人工介入)
+        }
+      }
     }
     if (!isStable(snapshot)) {
       return;
@@ -169,6 +184,12 @@ public class ImportIngressScanner {
       metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
       metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
     }
+    if (manifest != null) {
+      metadata.put("manifestSchemaVersion", manifest.schemaVersion());
+      if (manifest.recordCount() != null) {
+        metadata.put("expectedRecordCount", manifest.recordCount());
+      }
+    }
     Long fileId =
         runtimeRepository.createFileRecord(
             FileRecordParam.builder()
@@ -181,8 +202,11 @@ public class ImportIngressScanner {
                 .fileFormatType(resolveFileFormatType(fileName))
                 .charset(StandardCharsets.UTF_8.name())
                 .fileSizeBytes(snapshot.size())
-                .checksumType("NONE")
-                .checksumValue(null)
+                .checksumType(
+                    manifest != null && Texts.hasText(manifest.checksumType())
+                        ? manifest.checksumType()
+                        : "NONE")
+                .checksumValue(manifest == null ? null : manifest.checksumValue())
                 .storageType("S3")
                 .storagePath(snapshot.objectName())
                 .storageBucket(s3StorageProperties.getBucket())
@@ -375,6 +399,37 @@ public class ImportIngressScanner {
       return objectName.substring(0, dotIndex) + suffix;
     }
     return objectName + suffix;
+  }
+
+  private boolean isManifestMode() {
+    return "MANIFEST".equalsIgnoreCase(scannerProperties.getDoneFileFormat());
+  }
+
+  /** 读 .chk JSON manifest:解析 + 免下载 size 校验;失败/不符返回 null。 */
+  private SidecarManifest readAndVerifyManifest(String markerName, ObjectSnapshot snapshot) {
+    try (InputStream in = objectStore.get(s3StorageProperties.getBucket(), markerName)) {
+      byte[] bytes = in.readNBytes((int) MAX_MANIFEST_BYTES + 1);
+      if (bytes.length > MAX_MANIFEST_BYTES) {
+        log.warn("sidecar manifest too large, skip register: marker={}", markerName);
+        return null;
+      }
+      SidecarManifest manifest = objectMapper.readValue(bytes, SidecarManifest.class);
+      if (manifest.sizeBytes() != null && manifest.sizeBytes() != snapshot.size()) {
+        log.warn(
+            "manifest size mismatch, skip register: object={}, manifestSize={}, actualSize={}",
+            snapshot.objectName(),
+            manifest.sizeBytes(),
+            snapshot.size());
+        return null;
+      }
+      return manifest;
+    } catch (Exception ex) {
+      log.warn(
+          "failed to read/parse sidecar manifest, skip register: marker={}, error={}",
+          markerName,
+          ex.getMessage());
+      return null;
+    }
   }
 
   private String resolveFileFormatType(String fileName) {

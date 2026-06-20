@@ -19,6 +19,9 @@ public class ImportScannerProperties {
   /** 标记命名:APPEND_FULL_NAME(默认,全名+后缀)或 REPLACE_EXTENSION(去末段扩展名,旧行为)。 */
   private String doneFileNaming = "APPEND_FULL_NAME";
 
+  /** 标记格式:MARKER(默认,空标记)或 MANIFEST(.chk 为 JSON,校验 size+注入 checksum/recordCount)。 */
+  private String doneFileFormat = "MARKER";
+
   private long stabilityWindowSeconds = 30L;
   private String sourceType = "SYSTEM";
   private String defaultBizType = "IMPORT_SCAN";

@@ -26,4 +26,10 @@ class ImportScannerPropertiesTest {
   void doneFileNaming_defaultsToAppendFullName() {
     assertThat(new ImportScannerProperties().getDoneFileNaming()).isEqualTo("APPEND_FULL_NAME");
   }
+
+  @Test
+  @DisplayName("标记格式默认 MARKER(空标记,向后兼容);MANIFEST 模式才启用 JSON 强校验")
+  void doneFileFormat_defaultsToMarker() {
+    assertThat(new ImportScannerProperties().getDoneFileFormat()).isEqualTo("MARKER");
+  }
 }
