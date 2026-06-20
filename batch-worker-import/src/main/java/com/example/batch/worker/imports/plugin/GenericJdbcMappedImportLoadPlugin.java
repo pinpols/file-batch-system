@@ -10,6 +10,7 @@ import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
 import com.example.batch.worker.imports.jdbc.ImportLoadStrategy;
 import com.example.batch.worker.imports.jdbc.JdbcMappedImportSpec;
+import com.example.batch.worker.imports.stage.format.ParseSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.StringReader;
 import java.sql.Connection;
@@ -252,7 +253,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
     for (JdbcMappedImportSpec.ColumnMapping m : spec.columnMappings()) {
       if (m.to().equals(col)) {
-        return row.get(m.from());
+        return resolveRowValue(row, m.from());
       }
     }
     String pattern = spec.systemBindings().get(col);
@@ -260,6 +261,23 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return resolveBinding(pattern, context);
     }
     throw new IllegalStateException("no binding for column: " + col);
+  }
+
+  /**
+   * 取 {@code from} 对应的行值:先精确命中(快路径);未命中再按 {@link ParseSupport#matchKey} 大小写/下划线容错匹配 （如文件表头 {@code
+   * Phone}/{@code PHONE} 命中 {@code from=phone}),仍无则 null。
+   */
+  private static Object resolveRowValue(Map<String, Object> row, String from) {
+    if (row.containsKey(from)) {
+      return row.get(from);
+    }
+    String mk = ParseSupport.matchKey(from);
+    for (Map.Entry<String, Object> e : row.entrySet()) {
+      if (ParseSupport.matchKey(e.getKey()).equals(mk)) {
+        return e.getValue();
+      }
+    }
+    return null;
   }
 
   private Object valueForPartitionColumn(

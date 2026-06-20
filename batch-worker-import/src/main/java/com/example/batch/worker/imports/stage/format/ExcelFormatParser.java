@@ -223,11 +223,13 @@ public class ExcelFormatParser implements FormatParser {
   }
 
   private static int indexOfHeader(List<String> headers, String source) {
-    if (headers == null) {
+    if (headers == null || source == null) {
       return -1;
     }
+    // 大小写/下划线容错:与 CSV/LOAD 的 from↔表头匹配规则一致
+    String mk = ParseSupport.matchKey(source);
     for (int i = 0; i < headers.size(); i++) {
-      if (source != null && source.equalsIgnoreCase(headers.get(i))) {
+      if (ParseSupport.matchKey(headers.get(i)).equals(mk)) {
         return i;
       }
     }

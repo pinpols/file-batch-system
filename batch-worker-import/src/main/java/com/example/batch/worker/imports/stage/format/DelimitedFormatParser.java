@@ -11,9 +11,11 @@ import com.univocity.parsers.csv.CsvParserSettings;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Parses delimited text (CSV, TSV, pipe-separated, etc.) into NDJSON records.
@@ -158,6 +160,10 @@ public class DelimitedFormatParser implements FormatParser {
     if (!(fieldMappings instanceof List<?> list) || list.isEmpty()) {
       return;
     }
+    Set<String> headerKeys = new HashSet<>();
+    for (String h : headers) {
+      headerKeys.add(ParseSupport.matchKey(h));
+    }
     List<String> missing = new ArrayList<>();
     for (Object item : list) {
       if (!(item instanceof Map<?, ?> map) || !isRequired(map.get("required"))) {
@@ -168,7 +174,8 @@ public class DelimitedFormatParser implements FormatParser {
         continue;
       }
       String source = String.valueOf(src).trim();
-      if (!headers.contains(source)) {
+      // 大小写/下划线容错:与 LOAD 的 from↔表头匹配一致
+      if (!headerKeys.contains(ParseSupport.matchKey(source))) {
         missing.add(source);
       }
     }

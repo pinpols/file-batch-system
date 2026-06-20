@@ -229,7 +229,7 @@ if effective.isEmpty():
 4. `normalizeColumn` 工具落 `batch-common` 还是 import/export 各自实现(避免无谓共享耦合)。
 5. **(§4.5)** fan-out(一 `from` → 多 `to`)默认 reject 是否接受(用户倾向不允许);碰撞(多 `from` → 一 `to`)改 reject 无异议。
 6. ~~**(§4.6)** headerless CSV 的位置 schema 从硬编码 `defaultHeaders()` 改为 `field_mappings` 顺序~~ — **已修(2026-06-20)**:`ParseSupport.positionalHeaders()` + `DelimitedFormatParser` 无表头分支改造,模板无 `field_mappings` 才回退旧默认。
-7. **(§4.6 脚注)** 是否对 `from`→文件表头匹配也加大小写/trim 容错(动用户文件数据,更敏感)。
+7. ~~**(§4.6 脚注)** 是否对 `from`→文件表头匹配也加大小写/trim 容错~~ — **已实现(用户拍板「静默匹配」)**:新增 `ParseSupport.matchKey`(全小写 + 去 `_`/`-`/空格),统一用于 LOAD `valueForColumn`(精确未命中再容错)、CSV `validateRequiredHeaders`、Excel `indexOfHeader`。`Phone`/`PHONE`/`phone`、`mobile_no`/`mobileNo` 在匹配时等价。权衡:会掩盖纯写法差异的"拼错",但消除最常见的"表头大小写不一致→整列 null"。
 
 ---
 

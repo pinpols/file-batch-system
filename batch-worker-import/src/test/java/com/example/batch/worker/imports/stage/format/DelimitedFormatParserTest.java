@@ -98,6 +98,25 @@ class DelimitedFormatParserTest {
     assertThat(count).isEqualTo(1L);
   }
 
+  @Test
+  void headeredToleratesCaseAndUnderscoreOnRequiredHeader() throws Exception {
+    // 文件表头 CUSTOMER_NO / Customer_Name 与 field_mappings 的 customerNo / customerName 仅写法不同
+    String csv = "CUSTOMER_NO,Customer_Name\nC001,Alice\n";
+    Map<String, Object> tpl =
+        Map.of(
+            "header_rows",
+            1,
+            "field_mappings",
+            List.of(
+                Map.of("name", "customerNo", "required", true),
+                Map.of("name", "customerName", "required", true)));
+    StringWriter sink = new StringWriter();
+
+    long count = parser.parse(context(), request(csv, tpl), new BufferedWriter(sink));
+
+    assertThat(count).isEqualTo(1L);
+  }
+
   private ImportJobContext context() {
     ImportJobContext ctx = new ImportJobContext();
     ctx.setTenantId("t1");
