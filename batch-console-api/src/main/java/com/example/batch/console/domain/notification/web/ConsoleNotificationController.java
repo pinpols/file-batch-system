@@ -4,6 +4,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.domain.notification.application.ConsoleNotificationApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
@@ -128,7 +129,7 @@ public class ConsoleNotificationController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<Map<String, Object>>> deliveryLogs(
       @RequestParam @NotBlank String tenantId,
-      @RequestParam(defaultValue = "100") @Positive int limit) {
+      @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
     return responseFactory.success(service.deliveryLogs(tenantId, limit));
   }
 }
