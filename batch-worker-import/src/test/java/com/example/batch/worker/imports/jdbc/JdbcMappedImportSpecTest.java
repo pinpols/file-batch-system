@@ -2,8 +2,10 @@ package com.example.batch.worker.imports.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.example.batch.common.exception.WorkerConfigException;
+import com.example.batch.worker.imports.jdbc.JdbcMappedImportSpec.ColumnMapping;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,136 @@ class JdbcMappedImportSpecTest {
     assertThatThrownBy(() -> JdbcMappedImportSpec.parse(Map.of(), objectMapper))
         .isInstanceOf(WorkerConfigException.class)
         .hasMessageContaining("jdbc_mapped_import spec missing");
+  }
+
+  @Test
+  void shouldInferColumnMappingsFromFieldMappingsWhenOmitted() {
+    Map<String, Object> template =
+        Map.of(
+            "field_mappings",
+            List.of(
+                Map.of("name", "customerNo", "targetColumn", "customer_no"),
+                // 无 targetColumn → 归一化 customerName → customer_name
+                Map.of("name", "customerName"),
+                // persist:false → 只校验不入库,不进推断
+                Map.of("name", "creditLimit", "persist", false)),
+            "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "customer_account",
+                "tenantColumn", "tenant_id",
+                "conflictColumns", List.of("tenant_id", "customer_no")));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.columnMappings())
+        .extracting(ColumnMapping::from, ColumnMapping::to)
+        .containsExactly(
+            tuple("customerNo", "customer_no"), tuple("customerName", "customer_name"));
+  }
+
+  @Test
+  void shouldInferWhenColumnMappingsIsEmptyJsonArray() {
+    Map<String, Object> template =
+        Map.of(
+            "field_mappings",
+            List.of(Map.of("name", "customerNo", "targetColumn", "customer_no")),
+            "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "customer_account",
+                "tenantColumn", "tenant_id",
+                "columnMappings", List.of()));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.columnMappings()).hasSize(1);
+    assertThat(spec.columnMappings().get(0).to()).isEqualTo("customer_no");
+  }
+
+  @Test
+  void explicitMappingsOverrideInferredByFrom_onlyDiffsNeeded() {
+    Map<String, Object> template =
+        Map.of(
+            "field_mappings",
+            List.of(Map.of("name", "email"), Map.of("name", "phone")),
+            "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "customer_account",
+                "tenantColumn", "tenant_id",
+                // 只需写名字对不上的差异项:phone → mobile_no
+                "columnMappings", List.of(Map.of("from", "phone", "to", "mobile_no"))));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.columnMappings())
+        .extracting(ColumnMapping::from, ColumnMapping::to)
+        .containsExactly(tuple("email", "email"), tuple("phone", "mobile_no"));
+  }
+
+  @Test
+  void shouldRejectWhenNeitherColumnMappingsNorFieldMappingsPresent() {
+    Map<String, Object> template =
+        Map.of(
+            "jdbc_mapped_import",
+            Map.of("schema", "biz", "table", "customer_account", "tenantColumn", "tenant_id"));
+
+    assertThatThrownBy(() -> JdbcMappedImportSpec.parse(template, objectMapper))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("could not be inferred from field_mappings");
+  }
+
+  @Test
+  void shouldRejectFanOutOneSourceToMultipleColumns() {
+    JdbcMappedImportSpec spec =
+        mappingSpec(
+            List.of(
+                new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
+                new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_y")));
+
+    assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz")))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("fan-out is not supported");
+  }
+
+  @Test
+  void shouldRejectCollisionMultipleSourcesToOneColumn() {
+    JdbcMappedImportSpec spec =
+        mappingSpec(
+            List.of(
+                new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
+                new JdbcMappedImportSpec.ColumnMapping("fieldB", "col_x")));
+
+    assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz")))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("single source");
+  }
+
+  @Test
+  void normalizeColumnHandlesCamelUnderscoreAndCase() {
+    assertThat(JdbcMappedImportSpec.normalizeColumn("customerNo")).isEqualTo("customer_no");
+    assertThat(JdbcMappedImportSpec.normalizeColumn("CUSTOMER_NO")).isEqualTo("customer_no");
+    assertThat(JdbcMappedImportSpec.normalizeColumn("customer_no")).isEqualTo("customer_no");
+    assertThat(JdbcMappedImportSpec.normalizeColumn("customerID")).isEqualTo("customer_id");
+    assertThat(JdbcMappedImportSpec.normalizeColumn("customerHTTPUrl"))
+        .isEqualTo("customer_http_url");
+  }
+
+  private static JdbcMappedImportSpec mappingSpec(
+      List<JdbcMappedImportSpec.ColumnMapping> mappings) {
+    return new JdbcMappedImportSpec(
+        "biz",
+        "customer_account",
+        "tenant_id",
+        mappings,
+        List.of(),
+        Map.of(),
+        null,
+        List.of(),
+        ImportLoadStrategy.BATCH_UPSERT,
+        List.of(),
+        null);
   }
 
   @Test

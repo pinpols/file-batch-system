@@ -1,6 +1,6 @@
 # 列映射配置体验:IMPORT 默认推断,EXPORT 列归 SELECT
 
-> 日期:2026-06-20 · 状态:设计草案(待评审,未改码)
+> 日期:2026-06-20 · 状态:已实现(IMPORT 推断+1:1 基数校验、EXPORT detailSelectColumns 去重;PR #579)
 > 范围:IMPORT `columnMappings` 默认推断 + 差异覆盖为主;EXPORT 维持列显式(SQL 投影),仅一处可选去重
 > 关联:`docs/architecture/worker-plugins.md`、`docs/runbook/first-tenant-config-quickstart.md`、ADR 范围纪律(文件交付闭环,不扩张为数据治理)
 

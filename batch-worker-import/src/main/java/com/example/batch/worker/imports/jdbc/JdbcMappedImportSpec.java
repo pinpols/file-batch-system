@@ -55,9 +55,15 @@ public record JdbcMappedImportSpec(
     String schema = String.valueOf(root.getOrDefault("schema", "biz")).trim();
     String table = required(root, "table");
     String tenantColumn = required(root, "tenantColumn");
-    List<ColumnMapping> mappings = parseMappings(root.get("columnMappings"));
+    // columnMappings 可缺省(不写 / 空 [] / null)——此时从模板 field_mappings 推断,
+    // 显式项按 from 覆盖推断项、并追加新项("只配置明确差异")。
+    List<ColumnMapping> explicit = parseMappings(root.get("columnMappings"));
+    List<ColumnMapping> inferred = inferFromFieldMappings(templateConfig, objectMapper);
+    List<ColumnMapping> mappings = mergeMappings(inferred, explicit);
     if (mappings.isEmpty()) {
-      throw new WorkerConfigException("jdbc_mapped_import.columnMappings is required");
+      throw new WorkerConfigException(
+          "jdbc_mapped_import.columnMappings is required and could not be inferred from"
+              + " field_mappings (declare columnMappings or field_mappings[*].name/targetColumn)");
     }
     List<String> conflicts = parseStringList(root.get("conflictColumns"));
     Map<String, String> system = parseSystemBindings(root.get("systemBindings"));
@@ -160,6 +166,144 @@ public record JdbcMappedImportSpec(
     return out;
   }
 
+  /**
+   * 从模板顶层 {@code field_mappings} 推断列映射:每个声明字段产出一条 {@code from(name) -> to}。{@code to}
+   * 优先取显式 {@code targetColumn},缺省则对 {@code name} 做 {@link #normalizeColumn} 归一化(驼峰/下划线/大小写
+   * 写法差异默认兼容)。{@code persist:false} 的字段只参与解析校验、不入库,故不进推断集。
+   */
+  private static List<ColumnMapping> inferFromFieldMappings(
+      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+    List<ColumnMapping> out = new ArrayList<>();
+    for (Map<String, Object> fm : extractFieldMappings(templateConfig, objectMapper)) {
+      Object nameRaw = fm.get("name");
+      if (nameRaw == null || !Texts.hasText(String.valueOf(nameRaw))) {
+        continue;
+      }
+      if (Boolean.FALSE.equals(toBoolean(fm.get("persist")))) {
+        continue;
+      }
+      String name = String.valueOf(nameRaw).trim();
+      Object target = fm.get("targetColumn");
+      String to =
+          target != null && Texts.hasText(String.valueOf(target))
+              ? String.valueOf(target).trim()
+              : normalizeColumn(name);
+      if (Texts.hasText(to)) {
+        out.add(new ColumnMapping(name, to));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 合并推断项与显式项:显式按 {@code from} 覆盖同名推断项,其余显式项追加。顺序 = 未被覆盖的推断项在前、显式项在后。
+   * 不在此塌缩重复(fan-out / 碰撞),交由 {@link #validateMappingCardinality} 显式拒绝。
+   */
+  private static List<ColumnMapping> mergeMappings(
+      List<ColumnMapping> inferred, List<ColumnMapping> explicit) {
+    if (explicit.isEmpty()) {
+      return inferred;
+    }
+    Set<String> explicitFroms = new LinkedHashSet<>();
+    for (ColumnMapping e : explicit) {
+      explicitFroms.add(e.from());
+    }
+    List<ColumnMapping> out = new ArrayList<>();
+    for (ColumnMapping inf : inferred) {
+      if (!explicitFroms.contains(inf.from())) {
+        out.add(inf);
+      }
+    }
+    out.addAll(explicit);
+    return out;
+  }
+
+  private static List<Map<String, Object>> extractFieldMappings(
+      Map<String, Object> templateConfig, ObjectMapper objectMapper) {
+    if (templateConfig == null) {
+      return List.of();
+    }
+    Object raw = templateConfig.get("field_mappings");
+    if (raw == null) {
+      return List.of();
+    }
+    List<?> list;
+    if (raw instanceof List<?> l) {
+      list = l;
+    } else {
+      String text = extractJsonText(raw);
+      if (text == null || !Texts.hasText(text)) {
+        return List.of();
+      }
+      try {
+        list = objectMapper.readValue(text, List.class);
+      } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(JdbcMappedImportSpec.class, "catch:Exception", ignored);
+        return List.of();
+      }
+    }
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (Object item : list) {
+      if (item instanceof Map<?, ?> m) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        m.forEach((k, v) -> entry.put(String.valueOf(k), v));
+        out.add(entry);
+      }
+    }
+    return out;
+  }
+
+  private static Boolean toBoolean(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Boolean b) {
+      return b;
+    }
+    String s = String.valueOf(value).trim();
+    if ("false".equalsIgnoreCase(s)) {
+      return false;
+    }
+    if ("true".equalsIgnoreCase(s)) {
+      return true;
+    }
+    return null;
+  }
+
+  /**
+   * 字段名 → snake_case 列名的确定性归一化:驼峰/连续大写边界切分 + 全小写 + 下划线/连字符/空格折叠为单下划线。
+   * {@code customerNo}/{@code CUSTOMER_NO}/{@code customer_no} 都归一为 {@code customer_no};{@code
+   * customerHTTPUrl} → {@code customer_http_url}。仅消写法差异,不做相似度模糊匹配。
+   */
+  static String normalizeColumn(String name) {
+    if (name == null) {
+      return "";
+    }
+    String s = name.trim();
+    StringBuilder sb = new StringBuilder(s.length() + 4);
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (c == '_' || c == '-' || c == ' ') {
+        if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '_') {
+          sb.append('_');
+        }
+        continue;
+      }
+      if (Character.isUpperCase(c)) {
+        boolean prevLowerOrDigit =
+            i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
+        boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
+        if (sb.length() > 0
+            && sb.charAt(sb.length() - 1) != '_'
+            && (prevLowerOrDigit || nextLower)) {
+          sb.append('_');
+        }
+      }
+      sb.append(Character.toLowerCase(c));
+    }
+    return sb.toString();
+  }
+
   private static List<String> parseStringList(Object raw) {
     if (raw instanceof List<?> list) {
       List<String> out = new ArrayList<>();
@@ -221,6 +365,7 @@ public record JdbcMappedImportSpec(
   }
 
   public void validateIdentifiers(Collection<String> allowedSchemas) {
+    validateMappingCardinality();
     JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
     JdbcMappedSqlValidator.requireIdentifier(table, "table");
     JdbcMappedSqlValidator.requireIdentifier(tenantColumn, "tenantColumn");
@@ -246,6 +391,39 @@ public record JdbcMappedImportSpec(
     }
     if (loadStrategy == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
       validateStageSwap();
+    }
+  }
+
+  /**
+   * 列映射基数强制 1:1。fan-out(一个 {@code from} 映射多个 {@code to})与碰撞(多个 {@code from} 落同一
+   * {@code to})都 fail-fast——后者在历史实现里是静默 first-wins 丢列,这里改为显式拒绝并指明冲突双方。
+   */
+  private void validateMappingCardinality() {
+    Map<String, String> byFrom = new LinkedHashMap<>();
+    Map<String, String> byTo = new LinkedHashMap<>();
+    for (ColumnMapping m : columnMappings) {
+      String prevTo = byFrom.putIfAbsent(m.from(), m.to());
+      if (prevTo != null) {
+        throw new WorkerConfigException(
+            "columnMappings: source field '"
+                + m.from()
+                + "' maps to multiple columns ('"
+                + prevTo
+                + "', '"
+                + m.to()
+                + "'); fan-out is not supported");
+      }
+      String prevFrom = byTo.putIfAbsent(m.to(), m.from());
+      if (prevFrom != null) {
+        throw new WorkerConfigException(
+            "columnMappings: target column '"
+                + m.to()
+                + "' is mapped from multiple source fields ('"
+                + prevFrom
+                + "', '"
+                + m.from()
+                + "'); each column must have a single source");
+      }
     }
   }
 
