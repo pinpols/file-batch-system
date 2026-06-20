@@ -248,4 +248,24 @@ public class ParseSupport {
         "email",
         "status");
   }
+
+  /** 无表头分隔文件的位置列名:取 field_mappings 的 name 顺序,缺省回退 defaultHeaders。 */
+  public List<String> positionalHeaders(Object templateConfigObject) {
+    Object fieldMappings = templateFieldMappings(templateConfigObject);
+    if (fieldMappings instanceof List<?> list) {
+      List<String> names = new ArrayList<>();
+      for (Object item : list) {
+        if (item instanceof Map<?, ?> m) {
+          Object name = m.get("name");
+          if (name != null && Texts.hasText(String.valueOf(name))) {
+            names.add(String.valueOf(name).trim());
+          }
+        }
+      }
+      if (!names.isEmpty()) {
+        return names;
+      }
+    }
+    return defaultHeaders();
+  }
 }

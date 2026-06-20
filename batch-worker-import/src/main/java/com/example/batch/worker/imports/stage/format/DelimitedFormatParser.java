@@ -57,7 +57,9 @@ public class DelimitedFormatParser implements FormatParser {
     String delimiter = resolveDelimiter(importPayload, templateConfig);
 
     CsvParser parser = new CsvParser(buildSettings(delimiter));
-    List<String> headers = support.defaultHeaders();
+    // 无表头时按位置绑定:列名取模板 field_mappings 的 name 顺序(模板缺省才回退硬编码示例 schema);
+    // 有表头时此初值会被文件首行覆盖(见下方 withHeader 分支)。
+    List<String> headers = support.positionalHeaders(templateConfig);
     long recordNo = 0L;
     List<String[]> footerBuffer = footerRows > 0 ? new ArrayList<>(footerRows + 1) : null;
 

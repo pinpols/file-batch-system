@@ -173,7 +173,7 @@ if effective.isEmpty():
 |---|---|
 | **默认是"列数跟文件列对齐"吗?** | **不是按文件物理列数/位置**。驱动映射的是 **`field_mappings` 声明的字段**,按**名字**对齐。文件多出的列 → 忽略;`field_mappings` 声明而文件没有的列 → 该值 null(required 由 VALIDATE 拦)。写入 DB 的列数 = 入库的 `field_mappings` 条数,不是文件列数。 |
 | **顺序可以不一致吗?**(带表头:CSV 带 header / JSON / Excel / XML) | **可以**。按名匹配,文件列序随便排;DB INSERT 列序由 `columnMappings`/`field_mappings` 顺序决定(`orderedInsertColumns`),独立于文件。 |
-| **无表头格式**(headerless CSV / FIXED_WIDTH) | **顺序与列数都必须对齐**——无表头只能**按位置**绑定。此时位置 schema 应取 `field_mappings` 的声明顺序。**现状 gap**:headerless CSV 当前回退到硬编码 `ParseSupport.defaultHeaders():241`(7 列 customer schema),对通用 jdbc_mapped 会错位——本设计建议把 headerless 的位置 schema 改为按 `field_mappings` 顺序(评审确认是否纳入本次,或单列 follow-up)。 |
+| **无表头格式**(headerless CSV / FIXED_WIDTH) | **顺序与列数都必须对齐**——无表头只能**按位置**绑定,位置 schema 取 `field_mappings` 的声明顺序。**已修(2026-06-20)**:`DelimitedFormatParser` 无表头分支改用新 `ParseSupport.positionalHeaders()`——按 `field_mappings[*].name` 顺序绑定,仅当模板无 `field_mappings` 时才回退硬编码 `defaultHeaders()`(向后兼容)。FIXED_WIDTH 本就按 `field_mappings` 的 `target`/`start`/`length` 绑定,无此 gap。 |
 
 > ⚠️ 另一个独立的名字匹配脆点(不在本次默认推断范围、但相关):`from`→文件表头是**精确字符串匹配**(`row.get(m.from())`),大小写/空格不一致会导致"整列变 null"(quickstart §6 已记此坑)。§4.2 的归一化目前只作用于 `name→DB列(to)` 侧;是否对 `from→表头` 侧也做大小写/trim 容错是更敏感的改动(动用户文件数据),列为待评审点而非默认纳入。
 
@@ -228,5 +228,5 @@ if effective.isEmpty():
 3. `biz_table_schema` 列白名单是否纳入本次推断校验。
 4. `normalizeColumn` 工具落 `batch-common` 还是 import/export 各自实现(避免无谓共享耦合)。
 5. **(§4.5)** fan-out(一 `from` → 多 `to`)默认 reject 是否接受(用户倾向不允许);碰撞(多 `from` → 一 `to`)改 reject 无异议。
-6. **(§4.6)** headerless CSV 的位置 schema 从硬编码 `defaultHeaders()` 改为 `field_mappings` 顺序——本次纳入还是单列 follow-up。
+6. ~~**(§4.6)** headerless CSV 的位置 schema 从硬编码 `defaultHeaders()` 改为 `field_mappings` 顺序~~ — **已修(2026-06-20)**:`ParseSupport.positionalHeaders()` + `DelimitedFormatParser` 无表头分支改造,模板无 `field_mappings` 才回退旧默认。
 7. **(§4.6 脚注)** 是否对 `from`→文件表头匹配也加大小写/trim 容错(动用户文件数据,更敏感)。
