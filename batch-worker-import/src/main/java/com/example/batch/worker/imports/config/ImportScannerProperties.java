@@ -22,6 +22,12 @@ public class ImportScannerProperties {
   /** 标记格式:MARKER(默认,空标记)或 MANIFEST(.chk 为 JSON,校验 size+注入 checksum/recordCount)。 */
   private String doneFileFormat = "MARKER";
 
+  /** 批次清单(ADR-040)开关:true 时 scanner 识别批次清单对象,按其 requiredFiles 动态注入 required_file_set。 */
+  private boolean batchManifestEnabled = false;
+
+  /** 批次清单对象后缀(含点),默认 .batch.json。 */
+  private String batchManifestSuffix = ".batch.json";
+
   private long stabilityWindowSeconds = 30L;
   private String sourceType = "SYSTEM";
   private String defaultBizType = "IMPORT_SCAN";

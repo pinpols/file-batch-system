@@ -118,6 +118,10 @@ batch:
         # 标记格式：MARKER（默认，空标记仅守门）/ MANIFEST（.chk 为 JSON sidecar，登记时校验 size
         #         并把 checksum/recordCount 注入 file_record，交由 preprocess/validate 实校）
         done-file-format: ${BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT:MARKER}
+        # 批次清单（ADR-040 Phase1）：true 时识别 <group>_<bizDate>.batch.json 清单对象，
+        # 按其 requiredFiles 给命中的数据文件动态注入 required_file_set（地区每天不固定/带时间戳场景）
+        batch-manifest-enabled: ${BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED:false}
+        batch-manifest-suffix: ${BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_SUFFIX:.batch.json}
         # 稳定窗口（秒）：对象在该窗口内不再变化才认为可处理
         stability-window-seconds: ${BATCH_WORKER_IMPORT_SCANNER_STABILITY_WINDOW_SECONDS:30}
         # 来源类型（SYSTEM/…）：用于审计/策略

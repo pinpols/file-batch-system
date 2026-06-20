@@ -12,15 +12,18 @@ import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -81,10 +84,34 @@ public class ImportIngressScanner {
     }
     Map<String, ObjectSnapshot> snapshots = listSnapshots();
     Set<String> currentObjects = new HashSet<>(snapshots.keySet());
+    List<BatchManifest> batchManifests = collectBatchManifests(snapshots);
     for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
-      tryRegister(entry.getValue(), currentObjects);
+      tryRegister(entry.getValue(), currentObjects, batchManifests);
     }
     observedObjects.keySet().removeIf(existing -> !currentObjects.contains(existing));
+  }
+
+  /** 本轮扫描里识别并解析所有批次清单对象(按后缀);未开启或无清单返回空表。 */
+  private List<BatchManifest> collectBatchManifests(Map<String, ObjectSnapshot> snapshots) {
+    if (!scannerProperties.isBatchManifestEnabled()) {
+      return List.of();
+    }
+    String suffix = scannerProperties.getBatchManifestSuffix();
+    List<BatchManifest> result = new ArrayList<>();
+    for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
+      if (!entry.getKey().endsWith(suffix)) {
+        continue;
+      }
+      // ADR-040 Phase3 自完整性:批次清单也过稳定窗口,防读到半写清单 → 误判当天预期文件集合
+      if (!isStable(entry.getValue())) {
+        continue;
+      }
+      BatchManifest manifest = readBatchManifest(entry.getKey());
+      if (manifest != null) {
+        result.add(manifest);
+      }
+    }
+    return result;
   }
 
   /**
@@ -108,9 +135,14 @@ public class ImportIngressScanner {
     return key.substring(0, slash);
   }
 
-  private void tryRegister(ObjectSnapshot snapshot, Set<String> currentObjects) {
+  private void tryRegister(
+      ObjectSnapshot snapshot, Set<String> currentObjects, List<BatchManifest> batchManifests) {
     if (snapshot == null || snapshot.objectName().endsWith(scannerProperties.getDoneFileSuffix())) {
       return;
+    }
+    if (scannerProperties.isBatchManifestEnabled()
+        && snapshot.objectName().endsWith(scannerProperties.getBatchManifestSuffix())) {
+      return; // 批次清单对象本身不当数据文件登记
     }
     SidecarManifest manifest = null;
     if (scannerProperties.isRequireDoneFile()) {
@@ -142,15 +174,23 @@ public class ImportIngressScanner {
     }
     if (runtimeRepository.existsFileRecordByStoragePath(
         resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName())) {
+      // ADR-040 Phase2:数据文件先到、清单后到 —— 对已登记成员回填 required_file_set(幂等)
+      backfillBatchManifestArrival(snapshot, resolvedTenant, batchManifests);
       return;
     }
-    String fileName =
-        snapshot.objectName().contains("/")
-            ? snapshot.objectName().substring(snapshot.objectName().lastIndexOf('/') + 1)
-            : snapshot.objectName();
+    String fileName = baseName(snapshot.objectName());
     LocalDate bizDate = resolveScannerBizDate(snapshot.objectName());
     if (bizDate == null) {
       return;
+    }
+    // ADR-040 Phase1:命中批次清单(成员名 ∈ manifest.requiredFiles)→ 用清单的 group + requiredFiles
+    // 覆盖静态配置,实现动态成组;未命中则沿用静态 arrival 配置。
+    String effectiveGroupCode = scannerProperties.getArrival().getFileGroupCode();
+    String effectiveRequiredFileSet = scannerProperties.getArrival().getRequiredFileSet();
+    BatchManifest matchedBatch = matchBatchManifest(batchManifests, resolvedTenant, fileName);
+    if (matchedBatch != null) {
+      effectiveGroupCode = matchedBatch.fileGroupCode();
+      effectiveRequiredFileSet = String.join(",", matchedBatch.requiredFiles());
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("scanner", "objectStore-import");
@@ -160,29 +200,9 @@ public class ImportIngressScanner {
     metadata.put("lastModified", snapshot.lastModified());
     metadata.put("detectedAt", BatchDateTimeSupport.utcNow().toString());
     if (scannerProperties.getArrival().isEnabled()
-        && Texts.hasText(scannerProperties.getArrival().getFileGroupCode())
-        && Texts.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
-      metadata.put("fileGroupCode", scannerProperties.getArrival().getFileGroupCode());
-      metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
-      metadata.put("requiredFileSet", scannerProperties.getArrival().getRequiredFileSet());
-      metadata.put(
-          "arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
-      metadata.put(
-          "expectedArrivalTime",
-          BatchDateTimeSupport.utcNow()
-              .plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds())
-              .toString());
-      metadata.put(
-          "latestTolerableTime",
-          BatchDateTimeSupport.utcNow()
-              .plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds())
-              .toString());
-      metadata.put("arrivalState", "WAITING_ARRIVAL");
-      metadata.put("triggerOnComplete", scannerProperties.getArrival().isTriggerOnComplete());
-      metadata.put("allowEmptyRun", scannerProperties.getArrival().isAllowEmptyRun());
-      metadata.put("allowSkipBizDate", scannerProperties.getArrival().isAllowSkipBizDate());
-      metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
-      metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
+        && Texts.hasText(effectiveGroupCode)
+        && Texts.hasText(effectiveRequiredFileSet)) {
+      putArrivalMetadata(metadata, effectiveGroupCode, effectiveRequiredFileSet);
     }
     if (manifest != null) {
       metadata.put("manifestSchemaVersion", manifest.schemaVersion());
@@ -219,8 +239,8 @@ public class ImportIngressScanner {
                 .metadata(metadata)
                 .build());
     if (scannerProperties.getArrival().isEnabled()
-        && Texts.hasText(scannerProperties.getArrival().getFileGroupCode())
-        && Texts.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
+        && Texts.hasText(effectiveGroupCode)
+        && Texts.hasText(effectiveRequiredFileSet)) {
       runtimeRepository.appendAudit(
           FileAuditParam.builder()
               .fileId(fileId)
@@ -233,8 +253,8 @@ public class ImportIngressScanner {
               .evidenceRef(snapshot.objectName())
               .detailSummary(
                   Map.of(
-                      "fileGroupCode", scannerProperties.getArrival().getFileGroupCode(),
-                      "requiredFileSet", scannerProperties.getArrival().getRequiredFileSet(),
+                      "fileGroupCode", effectiveGroupCode,
+                      "requiredFileSet", effectiveRequiredFileSet,
                       "arrivalState", "WAITING_ARRIVAL"))
               .build());
     }
@@ -428,6 +448,124 @@ public class ImportIngressScanner {
           "failed to read/parse sidecar manifest, skip register: marker={}, error={}",
           markerName,
           ex.getMessage());
+      return null;
+    }
+  }
+
+  /** 写入到达组 metadata(到达组 SLA + 凑齐判定所需);group/requiredFileSet 已按批次清单或静态配置解析。 */
+  private void putArrivalMetadata(
+      Map<String, Object> metadata, String groupCode, String requiredFileSet) {
+    metadata.put("fileGroupCode", groupCode);
+    metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
+    metadata.put("requiredFileSet", requiredFileSet);
+    metadata.put("arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
+    metadata.put(
+        "expectedArrivalTime",
+        BatchDateTimeSupport.utcNow()
+            .plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds())
+            .toString());
+    metadata.put(
+        "latestTolerableTime",
+        BatchDateTimeSupport.utcNow()
+            .plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds())
+            .toString());
+    metadata.put("arrivalState", "WAITING_ARRIVAL");
+    metadata.put("triggerOnComplete", scannerProperties.getArrival().isTriggerOnComplete());
+    metadata.put("allowEmptyRun", scannerProperties.getArrival().isAllowEmptyRun());
+    metadata.put("allowSkipBizDate", scannerProperties.getArrival().isAllowSkipBizDate());
+    metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
+    metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
+  }
+
+  private String baseName(String objectName) {
+    return objectName.contains("/")
+        ? objectName.substring(objectName.lastIndexOf('/') + 1)
+        : objectName;
+  }
+
+  /**
+   * ADR-040 Phase2 回填:数据文件先到、批次清单后到时,对已登记成员补 required_file_set + 到达组 metadata。 幂等:已带
+   * requiredFileSet 的记录跳过,避免每轮 tick 抖 updated_at。
+   */
+  private void backfillBatchManifestArrival(
+      ObjectSnapshot snapshot, String tenantId, List<BatchManifest> batchManifests) {
+    if (!scannerProperties.isBatchManifestEnabled() || batchManifests.isEmpty()) {
+      return;
+    }
+    BatchManifest matched =
+        matchBatchManifest(batchManifests, tenantId, baseName(snapshot.objectName()));
+    if (matched == null) {
+      return;
+    }
+    Map<String, Object> record =
+        runtimeRepository.loadFileRecordByStoragePath(
+            tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
+    if (record == null || record.isEmpty() || hasRequiredFileSet(record)) {
+      return;
+    }
+    Long fileId = runtimeRepository.toLong(record.get("id"));
+    if (fileId == null) {
+      return;
+    }
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    putArrivalMetadata(
+        metadata, matched.fileGroupCode(), String.join(",", matched.requiredFiles()));
+    runtimeRepository.updateFileMetadata(fileId, metadata);
+    log.info(
+        "batch manifest backfilled arrival group for registered file: tenantId={}, fileId={},"
+            + " fileGroupCode={}",
+        tenantId,
+        fileId,
+        matched.fileGroupCode());
+  }
+
+  /** 已登记记录的 metadata_json 是否已含非空 requiredFileSet(回填幂等判据)。 */
+  private boolean hasRequiredFileSet(Map<String, Object> record) {
+    Object metadataJson = record.get("metadata_json");
+    if (metadataJson == null) {
+      return false;
+    }
+    try {
+      Map<String, Object> meta =
+          objectMapper.readValue(String.valueOf(metadataJson), new TypeReference<>() {});
+      Object value = meta.get("requiredFileSet");
+      return value != null && Texts.hasText(String.valueOf(value));
+    } catch (Exception ex) {
+      return false;
+    }
+  }
+
+  /** 命中规则:成员文件名 ∈ 某清单 requiredFiles 且租户匹配;返回首个命中清单,无则 null。 */
+  private BatchManifest matchBatchManifest(
+      List<BatchManifest> manifests, String tenantId, String fileName) {
+    for (BatchManifest m : manifests) {
+      if (m.requiredFiles() == null
+          || m.requiredFiles().isEmpty()
+          || !Texts.hasText(m.fileGroupCode())) {
+        continue;
+      }
+      if (Texts.hasText(m.tenantId()) && !m.tenantId().equals(tenantId)) {
+        continue;
+      }
+      if (m.requiredFiles().contains(fileName)) {
+        return m;
+      }
+    }
+    return null;
+  }
+
+  /** 读批次清单 JSON;失败返回 null(本轮不参与动态成组,下轮重试)。 */
+  private BatchManifest readBatchManifest(String objectName) {
+    try (InputStream in = objectStore.get(s3StorageProperties.getBucket(), objectName)) {
+      byte[] bytes = in.readNBytes((int) MAX_MANIFEST_BYTES + 1);
+      if (bytes.length > MAX_MANIFEST_BYTES) {
+        log.warn("batch manifest too large, skip: object={}", objectName);
+        return null;
+      }
+      return objectMapper.readValue(bytes, BatchManifest.class);
+    } catch (Exception ex) {
+      log.warn(
+          "failed to read/parse batch manifest: object={}, error={}", objectName, ex.getMessage());
       return null;
     }
   }
