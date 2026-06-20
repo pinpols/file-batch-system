@@ -8,11 +8,14 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Test;
 
 class ImportPreprocessPipelineTest {
@@ -34,6 +37,64 @@ class ImportPreprocessPipelineTest {
     Map<String, Object> template = Map.of("compress_type", "GZIP");
     byte[] out = ImportPreprocessPipeline.run(gzipped, null, template, true);
     assertThat(out).isEqualTo(raw);
+  }
+
+  @Test
+  void shouldUntarFirstFileEntryWhenCompressTypeTar() throws Exception {
+    byte[] raw = "id,name\n1,alice\n".getBytes(StandardCharsets.UTF_8);
+    byte[] tar = buildTar(Map.of("orders.csv", raw));
+    Map<String, Object> template = Map.of("compress_type", "TAR");
+    byte[] out = ImportPreprocessPipeline.run(tar, null, template, true);
+    assertThat(out).isEqualTo(raw);
+  }
+
+  @Test
+  void shouldUntarGzWhenCompressTypeTarGz() throws Exception {
+    byte[] raw = "a,b\n1,2\n".getBytes(StandardCharsets.UTF_8);
+    byte[] tar = buildTar(Map.of("data.csv", raw));
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    try (GZIPOutputStream gos = new GZIPOutputStream(bos)) {
+      gos.write(tar);
+    }
+    Map<String, Object> template = Map.of("compress_type", "TAR_GZ");
+    byte[] out = ImportPreprocessPipeline.run(bos.toByteArray(), null, template, true);
+    assertThat(out).isEqualTo(raw);
+  }
+
+  @Test
+  void shouldUntarSelectEntryByNameViaExplicitPipeline() throws Exception {
+    // 多文件 tar:显式 entryName 选第二个,验证不是盲取首条
+    LinkedHashMap<String, byte[]> entries = new LinkedHashMap<>();
+    entries.put("first.csv", "first".getBytes(StandardCharsets.UTF_8));
+    entries.put("second.csv", "second".getBytes(StandardCharsets.UTF_8));
+    byte[] tar = buildTar(entries);
+    Map<String, Object> step = Map.of("type", "UNTAR", "entryName", "second.csv");
+    Map<String, Object> template = Map.of("preprocess_pipeline", java.util.List.of(step));
+    byte[] out = ImportPreprocessPipeline.run(tar, null, template, true);
+    assertThat(out).isEqualTo("second".getBytes(StandardCharsets.UTF_8));
+  }
+
+  @Test
+  void shouldThrowWhenTarHasNoFileEntry() throws Exception {
+    byte[] emptyTar = buildTar(new LinkedHashMap<>());
+    Map<String, Object> template = Map.of("compress_type", "TAR");
+    assertThatThrownBy(() -> ImportPreprocessPipeline.run(emptyTar, null, template, true))
+        .isInstanceOf(ImportPreprocessException.class)
+        .hasMessageContaining("no usable entry");
+  }
+
+  private static byte[] buildTar(Map<String, byte[]> entries) throws Exception {
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    try (TarArchiveOutputStream tos = new TarArchiveOutputStream(bos)) {
+      for (Map.Entry<String, byte[]> e : entries.entrySet()) {
+        TarArchiveEntry entry = new TarArchiveEntry(e.getKey());
+        entry.setSize(e.getValue().length);
+        tos.putArchiveEntry(entry);
+        tos.write(e.getValue());
+        tos.closeArchiveEntry();
+      }
+    }
+    return bos.toByteArray();
   }
 
   // ===== AES_GCM_DECRYPT 回归保护 =====

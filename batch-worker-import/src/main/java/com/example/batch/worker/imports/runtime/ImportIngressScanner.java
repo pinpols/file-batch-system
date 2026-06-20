@@ -103,7 +103,7 @@ public class ImportIngressScanner {
   }
 
   private void tryRegister(ObjectSnapshot snapshot, Set<String> currentObjects) {
-    if (snapshot == null || snapshot.objectName().endsWith(".done")) {
+    if (snapshot == null || snapshot.objectName().endsWith(scannerProperties.getDoneFileSuffix())) {
       return;
     }
     if (scannerProperties.isRequireDoneFile()
@@ -364,12 +364,17 @@ public class ImportIngressScanner {
     }
   }
 
+  /** 标记名:APPEND_FULL_NAME=全名+后缀;REPLACE_EXTENSION=去末段扩展名+后缀。 */
   private String resolveDoneMarker(String objectName) {
+    String suffix = scannerProperties.getDoneFileSuffix();
+    if (!"REPLACE_EXTENSION".equalsIgnoreCase(scannerProperties.getDoneFileNaming())) {
+      return objectName + suffix;
+    }
     int dotIndex = objectName.lastIndexOf('.');
     if (dotIndex > objectName.lastIndexOf('/')) {
-      return objectName.substring(0, dotIndex) + ".done";
+      return objectName.substring(0, dotIndex) + suffix;
     }
-    return objectName + ".done";
+    return objectName + suffix;
   }
 
   private String resolveFileFormatType(String fileName) {

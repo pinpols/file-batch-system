@@ -81,6 +81,9 @@
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.4.2</archunit.version>
         <poi.version>5.4.0</poi.version>
+        <!-- commons-compress:import 预处理 UNTAR / UNTAR_GZ 用(tar 容器解包);JDK 自带 GZIP/ZIP,
+             tar 无标准库支持。版本对齐 POI 5.4.0 传递的 commons-compress,避免双版本漂移。 -->
+        <commons-compress.version>1.27.1</commons-compress.version>
         <!-- R7 安全扫描 2026-05-16: trivy fs 命中 11 个 HIGH CVE 组件。下列 version 覆盖
              Spring Boot 4.0.6 默认传递依赖，强制升到安全 patch 版本。
              - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
@@ -189,6 +192,11 @@
                 <groupId>org.apache.poi</groupId>
                 <artifactId>poi-ooxml</artifactId>
                 <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${commons-compress.version}</version>
             </dependency>
             <!-- BouncyCastle:bcprov 1.84 是 CVE-2026-5598 安全 patch(见 properties 注释);
                  之前 console-api 显式 1.78.1 跟 parent 1.84 冲突 → 收口 parent。 -->

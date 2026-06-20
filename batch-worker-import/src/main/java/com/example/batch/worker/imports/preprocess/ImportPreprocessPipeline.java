@@ -33,6 +33,8 @@ import java.util.zip.ZipInputStream;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 
 /**
  * 有序二进制预处理管道（工具类，不可实例化）：对原始文件字节按步骤顺序依次执行解压、解密、摘要校验和字符集转码。
@@ -46,6 +48,8 @@ import javax.crypto.spec.SecretKeySpec;
  * <ul>
  *   <li>{@code UNZIP} — 解 ZIP，支持 {@code entryName} 指定条目
  *   <li>{@code GUNZIP} — 解 GZIP
+ *   <li>{@code UNTAR} — 解 tar 容器，支持 {@code entryName} 指定条目（缺省取首个普通文件条目）
+ *   <li>{@code UNTAR_GZ} — 解 tar.gz / tgz（先 GUNZIP 再 UNTAR），同样支持 {@code entryName}
  *   <li>{@code AES_GCM_DECRYPT} — AES/GCM/NoPadding 解密，需提供 {@code aesKeyBase64} / {@code
  *       aesIvBase64}
  *   <li>{@code VERIFY_DIGEST} — SHA-256 / MD5 摘要校验，期望值来自步骤配置或 {@link ImportPayload#checksumValue()}
@@ -85,7 +89,12 @@ public final class ImportPreprocessPipeline {
    * bypass 模式下拒收。
    */
   private static final Map<String, String> IMPLICIT_COMPRESS_STEPS =
-      Map.of("ZIP", "UNZIP", "GZIP", "GUNZIP");
+      Map.of(
+          "ZIP", "UNZIP",
+          "GZIP", "GUNZIP",
+          "TAR", "UNTAR",
+          "TAR_GZ", "UNTAR_GZ",
+          "TGZ", "UNTAR_GZ");
 
   private static final Map<String, String> IMPLICIT_ENCRYPT_STEPS =
       Map.of("AES", "AES_GCM_DECRYPT");
@@ -113,6 +122,8 @@ public final class ImportPreprocessPipeline {
         switch (type.toUpperCase(Locale.ROOT)) {
           case "UNZIP" -> current = unzip(current, step, payload);
           case "GUNZIP" -> current = gunzip(current);
+          case "UNTAR" -> current = untar(current, step, payload);
+          case "UNTAR_GZ" -> current = untar(gunzip(current), step, payload);
           case "AES_GCM_DECRYPT" -> {
             if (!bypassMode) {
               current = aesGcmDecrypt(current, step, payload);
@@ -240,6 +251,33 @@ public final class ImportPreprocessPipeline {
     } catch (IOException ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_GUNZIP_FAILED", ex.getMessage(), ex);
     }
+  }
+
+  /** 解 tar:取 entryName 指定条目,缺省首个普通文件;复用 boundedReadAll 防炸弹。 */
+  private static byte[] untar(byte[] input, Map<String, Object> step, ImportPayload payload) {
+    String entryName = stringProp(step, "entryName");
+    if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
+      Object v = payload.metadata().get("tarEntryName");
+      if (v != null && Texts.hasText(String.valueOf(v))) {
+        entryName = String.valueOf(v);
+      }
+    }
+    try (TarArchiveInputStream tis = new TarArchiveInputStream(new ByteArrayInputStream(input))) {
+      TarArchiveEntry entry;
+      while ((entry = tis.getNextEntry()) != null) {
+        if (entry.isDirectory() || !entry.isFile()) {
+          continue;
+        }
+        if (Texts.hasText(entryName) && !entryName.equals(entry.getName())) {
+          continue;
+        }
+        return boundedReadAll(tis, input.length, "UNTAR");
+      }
+    } catch (IOException ex) {
+      throw new ImportPreprocessException("IMPORT_PREPROCESS_UNTAR_FAILED", ex.getMessage(), ex);
+    }
+    throw new ImportPreprocessException(
+        "IMPORT_PREPROCESS_UNTAR_EMPTY", "tar archive has no usable entry");
   }
 
   // ── 解压尺寸闸（防 zip bomb / 压缩炸弹）────────────────────────────────
