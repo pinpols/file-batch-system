@@ -7,6 +7,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.Guard;
@@ -23,6 +24,7 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -69,6 +71,13 @@ public class ChildJobLaunchSupport {
           "_parentWorkflowRunId",
           "parentInstanceId");
 
+  /**
+   * 跨 workflow 嵌套环检测上溯 parent_instance_id 链的硬上限。环本身在每次拉起前就会被拦截(见 {@link
+   * #guardAgainstNestingCycle}),链上不会真正出现"不同 job_code 的环",故上溯必然终止于根;此上限只为给
+   * rerun 长链 / 异常数据兜底,避免万一脏数据导致无界 DB 读。命中视为异常但 fail-open(放行)——真正的环已在更早层被拦。
+   */
+  private static final int MAX_ANCESTOR_WALK = 256;
+
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
   private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
@@ -90,6 +99,11 @@ public class ChildJobLaunchSupport {
     if (refJobCode == null || refJobCode.isBlank()) {
       return 0;
     }
+
+    // JOB 节点的 related_job_code 可指向 job_type=WORKFLOW 的 job(workflow 套 workflow)。
+    // DefaultWorkflowDagService 的环检测只覆盖单 workflow_definition 内的 edge,发现不了
+    // A→B→A 这类跨 workflow 引用环 —— 运行期会无限拉起子作业。这里在拉起任何副作用之前 fail-fast。
+    guardAgainstNestingCycle(jobInstance, refJobCode, node.nodeCode());
 
     // 与 TASK/FILE_STEP 节点一致：立即将节点标为 READY
     recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
@@ -123,6 +137,50 @@ public class ChildJobLaunchSupport {
     launchServiceProvider.getObject().launch(childLaunchRequest);
 
     return 1; // 向父 job 新增了一个虚拟分区
+  }
+
+  /**
+   * 跨 workflow 嵌套环检测：在拉起子作业之前,沿 {@code parent_instance_id} 链上溯收集所有祖先 job_code(含当前父作业自身),
+   * 若待拉起的 {@code refJobCode} 已在祖先集合中,判定为环并 fail-fast。
+   *
+   * <p>因为判定发生在"每次拉起之前",一个不同 job_code 的环最多展开一层就会被拦截(A→B 拉起时 B 不在 {A} 中放行;B→A 拉起时
+   * A 已在 {B,A} 中被拦),所以正常链上不会真正出现环,上溯必然终止于根(parentInstanceId == null)。rerun 链虽会把同一
+   * job_code 重复挂在 parent 链上,但收进 Set 后不产生误报。
+   */
+  private void guardAgainstNestingCycle(
+      JobInstanceEntity parent, String refJobCode, String nodeCode) {
+    Set<String> ancestorJobCodes = new LinkedHashSet<>();
+    JobInstanceEntity cursor = parent;
+    int hops = 0;
+    while (cursor != null && hops < MAX_ANCESTOR_WALK) {
+      if (cursor.getJobCode() != null) {
+        ancestorJobCodes.add(cursor.getJobCode());
+      }
+      Long parentInstanceId = cursor.getParentInstanceId();
+      if (parentInstanceId == null) {
+        break;
+      }
+      cursor = jobMappers.jobInstanceMapper.selectById(cursor.getTenantId(), parentInstanceId);
+      hops++;
+    }
+    if (hops >= MAX_ANCESTOR_WALK) {
+      // fail-open：真正的环已在更早层被拦,这里只是兜底脏数据,放行但留痕便于排查。
+      log.warn(
+          "workflow nesting ancestor walk hit cap {} for tenant={} parentInstance={} node={};"
+              + " cycle check may be incomplete",
+          MAX_ANCESTOR_WALK,
+          parent.getTenantId(),
+          parent.getId(),
+          nodeCode);
+    }
+    if (ancestorJobCodes.contains(refJobCode)) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.workflow.nested_cycle_detected",
+          refJobCode,
+          nodeCode,
+          String.join(" -> ", ancestorJobCodes));
+    }
   }
 
   private JobPartitionEntity createVirtualPartition(
