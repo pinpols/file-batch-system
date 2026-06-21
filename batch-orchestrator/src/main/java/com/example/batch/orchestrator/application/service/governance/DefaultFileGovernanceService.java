@@ -33,6 +33,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -349,11 +350,15 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   public String operateArrivalGroup(ArrivalGroupGovernanceCommand command) {
     validateArrivalGroupCommand(command);
     List<Map<String, Object>> groupFiles =
-        fileGovernanceRepository.selectArrivalGroupFiles(
-            command.tenantId(), command.fileGroupCode());
+        Texts.hasText(command.bizDate())
+            ? fileGovernanceRepository.selectArrivalGroupFiles(
+                command.tenantId(), command.fileGroupCode(), command.bizDate())
+            : fileGovernanceRepository.selectArrivalGroupFiles(
+                command.tenantId(), command.fileGroupCode());
     if (groupFiles.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
     }
+    rejectAmbiguousArrivalGroupOperation(command, groupFiles);
     Instant now = BatchDateTimeSupport.utcNow();
     String action = command.action().trim().toUpperCase();
     String nextState =
@@ -417,6 +422,24 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
               metadata));
     }
     return nextState;
+  }
+
+  private void rejectAmbiguousArrivalGroupOperation(
+      ArrivalGroupGovernanceCommand command, List<Map<String, Object>> groupFiles) {
+    if (Texts.hasText(command.bizDate())) {
+      return;
+    }
+    LinkedHashSet<String> bizDates = new LinkedHashSet<>();
+    for (Map<String, Object> groupFile : groupFiles) {
+      String bizDate = stringValue(groupFile.get("biz_date"));
+      bizDates.add(Texts.hasText(bizDate) ? bizDate : "__MISSING_BIZ_DATE__");
+      if (bizDates.size() > 1) {
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT,
+            "error.common.invalid_argument_detail",
+            "bizDate is required when arrival group spans multiple business dates");
+      }
+    }
   }
 
   private String stringValue(Object value) {

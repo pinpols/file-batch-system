@@ -6,6 +6,7 @@ import lombok.Builder;
 public record ArrivalGroupGovernanceCommand(
     String tenantId,
     String fileGroupCode,
+    String bizDate,
     String action,
     String operatorId,
     String traceId,

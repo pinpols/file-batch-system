@@ -119,9 +119,11 @@
         select id,
                tenant_id,
                file_name,
+               biz_date,
                file_status,
                created_at,
                updated_at,
+               metadata_json,
                metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
                metadata_json -&gt;&gt; 'waitFileGroupMode' as wait_file_group_mode,
                metadata_json -&gt;&gt; 'requiredFileSet' as required_file_set,
@@ -142,6 +144,7 @@
 
     <select id="selectArrivalGroupSummaries" resultType="map">
         select tenant_id,
+               biz_date,
                metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
                coalesce(metadata_json -&gt;&gt; 'waitFileGroupMode', 'ALL_OF') as wait_file_group_mode,
                coalesce(metadata_json -&gt;&gt; 'requiredFileSet', '') as required_file_set,
@@ -166,6 +169,7 @@
             and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = #{arrivalState}
         </if>
         group by tenant_id,
+                 biz_date,
                  metadata_json -&gt;&gt; 'fileGroupCode',
                  coalesce(metadata_json -&gt;&gt; 'waitFileGroupMode', 'ALL_OF'),
                  coalesce(metadata_json -&gt;&gt; 'requiredFileSet', ''),
@@ -191,6 +195,9 @@
         from batch.file_record
         where tenant_id = #{tenantId}
           and metadata_json -&gt;&gt; 'fileGroupCode' = #{fileGroupCode}
+        <if test="bizDate != null and bizDate != ''">
+          and biz_date = #{bizDate}::date
+        </if>
         order by id asc
     </select>
 
