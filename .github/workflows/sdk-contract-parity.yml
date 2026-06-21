@@ -211,11 +211,13 @@ jobs:
               --check=false \
               --kafka-addr PLAINTEXT://0.0.0.0:9092 \
               --advertise-kafka-addr PLAINTEXT://127.0.0.1:19092
-          for i in {1..60}; do
+          deadline=60
+          while (( deadline > 0 )); do
             if nc -z 127.0.0.1 19092; then
               exit 0
             fi
             sleep 1
+            deadline=$((deadline - 1))
           done
           docker logs sdk-live-redpanda
           exit 1
