@@ -273,7 +273,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         buildPayloadJson(
             context.creation().execution().request(),
             context.creation().execution().jobInstance(),
-            effectiveParams));
+            effectiveParams,
+            context.partition()));
     // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
     task.setEffectiveParameters(effectiveParams == null ? null : JsonUtils.toJson(effectiveParams));
     task.setDryRun(Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
@@ -383,5 +384,36 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
     Map<String, Object> payload = enrichPayload(request, jobInstance, params);
     return JsonUtils.toJson(payload);
+  }
+
+  private String buildPayloadJson(
+      LaunchRequest request,
+      JobInstanceEntity jobInstance,
+      Map<String, Object> params,
+      JobPartitionEntity partition) {
+    Map<String, Object> payload = enrichPayload(request, jobInstance, params);
+    enrichBundleBinding(payload, partition);
+    return JsonUtils.toJson(payload);
+  }
+
+  /**
+   * ADR-046 文件束:partition 携带 source_file_id/template_code/target_ref 绑定时注入 task payload，worker
+   * claim 后据此处理指定文件、指定模板、指定目标。普通(非束)partition 这些列为空，payload 与改造前完全一致——纯加法、不影响存量导入。
+   */
+  static void enrichBundleBinding(Map<String, Object> payload, JobPartitionEntity partition) {
+    if (partition == null) {
+      return;
+    }
+    if (partition.getSourceFileId() != null && !payload.containsKey("sourceFileId")) {
+      payload.put("sourceFileId", partition.getSourceFileId());
+    }
+    String templateCode = partition.getTemplateCode();
+    if (templateCode != null && !templateCode.isBlank() && !payload.containsKey("templateCode")) {
+      payload.put("templateCode", templateCode);
+    }
+    String targetRef = partition.getTargetRef();
+    if (targetRef != null && !targetRef.isBlank() && !payload.containsKey("targetRef")) {
+      payload.put("targetRef", targetRef);
+    }
   }
 }
