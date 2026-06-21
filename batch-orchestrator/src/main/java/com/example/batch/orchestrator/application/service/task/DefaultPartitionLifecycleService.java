@@ -76,6 +76,10 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
       partitionEntity.setIdempotencyKey(partitionIdempotencyKey);
       partitionEntity.setInputSnapshot(buildInputSnapshot(plan, partitionPlan, jobInstanceId));
       partitionEntity.setDryRun(plan.isDryRun());
+      // ADR-046 文件束:把 plan 里的 per-file 绑定写进 partition(非束作业这些为 null)。
+      partitionEntity.setSourceFileId(partitionPlan.getSourceFileId());
+      partitionEntity.setTemplateCode(partitionPlan.getTemplateCode());
+      partitionEntity.setTargetRef(partitionPlan.getTargetRef());
       jobPartitionMapper.insert(partitionEntity);
       partitionEntities.add(partitionEntity);
     }
