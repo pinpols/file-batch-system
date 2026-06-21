@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Outbox 投递的集群级熔断器：连续投递失败累积到阈值后打开熔断，强制 {@link OutboxPollScheduler} 暂停推进， 避免失败重试造成的雪崩式 DB 写入 / Kafka
- * 重投 / 告警轰炸。
+ * 重投 / 告警轰失败。
  *
  * <p>状态通过 Redis Hash 共享（而非 in-process），多实例部署下所有 orchestrator 看到同一个熔断状态。
  *

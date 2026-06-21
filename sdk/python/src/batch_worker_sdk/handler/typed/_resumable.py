@@ -111,7 +111,7 @@ class ResumableTemplateMixin:
     async def _guard(coro: Awaitable[SdkTaskResult]) -> SdkTaskResult:
         """顶层捕获 :class:`SdkTaskStopped` → cancelled 终态(决策三)。
 
-        业务不得吞掉 ``SdkTaskStopped``;到这一层统一转成 REPORT 可识别的
+        业务不得捕获并抑制 ``SdkTaskStopped``;到这一层统一转成 REPORT 可识别的
         cancelled 结果。
         """
         try:

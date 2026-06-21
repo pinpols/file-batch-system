@@ -30,7 +30,7 @@ public record SqlTransformComputeSpec(
     EmptyResultPolicy emptyResultPolicy,
     int maxStagedRows) {
 
-  /** P1-6:单批 staging 行数上限默认值。配置 SQL 写错或数据激增时,防止把业务库 + staging 表打爆。 */
+  /** P1-6:单批 staging 行数上限默认值。配置 SQL 写错或数据激增时,防止业务库 + staging 表资源耗尽。 */
   public static final int DEFAULT_MAX_STAGED_ROWS = 1_000_000;
 
   public enum WriteMode {

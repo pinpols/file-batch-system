@@ -68,7 +68,7 @@ public class WheelMetrics {
   private final ConcurrentMap<String, Counter> misfireHandledByPolicy = new ConcurrentHashMap<>();
 
   // ADR/audit 2026-06-03:advance.failed 移除 jobCode tag(高基数 = 租户 × 作业,
-  // Prometheus series 爆炸风险);改全局 counter,具体 jobCode 走日志/trace 关联.
+  // Prometheus series 爆失败风险);改全局 counter,具体 jobCode 走日志/trace 关联.
   private final Counter advanceFailedCounter;
 
   public WheelMetrics(MeterRegistry registry) {
@@ -227,7 +227,7 @@ public class WheelMetrics {
    * R2-P0-3: advanceAfterFire DB 失败计数；持续增长表示 wheel 处于"成功 fire 但 next_fire_time 没推进" 的危险态——会被下一 tick
    * 重复 fire，触发条件通常是 DB 短暂不可达 / 锁等待超时。
    *
-   * <p>audit 2026-06-03:已移除 jobCode tag(高基数 = 租户 × 作业,Prometheus series 爆炸风险);jobCode 入参保留 用作未来
+   * <p>audit 2026-06-03:已移除 jobCode tag(高基数 = 租户 × 作业,Prometheus series 爆失败风险);jobCode 入参保留 用作未来
    * log/trace 钩子,当前仅用于告警全局聚合,具体作业定位走日志/trace 关联(MDC + traceId)。
    */
   public void incrementAdvanceFailed(String jobCode) {

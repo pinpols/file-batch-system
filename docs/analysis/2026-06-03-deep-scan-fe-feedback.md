@@ -31,7 +31,7 @@
 - `useAsyncAction` 仅 **26** 处使用,`cooldownMs` 仅 **3** 处显式设(`ApiKeyList` / `SystemParameterList` / `TenantBatchCreateDialog`)。绝大多数"保存 / 提交 / 触发"按钮**没有冷却窗口**,200ms 双击仍可重复触发(下游靠 BE 幂等拦截器 + axios 静默 IDEMPOTENT_REPLAY 救场,但出错时仍是 409 静默)。
 - `useBriefActionLoading` 仅在 `useListFilterFeedback` 内部用——筛选闪烁防抖只覆盖列表筛选条这一种场景。
 
-### 1.3 卡死兜底
+### 1.3 长期停滞兜底
 
 - `routeProgress.start()` 有 `12s safetyTimer` 强制 `finish()`,**良好**。
 - `useSseAutoReload` 5 次指数退避后 `onFallback` 弹一次"实时推送暂不可用",**良好**。
@@ -113,7 +113,7 @@
 
 - `MaintenanceBanner` 3 态(blocked / readonly / admin-bypass),ETA 分钟级倒计时,affectedServices chip,WCAG `role="alert"`。**优秀**。
 - `DegradationBanner` 接 BE Resilience4j `X-Degraded-Source` header,每 15s 清 TTL 60s 过期源。**优秀**。
-- **(P1)** banner 无关闭按钮,且 maintenance 期可被用户当作"系统挂了"。建议加 "了解更多 / 查看 SLA" 链接。
+- **(P1)** banner 无关闭按钮,且 maintenance 期可被用户当作"系统异常退出"。建议加 "了解更多 / 查看 SLA" 链接。
 
 ---
 
@@ -136,7 +136,7 @@
 
 - **22 处** `<EmptyState`、**11 处** `<DataState`。新增 view 用法稳定,但旧 list 仍写裸 `<el-empty>` 或 `empty-text`,用户**无法区分** "本来无数据" vs "筛了无匹配" vs "你没权限"——这正是 9 个 variant 要解决的事。
 - **(P1)**`DataState` 内 `emptyVariant` 默认 `'empty'`,11 个调用点里仅 1-2 处显式传 `filter-empty`。**重灾区**:`JobInstanceList`(每个 oncall 用户都看)、`WorkflowRunList`、`AlertList` —— 都没区分。
-- **(P1)**没有"网络错引导"——`error` variant 描述固定 `error.subtitle`,不区分网络 / 服务挂掉,用户看不出"该重试还是该等运维"。
+- **(P1)**没有"网络错引导"——`error` variant 描述固定 `error.subtitle`,不区分网络 / 服务异常退出,用户看不出"该重试还是该等运维"。
 - **(P2)**CTA 引导薄弱——`EmptyState` 提供 `#action` slot,实际只在 `DataState` 注入了 "重试"。`tenant-empty` 应当 CTA "切换租户",`no-permission` 应当 CTA "申请权限",目前**全部缺失**。
 
 ---
@@ -187,7 +187,7 @@
 ### 6.2 落地
 
 - 50 处用了 `confirmDanger`,**21 处仍是裸 `ElMessageBox.confirm`**(WorkerManagement.drain/takeover 仍裸 confirm;ConfigSecretsTab.rotate 裸 confirm;FileList / ArrivalGroupList / PartitionView / AlertRoutingPanel / WorkflowDefinitionList / UserAccountList / JobDefinitionList / PipelineDefinitionList / TenantPackageImportWizard 各 1-2 处)。
-- 这些裸调用全部**:
+- 这些直接调用用全部**:
   - 没有 `confirmButtonClass: 'el-button--danger'` —— danger 按钮不红;
   - 文案只有 `type: 'warning'`,没有 consequence 段;
   - cancelButton 在 confirm 左边(EP 默认),违反国内多数后台"危险操作右下、取消左下"惯例;
@@ -365,7 +365,7 @@ staleTime: 30s, gcTime: 5min, retry: 1, refetchOnWindowFocus: false
 | 进度可信度 | 4.0 | 都是真数据,但 Import/Upload 完全缺 |
 | Bell 红点(桌面) | 0.0 | 不存在 |
 | Web Push 接入 | 0.5 | 骨架完整,0 调用点 |
-| Confirmation 安全 | 3.0 | useDangerConfirm 好,但 21 处裸调用 + 2 处吞 Cancel |
+| Confirmation 安全 | 3.0 | useDangerConfirm 好,但 21 处直接调用用 + 2 处吞 Cancel |
 | 乐观更新 | 0.0 | 0 处 |
 | **综合** | **3.2 / 5** | 设计强,落地割裂 |
 
@@ -449,7 +449,7 @@ try {
 
 - `useOpsSummary.ts:244-245` 把 `getDashboardSlaReport` / `getDashboardTenantUsage` 用 `.catch(() => null)` 降级。
 - 任一接口偶发 500 → 返 null → UI 渲染 null 为 0 / `—`。
-- oncall 工程师早上 9 点打开 OpsSummary 看到全 0 → 假定"昨晚没事" → 实际是 BE 一个 dashboard 接口挂了。
+- oncall 工程师早上 9 点打开 OpsSummary 看到全 0 → 假定"昨晚没事" → 实际是 BE 一个 dashboard 接口异常退出。
 - **P0**。修复:把 catch 改成 `.catch((e) => { dashboardSlaError.value = e; return null })`,并在 UI 区块显式渲染 `<EmptyState variant="error" :on-retry="reload" />`。
 
 ### 16.6 用户上传 50 MB Excel
@@ -457,7 +457,7 @@ try {
 - `<el-upload>` 默认 onChange → `useImportWizard.onFile`
 - `upLoading.value = true`
 - POST 出门,axios 没设 `onUploadProgress` → 浏览器原生 fetch 进度只有浏览器底栏知道。
-- 用户面对 spinning loader 30-60s,**完全不知道是上传中、还是 BE 处理中、还是卡死**。
+- 用户面对 spinning loader 30-60s,**完全不知道是上传中、还是 BE 处理中、还是长期停滞**。
 - 中间任何瞬时网络抖动 → axios 重试(GET 才重试,POST 不重试)→ 直接失败 → toast"网络不可达"。
 - 用户的反应:重新选文件、再传一遍。
 - **P0**。这正是 P0-4。

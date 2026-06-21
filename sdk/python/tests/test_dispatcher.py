@@ -141,7 +141,7 @@ async def test_apply_platform_directive_accepts_parsed_directive() -> None:
     ``ParsedDirective``(生产路径),而不是只认 dict。
 
     早先这里 ``directive.get('runtimeState')`` 对 ``ParsedDirective`` 会
-    ``AttributeError``,被心跳循环吞掉 → 心跳下发的 FSM 切换 / 并发收敛永不
+    ``AttributeError``,被心跳循环捕获并抑制 → 心跳下发的 FSM 切换 / 并发收敛永不
     生效(directive 覆盖缺口)。
     """
     dispatcher, http = await _make()

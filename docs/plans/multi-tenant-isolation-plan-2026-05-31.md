@@ -142,7 +142,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - [x] `pg_policies` healthcheck 集成 actuator(`RlsPolicyHealthIndicator`)
 - [ ] runbook `docs/runbook/multi-tenant-rls.md` 写清 BYPASSRLS 何时用、policy 怎么 review
 
-**出口红线(阻断项 —— 不满足则 RLS 形同虚设,必须在 Phase A 真正收尾前全绿)**:
+**出口红线(阻断项 —— 不满足则 RLS 形同虚设,必须在 Phase A 真正收尾前全部通过)**:
 
 > 上面的「出口」是功能完成度(已基本达成),这三条是**安全有效性**。任一未达成 → RLS 只是装了脚手架,不提供实际防护。当前三条**都未达成**。
 
@@ -165,7 +165,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 | 主力 | **应用启动 fail-fast**(扫真实 business DS 的 `biz` schema,挂 `ArchiveSchemaDriftCheck` 同款 hook)| 闭世界校验,漏配 → 拒绝启动(非 health DOWN);只有连真实库才看得到脚本建的真实表 |
 | 最早 | **CI Testcontainers IT** | 容器内按真实顺序跑 `create_biz_tables.sql` + `rls-phase-a.sql`,再闭世界 diff `pg_tables(biz)` vs `pg_policies` |
 | 持续 | **actuator healthcheck**(`RlsPolicyHealthIndicator` 改闭世界)| 抓运行期被加表 / policy 被 DROP 的漂移 |
-| 根因(可选)| **PG event trigger 自动入册**(`ddl_command_end` 在 `biz` 建表自动 ENABLE/FORCE + 套标准 policy)| 加表零 RLS 步骤,彻底消除「记得跑脚本」的顺序问题;代价是 superuser 魔法 + 模板一刀切,表真多了再上 |
+| 根因(可选)| **PG event trigger 自动入册**(`ddl_command_end` 在 `biz` 建表自动 ENABLE/FORCE + 套标准 policy)| 加表零 RLS 步骤,彻底消除「记得跑脚本」的顺序问题;代价是 superuser 隐式 + 模板不加区分,表真多了再上 |
 
 > 闭世界判定写**一份**共享逻辑(扫 biz schema vs pg_policies),启动 fail-fast / CI IT / healthcheck 都复用它 —— single source of truth,别三处各写清单(那又退回白名单老问题)。
 
@@ -304,7 +304,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 
 | 问题 | 说明 |
 |---|---|
-| **Flyway 复杂度爆炸** | 9 张表 × N 个 schema = N 倍 migration,每次发版都要跑 N 遍,失败回滚地狱 |
+| **Flyway 复杂度爆失败** | 9 张表 × N 个 schema = N 倍 migration,每次发版都要跑 N 遍,失败回滚地狱 |
 | **MyBatis XML 写不动** | `<select>` 里 `from biz.customer_account` 要变量化 schema 名,每个 mapper 都要改 |
 | **连接池切 schema 损耗** | session 切 `search_path` 频繁,HikariCP connection reuse 受损 |
 | **跨租户聚合 query 难写** | `SELECT ... FROM biz_ta.x UNION biz_tb.x UNION ...` 字符串拼接 N 段 |
@@ -323,8 +323,8 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 |---|---|
 | **每接一个租户 = 一次完整 DBA 谈判**(权限 / 网络 / 凭据 / SLA / 合规审计)| 接入周期周 → 月 |
 | **凭据池管理复杂** | N 个租户 = N 套凭据 + N 个 vault entry + N 个轮转策略 + 凭据失效报警链路 |
-| **网络拓扑爆炸** | VPN / 专线 / IP 白名单 / 反向 PrivateLink 全平台维护 |
-| **schema 漂移** | 租户改表平台不知道,跑挂了才发现;每个租户的 schema 跟平台 ORM 兼容性独立维护 |
+| **网络拓扑爆失败** | VPN / 专线 / IP 白名单 / 反向 PrivateLink 全平台维护 |
+| **schema 漂移** | 租户改表平台不知道,跑异常退出才发现;每个租户的 schema 跟平台 ORM 兼容性独立维护 |
 | **SQL 兼容性** | 租户用 PG / MySQL / Oracle 不同版本,平台 ORM 要全兼容,driver / 方言地狱 |
 | **故障归因** | 慢了 / 错了到底是平台 worker 还是租户 DB → 扯皮,SLA 难定义 |
 | **租户运维负担** | 租户 DBA 要为平台开权限 + 监控 + 防火墙 + 凭据轮转,租户接入成本不在我们手里 |
@@ -387,8 +387,8 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 |---|---|---|---|
 | 1 | Phase A(RLS)收尾(R1/R2/R3)是否做? | ✅ P0 必做 | happy-path 已上线但 fail-open;不收尾 = RLS 形同未做,数据泄露风险仍在 |
 | 2 | Phase B(SDK)是否做? | ✅ P1 推荐 | 不做 = 跨语言 / 自家依赖 / 数据驻留诉求没路径 |
-| 3 | Phase C(per-tenant schema)是否默认开? | ❌ 否决(§6.1)| 价值伪需求,运维爆炸 |
-| 4 | Phase D(per-tenant worker pool)是否做? | ✅ P1 几乎免费 | **核心代码已 ready**,只缺 Helm 模板,1.5-2 周搞定 |
+| 3 | Phase C(per-tenant schema)是否默认开? | ❌ 否决(§6.1)| 价值伪需求,运维爆失败 |
+| 4 | Phase D(per-tenant worker pool)是否做? | ✅ P1 几乎免费 | **核心代码已 ready**,只缺 Helm 模板,1.5-2 周完成 |
 | 5 | Phase A 后是否限制平台运维用 `BYPASSRLS`? | ✅ 限制 | 不限制 = RLS 等于没做 |
 | 6 | SDK 接入文档放主 repo 还是独立 repo? | 独立 repo | 主 repo 文档膨胀,租户 onboarding 体验差 |
 | 7 | 现有内建 worker(import/export/...)继续吗? | ✅ 继续 | 默认形态,租户体验最简单 |
@@ -412,7 +412,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 |---|---|
 | **RLS 性能拖累**(每 query 多个 policy check)| 上线前压测,关键 query 加索引含 `tenant_id` 首字段 |
 | **SDK 接入率低**(租户嫌麻烦,仍要求平台代部署)| 文档质量 + 模板 repo 易用性 + 案例样例 |
-| **Per-tenant 方案做了但没人用** | 严格按合同触发,不默认开 |
+| **Per-tenant 方案做了但无法形成真实使用** | 严格按合同触发,不默认开 |
 | **`batch-common` 拆 SDK 影响内部模块** | ADR-035 已分析,薄壳不变内部 |
 | **现有租户配置不兼容新隔离方案** | Phase A/B 设计上向后兼容(default-tenant + RLS bypass for legacy worker)|
 | **运维 / on-call 知识断层** | 每 phase 配 runbook 是出口必备 |

@@ -79,7 +79,7 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
     // 关闭顺序的意图：
     // 1) 先把 worker 标记为 DRAINING（best-effort），让 orchestrator 在调度层面减少派发
     // 2) 再停止 Kafka listener，避免继续拉取新任务
-    // 3) 等待 in-flight 任务自然结束（有超时），避免 RUNNING 卡死/重复调度
+    // 3) 等待 in-flight 任务自然结束（有超时），避免 RUNNING 长期停滞/重复调度
     // 4) 排空后主动 deactivate（→OFFLINE），免去心跳超时窗口，计划内重启即时摘除
     Collection<WorkerRegistration> registrations = workerRuntimeState.snapshot();
     for (WorkerRegistration registration : registrations) {

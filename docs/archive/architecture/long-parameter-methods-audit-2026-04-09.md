@@ -187,7 +187,7 @@
 
 ---
 
-## 参考实现形态（建议）
+## 参考实暴露态（建议）
 
 - **MyBatis 参数对象**：
   - `int updateXxx(@Param("p") XxxParam p);`

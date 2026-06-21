@@ -364,7 +364,7 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 
 - PROCESS 当前支持线性 pipeline,不做 DAG / workflow 级分支编排;复杂依赖仍交给 workflow。
 - staging 用单张共享表 + JSONB payload;类型还原靠 PG `jsonb_populate_record`,对绝大多数列类型(numeric/date/timestamp/text)够用,极端类型(自定义复合类型、PostGIS)需单独验证。
-- 当前 staging 没有 retention 清理 scheduler;运维对孤儿行(任务挂了没走到 FEEDBACK)需靠 `staged_at` 索引手动清,下一轮可加自动清理。
+- 当前 staging 没有 retention 清理 scheduler;运维对孤儿行(任务异常退出没走到 FEEDBACK)需靠 `staged_at` 索引手动清,下一轮可加自动清理。
 - 跨 workflow 依赖仍不随 PROCESS 一起做,继续由 §4.6 的触发模型单独评估。
 
 > ⚠️ **2026-04-28 深度评估发现的洞**：详细列表见 [`process-worker-known-issues.md`](./process-worker-known-issues.md)。简版：**2 个 P0**（WAP COMMIT/FEEDBACK 非原子 → 孤儿 staging；staging 缺 tenant_id 强过滤 → 防御纵深缺失）、**5 个 P1**（重跑 staging 永久泄漏 / attributes 污染 SQL 命名参数 / COMPUTE 二次跑 sourceSql / writeMode=INSERT 重跑必 UK 冲突 / staging 无写入上限）、**9 个 P2**。按该文档 §5 sprint 切片推进，先修 P0+P1-6。

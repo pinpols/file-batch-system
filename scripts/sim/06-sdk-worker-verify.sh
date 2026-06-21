@@ -8,7 +8,7 @@
 # 覆盖 5 个 SDK 基类(Import/Export/Process/Dispatch/Atomic)+ echo/sleep 的注册腿。
 #
 # 幂等可重复:每次跑会清掉上轮的 sdk-verify API key 与 worker 注册,重新建。
-# 退出 0=全绿,非 0=有断言失败。结束时自动停 worker(deactivate + kill)。
+# 退出 0=全部通过,非 0=有断言失败。结束时自动停 worker(deactivate + kill)。
 #
 # 依赖:本地 docker 栈在跑(console 18080 / orchestrator 18082 / kafka 19092 / pg);
 #       admin/admin123 种子账号;mvn + java(构建 sample jar,缺则自动构建)。

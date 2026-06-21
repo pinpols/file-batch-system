@@ -10,7 +10,7 @@ import java.util.Map;
  *     EXPORT_FILE_EMPTY}）便于告警规则匹配
  * @param message 失败描述（passed=true 时 null）
  * @param evidence 排障所需的少量证据（fileId / actualSize / expectedSize 等），会写入 outbox event 和 Micrometer
- *     tag（仅 code 作为 tag，避免 high-cardinality 爆炸）
+ *     tag（仅 code 作为 tag，避免 high-cardinality 爆失败）
  */
 public record VerifyResult(
     boolean passed, String code, String message, Map<String, Object> evidence) {

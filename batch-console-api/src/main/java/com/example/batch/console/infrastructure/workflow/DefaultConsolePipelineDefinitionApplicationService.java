@@ -257,7 +257,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
         return OffsetDateTime.parse(text).toInstant();
       } catch (DateTimeParseException ignoredToo) {
         // 宽容 fractional seconds（0-9 位）+ 可选 T 或空格分隔符，
-        // 原来枚举固定 .SSSSSS / .SSS 遇到 .SSSSS (5 位) 之类会全部挂掉。
+        // 原来枚举固定 .SSSSSS / .SSS 遇到 .SSSSS (5 位) 之类会全部异常退出。
         DateTimeFormatter flexible =
             new DateTimeFormatterBuilder()
                 .appendPattern("yyyy-MM-dd")

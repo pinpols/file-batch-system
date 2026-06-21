@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>#6 Controller 端点(@RequestMapping 系)返回值一律 {@link CommonResponse};二进制下载 / 流式响应 豁免 {@code
- *       ResponseEntity} / {@code SseEmitter};禁裸返 DTO 或自封装 envelope。
+ *       ResponseEntity} / {@code SseEmitter};禁直接返回 DTO 或自封装 envelope。
  *   <li>#4 {@code @Transactional} 只放 Service 公共方法,禁放 Controller / Mapper。
  * </ul>
  */

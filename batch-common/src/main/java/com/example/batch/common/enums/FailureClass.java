@@ -39,7 +39,7 @@ public enum FailureClass implements DictEnum {
   private final String code;
   private final String label;
 
-  /** 空白回落 UNKNOWN; 未知 code 抛异常, 避免静默吞掉。 */
+  /** 空白回落 UNKNOWN; 未知 code 抛异常, 避免静默捕获并抑制。 */
   public static FailureClass fromCode(String code) {
     if (code == null || code.isBlank()) {
       return UNKNOWN;

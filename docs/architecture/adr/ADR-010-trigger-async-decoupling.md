@@ -139,7 +139,7 @@ CREATE UNIQUE INDEX uk_trigger_outbox_request_id
 
 ### 正面
 
-- **trigger 重启不丢 launch**:Quartz fire 后第一时间落 trigger_outbox(同事务,与 trigger_request 一起),trigger JVM 挂掉 outbox 已落库,relay 重启后继续投递。
+- **trigger 重启不丢 launch**:Quartz fire 后第一时间落 trigger_outbox(同事务,与 trigger_request 一起),trigger JVM 异常退出 outbox 已落库,relay 重启后继续投递。
 - **orchestrator 短暂宕机不阻塞 trigger**:HTTP 同步桥下,orchestrator 重启期间 Quartz worker thread 阻塞;outbox 模式下,trigger 写完 outbox 立即返回,orchestrator 起来后 Kafka 消费跟上。
 - **架构一致**:整条主链路 + trigger 入口都是 DB+outbox+Kafka 模式,运维心智模型统一,可观测性指标统一(`*.outbox.publish.lag` 系列)。
 - **可对账**:trigger_outbox_event + trigger_request 双表,出问题任何一边都能反查。

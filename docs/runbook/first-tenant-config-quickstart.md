@@ -118,7 +118,7 @@ curl -X POST /api/console/tenants \
 
 > 字段速查:`schema/table`=落哪张业务表;`tenantColumn`=租户隔离列(几乎都是 `tenant_id`);`columnMappings`=**可省**(从 field_mappings 推断,只写差异列);`conflictColumns`=幂等键(自动补 tenant_id);`standardAuditBindings:true`=一键审计列。
 >
-> 注:上传配置包时**预览期**会校验 `jdbcMappedImport` 必含 `table`/`tenantColumn`、`field_mappings` 每项必含 `name`、CRON 作业必含合法 `schedule_expr`、DELIMITED 模板必含 `delimiter`、导出 SQL 禁 `SELECT *`——脏配置不会留到运行期才炸。
+> 注:上传配置包时**预览期**会校验 `jdbcMappedImport` 必含 `table`/`tenantColumn`、`field_mappings` 每项必含 `name`、CRON 作业必含合法 `schedule_expr`、DELIMITED 模板必含 `delimiter`、导出 SQL 禁 `SELECT *`——异常配置不会留到运行期才失败。
 
 ### 3b. 导出 → 文件(CSV / Excel)
 

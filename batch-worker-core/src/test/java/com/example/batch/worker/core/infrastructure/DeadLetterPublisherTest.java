@@ -100,7 +100,7 @@ class DeadLetterPublisherTest {
    */
   @Test
   void publish_brokerSlow_timesOutAndThrows() {
-    // 永不完成的 future 模拟 broker 卡死
+    // 永不完成的 future 模拟 broker 长期停滞
     CompletableFuture<SendResult<String, String>> stuck = new CompletableFuture<>();
     when(kafkaTemplate.send(anyString(), anyString())).thenReturn(stuck);
 

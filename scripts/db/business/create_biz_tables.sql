@@ -32,7 +32,7 @@ CREATE SCHEMA IF NOT EXISTS batch;
 -- 使 INSERT ... SELECT ... COMMIT 能留在同一个物理库内。
 --
 -- 按 staged_at 天级 RANGE 分区(2026-06 起):staging 行批次写满即清,但 DELETE 不缩文件,
--- 长期高水位会把堆膨胀到历史最大暂存量并再不回收(实测撑爆磁盘)。分区后由
+-- 长期高水位会把堆膨胀到历史最大暂存量并再不回收(实测超过磁盘)。分区后由
 -- ProcessStagingOrphanCleaner 预建未来日分区 + DROP 过期日分区(retention-days),
 -- DROP 瞬间把空间还给 OS,磁盘占用封顶在「保留窗口内的暂存量」,根治物理膨胀。
 -- 注:分区键 staged_at 必须进每个唯一约束 → PRIMARY KEY 加入 staged_at

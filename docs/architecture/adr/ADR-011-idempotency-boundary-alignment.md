@@ -27,7 +27,7 @@
 **实现要点**:
 
 - Key = `console:idempotency:{tenant}:{method}:{uri}:{idempotencyKey}` — 绑定 tenant + URI + method,杜绝跨接口/跨租户假冲突。
-- 两阶段占坑:
+- 两阶段占问题:
   - `preHandle` 写 `PENDING`(30s TTL),并发同 key 直接 409 + `Retry-After: 30`。
   - `afterCompletion` 根据 HTTP 响应:2xx → 升级 `DONE`(24h TTL,长期防重复);非 2xx → DELETE,允许调用方安全重试。
 - 失败时**显式释放**占位,不再让"业务异常 / 5xx"把 key 锁 24h。
@@ -112,7 +112,7 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 
 | 层       | 文件                                                           | 关键实现                                 |
 | ------- | ------------------------------------------------------------ | ------------------------------------ |
-| Layer 1 | `batch-console-api/.../ConsoleIdempotencyInterceptor.java`   | 全文重写;两阶段占坑 + 4 路 key 绑定 + 失败释放       |
+| Layer 1 | `batch-console-api/.../ConsoleIdempotencyInterceptor.java`   | 全文重写;两阶段占问题 + 4 路 key 绑定 + 失败释放       |
 | Layer 2 | `batch-trigger/.../DefaultTriggerService.java:134-142`       | `approvePendingCatchUp` 短路 LAUNCHED  |
 | Layer 2 | `batch-trigger/.../DefaultTriggerService.java:60-71`         | 类 Javadoc 说明"trigger 层只做尽力去重"        |
 | Layer 3 | `db/migration/V37__fix_trigger_request_dedup_constraint.sql` | 删 trigger 层约束 + 注释明示 orchestrator 兜底 |

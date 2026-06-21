@@ -36,7 +36,7 @@ groups:
 
       - alert: BatchJobDefinitionFailingRepeatedly
         # 同一 (tenant, jobCode) 1h 内失败 >= 5 次 → 配置异常 / 模板坏 / 资源缺,
-        # 持续 trigger 只会生成脏 job_instance + 污染日志,人工介入禁用或修
+        # 持续 trigger 只会生成异常 job_instance + 污染日志,人工介入禁用或修
         expr: sum by (tenant, jobCode) (increase(batch_job_failure_total[1h])) >= 5
         for: 5m
         labels:
@@ -45,7 +45,7 @@ groups:
           alert_group: job
         annotations:
           summary: "Job {{ $labels.tenant }}/{{ $labels.jobCode }} 1h 内失败 {{ $value | humanize }} 次"
-          description: "同一 job_definition 短时间持续失败,通常意味着配置错误(模板缺密钥 / 资源不存在 / 数据 schema 不匹配)。请到 console 查看实例日志并禁用该定义,避免 trigger 持续放炮生成脏数据。"
+          description: "同一 job_definition 短时间持续失败,通常意味着配置错误(模板缺密钥 / 资源不存在 / 数据 schema 不匹配)。请到 console 查看实例日志并禁用该定义,避免 trigger 持续生成异常运行数据。"
 
       - alert: BatchDispatchCircuitsOpen
         expr: batch_dispatch_circuits_open > 0
@@ -219,7 +219,7 @@ groups:
           summary: "Outbox pending events backlog is critical"
           description: "Outbox NEW+FAILED events exceeded 20000 for 2 minutes — downstream workers are starving. Escalate immediately."
 
-      # resetStalePublishing 正常会每轮清 0。长期 >0 意味着 poll 本身挂了或锁永久持有。
+      # resetStalePublishing 正常会每轮清 0。长期 >0 意味着 poll 本身异常退出或锁永久持有。
       - alert: BatchOutboxStalePublishingStuck
         expr: batch_outbox_publishing_stale_events > 0
         for: 5m
@@ -811,7 +811,7 @@ groups:
 
   # ===========================================================================
   # 容量护栏(2026-06-10 审计 P2-7 补)。
-  # 背景:归档/清理调度若坏死(ShedLock 卡死 / cron 配错 / 调度异常),原本只有
+  # 背景:归档/清理调度若坏死(ShedLock 长期停滞 / cron 配错 / 调度异常),原本只有
   #   应用级 backlog 告警,缺"磁盘 / 库体积"这道兜底——磁盘写满是所有组件的共因故障。
   #   历史教训:process_staging 曾积压 118GB dead、Docker.raw 147G bloat 才被发现。
   # 数据源:node-exporter(9100)/ postgres-exporter(9187)/ cadvisor,均已在 prometheus.yml scrape。
@@ -876,7 +876,7 @@ groups:
           alert_group: capacity
         annotations:
           summary: "PostgreSQL database {{ $labels.datname }} grew >10GB in 6h"
-          description: "库 {{ $labels.datname }} 6h 内净增 {{ $value | humanize1024 }}B。正常增量同步远低于此——多半是归档/清理调度坏死(outbox PUBLISHED 不归档 / process_staging 不清 / run 表不归档)。查对应 ShedLock 是否卡死、scheduler 日志有无异常。"
+          description: "库 {{ $labels.datname }} 6h 内净增 {{ $value | humanize1024 }}B。正常增量同步远低于此——多半是归档/清理调度坏死(outbox PUBLISHED 不归档 / process_staging 不清 / run 表不归档)。查对应 ShedLock 是否长期停滞、scheduler 日志有无异常。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#库体积增长治理"
 
       - alert: PostgresDatabaseSizeHigh
@@ -942,7 +942,7 @@ groups:
 
       - alert: BatchPostgresLockWaitStuck
         # 真"等锁阻塞"会话数(pg_stat_activity wait_event_type='Lock'),来自自定义 query
-        # docker/observability/postgres-exporter-queries.yaml。该指标仅在挂了 query 的部署(compose)
+        # docker/observability/postgres-exporter-queries.yaml。该指标仅在异常退出 query 的部署(compose)
         # 存在;未挂的环境此规则不 fire(由下面 LongRunningTransaction 用默认指标兜底)。
         expr: pg_lock_waits_waiting_sessions > 0
         for: 5m

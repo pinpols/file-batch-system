@@ -3,7 +3,7 @@
 ## 约定
 业务异常统一 `BizException.of(ResultCode.X, "error.<scope>.<reason>", args...)`。
 错误码 key 为 snake_case,i18n 双语在 `messages.properties`(英文)+ `messages_zh_CN.properties`(中文)1:1 对齐。
-HTTP 语义:认证/权限类落 401/403,参数/状态冲突类落 4xx,下游/存储异常不应裸抛成 500(应映射为合适的 4xx)。
+HTTP 语义:认证/权限类落 401/403,参数/状态冲突类落 4xx,下游/存储异常不应直接抛出未映射异常成 500(应映射为合适的 4xx)。
 
 ## 常见错误码(scope = task / 任务执行)
 - `error.task.already_claimed`:任务已被(其它/当前)worker 认领,状态非预期。并发 CLAIM 时出现。

@@ -235,7 +235,7 @@ jobs:
         # OWASP dependency-check 当前在 CI 上撞 NVD API rate-limit → NVD 全量下载
         # 慢到不可控(实测 70k/352k @ 6m44s,继续下要 15+ min)。工具自身已知问题:
         #   - continue-on-error:让 hadolint/trivy 不被阻塞
-        #   - timeout-minutes: 5:卡死自动 abort,security-scan 全 job 控在 ~7 min
+        #   - timeout-minutes: 5:长期停滞自动 abort,security-scan 全 job 控在 ~7 min
         # backlog 跟进:配 NVD_API_KEY secret 或换 trivy 替代依赖扫描。
         continue-on-error: true
         timeout-minutes: 5

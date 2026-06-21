@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
  *
  * <p>批量调度平台里有大量"软字符串"字段在多张表之间引用（{@code worker_group} / {@code window_code} / {@code calendar_code}
  * / {@code queue_code} 等），历史上因为既没统一大小写、 也没拦字典外的值，导致同一个概念在 job_definition / worker_registry /
- * 运行时实例之间出现 {@code IMPORT / import / Import} 并存、{@code always_open / always-open} 混用的脏数据， 运行时
+ * 运行时实例之间出现 {@code IMPORT / import / Import} 并存、{@code always_open / always-open} 混用的异常数据， 运行时
  * worker 匹配 SQL 等值比较直接失配，任务永远卡在 WAITING。
  *
  * <p><b>归一规则</b>（两类）：

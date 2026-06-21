@@ -37,7 +37,7 @@ handler 没收到 `execute()`,console 看 job 卡在 ready / dispatched。
 
 | 症状 | 根因 | 处理 |
 |---|---|---|
-| 日志有 `KafkaTaskConsumer paused partition` 不消费 | **Capacity-aware pause** — inFlight 触顶,SDK 主动 pause partition 不抢单 | 跑完手头任务自动 resume;持续 pause 说明 handler 卡死(看堆栈)或 `maxConcurrentTasks` 太低。机制见 ADR-035 §11 P0-1 |
+| 日志有 `KafkaTaskConsumer paused partition` 不消费 | **Capacity-aware pause** — inFlight 触顶,SDK 主动 pause partition 不抢单 | 跑完手头任务自动 resume;持续 pause 说明 handler 长期停滞(看堆栈)或 `maxConcurrentTasks` 太低。机制见 ADR-035 §11 P0-1 |
 | 日志显示 `dispatcher state=PAUSED` 或 `DRAINING` | 平台 heartbeat directive 命令暂停;SDK 拒新任务 | console 检查是否管理员主动 pause 了 worker;DRAINING 意味着即将下线,不可逆。状态机见 ADR-035 §11 P0-2 + `WorkerRuntimeState.java` |
 | handler 抛异常但日志没看到栈 | 业务 handler 抛 `RuntimeException`,被 dispatcher catch 转 `SdkTaskResult.fail`,栈走 WARN 级 | 调日志级别到 DEBUG;或在 handler 里 `try/catch` 自己 `log.error("...", e)` 保留完整栈 |
 | Kafka topic 看不到消息进来 | topic 命名不匹配 `batch.task.dispatch.{type}.{tenantId}`(ADR-035 §2 Kafka ACL) | 在 platform 端确认 topic 已建 + 消费者订阅模式匹配;`kafkaTopicPattern` 默认 `batch.task.dispatch.<tenantId>.*`,自定义时注意 anchors |
@@ -84,5 +84,5 @@ Spring Boot starter 启动比 plain SDK 慢(autoconfigure + bean 扫描):
 ## 找不到症状?
 
 - 看 [ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)「实施记录:协议字段细节」对照 wire payload
-- 看 [`docs/runbook/per-tenant-worker-onboarding.md`](../runbook/per-tenant-worker-onboarding.md) §「常见接入坑」
+- 看 [`docs/runbook/per-tenant-worker-onboarding.md`](../runbook/per-tenant-worker-onboarding.md) §「常见接入问题」
 - 平台运维侧:[`docs/runbook/`](../runbook/) 内对应 `kafka-*` / `outbox-*` runbook

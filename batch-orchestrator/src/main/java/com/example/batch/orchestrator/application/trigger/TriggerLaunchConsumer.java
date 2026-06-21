@@ -52,7 +52,7 @@ public class TriggerLaunchConsumer {
   private static final String METRIC_DEDUPED = "batch.trigger.launch.deduped.total";
   private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
 
-  // R3-P0-11：Kafka 消息可注入任意 tenantId 字符串 → Prometheus TSDB cardinality 爆炸。
+  // R3-P0-11：Kafka 消息可注入任意 tenantId 字符串 → Prometheus TSDB cardinality 爆失败。
   // 用 ConcurrentHashMap.newKeySet 缓存已观测 tenantId，超过阈值后新 tenant 统一归一化为 "other"。
   // 256 是 Prom 单 metric 系列上限的实用阈值（足够区分常见租户 + 容忍误差）。
   private static final int MAX_TENANT_TAG_CARDINALITY = 256;

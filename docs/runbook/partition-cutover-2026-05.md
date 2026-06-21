@@ -66,7 +66,7 @@ mvn -pl batch-orchestrator verify -Dspring.profiles.active=cutover-test
 - 01 脚本 INSERT INTO ... SELECT 耗时（行数 × 时长）
 - 02 脚本同上
 - 重建索引耗时
-- IT 全绿耗时
+- IT 全部通过耗时
 
 ---
 

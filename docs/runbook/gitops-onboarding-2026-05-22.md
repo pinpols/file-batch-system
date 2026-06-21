@@ -124,7 +124,7 @@ imagePullSecrets:
 - [ ] **GitHub Secrets** 配 `OPS_REPO_TOKEN`(本仓库)
 - [ ] **集群安装 Argo CD**(`kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml`)
 - [ ] **集群安装 flagger**(`helm install flagger flagger/flagger -n flagger-system`,prod 必装)
-- [ ] **集群安装 Prometheus**(kube-prometheus-stack 一把梭)
+- [ ] **集群安装 Prometheus**(kube-prometheus-stack 一次性执行)
 - [ ] **配 nginx ingress 或 istio**(flagger 切流量依赖)
 - [ ] **每个 namespace 建 ghcr-pull secret**
 - [ ] **`kubectl apply` 两个 Argo Application**(staging + prod)
@@ -143,7 +143,7 @@ imagePullSecrets:
 
 ### 5.2 紧急情况手动 helm rollback(兜底)
 
-Argo UI 挂了 / 仍在 sync 卡住时:
+Argo UI 异常退出 / 仍在 sync 卡住时:
 
 ```bash
 kubectl config use-context prod

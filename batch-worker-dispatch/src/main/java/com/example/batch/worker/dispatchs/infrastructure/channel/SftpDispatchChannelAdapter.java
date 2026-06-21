@@ -377,7 +377,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
 
-      // 其他 disconnect 异常吞掉（原语义）
+      // 其他 disconnect 异常捕获并抑制（原语义）
     }
   }
 

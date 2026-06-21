@@ -490,7 +490,7 @@ public class PlatformFileRuntimeRepository {
     //
     // **第一版**用 try/catch + 反查 — 但忽略了 PG 在 @Transactional 内 INSERT 抛错后整个事务被
     // 标记 aborted，后续 SELECT 直接抛 "current transaction is aborted" (SQLState 25P02)，
-    // 反查路径被吞掉，import 仍然卡死。日志显示 worker-import 持续 10+/分钟同样异常。
+    // 反查路径被捕获并抑制，import 仍然长期停滞。日志显示 worker-import 持续 10+/分钟同样异常。
     //
     // **正确做法**：INSERT 之前 pre-check (tenant_id, storage_path) WHERE checksum_value IS NULL，
     // 命中即直接复用 fileId；不命中再 INSERT。撞约束（极小概率并发场景）仍 catch 但只记 warn，

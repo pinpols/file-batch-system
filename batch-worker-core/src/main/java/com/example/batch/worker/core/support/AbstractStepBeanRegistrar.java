@@ -23,7 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * StepRegistryMapper, String, List)} 多类型构造器，把多种 bean 类型 + 各自 implCode 提取器组合到同一 module 下登记。
  *
  * <p>console-api 的 Excel 上传校验会按 pipeline 的 worker_type 查本表，拦住 {@code impl_code} 指向未注册 Spring bean
- * 的坏配置 （以前 seed 里 {@code sftpReceiveStep} 之类的"幽灵 impl_code"只能等运行时抛 STEP_NOT_FOUND 才暴露）。
+ * 的坏配置 （以前 seed 里 {@code sftpReceiveStep} 之类的"残留 impl_code"只能等运行时抛 STEP_NOT_FOUND 才暴露）。
  */
 @Slf4j
 public abstract class AbstractStepBeanRegistrar<T> {

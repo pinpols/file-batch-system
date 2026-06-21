@@ -25,7 +25,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
  *
  * <p>Redis key 绑定 {@code tenant + method + uri + idempotencyKey}，避免跨接口/跨租户的假冲突。
  *
- * <p>两阶段占坑：preHandle 写入 {@code PENDING} 标记，afterCompletion 根据响应状态决定：
+ * <p>两阶段占问题：preHandle 写入 {@code PENDING} 标记，afterCompletion 根据响应状态决定：
  *
  * <ul>
  *   <li>2xx 成功：标记改为 {@code DONE}，TTL 24 小时（阻止重复提交）。
@@ -129,7 +129,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       return false;
     }
 
-    // PENDING 也占坑（防并发双提交），但短 TTL（30s），超时自动释放
+    // PENDING 也占问题（防并发双提交），但短 TTL（30s），超时自动释放
     Boolean isNew;
     try {
       isNew = redisTemplate.opsForValue().setIfAbsent(redisKey, PENDING, Duration.ofSeconds(30));

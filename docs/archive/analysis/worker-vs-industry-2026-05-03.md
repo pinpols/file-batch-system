@@ -59,7 +59,7 @@
 
 1. **task 不可中断 / 无 timeout 强终止** ⚠️
    - **位置**：全 worker-core `grep` 无 `Future.cancel`/`InterruptedException` 业务路径
-   - **现象**：worker 没有 task-level timeout/cancel 机制；`PrepareStep`/`ComputeStep` 等业务异常只能等其自然完成；plugin 死循环或长 SQL 卡住 → orchestrator `JobInstanceTimeoutEnforcer` 标 TIMED_OUT，但 worker 线程仍被占着，`Semaphore` permit 永不释放 → **整个 worker 实例容量永久缩水**
+   - **现象**：worker 没有 task-level timeout/cancel 机制；`PrepareStep`/`ComputeStep` 等业务异常只能等其自然完成；plugin 无限循环或长 SQL 卡住 → orchestrator `JobInstanceTimeoutEnforcer` 标 TIMED_OUT，但 worker 线程仍被占着，`Semaphore` permit 永不释放 → **整个 worker 实例容量永久缩水**
    - **业界**：Temporal cancellation token + 心跳检；Spring Batch `JobOperator.stop()` 设 stop flag
 
 2. **PROCESS 5-stage `traceId` 每次不同 → batchKey 不重 → reclaim 后孤儿数据无人清** ⚠️
@@ -89,7 +89,7 @@
 
 7. **`AbstractStageExecutor` cycle guard 太宽松**
    - **位置**：`PipelineStepFlowSupport:34` `maxTransitionGuard = max(steps.size()*4, 16)`
-   - **现象**：5-stage pipeline guard 是 20，但 `onFailureNextStepCode` 能任意跳转，恶意/错误配置很容易 4 跳一轮死循环 20 次后才报错，期间 step_run 记录被疯狂写入
+   - **现象**：5-stage pipeline guard 是 20，但 `onFailureNextStepCode` 能任意跳转，恶意/错误配置很容易 4 跳一轮无限循环 20 次后才报错，期间 step_run 记录被疯狂写入
 
 8. **renew/heartbeat 无熔断**
    - **位置**：`WorkerTaskLeaseRenewer:96`（注释明确说"不熔断"）
@@ -112,13 +112,13 @@
 
 13. **`WorkerKafkaSubscribeProperties` PATTERN 模式 regex `\.[^.]+` 过于宽松**（`AbstractTaskConsumer:352`）— 任意一段后缀都匹配，**跨租户 topic 泄漏风险**（一个 worker 可能消费别的租户的 topic）。Production 应强制 TENANT_SCOPED 模式 + allowlist
 
-14. **`@Scheduled` 没有 worker 进程级独占** — `WorkerTaskLeaseRenewer.renewActiveTaskLeases` / `fastRetryFailedLeases` 在每个 worker JVM 都跑，无 ShedLock，多 worker 部署时 renew 调用量 = workers × in-flight tasks，10s 周期下高并发租户会**打爆 orch `/internal/tasks/.../renew` 端点**（无 batch renew API）
+14. **`@Scheduled` 没有 worker 进程级独占** — `WorkerTaskLeaseRenewer.renewActiveTaskLeases` / `fastRetryFailedLeases` 在每个 worker JVM 都跑，无 ShedLock，多 worker 部署时 renew 调用量 = workers × in-flight tasks，10s 周期下高并发租户会**压垮 orch `/internal/tasks/.../renew` 端点**（无 batch renew API）
 
 15. **DLQ envelope 无版本号**（`DeadLetterPublisher:30`）— 简单 map 序列化，未来 envelope schema 演进无法平滑迁移；运维 republish 工具难以做向后兼容
 
 16. **PROCESS `FEEDBACK swallow exception`**（`FeedbackStep:38`）合理但**不该 swallow 所有 RuntimeException**，至少 `OutOfMemoryError`/`InterruptedException` 应该重抛；当前 catch RuntimeException 已经够用，但缺少"超过 N 次连续 swallow 触发降级"的保护
 
-17. **`accepts()` 大小写归一不彻底**（`AbstractTaskConsumer:444` + `AbstractWorkerLoop:119`）— 双向归一只在源头，下游所有比较都得记得加 `IgnoreCase`，未来加新 worker 类型很容易踩坑
+17. **`accepts()` 大小写归一不彻底**（`AbstractTaskConsumer:444` + `AbstractWorkerLoop:119`）— 双向归一只在源头，下游所有比较都得记得加 `IgnoreCase`，未来加新 worker 类型很容易遇到问题
 
 ---
 

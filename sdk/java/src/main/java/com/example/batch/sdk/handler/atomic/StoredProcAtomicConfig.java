@@ -23,7 +23,7 @@ import java.util.Set;
  * <ul>
  *   <li><b>verifyExecutePrivilege</b>(默认 false,opt-in 第 4 闸):执行前查 {@code current_user} 对目标过程有无
  *       EXECUTE 权限({@code has_function_privilege}),无则拒。
- *   <li><b>maxOutBytesPerParam</b>:OUT 参数值字符串化后字节上限,超出截断(防大对象撑爆内存 / REPORT)。
+ *   <li><b>maxOutBytesPerParam</b>:OUT 参数值字符串化后字节上限,超出截断(防大对象超过内存 / REPORT)。
  *   <li><b>defaultAutoCommit</b>:事务模式;false=显式事务(成功 commit / 异常 rollback),true=每条自动 commit。
  * </ul>
  *

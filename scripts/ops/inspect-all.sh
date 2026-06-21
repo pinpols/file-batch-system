@@ -6,7 +6,7 @@
 # 2) 退出码 0 表示通过，1 表示至少一个脚本失败。
 # =========================================================
 #   1. inspect-observability.sh  — 服务 health / Prometheus 指标 / Kafka lag
-#   2. inspect-db.sh             — Flyway / 告警事件 / 卡死作业 / Outbox / 死信 / 重试积压
+#   2. inspect-db.sh             — Flyway / 告警事件 / 长期停滞作业 / Outbox / 死信 / 重试积压
 #   3. inspect-workers.sh        — Worker 排空超时 / 心跳失联 / 孤儿任务
 #
 # 使用方法：

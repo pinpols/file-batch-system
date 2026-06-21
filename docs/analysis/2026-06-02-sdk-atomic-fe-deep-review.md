@@ -68,7 +68,7 @@
 2. **🟠 dry-run 执行器无感知**:`V115__dry_run_mode.sql` 已加 dry_run 字段,executor 层无判断,`ctx.isDryRun()==true` 时仍真发 SQL/Shell/HTTP。ADR-026 dry-run 的"看会不会跑/看 SQL"承诺在 atomic 这条路径打折。
 3. **🟠 console schema 与 executor 漂移**:`ConsoleAtomicTaskTypeSchemaService` 的 CATALOG 是手维护硬编码,executor 改字段不会自动同步,FE 表单与实际参数不一致只能靠人发现。
 
-### 2.3 已建得很好的部分
+### 2.3 已较完整建设的部分
 
 - ✅ shell 默认 `enabled=false` + `commandWhitelist=空 即 全禁` 是教科书级 fail-closed
 - ✅ http SSRF 防护两层:glob 黑名单 + DNS 解析后 IP 段拒(`blockPrivateIps=true` 默认)
@@ -83,7 +83,7 @@
 
 | # | 维度 | 评分 | 关键证据 |
 |---|---|---|---|
-| 1 | 整体架构 | 4/5 | 桌面/移动双端路由分流清晰;PageContainer→PageHeader→SectionCard→ProTable 体系成型;**TanStack Query 与裸 axios 边界模糊** |
+| 1 | 整体架构 | 4/5 | 桌面/移动双端路由分流清晰;PageContainer→PageHeader→SectionCard→ProTable 体系成型;**TanStack Query 与直接 axios 调用边界模糊** |
 | 2 | 新功能(A/B/C)完成度 | 3.5/5 | A.1 ✅ B.1 ✅ C.1 ✅ A.2 ⚠️半(无编辑器集成) B.2 ⚠️半(只读无编辑) **A.3/A.4-A.6/B.3/B.4 未做(本批不阻塞)** |
 | 3 | 类型/契约同步 | 3/5 | `customTaskTypes.ts` 手写 wrapper(BE OpenAPI `data` 是 untyped),`gen:api:check` 无法检测此层漂移 |
 | 4 | i18n/token/a11y | 3.5/5 | zh/en 4000+ 行 1:1 ✅;**LayoutTabs / MWorkflowViewer 等仍有裸 px / hex(~8 处)**;dark/compact 切换状态不明 |
@@ -116,7 +116,7 @@
 2. **🟠 类型双源(generated vs 手写 wrapper)无 CI 守护**:`customTaskTypes.ts:10-26` 手写 11 字段是因 BE OpenAPI `data` 为 untyped。但**BE 改了字段(如加 `sdkVersion`),`gen:api:check` 不会报错**,FE 拿不到新字段。当前是"可控漂移",随时间累积会失控。
 3. **🟡 e2e regression 反馈延迟**:e2e 仅 staging-gate 跑(故意 — BE 在 PR-gate 起来不稳),PR merge → main → staging deploy 才能验证,反馈周期 ~10min+。combined with 64 specs 单 worker 跑 ~9h,失败后定位慢。
 
-### 3.4 前端做得很好的部分
+### 3.4 前端实现较完整的部分
 
 - ✅ **设计体系套用一致**:新 5 页面都走 `PageContainer → PageHeader → SectionCard`,无重创设计语言
 - ✅ **i18n 1:1 严格**:zh/en 都各加了 4 个 namespace,`npm run check:i18n` 全过
@@ -229,9 +229,9 @@
 
 | Lane | TOP # | PR | 状态 | 落地点 / 关键文件 | 测试 |
 |---|---|---|---|---|---|
-| **A** SDK Kafka pause + stop(timeout) | #1 | [#239](https://github.com/pinpols/file-batch-system/pull/239) | ✅ MERGED | `batch-worker-sdk/.../client/BatchPlatformClient.java:163-209`(`stop(Duration)` + 预算分摊 kafka 20% / dispatcher 75%)+ `dispatcher/TaskDispatcher.java:490-519`(超时 WARN 列 `inFlightTaskIds()`)| 286 单测全绿,新增 8(`*StopTimeoutTest` + `*CapacityPauseTest`)|
+| **A** SDK Kafka pause + stop(timeout) | #1 | [#239](https://github.com/pinpols/file-batch-system/pull/239) | ✅ MERGED | `batch-worker-sdk/.../client/BatchPlatformClient.java:163-209`(`stop(Duration)` + 预算分摊 kafka 20% / dispatcher 75%)+ `dispatcher/TaskDispatcher.java:490-519`(超时 WARN 列 `inFlightTaskIds()`)| 286 单测全部通过,新增 8(`*StopTimeoutTest` + `*CapacityPauseTest`)|
 | **B** Atomic dry-run + prod fail-closed | #2 | [#241](https://github.com/pinpols/file-batch-system/pull/241) | ✅ MERGED | `batch-common/.../spi/task/TaskContext.java` 加默认 `isDryRun()` + 4 个 `*TaskExecutor` 短路 + `runtime/AtomicExecutorProductionGuard.java` 启动期 fail-fast(`prod` / `prod-*` profile 强制白名单)| atomic 155/155、common 325/1-skip,新 15 用例 |
-| **C** SensitiveDataValidator(BE) | #3 | [#242](https://github.com/pinpols/file-batch-system/pull/242) | ✅ MERGED | `batch-common/.../security/SensitiveDataValidator.java`(116 行)+ i18n 2 文件 + atomic 4 executor 入口接入 + `DefaultWorkerRegistryService.java:119-122` register 路径拒入 + 21 用例 | 全绿,5 测试文件;HTTP `auth` 子树豁免(协议字段),需 FE follow-up 警示 |
+| **C** SensitiveDataValidator(BE) | #3 | [#242](https://github.com/pinpols/file-batch-system/pull/242) | ✅ MERGED | `batch-common/.../security/SensitiveDataValidator.java`(116 行)+ i18n 2 文件 + atomic 4 executor 入口接入 + `DefaultWorkerRegistryService.java:119-122` register 路径拒入 + 21 用例 | 全部通过,5 测试文件;HTTP `auth` 子树豁免(协议字段),需 FE follow-up 警示 |
 | **D** Worker fingerprint 端点 | #5 BE 部分 | [#240](https://github.com/pinpols/file-batch-system/pull/240) | ✅ MERGED | `ConsoleWorkerFingerprintController.java` + `WorkerFingerprintMapper.{java,xml}` + 2 Response record + OpenAPI `/api/console/workers/fingerprints[/summary]` 双端点 + protocol.md changelog | 794/794 全量绿;5 控制器测;`check-console-openapi-paths.py` 327 routes OK |
 | **E1** docs/sdk/ 集中化 | #6 | [#238](https://github.com/pinpols/file-batch-system/pull/238) | ✅ MERGED | `docs/sdk/quickstart.md`(92 行)+ `docs/sdk/troubleshooting.md`(88 行)| — |
 | **E2** wire-protocol 协议文档 | #6 续 | [#243](https://github.com/pinpols/file-batch-system/pull/243) | ⏳ OPEN(auto-merge armed) | `docs/sdk/wire-protocol.md`(161 行,双通道分工 + 12 故障矩阵 + 6 项时序约束)| — |

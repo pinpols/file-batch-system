@@ -41,7 +41,7 @@
 | 2 | `batch-trigger/.../application/TriggerOutboxRelay.java` 224 行 + 7 单测 |
 | 3 | `batch-trigger/.../service/DefaultTriggerService.java:202-225` 异步分支 + 灰度开关 |
 | 4 | `batch-trigger/.../infrastructure/mq/KafkaTriggerEventPublisher.java` + `batch-orchestrator/.../application/trigger/TriggerLaunchConsumer.java` |
-| 5 | **22 测试全绿** = 9 单测 + 7 relay + 4 trigger E2E + 2 跨模块 E2E |
+| 5 | **22 测试全部通过** = 9 单测 + 7 relay + 4 trigger E2E + 2 跨模块 E2E |
 | 6 | `docs/runbook/trigger-async-launch-rollout.md` 完整 SOP |
 | 7 | `HttpOrchestratorTriggerAdapter` `@Deprecated(forRemoval=true)` + DefaultTriggerService 首次进入 deprecation WARN |
 
@@ -55,7 +55,7 @@
 | §5.2 X-Console-Token | 标"未完成" | ✅ `ff20c36f` 物理删除 9 文件 -148 行，grep 全仓 0 残留 |
 | §5.7 trigger→orchestrator 同步桥 | 标"未完成" | ✅ ADR-010 全栈，见上 |
 | §5.12 Console Job 过胖 | 标"未完成" | ✅ 主类 90 LOC + 6 兄弟类（grep 验证）|
-| §5.5 Console 幂等不一致 | 中 | ✅ ADR-011 三层边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写（tenant+method+uri 绑定，两阶段占坑，Redis fail-closed）— §5.5 / §5.6 / §5.10 三处一并闭环 |
+| §5.5 Console 幂等不一致 | 中 | ✅ ADR-011 三层边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写（tenant+method+uri 绑定，两阶段占问题，Redis fail-closed）— §5.5 / §5.6 / §5.10 三处一并闭环 |
 | §5.11 Webhook durability | 中 | ✅ `b74e0a0c` V81 migration + `WebhookDeliveryRelay` 278 行（@Scheduled ShedLock 互斥，指数退避 5m→30m cap，最多 8 次，GIVE_UP 打 Prometheus）|
 
 4-29 评估累计 4 处口径滞后（漏看 + 误判），本次已实地 grep 全部核查。
@@ -83,7 +83,7 @@
 
 #### worker 数据质量服务
 
-`ImportDataQualityService` 809 → 138 LOC（-83%, 本日）：抽 `infrastructure/quality/` 子包 8 类（ValidationCoercions 静态工具 / ValidationConfigSupport mapper-bound / ValidationRuleSetMerger 派生+合并 / DatasetRuleEvaluator 行数+checksum+schema / RecordRuleEvaluator null+field+unique / ValidationIssueMasker / 3 record types），48 测试全绿。
+`ImportDataQualityService` 809 → 138 LOC（-83%, 本日）：抽 `infrastructure/quality/` 子包 8 类（ValidationCoercions 静态工具 / ValidationConfigSupport mapper-bound / ValidationRuleSetMerger 派生+合并 / DatasetRuleEvaluator 行数+checksum+schema / RecordRuleEvaluator null+field+unique / ValidationIssueMasker / 3 record types），48 测试全部通过。
 
 ---
 
@@ -195,7 +195,7 @@
 | P2-EXCEL-GODCLASS 6/7 | `b74e0a0c` + `b9eefb47` | WorkflowExcel 1512→**497**（-67%）/ TenantConfigInit 823→**120**（-85%）/ JobDef 887→**663** / BusinessCalendar 1009→**763** / PipelineDef 1061→**822** / TenantConfigPackage 846→**728**；`ConfigPackageExcelValidator` 874 经决策保留 |
 | P2-IDEMPOTENCY | ADR-011 + 3 层实施 | `ConsoleIdempotencyInterceptor` 197 行（PENDING 30s → DONE 24h，Redis fail-closed）+ Layer 2 idempotencyKey 短路 + Layer 3 V37 `uk_job_instance_tenant_dedup` 兜底 — deep-issue §5.5 + §5.6 + §5.10 三处一并闭环 |
 | Export 中文 fallback 改英文 | `247f7f4e` | 与 Import / Dispatch 一致 |
-| P2-IMPORT-DQ-GODCLASS | 本日 | `ImportDataQualityService` 809→138 LOC（-83%）— 抽 `infrastructure/quality/` 子包 8 类，48 测试全绿 |
+| P2-IMPORT-DQ-GODCLASS | 本日 | `ImportDataQualityService` 809→138 LOC（-83%）— 抽 `infrastructure/quality/` 子包 8 类，48 测试全部通过 |
 
 ### 🔴 剩余 follow-up
 
@@ -231,7 +231,7 @@
 | 9 | 2026-04-30 下午 | P1+P2 一把过清账：`0c623eb0` Prometheus 3 条告警 + `8dc6eac1` 9 处 FQN + `6d977766` hardening-backlog v6 + `b74e0a0c` WEBHOOK-DURABILITY 全栈 + ORCH-GODCLASS 部分 |
 | 8 | 2026-04-30 | 全维实地 grep 复评 — 锁定 P1 ops 缺口 / Excel god class 群 / 9 FQN 违规 |
 | 7 | 2026-04-30 | 运行日志噪声治理（ChannelConfigMerge + FileGovernance）|
-| 6 | 2026-04-30 | ADR-010 Stage 5 双层 E2E 22 测试全绿 |
+| 6 | 2026-04-30 | ADR-010 Stage 5 双层 E2E 22 测试全部通过 |
 | 5 | 2026-04-30 | ADR-010 trigger 异步解耦 7 stage 落地 |
 | 4 | 2026-04-30 | ADR-009 Stage 1.2 全栈落地 |
 | 3 | 2026-04-29 | ADR-009 Stage 2/3 实际已落（4-29 评估漏看）|

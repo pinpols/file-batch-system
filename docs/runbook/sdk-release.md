@@ -11,7 +11,7 @@
 | `sdk-contract-parity.yml` | **源码层契约不漂移**(5 语言 conformance fixtures + shared-constants parity) | 每个改 SDK 的 PR |
 | `sdk-release-validation.yml`(本文) | **打出来的发布产物真能装、真能用** + 协议 spec 无破坏性变更 + 严格门禁发布 | `release`(published)/ 手动 `workflow_dispatch`(默认 dry-run) |
 
-源码全绿 ≠ 包装得上:缺 build 步、入口写错、依赖漏声明,只有装"打出来的包"才挖得出。这是本工作流的核心价值。
+源码全部通过 ≠ 包装得上:缺 build 步、入口写错、依赖漏声明,只有装"打出来的包"才挖得出。这是本工作流的核心价值。
 
 ## 1. 工作流阶段
 
@@ -69,7 +69,7 @@ publish-* 每个 job 三重锁,任一不满足都不发:
 1. 确认 `main` 上 SDK 代码 + 版本号已就绪(各语言版本号见 §4)。
 2. 在 GitHub 建 **Release**(打 tag,`Publish release`)。
 3. `release: published` 触发本工作流:
-   - gate + package + smoke 全绿后,publish-* job 进入 `release-publish` environment;
+   - gate + package + smoke 全部通过后,publish-* job 进入 `release-publish` environment;
    - 审批人在 Actions 页面 **Review deployments** → Approve;
    - 各 registry 依次发布。
 4. 发布后核对:npm / PyPI / crates.io 页面出现新版本;Go 下游 `go get ...@<tag>` 可拉取。

@@ -76,7 +76,7 @@ public class SensorPollScheduler {
         // 先解 tenantId（workflow_run.selectByIdAnyTenant 走 RLS-bypass，安全）。
         String tenantId = resolveTenantId(nodeRun);
         if (tenantId == null || tenantId.isBlank()) {
-          // 拿不到 tenant 退回原行为，避免 nodeRun 残留卡死整 tick。
+          // 拿不到 tenant 退回原行为，避免 nodeRun 残留长期停滞整 tick。
           self.probeOne(nodeRun, now);
         } else {
           RlsTenantContextHolder.runWithTenant(tenantId, () -> self.probeOne(nodeRun, now));

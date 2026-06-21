@@ -49,7 +49,7 @@ public class ConsolePushSubscriptionService {
   /**
    * 订阅 upsert:同 (tenant, username, endpoint) 已存在则刷新 keys + last_seen_at。
    *
-   * <p>前端每次安装 / 重新授权 / 切设备都可能重发,upsert 保证不重复主键冲突也不留垃圾。
+   * <p>前端每次安装 / 重新授权 / 切设备都可能重发,upsert 保证不重复主键冲突也不留下无效记录。
    */
   @Transactional
   public void subscribe(

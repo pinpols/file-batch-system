@@ -13,7 +13,7 @@ name: Label auto-merge
 #   3) 所有 required check 一变绿,本 workflow 立即 admin squash merge
 #
 # 安全性:
-#   - **不** 跳过 required status checks(必须 unit-it-a/b1/b2 / static-checks / security 全绿)
+#   - **不** 跳过 required status checks(必须 unit-it-a/b1/b2 / static-checks / security 全部通过)
 #   - **不** 自动加 label(必须人手贴)
 #   - --admin 绕过 required_reviews(因为只有 admin 能触发本 workflow 的 token 才有 admin 权限)
 #   - 撤销:删 'automerge' label 即可,workflow 不会再 fire

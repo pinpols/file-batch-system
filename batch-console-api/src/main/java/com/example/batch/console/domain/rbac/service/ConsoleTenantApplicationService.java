@@ -113,7 +113,7 @@ public class ConsoleTenantApplicationService {
   public ConsoleTenantResponse createTenant(CreateTenantCommand cmd) {
     // 命名规范守卫双模式(2026-05-21):
     //   PROD:拒 test prefix(防 test 污染生产)
-    //   NON-PROD:必须 test prefix 或 DEV_FIXTURE 白名单(ta/tb/tc/default-tenant),防裸 ID 残留无主
+    //   NON-PROD:必须 test prefix 或 DEV_FIXTURE 白名单(ta/tb/tc/default-tenant),防无前缀 ID 残留无主
     // 之前用 bypassMode 判定会导致 local/e2e 完全跳过校验 → td/te/tx 等残留无主,cleanup 按 prefix 清不掉
     boolean productionMode = BatchProfileSupport.isProductionProfile(environment);
     ReservedPrefixGuard.checkTenantId(cmd.tenantId(), productionMode);

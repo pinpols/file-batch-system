@@ -116,7 +116,7 @@ mvn -pl batch-e2e-tests test -DexcludedGroups='smoke,critical'
 ## 反预期场景
 
 - pr-gate 漏掉 regression bug:**预期** — regression 的设计就是 nightly 兜底,fail
-  时回滚 staging branch / hotfix。如果同类 bug 反复在 regression 上炸,考虑升级该
+  时回滚 staging branch / hotfix。如果同类 bug 反复在 regression 上失败,考虑升级该
   case 到 critical。
 - smoke 跑得不稳:**严重** — smoke 是反馈周期的根基,flaky 必须当 P0 修。
 

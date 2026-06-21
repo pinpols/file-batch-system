@@ -139,7 +139,7 @@
 
 - **数据**:orchestrator/application/service 下 20 个 `interface`,32 个 `Default*Service`,即 **63 个 `*Service.java` 文件里 1/3 是接口**(空 SPI 多于真实多态)。
 - **根因**:历史 god-class decomposition(ADR-008)按"先抽接口"机械操作。
-- **建议**:对每个"只有 1 个 prod impl + 0 个 test stub"的接口列入表(P1-2 已示范 4 个),P1 内一刀切。文档化"何时该有接口":跨模块边界 / SPI 扩展点 / 多策略 Map 路由,其余删。
+- **建议**:对每个"只有 1 个 prod impl + 0 个 test stub"的接口列入表(P1-2 已示范 4 个),P1 内不加区分。文档化"何时该有接口":跨模块边界 / SPI 扩展点 / 多策略 Map 路由,其余删。
 
 ### P1-4 `Propagation.REQUIRES_NEW` 文档化不足
 
@@ -188,7 +188,7 @@
 ### P3-1 ~ P3-4 概要
 
 - **P3-1**:`batch-orchestrator/src/main/java/com/example/batch/orchestrator/service/` 与 `application/service/`(标准 DDD 分层)并存,11 个 service 在外层 service/ 包 — 整理移入 `application/service/` 子域。
-- **P3-2**:console-api 660 文件已是其它模块平均 3x,虽未越界但是单模块爆炸,**建议下个季度内启动 console-api 子模块拆分评估**(rbac / ops / definition / runtime 四子域)。
+- **P3-2**:console-api 660 文件已是其它模块平均 3x,虽未越界但是单模块爆失败,**建议下个季度内启动 console-api 子模块拆分评估**(rbac / ops / definition / runtime 四子域)。
 - **P3-3**:`examples/sample-tenant-worker-spring/.../SampleSpringWorkerIT.java` 自建 `@SpringBootTest`(examples 独立 reactor 合理),但要 README 写明"独立 reactor 不复用 AbstractIntegrationTest"。
 - **P3-4**:`db/migration` 165 个 V***.sql 单目录;Flyway 支持多 location(`db/migration/2026/06/V165__*.sql`),按月分子目录有助 review。
 

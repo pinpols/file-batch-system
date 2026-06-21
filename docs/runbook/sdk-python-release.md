@@ -59,7 +59,7 @@ GitHub Actions 自动跑 `sdk-python-publish.yml`:
 1. `hatch build --clean` 出 wheel + sdist
 2. OIDC 换 PyPI token
 3. `pypa/gh-action-pypi-publish` 推 PyPI
-4. `skip-existing: true` 让重 tag 不炸
+4. `skip-existing: true` 让重 tag 不失败
 
 ### d. 验证
 

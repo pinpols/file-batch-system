@@ -1,4 +1,4 @@
-# Kafka consumer group lag 飙高 / rebalance 卡死
+# Kafka consumer group lag 飙高 / rebalance 长期停滞
 
 > 优先级 P1 · 最后核对版本:2026-05 · 配套 chaos IT:`KafkaRebalanceStuckChaosIT`(TODO)
 
@@ -50,7 +50,7 @@
 
 3. **是 rebalance 卡,还是没消费者?**
    - 反复 rebalance:同一 group 在短时间内多次 `STATE=Preparing/Completing` → 多半是某 consumer 长时间没回 heartbeat / 超 `max.poll.interval.ms`,被踢出再加入循环
-   - 没消费者:`CONSUMER-ID=-` 且 `STATE=Empty` → worker 进程挂了或没起来,`docker compose ps batch-worker-import` 确认
+   - 没消费者:`CONSUMER-ID=-` 且 `STATE=Empty` → worker 进程异常退出或没起来,`docker compose ps batch-worker-import` 确认
    - 卡 `CompletingRebalance`:典型 broker 端 `transaction_state` topic 状态机异常,看 `docker logs batch-kafka | grep -i rebalance`
 
 4. **看消费者侧是不是单条消息处理太慢**

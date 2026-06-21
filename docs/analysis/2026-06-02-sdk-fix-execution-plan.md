@@ -180,8 +180,8 @@ T+0     T+1h   T+2h   T+3h   T+4h   T+5h   T+6h
 ## 6. 完成验收
 
 每 lane 必须满足:
-- ✅ `pytest -q`(Python)或 `mvn -pl batch-worker-sdk -am test`(Java)全绿
-- ✅ ruff + mypy strict(Python)/ spotless(Java)全绿
+- ✅ `pytest -q`(Python)或 `mvn -pl batch-worker-sdk -am test`(Java)全部通过
+- ✅ ruff + mypy strict(Python)/ spotless(Java)全部通过
 - ✅ 新增至少 1 个测试覆盖本 lane 改动
 - ✅ commit + push + `gh pr create --base main` + `gh pr merge --squash --auto`
 - ✅ 回报 ≤ 300 字,含 PR# / 改文件 `file:line` / 关键测试名 / 任何 blocker
@@ -191,7 +191,7 @@ T+0     T+1h   T+2h   T+3h   T+4h   T+5h   T+6h
 2. 拉 main 验:
    ```bash
    cd sdk-python && .venv/bin/pytest -q  # 期望 0 xfail(parity 已 strict)
-   mvn -pl batch-worker-sdk test          # 全绿
+   mvn -pl batch-worker-sdk test          # 全部通过
    ```
 3. 追加 §10 到 `2026-06-02-sdk-code-deep-review.md` 报告交付状态 + 评分回望
 

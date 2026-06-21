@@ -91,7 +91,7 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
-    -- 存在性守护:缺表只跳过并告警,不让整个 DO 块回滚(否则一张幽灵表会使
+    -- 存在性守护:缺表只跳过并告警,不让整个 DO 块回滚(否则一张不存在的表会使
     -- 全部 biz 表都拿不到 policy)。to_regclass 对不存在的表返回 NULL。
     IF to_regclass(t) IS NULL THEN
       RAISE NOTICE 'rls-phase-a: skip missing table % (no DDL found; RLS not applied)', t;

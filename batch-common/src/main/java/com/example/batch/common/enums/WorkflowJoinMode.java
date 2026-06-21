@@ -16,7 +16,7 @@ public enum WorkflowJoinMode implements DictEnum {
   private final String code;
   private final String label;
 
-  /** 空白回落到 ALL；未知 code 抛异常，避免配置错误被静默吞掉（L-3）。 */
+  /** 空白回落到 ALL；未知 code 抛异常，避免配置错误被静默捕获并抑制（L-3）。 */
   public static WorkflowJoinMode fromCode(String code) {
     if (code == null || code.isBlank()) {
       return ALL;

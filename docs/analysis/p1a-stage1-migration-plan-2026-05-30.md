@@ -340,7 +340,7 @@
 - `config/` 与 `BatchConsoleApiApplication` 保持原位
 
 每批必做的固定检查清单:
-- `mvn -pl batch-console-api -am clean test` 全绿
+- `mvn -pl batch-console-api -am clean test` 全部通过
 - IDE inspect: unused imports / cyclic packages
 - MyBatis-Plus `type-aliases-package` & XML `namespace` 全部更新
 - Swagger / 路径不变(只动包,不动 `@RequestMapping`)

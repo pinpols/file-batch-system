@@ -45,7 +45,7 @@ class StaticShardAssignmentProviderTest {
 
   @Test
   void zeroOrNegativeTotalCoercesTo1() {
-    // shardTotal<=0 的非法配置，静态 provider 容错为 1（避免启动期直接炸）
+    // shardTotal<=0 的非法配置，静态 provider 容错为 1（避免启动期直接失败）
     OutboxProperties props = new OutboxProperties();
     props.setShardTotal(0);
     props.setShardIndex(0);

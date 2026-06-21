@@ -42,7 +42,7 @@ kubectl get pods -n batch-prod
 │  ├─ > 5000 且持续增长 → 走症状 3（Outbox 堆积）
 │  ├─ 正常 → 下一级
 │  └─ 看 batch_outbox_publishing_stale_events 是否 > 0
-│     → 走症状 4（OutboxPoll 轮询本身挂了）
+│     → 走症状 4（OutboxPoll 轮询本身异常退出）
 │
 └─ 看 job_instance.status 分布
    ├─ 大量 RUNNING 卡住 → 查 SLA 告警：batch_job_sla_violation_count
@@ -52,7 +52,7 @@ kubectl get pods -n batch-prod
 ### 动作
 - drain 超时 → `bash scripts/ops/heal-drain-timeout.sh`
 - Outbox 堆积 → 见症状 3
-- PUBLISHING 卡死 → 见症状 4
+- PUBLISHING 长期停滞 → 见症状 4
 - SLA 违规 → 看告警原因，多数是 worker 吞吐不足或任务卡在某步；查 `job_execution_log`
 
 ---
@@ -118,7 +118,7 @@ bash scripts/ops/heal-stuck-outbox.sh              # 确认后执行
 
 ---
 
-## 症状 4：PUBLISHING 卡死（`BatchOutboxStalePublishingStuck`）
+## 症状 4：PUBLISHING 长期停滞（`BatchOutboxStalePublishingStuck`）
 
 ### 根因
 OutboxPollScheduler 没有在跑，`resetStalePublishing` 永远不清 0。
@@ -280,7 +280,7 @@ DELETE FROM shedlock WHERE name = '<lock_name>' AND locked_by LIKE '<dead_pod_ho
 ```promql
 # Outbox 积压
 batch_outbox_pending_events
-# PUBLISHING 卡死
+# PUBLISHING 长期停滞
 batch_outbox_publishing_stale_events
 # DLQ 积压
 batch_dead_letter_tasks_pending

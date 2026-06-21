@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
  * </ul>
  *
  * <p>新增兜底 sweeper（{@code orphan-sweep-enabled}，默认开启）：清理升级前残留的 "partition READY + lease_expire_at
- * NULL + 关联 task RUNNING" 死态，避免历史半成功态永久卡死。
+ * NULL + 关联 task RUNNING" 死态，避免历史半成功态永久长期停滞。
  *
  * <p>ShedLock 锁名 {@code partition_lease_reclaim} / {@code partition_orphan_sweep}， 同时使用 {@link
  * AtomicBoolean} 防止单节点重入。

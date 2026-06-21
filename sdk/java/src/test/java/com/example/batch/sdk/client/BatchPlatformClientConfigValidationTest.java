@@ -124,7 +124,7 @@ class BatchPlatformClientConfigValidationTest {
   }
 
   @Test
-  @DisplayName("BatchPlatformClient.builder 构造时验失败 → IllegalStateException 直接挂掉")
+  @DisplayName("BatchPlatformClient.builder 构造时验失败 → IllegalStateException 直接异常退出")
   void shouldFailFastInClientConstructor() {
     BatchPlatformClientConfig bad = valid().heartbeatInterval(Duration.ofMillis(100)).build();
     assertThatThrownBy(

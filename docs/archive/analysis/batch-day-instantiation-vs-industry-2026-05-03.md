@@ -94,12 +94,12 @@
 
 #### 3.8 partition fanout 算完就定，运行时无法 dynamic re-shard
 - **位置**：`DefaultSchedulePlanBuilder.java:43-85`、`DefaultPartitionDispatchService.java:136-164`
-- **现状**：T2 dispatch 时一次性算 partition_count，写完 `job_partition` 就锁死；某 partition 数据爆炸只能等 lease 超时
+- **现状**：T2 dispatch 时一次性算 partition_count，写完 `job_partition` 就锁死；某 partition 数据爆失败只能等 lease 超时
 - **业界**：Spark dynamic allocation；Argo `withParam` 运行时展开；Spring Batch `Partitioner` 也是启动时定，但 `RemotePartitionHandler` 支持 chunk-level 再分
 - **影响**：大 IMPORT 数据倾斜时单 partition 拖死整个 instance；缺少"运行时再 fork 子 partition"的能力
 - **修法**：先在 worker `report` 时支持上报 `additionalPartitionsRequested`，orchestrator 拿到后在同 instance 下补 partition + outbox（独立 ADR）
 
-#### 3.9 `business_calendar.cutoff_time` 一刀切，job 维度无 override
+#### 3.9 `business_calendar.cutoff_time` 不加区分，job 维度无 override
 - **位置**：`business_calendar` 表只有日历级 cutoff；`job_definition` 无 `cutoff_override_time`
 - **业界**：银行批不同 step（账务 / 风控 / 报表）有各自 cutoff；DolphinScheduler 任务节点可独立配 timezone
 - **影响**：同租户多业务（账务 06:00 cutoff，报表 09:00 cutoff）必须建多套 calendar_code，配置膨胀；calendar 改 cutoff 影响所有挂载的 job
@@ -138,7 +138,7 @@
 | **P0-4** | §3.3 `job_instance.calendar_code` 快照列 | 配置变更不污染历史 + settle 性能改善（少一次 JOIN） | 1d + 数据回填 |
 | **P1-1** | §3.2 batch_day counter 语义文档化 | 短期文档兜底；长期改主事务需配合 §3.4 | 0.5d 文档 |
 | **P1-2** | §3.7 `data_interval_start/end` 引入 | 小时/周级批次落地的前置条件；单点场景兼容退化 | 2d |
-| **P1-3** | §3.9 job-level cutoff override | 缓解一刀切 calendar 配置膨胀，向 §3.7 演进 | 1d |
+| **P1-3** | §3.9 job-level cutoff override | 缓解不加区分 calendar 配置膨胀，向 §3.7 演进 | 1d |
 | **P1-4** | §3.6 + §3.10 job-to-job 依赖 | 跨业务域编排刚需；独立 ADR + 新表，2026-Q3 立项 | 5-10d (ADR 级) |
 | **P2** | §3.8 dynamic re-shard / §3.11 warmup | 性能 / 体验优化，不阻塞主链路；按需立项 | - |
 

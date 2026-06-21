@@ -19,7 +19,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * 守护 {@link ValidResourceCode} 注解组合的有效性：必填 + 长度 + 字符集 pattern 三层都生效。
  *
- * <p>注解组合是 Bean Validation 元注解机制 + Lombok/Hibernate Validator 实现，单测覆盖典型脏数据 + 边界长度。
+ * <p>注解组合是 Bean Validation 元注解机制 + Lombok/Hibernate Validator 实现，单测覆盖典型异常数据 + 边界长度。
  */
 class ValidResourceCodeTest {
 
@@ -66,7 +66,7 @@ class ValidResourceCodeTest {
   @ParameterizedTest
   @ValueSource(
       strings = {
-        "q q q", // 含空格(就是历史脏数据案例)
+        "q q q", // 含空格(就是历史异常数据案例)
         " leading", // 前导空格
         "trailing ", // 尾随空格
         "with空格", // 中文空格

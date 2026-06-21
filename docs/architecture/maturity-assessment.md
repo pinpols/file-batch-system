@@ -86,7 +86,7 @@
 
 **强项**：
 - fail-open 多处兜底：read-replica quarantine + worker-cache Redis 异常退 DB + quota Redis 异常放行
-- Outbox stale PUBLISHING 重置（防 JVM 崩溃事件卡死）
+- Outbox stale PUBLISHING 重置（防 JVM 崩溃事件长期停滞）
 - 熔断器（`OutboxPublishCircuitBreaker`）三态
 - 优雅停机 `isDraining()` 短路（防 Lettuce 关闭后还抢 Redis 锁）
 - retry 三级（NONE / FIXED / EXPONENTIAL）+ DLQ 双轨（Kafka 隔离 + DB 落盘）+ replay 状态机
@@ -213,7 +213,7 @@
 **起点（2026-04-12）**：
 - ExcessiveParameterList × 11（违反 CLAUDE.md "参数 ≤6" 硬约束）
 - NcssCount × 5（方法过长）
-- AvoidDuplicateLiterals × 283（魔法字符串散布）
+- AvoidDuplicateLiterals × 283（硬编码字符串散布）
 
 **实测（2026-04-26 重扫）**：
 14 天间持续清理 + 本次集中收尾，**实际剩余 4 条**（DispatchChannelHealthRepository "tenantId/channelCode/now" + SmtpEmailDispatchChannelAdapter "true"），不再是 299 条。

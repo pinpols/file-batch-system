@@ -20,7 +20,7 @@ import java.util.Map;
  * <p>{@link #popSelector} 在读取属性的同时执行 remove——具有副作用，只可调用一次。
  *
  * <p>{@link #maxTransitionGuard} 返回 {@code steps.size() * 4}（最小 16）作为循环转换上限， 防止 pipeline
- * 因循环跳转导致死循环。
+ * 因循环跳转导致无限循环。
  */
 public final class PipelineStepFlowSupport {
 

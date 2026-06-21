@@ -163,7 +163,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 ---
 
-## 4. 已知的语言坑(简短建议)
+## 4. 已知的语言问题(简短建议)
 
 ### Go
 
@@ -171,28 +171,28 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 - **HTTP**:`net/http` + `http.Client{Transport: ...}` 即可,无需 framework。
 - **并发**:goroutine + `context.Context` 透传 cancel;心跳 / lease renew 用 `time.Ticker`。
 - **JSON**:`encoding/json` 默认 ignore unknown,符合协议要求。
-- **坑**:`net/http.Client` 默认无超时,**必须** `Timeout: 10*time.Second` 否则心跳挂死整个 worker。
+- **问题**:`net/http.Client` 默认无超时,**必须** `Timeout: 10*time.Second` 否则心跳挂死整个 worker。
 
 ### Python
 
 - **Kafka**:`confluent-kafka-python`(C 库 wrapper,生产推荐)或 `aiokafka`(asyncio 模式)。
 - **HTTP**:`httpx`(sync + async 双模)或 `requests`(sync only)。
 - **心跳调度**:同步模式用 `threading.Timer` / `apscheduler`;async 模式用 `asyncio.create_task` + `asyncio.sleep`。
-- **坑**:GIL 让真并行受限;CPU 密集型 handler 用 multiprocessing 或交给 atomic executor 那边跑。日志库 `logging.basicConfig` 必须配 JSON formatter(平台日志聚合统一 JSON)。
+- **问题**:GIL 让真并行受限;CPU 密集型 handler 用 multiprocessing 或交给 atomic executor 那边跑。日志库 `logging.basicConfig` 必须配 JSON formatter(平台日志聚合统一 JSON)。
 
 ### Node.js
 
 - **Kafka**:`kafkajs`(纯 JS,API 干净)或 `node-rdkafka`(C 库 wrapper,性能更好)。
 - **HTTP**:`undici`(Node 内置 fetch 后端,性能最好)或 `axios`(API 友好)。
 - **心跳调度**:`setInterval` 即可;**注意** Node 单线程,长循环 handler 会阻塞调度器 —— 必须 `await` / worker_threads。
-- **坑**:`Promise` 异常未 catch 会变成 unhandledRejection,**必须**全局兜底;否则 SIGTERM 时进程 hang。
+- **问题**:`Promise` 异常未 catch 会变成 unhandledRejection,**必须**全局兜底;否则 SIGTERM 时进程 hang。
 
 ### .NET / C#
 
 - **Kafka**:`Confluent.Kafka` 官方库。
 - **HTTP**:`HttpClient`(注意复用,`new HttpClient()` per call 会耗 socket)。
 - **心跳调度**:`System.Threading.Timer` 或 `IHostedService`。
-- **坑**:`HttpClient.Timeout` 默认 100s,**必须**显式调小到 10s。
+- **问题**:`HttpClient.Timeout` 默认 100s,**必须**显式调小到 10s。
 
 ---
 

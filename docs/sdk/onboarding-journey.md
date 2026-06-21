@@ -198,7 +198,7 @@ OFFLINE worker 的在跑 task 由 lease 过期机制回收(ADR-035 §「Schedule
 
 ### 6.3 时序校验 fail-fast / WARN 降级(R3-4)
 
-SDK 启动期对 4 条时序规则做 cross-field 校验,违反默认 `IllegalStateException` 让进程挂掉:
+SDK 启动期对 4 条时序规则做 cross-field 校验,违反默认 `IllegalStateException` 让进程异常退出:
 
 | # | 规则 | 默认值 | 违反含义 |
 |---|---|---|---|

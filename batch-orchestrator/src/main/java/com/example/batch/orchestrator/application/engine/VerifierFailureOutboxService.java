@@ -35,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code @Transactional} 内（{@link Propagation#MANDATORY}），保证：
  *
  * <ul>
- *   <li>task SUCCESS 写库失败 → outbox 也回滚（避免幽灵事件）
+ *   <li>task SUCCESS 写库失败 → outbox 也回滚（避免残留事件）
  *   <li>task SUCCESS 写库成功 + outbox 写入失败 → 全部回滚（task 仍待 worker 重投）
  * </ul>
  *

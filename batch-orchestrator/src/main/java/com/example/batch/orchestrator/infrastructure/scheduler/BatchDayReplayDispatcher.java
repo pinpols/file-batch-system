@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>每轮处理上限由 {@link BatchDayReplayDispatchProperties#getSessionBatchSize} + {@link
- *       BatchDayReplayDispatchProperties#getEntryBatchSize} 双控；防止一次把 dispatcher 打爆；
+ *       BatchDayReplayDispatchProperties#getEntryBatchSize} 双控；防止一次派发过多 entry 压垮 dispatcher；
  *   <li>{@link OrchestratorGracefulShutdown#isDraining} 期间直接 skip；
  *   <li>每个 entry 的 status 推进走独立短事务（REQUIRES_NEW），避免单条失败把整批 rollback。
  * </ul>

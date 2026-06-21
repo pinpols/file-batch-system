@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * Worker 心跳超时治理调度器。
  *
  * <p>背景：{@code worker_registry.heartbeat_at} 由 worker 自己通过 {@code touchHeartbeat} 定期刷新； 进程崩溃 / 网络隔离
- * / JVM 卡死时心跳停更，但 DB 里 {@code status} 仍停留在 ONLINE。 若无外力清理， {@code DefaultWorkerSelector} 会选中"僵尸
+ * / JVM 长期停滞时心跳停更，但 DB 里 {@code status} 仍停留在 ONLINE。 若无外力清理， {@code DefaultWorkerSelector} 会选中"僵尸
  * worker"并把 partition release 给它——partition 永远不会被 claim，堆积在 READY。
  *
  * <p>本 scheduler 每 {@code heartbeat-check-interval-millis}（默认 30s）扫一次， 把 {@code heartbeat_at <

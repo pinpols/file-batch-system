@@ -12,7 +12,7 @@ services:
     container_name: batch-postgres-primary
     restart: unless-stopped
     # 默认 max_connections=100 不够：6 模块 × (platform + business) × Hikari 池
-    # 本地联调叠加就会炸 "too many clients already"。调到 300 留足余量。
+    # 本地联调叠加就会失败 "too many clients already"。调到 300 留足余量。
     # P2-4: 流复制参数 —— wal_level=replica（默认值，显式声明便于审阅）+ max_wal_senders 给 replica 容器留位
     command:
       - postgres

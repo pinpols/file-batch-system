@@ -33,7 +33,7 @@ private static String resolveTenantFallback(String principalTenantId) {
 
 注释明说兜底是为让 `auth.login` / `auth.logout` 等系统级动作不被 `tenant_id NOT NULL` 拒掉。问题是:
 
-- `ROLE_ADMIN` 的 `ConsolePrincipal.tenantId()` 是 `null`,但它能 update / batchCreate **任意 tenant** 的资源(ConsoleTenantController.update / batchCreate 都挂了 `@AuditAction`)
+- `ROLE_ADMIN` 的 `ConsolePrincipal.tenantId()` 是 `null`,但它能 update / batchCreate **任意 tenant** 的资源(ConsoleTenantController.update / batchCreate 都异常退出 `@AuditAction`)
 - 这些操作的审计行 `tenant_id = "system"`,而不是被改的目标租户
 - 取证查询 "谁动了 tenant-X?" 会查不到(漏查),合规链断掉
 
@@ -62,7 +62,7 @@ public void consume(...) {
 
 `writeBackTriggerRequestLaunched` 在新 Kafka 工作线程上跑,`launchApplicationService.launch` 内部即便设过 holder,执行完返回时也会清掉(或在该方法栈帧结束)。回写的 mapper update 没有 RLS session var。
 
-当前 RLS Phase A 过渡模式策略允许 `app.tenant_id IS NULL` 旁路(见 `RlsPolicyHealthIndicator`),所以暂没炸,但:
+当前 RLS Phase A 过渡模式策略允许 `app.tenant_id IS NULL` 旁路(见 `RlsPolicyHealthIndicator`),所以暂没失败,但:
 
 - Phase B 切严格模式时,这条 Kafka 路径会全员失败,batch_day → trigger_request → launch 闭环垮
 - 在 Phase A 下也丢了纵深防御:伪造 Kafka 消息可改任意租户的 trigger_request 状态

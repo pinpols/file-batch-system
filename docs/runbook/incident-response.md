@@ -9,7 +9,7 @@
 | [pg-primary-failover](playbooks/pg-primary-failover.md) | PG 主库挂,从库切主 | P0 |
 | [redis-shedlock-down](playbooks/redis-shedlock-down.md) | Redis 全断,ShedLock 切 jdbc fallback | P0 |
 | [kafka-rebalance-stuck](playbooks/kafka-rebalance-stuck.md) | Consumer group lag 飙高,rebalance 卡 | P1 |
-| [outbox-stuck-publishing](playbooks/outbox-stuck-publishing.md) | `outbox_event` PUBLISHING 卡死自愈 | P1 |
+| [outbox-stuck-publishing](playbooks/outbox-stuck-publishing.md) | `outbox_event` PUBLISHING 长期停滞自愈 | P1 |
 | [batch-day-not-settling](playbooks/batch-day-not-settling.md) | `batch_day_instance` 卡 SETTLING | P2 |
 
 本文件是总框架(原则 / 分级 / 常用命令);具体剧本在 `playbooks/`。

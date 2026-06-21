@@ -125,7 +125,7 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
   /**
    * P0-1 (pre-launch audit 2026-05-18)：prod-like profile 下禁止 {@code enabled=false}。
    *
-   * <p>未加守护前 Helm values 误改 {@code batch.console.security.enabled=false} 即可裸奔 —— filter 短路放行所有
+   * <p>未加守护前 Helm values 误改 {@code batch.console.security.enabled=false} 即可无鉴权放行 —— filter 短路放行所有
    * /api/console/**，JWT / bypass / SSE 全跳过。
    */
   @PostConstruct

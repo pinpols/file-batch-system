@@ -30,7 +30,7 @@ scheduler stop   20%    停止心跳 / 租约续约调度器
 - ``client.schedulers`` —— 含 ``async stop()`` 的可迭代对象(心跳调度器、
   租约续约调度器)。
 - ``client.deactivate()`` —— 可选;HTTP /deactivate 调用。 best-effort 调用
-  并吞掉异常(即便失败,orch 端 120s 心跳超时也会自动回收 worker)。
+  并捕获并抑制异常(即便失败,orch 端 120s 心跳超时也会自动回收 worker)。
 """
 
 from __future__ import annotations

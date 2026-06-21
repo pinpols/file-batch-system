@@ -22,7 +22,7 @@
 |---|---:|---:|---:|---:|---|---|
 | C-4 | 文件路径遍历漏洞 | CRITICAL | S | P0 | 第1阶段 ✅ | 高危安全问题，但修复相对直接 |
 | C-5 | 大文件 OOM 崩溃 | CRITICAL | M | P0 | 第1阶段 ✅ | 先做限流、限大小，后续再做流式化 |
-| C-7 | 节假日调整死循环 | CRITICAL | S | P0 | 第1阶段 ✅ | 小改动，高收益 |
+| C-7 | 节假日调整无限循环 | CRITICAL | S | P0 | 第1阶段 ✅ | 小改动，高收益 |
 | H-6 | SFTP 禁用主机密钥验证 | HIGH | S | P0 | 第1阶段 ✅ | 安全红线问题 |
 | H-9 | Cron 表达式未验证 | HIGH | S | P0 | 第1阶段 ✅ | 配置入口防御 |
 | H-10 | NAS 路径未规范化 | HIGH | S | P0 | 第1阶段 ✅ | 与路径遍历同类问题 |
@@ -66,14 +66,14 @@
 ## 三、建议实施分阶段
 
 ### 第1阶段：立即止血版 ✅ 已完成（2026-04-07）
-目标：**先把安全洞、死循环、明显错误配置、OOM 入口堵住**
+目标：**先把安全洞、无限循环、明显错误配置、OOM 入口堵住**
 
 #### 建议纳入
 - ✅ C-4 路径遍历 → `DispatchFileContentResolver`: 拒绝含 `..` 的 storage_path，normalize 后再打开
 - ✅ H-10 NAS 路径规范化 → `RemoteFilesystemDispatchSupport.dispatchNas`: 补 `.toAbsolutePath().normalize()`
 - ✅ C-5 大文件限制第一版 → `ReceiveStep`: 入口检查 payload 长度，超限返回 IMPORT_RECEIVE_TOO_LARGE
 - ✅ D-4 文件大小限制第一版 → `application.yml`: 新增 `batch.worker.import.max-payload-size-mb`（默认 100MB）；同时修正 `fileSizeBytes` 不再调用 `getBytes()`
-- ✅ C-7 日历死循环 → `CalendarBizDateResolver`: previousWorkday/nextWorkday 加 MAX_ITERATIONS=365，超限抛异常
+- ✅ C-7 日历无限循环 → `CalendarBizDateResolver`: previousWorkday/nextWorkday 加 MAX_ITERATIONS=365，超限抛异常
 - ✅ H-6 SFTP host key 校验 → `SftpDispatchChannelAdapter`: 默认 StrictHostKeyChecking=yes，支持 `sftp_strict_host_key_checking`/`sftp_known_hosts_path` 配置；"no" 时打 WARN 日志
 - ✅ H-9 Cron 预校验 → `TriggerSchedulerFacade`: `CronExpression.isValidExpression()` 前置校验，非法表达式快速失败
 - ✅ M-9 XXE 防护补全 → `ParseStep`: 补 `ACCESS_EXTERNAL_DTD=""` 和 `ACCESS_EXTERNAL_SCHEMA=""` 属性
@@ -91,7 +91,7 @@
 ---
 
 ### 第2阶段：主链路一致性修复版 ✅ 已完成（2026-04-07）
-目标：**把最容易造成”任务不动、重复执行、状态卡死”的问题修掉**
+目标：**把最容易造成”任务不动、重复执行、状态长期停滞”的问题修掉**
 
 #### 建议纳入
 - ✅ C-6 Trigger 去重竞态 → `DefaultTriggerService.persistAndForward`: 将 dedup SELECT 移入 REQUIRES_NEW 事务内；初始状态 PENDING，Kafka 发送成功后 CAS 更新为 ACCEPTED
@@ -169,7 +169,7 @@
 |---|---:|---:|---|
 | C-4 路径遍历 | S | P0 | 立刻修 |
 | H-10 NAS 路径规范化 | S | P0 | 立刻修 |
-| C-7 日历死循环 | S | P0 | 立刻修 |
+| C-7 日历无限循环 | S | P0 | 立刻修 |
 | H-6 SFTP 主机校验 | S | P0 | 立刻修 |
 | H-9 Cron 校验 | S | P0 | 立刻修 |
 | H-2 Retry 终态校验 | S | P1 | 立刻修 |
@@ -306,7 +306,7 @@
 **高风险小改项**，马上见效：
 - 路径遍历
 - 大文件上限
-- 死循环
+- 无限循环
 - SFTP host 校验
 - Cron 校验
 - Retry 终态校验
@@ -332,8 +332,8 @@
 
 如果要一句最实用的结论：
 
-1. 先做高风险、小改动的问题，立刻降低事故面。  
-2. 再做主链路一致性问题，把任务不动、重复执行、状态卡死这些核心问题压下去。  
+1. 先做高风险、小改动的问题，立刻降低事故面。
+2. 再做主链路一致性问题，把任务不动、重复执行、状态长期停滞这些核心问题压下去。
 3. 最后统一幂等层和事务边界，做长期架构收敛。
 
 ---

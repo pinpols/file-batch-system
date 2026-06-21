@@ -43,9 +43,9 @@ Start-Process ssh -ArgumentList $sshArgs -NoNewWindow -PassThru `
 | `ServerAliveCountMax=3` | 3 次心跳无应答(90s)就断重连 | 配合 keep-alive 决定多快放弃 |
 | `ExitOnForwardFailure=yes` | 任一 `-R` 失败立即退出 | 半通状态,某些端口看似通其实没起 |
 
-## 真踩过的坑(按命中顺序)
+## 真踩过的问题(按命中顺序)
 
-### 坑 1:PowerShell 生成 key 时 passphrase 被设成字面 `""`
+### 问题 1:PowerShell 生成 key 时 passphrase 被设成字面 `""`
 
 ```powershell
 # 看起来对,实际错
@@ -95,7 +95,7 @@ ssh-keygen -y -P "" -f $env:USERPROFILE\.ssh\id_ed25519
 # 输出公钥 + rc=0 → passphrase 真空
 ```
 
-### 坑 2:macOS 上看 sshd 日志要用 unified log,不是 journalctl
+### 问题 2:macOS 上看 sshd 日志要用 unified log,不是 journalctl
 
 ```bash
 # Linux 看法(macOS 没这俩)
@@ -121,7 +121,7 @@ cat /tmp/sshd-debug.log
 
 22 端口由 launchd 管,debug sshd 跑在 22222 不冲突。Ctrl+C 停 debug sshd 不影响生产 sshd。
 
-### 坑 3:GatewayPorts 默认 no,反向口只绑 127.0.0.1
+### 问题 3:GatewayPorts 默认 no,反向口只绑 127.0.0.1
 
 `ssh -R 28090:localhost:18090 dengchao@.15` 在 .15 上 listen,**默认只绑 .15 的 `127.0.0.1`** —— `.15` 自己 `curl localhost:28090` 通,LAN 其它机器 `curl 192.168.1.15:28090` **不通**。
 
@@ -145,7 +145,7 @@ sudo launchctl kickstart -k system/com.openssh.sshd
 | ssh -vvv 有 `Server accepts key`,之后 `Connection reset by authenticating user [preauth]` | **client 私钥解锁失败**(passphrase 错 / 文件损坏);`ssh-keygen -y -P "" -f <key>` 测 |
 | 隧道起来但 .15 上 `lsof -i :28090` 没 listen | `ExitOnForwardFailure=yes` 应该会立即退,检查 `ssh-tunnel-15.err.log` |
 | 隧道半小时后自己断 | 加 `ServerAliveInterval=30 ServerAliveCountMax=3` |
-| LAN 别的机器打 .15:28090 不通,.15 本机 curl 通 | `GatewayPorts=no`(见 坑 3)|
+| LAN 别的机器打 .15:28090 不通,.15 本机 curl 通 | `GatewayPorts=no`(见 问题 3)|
 
 ## 长期化(可选):Windows 计划任务托管
 

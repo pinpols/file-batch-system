@@ -276,7 +276,7 @@ public class DefaultLaunchService implements LaunchService {
     try {
       selfProvider.getObject().markWorkflowRunFailedDueToDispatch(workflowRun);
     } catch (RuntimeException reverseEx) {
-      // 反向 finalize 失败,静默吞掉(不掩盖原始 dispatch 异常 cause;reverseEx 仅 oncall 视角看一眼)
+      // 反向 finalize 失败,静默捕获并抑制(不掩盖原始 dispatch 异常 cause;reverseEx 仅 oncall 视角看一眼)
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:finalizeWorkflowRunOnDispatchFailure", reverseEx);
     }

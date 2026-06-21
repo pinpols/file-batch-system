@@ -96,7 +96,7 @@ public class DispatchChannelHealthService {
     }
     ChannelIdentity channel = ChannelIdentity.from(channelConfig);
     // T-3：没有 tenantId/channelCode 无法查健康快照；此时放行（健康门控不适用），
-    // 避免 repository.findHealth(null, null) 走 SQL 返回脏数据或 DAO 层 NPE
+    // 避免 repository.findHealth(null, null) 走 SQL 返回异常数据或 DAO 层 NPE
     if (!channel.isTargetable()) {
       return true;
     }

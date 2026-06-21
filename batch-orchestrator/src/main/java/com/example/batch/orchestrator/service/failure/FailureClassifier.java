@@ -85,16 +85,16 @@ public class FailureClassifier {
       }
       // INFRASTRUCTURE 类(瞬态可重试):先于下面的 DATA_QUALITY/catch-all 命中,
       // 因为 OptimisticLockingFailureException 也是 NonTransientDataAccessException 子类,
-      // 但它属于 CAS 冲突,语义上可重试,必须前置不能被整合规则误判为脏数据。
+      // 但它属于 CAS 冲突,语义上可重试,必须前置不能被整合规则误判为异常数据。
       if (cursor instanceof TransientDataAccessException
           || cursor instanceof SQLTransientException
           || cursor instanceof OptimisticLockingFailureException
           || cursor instanceof ResourceAccessException) {
         return FailureClass.INFRASTRUCTURE;
       }
-      // DATA_QUALITY 类(不可重试脏数据):唯一键 / check / not-null / FK 违反等。
+      // DATA_QUALITY 类(不可重试异常数据):唯一键 / check / not-null / FK 违反等。
       // 必须前置到泛 DataAccessException catch-all 之前,否则 DataIntegrityViolationException
-      // (NonTransientDataAccessException 子类)会被误判为 INFRASTRUCTURE → 脏数据无限重试。
+      // (NonTransientDataAccessException 子类)会被误判为 INFRASTRUCTURE → 异常数据无限重试。
       if (cursor instanceof DataIntegrityViolationException) {
         return FailureClass.DATA_QUALITY;
       }
@@ -104,7 +104,7 @@ public class FailureClassifier {
         return classifyBySqlState(sql.getSQLState());
       }
       // 其余不可恢复(NonTransient)数据访问异常:无瞬态特征也无 SQLState 信号,
-      // 归脏数据(不可重试),避免被 catch-all 当基础设施无限重试。
+      // 归异常数据(不可重试),避免被 catch-all 当基础设施无限重试。
       if (cursor instanceof NonTransientDataAccessException) {
         return FailureClass.DATA_QUALITY;
       }

@@ -68,7 +68,7 @@ Schema 整体已较为成熟：
 
 ### 3.6 file_dispatch_record FK 缺级联策略
 - **证据**：V6 `file_dispatch_record.file_id REFERENCES file_record(id)`，无显式 ON DELETE，默认 RESTRICT。
-- **影响**：归档 / 清理顺序错误会阻塞 file_record 删除，事务回滚导致清理任务卡死。
+- **影响**：归档 / 清理顺序错误会阻塞 file_record 删除，事务回滚导致清理任务长期停滞。
 - **建议**：改为 `ON DELETE CASCADE`（若是审计性质则 `SET NULL`）；清理脚本中显式记录删除顺序。
 
 ### 3.7 job_partition.idempotency_key 的 partial UNIQUE 仍存 NULL 漏洞

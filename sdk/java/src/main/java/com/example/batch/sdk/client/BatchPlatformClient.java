@@ -79,7 +79,7 @@ public class BatchPlatformClient {
   /**
    * 启动 — 调 register API + 启动 Kafka consumer + heartbeat / lease scheduler。
    *
-   * <p>P7-3:register 失败 → 抛 {@link RuntimeException}(此时尚未启动任何后台线程)。调用方<b>不应吞掉</b>此异常 —— 让它传播出
+   * <p>P7-3:register 失败 → 抛 {@link RuntimeException}(此时尚未启动任何后台线程)。调用方<b>不应捕获并抑制</b>此异常 —— 让它传播出
    * {@code main} 使进程以非 0 退出码结束,K8s / systemd 据此重启拉起(register 失败通常是平台不可达 / apiKey 失效 / 配置错误,重启 +
    * 运维介入是正确处置)。示范见 {@code sample-tenant-worker} 的 {@code main}。
    */

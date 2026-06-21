@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 /**
  * 启动期校验：扫 {@code pg_constraint.convalidated=false} 的 CHECK / FK，全部 fail-fast。
  *
- * <p><b>背景（R7 DB 审计 P1-5）</b>：V124/V125/V126 加 CHECK / FK 时统一用 {@code NOT VALID}（避免历史脏数据 阻塞
+ * <p><b>背景（R7 DB 审计 P1-5）</b>：V124/V125/V126 加 CHECK / FK 时统一用 {@code NOT VALID}（避免历史异常数据 阻塞
  * migration），原计划 DBA 运维窗口逐表 {@code VALIDATE CONSTRAINT}。实际操作中常被遗忘，让 DB 长期处于 "约束已加但未校验存量"的 drift
  * 状态：新插入行能违反约束直到 VALIDATE 跑完。
  *

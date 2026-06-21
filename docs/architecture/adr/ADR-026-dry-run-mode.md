@@ -29,7 +29,7 @@
 
 ## 背景
 
-不同语义的"安全跑"现在都被 `batch.security.bypass-mode` 一个开关糊在一起：
+不同语义的"安全跑"现在都被 `batch.security.bypass-mode` 一个开关混在一起：
 
 - **bypass-mode**：本地联调用，整条安全链放行 — 不安全，prod 拒绝；
 - **dry-run**：prod 也想跑，但**不写业务表 / 不发外部消息**，只演练；当前不存在。

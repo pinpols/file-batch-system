@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClient;
  *
  * <p>fail-closed(结算优先):查询失败时不放行 fire,记 ERROR 让运维介入。
  *
- * <p>kill-switch batch.trigger.readiness-gate.enabled 默认 true;关闭时一律放行。
+ * <p>emergency switch batch.trigger.readiness-gate.enabled 默认 true;关闭时一律放行。
  */
 @Slf4j
 @Component

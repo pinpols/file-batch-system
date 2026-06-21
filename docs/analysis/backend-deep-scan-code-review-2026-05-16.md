@@ -55,7 +55,7 @@
 
 - 导入 map 写入 `m.put("tenantId", tenantId)`。
 - 补一个 Mapper 或 Service 测试，覆盖 V92 后的导入路径。
-- 顺手补单条 `insert` 的 `tenant_id` 支持，避免未来复用单插路径再次踩坑。
+- 顺手补单条 `insert` 的 `tenant_id` 支持，避免未来复用单插路径再次遇到问题。
 
 ## P1-1 日历节假日更新/删除缺少 holidayId 归属校验
 

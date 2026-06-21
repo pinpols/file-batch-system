@@ -13,7 +13,7 @@
 | 01 | [daily-inspection.md](./daily-inspection.md) | 日常巡检 SOP（每日 / 每周 / 每月 check） |
 | 02 | [incident-response.md](./incident-response.md) | 故障响应 runbook（P0/P1 标准动作） |
 | 03 | [troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md) | 故障决策树（按症状分支定位） |
-| 04 | [compensation-cleanup.md](./compensation-cleanup.md) | Compensation 失败清理（卡死的补偿任务怎么搞） |
+| 04 | [compensation-cleanup.md](./compensation-cleanup.md) | Compensation 失败清理（长期停滞的补偿任务怎么搞） |
 
 ### 二、部署 / 上线（首次部署或上量）
 
@@ -65,7 +65,7 @@
 | 本地起服务 | 07 → 06 → 05 |
 | 上 staging | 05 → 06 → 11 → 18 |
 | 上 prod | 25（凭据矩阵:逐行核对必配 + prod fail-fast 项）→ 11（部署前 checklist） → 10 → 18 → 02 |
-| 救火（卡死 / 数据异常） | 02 → 03 → 04 |
+| 救火（长期停滞 / 数据异常） | 02 → 03 → 04 |
 | 容量评估 / 上量 | [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) → 11 → 12 → 13 |
 | Quartz → Wheel 切换 | 16 → 15 |
 

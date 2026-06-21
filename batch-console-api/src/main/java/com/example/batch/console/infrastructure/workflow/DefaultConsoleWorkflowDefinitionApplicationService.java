@@ -53,7 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>定义 + 节点 + 边在同一事务内 upsert；update 先 {@code deleteByWorkflowDefinitionId} 清空节点/边再重写，
- *       避免遗留脏数据（调用方全量提交新 DAG 即可，不必增量 diff）。
+ *       避免遗留异常数据（调用方全量提交新 DAG 即可，不必增量 diff）。
  *   <li>每次写都调 {@link ConsoleConfigCacheInvalidationService#evictWorkflowDefinition}， 保证
  *       orchestrator launch 时读到最新拓扑（与 {@link DefaultConsoleJobDefinitionApplicationService} 一致的
  *       缓存一致性协议）。

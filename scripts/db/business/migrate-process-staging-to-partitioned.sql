@@ -8,7 +8,7 @@
 --    (禁令标记范式同 scripts/db/partition-migration/01-outbox-event-partitioned.sql 头注释。)
 -- =========================================================
 -- 背景:旧 process_staging 是普通堆表,FEEDBACK/孤儿清理用 DELETE 不缩文件,
--- 长期高水位膨胀(实测撑爆磁盘)。改为按 staged_at 天级 RANGE 分区后,
+-- 长期高水位膨胀(实测超过磁盘)。改为按 staged_at 天级 RANGE 分区后,
 -- ProcessStagingOrphanCleaner 预建未来分区 + DROP 过期分区,DROP 即还空间给 OS。
 --
 -- 适用:已部署、process_staging 已是非分区表的环境(全新部署直接走

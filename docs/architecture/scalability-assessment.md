@@ -22,7 +22,7 @@
 | **多租户从 model 层就在** | 几乎所有表第一字段是 `tenant_id`；selector / quota / queue 都按 tenant 分割 | 后期想加是地狱，从一开始建对了 |
 | **配置驱动（不是代码）** | `pipeline_step_definition` / `file_template_config` / `file_channel_config` 全在 DB；换文件格式/换 channel 不用改代码不用重启 worker | 真实业务每月会冒出新文件格式/新对接方，硬编码会死 |
 | **DAG + GATEWAY 编排** | `workflow_node` + `workflow_edge` + `joinMode` (ALL / ANY / N_OF) + `condition_expr` | 真海量批量必定要跨任务依赖（"日终所有数据全到才出报表"），这个能力具备。详见 [`workflow-dependency-guide.md`](./workflow-dependency-guide.md) |
-| **熔断 / 退避 / DL / 补偿全链** | `RetryGovernanceService`（NON_RETRYABLE 集合）+ `CompensationService` + `DispatchChannelHealthService` 熔断 | 海量 dispatch 时一两个对端挂掉是常态，必须熔断不让雪崩；不可重试错误必须直接进 DL 而不是浪费指数 backoff |
+| **熔断 / 退避 / DL / 补偿全链** | `RetryGovernanceService`（NON_RETRYABLE 集合）+ `CompensationService` + `DispatchChannelHealthService` 熔断 | 海量 dispatch 时一两个对端异常退出是常态，必须熔断不让雪崩；不可重试错误必须直接进 DL 而不是浪费指数 backoff |
 | **ShedLock 集群单实例 + Sharding** | 调度类任务都加 ShedLock；`OutboxPollScheduler` 支持 `shardTotal>1` 多实例并行 | 这是横向扩 orchestrator 实例的前提 |
 | **Outbox 自适应轮询** | 有积压立即下轮（200ms）/ 空闲退避到 5s | 既不空查 DB 又能近实时推消息 |
 | **Pipeline / Stage 模板可静态校验** | 每类 worker 的 step 链是固定模板（IMPORT 6 / EXPORT 5 / DISPATCH 6）；ensurePipelineDefinition 已存在不重写（本周修） | 防止跨 worker 错位污染 step 链 |
@@ -37,7 +37,7 @@
 |---|---|---|---|
 | **单 PostgreSQL 实例** | `batch_platform` 一库扛 outbox + job_instance + partition + workflow_run + file_record 全部元数据 | 5K–10K 任务/秒派发（合理硬件） | 写入瓶颈；外加慢查询拖死调度回环 |
 | **`job_partition` 单表** | 没分区表（PG partitioning），全靠普通索引 | 单表 5000 万行查询开始抖（取决于 WHERE 复杂度） | `WaitingPartitionDispatchScheduler` 扫表变慢 → 调度滞后 |
-| **`outbox_event` 无清理** | 没看到自动归档/删除 PUBLISHED 事件的机制 | 1 亿行后即使有索引也开始慢 | poller select latency 爆炸 → publish 滞后 → 整链路变慢 |
+| **`outbox_event` 无清理** | 没看到自动归档/删除 PUBLISHED 事件的机制 | 1 亿行后即使有索引也开始慢 | poller select latency 爆失败 → publish 滞后 → 整链路变慢 |
 | **`DefaultWorkerSelector` 实时查 DB** | 每次派发都 `SELECT worker_registry WHERE status='ONLINE'` | worker 数 < 几百 OK | 万级 worker 时该 query 成热点 |
 | **`OrchestratorConfigCacheService` 无主动失效** | 改 `default_params` 必须重启 orchestrator 才生效（本周踩过） | 配置变更频率低就行 | 多实例集群想做"灰度更新一个 job"基本不可能 |
 | **历史数据治理是手工脚本** | `cleanup-historical-failures.sql` 是 `psql -f` 跑 | 单实例可控 | 海量场景必须自动化（带 watermark 的归档作业），否则一年后整库变废 |
@@ -84,13 +84,13 @@
 - outbox 积压告警
 - DL 队列容量告警
 - tenant 级 quota 实时使用率
-- DAG 大规模 fan-out 时的 join-gate 卡死告警
+- DAG 大规模 fan-out 时的 join-gate 长期停滞告警
 
-生产海量没这套基本是裸奔。
+生产海量场景缺少这套机制会缺乏容量保护。
 
 ### 4.4 workflow JOB 节点扇出表膨胀
 
-一个 workflow 跑会创建多个 child `job_instance`（本周验证过：`TC_WF_RISK_PIPELINE` 1 个 workflow → 4 个 job_instance）。扇出 100 倍的复杂 workflow 会让 instance 表爆炸。需要对 `workflow_run` 单独建 archive 流程。
+一个 workflow 跑会创建多个 child `job_instance`（本周验证过：`TC_WF_RISK_PIPELINE` 1 个 workflow → 4 个 job_instance）。扇出 100 倍的复杂 workflow 会让 instance 表爆失败。需要对 `workflow_run` 单独建 archive 流程。
 
 ### 4.5 资源 quota 软限流不够强 — **2026-04-25 已完成 Redis Lua 迁移**
 

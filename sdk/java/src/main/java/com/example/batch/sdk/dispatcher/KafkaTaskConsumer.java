@@ -41,7 +41,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
  *       offset;平台暂停 / 本地 drain / tenant mismatch 不前移 offset,避免 consume-and-drop
  *   <li>{@link BatchPlatformClientConfig#getKafkaTopicPattern()} 支持
  *       wildcard(`batch.task.dispatch.<tenant>.*`)
- *   <li>JSON 反序列化失败 → log ERROR + skip,不死循环
+ *   <li>JSON 反序列化失败 → log ERROR + skip,不无限循环
  * </ul>
  */
 @Slf4j

@@ -494,7 +494,7 @@ public class ConfigPackageExcelValidator {
   private static final Pattern FORBIDDEN_SQL =
       Pattern.compile("(?i)\\b(UPDATE|DELETE|INSERT|DROP|ALTER|TRUNCATE|GRANT|MERGE|EXEC)\\b");
 
-  /** #4a file_format_type=DELIMITED 时 delimiter 必填(否则 CSV 解析无分隔符,运行期才炸)。 */
+  /** #4a file_format_type=DELIMITED 时 delimiter 必填(否则 CSV 解析无分隔符,运行期才失败)。 */
   private static void validateFormatConditionals(Map<String, String> row, List<String> ri) {
     if ("DELIMITED".equals(normalizeEnum(row.get("file_format_type")))
         && !hasText(normalize(row.get("delimiter")))) {

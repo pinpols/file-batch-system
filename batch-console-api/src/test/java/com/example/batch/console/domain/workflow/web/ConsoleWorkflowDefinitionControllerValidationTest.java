@@ -28,7 +28,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * 守护 WorkflowDefinitionSaveRequest 的嵌套 @Valid 在 controller 生效。
  *
  * <p>历史缺陷:nodes / edges 列表元素的 @ValidResourceCode (nodeCode / fromNodeCode / toNodeCode)
- * 未被解析,脏数据可直通入库。本测试保证嵌套校验链不破。
+ * 未被解析,异常数据可直通入库。本测试保证嵌套校验链不破。
  */
 class ConsoleWorkflowDefinitionControllerValidationTest {
 

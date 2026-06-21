@@ -6,7 +6,7 @@
 #   例:   scripts/local/provision-biz-shard.sh shard-1 15442
 #          scripts/local/provision-biz-shard.sh silo-big 15443
 #
-# 设计同 verify:用 docker run 把分片挂到运行栈网络(避免 compose external-network/env 坑)。
+# 设计同 verify:用 docker run 把分片挂到运行栈网络(避免 compose external-network/env 问题)。
 # compose 里的 postgres-biz-shard-1 是 shard-1 的「生产形态」声明;本脚本是通用「就地开片」路径。
 set -euo pipefail
 cd "$(dirname "$0")/../.."

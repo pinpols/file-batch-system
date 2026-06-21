@@ -6,7 +6,7 @@
 
 与 Java 端保持的关键不变量:
 
-- **HTTP 失败永不杀死循环。** Java 端用 ``try { ... } catch (Throwable) {
+- **HTTP 失败永不杀无限循环。** Java 端用 ``try { ... } catch (Throwable) {
   log.warn }`` 包整个 tick;Python 端同样吸收任何异常并 WARN,空窗期由
   orch 端的"missed-heartbeat 阈值"处理。
 - **调度器响应 ``nextHeartbeatHint``**(PR #251)。orch 可上调或下调下一
@@ -148,7 +148,7 @@ class HeartbeatScheduler:
         返回解析后的 directive(测试 / 可观测性场景使用);心跳 HTTP 失败
         时返回 ``None``。
 
-        异常被吸收:调用方是循环本体,不能让它挂掉。
+        异常被吸收:调用方是循环本体,不能让它异常退出。
         """
         body: dict[str, Any] = {
             "tenantId": self._config.tenant_id,

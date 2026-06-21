@@ -26,7 +26,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   private static final String KEY_QUERY_PARAM_SCHEMA = "query_param_schema";
 
   /**
-   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致 Excel/CSV 生成时内存爆炸。1024
+   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致 Excel/CSV 生成时内存爆失败。1024
    * 列足够覆盖业务极端场景；真要超此值需显式把模板的 {@code max_columns} 字段调大（见 {@link #resolveMaxColumns}）。
    */
   private static final int DEFAULT_MAX_COLUMNS = 1024;

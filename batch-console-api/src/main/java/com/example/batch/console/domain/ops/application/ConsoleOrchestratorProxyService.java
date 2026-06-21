@@ -15,7 +15,7 @@ import java.util.Map;
  *   <li>instanceAction — 针对 job_instance 的生命周期操作（CANCEL / RETRY / TERMINATE 等）
  *   <li>partitionAction — 针对分区级别的操作（RETRY_PARTITION / CANCEL_PARTITION 等）
  *   <li>workflowRunAction — 针对 workflow_run 的操作（CANCEL / TERMINATE 等）
- *   <li>workflowRunSkipNode — 跳过指定节点并让 DAG 继续推进，用于卡死节点的人工干预
+ *   <li>workflowRunSkipNode — 跳过指定节点并让 DAG 继续推进，用于长期停滞节点的人工干预
  *   <li>outboxCleanup / outboxRepublish — outbox_event 表运维（删除终结事件 / 重投递失败事件）， 由 orchestrator
  *       在自己事务里执行；console 不直接写 outbox 表
  *   <li>adminTestDataCleanup* — 测试数据清理，涉及运行态表 DELETE/UPDATE，由 orchestrator 执行； console 只保留 admin 入口

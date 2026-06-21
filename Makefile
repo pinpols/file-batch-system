@@ -42,7 +42,7 @@ dev-restart:
 #   2) 删除 / 重命名 resource（yml / SQL / 静态文件同上风险）
 #   3) 改了 parent pom 依赖版本，担心 .flattened-pom.xml 不同步
 #   4) 新增 Flyway migration 脚本却报"脚本缺失"
-#   5) 怀疑"幽灵 bug"、构建缓存状态不一致
+#   5) 怀疑"缓存或残留状态问题"、构建缓存状态不一致
 dev-restart-clean:
 	bash scripts/local/stop-all.sh
 	CLEAN=1 bash scripts/local/build-apps.sh
@@ -114,7 +114,7 @@ db-reset-flyway:
 ops-inspect:
 	bash scripts/ops/inspect-all.sh
 
-# 修复卡死的 outbox 事件
+# 修复长期停滞的 outbox 事件
 ops-heal-stuck:
 	bash scripts/ops/heal-stuck-outbox.sh
 

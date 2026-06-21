@@ -6,7 +6,7 @@
 
 | # | 文件 | 作用 | 何时看 |
 |---|---|---|---|
-| 01 | [deep-issue-analysis.md](./deep-issue-analysis.md) | 系统级深度问题分析：Bug / 漏洞 / 设计缺陷全景 | 想知道"目前有哪些坑" |
+| 01 | [deep-issue-analysis.md](./deep-issue-analysis.md) | 系统级深度问题分析：Bug / 漏洞 / 设计缺陷全景 | 想知道"目前有哪些问题" |
 | 02 | [fix-report.md](./fix-report.md) | 修复报告：哪些已修、commit 引用 | 验收 / 复盘 |
 | 03 | [hardening-backlog.md](./hardening-backlog.md) | 硬化 backlog：剩下的 P0/P1/P2 优先级排序 | 决定下个 sprint 干什么 |
 | 04 | [project-assessment.md](./project-assessment.md) | 项目工程深度评估（当前权威）：四维评分 + 演进 delta + ops 缺口锁定 | 看"项目今天整体水准"一页式判断 |

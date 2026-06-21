@@ -24,7 +24,7 @@
 
 | 阶段 | 门槛 | 放行建议 |
 |---|---|---|
-| P0 | 主链路复验、trigger misfire、PG 参数矩阵完成且无卡死/非终态 | 可以灰度 |
+| P0 | 主链路复验、trigger misfire、PG 参数矩阵完成且无长期停滞/非终态 | 可以灰度 |
 | P1 | 真实对象存储、dispatch/atomic 故障注入、process failure profile 完成 | 可以扩大流量 |
 | P2 | 1w/10w task storm、多租户混压、容量上限画像完成 | 可以给出容量承诺 |
 
@@ -186,12 +186,12 @@ atomic 覆盖：
 
 - 可恢复。
 - 无 staging 残留。
-- 无重复写脏数据。
+- 无重复写异常数据。
 
 状态：**本地 process 分片/cancel 已复跑，fault-injection profile 未完成**。
 
 - `process-stage4c-20260608163544`：4/4 分片 SUCCESS，目标 16 行；RUNNING cancel HTTP 200 后终态 `FAILED/WORKER_EXECUTION_CANCELLED`。
-- 未完成：DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/脏数据核对。
+- 未完成：DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/异常数据核对。
 
 ## P2 容量画像
 

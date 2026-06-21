@@ -78,7 +78,7 @@ public class JobLifecycleMetrics {
     Counter.builder(JOB_FAILURE_TOTAL).tags(tags).register(registry).increment();
   }
 
-  /** 防 NPE / 空串变 "unknown",保持 Grafana 维度可枚举,不会因稀疏 null 拆出垃圾 series。 */
+  /** 防 NPE / 空串变 "unknown",保持 Grafana 维度可枚举,不会因稀疏 null 拆出无效 series。 */
   private String safe(String value) {
     return value == null || value.isBlank() ? "unknown" : value;
   }

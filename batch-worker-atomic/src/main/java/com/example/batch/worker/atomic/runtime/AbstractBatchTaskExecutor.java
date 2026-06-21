@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>钩子是 opt-in 的(不在接口加 default 方法),要全局能力请走 SDK 侧扩展点
  *   <li>{@link #before / #after / #cleanup} 不应是多 stage 状态机(那是 pipeline 的边界)
- *   <li>钩子异常不应被吞掉,统一让 {@link #execute(TaskContext)} 的 catch-all 转成 {@link
+ *   <li>钩子异常不应被捕获并抑制,统一让 {@link #execute(TaskContext)} 的 catch-all 转成 {@link
  *       TaskResult#fail(Throwable)}
  * </ul>
  *

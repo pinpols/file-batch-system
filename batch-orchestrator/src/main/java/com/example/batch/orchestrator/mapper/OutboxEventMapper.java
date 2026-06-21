@@ -39,7 +39,7 @@ public interface OutboxEventMapper {
       @Param("publishingStatus") String publishingStatus);
 
   /**
-   * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久卡死。
+   * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久长期停滞。
    *
    * @return 被重置的记录数
    */

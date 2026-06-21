@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * P3-3 archive 系列：outbox_event 自动归档调度器。默认每天 03:30 跑（早于 workflow 的 04:15）。
  *
  * <p>每次 tick 先清 PUBLISHED（保留 7 天），再清 GIVE_UP（保留 30 天）；单状态最多连刷 {@link #MAX_BATCHES_PER_TICK}
- * 批防止异常输入死循环。
+ * 批防止异常输入无限循环。
  */
 @Slf4j
 @Component

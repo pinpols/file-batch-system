@@ -19,7 +19,7 @@ Hikari connection leak、Kafka consumer 累计 lag。
 - JFR 启动参数 + 周期 heap dump 工具链
 - 退出条件:任意 health 指标超阈值立即 stop 留现场
 - 报告:`scripts/local/analyze-soak.sh` 解析 JFR 出 markdown 报告
-- 跨日触发:hack JVM 时钟前进 + 验 `batch_day_instance` 正常翻日
+- 跨日触发:通过 JVM 时钟偏移模拟日期前进 + 验 `batch_day_instance` 正常翻日
 
 **Out of scope**:
 - 不做集群伸缩(多副本压测 → 单独议题)
@@ -77,14 +77,14 @@ jcmd $pid GC.heap_dump logs/soak/heap-$(date +%Y%m%d-%H%M).hprof
 - [ ] `analyze-soak.sh`:`jfr summary` + jq 解析 → markdown 报告
 - [ ] 输出:`logs/soak/soak-report-YYYYMMDD.md`
 
-### Step 4 — 跨日 hack(1h)
+### Step 4 — 跨日时间偏移(1h)
 - [ ] 启动前 `faketime` 或 JVM `-Dbatch.testing.clock-offset=+12h`(需 BatchDateTimeSupport 支持注入 offset)
 - [ ] 验 `batch_day_instance` 在测试时钟 00:00 翻批正确
 
 > **TODO / 阻塞**:`BatchDateTimeSupport` 当前使用注入的 `Clock` bean(`clock.instant()`),**不读** `-Dbatch.testing.clock-offset`。
 > `start-soak.sh` 已透传该 `-D` 参数,但要真正生效,需在 `batch-common` 的 Clock bean 配置上增加 offset 注入:
 > 例如新增一个 `@Profile("soak") @Bean Clock offsetClock(...)` 用 `Clock.offset(Clock.systemUTC(), Duration.parse(...))` 包一层。
-> 在该 bean 上线前,跨日 hack 走另一条路:用 `faketime`(macOS `libfaketime`)包 JVM 进程,或直接改宿主机时钟(不推荐)。
+> 在该 bean 上线前,跨日时间偏移 走另一条路:用 `faketime`(macOS `libfaketime`)包 JVM 进程,或直接改宿主机时钟(不推荐)。
 > 报告里的"跨日"维度会照常解析 `batch_day_instance`,只是触发依赖外部条件。
 
 ## 验收标准

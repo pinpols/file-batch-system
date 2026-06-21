@@ -115,9 +115,9 @@ class SdkTaskStopped(Exception):
 
     每次 :meth:`SdkTaskContext.commit` 成功后,若 ``ctx.is_cancelled()`` 命中,
     则在**已提交的安全点**抛此异常 —— 取消总是停在两个批次之间的边界,不会留
-    半个批次的脏数据。续跑模板的顶层 ``execute`` 捕获它 → 落 cancelled 终态。
+    半个批次的异常数据。续跑模板的顶层 ``execute`` 捕获它 → 落 cancelled 终态。
 
-    红线:**业务代码不得吞掉本异常**(吞了就停不下来)。它刻意不继承
+    红线:**业务代码不得捕获并抑制本异常**(吞了就停不下来)。它刻意不继承
     :class:`PlatformError`,以免被业务的 ``except PlatformError`` 误捕。
 
     :param break_position: 取消发生时已安全提交到的断点(已落盘)。

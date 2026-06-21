@@ -19,10 +19,10 @@ import org.springframework.stereotype.Component;
  *   <li>{@code process_commit_published_rows} - DistributionSummary,COMMIT 落 target 表的行数
  *   <li>{@code process_validation_failed_total} - Counter,VALIDATE 阶段单条 rule 失败计数(tag: ruleName)
  *   <li>{@code process_stage_duration_seconds} - Timer,五段每段耗时(tag: stage, success)
- *   <li>{@code process_feedback_swallowed_total} - Counter,FEEDBACK 阶段吞掉的异常累计
+ *   <li>{@code process_feedback_swallowed_total} - Counter,FEEDBACK 阶段捕获并抑制的异常累计
  * </ul>
  *
- * <p><b>tenantId 不作为 Micrometer tag</b>:运行时高基数(随租户数线性增长)会让 Prometheus time-series 内存爆炸。tenantId 走
+ * <p><b>tenantId 不作为 Micrometer tag</b>:运行时高基数(随租户数线性增长)会让 Prometheus time-series 内存爆失败。tenantId 走
  * MDC 进日志便于按租户追溯;按租维度聚合改用 Prometheus exemplar 或日志聚合方案, 不在 metrics label 维度直接展开。
  *
  * <p>方法签名保留 tenantId 入参纯为向后兼容,内部不再用于 tag 缓存键。
@@ -116,8 +116,8 @@ public class ProcessMetrics {
   }
 
   /**
-   * FEEDBACK 阶段吞掉的异常计数。按设计,FEEDBACK 失败不应让整个 task 失败(target 已落 / staging 已清),但 完全静默会让 staging 残留 /
-   * 审计漏写不可见。本指标暴露 swallow 频率,告警 / 排障的入口。
+   * FEEDBACK 阶段捕获并抑制的异常计数。按设计,FEEDBACK 失败不应让整个 task 失败(target 已落 / staging 已清),但 完全静默会让 staging 残留
+   * / 审计漏写不可见。本指标暴露 swallow 频率,告警 / 排障的入口。
    */
   public void incrementFeedbackSwallowed(String tenantId) {
     if (registry == null) {
@@ -128,7 +128,7 @@ public class ProcessMetrics {
         if (feedbackSwallowedCounter == null) {
           feedbackSwallowedCounter =
               Counter.builder(FEEDBACK_SWALLOWED)
-                  .description("PROCESS FEEDBACK 阶段吞掉的异常累计 (target 已落,但 cleanup/audit 失败)")
+                  .description("PROCESS FEEDBACK 阶段捕获并抑制的异常累计 (target 已落,但 cleanup/audit 失败)")
                   .register(registry);
         }
       }

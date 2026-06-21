@@ -147,7 +147,7 @@ batch.archive.tiering:
 | 走 TimescaleDB hyper-partition | 引入第三方扩展，PG 版本绑死，运维复杂 |
 | 用 ClickHouse 做长保留 | 双引擎、跨引擎一致性难保证、运维多一套 |
 | 仅靠 PG 物理 vacuum + dump 备份 | 不能查询、恢复要全表 dump、无 partition pruning |
-| 完全走 OSS（不分层） | 实时查询性能受不了，秒级 → 业务方喷 |
+| 完全走 OSS（不分层） | 实时查询性能受不了，秒级 → 业务方投诉 |
 
 ## 不变量
 

@@ -88,7 +88,7 @@ public class OrchestratorKafkaConsumerConfiguration {
 
   /**
    * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
-   * IllegalArgumentException）不重试直接放行。日志记录失败上下文，offset 前进，避免单条卡死 partition。
+   * IllegalArgumentException）不重试直接放行。日志记录失败上下文，offset 前进，避免单条长期停滞 partition。
    */
   private DefaultErrorHandler triggerLaunchErrorHandler() {
     TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();

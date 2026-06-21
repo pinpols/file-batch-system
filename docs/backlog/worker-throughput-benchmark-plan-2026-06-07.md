@@ -12,8 +12,8 @@
 
 1. **import/export P0/P1 已完成并系统复验**。导入覆盖 1000w `PARTITION_REPLACE_COPY` / 分片 guard / stage-swap；导出覆盖 1000w 单片、4 分片正确性、multipart/store 段、参数读取和 4 分片真并行。最终导出 trace `bb7343da2bd24313b8abbb99b8807c1f`,4 个 task 同秒 RUNNING,instance wall `144.092s`。
 2. **process 已完成 1000w 大数据 benchmark 和 P1 收口**。聚合 1000w -> 10w 端到端 40.966s；旧 JSONB copy 867.606s；新增 `stagingMode=DIRECT` 后 1000w copy 端到端 62.978s,staging 残留 0。
-3. **dispatch/atomic/trigger 已完成小基线 + 高压复验**。小基线全绿；修复后高压 RUN_ID `ctlw-202606080130-t1t2` 的 HTTP/Gatling 900/900 OK,540/540 实例全部进入终态,不再残留 `CREATED + NO_TASK`。
-4. **本地高压失败是容量策略下的可观察终态,不是 worker 卡死**。本地 `tenant_quota_policy.exceeded_strategy=REJECT`、`dispatch_queue` 只有 3 job / 6 partition,高压下部分实例被终态化为 `FAILED/NO_TASK`;这是预期的背压结果。
+3. **dispatch/atomic/trigger 已完成小基线 + 高压复验**。小基线全部通过；修复后高压 RUN_ID `ctlw-202606080130-t1t2` 的 HTTP/Gatling 900/900 OK,540/540 实例全部进入终态,不再残留 `CREATED + NO_TASK`。
+4. **本地高压失败是容量策略下的可观察终态,不是 worker 长期停滞**。本地 `tenant_quota_policy.exceeded_strategy=REJECT`、`dispatch_queue` 只有 3 job / 6 partition,高压下部分实例被终态化为 `FAILED/NO_TASK`;这是预期的背压结果。
 5. **当前还不是 1w/10w 容量上限结论**。P0 状态机缺陷已修,下一步 task storm、故障注入、重试/背压上限可独立跑。
 6. 所有 benchmark 都走正常系统链路:API / trigger / orchestrator / Kafka / worker / DB,不走前台模拟;代码完成状态和 benchmark 结果分开记录。
 
@@ -299,7 +299,7 @@ bash load-tests/scripts/run-control-plane-worker-benchmark.sh
 
 Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-ctlw-202606080130-t1t2.md`;Gatling HTML:`load-tests/target/gatling-results/controlplanemixedpressuresimulation-20260607173104566/index.html`。
 
-结论:T1/T2 状态机 P0 已收口。高压下的 FAILED 是本地容量策略 `REJECT` 的可观察终态,不是 worker 卡死或未派发残留。
+结论:T1/T2 状态机 P0 已收口。高压下的 FAILED 是本地容量策略 `REJECT` 的可观察终态,不是 worker 长期停滞或未派发残留。
 
 ## 执行顺序
 

@@ -96,7 +96,7 @@ PR 合并到 main 不动版本号。`-SNAPSHOT` 状态会一直累积新功能 /
 
 ### 2.2 准备 release（拉 release 分支或直接 main）
 
-确认 main 测试全绿 + 当前 `<revision>` 是 `X.Y.0-SNAPSHOT`，准备发 `X.Y.0`：
+确认 main 测试全部通过 + 当前 `<revision>` 是 `X.Y.0-SNAPSHOT`，准备发 `X.Y.0`：
 
 ```bash
 # 1) 改 pom 去掉 -SNAPSHOT

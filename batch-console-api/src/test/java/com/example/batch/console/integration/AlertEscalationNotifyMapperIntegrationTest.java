@@ -18,7 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 集成测试:验证升级通知的两个新 SQL 对真实 PG 的语义正确(V181 列 + 谓词 + CAS 水位线)。
  *
  * <p>单元测试 {@code AlertEscalationNotifierTest} mock 掉 mapper 只验编排,SQL 本身的列名 / {@code >} 谓词 / CAS
- * 守护必须在真库上验,避免「全绿但 SQL 错」(conformance≠production)。
+ * 守护必须在真库上验,避免「全部通过但 SQL 错」(conformance≠production)。
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
