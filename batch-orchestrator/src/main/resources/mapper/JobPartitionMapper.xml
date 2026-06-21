@@ -77,7 +77,10 @@
             idempotency_key,
             input_snapshot,
             output_summary,
-            dry_run
+            dry_run,
+            source_file_id,
+            template_code,
+            target_ref
         ) values (
             #{tenantId},
             #{jobInstanceId},
@@ -95,7 +98,10 @@
             <choose>
                 <when test="dryRun != null">#{dryRun}</when>
                 <otherwise>false</otherwise>
-            </choose>
+            </choose>,
+            #{sourceFileId},
+            #{templateCode},
+            #{targetRef}
         )
     </insert>
 

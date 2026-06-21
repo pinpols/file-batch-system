@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.plan;
 
+import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.model.WorkerRouteModel;
@@ -72,6 +73,23 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
         plan.getPartitionCount() == null || plan.getPartitionCount() <= 0
             ? 1
             : plan.getPartitionCount();
+
+    // ADR-046 文件束:BUNDLE_IMPORT 作业「一文件一 partition」,各 partition 绑各自源文件/模板(异构)。
+    boolean bundleJob =
+        jobDefinition != null && JobType.BUNDLE_IMPORT.code().equals(jobDefinition.jobType());
+    List<BundlePlanParams.BundleFile> bundleFiles =
+        bundleJob ? BundlePlanParams.extract(planParams) : List.of();
+    if (bundleJob && !bundleFiles.isEmpty() && bundleFiles.size() != partitionCount) {
+      // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
+      // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢文件。
+      throw new IllegalStateException(
+          "ADR-046 bundle partition count mismatch: files="
+              + bundleFiles.size()
+              + " partitions="
+              + partitionCount
+              + " (BUNDLE_IMPORT 须 shardStrategy=DYNAMIC 且 bundleFiles 数 ≤ 256)");
+    }
+
     for (int partitionNo = 1; partitionNo <= partitionCount; partitionNo++) {
       SchedulePlan.PartitionPlan partitionPlan = new SchedulePlan.PartitionPlan();
       partitionPlan.setPartitionNo(partitionNo);
@@ -79,6 +97,12 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
           command.jobCode() + ":" + command.bizDate() + ":" + partitionNo);
       partitionPlan.setBusinessKey(command.jobCode() + ":" + command.bizDate());
       partitionPlan.setWorkerRoute(route);
+      if (bundleJob && !bundleFiles.isEmpty()) {
+        BundlePlanParams.BundleFile bundleFile = bundleFiles.get(partitionNo - 1);
+        partitionPlan.setSourceFileId(bundleFile.sourceFileId());
+        partitionPlan.setTemplateCode(bundleFile.templateCode());
+        partitionPlan.setTargetRef(bundleFile.targetRef());
+      }
       partitionPlans.add(partitionPlan);
     }
     plan.setPartitions(partitionPlans);
