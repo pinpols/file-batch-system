@@ -14,10 +14,10 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DispatchPayload(
-    // ADR-046 文件束分发:束 partition 的绑定列经 dispatch 派发塞进 payload 为带 bundle 前缀的
+    // ADR-046 文件束分发:束 partition 的绑定列经 dispatch 派发写入 payload 为带 bundle 前缀的
     // bundleSourceFileId / bundleTargetRef(见 DefaultPartitionDispatchService.enrichBundleBinding)。
     // 分发载荷历史字段名是 fileId / channelCode,这里用 @JsonAlias 把束键映射进来,无需在
-    // PrepareDispatchStep 加分支。前缀键不与业务 payload 可能出现的泛化 fileId/channelCode 撞
+    // PrepareDispatchStep 加分支。前缀键不与业务 payload 可能出现的泛化 fileId/channelCode 冲突
     // (P1-3 防御);普通分发任务仍用原字段名,不受影响(同名优先,别名兜底)。
     @JsonAlias("bundleSourceFileId") String fileId,
     String fileCode,
