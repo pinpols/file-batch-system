@@ -271,7 +271,9 @@ ROUTING_MARK_END="# <<< sim-harness routing overlay"
 routing_sim_teardown() {
   # 删除 overlay 块,还原单片,重启 3 worker
   if grep -qF "$ROUTING_MARK_BEGIN" .env.local 2>/dev/null; then
-    sed -i '' "/$ROUTING_MARK_BEGIN/,/$ROUTING_MARK_END/d" .env.local
+    # 可移植删块:避开 sed -i 的 BSD(需 '' 后缀)/ GNU(不带后缀)差异 —— 同目录 tmp + mv,Linux/macOS 通用。
+    sed "/$ROUTING_MARK_BEGIN/,/$ROUTING_MARK_END/d" .env.local > .env.local.tmp \
+      && mv .env.local.tmp .env.local
     c_ylw "  routing overlay 已从 .env.local 移除,重启 worker 还原单片"
     unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
     bash scripts/local/restart.sh worker-import worker-export worker-process >/tmp/harness-routing-restore.log 2>&1 || true
