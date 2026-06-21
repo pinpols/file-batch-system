@@ -39,7 +39,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
       "batch.worker.import.scanner.stability-window-seconds=0",
       "batch.worker.import.scanner.prefix=ingress/",
       "batch.worker.import.scanner.require-done-file=false",
-      "batch.worker.import.scanner.default-biz-date=2026-05-05"
+      "batch.worker.import.scanner.default-biz-date=2026-05-05",
+      "batch.worker.import.scanner.batch-manifest-enabled=true"
     })
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
@@ -102,6 +103,48 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     Map<String, Object> after =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
     assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
+  }
+
+  @Test
+  void shouldPersistBundleTemplateCodeFromV2Manifest() throws Exception {
+    String bucket = s3Bucket();
+    String dataObject = "ingress/order-it.csv";
+    String manifestObject = "ingress/bundle-it.batch.json";
+    S3Client client = s3Client();
+
+    // v2 批次清单:声明 order-it.csv 用模板 TPL_ORDER
+    String manifestJson =
+        """
+        {
+          "schemaVersion": "batch-manifest-v2",
+          "fileGroupCode": "bundle-it-group",
+          "bizDate": "2026-05-05",
+          "tenantId": "t1",
+          "requiredFiles": ["order-it.csv"],
+          "fileMapping": [ { "fileName": "order-it.csv", "templateCode": "TPL_ORDER" } ]
+        }
+        """;
+    client.putObject(
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(manifestObject)
+            .contentType("application/json")
+            .build(),
+        RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
+    byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
+    client.putObject(
+        PutObjectRequest.builder().bucket(bucket).key(dataObject).contentType("text/csv").build(),
+        RequestBody.fromBytes(content));
+
+    scanner.scan();
+
+    Map<String, Object> row =
+        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+    assertThat(row).isNotEmpty();
+    // ADR-046:per-file 模板从 v2 manifest 落到 file_record.metadata_json,供 launch 展异构 partition
+    assertThat(String.valueOf(row.get("metadata_json")))
+        .contains("bundleTemplateCode")
+        .contains("TPL_ORDER");
   }
 
   private S3Client s3Client() {
