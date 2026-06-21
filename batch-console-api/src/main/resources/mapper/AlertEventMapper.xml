@@ -16,6 +16,9 @@
         <result column="last_seen_at" property="lastSeenAt"/>
         <result column="trace_id" property="traceId"/>
         <result column="status" property="status"/>
+        <result column="escalation_tier" property="escalationTier"/>
+        <result column="escalated_at" property="escalatedAt"/>
+        <result column="escalation_notified_tier" property="escalationNotifiedTier"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -98,5 +101,24 @@
             updated_at = now()
         where tenant_id = #{tenantId}
           and id = #{id}
+    </update>
+
+    <select id="selectEscalatedPendingNotify" resultMap="AlertEventResultMap">
+        select *
+        from batch.alert_event
+        where status = 'OPEN'
+          and escalation_tier &gt; escalation_notified_tier
+        order by escalated_at asc
+        limit #{limit}
+    </select>
+
+    <update id="markEscalationNotified">
+        update batch.alert_event
+        set escalation_notified_tier = #{newNotifiedTier},
+            updated_at = now()
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and status = 'OPEN'
+          and escalation_notified_tier = #{expectedNotifiedTier}
     </update>
 </mapper>

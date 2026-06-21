@@ -27,11 +27,14 @@ public interface JobInstanceMapper {
       @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
 
   /**
-   * 指定租户 + jobCode + bizDate 下终态 SUCCESS(实盘,不含 dry-run)的实例数。
+   * 指定租户 + jobCode + bizDate 下**最新一次 attempt**(run_attempt 最大、同值取 id 最大)的实例状态。
    *
-   * <p>供 ADR-043 依赖感知 fire 就绪查询:{@code > 0} 即上游该批次日已成功。
+   * <p>供 ADR-043 依赖感知 fire 就绪查询:只有最新 attempt 为 {@code SUCCESS} 才算就绪。
+   *
+   * <p>相较"存在任意 SUCCESS",此口径能正确处理「先成功、后 rerun 失败 / rerun 正在跑」—— 此时最新 attempt 非
+   * SUCCESS,下游不应按过期结果放行(防结算级误放行)。无任何实例时返回 null。
    */
-  long countSuccessByBizDate(
+  String selectLatestStatusByBizDate(
       @Param("tenantId") String tenantId,
       @Param("jobCode") String jobCode,
       @Param("bizDate") LocalDate bizDate);

@@ -257,6 +257,8 @@ public class ConsoleOpsQueryService {
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getJobCode(),
             request.getRequestId(),
+            request.getBizDate(),
+            request.getKeyword(),
             pageRequest,
             decodeCursorId(request.getCursor()));
     List<PendingCatchUpEntity> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
@@ -342,6 +344,8 @@ public class ConsoleOpsQueryService {
     query.setApprovalType(request.getApprovalType());
     query.setActionType(request.getActionType());
     query.setApprovalStatus(request.getApprovalStatus());
+    query.setRequesterId(request.getRequesterId());
+    query.setKeyword(request.getKeyword());
     query.setPageRequest(pageRequest);
     List<ApprovalCommandEntity> rows = opsMappers.approvalCommandMapper.selectByQuery(query);
     long total = opsMappers.approvalCommandMapper.countByQuery(query);

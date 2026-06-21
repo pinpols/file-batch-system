@@ -13,6 +13,7 @@ import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.service.TriggerService;
+import com.example.batch.trigger.service.UpstreamNotReadyException;
 import com.example.batch.trigger.support.TriggerDescriptor;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timeout;
@@ -347,9 +348,12 @@ public class HashedWheelTriggerScheduler {
     long fireStartNanos = System.nanoTime();
     try {
       TriggerDescriptor descriptor = loadDescriptor(state);
-      // 0) misfire 分流:next_fire_time 比 actual 早超过 misfireThreshold 视为 misfire
+      // 0) misfire 分流:next_fire_time 比 actual 早超过 misfireThreshold 视为 misfire。
+      //    ADR-043:readiness defer 重检行的 next_fire_time 是"重检时钟"(now+recheckInterval)非真 cron,
+      //    不参与 misfire 分流——否则会被误判 misfire 走 NONE/AUTO 分支丢批或乱补跑。
+      boolean deferringReadiness = state.getReadinessDeferredSince() != null;
       long lagSeconds = (actualFireMillis - scheduledFireTime.toEpochMilli()) / 1000L;
-      if (lagSeconds >= props.getMisfireThresholdSeconds()) {
+      if (!deferringReadiness && lagSeconds >= props.getMisfireThresholdSeconds()) {
         handleMisfire(state, descriptor, scheduledFireTime, groupTag);
         return;
       }
@@ -439,30 +443,90 @@ public class HashedWheelTriggerScheduler {
       TriggerType triggerType,
       String groupTag,
       String successStatus) {
+    // ADR-043:defer 期 next_fire_time 是"重检时钟",用 readiness_deferred_since(原始触发时刻)做
+    // command.fireTime 与 cron 推进基准,防 bizDate 在重检期间漂移到下一业务日。
+    Instant effectiveFireTime =
+        state.getReadinessDeferredSince() != null
+            ? state.getReadinessDeferredSince()
+            : scheduledFireTime;
     String requestId = IdGenerator.newBusinessNo("wheel");
     try {
       ScheduledTriggerCommand command =
           new ScheduledTriggerCommand(
-              descriptor, scheduledFireTime, triggerType, requestId, IdGenerator.newTraceId());
+              descriptor, effectiveFireTime, triggerType, requestId, IdGenerator.newTraceId());
       LaunchResponse response = triggerService.launchScheduled(command);
       // LaunchResponse.instanceNo == null = LaunchService 主动跳过(节假日 SKIP rollRule
       // 或 bizDate 为空);不算失败,但需要区分状态
       if (response == null || response.instanceNo() == null) {
         metrics.incrementFireSuccess(groupTag);
-        advanceNextFireTime(state, scheduledFireTime, "SKIPPED_BY_CALENDAR", 0);
+        advanceNextFireTime(state, effectiveFireTime, "SKIPPED_BY_CALENDAR", 0);
         return;
       }
       metrics.incrementFireSuccess(groupTag);
-      advanceNextFireTime(state, scheduledFireTime, successStatus, 0);
+      advanceNextFireTime(state, effectiveFireTime, successStatus, 0);
+    } catch (UpstreamNotReadyException notReady) {
+      // ADR-043:依赖未就绪——窗口内 defer 重检(同 bizDate 不丢批),超窗 give-up。
+      handleReadinessDefer(state, effectiveFireTime, groupTag, notReady);
     } catch (Exception e) {
       metrics.incrementFireFailed(groupTag, e.getClass().getSimpleName());
       log.warn(
           "trigger launch failed: job={} scheduledFireTime={}",
           state.getJobCode(),
-          scheduledFireTime,
+          effectiveFireTime,
           e);
-      advanceNextFireTime(state, scheduledFireTime, "FAILED", 0);
+      advanceNextFireTime(state, effectiveFireTime, "FAILED", 0);
     }
+  }
+
+  /**
+   * ADR-043 readiness defer 决策:依赖未就绪时,等待未超 readinessWindow → defer(把 next_fire_time 设为 重检时钟
+   * now+recheckInterval,记 readiness_deferred_since,不前移真 cron,下个扫描窗重检,同一 bizDate 不丢批);超窗 → 放弃本
+   * bizDate(推进到下一真 cron + WAITING_READINESS_TIMEOUT + ERROR/metric 告警)。
+   */
+  private void handleReadinessDefer(
+      TriggerRuntimeStateEntity state,
+      Instant effectiveFireTime,
+      String groupTag,
+      UpstreamNotReadyException notReady) {
+    Instant deferredSince =
+        state.getReadinessDeferredSince() != null
+            ? state.getReadinessDeferredSince()
+            : effectiveFireTime;
+    Instant now = dateTimeSupport.nowInstant();
+    long waitedSeconds = Duration.between(deferredSince, now).getSeconds();
+    if (waitedSeconds <= props.getReadinessWindowSeconds()) {
+      Instant recheckAt = now.plusSeconds(props.getReadinessRecheckIntervalSeconds());
+      try {
+        stateMapper.deferForReadiness(state.getId(), recheckAt, deferredSince);
+      } catch (Exception e) {
+        // defer 写库失败:marker 由 stale-marker 周期清理后下个扫描窗会重捡,不丢批。
+        metrics.incrementAdvanceFailed(state.getJobCode());
+        log.warn("readiness defer DB update failed: job={}", state.getJobCode(), e);
+        return;
+      }
+      metrics.incrementReadinessDeferred(groupTag);
+      log.info(
+          "trigger deferred (upstream not ready): job={} dependsOn={} bizDate={} waited={}s"
+              + " window={}s recheckIn={}s",
+          state.getJobCode(),
+          notReady.getDependsOnJobCode(),
+          notReady.getBizDate(),
+          waitedSeconds,
+          props.getReadinessWindowSeconds(),
+          props.getReadinessRecheckIntervalSeconds());
+      return;
+    }
+    metrics.incrementReadinessTimeout(groupTag);
+    log.error(
+        "trigger readiness window exceeded, giving up this bizDate: job={} dependsOn={} bizDate={}"
+            + " waited={}s window={}s",
+        state.getJobCode(),
+        notReady.getDependsOnJobCode(),
+        notReady.getBizDate(),
+        waitedSeconds,
+        props.getReadinessWindowSeconds());
+    // 推进到下一真 cron(基准=deferredSince 原始触发时刻);advanceAfterFire 同步清 readiness_deferred_since。
+    advanceNextFireTime(state, deferredSince, "WAITING_READINESS_TIMEOUT", 0);
   }
 
   private void advanceNextFireTime(

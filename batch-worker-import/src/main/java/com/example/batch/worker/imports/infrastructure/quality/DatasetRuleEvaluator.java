@@ -13,8 +13,10 @@ import static com.example.batch.worker.imports.infrastructure.quality.Validation
 import static com.example.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
 import com.example.batch.common.utils.Texts;
+import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +35,11 @@ public class DatasetRuleEvaluator {
 
   public void evaluate(ValidationSession session) {
     evaluateRowCount(
-        session.totalCount(), session.ruleSet(), session.datasetIssues(), session.appliedChecks());
+        session.totalCount(),
+        session.ruleSet(),
+        session.datasetIssues(),
+        session.appliedChecks(),
+        manifestExpectedCount(session.context()));
     evaluateControlRecord(session);
     evaluateChecksum(
         session.normalizedPayload(),
@@ -48,26 +54,60 @@ public class DatasetRuleEvaluator {
         session.appliedChecks());
   }
 
+  /**
+   * file_record.metadata_json 里 sidecar(.chk manifest)声明的期望记录数,由 ValidateStep 在打开校验会话前 塞进 context
+   * 属性。校验侧据此对账"声明行数 vs 实际累加行数"。
+   */
+  public static final String ATTR_EXPECTED_RECORD_COUNT = "expectedRecordCount";
+
+  /** 从 context 属性读 sidecar 声明的期望记录数(ValidateStep 塞入);缺失/非数字 → null。 */
+  private Integer manifestExpectedCount(ImportJobContext context) {
+    if (context == null) {
+      return null;
+    }
+    return integerValue(context.getAttributes().get(ATTR_EXPECTED_RECORD_COUNT));
+  }
+
   private void evaluateRowCount(
       long actualCount,
       Map<String, Object> ruleSet,
       List<ValidationIssue> datasetIssues,
-      Set<String> appliedChecks) {
+      Set<String> appliedChecks,
+      Integer manifestExpectedCount) {
     Map<String, Object> rule = configSupport.firstMap(ruleSet, "rowCountCheck", "row_count_check");
-    if (rule.isEmpty() || !enabled(rule)) {
+    boolean ruleEnabled = !rule.isEmpty() && enabled(rule);
+    // sidecar 声明的期望行数:模板未显式 pin exact 时,用 manifest 声明值兜底对账(ADR-040)。
+    // 模板已显式给 exact → 模板优先(template wins),不被 manifest 覆盖。
+    Integer ruleExact = ruleEnabled ? integerValue(rule.get("exact")) : null;
+    boolean fromManifest = ruleExact == null && manifestExpectedCount != null;
+    Integer exactCount =
+        ruleExact != null ? ruleExact : (fromManifest ? manifestExpectedCount : null);
+    Integer minCount =
+        ruleEnabled ? integerValue(firstNonNull(rule.get(KEY_MIN), rule.get("minimum"))) : null;
+    Integer maxCount =
+        ruleEnabled ? integerValue(firstNonNull(rule.get(KEY_MAX), rule.get("maximum"))) : null;
+    // 既无模板 rowCountCheck、又无 manifest 声明 → 无可对账,直接跳过。
+    if (!ruleEnabled && exactCount == null) {
       return;
     }
     appliedChecks.add("row_count_check");
-    Integer exactCount = integerValue(rule.get("exact"));
-    Integer minCount = integerValue(firstNonNull(rule.get(KEY_MIN), rule.get("minimum")));
-    Integer maxCount = integerValue(firstNonNull(rule.get(KEY_MAX), rule.get("maximum")));
     if (exactCount != null && actualCount != exactCount) {
+      Map<String, Object> details = new LinkedHashMap<>();
+      details.put("expected", exactCount);
+      details.put(KEY_ACTUAL, actualCount);
+      if (fromManifest) {
+        details.put("source", "manifest");
+      }
       datasetIssues.add(
           new ValidationIssue(
               null,
               "IMPORT_VALIDATE_ROW_COUNT",
-              "row count mismatch, expected=" + exactCount + MSG_ACTUAL_SUFFIX + actualCount,
-              Map.of("expected", exactCount, KEY_ACTUAL, actualCount)));
+              "row count mismatch, expected="
+                  + exactCount
+                  + (fromManifest ? " (manifest)" : "")
+                  + MSG_ACTUAL_SUFFIX
+                  + actualCount,
+              Map.copyOf(details)));
       return;
     }
     if (minCount != null && actualCount < minCount) {

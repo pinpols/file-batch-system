@@ -9,6 +9,7 @@ import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -177,6 +178,53 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     TriggerRuntimeStateEntity advanced = mapper.selectByJobDefinitionId(jobDefId);
     assertThat(advanced.getMisfireCount()).isEqualTo(1);
     assertThat(advanced.getLastFireStatus()).isEqualTo("MISFIRE_CATCH_UP");
+  }
+
+  @Test
+  void deferForReadinessSetsDeferredSinceAndRechecksWithoutAdvancingCron() {
+    // ADR-043:上游未就绪 defer —— 写 readiness_deferred_since(原始触发时刻)+ 重检时钟 + 释放 marker,
+    // last_fire_status=WAITING_READINESS;misfire_count 不动。
+    Instant origin = BatchDateTimeSupport.utcNow().plusSeconds(30);
+    insertWithFireTime(origin);
+    TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
+    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+
+    Instant recheckAt = BatchDateTimeSupport.utcNow().plusSeconds(30);
+    int rows = mapper.deferForReadiness(loaded.getId(), recheckAt, origin);
+    assertThat(rows).isEqualTo(1);
+
+    TriggerRuntimeStateEntity deferred = mapper.selectByJobDefinitionId(jobDefId);
+    assertThat(deferred.getReadinessDeferredSince()).isEqualTo(origin);
+    assertThat(deferred.getNextFireTime()).isEqualTo(recheckAt);
+    assertThat(deferred.getLastFireStatus()).isEqualTo("WAITING_READINESS");
+    assertThat(deferred.getScheduledFireMarker()).isNull();
+    assertThat(deferred.getMisfireCount()).isZero();
+  }
+
+  @Test
+  void advanceAfterFireClearsReadinessDeferredSince() {
+    // defer 后就绪 fire(或超窗 give-up)→ advanceAfterFire 必须清回 readiness_deferred_since = null,
+    // 否则下次会被误当成"仍在 defer"而绕过 misfire 分流。
+    Instant origin = BatchDateTimeSupport.utcNow().plusSeconds(30);
+    insertWithFireTime(origin);
+    TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
+    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    mapper.deferForReadiness(loaded.getId(), origin.plusSeconds(30), origin);
+    assertThat(mapper.selectByJobDefinitionId(jobDefId).getReadinessDeferredSince()).isNotNull();
+
+    Instant nextNext = origin.plus(Duration.ofMinutes(60));
+    mapper.advanceAfterFire(
+        loaded.getId(),
+        nextNext,
+        origin,
+        "FIRED",
+        0,
+        "Asia/Shanghai",
+        nextNext.atZone(ZoneId.of("Asia/Shanghai")).toLocalDate(),
+        nextNext.atZone(ZoneId.of("Asia/Shanghai")).toLocalTime(),
+        1);
+
+    assertThat(mapper.selectByJobDefinitionId(jobDefId).getReadinessDeferredSince()).isNull();
   }
 
   @Test
