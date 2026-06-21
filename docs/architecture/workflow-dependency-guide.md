@@ -148,7 +148,7 @@ INSERT INTO batch.workflow_edge ... VALUES
   (..., 'JOIN_GATE', 'JOB_D', 'ALWAYS', true);
 ```
 
-> **小坑**：GATEWAY 节点不配 `joinMode` 时 `DefaultWorkflowDagService` 默认按 `ALL` 处理（保守，等齐所有上游）。所以"全部成功"其实可以省略 `node_params`，但**显式写出来更可读**。
+> **小问题**：GATEWAY 节点不配 `joinMode` 时 `DefaultWorkflowDagService` 默认按 `ALL` 处理（保守，等齐所有上游）。所以"全部成功"其实可以省略 `node_params`，但**显式写出来更可读**。
 
 ### 3.3 多上游 N 个成功 — 3 个里 2 个就触发
 
@@ -318,7 +318,7 @@ return switch (joinRule.joinMode()) {
 
 ## 9. 一些常见配错检查表
 
-跑前过一遍这几条能少踩坑：
+跑前过一遍这几条能少遇到问题：
 
 - [ ] **每个 GATEWAY 节点都显式写 `joinMode`**——别让默认值 ALL 把"任一即触发"的意图悄悄改了语义
 - [ ] **`joinMode=N_OF` 必须带 `joinThreshold`**，且 `0 < threshold ≤ 入度`
@@ -394,7 +394,7 @@ ADR-009 引入受限 JSONPath 子集做这种显式引用。
 
 - [`system-flow-overview.md`](./system-flow-overview.md) — 系统总流程，看 workflow 在整体架构中的位置
 - [`core-model.md`](./core-model.md) — workflow_run / workflow_node_run 等运行态实体
-- [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) — TC_WF_RISK_PIPELINE 的真实跑通过程（含 sourcePayload 继承的坑、`buildChildLaunchRequest` 怎么把 `node_params` 透到子作业）
+- [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) — TC_WF_RISK_PIPELINE 的真实跑通过程（含 sourcePayload 继承的问题、`buildChildLaunchRequest` 怎么把 `node_params` 透到子作业）
 - 源码：
   - `batch-orchestrator/.../service/DefaultWorkflowDagService.java`（DAG 计算 + join 规则）
   - `batch-orchestrator/.../service/WorkflowConditionEvaluator.java`（CONDITION 表达式解析）

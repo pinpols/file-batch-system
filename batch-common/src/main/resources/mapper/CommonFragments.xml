@@ -11,7 +11,7 @@
         </select>
 
     设计取舍:
-    - 不用 PageHelper 类 ThreadLocal 黑魔法,显式 #{pageRequest.*} 比较好调试
+    - 不用 PageHelper 类 ThreadLocal 黑隐式,显式 #{pageRequest.*} 比较好调试
     - 21 个 mapper.xml 原本每个写 5 行 offset bind,改 1 行 include,减少 80+ LOC 重复
     - cursor 分页另起 fragment(ADR-031 阶段 1 落地)
 -->

@@ -25,7 +25,7 @@
 
 ## 怎么定位
 
-1. **确认主库挂了,不是网络抖动**
+1. **确认主库异常退出,不是网络抖动**
    ```bash
    # 在 orchestrator 容器宿主上
    docker compose ps postgres-primary
@@ -125,7 +125,7 @@
 
 ### 方案 C:核武器 — 回滚 + 重建(30+ min)
 
-触发条件:主库数据卷损坏、replica 同步早就断、上一版 PG migration 把 schema 搞坏。
+触发条件:主库数据卷损坏、replica 同步早就断、上一版 PG migration 把 schema 破坏。
 
 1. 停所有服务:`docker compose down`(不带 `-v`,**别清卷**)
 2. 备份现有卷:`docker run --rm -v batch_postgres-primary-data:/data -v $(pwd)/backup:/backup alpine tar czf /backup/pg-primary-$(date +%s).tgz /data`

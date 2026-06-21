@@ -278,7 +278,7 @@ public class PreprocessStep implements ImportStageStep {
   /**
    * 对象拉取前的租户归属校验:payload 携带的 {@code storagePath} 必须逐字命中本租户已登记 file_record (按 {@code tenant_id} +
    * {@code FILE_ID} 加载)的 {@code storage_path}。 这是比"前缀匹配"更强的约束——只放行平台为本文件登记的那一个对象,杜绝跨租户/任意路径读取。
-   * 校验失败抛 {@link ImportPreprocessException},由 execute 的 catch 转优雅失败(非裸抛)。
+   * 校验失败抛 {@link ImportPreprocessException},由 execute 的 catch 转优雅失败(非直接抛出未映射异常)。
    */
   private void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
     Long fileId =
@@ -338,7 +338,7 @@ public class PreprocessStep implements ImportStageStep {
       throw ex;
     } catch (Exception ex) {
       // 对象缺失 / 拉取失败 → 走 PREPROCESS 优雅失败(execute 的 catch 转 ImportStageResult.failure),
-      // 而非裸抛未捕获异常。
+      // 而非直接抛出未映射异常未捕获异常。
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED",
           "failed to load import object from storage (bucket="

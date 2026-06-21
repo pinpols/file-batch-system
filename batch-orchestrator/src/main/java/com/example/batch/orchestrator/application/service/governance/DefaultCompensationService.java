@@ -51,7 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li><b>防重双保险</b>：{@link #assertNoRunningConflict} 先查 RUNNING 计数，DB 还有唯一约束兜底 （{@code
  *       DataIntegrityViolationException} 转为 {@code CONFLICT}），处理并发提交的 TOCTOU。
  *   <li><b>状态必达</b>：handler 抛异常时必须更新命令状态为 FAILED 并写 {@code job_execution_log}， 然后再
- *       rethrow；缺任何一步会让命令停留在 RUNNING 造成"幽灵补偿"。
+ *       rethrow；缺任何一步会让命令停留在 RUNNING 造成"残留补偿"。
  *   <li><b>路由表在构造期构建</b>：{@link #handlersByType} 是不可变 Map，避免分派时 if-chain 并保证 O(1)。
  * </ul>
  */
@@ -112,7 +112,7 @@ public class DefaultCompensationService implements CompensationService {
    *   <li>本 submit() 方法**不再有外层 @Transactional**(纯调度方法)
    *   <li>INSERT 命令行走 {@link #insertCommandInNewTx} REQUIRES_NEW,独立提交 — handler 失败也留住命令行
    *   <li>handler 执行 + SUCCESS 状态/日志走 {@link #executeAndMarkSuccessInOwnTx} 默认 @Transactional —
-   *       handler 抛错就**回滚业务写入**,不留垃圾
+   *       handler 抛错就**回滚业务写入**,不留下无效记录
    *   <li>FAILED 状态/日志走 {@link #markFailedAndLogInNewTx} REQUIRES_NEW — 即使外层业务事务回滚也独立留痕, 且能 unblock
    *       后续补偿提交(避免命令卡 RUNNING)
    * </ul>

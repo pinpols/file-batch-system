@@ -205,7 +205,7 @@
 - `fullscreen` 模式直接 cover layout,但内部 inspector 默认 `min-width: 0` 不约束最小宽,inspector 在 1366 + 长 nodeCode 时挤出。
 - Legend 用 `.dag-legend` chip 行,flex-wrap,可换行。
 - ❌ 全无 `@media`——纯桌面假设。1024 平板下 graph + 320 inspector 直接撑出滚动条。
-- **D-PG-WF-01(P1)** Inspector 宽度未限,长 nodeCode 撑爆;建议 `max-width: 360px; word-break: break-all`。
+- **D-PG-WF-01(P1)** Inspector 宽度未限,长 nodeCode 超过;建议 `max-width: 360px; word-break: break-all`。
 - **D-PG-WF-02(P1)** 工具栏 icon-only 按钮无 aria-label,只用 tooltip——键盘 / SR 用户失明。
 
 ### 8.2 JobInstanceList(`src/views/monitor/JobInstanceList.vue` 406L)

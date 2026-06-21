@@ -101,7 +101,7 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 
 **Python 后续清单(增量 2/3)**:
 
-- [x] 23/24/26/27/29 + 21/22:转硬,真实 `PlatformHttpClient` / 分类断言全绿。
+- [x] 23/24/26/27/29 + 21/22:转硬,真实 `PlatformHttpClient` / 分类断言全部通过。
 - [ ] **25-heartbeat-503-no-backoff**:Python `heartbeat` 复用通用 `with_retry`,对所有 5xx 做指数退避,缺 §C 单次豁免分支。补 per-端点 no-backoff 是独立 production retry 行为变更,超出本增量范围 → 暂 `xfail(strict)`,标后续。
 - [ ] **28-kafka-paused-task-type-drop**:Python `dispatcher.apply_platform_directive` 当前只落 `runtimeState`,未在 `on_message` 按 `pausedTaskTypes` 做 per-message drop(directive 已能解析 paused 集合,但不据此丢消息)→ 暂 `xfail(strict)`,补 drop 后驱动 `on_message` 断言不 claim 即转硬。
 
@@ -121,7 +121,7 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 - [ ] 常量 codegen / loader 从 `sdk-shared-constants.yaml` 取值 + parity 测试
 - [ ] contract runner 跑全部 fixtures 的 `then.expect`,100% 覆盖
 - [ ] `sdk-contract-parity.yml`:加 `paths` + `<lang>-contract` job + 接入 parity-report
-- [ ] BYO guide §4 补该语言的"已知坑"
+- [ ] BYO guide §4 补该语言的"已知问题"
 
 ## 5. 引用
 

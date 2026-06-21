@@ -137,7 +137,7 @@ public class ImportLoadStep implements StepPlugin { ... }
 
 | # | 问题 | 决策 |
 |---|---|---|
-| 1 | 是否做 type-coercion 智能匹配（int ↔ long） | **不做**。type 不匹配就是错；coerce 隐式转换会埋坑 |
+| 1 | 是否做 type-coercion 智能匹配（int ↔ long） | **不做**。type 不匹配就是错；coerce 隐式转换会埋问题 |
 | 2 | reconciler 频率 | daily（半夜跑）；高频意义不大，节假日突发也轮不到 reconciler 救 |
 | 3 | output contract 是否强制 | **不强制**。新写的 step 加，老的不强求；validator 跳过未声明 step 的 V5/V12 |
 | 4 | console UI 一次显示多少错 | 全部展示（无截断）；100+ 错时让用户头疼但不假装"只有 1 个错" |

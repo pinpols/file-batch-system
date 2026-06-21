@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  *
  * <ol>
  *   <li><b>Global</b>（{@code governance.resourceScheduler.globalMaxRunningJobs}）：整个集群的活跃 job 硬上限，
- *       防止洪峰打爆 DB/Kafka。任一轮超限即 block。
+ *       防止洪峰压垮 DB/Kafka。任一轮超限即 block。
  *   <li><b>Tenant</b>：以 {@code TenantQuotaPolicy} 为源。支持 <b>fair-share group</b> 跨租户共享配额 （同 {@code
  *       fairShareGroup} 的 job 总数封顶），再走 {@code maxRunningJobsPerTenant} 基础配额 + {@code burstLimit}
  *       软弹性——通过 {@link QuotaRuntimeStateService} 在 Redis 里管理预留与滑动窗口重置。
@@ -141,7 +141,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
    *   <li>{@code REJECT} → fail-fast，launch 立刻抛 BizException
    *   <li>{@code QUEUE_DEFER} → 维持 V89 之前的隐式行为（{@code waitForCapacity}），partition 留 WAITING
    *   <li>{@code DEGRADE_PRIORITY} → 仍 defer 但 reasonCode 加 {@code _DEGRADED} 后缀， {@code
-   *       DefaultResourceScheduler} 见此后缀会把决策 priority/band 砍到最低， fairnessScore 自然落到 WAITING 队尾
+   *       DefaultResourceScheduler} 见此后缀会把决策 priority/band 降到最低， fairnessScore 自然落到 WAITING 队尾
    * </ul>
    */
   private static ResourceCheck applyStrategy(

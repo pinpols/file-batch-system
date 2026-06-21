@@ -360,7 +360,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   /**
    * 容错解析 JSON:畸形 / 字面量 "null" / 空白 一律返回 null,不抛异常。
    *
-   * <p>调用方按需翻译为 BizException(入参写路径)或当 null 处理(diff 读路径,容忍历史坏数据)。 旧实现裸调 {@code JsonUtils.fromJson}
+   * <p>调用方按需翻译为 BizException(入参写路径)或当 null 处理(diff 读路径,容忍历史坏数据)。 旧实现直接调用 {@code JsonUtils.fromJson}
    * 在畸形 JSON 时抛 {@link IllegalArgumentException}, 穿透 ControllerAdvice 变 500;统一收口在此。
    */
   private static Object safeParseJson(String value) {

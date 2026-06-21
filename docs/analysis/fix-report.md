@@ -2,7 +2,7 @@
 
 > 最近一次大批闭环：2026-04-21（V4 滚动版本，历史 V1-V3 见 [`../archive/analysis/`](../archive/analysis/)）
 > 范围：多租户业务链路打通 + 关联代码 bug 修复
-> 验证基线：所有修复在本地全链路真跑通（真表 / 真数据 / 真出站文件）+ 6 条新增单元测试全绿 + 重启无回退
+> 验证基线：所有修复在本地全链路真跑通（真表 / 真数据 / 真出站文件）+ 6 条新增单元测试全部通过 + 重启无回退
 
 ---
 
@@ -14,7 +14,7 @@
 | 运维/数据源配置 | 1 | 0 | 1 | worker-import JDBC URL 加 stringtype=unspecified |
 | 种子错配 / 表缺失 | 3 | 0 | 3 | biz.transaction/risk_score/risk_alert 建表 + 4 模板补配置 |
 | 噪声止血 | 4 | 0 | 4 | 禁用 4 条永远跑不通的 cron（暂时） |
-| 场景端到端打通 | 3 | 0 | 3 | tb IMPORT / tc IMPORT / tc EXPORT 全绿 |
+| 场景端到端打通 | 3 | 0 | 3 | tb IMPORT / tc IMPORT / tc EXPORT 全部通过 |
 | 能力验证 | 3 | 0 | 0 | RERUN / 多分片 / Dead-letter 回放 |
 | **合计** | **16** | **2** | **11** | |
 
@@ -53,7 +53,7 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 
 **根因**：`matchesResourceTag` 只比较 `queue.resourceTag ⟂ worker.resourceTag`，没读 `worker.capabilityTags`。schema 里既给了数组字段，代码却没用上。
 
-**修复**：扩展匹配规则——队列 tag 等于 `worker.resource_tag`（单值）**或**命中 `worker.capability_tags` 数组中任意一项（忽略大小写）均算匹配。畸形 JSON 降级为"不匹配"并 WARN，不让坏数据炸出异常。
+**修复**：扩展匹配规则——队列 tag 等于 `worker.resource_tag`（单值）**或**命中 `worker.capability_tags` 数组中任意一项（忽略大小写）均算匹配。畸形 JSON 降级为"不匹配"并 WARN，不让坏数据触发异常。
 
 新增单元测试 `DefaultWorkerSelectorTest`（6 case）：无 tag / 单值命中 / 数组命中 / 大小写不敏感 / 双侧都不匹配 / 畸形 JSON 不崩。
 
@@ -134,7 +134,7 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 | 能力 | 验证结论 |
 |---|---|
 | **RERUN 触发语义**（V62 新加） | instance 128：`run_attempt=2 / parent_instance_id=116 / trigger_type=RERUN`，同 dedup_key 未被判重复；唯一键 `(tenant_id, dedup_key, run_attempt)` 三列方案正确工作 |
-| **多分片**（STATIC，`partitionCount=3`） | instance 129：`expected=3 / success=3 / failed=0`；三条 job_partition 并行全绿 |
+| **多分片**（STATIC，`partitionCount=3`） | instance 129：`expected=3 / success=3 / failed=0`；三条 job_partition 并行全部通过 |
 | **Dead-letter 回放**（含审批流） | DL#111 → `/dead-letters/replay` 生成 approval `apr-...` PENDING → `/approvals/{no}/approve` 执行 → `dead_letter_task.replay_status: NEW → SUCCESS`，触发 compensation `cmp-...` |
 
 ---

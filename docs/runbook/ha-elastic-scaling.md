@@ -91,7 +91,7 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 - 自建 Sentinel（≥3 节点）
 - 自建 Redis Cluster（≥6 节点）
 
-> **trigger 不依赖 Redis 锁**：trigger 模块的协调走 PG —— Quartz JobStore 用 `QRTZ_LOCKS`（`SELECT ... FOR UPDATE`），8 处辅助调度（reconciler / forward-retry / cutoff / wheel.* 等）用 ShedLock JDBC（`batch.shedlock` 表）。Redis 故障**不影响** trigger 的集群协调；但会让 orchestrator 的 ShedLock 阻塞 / 退化（archive 调度器在 Redis 恢复前不会 acquire 锁，但因 `lockAtMostFor` 过期机制不会卡死）。
+> **trigger 不依赖 Redis 锁**：trigger 模块的协调走 PG —— Quartz JobStore 用 `QRTZ_LOCKS`（`SELECT ... FOR UPDATE`），8 处辅助调度（reconciler / forward-retry / cutoff / wheel.* 等）用 ShedLock JDBC（`batch.shedlock` 表）。Redis 故障**不影响** trigger 的集群协调；但会让 orchestrator 的 ShedLock 阻塞 / 退化（archive 调度器在 Redis 恢复前不会 acquire 锁，但因 `lockAtMostFor` 过期机制不会长期停滞）。
 
 ### 2. Helm chart `terminationGracePeriodSeconds` ✅（已落地）
 `_helpers.tpl` 提供 `gracefulShutdownPod` / `gracefulShutdownLifecycle` helper，

@@ -174,14 +174,14 @@ _force_kill_names() {
   for n in "$@"; do
     while read -r pid; do
       [[ -z "$pid" ]] && continue
-      echo "  force kill pid=$pid ($n)"
+      echo "  force terminate pid=$pid ($n)"
       kill -9 "$pid" 2>/dev/null || true
     done < <(_pids_cmd_contains "build/runtime-jars/${n}.jar")
     abs_jar="${RUNTIME_JAR_DIR}/${n}.jar"
     if [[ -f "$abs_jar" ]]; then
       while read -r pid; do
         [[ -z "$pid" ]] && continue
-        echo "  force kill pid=$pid ($n abs)"
+        echo "  force terminate pid=$pid ($n abs)"
         kill -9 "$pid" 2>/dev/null || true
       done < <(_pids_cmd_contains "$abs_jar")
     fi
@@ -189,7 +189,7 @@ _force_kill_names() {
     [[ -n "$mod" ]] || continue
     while read -r pid; do
       [[ -z "$pid" ]] && continue
-      echo "  force kill pid=$pid ($mod target)"
+      echo "  force terminate pid=$pid ($mod target)"
       kill -9 "$pid" 2>/dev/null || true
     done < <(_pids_cmd_contains "/${mod}/target/")
   done

@@ -71,7 +71,7 @@ class ImportPreprocessPipelineRsaTest {
   @Test
   void shouldFailVerification_whenPayloadTampered() {
     byte[] tamperedPayload =
-        "customerNo,customerName\nC001,Eve (hacker)\n".getBytes(StandardCharsets.UTF_8);
+        "customerNo,customerName\nC001,Eve Test\n".getBytes(StandardCharsets.UTF_8);
 
     Map<String, Object> step =
         Map.of(

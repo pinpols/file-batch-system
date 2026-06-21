@@ -602,7 +602,7 @@
 
         <!--
           SpotBugs Profile:静态 NPE/null-pointer 缺陷分析。
-          启用方式(手动,不绑 verify 避免空 target/classes 炸):
+          启用方式(手动,不绑 verify 避免空 target/classes 失败):
               mvn -P spotbugs com.github.spotbugs:spotbugs-maven-plugin:spotbugs
           失败策略:failOnError=false — baseline 期只产报告,Q3 治理完成后切 true 形成硬门。
           产物:每模块 target/spotbugsXml.xml + spotbugs.html。

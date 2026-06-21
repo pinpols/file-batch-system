@@ -1061,8 +1061,8 @@ worker 离线
 | workerType 路由 | import/export/dispatch 分开 |
 | capabilityTags | 按能力标签选择 worker |
 | resourceProfile | 声明 CPU、内存、IO、并发需求 |
-| 队列限流 | 防止瞬间打爆 worker |
-| 外部系统限流 | 防止打爆数据库、SFTP、API |
+| 队列限流 | 防止瞬时流量压垮 worker |
+| 外部系统限流 | 防止压垮数据库、SFTP、API |
 | 同作业并发限制 | 同一个 job 同时最多几个实例 |
 | 同租户并发限制 | 防止某个租户占满资源 |
 | 优先级 | 日终核心链路优先 |

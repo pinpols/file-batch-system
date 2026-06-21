@@ -164,7 +164,7 @@ public class WheelTriggerReconciler {
         stateMapper.deleteByJobDefinitionId(state.getJobDefinitionId());
         // P1: trigger 被禁用 / 删除 → 同步释放 warnedInvalidCron 里 (tenantId, jobCode)
         // 条目;否则该坏 cron 的"已警告过"标记会永驻进程,trigger 重建用同 jobCode + 同坏
-        // cron 时反而被静默吞掉首次 WARN。
+        // cron 时反而被静默捕获并抑制首次 WARN。
         warnedInvalidCron.remove(state.getTenantId() + ":" + state.getJobCode());
         deleted++;
         log.info(

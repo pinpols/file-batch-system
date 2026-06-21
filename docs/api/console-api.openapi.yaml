@@ -3193,9 +3193,9 @@ paths:
   /api/console/admin/test-data/by-ids:
     delete:
       tags: [Admin]
-      summary: Cleanup tenants by exact ID list (补刀 prefix 模式无法清纯短名残留)
+      summary: Cleanup tenants by exact ID list (补充处理 prefix 模式无法清纯短名残留)
       description: |
-        按精确 tenantId 列表级联清理,补刀 `/api/console/admin/test-data?prefix=` 无法清纯短名
+        按精确 tenantId 列表级联清理,补充处理 `/api/console/admin/test-data?prefix=` 无法清纯短名
         ID(如历史残留 `tx` / `td`,因 prefix 模式强制 `prefix-%` 后缀匹配)。
 
         **白名单保护**(任何场景拒删):`system` / `default` / `default-tenant` / `ta` / `tb` / `tc`。

@@ -56,7 +56,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkflowDagValidator {
 
-  /** 节点数硬上限,防恶意大输入打爆 BFS。MVP 量级,后续可调。 */
+  /** 节点数硬上限,防恶意大输入耗尽 BFS 遍历资源。MVP 量级,后续可调。 */
   public static final int MAX_NODES = 200;
 
   private final PipelineDefinitionMapper pipelineDefinitionMapper;

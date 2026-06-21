@@ -392,7 +392,7 @@ class DefaultTaskExecutionWrapperTest {
                     DefaultTaskExecutionWrapper.CANCELLED_ERROR_CODE.equals(report.getCode())));
   }
 
-  /** P0-1: clamp — task 配 timeout 超过 maxTimeoutSeconds 必须截断, 防呆配置错误把 worker 卡死 2 小时以上. */
+  /** P0-1: clamp — task 配 timeout 超过 maxTimeoutSeconds 必须截断, 防呆配置错误把 worker 长期停滞 2 小时以上. */
   @Test
   void shouldClampTimeoutToMax() {
     PulledTask task = sampleTask("1011", "t1", "w1");

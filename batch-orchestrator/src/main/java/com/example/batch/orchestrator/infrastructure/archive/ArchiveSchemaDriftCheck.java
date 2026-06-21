@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * <p><b>背景</b>:V71 用 {@code LIKE batch.<x> INCLUDING ALL} 一次性复制热表结构到 {@code
  * archive.<x>_archive}。后续给热表加列(V72/V73...),冷表不会自动同步。当 {@code OutboxArchiveService.archive()} /
  * {@code SuccessInstanceArchiveService.archive()} 走 {@code INSERT ... SELECT *} 路径时,列数不一致会让 INSERT
- * 失败,archive scheduler 整个挂掉, 热表归档停止 → 单表无限增长(比 archive 不存在更危险)。
+ * 失败,archive scheduler 整个异常退出, 热表归档停止 → 单表无限增长(比 archive 不存在更危险)。
  *
  * <p><b>守护逻辑</b>:启动期 {@link ApplicationReadyEvent} 触发,对比 14 张归档对照表的 column 集合。差异即 throw →
  * orchestrator 启动失败,强制开发者下次 ALTER 热表前同步 给 archive 加 migration。

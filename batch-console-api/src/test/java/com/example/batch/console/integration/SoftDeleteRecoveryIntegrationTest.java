@@ -15,14 +15,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * V145/V146 软删除复活语义的 SQL 行为合同测试 — 不走 controller 路径,直接 JdbcTemplate 验证 schema + mapper.xml
  * 的关键不变量,任何回归(如 V146 后续 migration 撤掉 upsert 复活、 mapper.xml 删了 is_deleted=false 复位、UNIQUE 约束改
- * partial 形成幽灵双行等)立刻挂测。
+ * partial 形成重复逻辑行等)立刻挂测。
  *
  * <p>覆盖 5 张配置表的关键不变量:
  *
  * <ul>
  *   <li>软删除 = UPDATE is_deleted=true(非物理 DELETE),原行 id 保留
  *   <li>列表查询默认 is_deleted=false 过滤,软删行不可见
- *   <li>upsert(ON CONFLICT)同 code 撞 UNIQUE 时复活 is_deleted=false,同一 id 不产生幽灵双行
+ *   <li>upsert(ON CONFLICT)同 code 撞 UNIQUE 时复活 is_deleted=false,同一 id 不产生重复逻辑行
  *   <li>update / toggleEnabled 带 is_deleted=false guard,已删除行无法被改回 enabled=true
  * </ul>
  */
@@ -38,7 +38,7 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   @AfterEach
   void cleanup() {
-    // 每个 case 收尾物理删除(本测试自己的脏数据 — 真实生产路径只软删)
+    // 每个 case 收尾物理删除(本测试自己的异常数据 — 真实生产路径只软删)
     jdbc.update("DELETE FROM batch.file_channel_config WHERE tenant_id = ?", TENANT);
     jdbc.update("DELETE FROM batch.notification_channel WHERE tenant_id = ?", TENANT);
     jdbc.update("DELETE FROM batch.alert_routing_config WHERE tenant_id = ?", TENANT);
@@ -87,7 +87,7 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + "  updated_at = current_timestamp",
         TENANT);
 
-    // 5) id 保留(同一逻辑实体不产生幽灵双行)+ 字段被新值覆盖 + is_deleted 复位
+    // 5) id 保留(同一逻辑实体不产生重复逻辑行)+ 字段被新值覆盖 + is_deleted 复位
     Map<String, Object> row =
         jdbc.queryForMap(
             "SELECT id, channel_name, channel_type, is_deleted FROM batch.file_channel_config "

@@ -112,7 +112,7 @@ class DefaultHeartbeatServiceTest {
     ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
     verify(registrationService, times(1)).renew(captor.capture());
     assertThat(captor.getValue().getCurrentLoad())
-        .as("LoadProvider 异常应被静默吞掉,currentLoad 兜底 0")
+        .as("LoadProvider 异常应被静默捕获并抑制,currentLoad 兜底 0")
         .isZero();
   }
 

@@ -63,7 +63,7 @@
   - `job_instance.lease_owner` 不残留死连接锁
 
 ## 验收标准
-- [ ] `mvn verify -pl batch-common,batch-orchestrator -Dit.test='*ToxicIT'` 三个 IT 全绿
+- [ ] `mvn verify -pl batch-common,batch-orchestrator -Dit.test='*ToxicIT'` 三个 IT 全部通过
 - [ ] CI `full-ci-gate` 跑通(不进 pr-gate,Toxiproxy 起容器较慢)
 - [ ] 每个 IT 写 `@DisplayName` 中文 + 故障注入意图说明
 - [ ] `chaos/README.md` 补"如何写新 Toxic IT"指引
@@ -77,5 +77,5 @@
 | 里程碑 | 产出 |
 |---|---|
 | M1 | `AbstractChaosIntegrationTest` 基类 + 1 个 hello-world IT 跑通 |
-| M2 | 3 个示范 IT 全绿 |
+| M2 | 3 个示范 IT 全部通过 |
 | M3 | CI 接入 + README 文档化 |

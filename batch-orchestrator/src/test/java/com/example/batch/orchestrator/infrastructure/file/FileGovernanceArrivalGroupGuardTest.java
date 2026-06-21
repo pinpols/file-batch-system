@@ -24,7 +24,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 /**
- * 2026-05-01 噪声治理:验证 FileGovernanceScheduler 三处死循环防御:
+ * 2026-05-01 噪声治理:验证 FileGovernanceScheduler 三处无限循环防御:
  *
  * <ol>
  *   <li>SQL 排除 {@code WAITING_MANUAL_CONFIRM} 已在 mapper 改,本类不覆盖

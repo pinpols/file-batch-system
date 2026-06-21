@@ -4,7 +4,7 @@
 >
 > 方法:逐文件读 + 跨文件交叉印证(状态转换 / 事务边界 / 幂等键 / CAS / 锁顺序 / 边界异常),不跑测试,纯静态审计。
 >
-> 输出:findings 按 P0/P1/P2/P3 分级,P0=可导致生产数据错乱或状态机卡死的硬伤,P1=运维补救路径缺失/降级,P2=细粒度退化或潜在 race,P3=可读性/工程一致性。
+> 输出:findings 按 P0/P1/P2/P3 分级,P0=可导致生产数据错乱或状态机长期停滞的硬伤,P1=运维补救路径缺失/降级,P2=细粒度退化或潜在 race,P3=可读性/工程一致性。
 
 ## 0. 扫描覆盖度
 
@@ -75,7 +75,7 @@
 - 建议:
   - 短期:把 `batch.alert.events` Micrometer counter 接到外部 alert manager(Prometheus / Grafana alerting);
   - 中期:补 `alert_route` 表 + 简易订阅(tenant / alertType / severity → webhook URL),DefaultAlertEventService.emit 末尾异步分发;
-  - 静默和升级延后,先把"看不到告警"这个核心缺口堵上。
+  - 静默和升级延后,先把"看不到告警"这个核心缺口修复。
 
 ---
 
@@ -139,7 +139,7 @@
 
 - 文件:`SensorStateMachine.java:235-281`
 - 现象:WAIT 节点 finishFailure 后 advanceDownstream 走 `success=false` 的 resolveNextNodes,FAILURE 边走分支,但**不调 `cascadeSkipDownstream`**(注释里说"失败路径 + cascadeSkipDownstream 不在本类范围,由 WorkflowDagService 在下次 worker 回报时自然推进")。
-- 影响:WAIT 是叶子节点经常用作 join 上游,如果整 workflow 后面没有再有 worker 回报来触发 outcome 链路,cascadeSkip 永远不跑 → SKIPPED 不会被正确级联,可能漏掉一些 ALL-mode join 下游卡死。当前任务描述说"FAIL_NODE / cascade-skip"是关心点,这里是显式缺口。
+- 影响:WAIT 是叶子节点经常用作 join 上游,如果整 workflow 后面没有再有 worker 回报来触发 outcome 链路,cascadeSkip 永远不跑 → SKIPPED 不会被正确级联,可能漏掉一些 ALL-mode join 下游长期停滞。当前任务描述说"FAIL_NODE / cascade-skip"是关心点,这里是显式缺口。
 - 建议:`finishFailure` 末尾对当前节点显式调 `workflowDagService.cascadeSkipDownstream`(就像 `DefaultTaskOutcomeService.advanceDagNodes:680` 一样),保持失败语义一致。
 
 ### P2-3 `BatchDayGateService.evaluateAndApply` CATCH_UP / RERUN 强制绕过 frozen,但**不检查 day_status=SKIPPED 的回放**
@@ -196,7 +196,7 @@
 - 文件:`ApprovalController.java`
 - 建议:迁到 `controller/request/` 与项目其它 controller 一致(`AlertEmitRequest` / `TaskLeaseRenewBatchRequest` 都已外移)。
 
-### P3-5 `BatchDayReplayDispatcher` 注释里宣称 "ENTRY_BATCH_SIZE 双控防止打爆",但**没有 metric 反映实际 throughput**
+### P3-5 `BatchDayReplayDispatcher` 注释里宣称 "ENTRY_BATCH_SIZE 双控防止压垮",但**没有 metric 反映实际 throughput**
 
 - 建议:加 `batch.replay.dispatch.entries_total` Counter,运维能看到 backlog。
 
@@ -235,7 +235,7 @@
 | 等级 | 编号 | 简述 | 修复成本 | 业务影响 |
 |---|---|---|---|---|
 | P0 | P0-1 | ApprovalType enum 与代码硬编码漂移 | S(加 enum + 守护) | 中(FE 字典 + 静态守护) |
-| P0 | P0-2 | Replay reconciler 同 jobCode 多 entry 错回填 | S(加 mapper + 改 find) | 高(session 卡死) |
+| P0 | P0-2 | Replay reconciler 同 jobCode 多 entry 错回填 | S(加 mapper + 改 find) | 高(session 长期停滞) |
 | P0 | P0-3 | Alert 子系统无 routing/notification | M(加 route 表 + 异步分发) | 高(生产告警瞎子) |
 | P1 | P1-1 | dead-letter replay 缺 audit + operatorId | S | 中 |
 | P1 | P1-2 | workflow skipNode 缺 audit + alert | S | 中 |
@@ -412,7 +412,7 @@ Orchestrator:
 
 ## 10. 复核建议(下一轮 scan)
 
-- **架构级缺口扫描**(对标 memory `feedback_audit_vs_architecture_review`):本次扫到的 P0-3(告警 routing 缺失)就是典型架构级缺口,全绿的状态机审计掩盖了运维体感的真实缺位。下轮建议:
+- **架构级缺口扫描**(对标 memory `feedback_audit_vs_architecture_review`):本次扫到的 P0-3(告警 routing 缺失)就是典型架构级缺口,全部通过的状态机审计掩盖了运维体感的真实缺位。下轮建议:
   - 明确"运维告警"威胁模型,列必须能 reach 人的 channel,反推系统侧缺什么;
   - 把 RLS / 多租隔离的"实施一致性"重审一次(MultiTenantIsolationIntegrationTest 守护够不够);
   - `@AuditAction` 注解模式:本仓只有零散的 `appendAuditLog` 方法,缺统一切面;若引入注解切面可一并扫所有运维端点。

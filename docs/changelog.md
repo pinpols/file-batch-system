@@ -102,10 +102,10 @@
     - 409 Conflict = 瞬时并发冲突（乐观锁 / 唯一键 / 幂等撞键）→ FORWARD_FAILED（trigger-retry-scheduler 自动下次 tick 再试），不抛。
     - 404 / 其他 4xx 行为不变。
   - **`AbstractApiExceptionHandler` 新增 2 个 handler**：`OptimisticLockingFailureException` / `DuplicateKeyException` 统一映射为 409 CONFLICT + WARN（而不是落到通用 `Exception` handler 打 ERROR + 500）。所有模块（trigger/orchestrator/console）的 ApiExceptionHandler 一次受益，因为它们都继承这个基类。
-  - **`RedisShedLockProvider.lock` 捕获 `DataAccessException`**：Redis 瞬时故障（`QueryTimeoutException` / 连接拒绝 / 节点切主）时 `return Optional.empty()`（视为没拿到锁），下 tick 自然重试，不再冒泡到 Spring scheduler 打 ERROR。`unlock` 同理吞掉（key TTL 自动释放）。
+  - **`RedisShedLockProvider.lock` 捕获 `DataAccessException`**：Redis 瞬时故障（`QueryTimeoutException` / 连接拒绝 / 节点切主）时 `return Optional.empty()`（视为没拿到锁），下 tick 自然重试，不再冒泡到 Spring scheduler 打 ERROR。`unlock` 同理捕获并抑制（key TTL 自动释放）。
   - **`DefaultStateMachine` 自回边 NOOP 降 DEBUG**：`case "START", "CLAIM", ..., "RUNNING" -> "RUNNING"` 把 RUNNING 加进合法事件；TERMINATE/CANCEL 补 TERMINATED/CANCELLED；WAITING/CREATED/PENDING/NOOP 合并为 noop；default 分支判断 `event.equalsIgnoreCase(fromState)` → 幂等重复事件 DEBUG，其他真未知事件（如 `SUCESS` 拼错）保留 WARN。
   - **`RemoteFilesystemDispatchSupport` NAS symlink WARN 首次抑制**：加 `ConcurrentHashMap<String, Boolean> NAS_SYMLINK_WARNED`，同一 configured path 只报一次；macOS 本地 `/tmp → /private/tmp` 这种恒定 symlink 不再每次 dispatch 都刷一条。
-- **脏数据排查：孤儿 job_definition 通用清理**：最初发现 `default-tenant/gen_data_cleanup` 的 `worker_group=GENERAL` 在系统里没有任何 `ONLINE/DRAINING` worker 匹配（只有 IMPORT/EXPORT/DISPATCH 三组），导致 `WaitingPartitionDispatchScheduler` 每 10s 选一次 → `DefaultWorkerSelector` WARN `no_online_workers_in_group`（累计 1073 条）。进一步调研发现同类孤儿还有 `gen_archive_purge` / `gen_index_rebuild`，以及 6 条长期 CREATED 卡住的 job_instance（launch 中断残留）。
+- **异常数据排查：孤儿 job_definition 通用清理**：最初发现 `default-tenant/gen_data_cleanup` 的 `worker_group=GENERAL` 在系统里没有任何 `ONLINE/DRAINING` worker 匹配（只有 IMPORT/EXPORT/DISPATCH 三组），导致 `WaitingPartitionDispatchScheduler` 每 10s 选一次 → `DefaultWorkerSelector` WARN `no_online_workers_in_group`（累计 1073 条）。进一步调研发现同类孤儿还有 `gen_archive_purge` / `gen_index_rebuild`，以及 6 条长期 CREATED 卡住的 job_instance（launch 中断残留）。
   - `scripts/db/cleanup-orphan-general-job.sql` 重写为**通用脚本**（不再硬编码 `gen_data_cleanup`）：PART A 只读诊断（4 个 SELECT 列出将被改的范围），PART B 写事务（4 条 UPDATE 级联 CANCEL partition → instance → disable definition → 附带清 stale CREATED），PART C 事后验证。判定逻辑：`enabled=true AND worker_group <> '' AND worker_group NOT IN (online worker_groups)`；**WORKFLOW 类型的 `worker_group=''` 合法**（workflow 本身不挂 worker，节点才分），脚本已排除。
   - 脚本幂等：`UPDATE ... WHERE status IN (active states)` 只改当前活跃行，重复跑无副作用。
   - 执行记录（2026-04-24 14:01）：B-1 CANCEL 2 partition / B-2 CANCEL 3 instance / B-3 禁用 3 definition / B-4 CANCEL 5 stale CREATED；事后 orchestrator `waiting dispatch tick` INFO 立即静默（下沉到 `log.debug("no WAITING partitions this tick")` 分支）。
@@ -129,9 +129,9 @@
 - **前端整合式 Excel 补齐 default-tenant 样本**：v4 硬化批次在 `multi-tenant-seed.sql` 给 `default-tenant` 新增了 4 条本地化 dispatch channel_config + 3 条探针 workflow（`wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed`）+ 对应 job_definition，但 `test-full-coverage-import-suite/` 只有 ta/tb/tc 的 `*-tenant-config-package-test.xlsx`，前端 `/api/console/config/tenant-package/excel/*` 入口无法一键重放这批 seed。
   - 新增 `docs/test-data/test-full-coverage-import-suite/default-tenant-config-package-test.xlsx`（用生成脚本 `scripts/local/gen-default-tenant-excel.py` 产出，整合式 8 sheet 结构，按需修改脚本重生）。
   - 更新同目录 `README.md`：声明四个租户样本的用途、生成脚本指针、以及已知 gap——整合式 Excel 暂不含 `file_template_config` sheet，因此 tb/tc 本轮新增的 `IMP-TXN-FIXED` / `IMP-TXN-XML` / `IMP-TRANSACTION-CSV.jdbcMappedImport` / `IMP-RISK-SCORE-JSON.jdbcMappedImport` / `EXP-RISK-ALERT-JSON.sqlTemplateExport` 目前仅落地 seed SQL，等后续整合式 Excel 增加该 sheet 后再同步。
-- **`capability_tags` 数据质量审计调度器**（审计发现的唯一"脏数据妥协"兜底）：`DefaultWorkerSelector.capabilityTagsContain` 为防畸形 JSON 拖垮 selector，catch 后返回 false（WARN 一条即过）——数据源头可能长期无人发现。新增 `WorkerCapabilityTagsAuditScheduler` 默认每 5 min（`batch.worker.audit.capability-tags-scan-interval-millis`）扫描 ONLINE/DRAINING worker：
+- **`capability_tags` 数据质量审计调度器**（审计发现的唯一"异常数据妥协"兜底）：`DefaultWorkerSelector.capabilityTagsContain` 为防畸形 JSON 拖垮 selector，catch 后返回 false（WARN 一条即过）——数据源头可能长期无人发现。新增 `WorkerCapabilityTagsAuditScheduler` 默认每 5 min（`batch.worker.audit.capability-tags-scan-interval-millis`）扫描 ONLINE/DRAINING worker：
   - DB 侧 `WorkerRegistryMapper.selectInvalidCapabilityTags` 用 `jsonb_typeof(capability_tags) <> 'array'` + 含非字符串元素过滤，O(activeWorkers) 扫表。
-  - App 侧用 `JsonNode` 而非 `String[].class` 做二次严格校验——Jackson 默认会把 `[1,2]` 这种数值元素静默强转成字符串（这恰恰是要审计的脏数据），必须按元素 `isTextual()` 判定才能暴露。
+  - App 侧用 `JsonNode` 而非 `String[].class` 做二次严格校验——Jackson 默认会把 `[1,2]` 这种数值元素静默强转成字符串（这恰恰是要审计的异常数据），必须按元素 `isTextual()` 判定才能暴露。
   - 命中时 WARN 日志（采样前 10 条，`capability-tags-log-sample-limit` 可覆盖）+ `batch.worker.capability_tags.invalid.count` gauge，Grafana 可设"> 0 持续 2 周期"告警。
   - ShedLock(`worker_capability_tags_audit`, PT2M)；`OrchestratorGracefulShutdown.isDraining()` 时跳过。
   - 新增 `InvalidCapabilityTagsRecord` DTO（tenant/code/raw）+ `WorkerCapabilityTagsAuditSchedulerTest` 7 case（draining/empty/对象/标量/含数值数组/合法数组/mixed/null-blank）。
@@ -147,16 +147,16 @@
     - `mergeNodeParams`：把当前 `workflow_node.node_params`（用户在设计器配的 `templateCode` / `channelCode` 等静态字段）合并进下游 task payload。
     - `mergeUpstreamPartitionOutputs`：扫描同一 job_instance 下已 SUCCESS 的兄弟分区 `output_summary`，按保守白名单（`fileId / fileCode / batchNo / recordCount / bizDate`）抽取后塞进 payload；SETTLE 生成的文件自动流向 DISPATCH 节点。
     验证：触发 `wf_eod_process` 后观察 SETTLE 分区的 `task_payload`，5 个 node_params 字段（`step / batchNo / bizType / fileCode / templateCode`）正确注入，与 `sourcePayload` 字段共存。
-    跟进：经查 `WaitingPartitionDispatchScheduler` 本身没 bug。早先误判「不 release」的根因是 worker 进程在长时间运行中挂掉、心跳超时被 `WorkerHeartbeatTimeoutScheduler` 打 OFFLINE，selector 自然 `candidates=0 / no_online_workers_in_group` 静默重试。重启 workers 后 WAITING partition 立即释放。顺手给该 scheduler 加了 `waiting dispatch tick` 和 `skip partitionId=... reason=...` 两级 INFO 日志，今后此类卡死一目了然。
+    跟进：经查 `WaitingPartitionDispatchScheduler` 本身没 bug。早先误判「不 release」的根因是 worker 进程在长时间运行中异常退出、心跳超时被 `WorkerHeartbeatTimeoutScheduler` 打 OFFLINE，selector 自然 `candidates=0 / no_online_workers_in_group` 静默重试。重启 workers 后 WAITING partition 立即释放。顺手给该 scheduler 加了 `waiting dispatch tick` 和 `skip partitionId=... reason=...` 两级 INFO 日志，今后此类长期停滞一目了然。
 - **Workflow→worker step executor 协议错位修复**（上段副发现的根因落地）：`STEP_NOT_FOUND: DISPATCH_PREPARE` 不是 worker 把 payload.steps 当执行链解读的问题，而是 worker 拿 `request.jobCode()`（= workflow 自己的 `wf_eod_process`）去查 `pipeline_definition` → 命中的是跨 worker 的复合 pipeline（混着 EXPORT_* 和 DISPATCH_* 两类 impl_code）→ EXPORT worker 在 DISPATCH_PREPARE 上自然报错。三处修法一起上：
   - `AbstractPipelineStepExecutionAdapter.resolveJobCode` 优先读 task payload JSON 的 `targetJobCode`（orchestrator 派发 workflow TASK 节点时已经写入），确保 worker 加载本域独立 pipeline（`exp_settlement_daily` / `disp_sftp_bank` 这种纯 EXPORT / DISPATCH 的 pipeline，而不是 `wf_eod_process` 的复合 pipeline）。
   - `DefaultWorkflowNodeDispatchService.mergeUpstreamPartitionOutputs` 加两级兜底查 fileId：先按 `jobInstance.traceId` 查 `file_record.trace_id`（本轮产出的文件），没有时再按 `batchNo → file_record.source_ref` 查（按业务键幂等复用的文件，如 `settlement-2026-04-22`）；抽到后注入下游 payload。DISPATCH 节点从此能看到 SETTLE 上游生成的 fileId。
-  - `WaitingPartitionDispatchScheduler.buildRequest` 优先读 `partition.input_snapshot` 里 sub-job 专用的 `queueCode / windowCode`，否则才回退到 `jobInstance` 的 workflow 级值。避免 DISPATCH partition 按 `workflow_queue.resource_tag=workflow` 去找 DISPATCH worker → capability_tags=[delivery] 永远不匹配的死循环。
+  - `WaitingPartitionDispatchScheduler.buildRequest` 优先读 `partition.input_snapshot` 里 sub-job 专用的 `queueCode / windowCode`，否则才回退到 `jobInstance` 的 workflow 级值。避免 DISPATCH partition 按 `workflow_queue.resource_tag=workflow` 去找 DISPATCH worker → capability_tags=[delivery] 永远不匹配的无限循环。
   - 端到端验证：wf_eod_process（instance 219）的 SETTLE SUCCESS → DISPATCH partition 的 `task_payload` 含 `fileId=470 / channelCode=sftp_bank / targetJobCode=disp_sftp_bank` → DISPATCH worker 加载正确 pipeline 跑到 DISPATCH_SEND 阶段。最后的 `sftp_host missing` 是 channel config 种子数据硬伤，与代码无关。
 - **P2 场景真实数据验证**（除压测）：逐条走通 —— drain enable/disable（orchestrator+trigger 双边，trigger 同步切 Quartz STANDBY/STARTED）、worker drain 生命周期（ONLINE→DRAINING→DECOMMISSIONED）、file archive/redispatch（file 470 `GENERATED→ARCHIVED`）、compensation 独立（`cmp-...afe1e065` JOB type SUCCESS）、LOCAL dispatch 真文件落盘、OSS dispatch 真上传、日历 holiday 插入验证。未覆盖：FIXED_WIDTH/XML（无种子模板）、GATEWAY 节点 + PIPELINE/MIXED 类型 workflow + join 模式（ALL/ANY/ANY_N）（无种子实例）、API/API_PUSH/EMAIL/NAS/SFTP 最后一公里（endpoint 占位或 channel config 种子问题）。
 - **P2 未通过项种子补齐**（沉到 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql` 末尾）：
   - default-tenant 4 条 dispatch channel config 重写：`sftp_bank`→`localhost:12222`（docker SFTP 映射）、`email_ops`→`localhost:1025`（MailHog-ready）、`nas_archive`→`/tmp/batch/nas-probe`、`oss_backup`→`http://localhost:19000`（本地 MinIO），全部对齐 `ChannelConfigMerge` 白名单的 key（sftp_host/smtp_host/oss_bucket/nas_remote_directory 等）。验证：SFTP 真上传到 `/home/ta/inbound/settlement-2026-04-22`；NAS 真写到 `/tmp/batch/nas-probe/settlement-{bizDate}.csv`；LOCAL + OSS 之前已绿。
-  - tb 两条文件格式模板：`IMP-TXN-FIXED`（FIXED_WIDTH，record_length=70，6 定宽字段；2 行真实数据落 `biz.transaction`）+ `IMP-TXN-XML`（XML，`parseHints.xmlRecordElement=txn`；2 行真实数据落 `biz.transaction`）。XML 模板必须把 `xmlRecordElement` 放在 `query_param_schema.parseHints` 下（被 `ParseSupport.parseHints` 取），顶层或 `xml_record_element` 作为后备路径；这条踩坑经验也记在种子注释里。
+  - tb 两条文件格式模板：`IMP-TXN-FIXED`（FIXED_WIDTH，record_length=70，6 定宽字段；2 行真实数据落 `biz.transaction`）+ `IMP-TXN-XML`（XML，`parseHints.xmlRecordElement=txn`；2 行真实数据落 `biz.transaction`）。XML 模板必须把 `xmlRecordElement` 放在 `query_param_schema.parseHints` 下（被 `ParseSupport.parseHints` 取），顶层或 `xml_record_element` 作为后备路径；这条遇到问题经验也记在种子注释里。
   - 两条探针 workflow：`wf_probe_pipeline`（workflow_type=PIPELINE，START→TASK→END）+ `wf_probe_gateway`（DAG，含 GATEWAY fork、并行两 TASK 分支、`joinMode=ANY` 的 MERGE gateway）。验证：instance 239 真走完 START→FORK(GATEWAY→SUCCESS)→BRANCH_A + BRANCH_B 并行派发（`failed_partition_count=2` 证明两条分支都真实执行），PIPELINE 类型 workflow 派发链路同样走通。MIXED 类型未加种子（code 路径支持，样板需另给）。
 - **`ParseSupport.writeParsedRecord` 去硬编码 `CustomerImportPayload`（P1-2 修完）**：`preserveLogicalRow=false` 分支把 row 强转 `CustomerImportPayload` 的代码删除，改为原样 NDJSON 输出。主链路 I/O 形态不变（LoadStep/ValidateStep 本来就按 Map 走），但后续非 customer schema 的 IMPORT 模板即便忘配 `jdbc_mapped_import` 也不会被默默吞字段。`CustomerImportPayload` 类和 LoadStep/DataQuality 的 legacy 重载保留，与硬编码问题无关、等后续统一下线 legacy 路径时再清。同场修掉 `ImportIngressScannerTest` / `GenerateStepTest` 两个旧版构造器调用。
 
@@ -166,7 +166,7 @@
   - 3 个 `@ConfigurationProperties` record（`ImportWorkerConfiguration` / `ExportWorkerConfiguration` / `DispatchWorkerConfiguration`）加 `List<String> capabilityTags` 字段 + `@Override` 把 null 归一成 `List.of()`
   - `WorkerRegistration` domain 加 `List<String> capabilityTags`；`AbstractWorkerLoop.ensureStarted` 把 `cfg.capabilityTags()` 塞进 registration；`HttpWorkerRegistryClient.toHeartbeatDto` 用这个值替代原 `null`
   - 3 个 worker 的 `application-local.yml` 声明具体 tag（import=`[ingest]` / export=`[report, workflow]` / dispatch=`[delivery]`）
-  - 踩坑提示：只改 `batch-worker-core` 源码后，直接 `mvn package` 下游 worker 模块会用本地 m2 缓存的旧 jar 打包。必须先 `mvn -pl batch-worker-core install -DskipTests`，否则下游 jar 里没有新的 setter 调用。
+  - 遇到问题提示：只改 `batch-worker-core` 源码后，直接 `mvn package` 下游 worker 模块会用本地 m2 缓存的旧 jar 打包。必须先 `mvn -pl batch-worker-core install -DskipTests`，否则下游 jar 里没有新的 setter 调用。
   - 恢复 `default-tenant` 2 条 queue 的 `resource_tag`（`export_queue=report` / `workflow_queue=workflow`），之前 V4-P0-1 临时清空的状态回滚为正常。
 - **多租户业务链路验证批次 v4**：详见 `docs/analysis/fix-report-v4.md` / `docs/analysis/hardening-backlog-v4.md`。修了 2 条代码 bug：
   - `TriggerSecurityConfiguration.InternalSecretFilter.setAuthenticated` 用 `AnonymousAuthenticationToken` 被 Spring Security `.authenticated()` 拒绝（trustResolver 判 anonymous）→ 换 `UsernamePasswordAuthenticationToken.authenticated(...)`。原因：`/api/triggers/management/*` 全线 403 / bypass-mode 失效。
@@ -179,7 +179,7 @@
   - ❌ `default-tenant` `export_queue` / `workflow_queue` `resource_tag` 清空、2 条 `job_definition.enabled=false`（TA_DISPATCH_ORDER / gen_reconcile）不入种子 — 属运维临时动作 / 待 P0-2 根治
 
 ### 2026-04-20
-- **脏数据入口治理**：新增 `CodeNormalizer` 工具（batch-common/utils），定义两类归一规则：
+- **异常数据入口治理**：新增 `CodeNormalizer` 工具（batch-common/utils），定义两类归一规则：
   - **分组码**（`worker_group` / `tenant_id`）→ UPPER + `^[A-Z][A-Z0-9_]*$` 校验
   - **配置码**（`window_code` / `calendar_code` / `queue_code`）→ LOWER + `-` 替换为 `_` + `^[a-z0-9][a-z0-9_]*$` 校验
   入口侧在 7 个写路径统一调用 `toUpperOrNull` / `toConfigFormOrNull`（宽松版，供 Excel 预览使用）：

@@ -94,7 +94,7 @@
 - 必须配 `BATCH_CONSOLE_PRIMARY_URL` / `BATCH_CONSOLE_REPLICA_URL` 等 6 项 DB 凭证
 
 **风险**：
-- 从库挂掉 → 🟡 **中 fail-open**：`ReadReplicaRoutingDataSource` 在从库 SQLException 时降级走主库；连续失败 ≥ `failureThreshold`（默认 3）后进入 `quarantineSeconds`（默认 30s）隔离期，期内静默走主库；期满下次请求自动探测，成功即解除。**副作用：主库压力上升**，长期 replica 故障要扩容主库
+- 从库异常退出 → 🟡 **中 fail-open**：`ReadReplicaRoutingDataSource` 在从库 SQLException 时降级走主库；连续失败 ≥ `failureThreshold`（默认 3）后进入 `quarantineSeconds`（默认 30s）隔离期，期内静默走主库；期满下次请求自动探测，成功即解除。**副作用：主库压力上升**，长期 replica 故障要扩容主库
 - 主从延迟 → "提交后立即读"场景会读到旧数据；用 `@RouteToPrimary` 注解强制走主库（`RouteToPrimaryAspect` 已就位）
 - 多从库扩展 → 当前 routing map 硬编码 PRIMARY/REPLICA，多从库需改 `determineCurrentLookupKey` 加轮询
 
@@ -260,7 +260,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 总旁路开关(认证/加解密/审批),**prod profile 强制拒绝**。本地 yml 默认 `true`,但 `.env.local` 的 `BATCH_SECURITY_BYPASS_MODE` 会**覆盖** yml。
 
-> ⚠️ **sim/本地踩坑(2026-06-14)**:`BATCH_SECURITY_BYPASS_MODE=false` 时 CSRF(double-submit cookie)对**所有写请求**生效;sim 的 curl 脚本不带 `X-XSRF-TOKEN` → **全部 403「访问被拒绝」**(租户导入/迁片/上传全挂)。`bypass-mode=true` 时 `BYPASS_MODE_CSRF_IGNORED_MATCHERS={"/**"}` 放行。**跑 sim 必须 `BATCH_SECURITY_BYPASS_MODE=true`**(已纳入 `sim-harness.sh preflight` 检查项)。FE/真实部署走正常 CSRF(axios 回传 XSRF-TOKEN),不受影响。
+> ⚠️ **sim/本地遇到问题(2026-06-14)**:`BATCH_SECURITY_BYPASS_MODE=false` 时 CSRF(double-submit cookie)对**所有写请求**生效;sim 的 curl 脚本不带 `X-XSRF-TOKEN` → **全部 403「访问被拒绝」**(租户导入/迁片/上传全挂)。`bypass-mode=true` 时 `BYPASS_MODE_CSRF_IGNORED_MATCHERS={"/**"}` 放行。**跑 sim 必须 `BATCH_SECURITY_BYPASS_MODE=true`**(已纳入 `sim-harness.sh preflight` 检查项)。FE/真实部署走正常 CSRF(axios 回传 XSRF-TOKEN),不受影响。
 
 ## 4. 翻开关的统一流程
 

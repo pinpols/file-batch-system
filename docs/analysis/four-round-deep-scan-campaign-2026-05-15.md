@@ -21,7 +21,7 @@
 
 | 轮 | 维度 | 关键发现示例 |
 |---|---|---|
-| **R1** | Trigger + outbox 正确性 | approve 走同步 HTTP 卡死 (P0) |
+| **R1** | Trigger + outbox 正确性 | approve 走同步 HTTP 长期停滞 (P0) |
 | | Workflow DAG 引擎 | dispatchNode TOCTOU 双 fire (P1) |
 | | Worker lifecycle + CLAIM | lease lost 后 worker 仍 report (P1) |
 | | 多租隔离 + auth | 2 个 console mapper 跨租户泄漏 (P0×2) |
@@ -35,7 +35,7 @@
 | | 边界 + 大输入 | JsonFormatParser envelope 全量 readTree OOM (P0) |
 | **R3** | 分布式不变量 | updateOutputSummary 无 version CAS lost update (P0) |
 | | 缓存正确性 | Redis HSET+EXPIRE 非原子 TTL miss (P0×2) |
-| | 日志 + MDC + metrics | TriggerLaunchConsumer tenant tag cardinality 爆炸 (P0) |
+| | 日志 + MDC + metrics | TriggerLaunchConsumer tenant tag cardinality 爆失败 (P0) |
 | | 优雅停机 + K8s 探针 | export worker terminationGracePeriodSeconds 不足 (P0) |
 | | DB 约束完整性 | **4 张表 UNIQUE + NULL bypass (P0×4)** |
 | | 测试覆盖盲区 | DefaultTaskOutcomeServiceTest 假测试（reflection 断言） |

@@ -38,13 +38,13 @@ $PSQL "select count(*) from batch.outbox_event where publish_status in ('NEW','F
 $PSQL "select wait_event_type, count(*) from pg_stat_activity where state='active' group by 1;" # claim/report 锁等待
 # Kafka consumer lag(launch 单线程消费)+ PG 写 TPS 走你的监控大盘
 ```
-**通过判据**:Gatling assertions 全绿(p95<500ms / 错误率<1%)+ outbox 积压不发散 + lag 收敛。逼近 20 则记录余量 + 定容量上限。
+**通过判据**:Gatling assertions 全部通过(p95<500ms / 错误率<1%)+ outbox 积压不发散 + lag 收敛。逼近 20 则记录余量 + 定容量上限。
 签字:__________
 
 ## Phase 1-C · DR 演练
 
 ```bash
-# (1) 整队崩 → 精确一次(脚本已对真实 schema 校验)
+# (1) 全 worker 组崩溃 → 精确一次(脚本已对真实 schema 校验)
 PG_CONTAINER=<staging-pg> POSTGRES_USER=<user> PG_PLATFORM_DB=batch_platform \
 WORKER_CONTAINERS="worker-import worker-export worker-process worker-dispatch worker-atomic" \
 SETTLE_TIMEOUT_S=180 \
@@ -59,7 +59,7 @@ bash scripts/sim/dr-drill-pitr.sh
 #   WAL-G:  RESTORE_CMD='wal-g backup-fetch /var/lib/postgresql/data LATEST && touch .../recovery.signal && ...'
 #   RDS/Aurora: RESTORE_CMD='aws rds restore-db-instance-to-point-in-time --restore-time "$RESTORE_TARGET_TIME" ...'
 ```
-**通过判据**:整队崩脚本退 0(无重复 job_instance / 无重复 outbox / 无复活卡死);PITR 脚本退 0(RPO 不丢 T0 前已提交 + RTO ≤ 2h)。另做 PG failover + Kafka 短时不可用 + DLQ 重放。
+**通过判据**:全 worker 组崩溃脚本退 0(无重复 job_instance / 无重复 outbox / 无复活长期停滞);PITR 脚本退 0(RPO 不丢 T0 前已提交 + RTO ≤ 2h)。另做 PG failover + Kafka 短时不可用 + DLQ 重放。
 签字:__________
 
 ## Phase 1-D · 安全签收
@@ -95,8 +95,8 @@ grep -rn 'on conflict' --include=*.sql . | wc -l   # 对照基线;新增/改动 
 签字:__________
 
 ## Go / No-Go 总闸
-- [ ] Phase 0(CI 全绿 + 扫描清零)
-- [ ] Phase 1-A~E 全签字 + 1-B SLO 达标 + 1-C 整队崩/PITR 通过
+- [ ] Phase 0(CI 全部通过 + 扫描清零)
+- [ ] Phase 1-A~E 全签字 + 1-B SLO 达标 + 1-C 全 worker 组崩溃/PITR 通过
 - [ ] Phase 2 迁移 + 回滚 + RTO/RPO
 - [ ] 灰度预案 + 监控基线 + 回滚预案 + 值班就位
 

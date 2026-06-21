@@ -25,7 +25,7 @@
 
 ## Group A — 纯代码/配置(机械改,低风险,**无迁移**)
 
-一个 PR 搞定。建议用脚本 + `git mv`,改完 `mvn clean compile` + spotless。
+一个 PR 完成。建议用脚本 + `git mv`,改完 `mvn clean compile` + spotless。
 
 - [ ] **模块**:`git mv batch-worker-spi batch-worker-atomic`;改其 `pom.xml` `<artifactId>`;根 `pom.xml` `<modules>` 条目。
 - [ ] **包目录 + 声明**:`git mv` 包目录 `worker/spi` → `worker/atomic`(main + test);全仓 `sed` `com.example.batch.worker.spi` → `com.example.batch.worker.atomic`(package 声明 + 所有 import)。
@@ -79,7 +79,7 @@
 
 ## 执行顺序(下午)
 
-1. **先 Group A**(纯 rename)→ 全绿 → 合并。blast radius 大但机械,先把代码层清干净。
+1. **先 Group A**(纯 rename)→ 全部通过 → 合并。blast radius 大但机械,先把代码层清干净。
 2. **再 Group B**,按 B1→B2→B3→B4,**走迁移/双轨**,确认本地 + e2e 后再考虑环境切换。
 3. Group A、B 各独立 PR;commit 前 `mvn clean`(stale cache 会漏报真错)。
 

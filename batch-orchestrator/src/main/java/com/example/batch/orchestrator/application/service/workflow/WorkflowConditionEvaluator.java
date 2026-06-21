@@ -306,7 +306,7 @@ public class WorkflowConditionEvaluator {
     }
     String text = String.valueOf(value);
     // fast-path:非数字格式直接返 null,避免 NumberFormatException 噪音日志
-    // (条件 mode == 'fast' 时每个字符都会被试探,造成日志爆炸)
+    // (条件 mode == 'fast' 时每个字符都会被试探,造成日志爆失败)
     if (!looksLikeNumber(text)) {
       return null;
     }

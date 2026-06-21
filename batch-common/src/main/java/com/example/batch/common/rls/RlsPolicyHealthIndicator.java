@@ -14,7 +14,7 @@ import org.springframework.jdbc.datasource.DataSourceUtils;
 
 /**
  * Phase A · RLS healthcheck — 启动期 + actuator/health 时确认 biz.* 10 张表(+ batch.process_staging) 都启用了
- * RLS 并挂了 transition policy。
+ * RLS 并异常退出 transition policy。
  *
  * <p>检查项:对 `pg_class.relrowsecurity / relforcerowsecurity` 校验 ENABLE + FORCE,对 `pg_policies` 校验存在
  * `tenant_isolation_transition` policy。

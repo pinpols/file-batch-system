@@ -2,7 +2,7 @@
 
 > 2026-06-10 审计 P1-7 补。补上 `playbooks/pg-primary-failover.md` 第 §方案C 留的 TODO(「本仓未集成 PITR — TODO ops 团队补」)。
 >
-> **核心区分:复制 ≠ 备份。** 流复制 standby(`docker compose --profile replica`)是**高可用**——主库挂了切从库;但**误删 / 坏 migration / 逻辑损坏会同步到从库**,无法回到任意时间点。本 runbook 解决的是后者:可恢复到事故前任意时刻。
+> **核心区分:复制 ≠ 备份。** 流复制 standby(`docker compose --profile replica`)是**高可用**——主库异常退出切从库;但**误删 / 坏 migration / 逻辑损坏会同步到从库**,无法回到任意时间点。本 runbook 解决的是后者:可恢复到事故前任意时刻。
 
 ---
 

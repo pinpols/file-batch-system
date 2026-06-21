@@ -121,7 +121,7 @@ public class WaitingPartitionDispatchScheduler {
           }
         } catch (RuntimeException exception) {
           // 单个候选的资源评估失败（常见于 quota_runtime_state 的 @Version CAS 冲突）不应中断整批 tick，
-          // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 吞掉 → 后面几千条
+          // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 捕获并抑制 → 后面几千条
           // WAITING 永远轮不到"的级联阻塞。跳过本条，下 tick 重新评估。
           log.warn(
               "buildCandidate failed, skipping this tick's partition: tenantId={}, partitionId={},"
@@ -328,7 +328,7 @@ public class WaitingPartitionDispatchScheduler {
     // input_snapshot.queueCode（如 DISPATCH 节点 → dispatch_queue），与 jobInstance.queue_code
     // （workflow 自己的 workflow_queue）不一致。优先用 partition input_snapshot 里写的 queueCode，
     // 否则 selector 按 workflow_queue 的 resource_tag=workflow 去找 DISPATCH worker，永远不会匹配到
-    // capability_tags=[delivery] 的分发 worker → NO_AVAILABLE_WORKER 死循环。
+    // capability_tags=[delivery] 的分发 worker → NO_AVAILABLE_WORKER 无限循环。
     String partitionQueueCode = extractInputField(partition, "queueCode");
     request.setQueueCode(
         partitionQueueCode != null && !partitionQueueCode.isBlank()

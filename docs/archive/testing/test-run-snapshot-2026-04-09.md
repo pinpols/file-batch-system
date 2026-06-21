@@ -57,18 +57,18 @@ mvn test -pl batch-orchestrator,batch-trigger,batch-console-api,batch-worker-imp
   -am -Dtest="*IntegrationTest" -Dsurefire.failIfNoSpecifiedTests=false --no-transfer-progress
 ```
 
-### 结果：全绿 BUILD SUCCESS
+### 结果：全部通过 BUILD SUCCESS
 
 | 模块 | 测试数 | 结果 |
 |------|--------|------|
 | batch-common | 0 | — |
-| batch-trigger | 9 | 全绿 |
-| batch-orchestrator | 92 | 全绿 |
-| batch-worker-import | 6 | 全绿 |
-| batch-worker-export | 12 | 全绿 |
-| batch-worker-dispatch | 10 | 全绿 |
-| batch-console-api | 41 | 全绿 |
-| **合计** | **170** | **全绿** |
+| batch-trigger | 9 | 全部通过 |
+| batch-orchestrator | 92 | 全部通过 |
+| batch-worker-import | 6 | 全部通过 |
+| batch-worker-export | 12 | 全部通过 |
+| batch-worker-dispatch | 10 | 全部通过 |
+| batch-console-api | 41 | 全部通过 |
+| **合计** | **170** | **全部通过** |
 
 ---
 
@@ -76,13 +76,13 @@ mvn test -pl batch-orchestrator,batch-trigger,batch-console-api,batch-worker-imp
 
 ### 正常运行（随 `mvn test` 自动跑）
 
-#### batch-common（73 用例，全绿）
+#### batch-common（73 用例，全部通过）
 - RunModeSupportTest / ShedLockProviderFactoryTest
 - TaskStatusTest / RetryScheduleStatusTest / PartitionStatusTest / JobInstanceStatusTest / WorkerRegistryStatusTest / DeadLetterReplayStatusTest / RetryPolicyTypeTest
 - JsonUtilsTest / FileStateMachineTest / IdGeneratorTest / AlertFingerprintsTest / ContentMaskingUtilsTest
 - JdbcMappedSqlValidatorTest / PageRequestTest / BatchObjectCryptoServiceTest
 
-#### batch-console-api（41 用例，全绿）
+#### batch-console-api（41 用例，全部通过）
 - ConsoleSecurityConfigurationTest
 - DefaultConsoleFile/Template/JobDefinition/Ops/Report/WorkflowExcelApplicationServiceTest
 - AlertEventActionIntegrationTest / AlertEventIntegrationTest / ApprovalCommandQueryIntegrationTest
@@ -101,7 +101,7 @@ mvn test -pl batch-orchestrator,batch-trigger,batch-console-api,batch-worker-imp
 - 通过：ImportFailureE2eIT / ImportFailurePipelineE2eIT / WorkerDrainE2eIT
 - **失败（未修复）**：ImportPipelineE2eIT / MultiTenantConcurrentE2eIT / OutboxForwarderE2eIT / OutboxForwarderRetryE2eIT
 
-#### batch-orchestrator（92 用例，全绿）
+#### batch-orchestrator（92 用例，全部通过）
 - 单元测试（~20 类）：DefaultSchedulePlanBuilderTest / DefaultApprovalWorkflowServiceTest / DefaultCompensationServiceTest
   DefaultRetryGovernanceServiceTest / DefaultWorkerDrainGovernanceServiceTest / DefaultWorkflowDagServiceTest
   WorkflowConditionEvaluatorTest / PartitionLeaseReclaimSchedulerTest / KafkaOutboxPublisherTest
@@ -122,30 +122,30 @@ mvn test -pl batch-orchestrator,batch-trigger,batch-console-api,batch-worker-imp
   TriggerTypeLaunchIntegrationTest / WorkerClaimProgressCompleteIntegrationTest / WorkerRegistryIntegrationTest
 - Web 层：ApprovalControllerTest / DeadLetterControllerTest / LaunchControllerTest / TaskControllerTest / WorkerControllerTest
 
-#### batch-trigger（9 用例，全绿）
+#### batch-trigger（9 用例，全部通过）
 - 单元测试：HttpOrchestratorTriggerAdapterTest / QuartzLaunchJobTest / TriggerSchedulerFacadeTest
   BatchDayCutoffSchedulerTest / CalendarBizDateResolverTest / DefaultLaunchAdapterServiceTest
   DefaultTriggerServiceTest / TriggerControllerTest
 - 集成测试：BatchTriggerApplicationIntegrationTest / MisfireHandlerIntegrationTest / QuartzLaunchJobIntegrationTest
   TriggerRegistrationStartupIntegrationTest / TriggerServiceIntegrationTest
 
-#### batch-worker-core（9 用例，全绿）
+#### batch-worker-core（9 用例，全部通过）
 - DefaultTaskExecutionWrapperTest / DefaultWorkerLifecycleManagerTest / HttpTaskExecutionClientTest
 - PlatformFileRuntimeRepositoryTest / AbstractTaskConsumerBackpressureTest / AbstractWorkerLoopTest
 - ActiveTaskLeaseRegistryTest / PipelineStepFlowSupportTest / StaleTempFileCleanupTest
 
-#### batch-worker-dispatch（10 用例，全绿）
+#### batch-worker-dispatch（10 用例，全部通过）
 - ChannelConfigMergeTest / DispatchReceiptPollSchedulerTest / DispatchChannelCircuitBreakerTest
 - DispatchChannelGatewayTest / DispatchChannelHealthServiceIntegrationTest / DefaultDispatchStageExecutorTest
 - BatchWorkerDispatchApplicationIntegrationTest / ShedLockConfigurationIntegrationTest
 
-#### batch-worker-export（12 用例，全绿）
+#### batch-worker-export（12 用例，全部通过）
 - MinioExportStorageIntegrationTest / JdbcMappedExportSpecTest / ExportDataPluginRegistryTest
 - SqlTemplateExportDataPluginTest / SqlTemplateExportSpecTest / SqlTemplateExportSqlValidatorTest
 - DefaultExportStageExecutorTest / GenerateStepTest / PrepareStepTest / RegisterStepTest / StoreStepTest
 - BatchWorkerExportApplicationIntegrationTest / ShedLockConfigurationIntegrationTest
 
-#### batch-worker-import（6 用例，全绿）
+#### batch-worker-import（6 用例，全部通过）
 - ImportIngressScannerIntegrationTest / JdbcMappedImportSpecTest / ImportLoadPluginRegistryTest
 - ImportPreprocessPipelineRsaTest / ImportPreprocessPipelineTest / PreprocessStepKmsDecryptTest
 - ImportIngressScannerTest / ParseStepFixtureTest / ParseStepStreamingTest

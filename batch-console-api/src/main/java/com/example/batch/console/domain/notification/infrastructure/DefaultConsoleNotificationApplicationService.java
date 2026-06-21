@@ -201,7 +201,7 @@ public class DefaultConsoleNotificationApplicationService
         ruleMapper.selectById(resolved, ruleId), "subscription rule not found: " + ruleId);
     // P1-4: update 也必须校验 channel 存在(与 createRule 一致)。否则可写入失效 channelCode,
     // 而 SubscriptionRuleMapper.selectEnabledByEventType 要 join notification_channel,
-    // 失效 channel 会让规则永不命中(保存成功但永远不生效的幽灵规则)。
+    // 失效 channel 会让规则永不命中(保存成功但永远不生效的无效规则)。
     String channelCode = str(params, KEY_CHANNEL_CODE);
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);

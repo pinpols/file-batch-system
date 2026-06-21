@@ -79,7 +79,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 JsonUtils.fromJson(record.getPayloadJson(), CompensationCommandRequest.class);
             request.setApprovalId(approvalNo);
             // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
-            // 「必须指定补偿类型」、审批单卡死无从补救。按目标类型确定性推导补偿粒度兜底。
+            // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度兜底。
             if (request.getCompensationType() == null || request.getCompensationType().isBlank()) {
               request.setCompensationType(deriveCompensationType(record.getTargetType()));
             }

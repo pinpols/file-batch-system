@@ -143,7 +143,7 @@ class PartitionReclaimUnitTest {
             anyString(),
             eventKeyCaptor.capture(),
             eq(RunMode.RECOVER));
-    // eventKey 必须包含 version；保证多次 reclaim 不被 outbox UNIQUE(tenant_id, event_key) ON CONFLICT 静默吞掉
+    // eventKey 必须包含 version；保证多次 reclaim 不被 outbox UNIQUE(tenant_id, event_key) ON CONFLICT 静默捕获并抑制
     assertThat(eventKeyCaptor.getValue()).isEqualTo("t1:reclaim:1:v5");
   }
 

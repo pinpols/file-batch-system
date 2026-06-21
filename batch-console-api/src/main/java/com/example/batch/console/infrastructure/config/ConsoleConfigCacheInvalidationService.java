@@ -18,7 +18,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *
  * <ul>
  *   <li><b>afterCommit 执行</b>：所有 evict 都注册为事务同步的 {@code afterCommit} 钩子，事务成功提交后才 DEL—— 事务未提交就 DEL
- *       会导致"缓存先空 → 被别的并发读请求用旧 DB 数据重新填回"，反而把脏数据写进缓存。 无事务上下文时退化为立即 DEL。
+ *       会导致"缓存先空 → 被别的并发读请求用旧 DB 数据重新填回"，反而把异常数据写进缓存。 无事务上下文时退化为立即 DEL。
  *   <li><b>Key 约定</b>：{@code config:{tenantId}:{type}:{code}}。{@link #safe} 把 key 组件里的 {@code ':'}
  *       替换成 {@code '_'}，防止 tenantId / code 含冒号造成 key 分段歧义。
  *   <li><b>全租户清</b>：{@link #evictAllJobDefinitions} 走 <b>SCAN（非 KEYS）+ 分批 DEL</b>—— Redis {@code
@@ -103,7 +103,7 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   /**
-   * SCAN-based pattern 删除：走 {@link RedisKeyUtils#scanAndDelete} 通用工具，异常被工具层吞掉避免影响 afterCommit
+   * SCAN-based pattern 删除：走 {@link RedisKeyUtils#scanAndDelete} 通用工具，异常被工具层捕获并抑制避免影响 afterCommit
    * 钩子流程；残余 key 走 TTL（5min）自然清理。
    */
   private void scanAndDelete(String pattern) {

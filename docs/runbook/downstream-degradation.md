@@ -49,7 +49,7 @@
 
 **Legend**:
 - ✅ 已用 `DownstreamFallback` 接入
-- ⏳ TODO 待迁(目前可能裸调或散写 try/catch)
+- ⏳ TODO 待迁(目前可能直接调用或散写 try/catch)
 - 🚫 不接入(走业务自己的特殊语义)
 
 ## 原则

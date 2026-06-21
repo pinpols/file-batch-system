@@ -237,7 +237,7 @@ impl SdkCheckpoint for InMemoryCheckpoint {
 ///
 /// `commit` raises this **after** the business batch + checkpoint were committed
 /// (i.e. at a clean batch boundary, never mid-batch), carrying the
-/// already-persisted safe-point. A handler must propagate it up — **吞掉它就停不
+/// already-persisted safe-point. A handler must propagate it up — **捕获并抑制它就停不
 /// 下来** (swallowing it defeats cancellation). The run path / testkit map a
 /// returned `SdkTaskStopped` to a **cancelled** terminal report, *not* a
 /// failure: the data left behind is consistent at `break_position`.

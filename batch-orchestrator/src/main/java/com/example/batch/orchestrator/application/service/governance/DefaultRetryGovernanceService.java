@@ -180,7 +180,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       retrySchedule.setLastErrorCode(errorCode);
       // retry_schedule.last_error_message 是 varchar(1024)。worker 链路错误消息有时含嵌套
       // SQL detail / stack 摘要,容易越界。Java 侧防御性截断到 1023 字节,加 "…" 标记,
-      // 避免 INSERT 失败导致整条重试链卡死。
+      // 避免 INSERT 失败导致整条重试链长期停滞。
       retrySchedule.setLastErrorMessage(truncateErrorMessage(errorMessage, 1023));
       retryScheduleMapper.insert(retrySchedule);
       log.info(
@@ -201,7 +201,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   @Override
   public void dispatchDueRetries() {
     // R2-P0-2：每条 retry 进独立 REQUIRES_NEW，避免外层单事务下某条 CAS 冲突回滚整批 outbox 写
-    // （之前已经 markRunning 的 retry 会留在 RUNNING 永远卡死）。
+    // （之前已经 markRunning 的 retry 会留在 RUNNING 永远长期停滞）。
     // 1) 扫描（只读，无事务）
     // 2) 每条独立 tx 走 requeueOne：markRunning + requeuePartition + markSuccess 同事务，
     //    抛 TransientConflictException → 整 tx 回滚 → markRunning 也撤销 → 状态自动留 WAITING 等下轮
@@ -754,7 +754,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   /**
-   * 限制错误消息长度,防止超长 worker 异常 stack / SQL 报错把 varchar(1024) 列撑爆, 进而把整个 retry insert 事务回滚成"死循环"。多余字节用
+   * 限制错误消息长度,防止超长 worker 异常 stack / SQL 报错把 varchar(1024) 列超过, 进而把整个 retry insert 事务回滚成"无限循环"。多余字节用
    * "…" 单字符标记。
    */
   private static String truncateErrorMessage(String message, int maxLength) {

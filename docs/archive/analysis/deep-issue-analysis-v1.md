@@ -28,7 +28,7 @@
 | 级别 | 编号 | 问题概述 | 关键文件 |
 |------|------|----------|----------|
 | 🔴 立即修复 | #2-1 | Outbox 与状态写入非同一事务，孤儿任务 | `TaskDispatchOutboxService.java` |
-| 🟠 紧急 | #1-1 | Outbox 发布窗口竞态，事件卡死 PUBLISHING | `DefaultScheduleForwarder.java` |
+| 🟠 紧急 | #1-1 | Outbox 发布窗口竞态，事件长期停滞 PUBLISHING | `DefaultScheduleForwarder.java` |
 | 🟠 紧急 | #2-2 | assignWorker 回滚后返回值与 DB 不一致 | `DefaultTaskAssignmentService.java` |
 | 🟠 紧急 | #3-1 | 版本号冲突后无法递增，陷入永久冲突循环 | `DefaultTaskOutcomeService.java` |
 | 🟠 紧急 | #4-1 | 无 partition 场景 idempotencyKey 不含重试计数 | `TaskDispatchOutboxService.java` |
@@ -151,7 +151,7 @@ jobInstance.setVersion(version + 1);  // 抛异常后永不执行
 
 **文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:109-137`
 
-**问题**：两个并发 outcome 同时读到 `current == null`，都执行 `recordNodeRunStart`。虽有 `UNIQUE(workflow_run_id, node_code, run_seq)` 约束，但 `nextRunSeq()` 若非数据库序列实现，计算结果可能重复，导致约束冲突或脏数据。
+**问题**：两个并发 outcome 同时读到 `current == null`，都执行 `recordNodeRunStart`。虽有 `UNIQUE(workflow_run_id, node_code, run_seq)` 约束，但 `nextRunSeq()` 若非数据库序列实现，计算结果可能重复，导致约束冲突或异常数据。
 
 **影响**：产生重复 node_run 记录，影响 workflow 状态推进和审计追踪。
 

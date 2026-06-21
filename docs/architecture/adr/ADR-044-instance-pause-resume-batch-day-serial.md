@@ -49,7 +49,7 @@
 
 ## 影响
 
-- **正向**:长批可暂停排查再续,不再「一刀 cancel 重跑」;批次日串行从人工纪律变系统强制,堵结算级「叠日」风险。
+- **正向**:长批可暂停排查再续,不再直接 cancel 后重跑;批次日串行从人工纪律变系统强制,降低结算级「叠日」风险。
 - **状态机改动**:`PAUSED` 进 2 个核心 enum + 迁移校验 + 派发器跳过逻辑 + archive 冷表镜像(`ArchiveSchemaDriftCheck` 要求 `*_archive` 同步)。**影响面大、需充分测**(状态迁移守护测 `MultiTenantIsolationIntegrationTest` 类同级别覆盖)。
 - **幂等 / checkpoint 叠加**:resume 依赖既有分区 / 节点幂等(已 SUCCESS 不重跑);若叠 ADR-038 checkpoint,单 task 内也可续(正交)。
 - **风险**:PAUSED 与在途 task 的边界要讲清——「暂停 = 不派新,不冻结在途」,避免运维误期望「点暂停立刻全停」。文档 + UI 提示需明确。

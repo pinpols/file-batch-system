@@ -153,12 +153,12 @@ class SdkTaskContext(BaseModel):
            整数倍且 :attr:`self_report` 为真时,经 :attr:`progress_reporter` 上报一次。
         3. **取消安全点**(决策三):本次提交落盘后若 :meth:`is_cancelled` 命中,
            抛 :class:`SdkTaskStopped`(携带 ``break_position``),让模板顶层落
-           cancelled 终态 —— 取消停在批次边界,不留半批脏数据。
+           cancelled 终态 —— 取消停在批次边界,不留半批异常数据。
 
         **强约束**:业务数据提交与断点保存必须同事务 —— 由租户的 ``checkpoint``
         实现保证(SDK 不介入其事务边界,见 :mod:`checkpoint` 文档)。
 
-        :raises SdkTaskStopped: 本批已安全提交后检测到取消(业务不得吞掉)。
+        :raises SdkTaskStopped: 本批已安全提交后检测到取消(业务不得捕获并抑制)。
         """
         state = SdkCheckpointState(
             break_position=break_position,
@@ -183,7 +183,7 @@ class SdkTaskContext(BaseModel):
                 }
             )
 
-        # 安全点:业务 + 断点已落盘,此处检查取消才不会留半批脏数据。
+        # 安全点:业务 + 断点已落盘,此处检查取消才不会留半批异常数据。
         if self.is_cancelled():
             raise SdkTaskStopped(break_position)
 

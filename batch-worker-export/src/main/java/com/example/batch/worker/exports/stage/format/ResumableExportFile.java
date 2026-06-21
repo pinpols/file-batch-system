@@ -16,7 +16,7 @@ import java.nio.file.Path;
  *
  * <ul>
  *   <li>{@link #truncate(Path)} —— 截断到 0 后写(首跑;等价旧的 {@code TRUNCATE_EXISTING})。
- *   <li>{@link #append(Path)} —— 在文件末尾追加(续跑;调用方须先用 FileChannel.truncate 把残尾砍到 fsync 过的字节位点)。
+ *   <li>{@link #append(Path)} —— 在文件末尾追加(续跑;调用方须先用 FileChannel.truncate 将残尾截断到 fsync 过的字节位点)。
  * </ul>
  *
  * <p>{@link #flushAndSync()} 在每个分页边界调:flush BufferedWriter → {@code FileDescriptor.sync()}(数据落盘)→

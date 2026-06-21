@@ -123,7 +123,7 @@ echo "==> analyze-soak: 生成 $REPORT"
     limit 50;" 2>/dev/null || echo "(batch_day_instance 不存在或无数据)"
   echo '```'
   echo
-  echo "> 跨日 hack 依赖 \`-Dbatch.testing.clock-offset\`;当前 BatchDateTimeSupport 未读该属性。"
+  echo "> 跨日时间偏移 依赖 \`-Dbatch.testing.clock-offset\`;当前 BatchDateTimeSupport 未读该属性。"
   echo "> 真正生效需在 Clock bean 上实现 offset 注入,见 plan TODO。"
   echo
 

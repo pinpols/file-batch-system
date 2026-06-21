@@ -237,7 +237,7 @@ public class DispatchReceiptPollScheduler {
         return;
       }
       // L-4：之前 response.body().string() 把整个响应一次性读进堆内存，异常响应体（如
-      // 上游误返回大量调试信息）可能打爆 JVM。改流式读取 + maxReceiptBodyBytes 硬上限
+      // 上游误返回大量调试信息）可能耗尽 JVM 内存。改流式读取 + maxReceiptBodyBytes 硬上限
       JsonNode root;
       try (InputStream bodyStream = response.body().byteStream()) {
         byte[] limited = bodyStream.readNBytes(MAX_RECEIPT_BODY_BYTES);

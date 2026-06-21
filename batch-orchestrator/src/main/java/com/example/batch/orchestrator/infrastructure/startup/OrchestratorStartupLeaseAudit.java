@@ -21,11 +21,11 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>{@code worker_registry} 处于 DRAINING 且 {@code drain_deadline_at < now()} —— 正常情况由 {@code
- *       WorkerDrainTimeoutScheduler} 接管，非 0 说明上次调度挂了/未来得及跑；
+ *       WorkerDrainTimeoutScheduler} 接管，非 0 说明上次调度异常退出/未来得及跑；
  *   <li>{@code job_partition} 为 {@code READY}/{@code RUNNING}、仍持有 {@code lease_expire_at} 且早于
  *       {@code now()} —— 与 {@code PartitionLeaseReclaimScheduler} 扫描口径一致；终态分区残留 lease 不计；
  *   <li>{@code outbox_event} 卡在 PUBLISHING 且 updated_at 超 10 分钟 —— 正常情况由 OutboxPoll {@code
- *       resetStalePublishing} 每轮清 0，非 0 说明轮询本身挂了。
+ *       resetStalePublishing} 每轮清 0，非 0 说明轮询本身异常退出。
  * </ul>
  *
  * <p>本组件 <b>只告警不修复</b>：修复交给各自的定时调度器（启动后几十秒内会自动跑第一轮）。 价值在于"新启动的 Pod 立即给出一个健康快照"，便于排查"刚拉起就已有残留"这类场景。
@@ -71,7 +71,7 @@ public class OrchestratorStartupLeaseAudit {
           && outboxStuck == 0) {
         log.info(
             "启动运行态审计通过（orchestrator）：无 stale worker / drain overdue / active decommissioned"
-                + " claims / invalid capability_tags / terminal active children / 过期租约 / 卡死"
+                + " claims / invalid capability_tags / terminal active children / 过期租约 / 长期停滞"
                 + " PUBLISHING");
         return;
       }

@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 管理员专用:批量清理测试数据。
  *
- * <p>解决 e2e 测试只 INSERT 不 DELETE 导致业务表 60-85% 是脏数据的问题。CI 跑完 e2e 调一次 这个端点即可零残留。
+ * <p>解决 e2e 测试只 INSERT 不 DELETE 导致业务表 60-85% 是异常数据的问题。CI 跑完 e2e 调一次 这个端点即可零残留。
  *
  * <p>**严格安全约束**:
  *
@@ -96,7 +96,7 @@ public class ConsoleAdminTestDataController {
   }
 
   /**
-   * 按精确 tenantId 列表清理(prefix 模式无法清纯短名 ID 如 `tx` / `td` 等历史残留时的补刀)。
+   * 按精确 tenantId 列表清理(prefix 模式无法清纯短名 ID 如 `tx` / `td` 等历史残留时的补充处理)。
    *
    * <p>**白名单保护**:`system` / `default` / `default-tenant` / `ta` / `tb` / `tc` 任何场景拒删。
    *

@@ -242,8 +242,8 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 - §5.1 trigger Spring Security：`cd389a0b`（2026-04-22）— `TriggerSecurityConfiguration:42-46` 真起 SecurityFilterChain
 - §5.2 X-Console-Token：✅ commit `ff20c36f` 主代码 + yaml + OpenAPI + 测试 9 文件 +20/-168 物理删除；grep 全仓 0 残留
 - §5.5 / §5.6 / §5.10 idempotency 三层边界：ADR-011 定稿，3 层代码已实施
-- §5.7 trigger → orchestrator 异步：ADR-010 全栈 7 stage（`9587b8bf` / `087f6b7a` / `1ca3a957` / `22b330ea` / `788b637d` / `68bc49e8`），22 测试全绿
-- §5.11 webhook durability：V81 + `WebhookDeliveryRelay` 278 行 + 7 单测全绿
+- §5.7 trigger → orchestrator 异步：ADR-010 全栈 7 stage（`9587b8bf` / `087f6b7a` / `1ca3a957` / `22b330ea` / `788b637d` / `68bc49e8`），22 测试全部通过
+- §5.11 webhook durability：V81 + `WebhookDeliveryRelay` 278 行 + 7 单测全部通过
 - §5.12 Console Job god-class：`DefaultConsoleJobApplicationService` 现 90 LOC + 6 兄弟类 1278 LOC
 
 ### ADR 路线图（5 完成 / 2 deferred / 2 暂缓）

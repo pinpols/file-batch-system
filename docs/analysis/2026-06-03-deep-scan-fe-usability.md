@@ -46,7 +46,7 @@
 
 ## 2. 信息密度(一屏几 row / 详情排布 / tooltip)
 
-### 2.1 默认 pageSize=15 一刀切
+### 2.1 默认 pageSize=15 不加区分
 
 全站列表 pageSize 都是 15(`grep pageSize 15` 命中 14 个文件)。
 
@@ -156,7 +156,7 @@ StatusTag(`statusTagResolve.ts`)把 6 类映射到 EP tag 5 色(success/warning/
 
 ### 5.1 JSON 格式化
 
-`JsonPreview` 在 9+ 处使用(descriptor / DSL / nodes / edges / draft)。组件未读但从用法看支持折叠;问题是 `CustomTaskTypeList.vue:160-162` fallback `<pre>{{ raw }}</pre>` 把无法解析的 descriptor 原样渲染,长字串不折行也无 max-height,大 descriptor 把整个 drawer 撑爆。
+`JsonPreview` 在 9+ 处使用(descriptor / DSL / nodes / edges / draft)。组件未读但从用法看支持折叠;问题是 `CustomTaskTypeList.vue:160-162` fallback `<pre>{{ raw }}</pre>` 把无法解析的 descriptor 原样渲染,长字串不折行也无 max-height,大 descriptor 把整个 drawer 超过。
 → (P2)pre 加 `max-height:300px; overflow:auto`。
 
 ### 5.2 长字串 truncate
@@ -270,7 +270,7 @@ OpsSummary 仅做全 0 引导 + 4 指标 panel,不展示 "Recent jobs you viewed
 
 ### 10.1 confirmDanger
 
-`useDangerConfirm.ts` 强制"动词 + 对象 + 后果 + 是否可恢复"(L8-9 注释明确说解决"19 处 ElMessageBox.confirm 文案模糊"问题),很好。
+`useDangerConfirm.ts` 强制"动词 + 对象 + 后果 + 是否可恢复"(L8-9 注释明确说解决"19 处 ElMessageBox.confirm 文案不明确"问题),该约束合理。
 - AlertList ack/silence/close 三处都接了 confirmDanger,且 ack/silence 标 `irreversible:false`,close 标 `irreversible:true`(L382)— 准确分级。
 - WorkflowDefinitionList.archiveRow 标 `irreversible:false`,后果文案"软归档,实际禁用可恢复"— 诚实。
 
@@ -336,7 +336,7 @@ OpsSummary 4 tab(kpis/trend/dist/extra)+ 子 panel 各种图;**对新用户**进
 1. **JobDefinitionList 硬编码中文**(`src/views/job/JobDefinitionList.vue:10,13`)— 踩 CLAUDE.md 红线,5 分钟修。
 2. **跨页 selection 丢失**(`src/views/approvals/components/GeneralApprovalsTab.vue:66`)— 加 row-key + reserve-selection。
 3. **批量审批 partial success 谎报**(`L375 batchApprovedToast`)— 从 response 取真成功数。
-4. **AlertList 全量拉回前端切片**(`L285 queryAlertsAll`)— 大租户卡死;补真 paging 或限 maxResults。
+4. **AlertList 全量拉回前端切片**(`L285 queryAlertsAll`)— 大租户长期停滞;补真 paging 或限 maxResults。
 5. **桌面按钮无 permission gate**(AlertList ack/silence/close、WorkflowDefinitionList toggleRow、JobDefinitionList rowActions 等)— VIEWER 点了才 403,做一次全站 v-if 审计。
 
 ### P1(影响日常效率)
@@ -350,7 +350,7 @@ OpsSummary 4 tab(kpis/trend/dist/extra)+ 子 panel 各种图;**对新用户**进
 12. ⌘K Palette 不搜 alert title / instanceNo / approvalNo。
 13. ApprovalList tab 子 filter 不进 URL,分享链接丢上下文。
 14. WorkerManagement / CatchUp 等无"我的快捷过滤"收藏。
-15. Drawer 内嵌 JsonPreview 大 DSL 无 maxHeight,撑爆 drawer。
+15. Drawer 内嵌 JsonPreview 大 DSL 无 maxHeight,超过 drawer。
 16. AlertList 操作列 260px 横向拥挤,改 RowActions 折叠。
 17. WorkflowDefinitionList DAG 全屏返回 drawer 路径断。
 

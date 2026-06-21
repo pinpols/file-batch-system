@@ -5,7 +5,7 @@
 # 复用 scripts/local/start-all.sh,通过环境变量注入额外 JVM 参数:
 #   1) JFR:启动期 -XX:StartFlightRecording=name=soak,duration=${SOAK_HOURS}h,...
 #   2) Heap dump on OOM:-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=...
-#   3) 跨日 hack:-Dbatch.testing.clock-offset=${CLOCK_OFFSET}
+#   3) 跨日时间偏移:-Dbatch.testing.clock-offset=${CLOCK_OFFSET}
 #       注意:BatchDateTimeSupport 当前使用注入的 Clock bean,不读该属性。
 #       本脚本仍透传该 -D,等后续 Clock bean 实现 offset 支持后无需改脚本。
 #       详见 plan TODO 段。

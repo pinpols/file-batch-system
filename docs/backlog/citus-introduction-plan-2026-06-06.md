@@ -10,7 +10,7 @@
 1. **何时启用**:Tier-A + Tier-B 全做完仍不达目标,**且**有多租户并发洪峰实测信号(单租户单流 Citus 不缩耗时)。
 2. **改的是运维,但应用层改动 ≠ 极小**——见下方 ⚠️ 修正。
 3. **路径二选一**:**A** 自托管开源 Citus(免费、可控)/ **B** Azure Cosmos DB for PostgreSQL(托管 Citus,免 AGPL + 免运维)。
-4. **两个并列阻塞前置 POC**:① **RLS 过 coordinator**(`SET LOCAL app.tenant_id` 透传 worker,不过则路径作废)② **PK 复合化爆炸半径**(见 §0.5)。
+4. **两个并列阻塞前置 POC**:① **RLS 过 coordinator**(`SET LOCAL app.tenant_id` 透传 worker,不过则路径作废)② **PK 复合化爆失败半径**(见 §0.5)。
 5. **数据迁移可在线做**:`create_distributed_table` 原地分片,业务停机最小化。
 
 > ## ⚠️ 0.5 实测硬阻塞前置(2026-06-07 schema 实扫,修正本文档原"几乎不动应用"的乐观假设)
@@ -25,9 +25,9 @@
 > | **definition 表分类** | `job/pipeline/workflow_definition` 宜 **reference** 非 distributed | 🟡 决策 |
 > | **序列 / useGeneratedKeys** | 43 处 mapper `useGeneratedKeys`,distributed insert 取自增 id 行为 | 🟡 POC 验证 |
 >
-> **修正后定位**:Citus 不是"运维改造为主、应用极小",而是 **PK 复合化驱动的跨 23 表 + 千处应用代码重构**(估 12-20 周)。所以 §7 RLS POC **之外**必须再加一个 **PK 复合化 POC**(选 1-2 张核心表先改复合主键,实测应用层爆炸半径),两个 POC 都过才进入实施。
+> **修正后定位**:Citus 不是"运维改造为主、应用极小",而是 **PK 复合化驱动的跨 23 表 + 千处应用代码重构**(估 12-20 周)。所以 §7 RLS POC **之外**必须再加一个 **PK 复合化 POC**(选 1-2 张核心表先改复合主键,实测应用层爆失败半径),两个 POC 都过才进入实施。
 >
-> **2026-06-10 复核(实库直查)**:上述阻塞全部仍成立——10/10 核心表(`job_instance`/`pipeline_instance`/`outbox_event`/`workflow_run`/`file_record`/`trigger_request`/`dead_letter_task`/`job_partition`/`pipeline_step_run`/`workflow_node_run`)PK 仍为单列 `id`;`useGeneratedKeys` 43 → **49 处**(阻塞面在涨)。已采取的止血:CLAUDE.md §多租隔离新增「新表 PK 前瞻」(新多租大表一律复合 PK);洪峰 benchmark(门槛③)已排入 `worker-throughput-benchmark-plan-2026-06-07.md` P2。另:`outbox_event`/`job_instance` 月分区(partition-migration 01/02)同日在本地环境实跑——**触发新硬阻塞后已回滚**:分区键进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)` 等 upsert 契约,orchestrator outbox 写入全失败(6 个 mapper 受影响,清单见脚本 01 头注释)。**该教训直接外推到 Citus**:distributed table 同样要求 UNIQUE 含分片键,同一批 ON CONFLICT 全部会炸——§0.5 的"PK 复合化爆炸半径"POC 必须把 `grep -r 'on conflict'` 全量 mapper 清单纳入评估范围,这是比 `findById` 更隐蔽的爆炸点。
+> **2026-06-10 复核(实库直查)**:上述阻塞全部仍成立——10/10 核心表(`job_instance`/`pipeline_instance`/`outbox_event`/`workflow_run`/`file_record`/`trigger_request`/`dead_letter_task`/`job_partition`/`pipeline_step_run`/`workflow_node_run`)PK 仍为单列 `id`;`useGeneratedKeys` 43 → **49 处**(阻塞面在涨)。已采取的止血:CLAUDE.md §多租隔离新增「新表 PK 前瞻」(新多租大表一律复合 PK);洪峰 benchmark(门槛③)已排入 `worker-throughput-benchmark-plan-2026-06-07.md` P2。另:`outbox_event`/`job_instance` 月分区(partition-migration 01/02)同日在本地环境实跑——**触发新硬阻塞后已回滚**:分区键进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)` 等 upsert 契约,orchestrator outbox 写入全失败(6 个 mapper 受影响,清单见脚本 01 头注释)。**该教训直接外推到 Citus**:distributed table 同样要求 UNIQUE 含分片键,同一批 ON CONFLICT 全部会失败——§0.5 的"PK 复合化爆失败半径"POC 必须把 `grep -r 'on conflict'` 全量 mapper 清单纳入评估范围,这是比 `findById` 更隐蔽的爆失败点。
 
 ## 章节速览
 
@@ -477,7 +477,7 @@ batch.datasource.business.url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://primary
 - **不做** 业务表跨 colocation 组分散(同租户表必须 colocate 在一起,否则跨片事务激增)
 - **不做** 修改 Citus 源码 + 对外提供服务(触发 AGPL 网络条款);自用免改安全
 - **不做** 多主双写复制(BDR/pglogical)替代 Citus;状态机强一致不适用
-- **不做** 把 Citus 当"魔法加速器"宣传——它对**单租户单流**不缩耗时(详见 streaming-large-file §5.3 Citus 加速维度分析)
+- **不做** 把 Citus 当"隐式加速器"宣传——它对**单租户单流**不缩耗时(详见 streaming-large-file §5.3 Citus 加速维度分析)
 - **不做** 跨 region 部署 worker(网络延迟会毁掉 colocation 收益);单 region + 多 AZ
 
 ## 13. 关联

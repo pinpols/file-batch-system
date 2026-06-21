@@ -10,7 +10,7 @@
 #   sim           跑全量 sim 阶段 04→25(前置:preflight + prereq 已过)
 #   all           preflight → reset → prereq → verify-data → sim 一条龙
 #
-# 本 harness 固化了若干踩过的坑(见各 check 注释):
+# 本 harness 固化了若干踩过的问题(见各 check 注释):
 #   - bypass-mode 被 .env.local 的 BATCH_SECURITY_BYPASS_MODE=false 覆盖 → CSRF 拦所有写(403)
 #   - sim 阶段需 source scripts/sim/env-common.sh 才有 TRIGGER_BASE/CONSOLE_BASE
 #   - BATCH_ENV_COMMON_ROOT 来自 shell profile 会污染 .env.local 加载
@@ -126,7 +126,7 @@ fixture_compat_check() {
 }
 
 # ---------------------------------------------------------
-# reset:数据重制到基线(robust:只 truncate 实际存在的表,修 00-reset 撞缺表的坑)
+# reset:数据重制到基线(robust:只 truncate 实际存在的表,修 00-reset 撞缺表的问题)
 # ---------------------------------------------------------
 reset() {
   echo "== reset:运行态 + biz 数据回基线(保留 definition/config/tenant/user)=="

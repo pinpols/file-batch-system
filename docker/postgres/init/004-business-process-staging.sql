@@ -19,7 +19,7 @@ COMMENT ON SCHEMA batch IS 'Platform-shared schema reused in business DB for cro
 
 -- 按 staged_at 天级 RANGE 分区(与 scripts/db/business/create_biz_tables.sql 对齐):
 -- staging 行批次写满即清,但 DELETE 不缩文件,长期高水位会把堆膨胀到历史最大暂存量再不回收
--- (实测撑爆磁盘)。分区后由 ProcessStagingOrphanCleaner 预建未来日分区 + DROP 过期日分区,
+-- (实测超过磁盘)。分区后由 ProcessStagingOrphanCleaner 预建未来日分区 + DROP 过期日分区,
 -- DROP 瞬间把空间还给 OS。分区键 staged_at 必须进 PK(PG 声明式分区约束)。
 CREATE TABLE IF NOT EXISTS batch.process_staging (
     batch_key      TEXT        NOT NULL,

@@ -124,7 +124,7 @@
       只数 UNHEALTHY-且-探针过期的行：用于 startup audit 判定 pendingFirstProbe
       （unhealthy == overdue 时认为所有 UNHEALTHY 都是首轮 probe 未跑的残留）。
       DEGRADED 不参与本计数，避免把"DEGRADED 累积"误判成"全是 stale"，
-      让真实 UNHEALTHY 故障被错误吞掉。
+      让真实 UNHEALTHY 故障被错误捕获并抑制。
     -->
     <select id="countProbeOverdue" resultType="long">
         select count(*)

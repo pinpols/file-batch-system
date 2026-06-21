@@ -13,7 +13,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
  * WorkflowRunStatus.SUCCESS / WorkflowEdgeType.SUCCESS 都 = "SUCCESS")在测试断言里频繁出现,集中常量化让
  * 「测试在断言哪个域的状态」一目了然(`JobInstance.SUCCESS` vs `Edge.SUCCESS` vs `Workflow.SUCCESS`)。
  *
- * <p>**只放真正高频且语义清晰**的常量(audit 显示 ≥ 3 处出现);零散的 1-2 处场景继续直接用 `.code()`, 避免常量爆炸。
+ * <p>**只放真正高频且语义清晰**的常量(audit 显示 ≥ 3 处出现);零散的 1-2 处场景继续直接用 `.code()`, 避免常量爆失败。
  *
  * <p>本类**只在 test-jar 暴露**,生产代码禁引用。
  */

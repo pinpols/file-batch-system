@@ -5,7 +5,7 @@
 RLS 严格策略在 rls-phase-a-strict.sql 的 tables[] 数组里逐表 CREATE POLICY。
 
 风险:新增 biz 基表时漏加 tenant_id 列、或漏进 RLS tables[] 数组 → 该表无租户隔离,
-跨租户数据可被串读/串写,且 e2e 全绿挖不出(RLS 是 DB 层,测试库未必翻 strict)。
+跨租户数据可被串读/串写,且 e2e 全部通过挖不出(RLS 是 DB 层,测试库未必翻 strict)。
 
 判定(对 create_biz_tables.sql 里每张 biz 基表,分区子表 PARTITION OF 豁免):
   A. 必须含 tenant_id 列

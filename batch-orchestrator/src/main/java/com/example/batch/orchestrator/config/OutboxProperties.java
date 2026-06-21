@@ -61,7 +61,7 @@ public class OutboxProperties {
    * PUBLISHING 状态最大驻留时长（秒）。
    *
    * <p>若 outbox_event 在 PUBLISHING 状态超过此阈值，说明上一轮 markPublishing 后 Kafka 投递失败
-   * 且未能正常回退状态。轮询器会在每轮开始前将这些滞留事件重置为 FAILED，避免永久卡死。
+   * 且未能正常回退状态。轮询器会在每轮开始前将这些滞留事件重置为 FAILED，避免永久长期停滞。
    */
   private long publishingTimeoutSeconds = 120L;
 

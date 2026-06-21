@@ -36,7 +36,7 @@
 
 **禁止**:
 - 直接 import `com.example.batch.console.domain.<other-ctx>.*` 下的具体类
-- 把 shared 当垃圾桶塞业务逻辑(代码审查 reject)
+- 把 shared 当无边界容器塞业务逻辑(代码审查 reject)
 - 在 controller / mapper 跨 context(应限制在 application 层)
 
 ## 豁免机制

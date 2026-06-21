@@ -8,7 +8,7 @@
 - **CI(full-ci-gate)**:7 job 全并发,**wall-clock 30 min → 6:32**(-77%,run `26263116015`)
 - 唯一不可压的:`WorkerProcessRestartRecoveryE2eIT`(122s,@DirtiesContext 强 reload)
 
-### 2026-05-22 末轮 CI 实测(run 26268987041,wall-clock 6:25,**全绿**)
+### 2026-05-22 末轮 CI 实测(run 26268987041,wall-clock 6:25,**全部通过**)
 
 | Job | 耗时 | 内容 |
 |---|---|---|
@@ -32,7 +32,7 @@
 
 #### 下一轮瓶颈
 
-`unit-it-b` 6:16 + `e2e-shard 3/4` 6:19。再砍需拆 worker-* 与 console-api 成 2 job,但 setup overhead 已占 40%,**边际收益骤降,建议止步**。
+`unit-it-b` 6:16 + `e2e-shard 3/4` 6:19。继续压缩需拆 worker-* 与 console-api 成 2 job,但 setup overhead 已占 40%,**边际收益骤降,建议止步**。
 
 ## 措施分层
 
@@ -199,4 +199,4 @@ bash scripts/local/run-tests.sh e2e   # ~22 min
 | `0bd93576` | gitleaks 升级 8.18.4→8.30.1 + PEM header 测试 allowlist |
 | `94881dd1` | trivy 0.55.2→0.70.0(0.55.2 release 资源已 404)|
 | `2d8d522c` | dep-check 标 continue-on-error,NVD API NPE 不阻塞下游 |
-| `c0575092` | doc 记录 security-scan 修通后 wall-clock 6:25 全绿 |
+| `c0575092` | doc 记录 security-scan 修通后 wall-clock 6:25 全部通过 |

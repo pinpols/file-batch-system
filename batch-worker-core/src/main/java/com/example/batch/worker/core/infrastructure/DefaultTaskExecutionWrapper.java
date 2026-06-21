@@ -42,7 +42,7 @@ import org.springframework.stereotype.Service;
  * TaskExecutionClient#report} 上报 Orchestrator.
  *
  * <p><b>P0-1 (2026-05-03)</b>: 业务执行 submit 到 {@link TaskExecutionPool} 独立线程, listener 线程仅 {@code
- * future.get(timeout)} 等结果. 之前 plugin 死循环 / 长 SQL 卡住 → orchestrator 标 TIMED_OUT, 但 worker 线程仍占 着,
+ * future.get(timeout)} 等结果. 之前 plugin 无限循环 / 长 SQL 卡住 → orchestrator 标 TIMED_OUT, 但 worker 线程仍占 着,
  * Semaphore permit 永不释放 → worker 容量永久缩水. 现在超时即 {@code future.cancel(true)} → 释放 permit + 上报
  * orchestrator 失败 (errorCode=WORKER_EXECUTION_TIMEOUT). 协作式 cancel: 业务线程通过 {@code
  * Thread.isInterrupted()} / 阻塞 IO 自动响应; 不响应中断的线程在 {@link
@@ -109,7 +109,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
   }
 
-  /** R3-P2-5：按 workerType 懒注册 Timer；同一 type 复用同一实例避免 cardinality 爆炸。 */
+  /** R3-P2-5：按 workerType 懒注册 Timer；同一 type 复用同一实例避免 cardinality 爆失败。 */
   private Timer resolveExecutionTimer(String workerType) {
     if (meterRegistry == null) {
       return null;

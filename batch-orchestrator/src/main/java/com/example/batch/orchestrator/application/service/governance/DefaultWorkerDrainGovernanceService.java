@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li><b>优雅 drain</b>：{@link #startDrain} 把 worker 标记为 DRAINING 并打 drain deadline， worker
  *       不再接新任务、跑完手上任务后自然退出；{@link #takeoverAfterDrainTimeout} 定时器检查到 deadline 超期仍未 DECOMMISSIONED
- *       时强制接管剩余任务——防止卡死 worker 永远占着任务 lease。
+ *       时强制接管剩余任务——防止长期停滞 worker 永远占着任务 lease。
  *   <li><b>强制下线</b>：{@link #forceOffline} / {@link #takeover} 立即调用 {@code
  *       retryGovernanceService.reclaimTask} 把 worker 手中的活跃任务（CREATED / READY / RUNNING）重排队，然后标
  *       DECOMMISSIONED。

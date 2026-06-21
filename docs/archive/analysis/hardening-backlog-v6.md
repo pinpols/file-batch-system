@@ -32,7 +32,7 @@
 |---|---|---|
 | §5.1 | Trigger Spring Security | `cd389a0b`（2026-04-22 V4 闭环）；`TriggerSecurityConfiguration.java:42-46` 真起 SecurityFilterChain |
 | §5.2 | X-Console-Token 物理删除 | `ff20c36f`：主代码 + yaml + OpenAPI + 测试 9 文件 +20/-168 |
-| §5.7 | trigger → orchestrator 异步化 | ADR-010 全栈 7 stage（6 commits），22 测试全绿（单测 9 + relay 7 + Layer 1 trigger E2E 4 + Layer 2 跨模块 E2E 2） |
+| §5.7 | trigger → orchestrator 异步化 | ADR-010 全栈 7 stage（6 commits），22 测试全部通过（单测 9 + relay 7 + Layer 1 trigger E2E 4 + Layer 2 跨模块 E2E 2） |
 | §5.12 | Console Job 过胖 | `DefaultConsoleJobApplicationService` 现 90 LOC + 6 兄弟类共 1278 LOC |
 
 ### 2. ADR 路线图全栈完成
@@ -54,10 +54,10 @@
 
 | 编号 | 主题 | 状态 | 主要 commit |
 |---|---|---|---|
-| V6-P2-WEBHOOK-DURABILITY（deep-issue §5.11）| webhook 投递持久化 — V81 `delivery_status` CHECK 加 `GIVE_UP` + `(status, next_retry_at)` 部分索引；`WebhookDeliveryRelay` 278 LOC（@ConditionalOnProperty 默认开 + ShedLock 互斥 + 5/10/20/30min cap 退避 + absolute-max-attempts=8 后 GIVE_UP）；`WebhookEventPayload` + `WebhookDeliveryResult` 顶级类；`batch_webhook_delivery_give_up_total` counter + `WebhookDeliveryGiveUp` Prometheus 告警；7 单测全绿 | ✅ | `b74e0a0c`（2026-04-30 14:55）|
-| V6-P2-ORCHESTRATOR-GODCLASS | `DefaultTaskOutcomeService` 926 → 795 LOC（-14%）：抽 `TaskOutcomePayloadSupport`(104) + `TaskOutcomeSummaryBuilder`(76) + 内联 helper。`DefaultWorkflowNodeDispatchService` 840 → 371 LOC（-56%）：抽 `WorkflowNodePayloadBuilder`(311, Cluster F：payload 拼装 + 上游 partition output 合并 + ADR-009 DSL 解析) + `ChildJobLaunchSupport`(276, Cluster B+C：JOB 节点子作业拉起全套)；保留 25 LOC 重复（`recordNodeRunReady`/`nextRunSeq`）较抽公共类成本低；主 service 留 `dispatchNode`/`dispatchTaskNode`/`dispatchGatewayNode` 核心调度路径；test 构造器 5 → 4 参同步；12 个 `*WorkflowNode*Test` + `*Dispatch*Test` 全绿，506 IT 仅 1 已知 race flake（`WorkerClaimProgressCompleteIT`，isolation 重跑通过） | ✅ | `b74e0a0c` + `7d6faad6`（2026-04-30 20:46）|
+| V6-P2-WEBHOOK-DURABILITY（deep-issue §5.11）| webhook 投递持久化 — V81 `delivery_status` CHECK 加 `GIVE_UP` + `(status, next_retry_at)` 部分索引；`WebhookDeliveryRelay` 278 LOC（@ConditionalOnProperty 默认开 + ShedLock 互斥 + 5/10/20/30min cap 退避 + absolute-max-attempts=8 后 GIVE_UP）；`WebhookEventPayload` + `WebhookDeliveryResult` 顶级类；`batch_webhook_delivery_give_up_total` counter + `WebhookDeliveryGiveUp` Prometheus 告警；7 单测全部通过 | ✅ | `b74e0a0c`（2026-04-30 14:55）|
+| V6-P2-ORCHESTRATOR-GODCLASS | `DefaultTaskOutcomeService` 926 → 795 LOC（-14%）：抽 `TaskOutcomePayloadSupport`(104) + `TaskOutcomeSummaryBuilder`(76) + 内联 helper。`DefaultWorkflowNodeDispatchService` 840 → 371 LOC（-56%）：抽 `WorkflowNodePayloadBuilder`(311, Cluster F：payload 拼装 + 上游 partition output 合并 + ADR-009 DSL 解析) + `ChildJobLaunchSupport`(276, Cluster B+C：JOB 节点子作业拉起全套)；保留 25 LOC 重复（`recordNodeRunReady`/`nextRunSeq`）较抽公共类成本低；主 service 留 `dispatchNode`/`dispatchTaskNode`/`dispatchGatewayNode` 核心调度路径；test 构造器 5 → 4 参同步；12 个 `*WorkflowNode*Test` + `*Dispatch*Test` 全部通过，506 IT 仅 1 已知 race flake（`WorkerClaimProgressCompleteIT`，isolation 重跑通过） | ✅ | `b74e0a0c` + `7d6faad6`（2026-04-30 20:46）|
 | V6-P2-EXCEL-GODCLASS | 7 个 god class 主 service 平均 -67% LOC，新增 13 个收口类（详见下表） | ✅ 6/7 | `002b8864` + `bd0f0532` + `b9eefb47` |
-| V6-P2-CONSOLE-IDEMPOTENCY（deep-issue §5.5/§5.6/§5.10）| 三层幂等边界 — Layer 1：`ConsoleIdempotencyInterceptor` 全文重写（key 绑定 tenant+method+uri+idempotencyKey；两阶段占坑 PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE 释放；Redis fail-closed 503）。Layer 2：`DefaultTriggerService.approvePendingCatchUp:134-142` 用 `idempotencyKey` 查 `trigger_request` 已 LAUNCHED 短路；类 Javadoc:60-71 明示"trigger 层只做尽力去重，最终去重由 orchestrator 兜底"。Layer 3：`db/migration/V37` 删 `uk_trigger_request_tenant_dedup` + `uk_job_instance_tenant_dedup` 作为最终事实源。设计定稿见 [`ADR-011`](../architecture/adr/ADR-011-idempotency-boundary-alignment.md) | ✅ | — |
+| V6-P2-CONSOLE-IDEMPOTENCY（deep-issue §5.5/§5.6/§5.10）| 三层幂等边界 — Layer 1：`ConsoleIdempotencyInterceptor` 全文重写（key 绑定 tenant+method+uri+idempotencyKey；两阶段占问题 PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE 释放；Redis fail-closed 503）。Layer 2：`DefaultTriggerService.approvePendingCatchUp:134-142` 用 `idempotencyKey` 查 `trigger_request` 已 LAUNCHED 短路；类 Javadoc:60-71 明示"trigger 层只做尽力去重，最终去重由 orchestrator 兜底"。Layer 3：`db/migration/V37` 删 `uk_trigger_request_tenant_dedup` + `uk_job_instance_tenant_dedup` 作为最终事实源。设计定稿见 [`ADR-011`](../architecture/adr/ADR-011-idempotency-boundary-alignment.md) | ✅ | — |
 
 **EXCEL-GODCLASS 7 类拆分明细**：
 
@@ -112,7 +112,7 @@
 
 **当前进度**（2026-06-05 复核：全 4 stage 已落地，本清单此前漏同步 → 校正）：
 - ✅ Stage 1：`db/migration/V72__add_workflow_node_run_output.sql` schema 落地（output JSONB 列）+ worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String,Object>`）
-- ✅ Stage 2：`WorkflowParamResolver` + `WorkflowParamResolverTest`（10 单测全绿，复核日重跑确认）
+- ✅ Stage 2：`WorkflowParamResolver` + `WorkflowParamResolverTest`（10 单测全部通过，复核日重跑确认）
 - ✅ Stage 3：集成在 `WorkflowNodePayloadBuilder.mergeNodeParams`（实现选 payload 装配点，比设计稿假想的 `DefaultSchedulePlanBuilder` 更准确）+ `loadWorkflowRunContext` 加载上游节点 output
 - ✅ Stage 4：测试 seed `batch-e2e-tests/.../multi-tenant-seed.sql` 已配 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` DSL 演示
 

@@ -31,7 +31,7 @@ public class ProcessStagingCleanupProperties {
 
   /**
    * 分区保留天数。{@code process_staging} 按 {@code staged_at} 天级 RANGE 分区,早于 {@code now() - retentionDays}
-   * 天的整个日分区被 DROP(瞬间还空间给 OS,根治堆膨胀)。staging 行本就短命(COMPUTE 写、FEEDBACK 清),3 天足够覆盖卡死的孤儿 run;
+   * 天的整个日分区被 DROP(瞬间还空间给 OS,根治堆膨胀)。staging 行本就短命(COMPUTE 写、FEEDBACK 清),3 天足够覆盖长期停滞的孤儿 run;
    * 调大仅增加磁盘占用上限。**0 或负数 = 关闭分区 DROP**(仅保留 orphan DELETE,用于不希望自动 DROP 分区的环境)。
    */
   private int retentionDays = 3;

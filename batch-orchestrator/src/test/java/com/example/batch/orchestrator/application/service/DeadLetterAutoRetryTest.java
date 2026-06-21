@@ -76,7 +76,7 @@ class DeadLetterAutoRetryTest {
 
   /**
    * 入口边界保护：理论上 selectDueAutoRetries 的 SQL where 子句已过滤 replay_count &lt; max_replay_count， 但配置漂移 /
-   * 数据迁移可能让 max=0 漏进来；scheduler 必须主动转 GIVE_UP, 不允许进入 replayDeadLetter 死循环.
+   * 数据迁移可能让 max=0 漏进来；scheduler 必须主动转 GIVE_UP, 不允许进入 replayDeadLetter 无限循环.
    */
   @Test
   void recordWithMaxAlreadyReached_shouldGiveUpWithoutReplay() {

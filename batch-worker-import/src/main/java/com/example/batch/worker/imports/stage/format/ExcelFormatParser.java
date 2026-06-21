@@ -445,7 +445,7 @@ public class ExcelFormatParser implements FormatParser {
                 .build();
         support.writeParsedRecord(writeParam);
       } catch (BizException biz) {
-        // 表头/sheet 等业务级 fail-fast 不当坏行吞掉,沿 SAX parse 抛出由 ParseStep 转 BUSINESS_ERROR。
+        // 表头/sheet 等业务级 fail-fast 不当坏行捕获并抑制,沿 SAX parse 抛出由 ParseStep 转 BUSINESS_ERROR。
         throw biz;
       } catch (Exception ex) {
         SwallowedExceptionLogger.warn(ExcelFormatParser.class, "catch:Exception", ex);

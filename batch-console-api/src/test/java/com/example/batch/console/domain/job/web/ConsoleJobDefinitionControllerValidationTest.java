@@ -26,7 +26,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 /**
  * 守护 ConsoleJobDefinitionController 的请求体 Bean Validation 在 controller 入口生效。
  *
- * <p>历史脏数据案例：FE 已加 jobCode pattern,但 BE 未拦,被直接 INSERT `q q q` 含空格的 job_code,
+ * <p>历史异常数据案例：FE 已加 jobCode pattern,但 BE 未拦,被直接 INSERT `q q q` 含空格的 job_code,
  * 后续路由跳转崩。本测试守护 @ValidResourceCode 在 jobCode / newJobCode 两条入口都生效。
  */
 class ConsoleJobDefinitionControllerValidationTest {

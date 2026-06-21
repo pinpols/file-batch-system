@@ -69,7 +69,7 @@ P3 用**单文件 + 字节位点截断**方案接入(spike `docs/spike/adr-038-p
 机制:
 - **确定化文件路径**:续跑开启时生成文件落 `${java.io.tmpdir}/file-batch-export/inst-<pipelineInstanceId>.<ext>`(关闭时仍为随机 temp,行为不变)。同实例重派落同一文件,崩溃后能找回残文件。
 - **页边界 fsync + 位点**:每完成一页(`loadDetailPage` 一批)就 `flush + FileDescriptor.sync()` 落盘,把 `<byteOffset>@<typed-cursor>` 记进 `batch.pipeline_progress`(stage=`GENERATE`)。位点**仅在还有后继页时记**;终页 cursor=null 不记(交由完成时补记总行数),保证存下的 cursor 永远是有效续跑起点。
-- **续跑**:`FileChannel.truncate(byteOffset)` 砍掉崩溃残尾 → 数据插件从 `cursor` 续拉下一页 → append 续写。崩溃窗口最多重做「最后一个已记位点之后那一页」,因 truncate 先于重写故**不重复、不丢行**;JSON 收尾 `]}` 只在整体完成时写一次。
+- **续跑**:`FileChannel.truncate(byteOffset)` 截断崩溃残尾 → 数据插件从 `cursor` 续拉下一页 → append 续写。崩溃窗口最多重做「最后一个已记位点之后那一页」,因 truncate 先于重写故**不重复、不丢行**;JSON 收尾 `]}` 只在整体完成时写一次。
 - **幂等跳过**:GENERATE 已 `completed` 且文件仍在(STORE 未消费)→ 重派不重生成,补齐下游 attribute 即可。
 
 ### 前置约束(对齐 Import 的幂等校验)
@@ -142,7 +142,7 @@ ORDER BY completed_at DESC;
 
 | 项 | 跟进 PR |
 |---|---|
-| **阶段级续跑**(ADR-038 §决策四 P4) | 与 ADR-020 batch-day-replay 语义重叠,需对齐后再做。本 PR 砍掉。 |
+| **阶段级续跑**(ADR-038 §决策四 P4) | 与 ADR-020 batch-day-replay 语义重叠,需对齐后再做。本 PR 暂不实现。 |
 | **确定化残文件清理**(GENERATE 崩溃后从未重派的孤儿 `inst-*.<ext>`) | 走 tmp 目录,OS / 容器重启即清;若要主动清,后续可加按 mtime 的定期清扫(低优先,YAGNI)。 |
 
 ## 相关

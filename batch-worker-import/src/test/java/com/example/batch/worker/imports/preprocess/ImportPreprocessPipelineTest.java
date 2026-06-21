@@ -98,8 +98,8 @@ class ImportPreprocessPipelineTest {
   }
 
   // ===== AES_GCM_DECRYPT 回归保护 =====
-  // 历史脏数据事故:5001/5003 模板配 encrypt_type='AES' 但 import job 没供 aesKeyBase64,
-  // worker preprocess 必失败,造成所有任务循环失败 + 脏 job_instance 累积。
+  // 历史异常数据事故:5001/5003 模板配 encrypt_type='AES' 但 import job 没供 aesKeyBase64,
+  // worker preprocess 必失败,造成所有任务循环失败 + 异常 job_instance 累积。
   // 本组测试守护:
   //   - bypass=true 下 AES_GCM_DECRYPT 被跳过(本地联调防呆)
   //   - bypass=false + 无 key/iv → 抛 ImportPreprocessException(IMPORT_PREPROCESS_AES_KEY_MISSING)
@@ -116,7 +116,7 @@ class ImportPreprocessPipelineTest {
 
   @Test
   void aesGcmDecryptShouldFailFastWhenKeyMissingInProdMode() {
-    // 脏数据事故的精确回归:bypass=false + AES 但未提供 key/iv → 必抛
+    // 异常数据事故的精确回归:bypass=false + AES 但未提供 key/iv → 必抛
     byte[] anyBytes = "anything".getBytes(StandardCharsets.UTF_8);
     Map<String, Object> template = Map.of("encrypt_type", "AES");
     assertThatThrownBy(() -> ImportPreprocessPipeline.run(anyBytes, null, template, false))

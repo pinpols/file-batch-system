@@ -70,7 +70,7 @@ services:
     volumes:
       - batch-app-logs:/app/logs
       # logback-spring.xml prod profile 的 FRONTEND_FILE 硬编码写 /logs/frontend.log;
-      # K8s 那边 helm 挂了 emptyDir,docker-compose 这里要对齐,否则容器启动 logback 报
+      # K8s 那边 helm 异常退出 emptyDir,docker-compose 这里要对齐,否则容器启动 logback 报
       # "Failed to create parent directories for [/logs/frontend.log]" 直接 crash。
       - batch-app-logs:/logs
     ports:

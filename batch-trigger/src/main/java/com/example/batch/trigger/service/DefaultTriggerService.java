@@ -214,7 +214,7 @@ public class DefaultTriggerService implements TriggerService {
                       : pendingRequest.getRequestId();
               publishLaunchOutbox(launchRequest, dedupKey);
               // 同事务推进到 LAUNCHED — outbox 保证 at-least-once 投递；
-              // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再卡死。
+              // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再长期停滞。
               triggerRequestMapper.updateRequestStatus(
                   command.getTenantId(), command.getRequestId(), "LAUNCHED");
               return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());

@@ -50,7 +50,7 @@ public class DispatchFileContentResolver {
       return Files.newInputStream(local);
     }
     if (objectStore == null) {
-      // 走项目存储异常体系,上层可区分「存储未配置」与其他技术错误(而非被通用 500 吞掉)。
+      // 走项目存储异常体系,上层可区分「存储未配置」与其他技术错误(而非被通用 500 捕获并抑制)。
       throw new ObjectStoreException("object store not configured for remote storage");
     }
     String bucket =

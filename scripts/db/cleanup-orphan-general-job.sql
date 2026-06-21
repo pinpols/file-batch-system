@@ -1,6 +1,6 @@
 -- cleanup-orphan-general-job.sql
 -- ---------------------------------------------------------------
--- 清理两类"永远跑不动"的脏数据：
+-- 清理两类"永远跑不动"的异常数据：
 --
 -- 1. 孤儿 job_definition（含其活跃 job_instance / job_partition 级联）
 --    判定：enabled=true 且 worker_group 非空 且该 worker_group 无任何

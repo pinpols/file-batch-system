@@ -28,7 +28,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
  * <p>约束：
  *
  * <ul>
- *   <li>所有转换以 {@code version} 做乐观锁，CAS 失败时必须回滚或让调用方感知；不得静默吞掉。
+ *   <li>所有转换以 {@code version} 做乐观锁，CAS 失败时必须回滚或让调用方感知；不得静默捕获并抑制。
  *   <li>{@link #releaseForDispatch} 是 READY 出队的唯一入口——分片与任务状态须原子一起推进， 见方法内的回滚并还原内存对象逻辑。
  *   <li>{@link #reclaimExpiredPartitions} 回收超租后一律回 {@code WAITING} 而非 {@code READY}，
  *       走一遍正常调度与派发，避免跳过 outbox 落库导致任务永远拿不到 Kafka 消息。

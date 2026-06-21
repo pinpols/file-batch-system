@@ -135,7 +135,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
     boolean acquired = sem.tryAcquire();
     if (!acquired) {
       // 背压：当实例内并发达到上限时，暂停拉取新消息。
-      // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程卡死导致 rebalance 风险）。
+      // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程长期停滞导致 rebalance 风险）。
       pauseContainer();
       return false;
     }
@@ -215,7 +215,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
       }
     } catch (Exception parseOrStartupEx) {
       // 解析 / ensureStarted 阶段的异常：payload 无法反序列化或 worker 未起来。
-      // 送 DLQ 避免毒丸阻塞队列；若 DLQ 也挂了则 return false 让 Kafka 重投。
+      // 送 DLQ 避免毒丸阻塞队列；若 DLQ 也异常退出则 return false 让 Kafka 重投。
       log.error(
           "{} pre-dispatch failed — publishing to DLQ: error={}",
           workerConfiguration().workerType(),

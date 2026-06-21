@@ -235,7 +235,7 @@ class TaskDispatcherTest {
     verify(http, never()).report(anyLong(), anyString(), any());
   }
 
-  // ─── REPORT 传输失败:5xx/IO 退避重试,耗尽后吞掉,等 orchestrator lease 超时 ──────────
+  // ─── REPORT 传输失败:5xx/IO 退避重试,耗尽后捕获并抑制,等 orchestrator lease 超时 ──────────
 
   @Test
   void reportFailureSwallowed() throws Exception {

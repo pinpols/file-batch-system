@@ -286,7 +286,7 @@ console-api 一份配置 + 改 9 个 query service 加 `readOnly=true` 就值，
 | 新加**报表 / 数据分析**模块（如 `batch-analytics`），完全只读 | ✅ 引入读写分离，且**只读**——不挂主库写路径 |
 | orchestrator 出现**纯历史查询**端点（如"查 30 天前归档实例"），不涉及状态推进 | ✅ 该端点单独走 `@Transactional(readOnly=true)` + 从库；其他保持主库 |
 | 主库 CPU 长期 > 80% 且**读 SQL 占大头** | 重新评估；但更可能的根因是缺索引 / 慢 SQL，**先优化主库** |
-| 全局读 TPS 主库扛不住 | 那时大概率已经在做分库分表了（Phase 3 范畴），见 `docs/architecture/scalability-assessment.md` §6 |
+| 全局读 TPS 主库无法承载 | 那时大概率已经在做分库分表了（Phase 3 范畴），见 `docs/architecture/scalability-assessment.md` §6 |
 
 > **结论**：console-api 走读写分离是 BFF 层的优化；主链路（trigger / orchestrator / worker）的强一致性需求决定了它们必须直连主库——这是**架构正交决策**，不是临时省事。**未来真要引入只在"新增的纯读模块 / 纯读端点"上做，绝不反向给现有主链路加。**
 

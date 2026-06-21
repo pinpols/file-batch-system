@@ -110,7 +110,7 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    // 守护:脏数据不入库
+    // 守护:异常数据不入库
     Long cnt =
         jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM batch.workflow_definition WHERE workflow_code = ?",

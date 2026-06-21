@@ -32,8 +32,8 @@ public class WorkerReportOutboxProperties {
 
   /**
    * P1: 单次 {@link WorkerReportOutboxCoordinator#pollDeferredReports()} 调度内的总耗时熔断, 防止单批同步 HTTP
-   * submit 卡死整个轮询线程并阻塞 recoverStalePublishing。 &lt;= 0 表示关闭熔断,保留旧行为。默认 8 秒(略低于默认 HTTP 超时 × batch=8
-   * 的最差情况上限)。
+   * submit 长期停滞整个轮询线程并阻塞 recoverStalePublishing。 &lt;= 0 表示关闭熔断,保留旧行为。默认 8 秒(略低于默认 HTTP 超时 ×
+   * batch=8 的最差情况上限)。
    */
   private long pollMaxDurationMillis = 8_000L;
 

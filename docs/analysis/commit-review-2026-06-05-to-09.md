@@ -8,7 +8,7 @@
 
 | # | 问题 | 位置 | 来源 | 置信度 | 修复 |
 |---|------|------|------|--------|------|
-| 1 | sim 清理脚本在**平台库** TRUNCATE `batch.process_staging`(该表属业务库):清错表或报错中断 `00-clean.sh`,sim 带脏数据跑 | `scripts/sim-4day/sql/clean-platform-runtime.sql` | benchmark 系列 | 95 | ✅ 移到 clean-business-runtime.sql |
+| 1 | sim 清理脚本在**平台库** TRUNCATE `batch.process_staging`(该表属业务库):清错表或报错中断 `00-clean.sh`,sim 带异常数据跑 | `scripts/sim-4day/sql/clean-platform-runtime.sql` | benchmark 系列 | 95 | ✅ 移到 clean-business-runtime.sql |
 | 2 | `EncryptingObjectStore.statSize()` 返回**密文**长度,被 `PreprocessStep` 当明文长度做分区 range 切分;`decoratorEnabled=true` 时必然分片错位(当前默认 false 幸免) | `batch-common/.../EncryptingObjectStore.java` | #395/#398 | 90 | ✅ 新增 `supportsRangeRead()` 能力探测,加密层回退整份流式;statSize/presign 补密文语义文档 |
 | 3 | `pg-write-parameter-matrix.sh` 用 `ALTER SYSTEM` 改实例级 PG 参数,无 PGHOST 守护,`.env.local` 指错地址即改生产实例 | `scripts/local/pg-write-parameter-matrix.sh` | benchmark 系列 | 88 | ✅ 加 localhost 白名单守护(`PG_PARAM_MATRIX_ALLOW_REMOTE=1` 显式越过) |
 | 4 | `attachClause`(Console 可写模板字段)自由文本直拼 `ATTACH PARTITION` DDL,黑名单校验防不了 `/* */` 块注释 | `JdbcMappedImportSpec.validateStageSwap()` | #412 | 88 | ✅ 改白名单字符集校验(仅允许分区边界字面量字符) |
@@ -39,4 +39,4 @@
 
 ## 总评
 
-工程质量中上。问题集中两类:**`scripts/` 运维脚本缺守护**(最易直连生产出事的地方,主代码路径反而严谨)和**抽象层边角语义**(加密装饰器 statSize/presign、自动配置条件这类静默炸弹)。`biz.process_event_copy` 漏 RLS 再次印证:逐 PR 扫描查不出"全局清单类"缺口,需要定期对标(RLS 表清单 vs 实际带 tenant_id 的表)兜底。
+工程质量中上。问题集中两类:**`scripts/` 运维脚本缺守护**(最易直连生产出事的地方,主代码路径反而严谨)和**抽象层边角语义**(加密装饰器 statSize/presign、自动配置条件这类静默失败弹)。`biz.process_event_copy` 漏 RLS 再次印证:逐 PR 扫描查不出"全局清单类"缺口,需要定期对标(RLS 表清单 vs 实际带 tenant_id 的表)兜底。

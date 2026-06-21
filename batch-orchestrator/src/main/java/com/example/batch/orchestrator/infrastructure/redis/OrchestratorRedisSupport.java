@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 /**
  * Orchestrator Redis 操作工具类：封装常用 Redis 操作，统一序列化/反序列化并提供原子化操作支持。
  *
- * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除脏数据）、 Hash 整体写入、滑动窗口计数器（{@code
+ * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除异常数据）、 Hash 整体写入、滑动窗口计数器（{@code
  * incrementWithinWindow}，首次写入时设置 TTL）， 以及执行 Lua 脚本（{@code evalLong}）。
  *
  * <p>Cache-Aside 方法使用 best-effort 语义：Redis 连接类异常（{@link RedisConnectionFailureException} / {@link
@@ -128,7 +128,7 @@ public class OrchestratorRedisSupport {
   }
 
   // R3-P2-8：entries 也走 best-effort 包装；Redis 不可达时返回空 map 让上游 fallback DB，
-  // 不再让 governance 接口因 Redis 故障整条挂掉。
+  // 不再让 governance 接口因 Redis 故障整条异常退出。
   public Map<Object, Object> entries(String key) {
     Map<Object, Object> result = cacheRead(key, () -> redisTemplate.opsForHash().entries(key));
     return result == null ? Map.of() : result;

@@ -267,7 +267,7 @@ public class HashedWheelTriggerScheduler {
 
   /** 测试 + 内部都用,public 为了 IT 能直接触发(避免依赖 @Scheduled 60s 周期等)。 */
   public void scanAndSchedule(Duration window) {
-    // P1: 内存 in-flight 上限保护 — fire callback 卡死时 wheel 推入速率 ≫ 释放速率会让
+    // P1: 内存 in-flight 上限保护 — fire callback 长期停滞时 wheel 推入速率 ≫ 释放速率会让
     // inFlightFires / timeoutRegistry 无界增长。任一超阈值 → WARN + skip 本轮,等下次 tick
     // 重试;真实 fire 路径恢复后 map 自然回落,无需手动清理。
     int max = props.getMaxInFlight();

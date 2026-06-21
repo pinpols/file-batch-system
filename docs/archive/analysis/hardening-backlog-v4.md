@@ -66,9 +66,9 @@
 - 恢复 `default-tenant` 2 条 queue 的 `resource_tag`（`export_queue=report` / `workflow_queue=workflow`）
 - 重新跑 tb IMPORT → instance 165 SUCCESS，`biz.transaction` 落行。selector 通过 capability_tags 命中，之前需要绕过的种子错配彻底根治。
 
-**同时注意到的小坑**：worker-import 等子模块依赖 batch-worker-core，在只改 worker-core 源码后直接 `mvn package` 某个 worker 模块会用本地 m2 缓存的旧 jar。必须先 `mvn install batch-worker-core` 再 package 下游，否则 bytecode 里根本没 `setCapabilityTags` 调用（debug 时踩过一次）。
+**同时注意到的小问题**：worker-import 等子模块依赖 batch-worker-core，在只改 worker-core 源码后直接 `mvn package` 某个 worker 模块会用本地 m2 缓存的旧 jar。必须先 `mvn install batch-worker-core` 再 package 下游，否则 bytecode 里根本没 `setCapabilityTags` 调用（debug 时踩过一次）。
 
-**成本**：实际约 2h（含踩坑时间）
+**成本**：实际约 2h（含遇到问题时间）
 
 ---
 
@@ -106,7 +106,7 @@
 
 **文件**：`batch-worker-import/src/main/java/com/example/batch/worker/imports/stage/format/ParseSupport.java`
 
-**原症状**：`preserveLogicalRow=false` 时，不管 template 声明啥 schema，rows 统一被 `objectMapper.convertValue(row, CustomerImportPayload.class)` 强转。non-customer 导入（但又没配 `jdbc_mapped_import` 触发 `preserveLogicalRow=true`）会被吞掉除 customer 字段之外的列，validate 阶段报 `customerNo is required`。
+**原症状**：`preserveLogicalRow=false` 时，不管 template 声明啥 schema，rows 统一被 `objectMapper.convertValue(row, CustomerImportPayload.class)` 强转。non-customer 导入（但又没配 `jdbc_mapped_import` 触发 `preserveLogicalRow=true`）会被捕获并抑制除 customer 字段之外的列，validate 阶段报 `customerNo is required`。
 
 **完成动作**：
 - `writeParsedRecord` 内部统一把 row 原样 NDJSON 输出（删掉原本 `!preserveLogicalRow` 分支里的 `convertValue(CustomerImportPayload.class)` 及对应 lenient 重试路径）。参数 `preserveLogicalRow` 保留为 API 兼容。

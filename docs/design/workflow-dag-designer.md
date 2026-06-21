@@ -263,4 +263,4 @@ GET /api/console/queries/job-definitions/codes?tenantId=
 
 - `WorkflowDesignLockServiceTest`(6 case)
 - `ConsoleWorkflowFullUpdateControllerTest`(3 case)
-- `mvn -pl batch-console-api test -DskipITs` 全绿(844 / 0 fail / 1 skip)
+- `mvn -pl batch-console-api test -DskipITs` 全部通过(844 / 0 fail / 1 skip)

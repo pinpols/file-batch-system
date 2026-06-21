@@ -41,7 +41,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *       synchronization，只在事务成功提交后才 fanout——避免把最终会回滚的中间态推到前端造成 UI 幻读。
  *   <li><b>3 维过滤</b>：订阅按 {@code (tenantId, stream, eventType)} 严格匹配事件，{@code stream="*"} 或
  *       eventType 为 null/blank 视为通配。
- *   <li><b>心跳保活</b>：默认 25s 发 heartbeat 事件，防止代理/负载均衡在空闲连接上断线； 下限 clamp 到 10s 防止客户端指定过短间隔打爆线程。
+ *   <li><b>心跳保活</b>：默认 25s 发 heartbeat 事件，防止代理/负载均衡在空闲连接上断线； 下限 clamp 到 10s 防止客户端指定过短间隔耗尽线程资源。
  *   <li><b>断线回放</b>（{@link #replay}）：新订阅带 {@code cursor} 时从 replay store 拉该 cursor 之后的历史
  *       事件补推；cursor 已被回收或不存在时发 {@code reset-required} 事件要求前端重连并拿新 cursor。
  *   <li><b>生命周期</b>：emitter 的 onCompletion / onTimeout / onError 统一走 {@link #close}， 用 {@code

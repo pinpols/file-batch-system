@@ -126,7 +126,7 @@
 | **7** | R2-P0-1: SQL 注入 @ DataQualityCheckExecutor | P0 | PG 命令注入 |
 | **8** | R4-P0-2: approve(tenantId) 信任请求体 → 跨租户审批 | P0 | 权限越界 |
 | **9** | R3-P0-1: idempotency_key UNIQUE NULL bypass → 双 CLAIM | P0 | 同 task 双执行 |
-| **10** | R1-P0-3: trigger approve 绕 outbox → 永久卡 PROCESSING | P0 | 手动审批卡死 |
+| **10** | R1-P0-3: trigger approve 绕 outbox → 永久卡 PROCESSING | P0 | 手动审批长期停滞 |
 
 ---
 
@@ -150,7 +150,7 @@
 
 3. **没有"审计日志双轨制"** — DB 表的审计和 SIEM 日志平台的审计脱钩。高危操作（approve / promote / approve_replay）只 DB 记录，没有专用 appender 流向 ELK/Splunk，故障恢复时无实时告警。
 
-4. **CLAUDE.md 规范落地靠人眼** — "禁止 FQN"、"禁止 ZoneId.systemDefault()"、"所有 UNIQUE 含 tenant_id" 等约束，没有自动化校验，R4 还是踩坑（FQN）。
+4. **CLAUDE.md 规范落地靠人眼** — "禁止 FQN"、"禁止 ZoneId.systemDefault()"、"所有 UNIQUE 含 tenant_id" 等约束，没有自动化校验，R4 还是遇到问题（FQN）。
 
 ---
 

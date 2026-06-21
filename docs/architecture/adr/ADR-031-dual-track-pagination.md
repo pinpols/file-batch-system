@@ -27,11 +27,11 @@
 > ✅ **是**两个特定问题:
 >
 > 1. **移动端 infinite scroll 需要 cursor**:`MJobInstances` / `MAlerts` / `MOutbox` 等列表当前用 offset + 触底分页拼接,**遇到并发写时会漏/重**(2026-05-15 已观察到一次告警漏显示)
-> 2. **大表深翻页有 latent 风险**:`job_step_instance` / `workflow_node_run` 在 ~6 个月数据保留期里会达百万行,运维若深翻 page 1000+ 已经能感受到 1s+ 延迟。还没炸,但可预见
+> 2. **大表深翻页有 latent 风险**:`job_step_instance` / `workflow_node_run` 在 ~6 个月数据保留期里会达百万行,运维若深翻 page 1000+ 已经能感受到 1s+ 延迟。还没失败,但可预见
 
 ### 不引插件(再申明)
 
-- PageHelper 的 ThreadLocal 黑魔法 + count 自动改写易出错,大厂复盘已弃用,详见 ADR-031.附录 A
+- PageHelper 的 ThreadLocal 黑隐式 + count 自动改写易出错,大厂复盘已弃用,详见 ADR-031.附录 A
 - MyBatis-Plus 等于换 ORM,违反 ADR-001「全模块统一 MyBatis」
 - 自写薄封装 ~80 LOC,完全够用
 
@@ -387,7 +387,7 @@ cursor 是用户可控输入。SQL 必须保证:
 
 ## 附录 A:为什么不用 PageHelper
 
-(略,见此前讨论:ThreadLocal 黑魔法、count 自动改写错、不解决 keyset)
+(略,见此前讨论:ThreadLocal 黑隐式、count 自动改写错、不解决 keyset)
 
 ## 附录 B:为什么不用 MyBatis-Plus
 

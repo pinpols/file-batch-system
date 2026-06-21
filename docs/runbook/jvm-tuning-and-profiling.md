@@ -19,7 +19,7 @@
 -XX:+UseContainerSupport
 -XX:MaxRAMPercentage=70.0          # 留 30% 给 native(Netty / Kafka / MinIO 大头)
 -XX:InitialRAMPercentage=70.0      # heap 不动态扩,防 page fault 抖动
--XX:MaxDirectMemorySize=512m       # Netty / Kafka direct buffer 上限,不设会无界,撑爆 cgroup
+-XX:MaxDirectMemorySize=512m       # Netty / Kafka direct buffer 上限,不设会无界,超过 cgroup
 -XX:NativeMemoryTracking=summary   # 出 OOM 用 jcmd NMT summary 看 off-heap
 -XX:MaxMetaspaceSize=256m          # 防元空间无限增
 
@@ -174,7 +174,7 @@ java -jar arthas-boot.jar <pid>
 
 # === 三连击 thread dump(死锁 / 卡顿)===
 for i in 1 2 3; do jstack <pid> > /tmp/td-$i.txt; sleep 30; done
-# 三次对比,所有 dump 里 stack 没动 = 真卡(死锁 / 死循环 / 阻塞 IO)
+# 三次对比,所有 dump 里 stack 没动 = 真卡(死锁 / 无限循环 / 阻塞 IO)
 
 # === 一键打包诊断证据(发事故 issue 用)===
 jcmd <pid> VM.system_properties > /tmp/sysprops.txt

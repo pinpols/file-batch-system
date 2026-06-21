@@ -749,7 +749,7 @@ flowchart LR
 
 ### 2.4 PROCESS — 5 stage（WAP+bookends）
 
-PROCESS 解决"系统内部加工"（聚合 / 清洗 / 状态推进），**Write-Audit-Publish** 模式：先把计算结果写到 staging 隔离区，校验通过后再原子发布到 target，避免脏数据落到生产表。`COMPUTE` 由插件分派（`sqlTransformCompute` 配置驱动 / `ProcessComputePlugin` 业务自定义）。
+PROCESS 解决"系统内部加工"（聚合 / 清洗 / 状态推进），**Write-Audit-Publish** 模式：先把计算结果写到 staging 隔离区，校验通过后再原子发布到 target，避免异常数据落到生产表。`COMPUTE` 由插件分派（`sqlTransformCompute` 配置驱动 / `ProcessComputePlugin` 业务自定义）。
 
 ```mermaid
 flowchart LR
@@ -1093,7 +1093,7 @@ orchestrator 派发任务时要做两件事：
 1. 把 `job_instance` / `partition` 写进 PostgreSQL
 2. 把"task dispatch"事件发到 Kafka 让 worker 消费
 
-PostgreSQL + Kafka 没原生分布式事务。**先发 Kafka 后写 DB**：DB 失败 → worker 收到指向幽灵任务的事件；**先写 DB 后发 Kafka**：Kafka 失败 → 任务永远不会被 worker 看到。
+PostgreSQL + Kafka 没原生分布式事务。**先发 Kafka 后写 DB**：DB 失败 → worker 收到指向残留任务的事件；**先写 DB 后发 Kafka**：Kafka 失败 → 任务永远不会被 worker 看到。
 
 **Outbox Pattern 的解法**：把"我要发的消息"也写到一张表 `outbox_event`，**和业务数据写在同一个 PG 事务里**；Kafka 投递解耦到独立 poller。
 
@@ -1134,7 +1134,7 @@ stateDiagram-v2
   PUBLISHING --> FAILED: Kafka 拒绝/超时
   FAILED --> PUBLISHING: 下一轮 poll 重试
   FAILED --> GIVE_UP: 重试耗尽
-  PUBLISHING --> FAILED: stale 超时重置<br/>(JVM 崩溃 / Kafka 卡死)
+  PUBLISHING --> FAILED: stale 超时重置<br/>(JVM 崩溃 / Kafka 长期停滞)
   PUBLISHED --> [*]
   GIVE_UP --> [*]
 ```
@@ -1317,7 +1317,7 @@ ctx.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, maxUpdateTime.t
 
 PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类 worker,定位"系统内部数据加工"(聚合 / 清洗 / 状态推进)。落地依据:[`docs/design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5。
 
-不是简单"跑一段 SQL"。默认 JSONB 模式是 **WAP+bookends**(Write-Audit-Publish + 前后置):**先写 staging,后审核,再原子 publish**。与 dbt build / Iceberg branch / Netflix Atlas 的成熟数据平台一致,避免脏数据落到生产 target 表。`stagingMode=DIRECT` 是给无 staging audit 需求的大吞吐 copy 场景的显式快路径,以 `INSERT ... SELECT ... ON CONFLICT` 直接发布。
+不是简单"跑一段 SQL"。默认 JSONB 模式是 **WAP+bookends**(Write-Audit-Publish + 前后置):**先写 staging,后审核,再原子 publish**。与 dbt build / Iceberg branch / Netflix Atlas 的成熟数据平台一致,避免异常数据落到生产 target 表。`stagingMode=DIRECT` 是给无 staging audit 需求的大吞吐 copy 场景的显式快路径,以 `INSERT ... SELECT ... ON CONFLICT` 直接发布。
 
 ### 7.9.2 一张图看完整回路
 

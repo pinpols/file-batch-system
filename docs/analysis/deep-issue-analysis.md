@@ -250,7 +250,7 @@ JWT 会暴露在：
 
 ### 5.5 P1: Console 幂等拦截器的设计不完整
 
-> 🟢 **[已修，2026-04-30]** ADR-011 三层幂等边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写：key 改绑 `(tenant+method+uri+idempotencyKey)`，两阶段占坑（PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE），Redis fail-closed 503；Layer 2 `DefaultTriggerService.approvePendingCatchUp` idempotencyKey 短路；Layer 3 `uk_job_instance_tenant_dedup` DB UNIQUE 兜底 — §5.5/§5.6/§5.10 三处一并闭环。详见 `ADR-011-idempotency-boundary-alignment.md`。
+> 🟢 **[已修，2026-04-30]** ADR-011 三层幂等边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写：key 改绑 `(tenant+method+uri+idempotencyKey)`，两阶段占问题（PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE），Redis fail-closed 503；Layer 2 `DefaultTriggerService.approvePendingCatchUp` idempotencyKey 短路；Layer 3 `uk_job_instance_tenant_dedup` DB UNIQUE 兜底 — §5.5/§5.6/§5.10 三处一并闭环。详见 `ADR-011-idempotency-boundary-alignment.md`。
 
 #### 问题
 
@@ -260,7 +260,7 @@ JWT 会暴露在：
 - 没有绑定 URI
 - 没有绑定 tenantId
 - 没有绑定 username
-- 在控制器执行前就占坑
+- 在控制器执行前就占问题
 - 没有根据成功/失败决定是否保留
 
 #### 证据
@@ -391,7 +391,7 @@ JWT 会暴露在：
 
 ### 5.11 P1: Webhook 是进程内 best-effort，不是可靠交付
 
-> 🟢 **[已修，2026-04-30]** `b74e0a0c` 落地 V81 migration（delivery_status 加 GIVE_UP check + (status, next_retry_at) 部分索引）+ `WebhookDeliveryRelay` 278 行：`@Scheduled` + ShedLock 互斥 + `FOR UPDATE SKIP LOCKED`，周期扫 EXHAUSTED 行重投，指数退避（5m → 10m → 20m → 30m cap），绝对上限 8 次后标 GIVE_UP 并打 Prometheus counter `batch_webhook_delivery_give_up_total`；7 个 `WebhookDeliveryRelayTest` 单测全绿。
+> 🟢 **[已修，2026-04-30]** `b74e0a0c` 落地 V81 migration（delivery_status 加 GIVE_UP check + (status, next_retry_at) 部分索引）+ `WebhookDeliveryRelay` 278 行：`@Scheduled` + ShedLock 互斥 + `FOR UPDATE SKIP LOCKED`，周期扫 EXHAUSTED 行重投，指数退避（5m → 10m → 20m → 30m cap），绝对上限 8 次后标 GIVE_UP 并打 Prometheus counter `batch_webhook_delivery_give_up_total`；7 个 `WebhookDeliveryRelayTest` 单测全部通过。
 
 #### 问题
 

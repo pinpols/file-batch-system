@@ -60,7 +60,7 @@ staging-gate.yml / strict-verify.yml / workflow-lint.yml`
 * `docs/runbook/release-process-2026-05-22.md:46-49` 描述 `promote-staging.yml` 自动到
   ops repo 提 PR。
 * 实际 `.github/workflows/` 下既无 `build-image.yml` 也无 `promote-staging.yml`。
-* 文档 line 2 自己挂了 ⚠ 提示「promote-staging.yml 已删除」,但**没有说 build-image.yml 也删了**;
+* 文档 line 2 自己异常退出 ⚠ 提示「promote-staging.yml 已删除」,但**没有说 build-image.yml 也删了**;
   并且这个提示语义「本文档保留作为未来恢复 GitOps 时的参考蓝图」**不足以拦截新人误用**(读者
   会以为「build 镜像还跑,只是 promote 没自动」)。
 * `.github/workflows/workflow-lint.yml:71` 注释里写「老 workflow(dependabot-auto-merge /
@@ -102,7 +102,7 @@ step `exit 0` 硬写,后面再加 `continue-on-error: true`,**双重兜底等于
 是预期行为。
 
 **为何仍 P0**:工作流本身 OK,但**容易让人误以为有兜底**。`scripts/local/strict-verify.sh`
-非 0 退出能被 `set +e` + `exit 0` 完整吞掉,即使 docker compose 起 PG 失败、jar 起不来,
+非 0 退出能被 `set +e` + `exit 0` 完整捕获并抑制,即使 docker compose 起 PG 失败、jar 起不来,
 CI 也会报绿。一旦后续有人加 required check `strict-verify-live`,会直接零阻断地通过 —— 隐性
 回归风险。
 

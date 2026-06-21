@@ -19,7 +19,7 @@
 --               -v ON_ERROR_STOP=1 -f /opt/batch/scripts/db/cleanup-workflow-runs.sql
 --
 -- 自动化版本：本脚本对应 Java 调度器 WorkflowArchiveScheduler（每天 04:00），
--- 默认开启；本 SQL 仅作为人工救急 / 大批量补刀使用。
+-- 默认开启；本 SQL 仅作为人工救急 / 大批量补充处理使用。
 --
 -- ⚠️ 真删除，不可回滚（除非事务中断）。容量估算：单 workflow 平均 5 节点 → 每天 100 万 workflow run
 -- → 30 天保留 = 3000 万 workflow_run + 1.5 亿 workflow_node_run。海量场景需 archive schema 双层。

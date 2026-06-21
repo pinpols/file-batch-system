@@ -17,9 +17,9 @@ import org.springframework.stereotype.Component;
 /**
  * P0-1: worker 任务执行专用线程池.
  *
- * <p>之前 task 在 Kafka listener 线程同步执行, plugin 死循环就把 listener 卡死, Semaphore permit 永不释放. 改为 submit 到
- * 独立 pool, listener 线程仅 future.get(timeout) 等结果, 超时即 cancel(true) → 释放 permit; pool 线程的中断状态由业务 协作处理
- * (Thread.isInterrupted() / 阻塞 IO 自动抛 InterruptedException).
+ * <p>之前 task 在 Kafka listener 线程同步执行, plugin 无限循环就把 listener 长期停滞, Semaphore permit 永不释放. 改为 submit
+ * 到 独立 pool, listener 线程仅 future.get(timeout) 等结果, 超时即 cancel(true) → 释放 permit; pool 线程的中断状态由业务
+ * 协作处理 (Thread.isInterrupted() / 阻塞 IO 自动抛 InterruptedException).
  *
  * <p>线程命名: {@code worker-task-exec-{N}} 便于线程 dump 排查.
  */

@@ -178,7 +178,7 @@ HTTP/Gatling 结果:
 | dispatch | `lt_dispatch_local_job` | 180 | 123 | 57 | 0 | quota reject 已终态化为 FAILED/NO_TASK |
 | atomic direct + trigger | `atomic_sql_demo` | 360 | 230 | 130 | 0 | 成功子集正常;拒绝子集不再滞留 CREATED |
 
-结论:T1/T2 状态机 P0 已收口。高压下 FAILED 是本地容量策略 `tenant_quota_policy.exceeded_strategy=REJECT` 的可观察终态,不是 worker 卡死或 Kafka 积压。
+结论:T1/T2 状态机 P0 已收口。高压下 FAILED 是本地容量策略 `tenant_quota_policy.exceeded_strategy=REJECT` 的可观察终态,不是 worker 长期停滞或 Kafka 积压。
 
 ## Task 延迟
 

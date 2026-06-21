@@ -87,7 +87,7 @@ autoconfig(它们要 Clock / InformationSchemaMapper / DataSource 等无关 bean
 
 **测试输出**:`Tests run: 4, Failures: 0, Errors: 0`(8.1s)
 
-## 踩坑记录
+## 遇到问题记录
 
 ### 1. logback `FRONTEND_FILE` appender 绑死 `/logs/`
 

@@ -16,7 +16,7 @@ import org.springframework.boot.health.contributor.HealthIndicator;
  *   <li>{@code PUBLISHING} 状态卡住超过 {@code stalePublishingTimeoutSeconds} 的事件数 > 0
  * </ul>
  *
- * <p>动机:outbox 积压是任务交付链路的早期信号 —— 通常是 Kafka producer 失联 / consumer 没 ack / relay scheduler 挂了。比从
+ * <p>动机:outbox 积压是任务交付链路的早期信号 —— 通常是 Kafka producer 失联 / consumer 没 ack / relay scheduler 异常退出。比从
  * Grafana 告警发现更快被 k8s readiness 摘流。
  */
 public class OutboxLagHealthIndicator implements HealthIndicator {

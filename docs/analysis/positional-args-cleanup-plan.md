@@ -217,7 +217,7 @@ public class XxxDto {
 ## 8. 验收
 
 - [ ] 61 处全部清零（main grep `\b<methodName>\(.*\bnew\s+\w+\([^)]*,[^)]*,[^)]*,[^)]*,[^)]*,[^)]*,` → 0）
-- [ ] `mvn -pl <全模块> -DskipITs test` 全绿
+- [ ] `mvn -pl <全模块> -DskipITs test` 全部通过
 - [ ] `PositionalArgsConventionTest` 在 main + test 双路径通过
 - [ ] CLAUDE.md §方法参数约束 子节落地
 - [ ] docs/changelog.md 追加 2026-05-01 条目

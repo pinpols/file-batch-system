@@ -1,6 +1,6 @@
 # Branch Hygiene
 
-强制 5 条规则，避免 PR / 分支残留 + 过期 base 上写代码。本 session 已踩过 6+ 次坑(误 commit 到 `feature/fe-bugfixed`、PR #23/26/27/28 合后本地 3 个分支没删、5 个 renovate PR 积压、Bash cd 持久化导致 commit 落错仓/错分支)。
+强制 5 条规则，避免 PR / 分支残留 + 过期 base 上写代码。本 session 已踩过 6+ 次问题(误 commit 到 `feature/fe-bugfixed`、PR #23/26/27/28 合后本地 3 个分支没删、5 个 renovate PR 积压、Bash cd 持久化导致 commit 落错仓/错分支)。
 
 ## When to apply
 
@@ -47,7 +47,7 @@ gh pr merge 27 --squash --delete-branch
 
 ### 2. 推代码前 **先 `git branch --show-current`** 对一遍
 
-每次 `git push` / `git commit` 前确认当前分支名是预期的。本 session 真实坑:在 BE 仓 cd 后没注意 git 当前分支是 `feature/fe-bugfixed`(从其它 session 留下的),直接 commit + push,污染了别人的分支。
+每次 `git push` / `git commit` 前确认当前分支名是预期的。本 session 真实问题:在 BE 仓 cd 后没注意 git 当前分支是 `feature/fe-bugfixed`(从其它 session 留下的),直接 commit + push,污染了别人的分支。
 
 ```bash
 # ✅ commit 前 1 行核对

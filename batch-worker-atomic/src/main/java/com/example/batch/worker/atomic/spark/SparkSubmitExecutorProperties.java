@@ -66,7 +66,7 @@ public class SparkSubmitExecutorProperties {
 
   /**
    * #4 安全:允许的 {@code --master} 前缀白名单(如 {@code yarn}、{@code k8s://}、{@code spark://prod-})。 为空 =
-   * 不校验(仅本地;生产建议收紧,防用户 param 把作业提交到任意/攻击者集群或 {@code local[超大]} 打爆机器)。
+   * 不校验(仅本地;生产建议收紧,防用户 param 把作业提交到任意/攻击者集群或 {@code local[超大]} 耗尽本机资源)。
    */
   private List<String> allowedMasterPrefixes = List.of();
 

@@ -1,6 +1,6 @@
 # Quartz 替换为时间轮 — 生产级实施设计
 
-> **配套文档**：[`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)（战略决策层:为什么换、何时换);本文档是战术实施层(怎么换的每一处坑)。
+> **配套文档**：[`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)（战略决策层:为什么换、何时换);本文档是战术实施层(怎么换的每一处问题)。
 >
 > **状态**：设计文档,实施前必读;阶段 1 启动后按本文档对应章节落代码 + 测试。
 >
@@ -282,7 +282,7 @@ t=00:00  扫库 → 看到 trigger T (next_fire_time=00:04:30) → push 到 whee
 t=01:00  又扫库 → 还是看到 trigger T (next_fire_time 还没更新,因为还没 fire)
          → 又 push 一次,wheel 里有 2 个 task 指向同一 fire
 t=02:00  第三次 push
-... 直到 04:30 wheel tick fire,DB 强约束兜住,但 CPU / wheel 内存已被打爆
+... 直到 04:30 wheel tick fire,DB 强约束兜住,但 CPU / wheel 内存已被耗尽
 ```
 
 ### 4.2 解决方案 — 双层去重

@@ -10,7 +10,7 @@ import java.util.Map;
  * <ul>
  *   <li><b>pooledShardCount=1 且无 silo</b> = 当前行为(全部落 {@code shard-0}),落地第一步无损。
  *   <li><b>哈希用 {@link String#hashCode()}</b>:JLS 规定跨 JVM 稳定 → 路由确定,同租户恒落同片。
- *   <li><b>无租户上下文</b>(null/空)→ {@code shard-0} 兜底(不抛,避免无租户的基础设施查询挂掉)。
+ *   <li><b>无租户上下文</b>(null/空)→ {@code shard-0} 兜底(不抛,避免无租户的基础设施查询异常退出)。
  * </ul>
  *
  * <p>不可变、线程安全。placement 数据(分片数 / silo 列表)来自租户维护(见 biz_tenant_placement), 由装配方注入;凭据不在此(走

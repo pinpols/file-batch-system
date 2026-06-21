@@ -1,6 +1,6 @@
 # Backlog: EXPORT 分区不切数据导致重复/丢数据(治本设计)
 
-> 状态:**已实现**(分支 `feature/export-partition-slice`;5 个实现 task + 分片完整性 IT 全绿)。补齐 import 早有的分片切数据能力。
+> 状态:**已实现**(分支 `feature/export-partition-slice`;5 个实现 task + 分片完整性 IT 全部通过)。补齐 import 早有的分片切数据能力。
 > 日期:2026-06-06　模块:batch-worker-export、batch-common
 > 对照:[import-line-mod-read-amplification-2026-06-05.md](import-line-mod-read-amplification-2026-06-05.md)
 

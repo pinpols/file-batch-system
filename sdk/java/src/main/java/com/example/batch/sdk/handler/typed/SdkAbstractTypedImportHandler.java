@@ -29,7 +29,7 @@ import java.util.stream.Stream;
  * 三合一(业务写 + 断点保存 同事务 + 限流上报),提交后命中取消即在安全点抛 {@link SdkTaskStoppedException} → 模板顶层落 cancelled。要真续跑须
  * override {@link #breakPosition(I, List)} 返回本批最后一行的业务主键。
  *
- * <p><b>PG 服务端游标(流式读)</b>:{@link #readRows} 走 JDBC 时,PostgreSQL 默认<b>一次性拉全量结果集</b>,百万行会撑爆内存。真流式须在
+ * <p><b>PG 服务端游标(流式读)</b>:{@link #readRows} 走 JDBC 时,PostgreSQL 默认<b>一次性拉全量结果集</b>,百万行会超过内存。真流式须在
  * 同一 connection 上 {@code connection.setAutoCommit(false)} + {@code statement.setFetchSize(N)}
  * 开服务端游标,逐批拉取。 注意此时 connection 处于事务中,与 {@code ctx.commit} 的同事务写要协调好边界(读连接与写连接通常分开)。
  *

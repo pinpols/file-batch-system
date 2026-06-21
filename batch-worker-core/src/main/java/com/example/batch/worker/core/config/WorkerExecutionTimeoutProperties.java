@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * P0-1 worker 任务执行超时治理配置 ({@code batch.worker.execution})。
  *
- * <p>解决问题: plugin 死循环 / 长 SQL 卡住 → orchestrator 标 TIMED_OUT, worker 线程仍占着 → Semaphore permit 永 不释放
+ * <p>解决问题: plugin 无限循环 / 长 SQL 卡住 → orchestrator 标 TIMED_OUT, worker 线程仍占着 → Semaphore permit 永 不释放
  * → worker 容量永久缩水. 通过把执行 submit 到独立 pool + 限时 wait + Future.cancel(true) 强中断, 让 listener 线程 始终能在
  * timeout 后继续派下一个 task.
  */
@@ -22,7 +22,7 @@ public class WorkerExecutionTimeoutProperties {
   /** 默认 task 超时 (秒). 当 EffectiveTaskConfig.timeoutSeconds 为 null/0 时兜底. 默认 30 分钟. */
   private long defaultTimeoutSeconds = 1800L;
 
-  /** 上限 (秒). 超过此值即截断 (防呆: 配错 timeout=999999 把 worker 搞死). */
+  /** 上限 (秒). 超过此值即截断 (防配置错误: timeout=999999 会长期占用 worker 执行线程). */
   private long maxTimeoutSeconds = 7200L;
 
   /**

@@ -591,7 +591,7 @@ git commit -m "test(export): 分片完整性 IT — 4 片无重叠 + 全覆盖(s
 > mvn 注意(本仓约定):`e2e-tests` 纯测试模块用 `verify` 不用 `install`;推前必须 `clean` 防 stale cache。
 
 Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q clean test -pl batch-common,batch-worker-export -am`
-Expected: BUILD SUCCESS,新单测全绿
+Expected: BUILD SUCCESS,新单测全部通过
 
 - [ ] **Step 2: 更新设计文档状态**
 
