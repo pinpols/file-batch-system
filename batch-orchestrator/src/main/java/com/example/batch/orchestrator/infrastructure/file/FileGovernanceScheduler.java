@@ -51,7 +51,7 @@ public class FileGovernanceScheduler {
   private final FileGovernanceMetricsCacheService metricsCacheService;
   private final MeterRegistry meterRegistry;
 
-  /** ADR-046 第二刀-2c-2b:到达组凑齐若是文件束则发 BUNDLE_IMPORT launch。 */
+  /** ADR-046:到达组凑齐时,若该组是文件束则发起 BUNDLE_* launch。 */
   private final BundleArrivalLauncher bundleArrivalLauncher;
 
   private final AtomicLong arrivalDelayViolations = new AtomicLong();
