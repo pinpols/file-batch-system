@@ -13,12 +13,14 @@
 --   partition 创建逻辑、claim/report、job_task.task_type。
 -- =========================================================
 
--- 1) job_type CHECK 放宽(照 V158 模式:DROP IF EXISTS → 装新 CHECK)
+-- 1) job_type CHECK 放宽(DROP IF EXISTS → 装新 CHECK)。
+-- 用 NOT VALID 避免 squawk(constraint-missing-not-valid)告警 + 避免加约束时的全表扫描阻塞写:
+-- 本次是“单向扩值”(新集合 ⊇ 旧集合),存量行必然满足,无需 VALIDATE 回扫;NOT VALID 已对新写入强制。
 ALTER TABLE batch.job_definition DROP CONSTRAINT IF EXISTS ck_job_definition_job_type;
 ALTER TABLE batch.job_definition
     ADD CONSTRAINT ck_job_definition_job_type
         CHECK (job_type IN ('GENERAL', 'IMPORT', 'EXPORT', 'PROCESS', 'DISPATCH',
-                            'WORKFLOW', 'ATOMIC', 'BUNDLE_IMPORT'));
+                            'WORKFLOW', 'ATOMIC', 'BUNDLE_IMPORT')) NOT VALID;
 
 -- 2) job_partition per-file 绑定列(热表)
 ALTER TABLE batch.job_partition
