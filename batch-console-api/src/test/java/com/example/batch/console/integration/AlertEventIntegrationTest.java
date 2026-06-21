@@ -10,6 +10,7 @@ import com.example.batch.console.domain.notification.mapper.AlertEventMapper;
 import com.example.batch.console.domain.notification.query.AlertEventQuery;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         alertEventMapper.selectByQuery(
             new AlertEventQuery(
                 "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(),
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -98,10 +101,47 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     assertThat(results).hasSize(3);
   }
 
+  @Test
+  void shouldFilterAlertsByLastSeenTimeRange() {
+    String tenantId = "t-alert-time-" + BatchDateTimeSupport.utcEpochMillis();
+    Instant now = BatchDateTimeSupport.utcNow();
+    insertAlertEventAt(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "old", now.minusSeconds(864000));
+    insertAlertEventAt(
+        tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "recent", now.minusSeconds(3600));
+
+    // fromTime = 2 天前 → 只命中 recent
+    AlertEventQuery query =
+        new AlertEventQuery(
+            tenantId,
+            null,
+            null,
+            null,
+            null,
+            now.minusSeconds(172800),
+            null,
+            new PageRequest(1, 10),
+            null);
+
+    List<AlertEventEntity> rows = alertEventMapper.selectByQuery(query);
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).getTitle()).isEqualTo("recent");
+    assertThat(alertEventMapper.countByQuery(query)).isEqualTo(1);
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private void insertAlertEvent(
       String tenantId, String alertType, String severity, String status, String title) {
+    insertAlertEventAt(tenantId, alertType, severity, status, title, BatchDateTimeSupport.utcNow());
+  }
+
+  private void insertAlertEventAt(
+      String tenantId,
+      String alertType,
+      String severity,
+      String status,
+      String title,
+      Instant lastSeenAt) {
     jdbcTemplate.update(
         """
         INSERT INTO batch.alert_event
@@ -115,8 +155,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         severity,
         title,
         tenantId + ":" + alertType + ":" + System.nanoTime(),
-        Timestamp.from(BatchDateTimeSupport.utcNow()),
-        Timestamp.from(BatchDateTimeSupport.utcNow()),
+        Timestamp.from(lastSeenAt),
+        Timestamp.from(lastSeenAt),
         status);
   }
 }

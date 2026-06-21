@@ -296,6 +296,9 @@ public class ConsoleOpsQueryService {
             request.getStatus(),
             request.getAlertType(),
             request.getTraceId(),
+            parseFlexibleInstant(
+                request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
+            parseFlexibleInstant(request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
             pageRequest,
             decodeCursorId(request.getCursor()));
     List<AlertEventEntity> rows = opsMappers.alertEventMapper.selectByQuery(query);
