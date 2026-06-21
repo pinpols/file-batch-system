@@ -37,11 +37,13 @@ http = ["dep:reqwest", "serde", "dep:serde_json"]
 
 [dependencies]
 # All optional + behind a feature. `default-features = true` on rdkafka keeps
-# librdkafka's bundled build/SSL/SASL features that SCRAM-SHA-512 + SSL need.
-rdkafka = { version = "0.36", optional = true, default-features = true }
+# the upstream runtime defaults; `cmake-build` avoids librdkafka's legacy
+# configure/make path misdetecting Apple Silicon as x86_64.
+rdkafka = { version = "0.36", optional = true, default-features = true, features = ["cmake-build"] }
 # reqwest behind `http`: blocking client, JSON helpers, rustls (no OpenSSL).
 reqwest = { version = "0.12", optional = true, default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", optional = true, features = ["derive"] }
 serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
+futures-executor = "0.3"

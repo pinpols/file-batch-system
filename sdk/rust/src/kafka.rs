@@ -86,7 +86,10 @@ impl KafkaConsumerConfig {
     /// `.` is escaped so it matches a literal dot; the trailing `.*` matches any
     /// suffix (e.g. a task-type or shard segment).
     pub fn topic_regex(&self) -> String {
-        format!("^batch\\.task\\.dispatch\\.{}\\..*", regex_escape(&self.tenant_id))
+        format!(
+            "^batch\\.task\\.dispatch\\.{}\\..*",
+            regex_escape(&self.tenant_id)
+        )
     }
 
     /// The per-worker consumer group id (§1.2): `g-sdk-<tenant>-<worker>`.
@@ -522,7 +525,8 @@ mod tests {
     #[test]
     fn dispatch_message_binds_worker_type() {
         // v2 envelope: routing key is `workerType` (taskType removed).
-        let raw = br#"{"taskId":7,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"export"}"#;
+        let raw =
+            br#"{"taskId":7,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"export"}"#;
         let m: DispatchMessage = serde_json::from_slice(raw).expect("decode");
         assert_eq!(m.task_id, 7);
         assert_eq!(m.task_type, "export");
@@ -541,6 +545,23 @@ mod tests {
         }
     }
 
+    fn assigned_topics(tpl: &TopicPartitionList) -> Vec<String> {
+        tpl.elements()
+            .into_iter()
+            .map(|elem| elem.topic().to_string())
+            .collect()
+    }
+
+    fn send_record(producer: &rdkafka::producer::FutureProducer, topic: &str, payload: &[u8]) {
+        let delivery = futures_executor::block_on(producer.send(
+            rdkafka::producer::FutureRecord::<(), [u8]>::to(topic).payload(payload),
+            Duration::from_secs(10),
+        ));
+        if let Err((err, _message)) = delivery {
+            panic!("produce to {topic} failed: {err:?}");
+        }
+    }
+
     #[test]
     fn end_to_end_consume_against_real_broker() {
         // Env gate: only runs in CI with a broker (mirrors the TS/Go/Python
@@ -550,54 +571,134 @@ mod tests {
             _ => return,
         };
 
-        use rdkafka::producer::{BaseProducer, BaseRecord, Producer};
+        use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+        use rdkafka::client::DefaultClientContext;
+        use rdkafka::producer::FutureProducer;
+        use rdkafka::types::RDKafkaErrorCode;
 
-        let cfg = test_config(bootstrap.clone());
-        let topic = format!("batch.task.dispatch.{}.import", cfg.tenant_id);
+        let mut cfg = test_config(bootstrap.clone());
+        cfg.worker_code = format!(
+            "worker-live-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let topic = format!(
+            "batch.task.dispatch.{}.import-{}",
+            cfg.tenant_id, cfg.worker_code
+        );
 
-        // Topic is expected to be auto-created by the broker (CI sets
-        // `auto.create.topics.enable=true`) or pre-provisioned; we avoid the
-        // admin client so the `kafka` feature needs no async/`futures` dep.
+        let admin: AdminClient<DefaultClientContext> = ClientConfig::new()
+            .set("bootstrap.servers", &bootstrap)
+            .create()
+            .expect("admin");
+        let new_topic = NewTopic::new(&topic, 1, TopicReplication::Fixed(1));
+        let topic_results = futures_executor::block_on(admin.create_topics(
+            &[new_topic],
+            &AdminOptions::new().operation_timeout(Some(Duration::from_secs(10))),
+        ))
+        .expect("create topic");
+        for result in topic_results {
+            match result {
+                Ok(_) => {}
+                Err((_, RDKafkaErrorCode::TopicAlreadyExists)) => {}
+                Err((name, err)) => panic!("create topic {name} failed: {err:?}"),
+            }
+        }
 
-        // Produce three records: a good one, a foreign-tenant one (must be
-        // dropped), and a bad-schema one (must be rejected).
-        let producer: BaseProducer = ClientConfig::new()
+        // Seed first so the regex consumer sees the topic before subscribing.
+        // Real dispatch records are produced only after the consumer is polling;
+        // production config intentionally uses `auto.offset.reset=latest`.
+        let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", &bootstrap)
             .create()
             .expect("producer");
-        let good = br#"{"taskId":1,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#;
-        let foreign = br#"{"taskId":2,"tenantId":"tenant-b","schemaVersion":"v1","workerType":"import"}"#;
-        let bad_schema = br#"{"taskId":3,"tenantId":"tenant-a","schemaVersion":"v3","workerType":"import"}"#;
-        for payload in [good.as_slice(), foreign.as_slice(), bad_schema.as_slice()] {
-            producer
-                .send(BaseRecord::<(), [u8]>::to(&topic).payload(payload))
-                .expect("enqueue");
-        }
-        producer.flush(Duration::from_secs(10)).expect("flush");
+        send_record(
+            &producer,
+            &topic,
+            br#"{"taskId":0,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#,
+        );
 
-        // Consume and assert: only the good record is accepted + committed.
         let accepted = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
         let handler = CollectingHandler {
             accepted: accepted.clone(),
         };
-        let mut consumer = KafkaTaskConsumer::new(cfg, handler).expect("consumer");
-
+        let mut consumer_config = cfg.to_client_config();
+        consumer_config.set("auto.offset.reset", "earliest");
+        let base_consumer: BaseConsumer = consumer_config.create().expect("base consumer");
+        let mut consumer =
+            KafkaTaskConsumer::with_consumer(cfg, base_consumer, handler).expect("consumer");
         let in_flight = Arc::new(AtomicI64::new(0));
         let if_read = move || in_flight.load(Ordering::SeqCst);
 
-        // Poll for up to ~15s or until we've seen the good record.
+        let assignment_deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while std::time::Instant::now() < assignment_deadline {
+            let _ = consumer.poll_once(&if_read).expect("assignment poll");
+            if !consumer
+                .assignment()
+                .expect("assignment")
+                .elements_for_topic(&topic)
+                .is_empty()
+            {
+                break;
+            }
+        }
+        let assignment = consumer.assignment().expect("assignment");
+        assert!(
+            !assignment.elements_for_topic(&topic).is_empty(),
+            "consumer must be assigned to {topic} before producing live records; assigned={:?}",
+            assigned_topics(&assignment)
+        );
+
+        // Produce three records: a good one, a foreign-tenant one (must be
+        // dropped), and a bad-schema one (must be rejected).
+        let good =
+            br#"{"taskId":1,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#;
+        let foreign =
+            br#"{"taskId":2,"tenantId":"tenant-b","schemaVersion":"v1","workerType":"import"}"#;
+        let bad_schema =
+            br#"{"taskId":3,"tenantId":"tenant-a","schemaVersion":"v3","workerType":"import"}"#;
+        for payload in [good.as_slice(), foreign.as_slice(), bad_schema.as_slice()] {
+            send_record(&producer, &topic, payload);
+        }
+
+        // Consume and assert: only the good record is accepted + committed.
+        // Poll for up to ~15s or until all three decisions have been observed.
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        let mut dispositions = Vec::<String>::new();
+        let mut saw_good = false;
+        let mut saw_foreign = false;
+        let mut saw_bad_schema = false;
         while std::time::Instant::now() < deadline {
             let disp = consumer.poll_once(&if_read).expect("poll");
-            if let Some(RecordDisposition::Accepted) = disp {
-                if accepted.lock().unwrap().iter().any(|t| t == "1") {
-                    break;
+            dispositions.push(format!("{disp:?}"));
+            match disp {
+                Some(RecordDisposition::Accepted) => {
+                    saw_good = accepted.lock().unwrap().iter().any(|t| t == "1");
                 }
+                Some(RecordDisposition::DroppedForeignTenant) => saw_foreign = true,
+                Some(RecordDisposition::RejectedSchema) => saw_bad_schema = true,
+                _ => {}
+            }
+            if saw_good && saw_foreign && saw_bad_schema {
+                break;
             }
         }
 
         let got = accepted.lock().unwrap().clone();
-        assert!(got.contains(&"1".to_string()), "good record must be accepted");
+        assert!(
+            saw_good && got.contains(&"1".to_string()),
+            "good record must be accepted; got={got:?}; dispositions={dispositions:?}"
+        );
+        assert!(
+            saw_foreign,
+            "foreign-tenant record must be dropped; dispositions={dispositions:?}"
+        );
+        assert!(
+            saw_bad_schema,
+            "unknown-schema record must be rejected; dispositions={dispositions:?}"
+        );
         assert!(
             !got.contains(&"2".to_string()),
             "foreign-tenant record must be dropped (§1.9)"
