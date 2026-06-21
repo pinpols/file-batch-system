@@ -34,6 +34,19 @@ class JobTypeTest {
   }
 
   @Test
+  void workerTypeCodeProjectsBundlesToDeliveryTypeAndKeepsOthers() {
+    // 束作业投射到交付 worker 类型(否则 task_type=BUNDLE_* 违反 ck_job_task_type 且无 worker 认领)。
+    assertThat(JobType.BUNDLE_IMPORT.workerTypeCode()).isEqualTo("IMPORT");
+    assertThat(JobType.BUNDLE_EXPORT.workerTypeCode()).isEqualTo("EXPORT");
+    assertThat(JobType.BUNDLE_DISPATCH.workerTypeCode()).isEqualTo("DISPATCH");
+    // 非束作业 = 自身 code,行为不变。
+    assertThat(JobType.IMPORT.workerTypeCode()).isEqualTo("IMPORT");
+    assertThat(JobType.EXPORT.workerTypeCode()).isEqualTo("EXPORT");
+    assertThat(JobType.ATOMIC.workerTypeCode()).isEqualTo("ATOMIC");
+    assertThat(JobType.GENERAL.workerTypeCode()).isEqualTo("GENERAL");
+  }
+
+  @Test
   void isBundleCodeMatchesCodesAndRejectsUnknownOrNull() {
     assertThat(JobType.isBundleCode("BUNDLE_IMPORT")).isTrue();
     assertThat(JobType.isBundleCode("BUNDLE_EXPORT")).isTrue();

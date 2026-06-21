@@ -54,6 +54,21 @@ public enum JobType implements DictEnum {
     return BUNDLE_TYPES.contains(this);
   }
 
+  /**
+   * 执行本作业分区任务的 worker 类型 code(落 {@code job_task.task_type})。束作业本身不被 worker 直接执行——每个分区是一个
+   * 普通的导入/导出/分发任务,故束类型投射到其交付 worker 类型(BUNDLE_IMPORT→IMPORT / BUNDLE_EXPORT→EXPORT /
+   * BUNDLE_DISPATCH→DISPATCH);非束作业即自身 code。避免 {@code task_type=BUNDLE_*} 违反 ck_job_task_type 且无
+   * worker 认领。
+   */
+  public String workerTypeCode() {
+    return switch (this) {
+      case BUNDLE_IMPORT -> IMPORT.code;
+      case BUNDLE_EXPORT -> EXPORT.code;
+      case BUNDLE_DISPATCH -> DISPATCH.code;
+      default -> code;
+    };
+  }
+
   /** 按 job_type code(DB 字面量)判定是否文件束作业;未知 / null → false。 */
   public static boolean isBundleCode(String code) {
     if (code == null) {
