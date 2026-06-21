@@ -2,7 +2,7 @@
 
 ## 1. 设计定位
 
-本文基于以下三份设计材料和当前系统实现做收口：
+本文基于以下三份设计材料和当前系统实现做收敛：
 
 - [`batch-day-design.md`](./batch-day-design.md)
 - [`batch-day-capability-design.md`](./batch-day-capability-design.md)
@@ -56,7 +56,7 @@ console：只展示转换后的时间，不参与裁决
 允许规则：
 
 ```text
-平台默认时区可以是 Asia/Shanghai，用于缺省兜底
+平台默认时区可以是 Asia/Shanghai，用于缺省回退
 业务日历时区必须用 IANA ZoneId，例如 Asia/Shanghai、America/New_York
 同一平台可以承载多个业务时区的日历
 ```
@@ -97,14 +97,14 @@ fire_time_utc
 
 ```text
 日切预开入口：BatchDayOpenScheduler 按日历创建下一个 batch_day_instance
-触发兜底入口：DefaultLaunchService / LaunchBatchDayService 继续 upsert，防止漏建
+触发回退入口：DefaultLaunchService / LaunchBatchDayService 继续 upsert，防止漏建
 ```
 
 语义：
 
 ```text
 日切预开负责让批量日在控制台和门闩逻辑中提前可见；
-触发兜底负责兼容手工/API/事件触发和历史行为。
+触发回退负责兼容手工/API/事件触发和历史行为。
 ```
 
 推荐新增调度器：
@@ -127,7 +127,7 @@ sla_deadline_at
 timezone_snapshot
 ```
 
-`cutoff_at` 和 `sla_deadline_at` 应在创建时按 `timezone_snapshot` 计算并落库，避免后续日历配置变化导致历史解释漂移。
+`cutoff_at` 和 `sla_deadline_at` 应在创建时按 `timezone_snapshot` 计算并写入数据库，避免后续日历配置变化导致历史解释漂移。
 
 ## 4. 当前能力缺口复核
 
@@ -177,7 +177,7 @@ timezone_snapshot
 
 ```text
 "批量日驱动"主链后端能力已全闭合：主动打开、前日门闩(含 FROZEN→REJECT、SAME_JOB / SAME_JOB_GROUP 真正区分)、
-人工治理(独立审计表)、DST 策略(含 RUN_TWICE 降级 warn)、worker bizDate 收口、补跑显式策略、SETTLING 中间态、
+人工治理(独立审计表)、DST 策略(含 RUN_TWICE 降级 warn)、worker bizDate 收敛、补跑显式策略、SETTLING 中间态、
 trigger 本地计划审计、SLA escalation + alert event 流、import scanner bizDatePattern。
 
 仍未做(全部为非后端 / 设计层):
@@ -197,7 +197,7 @@ trigger 本地计划审计、SLA escalation + alert event 流、import scanner b
 | 前一批量日门闩 | 已完成后端能力 | V100 `day_rollover_policy`、`previous_day_dependency_scope`、`batch_day_waiting_launch`；`BatchDayGateService` 支持 `ALLOW / WAIT / REJECT` | 细粒度 `SAME_JOB / SAME_JOB_GROUP` 仍未完全展开，目前非 `INHERIT` 按等待前一批量日处理 |
 | 批量日人工治理 | 部分完成 | V101 扩展 `SKIPPED / MANUAL_RELEASED`、`frozen`、操作快照字段；`BatchDayOperationService` 支持 `FREEZE / RELEASE / SKIP / REOPEN / CLOSE`；审计写 `job_execution_log` | 未新增独立 `batch_day_operation_audit` 表；未暴露 Console REST API；权限点、高风险审批、操作历史 UI 未接入 |
 | DST 策略显式化 | 部分完成 | V102 `dst_gap_policy / dst_overlap_policy / dst_policy_snapshot`；`BatchDayTimePolicyResolver` 统一处理 cutoff gap / overlap | trigger cron 本地计划审计字段、Console DST 调整展示未做；`RUN_TWICE` 对 cutoff 降级为一次语义 |
-| worker bizDate 兜底 | 已完成核心收口 | export `PrepareStep` 缺 `bizDate` 失败；import scanner 要求显式 `defaultBizDate`；生产 worker 路径不再用 `LocalDate.now()` 推断业务日 | import scanner 的显式日期仍是配置项，后续建议改为从文件命名规则或上游到达事件解析 |
+| worker bizDate 回退 | 已完成核心收敛 | export `PrepareStep` 缺 `bizDate` 失败；import scanner 要求显式 `defaultBizDate`；生产 worker 路径不再用 `LocalDate.now()` 推断业务日 | import scanner 的显式日期仍是配置项，后续建议改为从文件命名规则或上游到达事件解析 |
 | 补跑版本治理 | 部分完成 | V103 `job_definition_version`、`rerun_policy_snapshot`；`run_attempt` 已保证 RERUN 新建实例不覆盖历史；`params_snapshot` 增加 job definition version | 补跑请求层 `resultPolicy / configVersionPolicy` 尚未成为显式 API 参数；结果产物版本/生效版本和核心账务审批未统一平台化 |
 
 ## 5. 补齐能力的实施设计
@@ -418,7 +418,7 @@ scope 解释：
 
 ```text
 释放必须保留原 request_id / trace_id / idempotency 语义；
-重复释放由 idempotency_record 或 waiting 表状态 CAS 兜底。
+重复释放由 idempotency_record 或 waiting 表状态 CAS 回退。
 ```
 
 #### BatchDayOperationService
@@ -728,7 +728,7 @@ cutoff_time
 timezone_snapshot
 ```
 
-得到 `ZonedDateTime` 后转 `Instant` 落库。
+得到 `ZonedDateTime` 后转 `Instant` 写入数据库。
 
 如果 `cutoff_time` 落入 DST gap：
 
@@ -810,7 +810,7 @@ scheduled_fire_time_utc
 
 这种模式允许 overlap 的两个 UTC 触发点都创建实例。
 
-### 9.3 建议落库审计字段
+### 9.3 建议写入数据库审计字段
 
 `trigger_runtime_state` 当前已有 `next_fire_time`，但缺少本地计划审计信息。建议后续增加：
 
@@ -832,14 +832,14 @@ ALTER TABLE batch.trigger_runtime_state
 
 ## 10. worker 与 data interval
 
-worker 不裁决 `bizDate`，但可能根据 `bizDate` 兜底生成数据窗口。这个兜底必须收敛。
+worker 不裁决 `bizDate`，但可能根据 `bizDate` 回退生成数据窗口。这个回退必须收敛。
 
 推荐规则：
 
 ```text
 1. orchestrator 下发 bizDate、calendarCode、batchDayId、dataIntervalStart、dataIntervalEnd；
 2. worker 优先使用 dataIntervalStart / dataIntervalEnd；
-3. 如果为空，worker 只能按 bizDate 做业务参数兜底，不能用 LocalDate.now()；
+3. 如果为空，worker 只能按 bizDate 做业务参数回退，不能用 LocalDate.now()；
 4. worker 记录 startedAt / finishedAt 使用 Instant.now(clock) 或统一 clock；
 5. 文件命名、对象存储路径、SQL 参数都使用下发 bizDate。
 ```
@@ -854,7 +854,7 @@ worker-export PrepareStep 中 payload/context 都没有 bizDate 时回退 LocalD
 
 ```text
 缺少 bizDate 时失败并提示上游上下文不完整；
-或仅在本地 demo profile 下允许 LocalDate.now() 兜底。
+或仅在本地 demo profile 下允许 LocalDate.now() 回退。
 ```
 
 ## 11. console 展示
@@ -916,7 +916,7 @@ misfireCount
 ```text
 1. 新增 BatchDayOpenScheduler；
 2. 创建时落 cutoff_at / sla_deadline_at / timezone_snapshot；
-3. 保留 launch 时 upsert 作为兜底；
+3. 保留 launch 时 upsert 作为回退；
 4. Console 批量日视图展示“已打开但未触发作业”的批量日。
 ```
 
@@ -955,9 +955,9 @@ misfireCount
 4. Console 展示 DST 调整结果。
 ```
 
-### Phase 6：worker 兜底收口
+### Phase 6：worker 回退收敛
 
-状态：已完成核心生产路径收口。提交 `94f969a5`。
+状态：已完成核心生产路径收敛。提交 `94f969a5`。
 
 ```text
 1. 禁止生产路径 worker 用本机日期补 bizDate；
@@ -1001,7 +1001,7 @@ misfireCount
 | 人工释放 | 前一日 `FAILED`，人工 release | 前一日 `MANUAL_RELEASED`，等待触发可释放 | 通过 | `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesForNextBizDate`；release 后触发等待队列重放 |
 | 批量日重开 | `FAILED` 批量日显式 reopen | 状态回到 `IN_FLIGHT`，写审计和审批 | 部分通过 | 服务层可 `REOPEN -> IN_FLIGHT` 并写审计；审批和 Console/API 未接入 |
 | 补跑结果版本 | 同一 job/bizDate 补跑 | 生成新 runAttempt，不覆盖历史结果 | 通过 | V62 已有 `(tenant_id, dedup_key, run_attempt)` 唯一约束；`DefaultLaunchService` 的 RERUN `max+1` 语义；V103 增加 `rerun_policy_snapshot` |
-| worker 缺 bizDate | payload/context 都无 `bizDate` | 生产路径失败，不用本机日期兜底 | 通过 | `PrepareStepTest#execute_failsWhenBizDateMissingFromPayloadAndContext`；worker 路径 grep 已无 `LocalDate.now()` 推断 `bizDate` |
+| worker 缺 bizDate | payload/context 都无 `bizDate` | 生产路径失败，不用本机日期回退 | 通过 | `PrepareStepTest#execute_failsWhenBizDateMissingFromPayloadAndContext`；worker 路径 grep 已无 `LocalDate.now()` 推断 `bizDate` |
 
 本轮验收结论：
 
@@ -1014,7 +1014,7 @@ misfireCount
 部分通过项集中在 Console/API/审批/trigger 审计字段，不影响后端核心批量日生命周期闭环，但仍不是完整产品化闭环。
 ```
 
-## 14. 最终收口
+## 14. 最终收敛
 
 ### 14.1 平台分工口径
 
@@ -1064,7 +1064,7 @@ DDL 迁移：
 worker 路径整改：
 
 ```text
-worker-export PrepareStep：缺 bizDate 时 fail-fast，禁止 LocalDate.now() 兜底
+worker-export PrepareStep：缺 bizDate 时 fail-fast，禁止 LocalDate.now() 回退
 worker-import scanner：要求显式 defaultBizDate
 全 worker 路径：业务日 grep 已无 LocalDate.now() 推断
 ```
@@ -1077,11 +1077,11 @@ Phase 2 批量日主动打开             4a4167b2
 Phase 3 前一批量日门闩             98d57be2
 Phase 4 批量日人工治理             072d2802
 Phase 5 DST 策略显式化             f34b2828
-Phase 6 worker 兜底收口            94f969a5
+Phase 6 worker 回退收敛            94f969a5
 Phase 7 补跑版本治理               cc69a768
 本轮文档 codify                   2965ddb1 / 8fa25050 / 3820c7e3
 
-— 2026-05-06 §14.3 后端残留收口 —
+— 2026-05-06 §14.3 后端残留收敛 —
 SETTLING 中间态 + import scanner bizDatePattern    28b77c59
 SLA escalation + gate/late-arrival alert event   a98ba722
 trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显式入参 / RUN_TWICE warn   d9f2ac7b
@@ -1149,7 +1149,7 @@ BatchDayOperationServiceTest                     (审计双写)
 BatchDayTimePolicyResolverTest                   (含 RUN_TWICE 降级)
 BatchDayCutoffSchedulerTest
 BatchDaySettleSchedulerTest                      (SETTLING 中段恢复)
-PrepareStepTest                                  (worker-export bizDate 兜底)
+PrepareStepTest                                  (worker-export bizDate 回退)
 CalendarBizDateResolverTest                      (cutoff 跨时区)
 DefaultLaunchServiceTest                         (rerun_policy_snapshot)
 DefaultCompensationServiceTest                   (rerun policy 透传)
@@ -1157,7 +1157,7 @@ JobSlaSchedulerTest                              (escalation 重试 + alert even
 TriggerRuntimeStateMapperIntegrationTest         (V104 本地计划字段)
 ```
 
-全 reactor 验收口径：`mvn -pl batch-orchestrator,batch-trigger,batch-console-api,batch-common -am -DskipITs test` 全 PASS（414/414，2026-05-06）。
+全 reactor 验收敛径：`mvn -pl batch-orchestrator,batch-trigger,batch-console-api,batch-common -am -DskipITs test` 全 PASS（414/414，2026-05-06）。
 
 回归监控：
 

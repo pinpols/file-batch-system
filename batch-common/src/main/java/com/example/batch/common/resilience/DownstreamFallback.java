@@ -110,7 +110,7 @@ public class DownstreamFallback {
     meterRegistry.counter("downstream.call.total", tags).increment();
   }
 
-  /** Fallback supplier — 接受异常,返回兜底值。 */
+  /** Fallback supplier — 接受异常,返回回退值。 */
   @FunctionalInterface
   public interface FallbackSupplier<T> {
     T apply(RestClientException ex);

@@ -19,7 +19,7 @@ BATCH_DEPLOY_VERIFICATION_ENABLE_LIVE=true \
 bash scripts/ci/run-full-regression.sh --with-deployment-verification
 ```
 
-当前已完成的是验证工具链与脚本入口收口；真实 staging 集群上的 live upgrade / rollback 留档仍需在目标环境执行。
+当前已完成的是验证工具链与脚本入口收敛；真实 staging 集群上的 live upgrade / rollback 留档仍需在目标环境执行。
 
 ## 已补齐的能力
 
@@ -149,7 +149,7 @@ mvn -pl batch-e2e-tests -am -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
   - `ConsoleRetryScheduleQueryIntegrationTest`
   - `JobInstanceQueryIntegrationTest`
 
-### 3. Worker drain / registry 行为收口
+### 3. Worker drain / registry 行为收敛
 
 - 新增 `WorkerRegistryJdbcRepository`，把 worker 心跳和下线更新改为显式 SQL 更新
 - 避免 worker 在 `DRAINING / DECOMMISSIONED` 状态被 heartbeat 覆盖回正常态
@@ -274,21 +274,21 @@ mvn -pl batch-e2e-tests -am -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
 ## verification-e2e-unit-integration-run
 
 
-日期：2026-03-29  
-目标：逐一验证所有测试类（尽量避免重复跑已成功用例），并把失败与修复过程记录下来。  
-fail-fast：关闭（`-Dsurefire.failFast=false`、`-Djunit.jupiter.execution.fail_fast=false`）  
+日期：2026-03-29
+目标：逐一验证所有测试类（尽量避免重复跑已成功用例），并把失败与修复过程记录下来。
+fail-fast：关闭（`-Dsurefire.failFast=false`、`-Djunit.jupiter.execution.fail_fast=false`）
 端口：统一设置 `-Dserver.port=0`（尽量避免占用）
 
 ---
 
 ## 预先修复（为通过之前 E2E 报错）
 
-1. `DispatchPipelineE2eIT` 初次失败：`Unrecognized field "run_mode"`  
+1. `DispatchPipelineE2eIT` 初次失败：`Unrecognized field "run_mode"`
    - 修复：在 `batch-worker-dispatch` 的 `DispatchPayload` 增加 `run_mode` 字段兼容（`@JsonProperty("run_mode")` / `@JsonAlias("runMode")`）。
-2. `DispatchPipelineE2eIT` 后续失败：`ON CONFLICT (tenant_id, event_key)` 无匹配唯一约束  
-   - 根因（历史）：当时 `platform-init.sql` 手写了 `outbox_event` 表且与 Flyway 不一致。  
+2. `DispatchPipelineE2eIT` 后续失败：`ON CONFLICT (tenant_id, event_key)` 无匹配唯一约束
+   - 根因（历史）：当时 `platform-init.sql` 手写了 `outbox_event` 表且与 Flyway 不一致。
    - 现状：`platform-init.sql` 仅建 schema；`outbox_event` 及唯一约束完全由 Flyway 迁移定义。
-3. `ExportPipelineE2eIT` 失败：`Unrecognized field "run_mode"`  
+3. `ExportPipelineE2eIT` 失败：`Unrecognized field "run_mode"`
    - 修复：在 `batch-worker-export` 的 `ExportPayload` 增加 `runMode`（`@JsonProperty("run_mode")` / `@JsonAlias("runMode")`），并同步更新 `batch-worker-export` 内相关单测里 `new ExportPayload(...)` 的入参（在 `autoDispatch` 后补 `null`）。
 
 验证结果：
@@ -322,7 +322,7 @@ fail-fast：关闭（`-Dsurefire.failFast=false`、`-Djunit.jupiter.execution.fa
 
 ## 结论
 
-Phase 3 的本地可执行系统联调资产已经收口，包含静态 deploy smoke、巡检入口和现有系统级测试证据。  
+Phase 3 的本地可执行系统联调资产已经收敛，包含静态 deploy smoke、巡检入口和现有系统级测试证据。
 但真实 staging kube context 下的 live rollout、故障注入和回滚观测仍需要在目标环境执行，当前环境无法替代。
 
 ## 已完成的验证
@@ -570,7 +570,7 @@ env:
 
 ## 备注
 
-当前阶段已完成的是压测工具链和运行入口收口，不代表已经获得最终容量基线。  
+当前阶段已完成的是压测工具链和运行入口收敛，不代表已经获得最终容量基线。
 正式门禁仍要求在真实 staging 或 prod-like 环境回填 p95 / p99 / 吞吐 / 错误率 / 饱和点数据。
 
 ---

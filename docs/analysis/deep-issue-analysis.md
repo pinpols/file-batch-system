@@ -11,7 +11,7 @@
 
 ## 2. 执行摘要
 
-这个项目不是“玩具型批处理 Demo”，而是一套边界清晰、模块分工明确、设计意图比较成熟的批处理平台。主链路采用 `DB -> Outbox -> Kafka -> CLAIM -> EXECUTE -> REPORT`，运行态事实源统一收口到 `batch-orchestrator`，这条主线是对的，很多地方也已经体现出比较强的工程意识，比如：
+这个项目不是“玩具型批处理 Demo”，而是一套边界清晰、模块分工明确、设计意图比较成熟的批处理平台。主链路采用 `DB -> Outbox -> Kafka -> CLAIM -> EXECUTE -> REPORT`，运行态事实源统一收敛到 `batch-orchestrator`，这条主线是对的，很多地方也已经体现出比较强的工程意识，比如：
 
 - `launch` 的 T1/T2 两段式事务拆分
 - `outbox` 事务内落盘
@@ -19,7 +19,7 @@
 - Testcontainers 驱动的集成/E2E 测试基础设施
 - 架构文档、运行链路文档、测试文档覆盖度较高
 
-但“设计成熟”不等于“系统已经收口”。当前代码里仍然有几类明显问题：
+但“设计成熟”不等于“系统已经收敛”。当前代码里仍然有几类明显问题：
 
 1. `batch-trigger` 作为调度入口和运维入口，暴露了大量写操作接口，但模块内没有 Spring Security 保护。这不是风格问题，而是系统边界问题。
 2. Console 的鉴权仍保留了旧式 `X-Console-Token` 共享密钥直通路径，而且默认配置、默认权限和默认账号仍然偏“开发便利优先”，与“生产就绪”的表述不一致。
@@ -250,7 +250,7 @@ JWT 会暴露在：
 
 ### 5.5 P1: Console 幂等拦截器的设计不完整
 
-> 🟢 **[已修，2026-04-30]** ADR-011 三层幂等边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写：key 改绑 `(tenant+method+uri+idempotencyKey)`，两阶段占问题（PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE），Redis fail-closed 503；Layer 2 `DefaultTriggerService.approvePendingCatchUp` idempotencyKey 短路；Layer 3 `uk_job_instance_tenant_dedup` DB UNIQUE 兜底 — §5.5/§5.6/§5.10 三处一并闭环。详见 `ADR-011-idempotency-boundary-alignment.md`。
+> 🟢 **[已修，2026-04-30]** ADR-011 三层幂等边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写：key 改绑 `(tenant+method+uri+idempotencyKey)`，两阶段占问题（PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE），Redis fail-closed 503；Layer 2 `DefaultTriggerService.approvePendingCatchUp` idempotencyKey 短路；Layer 3 `uk_job_instance_tenant_dedup` DB UNIQUE 回退 — §5.5/§5.6/§5.10 三处一并闭环。详见 `ADR-011-idempotency-boundary-alignment.md`。
 
 #### 问题
 
@@ -338,7 +338,7 @@ JWT 会暴露在：
 
 #### 判断
 
-这是典型的“事务内做外部 I/O”问题，应该拆成状态机推进或 outbox 驱动，而不是直接塞进同一事务。
+这是典型的“事务内做外部 I/O”问题，应该拆成状态机推进或 outbox 驱动，而不是直接写入同一事务。
 
 ### 5.9 P1: Trigger 的错误语义存在“成功返回 null”的分支
 
@@ -686,7 +686,7 @@ JWT 会暴露在：
 
 **主要短板**：控制平面的安全硬化落后、幂等语义不统一、Trigger 接入鲁棒性不够强、Console 服务边界开始失控、外围能力的失败语义不够硬。
 
-**优先级**：按 `安全 → 幂等 → 事务边界 → 服务拆分` 顺序收口，比继续叠加功能的长期可维护性收益更高。这四件事的具体计划见 §8。
+**优先级**：按 `安全 → 幂等 → 事务边界 → 服务拆分` 顺序收敛，比继续叠加功能的长期可维护性收益更高。这四件事的具体计划见 §8。
 
 ---
 

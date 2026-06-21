@@ -97,8 +97,8 @@ flowchart LR
 - `POST /internal/tasks/{taskId}/renew`：body 为 `TaskClaimRequest { tenantId, workerId }`；续租失败返回 `409`
 - `POST /internal/tasks/{taskId}/report`：body 为 `TaskExecutionReportDto`
   - `traceId` 用于串起 worker→orchestrator 的状态推进与审计日志（controller 层接收 body traceId 并回写到 trace 相关 log 字段）
-  - `success=false` 且缺失 `errorCode/errorMessage` 时，服务端会落库兜底可观测错误信息（`UNKNOWN`）
-  - **i18n 三元组**（V77/V78 后）：`errorKey` + `errorArgs`（JSON 数组）随 BizException.of 跨进程传递，落库 11 张表的 `error_key` + `error_args` JSONB 列；console 读路径过 `LocalizedErrorRenderer` 按当前 Locale 重渲染
+  - `success=false` 且缺失 `errorCode/errorMessage` 时，服务端会写入数据库回退可观测错误信息（`UNKNOWN`）
+  - **i18n 三元组**（V77/V78 后）：`errorKey` + `errorArgs`（JSON 数组）随 BizException.of 跨进程传递，写入数据库 11 张表的 `error_key` + `error_args` JSONB 列；console 读路径过 `LocalizedErrorRenderer` 按当前 Locale 重渲染
   - **节点产出**（ADR-009 Stage 1.2）：`outputs: Map<String, Object>` 字段，worker SUCCESS 时上报 fileId / recordCount / receiptCode 等关键字段，orchestrator 序列化写 `workflow_node_run.output` JSONB 列，供下游 workflow 节点 `$.nodes.<X>.output.<key>` DSL 引用
 
 ### 其它内部 HTTP 端点（2026-06-20 新增）
@@ -126,13 +126,13 @@ flowchart LR
 - **Headers**：`X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`（便于 Kafka 端日志聚合）
 - **Producer**：`KafkaTriggerEventPublisher`（acks=all + idempotence；Stage 1 同事务写 `trigger_outbox_event` PENDING；Stage 2 `TriggerOutboxRelay` 每 200ms 扫描 + ShedLock 互斥 + FOR UPDATE SKIP LOCKED；失败指数退避 max 60s）
 - **Consumer**：`TriggerLaunchConsumer`（MANUAL_IMMEDIATE ack；409 dedup → ack 跳过；429 限流 → ack 跳过让 outbox 重发；runtime → 抛出 listener 重试）
-- **幂等保证**：consumer 重复消费同 requestId 由 `uk_job_instance_tenant_dedup` 兜底，不会真正双跑
+- **幂等保证**：consumer 重复消费同 requestId 由 `uk_job_instance_tenant_dedup` 回退，不会真正双跑
 
 ## 读图要点
 
 - `console-api` 既查库，也通过 HTTP 把触发和高危动作交给 `trigger` 或 `orchestrator`。
 - `trigger` 自己维护 `batch.trigger_request` 和 Quartz 调度表，然后通过 HTTP 调 `orchestrator` 发起正式调度。
-- `orchestrator` 是调度状态的收口点，负责维护 `job_instance`、`job_partition`、`job_task`、`workflow_run`、`workflow_node_run`、`worker_registry`、`retry_schedule`、`dead_letter_task`、`outbox_event` 等核心表。
+- `orchestrator` 是调度状态的收敛点，负责维护 `job_instance`、`job_partition`、`job_task`、`workflow_run`、`workflow_node_run`、`worker_registry`、`retry_schedule`、`dead_letter_task`、`outbox_event` 等核心表。
 - worker 不是直接从库里扫任务，而是先消费 Kafka，再通过 HTTP 回 `orchestrator` 做 `claim`、`heartbeat`、`renew`、`report`。
 - worker 仍然会直连数据库，但直连的是执行阶段需要的业务表或文件类平台表，不直接接管调度状态主表。
 - `batch-worker-export` 还会额外访问 MinIO，把导出产物写到对象存储。

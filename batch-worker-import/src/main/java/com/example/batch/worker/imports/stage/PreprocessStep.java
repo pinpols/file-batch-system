@@ -299,7 +299,7 @@ public class PreprocessStep implements ImportStageStep {
   }
 
   /**
-   * 从对象存储拉取 import 源对象的原始字节。bucket 取 {@code payload.storageBucket},缺省回退默认 bucket; object 取 {@code
+   * 从对象存储拉取 import 源对象的原始字节。bucket 取 {@code payload.storageBucket},缺省默认回退 bucket; object 取 {@code
    * payload.storagePath}。超 {@link #MAX_OBJECT_BYTES} fail-fast 防 OOM。
    */
   private byte[] downloadObjectBytes(ImportPayload importPayload) {

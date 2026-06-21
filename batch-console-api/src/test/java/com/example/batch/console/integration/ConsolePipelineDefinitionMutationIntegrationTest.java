@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
  * <p>守护:
  *
  * <ul>
- *   <li>合法 jobCode + pipelineType 落库,bizType/workerGroup 字段透传
+ *   <li>合法 jobCode + pipelineType 写入数据库,bizType/workerGroup 字段透传
  *   <li>空格 / 中文 jobCode → 400(@ValidResourceCode 拦截)
  *   <li>pipelineType 不在 IMPORT/EXPORT/PROCESS/DISPATCH → 400(@Pattern 拦截)
  *   <li>同 tenantId + jobCode 重复 → 唯一约束撞

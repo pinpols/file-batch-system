@@ -6,7 +6,7 @@
 
 ---
 
-> **配置优先级**：显式环境变量 > docker-compose `:-` 兜底 > application.yml `${VAR:fallback}` > Java 字段默认（`@Data` 字段初始化值，兜底中的兜底）。
+> **配置优先级**：显式环境变量 > docker-compose `:-` 回退 > application.yml `${VAR:fallback}` > Java 字段默认（`@Data` 字段初始化值，回退中的回退）。
 >
 > **本文档以代码 + yml 为权威**。`rework-classification.md` Phase 2 表格用作交叉对照（已于 2026-04-25 与本文档对齐）。
 
@@ -27,13 +27,13 @@
 | `batch.datasource.business.routing.enabled` | import/export/process worker | **false**（单片无损，全租户落 shard-0=现库） | **false** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED`；开后按 `placement-source`（CONFIG/TABLE）+ `shards[*]` 路由,详见 [`biz-tenant-routing.md`](./biz-tenant-routing.md) §8 |
 | `batch.datasource.business.routing.placement-source` | 同上 | **CONFIG**（hash+silo） | **CONFIG** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE`=CONFIG/TABLE；TABLE 读 `batch.business_tenant_placement`（在线维护,见 console `/api/console/ops/tenant-placements`） |
 | ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
-| `batch.resource-scheduler.default-exceeded-strategy` | orchestrator | **QUEUE_DEFER**（有界队列+背压，洪峰不误拒） | **QUEUE_DEFER** | 🟡 中 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY`=QUEUE_DEFER/REJECT；ADR-042 Phase2.3 **改了平台默认行为**（旧默认硬拒 REJECT）→ 设 `REJECT` 可回退。仅作用于未显式配 `exceeded_strategy` 的租户，显式配的以租户策略为准 |
+| `batch.resource-scheduler.default-exceeded-strategy` | orchestrator | **QUEUE_DEFER**（有界队列+背压，峰值流量不误拒） | **QUEUE_DEFER** | 🟡 中 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY`=QUEUE_DEFER/REJECT；ADR-042 Phase2.3 **改了平台默认行为**（旧默认硬拒 REJECT）→ 设 `REJECT` 可回退。仅作用于未显式配 `exceeded_strategy` 的租户，显式配的以租户策略为准 |
 | `batch.worker.import.scanner.done-file-format` | worker-import | **MARKER** | **MARKER** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT`=MARKER/JSON；JSON 即 sidecar manifest 强校验（#570），配合 `batch-manifest-enabled` |
 | `batch.worker.import.scanner.done-file-suffix` | worker-import | **`.done`** | **`.done`** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX`；done 文件后缀可配（#569） |
 | `batch.worker.import.scanner.batch-manifest-enabled` | worker-import | **false** | **false** | 🟡 中 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED`；开后扫描期强校验批次清单（文件完整性，#570）|
 | `batch.file-governance.arrival.require-verified` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED`；开后到达组要求文件已校验通过才放行（#570）|
 
-> 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。
+> 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 回退，故障自动降级。
 >
 > **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读(#578/580/582/584)是模板/渠道级配置(`trailer_template` / control-total rule / `readback_verify_enabled`),归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md);本表只收全局 yml/env 开关。
 
@@ -54,7 +54,7 @@
 
 ## 2. 默认开关状态 + 开启建议（按部署形态）
 
-> **原则**：5 个 P2 开关的 yml fallback 全部为生产推荐值（read-replica=true / worker-cache=true / mq.routing=TENANT / quota.runtime-store=redis / quota.snapshot=true），所有开关都有 fail-open 兜底（详见 §1.1）。**多数场景"全部默认"即可**，下表只列需要显式覆盖的场景。
+> **原则**：5 个 P2 开关的 yml fallback 全部为生产推荐值（read-replica=true / worker-cache=true / mq.routing=TENANT / quota.runtime-store=redis / quota.snapshot=true），所有开关都有 fail-open 回退（详见 §1.1）。**多数场景"全部默认"即可**，下表只列需要显式覆盖的场景。
 
 | 部署形态 | 业务量级 | 推荐覆盖（在 .env 显式设） | 理由 |
 |---|---|---|---|
@@ -249,7 +249,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 应用层把租户路由到不同 biz PG 实例(自研,非 Citus)。**默认 `enabled=false` = 单片无损**(全租户落 shard-0=现库,零行为变更)。开启后:
 
-- `placement-source=CONFIG`(默认):hash 池化 + `silo-overrides`;`=TABLE`:读 `batch.business_tenant_placement`(在线维护,console `/api/console/ops/tenant-placements`,表命中优先 hash 兜底)。
+- `placement-source=CONFIG`(默认):hash 池化 + `silo-overrides`;`=TABLE`:读 `batch.business_tenant_placement`(在线维护,console `/api/console/ops/tenant-placements`,表命中优先 hash 回退)。
 - `shards[*]`(key+url+账密)凭据走 secrets,**不入表**;`shard-max-pool-size` 控每片池;`placement-cache-ttl-ms` 默认 5s(**0=每次查库仅测试用**)。
 - 仅 import/export/process 三 worker 持有 biz 数据源;dispatch/atomic/SDK 不涉及。
 - **Fail-open**:placement 表读失败时已有缓存保留 stale(silo 路由仍对),冷启动退 hash;未知 placement key **硬失败**(关 lenientFallback,防静默落 shard-0 污染)。
@@ -296,7 +296,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 | # | 待办 | 状态 |
 |---|---|---|
-| 1 | `docker/compose/app.yml` 给 `quartz-datasource` 加显式 `:-false` 兜底 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
+| 1 | `docker/compose/app.yml` 给 `quartz-datasource` 加显式 `:-false` 回退 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
 | 2 | `rework-classification.md` 第 81 行更新为实际默认表 | ✅ 完成（替换为 5 项开关默认值表 + 引用 `feature-switches.md`） |
 | 3 | `read-replica` 应用层 fail-open | ✅ **本次梳理前已落地**（`ReadReplicaRoutingDataSource` C-3.1：失败计数 + quarantine + micrometer 指标 + `@RouteToPrimary` 注解）；本文档 §3.1 已校准 |
 | 4 | `mq.routing` 切换灰度发布 runbook | ✅ 完成（新增 `docs/runbook/mq-topic-routing-rollout.md`） |

@@ -30,7 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
  * ADR-010 Stage 4: 消费 batch.trigger.launch.v1 topic,把 envelope 反序列化后调用现有 {@link
  * LaunchApplicationService#launch(LaunchRequest)} 内部 API。
  *
- * <p>幂等保证:同 requestId 多次消费 → orchestrator 端 {@code uk_job_instance_tenant_dedup} 兜底,不会真正双跑。重复消费时
+ * <p>幂等保证:同 requestId 多次消费 → orchestrator 端 {@code uk_job_instance_tenant_dedup} 回退,不会真正双跑。重复消费时
  * launch 抛 CONFLICT(409), 我们视为成功 ack(消息已被处理过,不需要重投)。
  *
  * <p>失败处理:
@@ -152,7 +152,7 @@ public class TriggerLaunchConsumer {
     } catch (ResponseStatusException ex) {
       if (ex.getStatusCode().value() == 409) {
         log.info(
-            "TriggerLaunchConsumer 重复 requestId 被 dedup 兜底,视为成功: tenantId={} requestId={}",
+            "TriggerLaunchConsumer 重复 requestId 被 dedup 回退,视为成功: tenantId={} requestId={}",
             tenantId,
             request.requestId());
         counter(METRIC_DEDUPED, "tenant", tenantTag).increment();
@@ -203,7 +203,7 @@ public class TriggerLaunchConsumer {
    * 把 trigger_request 的 status 推到 LAUNCHED + 写回 relatedJobInstanceId。
    *
    * <p>best-effort:任何异常仅 WARN 不抛 — 主路径 launch 已成功并 ack,这一步只是审计字段闭环。失败时 trigger_request 留在 ACCEPTED
-   * 状态(异步路径异常态),由后续 reconciler / 运维 SQL 兜底。
+   * 状态(异步路径异常态),由后续 reconciler / 运维 SQL 回退。
    */
   private void writeBackTriggerRequestLaunched(
       String tenantId, String requestId, LaunchResponse response) {

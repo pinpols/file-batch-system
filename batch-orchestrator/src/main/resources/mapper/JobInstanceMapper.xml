@@ -548,7 +548,7 @@
          会让下次跳过失败 partition 应处理的数据范围;让下次重新从同一 IN 跑,由 publish 路径
          的 ON CONFLICT 兜住重复(见 SqlTransformComputeSpec / buildPublishSql)。
          按 finished_at desc, id desc 排序:finished_at 是真实完成时间(优先);若并发场景下
-         finished_at 出现 NULL/相同,id 兜底保证确定性。 -->
+         finished_at 出现 NULL/相同,id 回退保证确定性。 -->
     <select id="selectLastSuccessByJobDefinition" resultMap="JobInstanceResultMap">
         select *
         from batch.job_instance

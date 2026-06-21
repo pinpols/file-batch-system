@@ -59,7 +59,7 @@ batch:
     executors:
       sql:
         enabled: true
-        forbid-os-capable-role: false  # 本地角色可能高权限;生产默认 true 兜底
+        forbid-os-capable-role: false  # 本地角色可能高权限;生产默认 true 回退
       shell:
         enabled: true
       stored-proc:
@@ -67,7 +67,7 @@ batch:
         # 本地放行 batch schema 下的过程(生产应精确到过程白名单)
         allowed-schemas:
         - batch
-        # 本地 dev:关 OS 角色闸(本地角色可能高权限);生产用最小权限角色,默认 true 兜底
+        # 本地 dev:关 OS 角色闸(本地角色可能高权限);生产用最小权限角色,默认 true 回退
         forbid-os-capable-role: false
       http:
         enabled: true

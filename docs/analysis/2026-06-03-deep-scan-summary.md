@@ -16,7 +16,7 @@
 
 ## 待补 7 个 lane(API 重置后补)
 
-- BE 安全审计(OWASP / SQL injection / SSRF / 命令注入 / 凭据落库 / 多租隔离)
+- BE 安全审计(OWASP / SQL injection / SSRF / 命令注入 / 凭据写入数据库 / 多租隔离)
 - BE 业务 bug + 运维(workflow / pipeline / batch-day / replay / outbox / dead-letter)
 - FE 交互 + 表单 + 键盘(form 校验 / 快捷键 / 拖拽 / 错误恢复)
 - FE 反馈 + loading + 错误(toast / 进度 / 空态 / 维护模式 banner)

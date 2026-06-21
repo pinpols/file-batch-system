@@ -21,15 +21,15 @@ import lombok.extern.slf4j.Slf4j;
  * /internal/workers/{workerCode}/heartbeat}。
  *
  * <p>body 对齐 {@code WorkerHeartbeatDto}:{@code tenantId / workerCode / status / heartbeatAt /
- * currentLoad / capabilityTags}。HTTP 失败不抛(orchestrator 端 missed-heartbeat 阈值兜底)。
+ * currentLoad / capabilityTags}。HTTP 失败不抛(orchestrator 端 missed-heartbeat 阈值回退)。
  */
 @Slf4j
 public class HeartbeatScheduler implements AutoCloseable {
 
-  /** Lane I:hint 兜底下限 — orch 配错(如 0 / 100ms)会把心跳刷爆,强制至少 1s。 */
+  /** Lane I:hint 回退下限 — orch 配错(如 0 / 100ms)会把心跳刷爆,强制至少 1s。 */
   static final long MIN_HINT_MS = 1_000L;
 
-  /** Lane I:hint 兜底上限倍率 — hint 不得超过 baseline 的 10 倍,避免 orch 配错把心跳拖死。 */
+  /** Lane I:hint 回退上限倍率 — hint 不得超过 baseline 的 10 倍,避免 orch 配错把心跳拖死。 */
   static final long MAX_HINT_MULTIPLIER = 10L;
 
   private final BatchPlatformClientConfig config;
@@ -105,7 +105,7 @@ public class HeartbeatScheduler implements AutoCloseable {
       body.put("heartbeatAt", Instant.now().toString());
       body.put("currentLoad", dispatcher.inFlightCount());
       // Lane I / Python SDK PR #320 对齐:把 register 时已上报的 6 字段也带到每次 heartbeat。
-      // 动机:DefaultWorkerRegistryService#heartbeat 在 registry 行不存在时会兜底降级到 register
+      // 动机:DefaultWorkerRegistryService#heartbeat 在 registry 行不存在时会回退降级到 register
       // 路径(运维误删 / 平台冷启重建索引等场景),那一刻若 body 缺这些字段,worker_registry 行
       // 就会带 null 字段重建。把字段每次都带上消除该窗口。null 字段由 Jackson NON_NULL 略过,平台
       // 端 record 允许 null。TODO:platform 端 heartbeat 路径目前仅消费 status/load/capabilityTags,
@@ -130,14 +130,14 @@ public class HeartbeatScheduler implements AutoCloseable {
       log.warn("heartbeat failed: {}", t.getMessage());
     }
     // Lane I (ADR-035 §11):若 orch 下发 nextHeartbeatHint,据此动态重排下次心跳间隔。
-    // 兜底:hint < 1s → 1s;hint > 10 × baseline → 10 × baseline(防 orch 配错)。
+    // 回退:hint < 1s → 1s;hint > 10 × baseline → 10 × baseline(防 orch 配错)。
     // null = 不下发,保持当前间隔(向后兼容老平台 / 老回包)。
     if (directive != null && directive.nextHeartbeatHint() != null) {
       applyHeartbeatHint(directive.nextHeartbeatHint().longValue() * 1_000L);
     }
   }
 
-  /** Lane I:据 hint 重排心跳调度;hint 单位 ms,内含兜底。包内可见以便单测。 */
+  /** Lane I:据 hint 重排心跳调度;hint 单位 ms,内含回退。包内可见以便单测。 */
   void applyHeartbeatHint(long hintMs) {
     long baselineMs = config.getHeartbeatInterval().toMillis();
     long maxMs = baselineMs * MAX_HINT_MULTIPLIER;

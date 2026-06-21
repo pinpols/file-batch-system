@@ -30,7 +30,7 @@
 
 ### 结论 2：`batch-trigger` 的 Phase 2 P0 缺口已补齐第一轮门禁
 
-`batch-trigger` 现有 14 个测试文件，已覆盖请求校验、dedup 落库、Quartz misfire/catch-up、调度元数据透传、启动加载和基础 DB 协作。剩余缺口主要是 trigger 专属 E2E 与多实例 Quartz 集群行为验证。
+`batch-trigger` 现有 14 个测试文件，已覆盖请求校验、dedup 写入数据库、Quartz misfire/catch-up、调度元数据透传、启动加载和基础 DB 协作。剩余缺口主要是 trigger 专属 E2E 与多实例 Quartz 集群行为验证。
 
 ### 结论 3：项目已有统一回归入口，并已落地三层 GitHub Actions workflow
 
@@ -107,9 +107,9 @@
 
 ## 当前状态
 
-Phase 2 已收口完成。
+Phase 2 已收敛完成。
 
-收口结果：
+收敛结果：
 
 - `batch-trigger` 首批 P0 门禁已补齐
 - 统一回归入口 `scripts/ci/run-full-regression.sh` 已落地
@@ -119,9 +119,9 @@ Phase 2 已收口完成。
 
 ## 目标
 
-本文件用于保留 Phase 2 的 P0 收口清单和后续增量项，便于单独查阅和维护。
+本文件用于保留 Phase 2 的 P0 收敛清单和后续增量项，便于单独查阅和维护。
 
-## 已完成的首轮收口
+## 已完成的首轮收敛
 
 ### `batch-trigger` 首批门禁
 
@@ -137,7 +137,7 @@ Phase 2 已收口完成。
 覆盖点：
 
 - API 请求校验、缺少幂等键、自动生成 `requestId/traceId`
-- trigger request 幂等落库与重复提交去重
+- trigger request 幂等写入数据库与重复提交去重
 - catch-up 审批通过后的状态推进
 - Quartz misfire 后的自动补跑 / 人工审批分支
 - Quartz 注册时 `catchUpPolicy` / `catchUpMaxDays` 元数据透传
@@ -149,7 +149,7 @@ Phase 2 已收口完成。
 
 - `TriggerLaunchRequest` 补齐字段校验注解
 - `TriggerApiExceptionHandler` 补齐 `MethodArgumentNotValidException`
-- `TriggerApiExceptionHandler` 统一处理 `ConstraintViolationException` 和兜底 500
+- `TriggerApiExceptionHandler` 统一处理 `ConstraintViolationException` 和回退 500
 
 ### Quartz catch-up 策略修正
 

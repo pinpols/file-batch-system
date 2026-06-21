@@ -23,7 +23,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * workflow_run stuck 兜底（参考 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.2）。
+ * workflow_run stuck 回退（参考 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.2）。
  *
  * <p>主路径靠 {@code DefaultTaskOutcomeService} 反向推进 workflow_run；如果 task outcome 永远不来 （task 全 stuck /
  * partition 已 reclaim 但 workflow_run 没收到信号），workflow_run 会永远 RUNNING。
@@ -32,7 +32,7 @@ import org.springframework.stereotype.Component;
  * {@code workflow_node_run}：
  *
  * <ul>
- *   <li>有 node 仍 READY/RUNNING → 不动（可能正常长跑或下游正在推进，由 timeout enforcer / lease reclaim 兜底）
+ *   <li>有 node 仍 READY/RUNNING → 不动（可能正常长跑或下游正在推进，由 timeout enforcer / lease reclaim 回退）
  *   <li>所有 node 终态 (SUCCESS/FAILED/SKIPPED)：
  *       <ul>
  *         <li>任一 FAILED → CAS finalize 为 FAILED

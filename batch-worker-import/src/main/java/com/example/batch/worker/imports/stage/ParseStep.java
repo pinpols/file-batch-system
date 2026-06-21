@@ -129,7 +129,7 @@ public class ParseStep implements ImportStageStep {
               context, stagingFile, totalCount, attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
       attrs.put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
       // 切片时 parsedCount 应反映本 partition 视角(下游 LoadStep 用它做 audit + step output);
-      // 不切片时维持原有 support.numberValue(...) 值兜底,保持与历史行为一致。
+      // 不切片时维持原有 support.numberValue(...) 值回退,保持与历史行为一致。
       Object existingParsedCount = attrs.get(KEY_PARSED_COUNT);
       long parsedCountValue =
           partitionedCount != totalCount

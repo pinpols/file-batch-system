@@ -147,4 +147,4 @@ ALTER TABLE batch.outbox_event_legacy RENAME TO outbox_event;
 - `scripts/db/partition-migration/02-job-instance-partitioned.sql` — job_instance 迁移
 - `scripts/db/partition-migration/03-add-future-partitions.sql` — 月度维护
 - `OutboxArchiveScheduler` / `SuccessInstanceArchiveScheduler` — archive 自动化（commit `18577c0c`）
-- `cleanup-outbox-events.sql` / `cleanup-success-instances.sql` — 手工兜底
+- `cleanup-outbox-events.sql` / `cleanup-success-instances.sql` — 手工回退

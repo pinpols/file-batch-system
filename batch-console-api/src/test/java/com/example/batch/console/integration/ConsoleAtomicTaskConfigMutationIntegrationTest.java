@@ -115,7 +115,7 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .expectStatus()
         .isBadRequest();
 
-    // 不应有落库
+    // 不应有写入数据库
     Long cnt =
         jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM batch.atomic_task_config WHERE tenant_id = ?",

@@ -71,7 +71,7 @@
 当前方案已经从“定时任务触发器”提升为“统一触发入口层”。其主要优势包括：
 
 - Trigger 与 Console 分层清晰，控制面与运行触发面职责明确；
-- 触发类型统一收口为 `CRON`、`FIXED_RATE`、`FIXED_DELAY`、`ONE_TIME`、`API`、`MANUAL`、`FILE_EVENT`；
+- 触发类型统一收敛为 `CRON`、`FIXED_RATE`、`FIXED_DELAY`、`ONE_TIME`、`API`、`MANUAL`、`FILE_EVENT`；
 - 业务日历、节假日、特殊业务日、catch-up 与 misfire 已纳入调度治理范围；
 - Orchestrator 统一接管触发后的实例创建、依赖判断、分片规划与 Worker 路由；
 - 已明确触发幂等与实例去重键，能够降低 API 重放、文件事件重复投递、人工重复操作带来的重复实例风险。
@@ -327,7 +327,7 @@
 
 ### 20.11 实施交付件完成状态（更新于 2026-03-25）
 
-以下内容为原定”工程实施阶段收口”的交付件，当前完成状态如下：
+以下内容为原定”工程实施阶段收敛”的交付件，当前完成状态如下：
 
 1. **接口落地件** ✅ 基本完成
    - 触发/补偿/查询/文件链接口示例见 `docs/api/console-api-protocol.md`；
@@ -336,8 +336,8 @@
      - 公共 Header：`X-Tenant-Id`、`X-Trace-Id`（服务端会写入 MDC，贯穿后续 audit/log 与链路追踪）
      - `claim` / `renew`：请求体为 `TaskClaimRequest`，包含 `tenantId`、`workerId`；冲突/租约失败时返回 `409`
      - `report`：请求体为 `TaskExecutionReportDto`
-       - `traceId` 为 worker 侧 trace（可为空；客户端会兜底生成并回填 header）
-       - `success=false` 时，若 `errorCode/errorMessage` 缺失则服务端会落库可观测的兜底值（`UNKNOWN`），便于联调与告警归因
+       - `traceId` 为 worker 侧 trace（可为空；客户端会回退生成并回填 header）
+       - `success=false` 时，若 `errorCode/errorMessage` 缺失则服务端会写入数据库可观测的回退值（`UNKNOWN`），便于联调与告警归因
 
 2. **数据库与 Flyway 落地件** ✅ 已完成
    - Flyway SQL 已按版本持续拆分演进；
@@ -362,7 +362,7 @@
    - SOP 文档：`docs/runbook/daily-inspection.md` 已更新为脚本化运维流程；
    - 故障响应：`docs/runbook/incident-response.md`；Worker 滚动升级：`docs/runbook/rolling-upgrade-workers.md`。
 
-**当前收口状态**：6 项中 4 项已完成，1 项部分完成（Kafka 消息体），1 项仍待补实（压测数据）。
+**当前收敛状态**：6 项中 4 项已完成，1 项部分完成（Kafka 消息体），1 项仍待补实（压测数据）。
 
 ### 20.12 综合评分与建设建议
 

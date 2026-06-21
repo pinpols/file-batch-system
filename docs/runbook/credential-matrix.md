@@ -8,15 +8,15 @@
 
 1. **账密绝不入库当明文**:片级 DB 账密走 secret 后端,**永不进 placement / shard catalog 表**(catalog 的 `secret_ref` 只是引用名,不是密钥);渠道/业务凭据走 `secret_version` 版本化、**应用层再加密**,控制台只能录新版本不能覆盖历史。
 2. **平台不绑死任何 vault**:应用代码**不集成任何 secret SDK**,只认 Spring 配置 / env。外部 secret 后端(Vault / AWS Secrets Manager / K8s Secret)经**标准 env / 挂载文件**喂进配置——谁部署谁用自己的后端注入。
-3. **prod profile fail-fast 兜底**:多个出厂默认占位符在 prod profile 下**拒绝启动**(见下表「prod 强校验」列);非 prod 不阻断但打 WARN。漏开 prod profile ≠ 安全,真上线务必跑在 prod-like profile。
+3. **prod profile fail-fast 回退**:多个出厂默认占位符在 prod profile 下**拒绝启动**(见下表「prod 强校验」列);非 prod 不阻断但打 WARN。漏开 prod profile ≠ 安全,真上线务必跑在 prod-like profile。
 
 ## 1. 凭据矩阵总表
 
 | # | 凭据类型 | 存储位置 | 注入方式 | prod 强校验 | 上线必配 | 负责人 |
 |---|---|---|---|---|---|---|
 | 1 | **biz 分片片级 DB 账密**(每片 PG 的 writer 账户) | **secret 后端**(dev: `secrets/biz-shards/<key>.env`;prod: Vault / K8s Secret)。**永不入表** | 后端 → env `BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_n_USERNAME/PASSWORD/URL` → `routing.shards[*]` | 启用多片时缺 default key `shard-0` 装配直接拒;账户须 `batch_business_writer`(非 superuser,superuser 被 RLS 豁免=隔离失效) | 启用 `routing.enabled=true` 多片时必配;单片(默认)用主库凭据 | 运维 / 平台 DBA |
-| 2 | **渠道凭据**(SFTP/API/OSS dispatch 的账密 / token / 密钥对) | `file_channel_config.config_json`(JSONB)+ `auth_type` 标类型;敏感值推荐走 `secret_version`(版本化、轮换窗口、`secret_payload` 应用层加密),`config_json` 存 `secret_ref` 引用 | 控制台录入 → 落库;渠道适配器按 `secret_version` 版本号选有效凭据 | 无独立 fail-fast(数据面配置,按租户) | 仅当该租户用 DISPATCH(SFTP/API 投递)时必配;纯导入入库+导出落文件用不到 | 配置维护者 / 租户管理员 |
-| 3 | **console 用户密码** | `console_user_account` 表,**Argon2id 哈希**(`ConsolePasswordHasher`,Spring Security 默认参数,含随机盐) | 建租户/建用户时录入明文 → 服务端 Argon2id 哈希落库;**首次登录强制改密**(`must_change_password`,`POST /api/console/auth/change-password`) | `ConsoleDefaultPasswordGuard` 拦出厂默认弱口令;prod 不允许沿用默认 | 必配(admin + 各租户用户);批量建租户密码最低 12 位 | 平台管理员 / 租户管理员 |
+| 2 | **渠道凭据**(SFTP/API/OSS dispatch 的账密 / token / 密钥对) | `file_channel_config.config_json`(JSONB)+ `auth_type` 标类型;敏感值推荐走 `secret_version`(版本化、轮换窗口、`secret_payload` 应用层加密),`config_json` 存 `secret_ref` 引用 | 控制台录入 → 写入数据库;渠道适配器按 `secret_version` 版本号选有效凭据 | 无独立 fail-fast(数据面配置,按租户) | 仅当该租户用 DISPATCH(SFTP/API 投递)时必配;纯导入入库+导出落文件用不到 | 配置维护者 / 租户管理员 |
+| 3 | **console 用户密码** | `console_user_account` 表,**Argon2id 哈希**(`ConsolePasswordHasher`,Spring Security 默认参数,含随机盐) | 建租户/建用户时录入明文 → 服务端 Argon2id 哈希写入数据库;**首次登录强制改密**(`must_change_password`,`POST /api/console/auth/change-password`) | `ConsoleDefaultPasswordGuard` 拦出厂默认弱口令;prod 不允许沿用默认 | 必配(admin + 各租户用户);批量建租户密码最低 12 位 | 平台管理员 / 租户管理员 |
 | 4 | **平台内部密钥** `batch.security.internal-secret` | 配置默认占位符 `internal-secret`(`batch-defaults.yml`);prod 经 `BATCH_INTERNAL_SECRET` 注入 | env `BATCH_INTERNAL_SECRET` → `BatchSecurityProperties.internalSecret`;orchestrator `/internal/**` 用 `X-Internal-Secret` header 校验 | **是**:prod profile 下仍为默认值 `internal-secret` → `IllegalStateException` fail-fast 拒绝启动 | 必配(orchestrator 内部接口鉴权;全部 worker/trigger 调用方共享) | 平台 / 运维 |
 | 5 | **console JWT 签名密钥** `console.security.jwt-secret` | 配置默认占位符 `console-jwt-secret-change-me`;prod 经 `BATCH_CONSOLE_JWT_SECRET` 注入 | env `BATCH_CONSOLE_JWT_SECRET` → `ConsoleSecurityProperties.jwtSecret`(`ConsoleJwtService` 派生 HMAC key) | **是**:`ConsoleJwtService.validateSecuritySecrets` prod profile 下默认/弱值 fail-fast | 必配(console 登录态签发/校验) | 平台 / 运维 |
 | 6 | **对象加密密钥 / KMS key** `batch.security.kms.keys.*` | 配置 `default-key-ref` + `keys` map(`batch-defaults.yml`,默认 `DEFAULT_TEST`);prod 经 env 注入真实密钥,**避免明文进仓库** | env `BATCH_SECURITY_KMS_DEFAULT_KEY_REF` / `BATCH_SECURITY_KMS_KEYS_*`;模板 `encryption_key_ref` 指向 `secret_version` | 默认关(`content_encryption_enabled=NO`);启用内容加密的租户才用 | 仅当租户/业务开 `content_encryption_enabled=YES`(`encryption_mode=APP_LEVEL`)时必配;`OBJECT_STORAGE_SSE` 走对象存储侧 | 平台(安全) |
@@ -30,7 +30,7 @@
 - **凭据轮换(渠道/加密)**:`secret_version` 支持 `DRAFT/PUBLISHED/GRAY/ROLLED_BACK` 状态 + 轮换窗口(`rotation_window_*`)+ 兼容期(`effective_*`),控制台**只录新版本不覆盖历史**,轮换事件进 `config_change_log` 审计。详见 `docs/design/multi-tenant-and-security.md` §5。
 - **biz 片凭据轮换**:换密码只动 secret 后端 + 重启(或热加载)worker,**不动** placement / shard catalog 表。账户固定用 `batch_business_writer`(非 superuser)。详见 `docs/runbook/biz-tenant-routing.md` §9。
 - **secret 脱敏**:日志输出统一经 `SecretMasking`(`batch-common/.../utils/SecretMasking.java`),不打全量凭据明文。
-- **dev vs prod 落差**:dev 大量用出厂默认(`minioadmin` / `batch_pass_123` / `internal-secret` / biz 片用 superuser `batch_user`)纯为本地起得来;**prod 一律换真实凭据 + prod-like profile 跑**,靠上表 fail-fast 列兜底。
+- **dev vs prod 落差**:dev 大量用出厂默认(`minioadmin` / `batch_pass_123` / `internal-secret` / biz 片用 superuser `batch_user`)纯为本地起得来;**prod 一律换真实凭据 + prod-like profile 跑**,靠上表 fail-fast 列回退。
 
 ## 3. 权威文档指针
 

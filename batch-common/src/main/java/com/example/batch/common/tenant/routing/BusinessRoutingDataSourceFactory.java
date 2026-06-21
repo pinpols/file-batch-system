@@ -35,7 +35,7 @@ public final class BusinessRoutingDataSourceFactory {
    * 多片装配(P2 使能):按 {@code shards}(placement key → DataSource)+ resolver 路由。
    *
    * <p>{@code shards} 的 key 必须覆盖 resolver 可能返回的全部 key(shard-0..N-1 + 各 silo);
-   * defaultTargetDataSource 用 shard-0 兜底(无租户上下文时)。N 个真实 DataSource 的构造 (从 config + secrets)由装配方/ops
+   * defaultTargetDataSource 用 shard-0 回退(无租户上下文时)。N 个真实 DataSource 的构造 (从 config + secrets)由装配方/ops
    * 提供——本工厂只负责组装路由,不碰凭据。
    *
    * @param shards placement key → 已建好的 DataSource;必须含 {@link

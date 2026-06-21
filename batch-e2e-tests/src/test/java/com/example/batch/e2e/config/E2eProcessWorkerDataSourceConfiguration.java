@@ -21,7 +21,7 @@ public class E2eProcessWorkerDataSourceConfiguration {
   }
 
   /**
-   * Boot JDBC 通常会注册同名 bean；缺失时（Process E2E 裁剪 auto-config）兜底。{@link
+   * Boot JDBC 通常会注册同名 bean；缺失时（Process E2E 裁剪 auto-config）回退。{@link
    * #processBusinessTransactionManager} 标记 {@code autowireCandidate=false}，避免按类型注入 {@code
    * TransactionManager} 时出现双候选。
    */

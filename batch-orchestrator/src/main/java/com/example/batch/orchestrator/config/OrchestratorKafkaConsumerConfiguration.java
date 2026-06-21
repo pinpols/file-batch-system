@@ -58,7 +58,7 @@ public class OrchestratorKafkaConsumerConfiguration {
     properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     properties.put(ConsumerConfig.GROUP_ID_CONFIG, consumerProperties.getGroupId());
-    // earliest 兜底:首次起服 / 重置时不丢消息;正常运行靠 commit offset
+    // earliest 回退:首次起服 / 重置时不丢消息;正常运行靠 commit offset
     properties.put(
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, consumerProperties.getAutoOffsetReset());
     // 关 auto-commit,走 MANUAL_IMMEDIATE
@@ -77,7 +77,7 @@ public class OrchestratorKafkaConsumerConfiguration {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(triggerLaunchConsumerFactory);
-    // launch→实例创建吞吐受此并发约束(旧默认 1 单线程封顶多租洪峰);与 launch topic 分区数对齐
+    // launch→实例创建吞吐受此并发约束(旧默认 1 单线程封顶多租峰值流量);与 launch topic 分区数对齐
     factory.setConcurrency(consumerProperties.getConcurrency());
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.getContainerProperties().setObservationEnabled(true);

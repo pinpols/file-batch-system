@@ -182,7 +182,7 @@ public class PipelineCompensationHook {
               .detailSummary(detail)
               .build());
     } catch (RuntimeException ex) {
-      // 审计落库失败不影响 pipeline 落终态;info 日志已是兜底审计。
+      // 审计写入数据库失败不影响 pipeline 落终态;info 日志已是补充审计。
       log.warn(
           "pipeline compensation audit persist failed (info log already recorded): fileId={}",
           fileId,

@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
  * SdkRetryableHandler#wrap}(SDK core 禁 Spring,不走 AOP),复用 {@link SdkRetryPolicy} 退避逻辑。
  *
  * <p><b>匹配规则</b>:抛出的异常 {@code isInstanceOf} {@link #value()} 任一类型才重试(子类匹配);不匹配的异常**原样透传**,
- * 不重试、不吞。达到 {@link #maxAttempts()} 仍失败 → 抛最后一次异常(由上层 handler 模板兜底转 fail)。
+ * 不重试、不吞。达到 {@link #maxAttempts()} 仍失败 → 抛最后一次异常(由上层 handler 模板回退转 fail)。
  *
  * <p>例:{@code @RetryOn(value = IOException.class, maxAttempts = 3, initialDelayMillis = 200)}。
  */

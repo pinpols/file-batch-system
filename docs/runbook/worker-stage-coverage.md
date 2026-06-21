@@ -197,7 +197,7 @@ JOIN batch.pipeline_instance pi ON pi.id = psr.pipeline_instance_id
 WHERE pi.related_job_instance_id = (SELECT id FROM batch.job_instance WHERE instance_no = '<your-instance-no>')
 ORDER BY psr.id;
 
--- IMPORT 落库验证
+-- IMPORT 写入数据库验证
 SELECT count(*) FROM biz.risk_score WHERE tenant_id='tc';   -- 在 batch_business 库执行
 
 -- EXPORT 文件验证
@@ -214,7 +214,7 @@ ls -la /tmp/batch/tc-risk-alert/                              -- LOCAL channel t
 ## 5. 已知遗留与限制
 
 - **文件名占位符未替换**：EXPORT 产出的 `file_name` 含 `{bizDate}` 字面量，没有真做插值。重复跑 EXPORT 会撞 `(tenant_id, checksum_value, storage_path)` 唯一键。临时方案：每次重跑前先清掉旧 file_record（连带 `file_audit_log` / `pipeline_instance.file_id`）。根治需要 `naming_rule` 字段做模板插值。
-- **worker 进程闲置约 8 小时会被系统回收**（macOS 本地 dev 环境特性，生产 supervisor 兜底）。每次连续跑前先 `jps -l | grep worker` 确认存活。
+- **worker 进程闲置约 8 小时会被系统回收**（macOS 本地 dev 环境特性，生产 supervisor 回退）。每次连续跑前先 `jps -l | grep worker` 确认存活。
 - **orchestrator 缓存 job_definition**：改 `default_params` / `retry_policy` 后必须重启 orchestrator 才生效。`OrchestratorConfigCacheService` 没有自动失效机制。
 - **EXPORT/IMPORT 模板补齐**：本验证只覆盖 `tc/EXP-RISK-ALERT-JSON` 和 `tc/IMP-RISK-SCORE-JSON`。`default-tenant` 的 `exp_*` 系列模板 `query_param_schema` 大多缺 `sql_template_export` / `jdbc_mapped_export` 配置，跑起来一律报 `export_data_ref is required`，等后续按 risk_alert 模板的格式补齐。
 

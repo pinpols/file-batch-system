@@ -127,7 +127,7 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
             "t1",
             "pending-001");
 
-    // ADR-010：审批走 outbox。trigger_request 标 LAUNCHED 后立刻返回，trigger_outbox_event 同事务落库。
+    // ADR-010：审批走 outbox。trigger_request 标 LAUNCHED 后立刻返回，trigger_outbox_event 同事务写入数据库。
     assertThat(response.instanceNo()).isEqualTo("pending-001");
     assertThat(response.traceId()).isEqualTo("trace-pending-001");
     assertThat(status).isEqualTo("LAUNCHED");

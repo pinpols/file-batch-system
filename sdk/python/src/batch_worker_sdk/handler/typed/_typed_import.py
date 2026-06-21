@@ -4,7 +4,7 @@
 模板顺序:``open_source -> read_rows(流式) -> load_batch(批量 flush)
 -> summarize``。强类型输入 ``ParamsT``(pydantic)取代 Java 的 Jackson 反射
 解析;强类型业务结果 ``OutputT`` 序列化回 ``SdkTaskResult.output``
-(``None`` -> 行计数器 map 兜底,对齐 Java)。
+(``None`` -> 行计数器 map 回退,对齐 Java)。
 """
 
 from __future__ import annotations

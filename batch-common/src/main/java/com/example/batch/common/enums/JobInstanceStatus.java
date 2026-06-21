@@ -53,7 +53,7 @@ public enum JobInstanceStatus implements DictEnum {
    *
    * <p>关键 rolling-rollback 兼容性：V117 增加了 SUCCESS_DRY_RUN / FAILED_DRY_RUN 后， 一旦回退到不含这两值的旧镜像，旧代码读到 DB
    * 里 dry-run 状态行，{@link DictEnum#fromCode} 返回 null。 调用方必须用 null-safe 路径（如 lifecycle 推断走 {@link
-   * BatchLifecycleStatus#UNKNOWN}）兜底， 不允许直接对结果 {@code .lifecycle()} 解引用导致 NPE。
+   * BatchLifecycleStatus#UNKNOWN}）回退， 不允许直接对结果 {@code .lifecycle()} 解引用导致 NPE。
    */
   public static JobInstanceStatus fromCodeOrNull(String code) {
     return DictEnum.fromCode(JobInstanceStatus.class, code);

@@ -63,7 +63,7 @@
 | `aggregate_type` | VARCHAR(64) | `JOB_TASK` 等聚合类型 |
 | `aggregate_id` | BIGINT | 关联实体主键 |
 | `event_type` | VARCHAR(64) | 事件类型，由 `BatchTopicResolver.resolve(eventType, msg)` 推导 Kafka topic |
-| `event_key` | VARCHAR(256) | **幂等键**，`uk_outbox_event_key UNIQUE (tenant_id, event_key)` 兜底；`insert ... on conflict do nothing` |
+| `event_key` | VARCHAR(256) | **幂等键**，`uk_outbox_event_key UNIQUE (tenant_id, event_key)` 回退；`insert ... on conflict do nothing` |
 | `payload_json` | JSONB | `TaskDispatchMessage` v2 序列化 |
 | `publish_status` | VARCHAR(32) | **5 态**：`NEW / PUBLISHING / PUBLISHED / FAILED / GIVE_UP` |
 | `publish_attempt` | INTEGER | 进入 PUBLISHING 时 +1（语义"尝试发送次数"） |
@@ -121,7 +121,7 @@ V80 另起 `batch.trigger_outbox_event`（trigger → orchestrator 异步 launch
 ShedLock + 应用层 sharding 协作（**不用** SKIP LOCKED）：
 
 - **STATIC sharding**：`OutboxProperties.shardIndex/shardTotal` 从 ENV 注入；多 instance 各自配 `shardIndex`，selectPending SQL 用 `(hashtext(tenant_id) & 2147483647) % shardTotal = shardIndex` 物理分流
-- **DYNAMIC sharding**：`RedisShardAssignmentProvider` 周期心跳（POD_NAME / hostname 注入），rebalance 时短暂重叠由 `markPublishing` 的 CAS 兜底
+- **DYNAMIC sharding**：`RedisShardAssignmentProvider` 周期心跳（POD_NAME / hostname 注入），rebalance 时短暂重叠由 `markPublishing` 的 CAS 回退
 - **ShedLock 锁名**：`shardTotal=1` → `outbox_poll`；`shardTotal>1` → `outbox_poll_shard_<index>`，每 shard 独立锁，instance 间不互锁
 - **锁参数**：`LOCK_AT_MOST=120s`（与 `publishingTimeoutSeconds` 对齐，确保锁过期时 stale 重置已生效）/ `LOCK_AT_LEAST=200ms`（让闲置轮询不长占锁）
 
@@ -135,7 +135,7 @@ ShedLock + 应用层 sharding 协作（**不用** SKIP LOCKED）：
 ### 死信 / GIVE_UP
 
 - **outbox 自身 GIVE_UP**：5 次失败后转终态，无主动告警 ❌（依赖 metric pull）
-- **任务消费 DLQ**：`BatchTopics.TASK_DEAD_LETTER` topic 已定义，`worker-core/DeadLetterPublisher` 实现，但 **orchestrator 端尚未配 listener 消费**（依赖 `uk_job_instance_tenant_dedup` 兜底重复）
+- **任务消费 DLQ**：`BatchTopics.TASK_DEAD_LETTER` topic 已定义，`worker-core/DeadLetterPublisher` 实现，但 **orchestrator 端尚未配 listener 消费**（依赖 `uk_job_instance_tenant_dedup` 防重复）
 
 ### 测试覆盖（实际类名，替代 ADR 决策段的 `OutboxForwarderE2eIT` / `OutboxForwarderRetryE2eIT`）
 

@@ -176,7 +176,7 @@ validateJsonField(value, fieldName, required, ri)
 
 新增 [scripts/dev/annotate-sonar-report.py](scripts/dev/annotate-sonar-report.py)：读 `sonar-report.csv`，按"精确表 + 规则默认表 + S112/S3776 特殊分级"为每条 issue 加两列 `action` + `note`，输出 `sonar-report-annotated.csv`。
 
-**精确表**记录本次 31 处 FIXED 的 `(rule, basename, line)` 三元组 + 中文说明；**规则默认表**收口剩余 batch-level 决策（每个 rule 一条）。后续每次扫描后跑一次脚本就能继承当前的归类决策。
+**精确表**记录本次 31 处 FIXED 的 `(rule, basename, line)` 三元组 + 中文说明；**规则默认表**收敛剩余 batch-level 决策（每个 rule 一条）。后续每次扫描后跑一次脚本就能继承当前的归类决策。
 
 下一步可在 [sonar-scan.sh](scripts/dev/sonar-scan.sh) 末尾自动接一行 `python3 scripts/dev/annotate-sonar-report.py`，让标注流水化。
 
@@ -198,7 +198,7 @@ validateJsonField(value, fieldName, required, ri)
 
 ### S1192 字符串常量化（256 条 / SKIP_BULK）
 
-噪音最大单一规则。项目核心字符串已按场景收口：DB 列名 / JSON key 在 `BatchFileConstants`、`PipelineRuntimeKeys`、`RESERVED_PARAMS` 中；剩余 256 条多为日志模板（`"tenantId={}, jobCode={}"`）、测试 fixture ID、error message detail —— 提常量后命名困难，可读性下降。
+噪音最大单一规则。项目核心字符串已按场景收敛：DB 列名 / JSON key 在 `BatchFileConstants`、`PipelineRuntimeKeys`、`RESERVED_PARAMS` 中；剩余 256 条多为日志模板（`"tenantId={}, jobCode={}"`）、测试 fixture ID、error message detail —— 提常量后命名困难，可读性下降。
 
 ### S6213 `_` 命名变量（56 条 / SKIP_BULK）
 

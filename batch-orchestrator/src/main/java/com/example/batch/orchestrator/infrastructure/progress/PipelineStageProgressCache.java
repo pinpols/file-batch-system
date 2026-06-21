@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li><b>不持久化</b>:进度只关心"当前"态,过期无意义;worker 崩溃后续跑由 {@code
- *       pipeline_progress.position_marker}(ADR-038)兜底,不靠本 cache
+ *       pipeline_progress.position_marker}(ADR-038)回退,不靠本 cache
  *   <li><b>TTL 5 分钟</b>:心跳默认 30s,5min 容 10 个心跳间隔,够防"心跳没了但 cache 还在显进度" 误导;过期由读侧 lazy 清理
  *   <li><b>节点本地</b>:multi-orchestrator 部署时,FE 只能查到收过该 worker 心跳的那个节点; 这种"不一致"窗口接受(进度本就有延迟,信号性 >
  *       准确性)。若需要跨节点一致,后续上 Redis

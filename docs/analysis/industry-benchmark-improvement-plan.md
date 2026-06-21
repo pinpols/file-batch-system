@@ -132,7 +132,7 @@ workflow_node.callbacks (JSONB):
 
 执行方：orchestrator 状态机推进到 SUCCESS / FAILED 时同事务写 `outbox_event` (event_type=NODE_CALLBACK)，由 `OutboxPollScheduler` 异步推 Kafka，再由 `CallbackDispatcher` 消费 + 实际发 HTTP。
 
-**为什么走 outbox 不直接 HTTP**：避免 callback 失败把 workflow 状态机卡住；callback 失败有 retry / DLQ 走兜底。
+**为什么走 outbox 不直接 HTTP**：避免 callback 失败把 workflow 状态机卡住；callback 失败有 retry / DLQ 走回退。
 
 **工作量**：1-2 工人日
 - DB：node_params 内嵌字段（不动 schema）

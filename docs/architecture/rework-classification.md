@@ -62,7 +62,7 @@
 | file_record / job_instance 归档 | B + C | ❌ 不改业务代码（仅 DDL）| ✅ 完成 | `scripts/db/cleanup-success-instances.sql`（30d 保留窗口 + 8 步级联清理） |
 | 配置缓存 Redis pub/sub 失效 | F | ✅ 改 | ✅ 完成 | `ConsoleConfigCacheController`：6 个 ops 端点 `/api/console/ops/cache/evict-*`，DB 直改后手动失效 Redis |
 | 完整观测三块板 | A | ❌ 不改（micrometer 已就位）| ✅ 完成 | `docker/observability/grafana-dashboard-batch-coverage.json`（6 panel：outbox pending/stale/DL pending/HTTP P99/publish rate/总览） |
-| worker auto-restart | A | ❌ 不改 | ✅ 完成 | `scripts/local/watchdog.sh`（macOS 闲置回收 worker 后自动拉起；docker-compose 模式 `restart: unless-stopped` 兜底） |
+| worker auto-restart | A | ❌ 不改 | ✅ 完成 | `scripts/local/watchdog.sh`（macOS 闲置回收 worker 后自动拉起；docker-compose 模式 `restart: unless-stopped` 回退） |
 
 **Phase 1：5 项里只有 1 项要改代码** ✅✅✅✅✅(改) — 全部交付，详见上表
 
@@ -78,7 +78,7 @@
 
 **Phase 2：原 5 项 → 现 4 项**（Quartz JobStore 单独库已撤销）— 其余 4 项 ✅✅✅✅ 全部交付
 
-**Phase 2 落地策略 — 实际默认（2026-04-25 校准）**：scaffolding 验证完成后多数开关 application.yml fallback 已设为开启 + fail-open 兜底，并非全 opt-in。每个开关的实际默认 / 风险等级 / 启用条件详见 [`docs/runbook/feature-switches.md`](../runbook/feature-switches.md)。
+**Phase 2 落地策略 — 实际默认（2026-04-25 校准）**：scaffolding 验证完成后多数开关 application.yml fallback 已设为开启 + fail-open 回退，并非全 opt-in。每个开关的实际默认 / 风险等级 / 启用条件详见 [`docs/runbook/feature-switches.md`](../runbook/feature-switches.md)。
 
 | 开关 | application.yml 默认 | docker-compose 默认 | 备注 |
 |---|---|---|---|
@@ -105,7 +105,7 @@
 |---|---|---|
 | 分库分表 | G | ✅✅ 重大改 |
 | 多 Kafka 集群 | D + F | ✅ 改（producer/consumer 多 cluster 路由）|
-| ~~workflow archive 自动化~~ | ~~B + F~~ | ✅ **2026-04-25 完成**：`WorkflowArchiveService` + `WorkflowArchiveScheduler`（默认每天 04:15，30d 保留窗口，5000 条 batchSize 防长事务）；兜底 SQL 脚本 `scripts/db/cleanup-workflow-runs.sql` |
+| ~~workflow archive 自动化~~ | ~~B + F~~ | ✅ **2026-04-25 完成**：`WorkflowArchiveService` + `WorkflowArchiveScheduler`（默认每天 04:15，30d 保留窗口，5000 条 batchSize 防长事务）；回退 SQL 脚本 `scripts/db/cleanup-workflow-runs.sql` |
 | 跨 AZ active-active | A + 少量 | ❌ 大部分（health probe 加点） |
 | 观测中台（tracing + log + metric 长存）| A + F | ❌ 大部分（少量 OpenTelemetry instrumentation）|
 

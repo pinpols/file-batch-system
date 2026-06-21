@@ -45,7 +45,7 @@
 
 亮点:
 - **滚动锁在容器内层**(`layout-shell-lock` 类挂到 `<html>`),避免双滚动条;sticky header / sidebar 0 抖动。
-- 三主卡片(侧栏 / 顶栏 / 主内容)间距 / 边距 / 圆角统一由 `--layout-panel-*` token 收口。
+- 三主卡片(侧栏 / 顶栏 / 主内容)间距 / 边距 / 圆角统一由 `--layout-panel-*` token 收敛。
 - `is-focus`(沉浸模式) 把 sidebar/header 隐藏,只剩 RouterView;有专门的退出 FAB。
 - `prefers-reduced-motion` 在主壳、卡片、tabs、segmented 等 ~10 处都做了禁用。
 
@@ -100,7 +100,7 @@
 - ✅ `breakpoints.ts` 注释里明文承认"之前各组件用了 9 个散值,改一个 breakpoint 要扫 17 个 @media",**已经收敛 token,但页面 .vue 内仍在写裸数字**。
 
 ### 3.2 ProTable / PageContainer / PageHeader / SectionCard 全部 0 `@media`
-- 这 4 个核心容器组件**没有任何响应式样式**,意味着所有列表页在窄屏下完全靠 `el-table` 内部横向滚动兜底。
+- 这 4 个核心容器组件**没有任何响应式样式**,意味着所有列表页在窄屏下完全靠 `el-table` 内部横向滚动回退。
 - `JobInstanceList` 12+ 列、`fixed="right"` 操作列 200px、所有列累计宽度 = **≥ 1250px**(仅前 8 列就已 1250)+ 操作列 200 + 实例号/序号/队列 540 → 实际 ≥ **2000px**。1366 笔电下横向必滚。
 
 ### 3.3 移动端
@@ -147,7 +147,7 @@
 - `TableSkeleton.vue`:`ProTable` 首屏自动 6 行骨架,数据已有时只用 `v-loading` 不切骨架避免抖动。
 
 ### 5.2 实际覆盖率(❌ 差距大)
-- `ProTable` 接入率 32.6%,剩余 60+ 页仍手写 `el-table` + `v-loading` + `empty-text`——大概率走"暂无数据"四个字兜底,**error 退化成 empty**,用户分不清是真空还是 BE 504。
+- `ProTable` 接入率 32.6%,剩余 60+ 页仍手写 `el-table` + `v-loading` + `empty-text`——大概率走"暂无数据"四个字回退,**error 退化成 empty**,用户分不清是真空还是 BE 504。
 - 28 / 98 页用 `EmptyState`/`DataState`,其余无 explicit empty / error 区分。
 - 2 / 98 页用 `el-skeleton`(其余依赖 `TableSkeleton` 由 `ProTable` 间接提供)。
 

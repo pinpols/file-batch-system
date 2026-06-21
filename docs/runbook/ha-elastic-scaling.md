@@ -50,7 +50,7 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 
 **用户感知**：极少数 task 多走一次 CLAIM 重试（毫秒级延迟）。
 
-**缓解**：CLAIM 本身就是悲观锁兜底，**不需要修**。如果想更敏感，TTL 调到 2s（`batch.scheduler.worker-cache.ttl-seconds`）。
+**缓解**：CLAIM 本身就是悲观锁回退，**不需要修**。如果想更敏感，TTL 调到 2s（`batch.scheduler.worker-cache.ttl-seconds`）。
 
 ## 弹性缩容的 4 个隐藏雷
 
@@ -104,11 +104,11 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 | **orchestrator** | **150s** | 15s | **ShedLock 主动释放 + outbox shard rebalance；Spring `BATCH_SHUTDOWN_TIMEOUT` 默认 120s 加 30s 缓冲** |
 | worker-dispatch | 120s | 15s | Kafka leave + 完成在跑 task |
 | worker-import | 180s | 15s | 长 task（>1 min 常见）需要 |
-| worker-export | 180s | 15s | 大文件生成更长，超时仍由 PartitionLeaseReclaim 兜底 |
+| worker-export | 180s | 15s | 大文件生成更长，超时仍由 PartitionLeaseReclaim 回退 |
 | worker-process | 180s | 15s | SQL 加工 + staging publish 可能跨多 stage,与 import/export 同档 |
 
 **单 task 平均执行时间长于上面默认值时**，要在 values 里调高对应组件，否则 SIGKILL
-仍会强杀 in-flight task（虽然有 reclaim 兜底，但产生不必要的重派）。
+仍会强杀 in-flight task（虽然有 reclaim 回退，但产生不必要的重派）。
 
 helm rendered 验证：7 个 deploy/sts 全部正确渲染 `terminationGracePeriodSeconds` +
 container `lifecycle.preStop` block。

@@ -158,7 +158,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
     if (bytes.length <= config.maxOutBytesPerParam()) {
       return s;
     }
-    // 截断到字节上限(可能切断多字节字符,用 String 解码兜底)
+    // 截断到字节上限(可能切断多字节字符,用 String 解码回退)
     String truncated = new String(bytes, 0, config.maxOutBytesPerParam(), StandardCharsets.UTF_8);
     return truncated + "...[truncated " + bytes.length + " bytes]";
   }
@@ -167,8 +167,8 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
   private void requireExecutePrivilege(Connection conn, String procName) throws Exception {
     String sql = "select has_function_privilege(current_user, ?, 'EXECUTE')";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
-      // has_function_privilege 需要 regprocedure 形式(proc 名 + 参数签名);简化:用 proc 名 + "()" 兜底,
-      // 真业务过程有参数时建议直接给 schema-qualified 名,PG 会按名解析。无参或重载场景由 DB 报错兜底。
+      // has_function_privilege 需要 regprocedure 形式(proc 名 + 参数签名);简化:用 proc 名 + "()" 回退,
+      // 真业务过程有参数时建议直接给 schema-qualified 名,PG 会按名解析。无参或重载场景由 DB 报错回退。
       ps.setString(1, procName);
       try (ResultSet rs = ps.executeQuery()) {
         if (rs.next() && !rs.getBoolean(1)) {

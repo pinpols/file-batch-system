@@ -78,7 +78,7 @@ if [[ "$BUILD_MODULE" == "true" ]]; then
 fi
 
 # 通过 glob 解析实际产物，避开硬编码版本号；${revision} 改动或 release 升版后无需同步此处。
-# 用 shell glob + 名称过滤代替 ls|grep（规避 SC2010；同时保留 nullglob 兜底，无产物时数组为空）。
+# 用 shell glob + 名称过滤代替 ls|grep（规避 SC2010；同时保留 nullglob 回退，无产物时数组为空）。
 JAR_PATH=""
 shopt -s nullglob
 for _candidate in "$ROOT_DIR/security-scan/target/security-scan-"*.jar; do

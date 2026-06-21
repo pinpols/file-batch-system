@@ -31,12 +31,12 @@ import org.springframework.stereotype.Service;
  *       currentSessionVersion} 返回 0，natural 触发新 session 建立。
  * </ul>
  *
- * <p><b>Redis 降级策略</b>（本进程内 Caffeine L1 + fail-open 兜底）：
+ * <p><b>Redis 降级策略</b>（本进程内 Caffeine L1 + fail-open 回退）：
  *
  * <ol>
  *   <li>写路径（nextSessionVersion / invalidateSession）：Redis 成功后同步写 Caffeine；Redis 异常时 继续更新 Caffeine
  *       并返回本地值，避免登录被阻断。跨 Pod 单会话语义短暂失效（运维 Grafana 可见）。
- *   <li>读路径（currentSessionVersion / isCurrentSession）：优先 Redis；Redis 异常时读 Caffeine 兜底； Caffeine
+ *   <li>读路径（currentSessionVersion / isCurrentSession）：优先 Redis；Redis 异常时读 Caffeine 回退； Caffeine
  *       也缺失时 {@code isCurrentSession} 返回 true（fail-open），让用户继续操作。
  * </ol>
  *
@@ -52,7 +52,7 @@ public class ConsoleSessionRegistry {
   private final StringRedisTemplate redisTemplate;
   private final ConsoleSecurityProperties securityProperties;
 
-  /** 进程内会话版本镜像，Redis 抖动时兜底。TTL 与 Redis 一致，防止内存累积。 */
+  /** 进程内会话版本镜像，Redis 抖动时回退。TTL 与 Redis 一致，防止内存累积。 */
   private final Cache<String, Long> localMirror;
 
   public ConsoleSessionRegistry(
@@ -172,7 +172,7 @@ public class ConsoleSessionRegistry {
       long current = currentSessionVersion(username, tenantId);
       return current > 0L && current == sessionVersion;
     } catch (DataAccessException ex) {
-      // 非预期场景（currentSessionVersion 自身已兜底），额外 fail-open
+      // 非预期场景（currentSessionVersion 自身已回退），额外 fail-open
       log.warn("Unexpected Redis failure in isCurrentSession; fail-open: {}", ex.getMessage());
       return true;
     }

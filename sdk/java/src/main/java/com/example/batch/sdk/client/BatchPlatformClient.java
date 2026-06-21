@@ -132,7 +132,7 @@ public class BatchPlatformClient {
     this.kafkaConsumerThread.setDaemon(false);
     this.kafkaConsumerThread.start();
     // SDK-P5-3 + Python PR #320 对齐:把 register 时的 6 字段身份快照交给 heartbeat 每次带上,
-    // 防止 worker_registry 行被运维误删 / 平台冷启重建索引导致 heartbeat 兜底降级 register 时丢字段。
+    // 防止 worker_registry 行被运维误删 / 平台冷启重建索引导致 heartbeat 回退降级 register 时丢字段。
     WorkerIdentity identity =
         new WorkerIdentity(
             "sdk-self-hosted",
@@ -171,7 +171,7 @@ public class BatchPlatformClient {
    *   <li>Dispatcher drain — 等 in-flight handler 跑完(超时 30s),期间 heartbeat / lease 仍在跑 维持租约,避免
    *       orchestrator 在 drain 中误判 worker 死了把任务派给别人
    *   <li>Heartbeat / lease scheduler 关 — drain 完成后才停心跳
-   *   <li>Deactivate — 通知平台 OFFLINE(失败 swallow,不阻塞进程退出)
+   *   <li>Deactivate — 通知平台 OFFLINE(失败 swallow,不阻写入程退出)
    * </ol>
    */
   public synchronized void stop() {
@@ -208,7 +208,7 @@ public class BatchPlatformClient {
     if (kafkaConsumer != null) {
       kafkaConsumer.close(Duration.ofMillis(kafkaJoinMs));
     }
-    // 兜底再 join 一次(KafkaTaskConsumer.close 已经 join,这里只覆盖极端竞态)
+    // 回退再 join 一次(KafkaTaskConsumer.close 已经 join,这里只覆盖极端竞态)
     if (kafkaConsumerThread != null && kafkaConsumerThread.isAlive()) {
       long remainingMs = remainingMs(startNanos, totalMs);
       try {

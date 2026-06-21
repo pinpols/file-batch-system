@@ -3,7 +3,7 @@
 > 状态:已上线 PR `feature/ci-speedup-c-plan-pr-unit-only`
 > 背景:PR-gate wall-clock 由最慢的 IT shard 决定(~15 min),日常 6+ 个 PR 排队反馈
 > 慢。C 方案把 IT/E2E 全部从 PR-gate 拆走,PR 阶段只做"5 min 内的快速反馈",IT 由
-> main push 的 full-ci-gate(post-merge)+ nightly staging-gate 兜底。
+> main push 的 full-ci-gate(post-merge)+ nightly staging-gate 回退。
 
 ## 改动概览(4 件)
 
@@ -15,7 +15,7 @@
   `mvn test -DskipITs=true`,只跑 surefire unit,跳过 failsafe IT。
 - `cleanup orphan testcontainers` 步骤删除(不再起 Testcontainers)。
 - `e2e-smoke` job 整个移除(原 R3-2 #262 引入),E2E smoke/critical/regression 全部
-  交给 staging-gate(nightly,4 shard 并发)+ full-ci-gate(main push 后兜底)。
+  交给 staging-gate(nightly,4 shard 并发)+ full-ci-gate(main push 后回退)。
 - **job 名 `unit-it-a` / `unit-it-b1` / `unit-it-b2` 保留**(ruleset required check 配置
   在这 3 个名字上,改名会让 ruleset 失配)。
 - 其它 job(`static-checks` / `security`)不动。
@@ -33,7 +33,7 @@
   等顶层非代码文件。
 - 3 个 unit job 加 `if: needs.changes.outputs.docs-only != 'true'`;skipped 在 GitHub
   side 算 SUCCESS,ruleset required check 不挂。
-- merge_group / push 事件 paths-filter 无 PR base,默认判 changed=true(安全兜底,
+- merge_group / push 事件 paths-filter 无 PR base,默认判 changed=true(安全回退,
   必跑 unit)。
 
 ### 3. Maven `.m2` cache
@@ -72,7 +72,7 @@ schedule 触发,不参与 merge queue 入栈检查。
 3. **持续监控指标**:`main reflog` 上每周 full-ci-gate 失败次数。指标见
    `docs/runbook/ci-speedup-2026-06-02-metrics.md`(若 >1/周 持续 2 周 => 收回 C 方案,
    见下"何时回滚")。
-4. **本地兜底**:开发者在 PR 前可以本地手动跑 `mvn verify -pl <module> -am`
+4. **本地回退**:开发者在 PR 前可以本地手动跑 `mvn verify -pl <module> -am`
    或 `bash scripts/local/strict-verify.sh`(R3-3 已上线)做 IT。约束在 reviewer
    checklist。
 
@@ -130,4 +130,4 @@ git push origin main
 - ruleset `strict_required_status_checks_policy=false` 已通过 GitHub API 关掉(允许
   required check 未跑完即可合 — 配合 paths-filter 跳 unit 的 docs PR)。
 - R3-2 #262 引入的 e2e-smoke 在 staging-gate.yml 已有等价覆盖,本次移除不丢测试矩阵。
-- R3-3 #264 引入的本地 `strict-verify.sh` 是开发者 PR 前的兜底入口。
+- R3-3 #264 引入的本地 `strict-verify.sh` 是开发者 PR 前的回退入口。

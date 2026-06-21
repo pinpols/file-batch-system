@@ -24,8 +24,8 @@ PG 层的真相:
 
 `feature/docker-deploy` 部署分支按 CLAUDE.md **只单向同步 main**,所以它部署的应用镜像 = **main 的代码**(非 Citus)。推论:
 - **现在可部署**:main 镜像 + 上面那套通用 HA。立即可上生产。
-- **Citus(分布式)不可直接从部署分支起**:需先 `feature/partition-readiness` → main 合并(而合并 gate 在多租户洪峰 benchmark)。在那之前,部署 = 非 Citus = 通用 HA 的"PG 单主备"形态。
-- 所以 Citus HA 不是"切开关",是有**前置依赖链**:洪峰 benchmark 达标 → feature 合 main → 部署分支同步 → PG 层增量到 Citus 多 group。
+- **Citus(分布式)不可直接从部署分支起**:需先 `feature/partition-readiness` → main 合并(而合并 gate 在多租户峰值流量 benchmark)。在那之前,部署 = 非 Citus = 通用 HA 的"PG 单主备"形态。
+- 所以 Citus HA 不是"切开关",是有**前置依赖链**:峰值流量 benchmark 达标 → feature 合 main → 部署分支同步 → PG 层增量到 Citus 多 group。
 
 ---
 
@@ -70,7 +70,7 @@ PG 层的真相:
 
 ### 2.2 PG 层增量到 Citus(仅 Citus go 后)
 
-前置:**洪峰 benchmark 达标 + feature/partition-readiness 合 main + 部署分支同步**。然后:
+前置:**峰值流量 benchmark 达标 + feature/partition-readiness 合 main + 部署分支同步**。然后:
 - Patroni 从普通模式**迁移到 Citus 模式**(加 `citus:` 段 + worker group)——这是一次**有状态迁移**,不是切 flag:需把现有单 PG 数据搬进 coordinator group,再扩 worker group,跑 `01-distribute.sql`。
 - Patroni 3.x Citus 模式优势:自动管 coordinator + worker group failover + `citus_update_node` 重注册(优于手写 `citus-cluster.sh` 一次性 add_node)。
 - GUC(`propagate_set_commands=local` / `enable_unsafe_triggers=on` / `max_shared_pool_size`)写进 Patroni DCS 参数;配本仓 `CitusRuntimeStartupCheck` 启动期校验。
@@ -105,7 +105,7 @@ PG 层的真相:
 
 > **阶段 1-3 完成 = 生产可上(单 PG HA 全量)**,服务 main 镜像;换 feature(未分布)镜像同样适用,HA 不动。
 
-**阶段 4 · PG 层增量到 Citus** —— *前置:洪峰 benchmark 达标 + feature 合 main*
+**阶段 4 · PG 层增量到 Citus** —— *前置:峰值流量 benchmark 达标 + feature 合 main*
 11. Patroni 迁 Citus 模式 + 扩 worker group(各 1 主 1 备)。
 12. 数据迁入 + `01-distribute.sql` + `batch.citus.enabled=true`。
 13. ✅ 验证:kill worker group leader → Patroni 自动 promote + 重注册,分布式查询不中断。

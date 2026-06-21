@@ -22,7 +22,7 @@ Content-Type: application/json
 - **在途守护**:`AtomicBoolean` 让密集通知合并为「至多一次在途扫描」,事件风暴下不会压垮扫描器。
 - 扫描器只做「发现 + 登记」,**不直接起任务**——起任务仍走 Trigger/Orchestrator 主链,事件驱动不改这条边界。
 
-> 轮询调度器(`scheduledScan`,ShedLock `import_ingress_scan`)保持开启作为兜底:事件丢失/事件源故障时,30s 轮询仍会补上发现。事件驱动是**加速层**,不是替代。
+> 轮询调度器(`scheduledScan`,ShedLock `import_ingress_scan`)保持开启作为回退:事件丢失/事件源故障时,30s 轮询仍会补上发现。事件驱动是**加速层**,不是替代。
 
 ## 事件源(不绑定云厂商)
 

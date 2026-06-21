@@ -13,7 +13,7 @@
 --                                   能看全部租户但只读;权限最敏感,须审计 + 限人。
 --
 -- 排故选哪个:
---   · 单租户问题 → batch_business_readonly(最小权限,RLS 兜底防越权看别家)。
+--   · 单租户问题 → batch_business_readonly(最小权限,RLS 回退防越权看别家)。
 --   · 跨租户/对账/平台级排查 → batch_business_readonly_all(只读 BYPASSRLS,审计)。
 --   · 绝不要用 batch_business_writer 排故(会误写),更不要用 superuser(RLS 对它豁免=隔离失效)。
 -- =========================================================

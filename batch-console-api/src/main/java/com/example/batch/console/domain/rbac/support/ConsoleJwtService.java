@@ -160,7 +160,7 @@ public class ConsoleJwtService {
         throw new IllegalStateException(
             "FATAL: batch.console.security.jwt-secret 仍包含默认占位符，" + "生产环境必须通过环境变量或密钥管理注入真实密钥");
       }
-      // P1-8：jwt-secret 长度强度兜底（HS256 最小 256 bit / 32 ASCII 字符）
+      // P1-8：jwt-secret 长度强度回退（HS256 最小 256 bit / 32 ASCII 字符）
       if (jwtSecret.length() < 32) {
         throw new IllegalStateException(
             "FATAL: batch.console.security.jwt-secret 长度不足 32 字符，HS256 弱密钥风险");
@@ -381,7 +381,7 @@ public class ConsoleJwtService {
   private NimbusJwtEncoder encoder() {
     NimbusJwtEncoder e = cachedEncoder;
     if (e == null) {
-      // 单元测试 / 非 Spring 场景 PostConstruct 未触发时的兜底初始化（同 SecretKey 多次构造无副作用）
+      // 单元测试 / 非 Spring 场景 PostConstruct 未触发时的回退初始化（同 SecretKey 多次构造无副作用）
       synchronized (this) {
         e = cachedEncoder;
         if (e == null) {

@@ -28,7 +28,7 @@ batch:
       download-base-url: https://console.internal/api/console/files/fs-download
       # presign HMAC 密钥。留空时回落到 batch.security.internal-secret（复用平台内部密钥）。
       presign-secret: ${BATCH_INTERNAL_SECRET:}
-      # presign 默认 TTL（兜底，调用方仍优先用入参）。
+      # presign 默认 TTL（回退，调用方仍优先用入参）。
       default-presign-ttl: 5m
 ```
 

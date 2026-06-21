@@ -31,7 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>用途：把源租户（通常是某环境）的一批配置（job / workflow / pipeline / fileChannel / fileTemplate） 打包成 {@code
  * ConfigSyncBundlePayload}，在目标租户侧 upsert 进去；实际 upsert 委托给 {@link
- * ConsoleTenantConfigInitApplicationService#batchInit}，支持 {@code dryRun} 预检不落库。
+ * ConsoleTenantConfigInitApplicationService#batchInit}，支持 {@code dryRun} 预检不写入数据库。
  *
  * <p>3 阶段：
  *

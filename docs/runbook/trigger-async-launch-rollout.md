@@ -46,7 +46,7 @@
 
 ### 已知 race + 自愈机制
 
-第一次消费时偶发 `TriggerLaunchConsumer launch 失败`,listener 抛异常 → spring-kafka 默认 SeekToCurrentErrorHandler 重试 → 第二次消费成功。原因:trigger 异步路径下 trigger_request 事务可能在 outbox 已 publish 但还没对 orchestrator 可见(read-after-write race)。orchestrator 端 `uk_job_instance_tenant_dedup` + listener 重试机制兜底,**业务层面不会双跑也不会丢失**,仅在 metric 上看到 `batch.trigger.launch.failed.total{reason="runtime"}` 偶发增量(后随重试 success 抹平)。
+第一次消费时偶发 `TriggerLaunchConsumer launch 失败`,listener 抛异常 → spring-kafka 默认 SeekToCurrentErrorHandler 重试 → 第二次消费成功。原因:trigger 异步路径下 trigger_request 事务可能在 outbox 已 publish 但还没对 orchestrator 可见(read-after-write race)。orchestrator 端 `uk_job_instance_tenant_dedup` + listener 重试机制回退,**业务层面不会双跑也不会丢失**,仅在 metric 上看到 `batch.trigger.launch.failed.total{reason="runtime"}` 偶发增量(后随重试 success 抹平)。
 
 ### 容器配置必备项(2026-04-30 切换发现)
 
@@ -68,7 +68,7 @@ trigger:
 
 ### 切换后 fallback 路径仍有效
 
-显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` + 重启 trigger + orchestrator → 立刻走原 HTTP 同步桥(`HttpOrchestratorTriggerAdapter`),`DefaultTriggerService.forwardToOrchestrator` 首次调用打 1 条 deprecation WARN(AtomicBoolean 防刷屏)。已落库的 `trigger_outbox_event` 由 relay 继续投递(回滚不丢),orchestrator consumer 仍在跑(由于 `@ConditionalOnProperty matchIfMissing=true`,缺 env 也起 listener,需要显式 `false` 才不起)。
+显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` + 重启 trigger + orchestrator → 立刻走原 HTTP 同步桥(`HttpOrchestratorTriggerAdapter`),`DefaultTriggerService.forwardToOrchestrator` 首次调用打 1 条 deprecation WARN(AtomicBoolean 防刷屏)。已写入数据库的 `trigger_outbox_event` 由 relay 继续投递(回滚不丢),orchestrator consumer 仍在跑(由于 `@ConditionalOnProperty matchIfMissing=true`,缺 env 也起 listener,需要显式 `false` 才不起)。
 
 ---
 
@@ -104,7 +104,7 @@ GROUP BY publish_status;
 "
 # 期望:全部 PUBLISHED,无 NEW/FAILED 残留
 
-# 5. 验证 job_instance 落库
+# 5. 验证 job_instance 写入数据库
 psql ${STAGING_DB} -c "
 SELECT request_id, instance_status FROM batch.job_instance
 WHERE request_id LIKE 'staging-async-%' ORDER BY created_at DESC LIMIT 10;
@@ -192,7 +192,7 @@ kubectl set env deployment/batch-orchestrator -n batch-prod \
 kubectl rollout restart deployment/batch-trigger deployment/batch-orchestrator -n batch-prod
 
 # 已写库的 outbox 事件由 relay 继续投递(开关只控制 trigger 端是否新写 outbox + relay 是否启动)
-# 注意:已 PUBLISHED 的事件 orchestrator 仍会消费,uk_job_instance_tenant_dedup 兜底重复
+# 注意:已 PUBLISHED 的事件 orchestrator 仍会消费,uk_job_instance_tenant_dedup 防重复
 ```
 
 ## 5. 切换后 24h 对账
@@ -271,7 +271,7 @@ Prometheus rules 加入:
 |---|---|
 | 双写期 trigger_request 同步桥 + outbox 异步桥并存 | ADR-010 设计已规避——开关只走一条路径,无双轨。回滚靠开关切回,不留双写 |
 | Kafka consumer rebalance 抖动 | `max-poll-interval-ms=300000`(5min)留足处理时间;launch 通常 < 1s |
-| orchestrator 启动时 consume 历史积压 | `auto-offset-reset=earliest` + `uk_job_instance_tenant_dedup` 兜底重复消息 |
+| orchestrator 启动时 consume 历史积压 | `auto-offset-reset=earliest` + `uk_job_instance_tenant_dedup` 防重复消息 |
 | 低延迟敏感 job 受 200ms relay 间隔影响 | 配置 `batch.trigger.outbox.poll-interval-millis=50` 降到 50ms 换更高 DB 负载;通常不需要 |
 
 ## 9. 相关文档

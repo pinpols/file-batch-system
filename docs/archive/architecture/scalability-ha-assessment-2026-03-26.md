@@ -15,7 +15,7 @@
 | 连接池隔离 | HikariCP 默认，未隔离 | 各角色独立 pool，按负载定容 | ★★★★☆ |
 | 优雅关闭 | 停消费不等 in-flight | awaitDrain + 可配超时 | ★★★★☆ |
 | 限流 / 背压 | 无 | Semaphore + container pause/resume | ★★★★☆ |
-| 临时文件治理 | 手动删除，无兜底 | 启动时清理孤儿文件 | ★★★★☆ |
+| 临时文件治理 | 手动删除，无回退 | 启动时清理孤儿文件 | ★★★★☆ |
 
 ---
 
@@ -113,7 +113,7 @@ WHERE  id      = :id
 
 ---
 
-## 六、临时文件兜底清理 ✅
+## 六、临时文件补充清理 ✅
 
 ### 已完成
 
@@ -130,7 +130,7 @@ WHERE  id      = :id
 | 3 | 连接池默认值且未隔离 | ✅ | `BusinessDataSourceConfiguration` + `application.yml` |
 | 4 | 优雅关闭不等 in-flight | ✅ | `ActiveTaskLeaseRegistry.awaitDrain` + `GracefulKafkaShutdown` |
 | 5 | 无背压 | ✅ | `AbstractTaskConsumer` Semaphore + pause/resume |
-| 6 | 临时文件无兜底清理 | ✅ | `StaleTempFileCleanup` |
+| 6 | 临时文件无补充清理 | ✅ | `StaleTempFileCleanup` |
 
 > **结论**：Worker 可安全水平扩展，Orchestrator 可多实例部署（乐观锁保护状态竞态）。
 > 如需进一步消除触发器重复调度风险，可迁移 Quartz JDBC 集群模式（低成本，`QRTZ_*` 表已存在）。

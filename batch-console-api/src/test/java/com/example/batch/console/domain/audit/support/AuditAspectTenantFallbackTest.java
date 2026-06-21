@@ -108,7 +108,7 @@ class AuditAspectTenantFallbackTest {
   @Test
   void shouldUseTargetTenantParamForRoleAdminCrossTenantOperation() throws Throwable {
     // ROLE_ADMIN 改 "tenant-x":principal.tenantId() = null,但 targetTenantParam=#tenantId 指向入参
-    // → audit 行 tenant_id 必须是 "tenant-x",而不是默认兜底 "system",否则取证按目标租户查会漏。
+    // → audit 行 tenant_id 必须是 "tenant-x",而不是默认回退 "system",否则取证按目标租户查会漏。
     ConsolePrincipal principal =
         new ConsolePrincipal("root", null /* tenantId null */, Set.of("ROLE_ADMIN"));
     SecurityContextHolder.getContext()
@@ -125,7 +125,7 @@ class AuditAspectTenantFallbackTest {
 
   @Test
   void shouldStillFallbackWhenTargetTenantParamResolvesToNull() throws Throwable {
-    // targetTenantParam=#tenantId 但入参传 null → 必须继续 principal → MDC → "system" 兜底链
+    // targetTenantParam=#tenantId 但入参传 null → 必须继续 principal → MDC → "system" 回退链
     ConsolePrincipal principal =
         new ConsolePrincipal("operator", "tenant-a", Set.of("ROLE_TENANT_OPERATOR"));
     SecurityContextHolder.getContext()

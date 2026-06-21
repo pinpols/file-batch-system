@@ -1,13 +1,13 @@
 # Backlog: 文件束到达组「确定性坏数据」隔离(quarantine)终态
 
-> 状态:**暂不做**(已加 metric 兜底,见下「已做的兜底」)。仅当生产真出现畸形束组反复刷错时再上。
+> 状态:**暂不做**(已加 metric 回退,见下「已做的回退」)。仅当生产真出现畸形束组反复刷错时再上。
 > 日期:2026-06-21　模块:batch-orchestrator（`FileGovernanceScheduler` / `BundleArrivalLauncher`）
 > 来源:ADR-046 文件束三类束 E2E 收尾后的复审残留项 P2(两路独立复审一致命中)。
-> 相关 PR:[#628](https://github.com/pinpols/file-batch-system/pull/628)（harden arrival group bundle semantics：launch 成功后才标 TRIGGERED）、[#629](https://github.com/pinpols/file-batch-system/pull/629)（命名空间化 + 本条的 metric 兜底）。
+> 相关 PR:[#628](https://github.com/pinpols/file-batch-system/pull/628)（harden arrival group bundle semantics：launch 成功后才标 TRIGGERED）、[#629](https://github.com/pinpols/file-batch-system/pull/629)（命名空间化 + 本条的 metric 回退）。
 
 ## 现象 / 根因
 
-到达组凑齐后 `FileGovernanceScheduler.triggerArrivalGroup` 调 `BundleArrivalLauncher.launchIfBundle`。
+到达组满足条件后 `FileGovernanceScheduler.triggerArrivalGroup` 调 `BundleArrivalLauncher.launchIfBundle`。
 launcher 对**确定性坏数据**会 fail-fast 抛 `IllegalStateException`:
 
 - 同组成员 `metadata_json` 携带**互相冲突的 `bundleJobCode`**（`mergeJobCode`）。
@@ -26,7 +26,7 @@ launcher 对**确定性坏数据**会 fail-fast 抛 `IllegalStateException`:
 
 触发条件:某束作业的批次清单/file_record metadata 被写坏(清单版本不一致、人工 backfill 错误等)。低概率但非零,且一旦发生是静默 livelock。
 
-## 已做的兜底(#629)
+## 已做的回退(#629)
 
 `FileGovernanceScheduler.triggerArrivalGroup` 的 launch-fail catch 加了 counter
 `batch.file.arrival.bundle.launch.failed`。运维可对该 metric 配告警 → 永久坏数据从「静默刷日志」变成「可触达人工」。

@@ -152,7 +152,7 @@ async def test_failed_business_is_not_recorded() -> None:
     wrapped = wrap_idempotent(h, store)
     r = await wrapped.execute(make_ctx({"order_id": "A1"}))
     assert r.success is False
-    # 失败不落库 —— 留给平台重试
+    # 失败不写入数据库 —— 留给平台重试
     assert store.find("import:t1:A1") is None
     # 占位也已释放,可重抢
     assert store.try_acquire("import:t1:A1") is True

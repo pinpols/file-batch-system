@@ -3,7 +3,7 @@ package com.example.batch.console.domain.audit.support;
 import java.time.Instant;
 
 /**
- * 通用控制台操作审计事件 — Aspect 构造,Service 落库。
+ * 通用控制台操作审计事件 — Aspect 构造,Service 写入数据库。
  *
  * <p>字段名 / 顺序与 DB 表 {@code batch.console_operation_audit} 一致,**也是将来 Kafka payload 的 schema**:迁移到
  * Kafka 时把这条 record 直接序列化成 JSON 发到 topic 即可,消费者按 {@link #eventVersion} 分支处理新老格式。
@@ -13,7 +13,7 @@ import java.time.Instant;
  * <ol>
  *   <li>非必填(老消费者读到 null 不挂)
  *   <li>同步升级 {@code eventVersion}
- *   <li>DB migration 给列 default 兜底
+ *   <li>DB migration 给列 default 回退
  * </ol>
  *
  * <p>没有静态工厂方法:构造器 canonical(record)受 CLAUDE.md 豁免,Aspect 用 canonical 构造器 直接传 16 个字段(用 null

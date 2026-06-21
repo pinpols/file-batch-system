@@ -55,7 +55,7 @@ public class LocalizedErrorRenderer {
 
       return fallback;
     } catch (RuntimeException ex) {
-      // v6 hardening: 兜底 IllegalArgumentException 等渲染异常——
+      // v6 hardening: 回退 IllegalArgumentException 等渲染异常——
       // 当 error_args JSONB 损坏导致 parseArgs 返回空数组、message 模板含 {N} 占位符时，
       // Spring 内部 MessageFormat 会抛 IllegalArgumentException；旧版仅 catch NoSuchMessageException
       // 让异常透传到 5xx，影响 console 列表查询。改为 fallback + warn 让历史异常数据不影响读路径。

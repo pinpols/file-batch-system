@@ -596,7 +596,7 @@ public SdkTaskResult execute(SdkTaskContext ctx) {
 
 - SDK 当前无 cancellation token 机制;A 的 handler 不会主动 abort
 - A 最终 REPORT 时会被平台 reject(lease 已不属于自己),但**业务副作用已经发生**
-- 缓解:**租户业务幂等是唯一兜底**
+- 缓解:**租户业务幂等是唯一回退**
 
 后续修复方向(见 review doc P0):`SdkTaskContext.isCancelled()` + `LeaseRenewalScheduler` 检测 lease revoked。
 

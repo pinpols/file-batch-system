@@ -226,7 +226,7 @@ Temporal namespace 有 per-task-queue rate limit:防租户 abuse。
 |---|---|---|---|---|
 | 🔴 P0 | Heartbeat 携带任意 details(合并 progress / checkpoint / lease)| 长任务可控性 | 1.5d | Temporal heartbeat details |
 | 🔴 P0 | Cancel push(heartbeat / renew response 携带 cancelRequested) | 副作用控制 | 0.5d | Temporal cancel |
-| 🔴 P0 | 多种 timeout(`taskTimeout` startToClose 语义) | 异常兜底 | 1d | Temporal 4 timeouts |
+| 🔴 P0 | 多种 timeout(`taskTimeout` startToClose 语义) | 异常回退 | 1d | Temporal 4 timeouts |
 | 🔴 P0 | `schemaVersion` 字段 + 协议握手 | 协议演进 | 0.5d | gRPC protobuf versioning |
 | 🟡 P1 | `SdkTypedTaskHandler<I, O>` 泛型基类 + JSON 反序列化 | 类型安全 | 1d | Temporal/Zeebe @ActivityInterface |
 | 🟡 P1 | `batch-worker-sdk-testkit` 子模块 + FakeBatchPlatform | 测试基建 | 3d | Temporal TestWorkflowEnvironment |

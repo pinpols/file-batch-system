@@ -11,7 +11,7 @@
 
 - ✅ 上游每个业务日产一个**批次清单对象**(JSON),列出当天该组的预期文件名集合
 - ✅ 平台读批次清单 → 动态推导该 `(tenant, fileGroupCode, bizDate)` 的 `requiredFileSet`,替代静态配置
-- ✅ 复用既有到达组凑齐判定(`requiredFileSet` 全到 + ADR 无关的 PR2 verified 闸)与超时兜底(`timeout-action`)
+- ✅ 复用既有到达组满足条件判定(`requiredFileSet` 全到 + ADR 无关的 PR2 verified 闸)与超时回退(`timeout-action`)
 - ✅ 解决「地区每天不固定 + 文件名带时间戳」导致静态 `requiredFileSet` 配不出的缺口
 
 「不做的部分」(留 follow-up / 明确不做):
@@ -77,7 +77,7 @@ scanner 每轮扫描会看到对象集合。批次清单与数据文件的到达
 `requiredFileSet` 一旦由清单注入到成员 `file_record`,**到达组判定逻辑完全不变**:
 
 - `evaluateArrivalGroup` 读 `required_file_set` → 算 `missingFiles` → 全到 + `triggerOnComplete` → `TRIGGERED`。
-- 清单声明了但一直没到的文件 → 现有 `latestTolerableTime` + `timeout-action`(`MANUAL_CONFIRM`/`BLOCK`/override)兜底,不会无限等。
+- 清单声明了但一直没到的文件 → 现有 `latestTolerableTime` + `timeout-action`(`MANUAL_CONFIRM`/`BLOCK`/override)回退,不会无限等。
 - **PR2 verified 闸正交叠加**:`require-verified=true` 时还要求每个成员有 per-file manifest 背书才放行。
 
 ### 4. 三层完整性的正交关系(全景)
@@ -103,6 +103,6 @@ scanner 每轮扫描会看到对象集合。批次清单与数据文件的到达
 
 ## Consequences
 
-- **正面**:动态地区 + 时间戳场景无需人工维护静态清单;成员仍可异构、各挂模板、导不同表;完全复用既有到达组凑齐 + 超时 + verified,改动集中在 scanner 一侧。
+- **正面**:动态地区 + 时间戳场景无需人工维护静态清单;成员仍可异构、各挂模板、导不同表;完全复用既有到达组满足条件 + 超时 + verified,改动集中在 scanner 一侧。
 - **代价**:依赖上游产批次清单(产不出则退回「不等齐、各到各导」或静态清单);回填对账带来每轮少量额外查询(受 batch-size 限制)。
 - **风险**:批次清单与 per-file `.chk` 两套协议需文档清晰区分,避免上游混淆「批次清单」与「单文件 manifest」。

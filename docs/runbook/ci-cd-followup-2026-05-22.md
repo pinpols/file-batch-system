@@ -31,7 +31,7 @@
 2. 对比同 job wall-clock:期望 cold 14min → warm 10-11min(节省 ~3min)
 
 **回退方案**:
-- cache step 失败会自动 fallback 到 testcontainers 自己拉(`|| true` 兜底)
+- cache step 失败会自动 fallback 到 testcontainers 自己拉(`|| true` 回退)
 - 若 cache key 拼写错导致永远 miss,删 `.github/actions/setup-build-env/action.yml` L36-58 的 3 个新 step 即可
 
 ---

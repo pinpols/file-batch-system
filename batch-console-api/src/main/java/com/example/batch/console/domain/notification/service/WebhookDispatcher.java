@@ -71,7 +71,7 @@ public class WebhookDispatcher {
   private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
 
   // 5.11: 有界队列 + AbortPolicy(原 CallerRunsPolicy 会反压 Tomcat 请求线程,与 WebhookDeliveryRelay
-  //   持久化补偿重叠,放弃即丢:实际是入队前已写 PENDING 日志,被拒任务由 relay 兜底)
+  //   持久化补偿重叠,放弃即丢:实际是入队前已写 PENDING 日志,被拒任务由 relay 回退)
   private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
   private final AtomicBoolean stopping = new AtomicBoolean(false);
 

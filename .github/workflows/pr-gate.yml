@@ -2,7 +2,7 @@ name: pr-gate
 
 # C 方案(2026-06-02):PR 只跑 unit + 文档全跳 + Merge Queue 入口。
 # 历史背景:Round-1 TOP-7 把 e2e 分级到 smoke(本 workflow)+ regression(staging-gate)。
-# C 方案进一步把 IT 也从 PR-gate 移除,IT/E2E 全部交给 full-ci-gate(main push 后兜底)+
+# C 方案进一步把 IT 也从 PR-gate 移除,IT/E2E 全部交给 full-ci-gate(main push 后回退)+
 # staging-gate(nightly)。PR-gate 只保留 static-checks + unit + security 三类快速反馈。
 # 风险:main 偶尔会被 full-ci-gate 拦,该 PR 作者负责立即 revert + 修复。
 # 详见 docs/runbook/ci-speedup-2026-06-02.md。
@@ -67,7 +67,7 @@ jobs:
   # ===========================================================================
   # Job 0: changes — dorny/paths-filter 判定 docs-only PR(C 方案 #2)
   # 文档/示例-only PR 跳过 3 个 unit job(GitHub 把 skipped 算 SUCCESS,ruleset
-  # required check 不挂),只保留 static-checks + security 兜底。
+  # required check 不挂),只保留 static-checks + security 回退。
   # ===========================================================================
   changes:
     runs-on: ubuntu-latest
@@ -90,7 +90,7 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           # PR base 判 diff;非 PR 事件(merge_group / push)无 base,filter 视为 changed=true
-          # (即 code=true / docs-only=false),保证安全 — 兜底跑 unit。
+          # (即 code=true / docs-only=false),保证安全 — 回退跑 unit。
           #
           # `code` = 平台 Java 源 + schema + 构建/CI 配置。只有命中才跑 3 个 unit-it。
           # **故意排除**(纯改这些 → docs-only=true → 跳 3 类测试,只保 static-checks + security):
@@ -240,7 +240,7 @@ jobs:
   # ===========================================================================
   # 3 个 maven unit shard 按"压力均匀"分配,不按业务领域分。
   # C 方案(2026-06-02):只跑 surefire unit(`mvn test -DskipITs`),IT 已搬到
-  # full-ci-gate(main push 兜底)+ staging-gate(nightly)。
+  # full-ci-gate(main push 回退)+ staging-gate(nightly)。
   # job 名 unit-it-a / unit-it-b1 / unit-it-b2 保留(ruleset required check 锁定)。
   #
   # Job 2: unit-shard-1 — orchestrator + worker-core
@@ -265,7 +265,7 @@ jobs:
       - name: Run unit tests (orchestrator + worker-core + sdk×3)
         shell: bash
         # -am 编译上游;-DskipITs=true 跳 failsafe IT;跳 PMD/Spotless(在 static-checks job)
-        # IT 由 full-ci-gate(main push 后)+ staging-gate(nightly)兜底
+        # IT 由 full-ci-gate(main push 后)+ staging-gate(nightly)回退
         run: |
           mvn test -pl batch-orchestrator,batch-worker-core,sdk/java,sdk/java-spring,sdk/java-testkit -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
@@ -353,7 +353,7 @@ jobs:
   # ===========================================================================
   # NOTE: e2e-smoke 已从 pr-gate 移除(C 方案 #1)。
   # E2E(smoke + regression)全部交给 staging-gate.yml(nightly,4 shard 并发)
-  # 和 full-ci-gate.yml(main push 后兜底)。
+  # 和 full-ci-gate.yml(main push 后回退)。
   # 如需 PR 阶段重新引入 smoke,从 git history 恢复 e2e-smoke job。
   # ===========================================================================
 
@@ -386,5 +386,5 @@ jobs:
         shell: bash
         # --skip-tests:绕开 security-scan 子模块单测(纯内部 orchestrator/options 逻辑,
         # 跟 scan 业务正确性无关;Java 25 + mockito javaagent 偶发 JVM crash 会让 PR 误挂)。
-        # 单测仍由 main 的 full-ci-gate security-scan job 兜底覆盖。
+        # 单测仍由 main 的 full-ci-gate security-scan job 回退覆盖。
         run: bash scripts/ci/security-scan.sh --skip-tests -- --mode=secret

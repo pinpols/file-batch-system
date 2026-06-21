@@ -187,7 +187,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     }
 
     // 三道闸模型:语句类型/DDL 不再由 app 白名单管控,放行范围 = 所连最小权限 DB 角色被授予的权限;
-    // OS 拒绝由 requireNonOsCapableRole(连接级角色闸)兜底。
+    // OS 拒绝由 requireNonOsCapableRole(连接级角色闸)回退。
 
     // dataSource(param 覆盖需命中 allowedDataSourceBeans)
     String dsBeanName = resolveDataSourceBeanName(params);
@@ -420,7 +420,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
    * <p><b>方言支持</b>:本检查仅对 PostgreSQL 有效(查 {@code pg_roles} / {@code pg_has_role()})。其他方言上若仍开 {@code
    * forbidOsCapableRole=true},本方法 <b>fail-closed 拒绝执行</b>——既然运维显式要求"禁 OS 能力角色"、而本闸在该方言下无法核验,
    * 静默放行等于安全控制 no-op(原 WARN+放行的"假阴性"姿态比报错更危险)。要在非 PG 方言上跑,须显式 {@code
-   * forbidOsCapableRole=false}(明确接受该方言下无 OS 角色核验)并自行用方言原生最小权限角色兜底。
+   * forbidOsCapableRole=false}(明确接受该方言下无 OS 角色核验)并自行用方言原生最小权限角色回退。
    *
    * <p>见 {@link SqlExecutorProperties#isForbidOsCapableRole()} javadoc 标注「PostgreSQL only」。
    */

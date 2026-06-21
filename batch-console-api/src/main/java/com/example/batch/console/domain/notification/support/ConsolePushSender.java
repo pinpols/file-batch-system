@@ -169,7 +169,7 @@ public class ConsolePushSender {
     } catch (ExecutionException | RuntimeException e) {
       log.error("[push] send failed sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
     } catch (Exception e) {
-      // web-push 抛 JoseException / GeneralSecurityException / IOException 等 checked exception 兜底
+      // web-push 抛 JoseException / GeneralSecurityException / IOException 等 checked exception 回退
       log.error("[push] send unexpected sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
     }
   }

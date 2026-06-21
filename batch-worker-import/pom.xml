@@ -82,7 +82,7 @@
             <artifactId>poi-ooxml</artifactId>
         </dependency>
         <!-- commons-compress:ImportPreprocessPipeline 的 UNTAR / UNTAR_GZ 步骤解包 tar 容器。
-             JDK 自带 GZIP/ZIP,tar 无标准库;版本经 parent dependencyManagement 收口。 -->
+             JDK 自带 GZIP/ZIP,tar 无标准库;版本经 parent dependencyManagement 收敛。 -->
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-compress</artifactId>

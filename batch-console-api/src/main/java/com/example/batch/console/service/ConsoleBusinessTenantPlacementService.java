@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>upsert 时若 console 侧已配 {@code batch.datasource.business.routing.shards}(片拓扑),校验目标 key 在已配置
  * 片集合内,**提前**拦掉 typo(把租户指到不存在的片)。未配拓扑时跳过本校验——worker 侧 multiShard 关了 lenientFallback,运行时仍会对未知 key
- * 硬失败兜底。
+ * 硬失败回退。
  */
 @Service
 @RequiredArgsConstructor
@@ -57,7 +57,7 @@ public class ConsoleBusinessTenantPlacementService {
 
   /**
    * placement 指派的合法 key 集合,优先级:shard catalog(enabled 片,权威)→ routing.shards 配置 → 空(不校验)。
-   * 空集合表示无可校验源,跳过(运行时 lenientFallback=false 兜底)。
+   * 空集合表示无可校验源,跳过(运行时 lenientFallback=false 回退)。
    */
   private Set<String> configuredShardKeys() {
     Set<String> keys = new LinkedHashSet<>(shardCatalogMapper.findEnabledKeys());

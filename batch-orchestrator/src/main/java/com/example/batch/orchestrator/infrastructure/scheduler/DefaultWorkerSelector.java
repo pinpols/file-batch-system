@@ -82,7 +82,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
       route.setAvailable(false);
       return route;
     }
-    // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较兜底，
+    // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较回退，
     // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
     String workerGroup = CodeNormalizer.toUpperOrNull(resolveWorkerGroup(request, queue));
     List<WorkerRegistryEntity> candidates = findCandidates(request.getTenantId(), workerGroup);
@@ -173,7 +173,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
         .orElse(null);
   }
 
-  /** V87 反压: 已 fully loaded 的 worker 不再被选中. NULL max_concurrent (老数据兜底) 视为无上限通过. */
+  /** V87 反压: 已 fully loaded 的 worker 不再被选中. NULL max_concurrent (老数据回退) 视为无上限通过. */
   private static boolean hasCapacity(WorkerRegistryEntity r) {
     Integer max = r.maxConcurrent();
     if (max == null || max <= 0) {

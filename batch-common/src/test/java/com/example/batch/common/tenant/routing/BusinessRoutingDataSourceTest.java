@@ -35,7 +35,7 @@ class BusinessRoutingDataSourceTest {
   }
 
   @Test
-  @DisplayName("无租户上下文 → 走 resolver 兜底 key(不抛)")
+  @DisplayName("无租户上下文 → 走 resolver 回退 key(不抛)")
   void shouldFallbackWhenNoTenant() {
     Exposed ds = new Exposed(new HashAndSiloPlacementResolver(4, Map.of()));
     RlsTenantContextHolder.clear();

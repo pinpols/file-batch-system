@@ -14,7 +14,7 @@
 | 3 | 连接池显式配置与隔离 | ✅ | 2026-03-26 |
 | 4 | 优雅关闭等待 in-flight 任务 | ✅ | 2026-03-26 |
 | 5 | Kafka 消费背压（Semaphore） | ✅ | 2026-03-26 |
-| 6 | 临时文件兜底清理 | ✅ | 2026-03-26 |
+| 6 | 临时文件补充清理 | ✅ | 2026-03-26 |
 
 ---
 
@@ -81,7 +81,7 @@
 
 ---
 
-## Task 6 — 临时文件兜底清理 ✅
+## Task 6 — 临时文件补充清理 ✅
 
 **关键证据**
 - `StaleTempFileCleanup`（`batch-worker-core/support/`）：`@EventListener(ApplicationReadyEvent.class)`

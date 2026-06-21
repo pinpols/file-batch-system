@@ -37,7 +37,7 @@ dev-restart:
 	bash scripts/local/build-apps.sh
 	bash scripts/local/start-all.sh
 
-# 强制 clean 重启（~80s total）；遇到以下任一情况用这个兜底：
+# 强制 clean 重启（~80s total）；遇到以下任一情况用这个回退：
 #   1) 删除 / 重命名 Java 类（旧 .class 可能残留在 target/classes 被打进 fat jar）
 #   2) 删除 / 重命名 resource（yml / SQL / 静态文件同上风险）
 #   3) 改了 parent pom 依赖版本，担心 .flattened-pom.xml 不同步

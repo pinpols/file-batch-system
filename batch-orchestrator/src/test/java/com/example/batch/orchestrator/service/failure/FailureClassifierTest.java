@@ -63,7 +63,7 @@ class FailureClassifierTest {
     assertThat(classifier.classify(null, null)).isEqualTo(FailureClass.UNKNOWN);
     assertThat(classifier.classify(null, new RuntimeException("?")))
         .isEqualTo(FailureClass.UNKNOWN);
-    // 未知 worker 上报字符串 → 走兜底（且最终仍是 UNKNOWN）
+    // 未知 worker 上报字符串 → 走回退（且最终仍是 UNKNOWN）
     assertThat(classifier.classify("WHO_KNOWS", null)).isEqualTo(FailureClass.UNKNOWN);
   }
 

@@ -30,7 +30,7 @@ public class BizMessageResolver {
    * <ol>
    *   <li>{@code messageKey} 命中资源文件 → 返回翻译后的中文/英文文案
    *   <li>{@code messageKey} 不存在但是 literal 异常 → 返回 {@link BizException#getMessage()}
-   *   <li>都没有 → 走 {@link ResultCode#label()}(中文兜底)
+   *   <li>都没有 → 走 {@link ResultCode#label()}(中文回退)
    * </ol>
    */
   public String resolve(BizException exception) {

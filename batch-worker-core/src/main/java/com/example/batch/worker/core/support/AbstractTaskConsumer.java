@@ -185,7 +185,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
       } catch (Exception ex) {
         // R1-P2-7 / S1-7：区分 orchestrator 5xx（transient，不该进 DLQ）vs 业务 4xx/不可恢复（DLQ）。
         // 5xx / 网络异常通常因 orchestrator rolling restart / DB 短暂不可达，要走 listener 自然重试；
-        // 进 DLQ 的话静默把任务丢到死信里，触发任务卡住（lease reclaim 兜底，但是 detection 延迟大）。
+        // 进 DLQ 的话静默把任务丢到死信里，触发任务卡住（lease reclaim 回退，但是 detection 延迟大）。
         if (isTransientOrchestratorFailure(ex)) {
           log.warn(
               "{} task transient failure (5xx/network) — NOT entering DLQ, will retry: taskId={},"

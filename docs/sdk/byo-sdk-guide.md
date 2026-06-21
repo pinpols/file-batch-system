@@ -49,7 +49,7 @@
 - **Consumer group**:`g-sdk-<tenantId>-<workerCode>`(per worker,平台不感知 group 名)
 - **反序列化**:JSON UTF-8;DTO 字段集对照 [TaskDispatchMessage schema](../api/orchestrator-internal.openapi.yaml#L_search),未知字段忽略(`ignoreUnknown` 等价)
 - **schemaVersion 兼容矩阵**:见 wire-protocol §A —— 未知 major(`v3+`)直接 reject,不 commit offset
-- **at-least-once 投递**:平台不去重,SDK 收到后调 claim 时由 orch `409` 兜底幂等
+- **at-least-once 投递**:平台不去重,SDK 收到后调 claim 时由 orch `409` 回退幂等
 
 ### 1.3 心跳调度(默认 30s,消费 nextHeartbeatHint 动态调速)
 
@@ -185,7 +185,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 - **Kafka**:`kafkajs`(纯 JS,API 干净)或 `node-rdkafka`(C 库 wrapper,性能更好)。
 - **HTTP**:`undici`(Node 内置 fetch 后端,性能最好)或 `axios`(API 友好)。
 - **心跳调度**:`setInterval` 即可;**注意** Node 单线程,长循环 handler 会阻塞调度器 —— 必须 `await` / worker_threads。
-- **问题**:`Promise` 异常未 catch 会变成 unhandledRejection,**必须**全局兜底;否则 SIGTERM 时进程 hang。
+- **问题**:`Promise` 异常未 catch 会变成 unhandledRejection,**必须**全局回退;否则 SIGTERM 时进程 hang。
 
 ### .NET / C#
 

@@ -18,11 +18,11 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 /**
- * 守护实例终态 → 子表(partition/task)收口的映射:
+ * 守护实例终态 → 子表(partition/task)收敛的映射:
  *
  * <ul>
  *   <li>SUCCESS → 子表 SUCCESS
- *   <li>FAILED / PARTIAL_FAILED → 子表 FAILED(混合失败都收口为 FAILED)
+ *   <li>FAILED / PARTIAL_FAILED → 子表 FAILED(混合失败都收敛为 FAILED)
  *   <li>CANCELLED → 子表 CANCELLED
  *   <li>TERMINATED → 子表 TERMINATED
  *   <li>非业务终态(RUNNING/WAITING/READY/CREATED) → no-op,不写 DB
@@ -48,7 +48,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
   }
 
   @Test
-  @DisplayName("SUCCESS → 子表收口为 SUCCESS")
+  @DisplayName("SUCCESS → 子表收敛为 SUCCESS")
   void reconcilesSuccess() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS.code());
 
@@ -59,7 +59,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
   }
 
   @Test
-  @DisplayName("FAILED → 子表收口为 FAILED")
+  @DisplayName("FAILED → 子表收敛为 FAILED")
   void reconcilesFailed() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.FAILED.code());
 
@@ -70,7 +70,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
   }
 
   @Test
-  @DisplayName("PARTIAL_FAILED → 子表收口为 FAILED(部分失败也收口为 FAILED)")
+  @DisplayName("PARTIAL_FAILED → 子表收敛为 FAILED(部分失败也收敛为 FAILED)")
   void reconcilesPartialFailedAsFailed() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.PARTIAL_FAILED.code());
 
@@ -81,7 +81,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
   }
 
   @Test
-  @DisplayName("CANCELLED → 子表收口为 CANCELLED")
+  @DisplayName("CANCELLED → 子表收敛为 CANCELLED")
   void reconcilesCancelled() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.CANCELLED.code());
 
@@ -93,7 +93,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
   }
 
   @Test
-  @DisplayName("TERMINATED → 子表收口为 TERMINATED")
+  @DisplayName("TERMINATED → 子表收敛为 TERMINATED")
   void reconcilesTerminated() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.TERMINATED.code());
 

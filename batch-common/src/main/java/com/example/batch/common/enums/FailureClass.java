@@ -22,7 +22,7 @@ import lombok.experimental.Accessors;
  *
  * <p>分类来源（写入侧由近及远）: worker {@code TaskExecutionReportDto.failureClass} → orchestrator 端 {@link
  * com.example.batch.common.exception.BizException#getFailureClass()} → `FailureClassifier` chain
- * 兜底。 永远不要为了显得"有分类"瞎猜; UNKNOWN 是合法终态值。
+ * 回退。 永远不要为了显得"有分类"瞎猜; UNKNOWN 是合法终态值。
  */
 @RequiredArgsConstructor
 @Accessors(fluent = true)

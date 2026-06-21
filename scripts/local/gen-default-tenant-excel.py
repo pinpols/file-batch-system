@@ -7,7 +7,7 @@
 #
 # 历史变化：alert_routing_config 已剔除（走 /config/excel?domain=alert-routings
 # 独立入口）；file_template_config 进核心（含 Import 目标表 / Export SQL）；
-# resource_queue / business_calendar / batch_window 进可选，引用时必填且允许 DB 兜底。
+# resource_queue / business_calendar / batch_window 进可选，引用时必填且允许 DB 回退。
 # =====================================================================
 import json
 from openpyxl import Workbook
@@ -57,7 +57,7 @@ WF_EDGE_COLS = [
     "edge_type","condition_expr","enabled",
 ]
 
-# ─── 3 可选基础依赖 sheet 列定义（引用时必填，允许 DB 兜底） ────────────────
+# ─── 3 可选基础依赖 sheet 列定义（引用时必填，允许 DB 回退） ────────────────
 RESOURCE_QUEUE_COLS = [
     "tenant_id","queue_code","queue_name","queue_type","max_running_jobs",
     "max_running_partitions","max_qps","worker_group","resource_tag",

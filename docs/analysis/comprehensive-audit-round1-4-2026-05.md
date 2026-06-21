@@ -34,7 +34,7 @@
 
 ### 1. **分布式系统的"幸存者偏差"** (R1 ~ R4 反复)
 
-**问题**: 大多数核心路径有 CAS / 幂等 / 补偿，但都是"后手兜底"，一旦上一层逻辑漏洞，后手才能施展。
+**问题**: 大多数核心路径有 CAS / 幂等 / 补偿，但都是"后手回退"，一旦上一层逻辑漏洞，后手才能施展。
 
 **实例**:
 - **R2-P0-2** (`DefaultRetryGovernanceService`): 整方法 `@Transactional` 外层，CAS 冲突时回滚全批 outbox → retry 永久丢失
@@ -134,7 +134,7 @@
 
 ### ✅ 做对的事
 
-1. **outbox pattern 三层兜底完整** — `trigger_request` → `trigger_outbox_event` → Kafka → orchestrator `uk_job_instance_tenant_dedup`，幂等键端到端闭环，审计无缝。
+1. **outbox pattern 三层回退完整** — `trigger_request` → `trigger_outbox_event` → Kafka → orchestrator `uk_job_instance_tenant_dedup`，幂等键端到端闭环，审计无缝。
 
 2. **多租户隔离严格** — CLAUDE.md 硬约束 + ADR 治理，90% 的数据边界都守住了。R1-R4 跨租户漏洞仅 2 个（console 列表查询 + approve 信任请求体），且都已修。
 

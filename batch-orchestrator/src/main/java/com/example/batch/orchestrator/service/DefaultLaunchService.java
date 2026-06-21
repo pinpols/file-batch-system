@@ -52,8 +52,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>这里把 launch 拆成两段<strong>独立提交</strong>的事务（T1/T2），目的是降低锁竞争与提升可重试性：
  *
  * <ul>
- *   <li><strong>T1（准备态落库）</strong>：只创建 {@code job_instance}/{@code workflow_run} 以及 START 节点的运行态，
- *       快速提交，作为后续调度/派发的"事实源"。
+ *   <li><strong>T1（准备态写入数据库）</strong>：只创建 {@code job_instance}/{@code workflow_run} 以及 START
+ *       节点的运行态， 快速提交，作为后续调度/派发的"事实源"。
  *   <li><strong>T2（运行态构建与派发）</strong>：创建 partition/task、写 outbox，并推进 instance/workflow 状态。 高竞争表只在
  *       T2 短事务里触碰，避免长事务持锁。
  * </ul>
@@ -94,7 +94,7 @@ public class DefaultLaunchService implements LaunchService {
       return LaunchResponse.skipped(traceId);
     }
 
-    // T1：先把 instance/workflow 落库并提交，避免 T2 执行期间持有更长时间锁。
+    // T1：先把 instance/workflow 写入数据库并提交，避免 T2 执行期间持有更长时间锁。
     PreparedLaunch prepared;
     try {
       prepared =
@@ -299,7 +299,7 @@ public class DefaultLaunchService implements LaunchService {
   /**
    * T1 事务：创建 {@code job_instance}/{@code workflow_run}，并补齐 START 节点运行态。
    *
-   * <p>该事务只做"准备态落库"，不触碰高竞争的 task/partition/outbox 表，从而缩短锁持有时间。
+   * <p>该事务只做"准备态写入数据库"，不触碰高竞争的 task/partition/outbox 表，从而缩短锁持有时间。
    */
   @Transactional
   public PreparedLaunch prepareJobInstance(

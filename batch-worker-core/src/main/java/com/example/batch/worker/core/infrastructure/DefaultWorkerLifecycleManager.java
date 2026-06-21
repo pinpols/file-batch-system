@@ -69,7 +69,7 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
             : WorkerRegistryStatus.DECOMMISSIONED.code();
     // R2-P1-7：之前 catch 仅 warn + e.getMessage()，registry 留 ONLINE → orchestrator 继续派任务给死 worker。
     // 改为：最多 3 次指数退避重试，全部失败 ERROR + 完整 stack。
-    // finally 仍清本地 map（本地状态已不准确，留着无意义）；DB 状态由 PartitionLeaseReclaimScheduler 兜底。
+    // finally 仍清本地 map（本地状态已不准确，留着无意义）；DB 状态由 PartitionLeaseReclaimScheduler 回退。
     try {
       updateStatusWithRetry(activeRegistration, WorkerRegistryStatus.DRAINING.code(), workerId);
       if (!WorkerRegistryStatus.DRAINING.code().equals(finalStatus)) {

@@ -211,7 +211,7 @@ class DefaultProcessStageExecutorTest {
             allStageStepBeans(), List.of(plugin), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
-    // COMPUTE step impl_code 是默认 sentinel(PROCESS_COMPUTE),走 payload 注入的 processImplCode 兜底
+    // COMPUTE step impl_code 是默认 sentinel(PROCESS_COMPUTE),走 payload 注入的 processImplCode 回退
     context
         .getAttributes()
         .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("PROCESS_COMPUTE"));

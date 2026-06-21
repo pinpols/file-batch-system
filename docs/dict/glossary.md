@@ -12,7 +12,7 @@
 | **task** | partition 内最小执行单元（worker 实际跑的事）。一个 partition 可包含 1 到多 task。 | [`../architecture/core-model.md`](../architecture/core-model.md) |
 | **trigger** | 触发器。CRON / FIXED_RATE / FIXED_DELAY / ONE_TIME / API / MANUAL / FILE_EVENT 7 种。 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §1 |
 | **launch** | 触发请求转化为 job_instance 的动作（trigger → orchestrator）。详见 ADR-003 T1/T2 拆分。 | [`../architecture/adr/ADR-003-launch-t1-t2-split.md`](../architecture/adr/ADR-003-launch-t1-t2-split.md) |
-| **claim** | worker 从 outbox 消息中"认领"task 的动作。CLAIM 是悲观锁兜底，确保单 task 单 worker 执行。 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §2 |
+| **claim** | worker 从 outbox 消息中"认领"task 的动作。CLAIM 是悲观锁回退，确保单 task 单 worker 执行。 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §2 |
 | **dispatch** | 文件分发动作（worker-dispatch 把生成好的文件推到外部渠道：SFTP / API / OSS / Email 等）。 | [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md) |
 
 ## 工作流

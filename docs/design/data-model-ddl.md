@@ -1,7 +1,7 @@
 ## 14. 数据模型与 PostgreSQL 表结构设计
 ### 14.1 设计目标与落地原则
 
-本章将前文中的任务调度、DAG 编排、文件链路、资源调度、补偿与审计模型统一落成 **可执行 DDL 终版**。目标不是停留在“表清单 + 字段建议”，而是直接给出可用于 Flyway 落库的 PostgreSQL 基线脚本。
+本章将前文中的任务调度、DAG 编排、文件链路、资源调度、补偿与审计模型统一落成 **可执行 DDL 终版**。目标不是停留在“表清单 + 字段建议”，而是直接给出可用于 Flyway 写入数据库的 PostgreSQL 基线脚本。
 
 **本章落地原则**：
 
@@ -9,7 +9,7 @@
 - 配置态、运行态、审计态、补偿态分表设计，不混用职责
 - 所有业务主表默认携带 `tenant_id`、`created_at`、`updated_at`
 - 所有高频运行表补齐唯一约束、检查约束、时间索引、状态索引
-- 一致性按“DB 先落库 + Outbox + MQ 至少一次 + Worker 幂等”建模
+- 一致性按“DB 先写入数据库 + Outbox + MQ 至少一次 + Worker 幂等”建模
 - 全文统一使用 `job_partition`，不再使用 `task_partition`
 - 文件链路补齐版本字段、分发表、审计表、模板表和运行态表，形成完整闭环
 
@@ -901,7 +901,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 - `job_instance.dedup_key`：实例级去重
 - `job_partition.idempotency_key`：分片级幂等键
 - `retry_schedule`：统一重试计划
-- `dead_letter_task`：失败终态兜底
+- `dead_letter_task`：失败终态回退
 - `outbox_event`：DB 与 MQ 的最终一致性桥梁
 
 建议统一口径：
@@ -934,7 +934,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 - `tenant_quota_policy.max_partitions_per_tenant`
 - `tenant_quota_policy.max_qps_per_tenant`
 
-这使得资源调度章节中的 `Tenant Quota / Fair Share` 模型可以直接落库实现。
+这使得资源调度章节中的 `Tenant Quota / Fair Share` 模型可以直接写入数据库实现。
 
 #### Batch Window 与 DAG 冲突处理
 
@@ -951,7 +951,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 - 不在窗口内时按 `WAIT / FAIL` 执行
 - 窗口结束后按 `STOP / FINISH_RUNNING / CONTINUE` 处理
 
-### 14.6 Flyway 落库建议
+### 14.6 Flyway 写入数据库建议
 
 建议按以下顺序建表：
 
@@ -970,7 +970,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 - 运行态主对象统一使用 `job_instance / job_partition / job_task`，不再使用 `task_partition` 等旧称谓。
 - 事件最终一致性桥梁统一使用 `outbox_event`，不再混用 `event_outbox`。
 - `job_instance` 与 `job_partition` 的主状态值统一严格以 14 章 DDL 为准；等待类细分语义通过 `WAITING` 结合调度原因、租约字段和审计日志表达。
-- 文件资产主表统一使用 `file_record`，图示与正文不再引用未落库的 `file_receive_record`。
+- 文件资产主表统一使用 `file_record`，图示与正文不再引用未写入数据库的 `file_receive_record`。
 
 本章交叉引用校验结论如下：
 

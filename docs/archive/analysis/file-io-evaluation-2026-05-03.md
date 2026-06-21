@@ -42,7 +42,7 @@
 | IMPORT Pipeline UNZIP/GUNZIP `boundedReadAll` (BAOS) | ⚠️ 解压后仍全部 in heap，最高 1 GiB | 极端配置 cap=1GiB 单任务 = 6 并发 6 GiB；建议默认下调或 spool | 同上 |
 | IMPORT Pipeline AES_GCM_DECRYPT / CHARSET_TRANSCODE | ⚠️ 同上 byte[] 全内存 | 同上链式风险 | 同上 |
 | IMPORT Parse Excel (POI XSSF SAX) | ✅ 流式事件回调，500MB xlsx ~20MB heap | 已防 | OK |
-| IMPORT Parse CSV (Univocity) | ✅ 流式 reader + `setMaxCharsPerColumn(-1)` 由上游兜底 | 已防 | OK |
+| IMPORT Parse CSV (Univocity) | ✅ 流式 reader + `setMaxCharsPerColumn(-1)` 由上游回退 | 已防 | OK |
 | IMPORT Parse JSON (Jackson `JsonParser`) | ✅ 流式 token | 已防 | OK |
 | IMPORT Validate/Load 行级 chunk (chunk=500) | ✅ NDJSON 行级 + 分块 flush 到 plugin | 已防 | OK |
 | EXPORT Generate (Delimited / FixedWidth / Excel SXSSF) | ✅ 写端流式 + 读端 DB 分页 1000 行 | 已防（500k 行硬闸） | OK |
@@ -81,7 +81,7 @@
 
 1. **`ImportPreprocessPipeline.boundedReadAll`**（`ImportPreprocessPipeline.java:235-264`）— 默认 `MAX_DECOMPRESS_BYTES=1 GiB` × 6 并发 task = 6 GiB 堆压。建议：①默认下调到 256 MiB；②超过 SPOOL 阈值（如 32 MiB）时改 spool 到 `Files.createTempFile` 而不是 BAOS（与 `PreprocessStep.spoolLargePayload` 路径打通），让 PARSE 阶段直接消费 spool 文件。代价低收益高。
 2. **`PreprocessStep.resolveRawBytes` + `BatchObjectCryptoService.decrypt(byte[])`**（`PreprocessStep.java:109-115`、`BatchObjectCryptoService.java:81-90`）— 当前 ①把 base64/raw 全 decode 到 `byte[]`；②`cryptoService.decrypt(rawBytes)` 又走 `ByteArrayInputStream → readAllBytes`。100 MB 输入 = 200-300 MB 中间峰值。建议：当 size > spool 阈值时直接走 `Files.createTempFile` + `decryptIfNeeded(InputStream) → transferTo(temp)`；不到阈值才走 byte[]。
-3. **`ImportPreprocessPipeline.charsetTranscode`**（`ImportPreprocessPipeline.java:406-431`）— `new String(input, fromCs)` + `text.getBytes(toCs)` 一行 2× 放大，cap 兜底但内存峰值难看。GBK→UTF-8 大文件场景可改 `InputStreamReader(in, fromCs) → OutputStreamWriter(out, toCs) + transferTo`。优先级低（charset_transcode 实际命中场景少）。
+3. **`ImportPreprocessPipeline.charsetTranscode`**（`ImportPreprocessPipeline.java:406-431`）— `new String(input, fromCs)` + `text.getBytes(toCs)` 一行 2× 放大，cap 回退但内存峰值难看。GBK→UTF-8 大文件场景可改 `InputStreamReader(in, fromCs) → OutputStreamWriter(out, toCs) + transferTo`。优先级低（charset_transcode 实际命中场景少）。
 4. **`SmtpEmailDispatchChannelAdapter.buildAttachment`**（`SmtpEmailDispatchChannelAdapter.java:203-221`）— `Files.copy` 落 temp file 后 `FileDataSource` 又会被 `jakarta.mail` 整块读到 SMTP socket。25MB cap 防了 OOM 但是 IO 翻 1 倍。可换成 `ByteArrayDataSource(InputStream, mimeType)` 直接桥接 `DispatchFileContentResolver.openInputStream`。优先级中（SMTP 不是热点）。
 5. **`ImportErrorOutputStorage.writeErrorOutput`**（`ImportErrorOutputStorage.java:45-58`）— `StringBuilder` 全拼 → `getBytes` → `ByteArrayInputStream`，1 万 bad records 时双倍内存。建议改 `Files.createTempFile` + `BufferedWriter` 流写后 `putObject(Path, knownSize)`（参考 `MinioExportStorage.writeObject(Path)`），与 export 链路对齐。优先级低。
 
@@ -109,7 +109,7 @@
 | ThreadLocal 占用 | Slf4j MDC + Spring SecurityContext + Hikari Connection 都重 | VT 大量 TL 反而拖慢 | 中性偏负 |
 | 调试/profile | 现有 thread dump 工具链熟悉 `worker-task-exec-N` | VT 在 jstack/profiler 里需要新的认知 | 短期负 |
 
-**唯一值得评估**的位置：`SftpDispatchChannelAdapter.DISCONNECT_EXECUTOR`（`SftpDispatchChannelAdapter.java:233-245`）—— scheduledThreadPool(2) 给 disconnect 兜底，单进程几百次 dispatch 同时撞上 SFTP 半关闭可能塞满 2 线程；改 `Executors.newVirtualThreadPerTaskExecutor()` 简单且这里没有 `synchronized` pin 风险。但实际触发率极低，**收益不足以单独 PR**，可作为某次清理的搭车改动。
+**唯一值得评估**的位置：`SftpDispatchChannelAdapter.DISCONNECT_EXECUTOR`（`SftpDispatchChannelAdapter.java:233-245`）—— scheduledThreadPool(2) 给 disconnect 回退，单进程几百次 dispatch 同时撞上 SFTP 半关闭可能塞满 2 线程；改 `Executors.newVirtualThreadPerTaskExecutor()` 简单且这里没有 `synchronized` pin 风险。但实际触发率极低，**收益不足以单独 PR**，可作为某次清理的搭车改动。
 
 ---
 

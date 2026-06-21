@@ -43,7 +43,7 @@ public class ConsoleMaintenanceProperties {
 
   /**
    * 受影响功能 / 子系统列表(前端按 service 展示哪些功能异常退出)。 例如:{@code ["job-schedule", "file-download"]}。空 list 表示
-   * "整站维护",前端 message 兜底显示。
+   * "整站维护",前端 message 回退显示。
    */
   private List<String> affectedServices = new ArrayList<>();
 }

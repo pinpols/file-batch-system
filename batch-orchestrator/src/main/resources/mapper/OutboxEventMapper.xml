@@ -77,7 +77,7 @@
         <if test="publishStatus != null and publishStatus != ''">
             and publish_status = #{publishStatus}
         </if>
-        <!-- V88: priority desc 优先派发高优 task; id asc 兜底先到先服务 -->
+        <!-- V88: priority desc 优先派发高优 task; id asc 回退先到先服务 -->
         order by priority desc, id asc
         <if test="batchSize != null and batchSize > 0">
             limit #{batchSize}

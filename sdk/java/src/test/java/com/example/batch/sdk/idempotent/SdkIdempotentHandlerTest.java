@@ -248,7 +248,7 @@ class SdkIdempotentHandlerTest {
     assertThat(handler.executions).hasValue(2);
   }
 
-  /** find() 抛运行时异常的 fake store —— 验证装饰器不吞,透传给 dispatcher 兜底。 */
+  /** find() 抛运行时异常的 fake store —— 验证装饰器不吞,透传给 dispatcher 回退。 */
   static final class ThrowingStore implements SdkIdempotencyStore {
     @Override
     public boolean tryAcquire(String key, long ttlMillis) {
@@ -295,7 +295,7 @@ class SdkIdempotentHandlerTest {
   }
 
   @Test
-  @DisplayName("store.tryAcquire() 抛异常 → 装饰器不吞,原样透传(由 dispatcher 兜底转 fail report),业务不执行")
+  @DisplayName("store.tryAcquire() 抛异常 → 装饰器不吞,原样透传(由 dispatcher 回退转 fail report),业务不执行")
   void shouldPropagate_whenStoreTryAcquireThrows() {
     // 准备
     AnnotatedHandler handler = new AnnotatedHandler();

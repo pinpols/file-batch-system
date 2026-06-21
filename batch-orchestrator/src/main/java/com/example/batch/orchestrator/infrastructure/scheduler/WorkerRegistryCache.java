@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * P2-3: Redis 缓存 ONLINE worker 列表，避免每秒派发都打 PG。
  *
  * <p>Key 形态：{@code worker:reg:{tenantId}:{workerGroup|_}}；value 是 slim {@link Entry} 列表的 JSON。 默认
- * 5s TTL（{@code batch.scheduler.worker-cache.ttl-millis}），命中即返回，未命中走 loader 兜底 并把结果写入 Redis。{@code
+ * 5s TTL（{@code batch.scheduler.worker-cache.ttl-millis}），命中即返回，未命中走 loader 回退 并把结果写入 Redis。{@code
  * enabled=false}（默认）时直通 loader，不调 Redis。
  *
  * <p><b>失效策略</b>：仅靠 TTL（5s 内的轻微 staleness 可接受——派发本就有重试）；不做 pub/sub 主动失效，避免心跳写路径耦合 Redis。worker

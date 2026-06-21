@@ -19,7 +19,7 @@
 | P1 | `Step` / `StepResult` / `StageExecutionResult` | `step` 和 `stage` 交替出现，阅读成本高 | 边界已在 [core-model.md](./core-model.md) 3.6 固化，本文不再重复定义 | 中 | 已固化 |
 | P1 | `workerId` / `workerCode` / `workerGroup` | 认证标识、业务编码、消费分组混在一起 | 统一命名含义，必要时拆分 DTO 字段 | 中 | 已完成 |
 | P2 | `CompensationSubmitCommand` / `ApprovalCommand` | 命令对象边界相近，业务上容易串 | 边界已在 [core-model.md](./core-model.md) 6.2 / 6.4 固化，本文只保留落点说明 | 中 | 已固化 |
-| P2 | `run_mode` | 过去没有统一上下文意图字段，容易被误当状态 | 已统一为运行时 `run_mode`；如需筛选或报表再单独评估落库 | 中 | 已完成 |
+| P2 | `run_mode` | 过去没有统一上下文意图字段，容易被误当状态 | 已统一为运行时 `run_mode`；如需筛选或报表再单独评估写入数据库 | 中 | 已完成 |
 
 ---
 
@@ -99,7 +99,7 @@
 
 | 项 | 说明 | 建议 |
 |---|---|---|
-| `run_mode` 落库评估 | 运行时键已统一，但还没有查询型持久化字段 | 本轮继续 deferred；只在确实需要筛选 / 报表 / 审计检索时再评估落库 |
+| `run_mode` 写入数据库评估 | 运行时键已统一，但还没有查询型持久化字段 | 本轮继续 deferred；只在确实需要筛选 / 报表 / 审计检索时再评估写入数据库 |
 | `CompensationSubmitCommand` / `ApprovalCommand` | 命令边界清晰，但命名可再显式一点 | 先不动代码，只补文档和 API 说明 |
 | `Step` / `Stage` | 已在 [core-model.md](./core-model.md) 3.6 固化 | 本文不再重复定义，后续只跟踪是否仍有旧称谓残留 |
 
@@ -107,7 +107,7 @@
 
 ## 4. 处理顺序复盘
 
-1. 先收口跨模块传播的语义歧义：`ExecutionContext`、`jobCode` 主名、`retry_count / attemptNo / publishAttempt / run_seq`
+1. 先收敛跨模块传播的语义歧义：`ExecutionContext`、`jobCode` 主名、`retry_count / attemptNo / publishAttempt / run_seq`
 2. 再收紧容易被业务人员误解的字段：`workerId / workerCode / workerGroup`
 3. 最后固化局部领域术语：`TaskStatus` / `StepInstanceStatus` / `WorkflowRunStatus`、`Step / Stage`、`CompensationSubmitCommand / ApprovalCommand`
 
@@ -120,7 +120,7 @@
 - 已落地：`PipelineContext` -> `ExecutionContext`
 - 已落地：`jobCode` / `pipelineCode` / `flowCode` 的主名收敛，代码层已统一到 `jobCode`
 - 已落地：`retry_count` / `attemptNo` / `publishAttempt` / `run_seq` 的语义分层
-- 已落地：`run_mode` 已按运行时上下文意图收口，不改表
+- 已落地：`run_mode` 已按运行时上下文意图收敛，不改表
 - 已落地：`workerId` / `workerCode` / `workerGroup` 的代码边界收紧
 - 已固化：`TaskStatus` / `StepInstanceStatus` / `WorkflowRunStatus` 的层级边界，已写入 [core-model.md](./core-model.md)
 - 已固化：`Step` / `Stage` 的边界，已写入 [core-model.md](./core-model.md)
@@ -132,7 +132,7 @@
   - [`core-model.md`](/Users/dengchao/Downloads/file-batch-system/docs/architecture/core-model.md)
   - 设计说明书关键章节引用已补齐
   - 关键 `ExecutionContext` / `PipelineRuntimeKeys` 类注释已明确边界
-- 数据库层面的结论已经收口：`run_mode` 落库查询继续 deferred，物理列统一重命名明确冻结，不进入本轮
+- 数据库层面的结论已经收敛：`run_mode` 写入数据库查询继续 deferred，物理列统一重命名明确冻结，不进入本轮
 
 | 优先级 | 目标 | 具体动作 | 推荐产出 | 依赖 | 风险 |
 |---|---|---|---|---|---|
@@ -140,14 +140,14 @@
 | P0 | 锁定恢复语义 | 统一 `retry / rerun / recover / compensate` 的调用边界和 API 说明，确保控制台、运维和设计文档口径一致 | 恢复术语对照表 + API 说明补丁 | `core-model.md`、`design-gap-audit.md` | 高：容易误改成同义词 |
 | P1 | 统一局部领域术语 | 明确 `workerId / workerCode / workerGroup` 的稳定定义；`Step` / `Stage` 已在 core-model 固化 | 命名约定附录 + 代码注释回写 | P0 完成 | 中：影响范围较小，但容易产生新的歧义 |
 | P1 | 收敛命令对象边界 | 将 `CompensationSubmitCommand` / `ApprovalCommand` 的职责边界写清楚，避免表单、命令、审计混用 | 命令对象边界说明 | P0 完成 | 中：主要是领域建模一致性 |
-| P2 | 文档补位 | 把仍然混用旧称谓的设计说明、实施状态和联调用语逐段回写到 `core-model.md` 和本清单 | 文档引用收口 | P0 / P1 完成 | 低：不改代码，只改文档 |
-| P2 | 评估数据库落点 | 对 `run_mode` 是否需要真正落库、以及物理列重命名是否值得做 PoC 评估 | 落库 / 重命名 PoC 清单 | P0 / P1 完成 | 中：可能引起较多连锁修改 |
+| P2 | 文档补位 | 把仍然混用旧称谓的设计说明、实施状态和联调用语逐段回写到 `core-model.md` 和本清单 | 文档引用收敛 | P0 / P1 完成 | 低：不改代码，只改文档 |
+| P2 | 评估数据库落点 | 对 `run_mode` 是否需要真正写入数据库、以及物理列重命名是否值得做 PoC 评估 | 写入数据库 / 重命名 PoC 清单 | P0 / P1 完成 | 中：可能引起较多连锁修改 |
 
 ### 执行节奏复盘
 
 1. 先完成 P0，保证跨模块沟通不再继续分叉。
 2. 再完成 P1，把局部术语和命令边界收干净。
-3. 当前剩余工作主要是 P2 文档补位，以及 `run_mode` 是否需要落库、物理列重命名的评估。
+3. 当前剩余工作主要是 P2 文档补位，以及 `run_mode` 是否需要写入数据库、物理列重命名的评估。
 
 ---
 
@@ -161,16 +161,16 @@
 
 ## 7. 数据库影响分级
 
-> 这部分把前面的候选项按“是否需要数据库层面改动”再切一次性。默认原则是：**能不改表就不改表**，先通过命名口径、DTO、Mapper、日志字段和文档收口。
+> 这部分把前面的候选项按“是否需要数据库层面改动”再切一次性。默认原则是：**能不改表就不改表**，先通过命名口径、DTO、Mapper、日志字段和文档收敛。
 
 ### 7.1 三列表总览
 
 | 类别 | 候选项 | 结论 |
 |---|---|---|
-| 后续评估（若立项则改表） | `run_mode` 如果要落库并可查询 | 本轮 deferred；只有进入筛选 / 报表 / 审计检索需求时，才考虑新增列或新增命令表字段 |
+| 后续评估（若立项则改表） | `run_mode` 如果要写入数据库并可查询 | 本轮 deferred；只有进入筛选 / 报表 / 审计检索需求时，才考虑新增列或新增命令表字段 |
 | 后续评估（若立项则改表） | 物理重命名 `publish_attempt` / `run_seq` / `retry_count` / `job_code` / `workflow_code` / `worker_code` / `worker_group` | 本轮 freeze；只有单独立项时才考虑，且会连带改 migration、mapper、测试数据 |
-| 只改代码 | `run_mode` 的运行时意图收口 | 已通过 Launch / retry / recover / compensate 链路写入 `run_mode`，当前不改表 |
-| 只改代码 | `PipelineContext` -> `ExecutionContext` | 这个项已经完成，不需要改表；后续只需保持类型引用和文档口径继续收口 |
+| 只改代码 | `run_mode` 的运行时意图收敛 | 已通过 Launch / retry / recover / compensate 链路写入 `run_mode`，当前不改表 |
+| 只改代码 | `PipelineContext` -> `ExecutionContext` | 这个项已经完成，不需要改表；后续只需保持类型引用和文档口径继续收敛 |
 | 只改代码 | `jobCode` / `pipelineCode` / `flowCode` 的主名收敛 | 数据库里已经存在 `job_code`、`workflow_code` 等字段，优先统一对象模型和映射层口径 |
 | 只改代码 | `retry_count` / `attemptNo` / `publishAttempt` / `run_seq` 的语义分层 | 这些字段本身已经存在，重点是把“业务重试次数”和“执行尝试序号”区分清楚 |
 | 只改代码 | `workerId` / `workerCode` / `workerGroup` | 现有表字段已经足够，主要修正日志、DTO、上下文和调用边界 |
@@ -186,7 +186,7 @@
 - 查询面现状：当前真正已有查询面是命令侧，而不是主运行态；控制台已有 [`ApprovalCommandQuery.java`](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/com/example/batch/console/domain/query/ApprovalCommandQuery.java) 和 [`ApprovalCommandMapper.xml`](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/ApprovalCommandMapper.xml)。
 - 现有承载：[`V27__approval_command.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V27__approval_command.sql) 已有 `payload_json` 可承载上下文；[`V13__create_compensation_and_step_runtime.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V13__create_compensation_and_step_runtime.sql) 的 `compensation_command` 没有统一上下文 JSON，如果未来真要查，更适合新增显式列。
 - 审计边界：[`V7__create_ops_tables.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V7__create_ops_tables.sql) 的 `job_execution_log` 和 [`V6__create_file_tables.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V6__create_file_tables.sql) 的 `file_audit_log` 可以承载审计信息，但不建议作为主查询面。
-- 何时改表：只有当产品要求按 `run_mode` 做筛选、统计、报表或审计检索时，才进入正式落库评估。
+- 何时改表：只有当产品要求按 `run_mode` 做筛选、统计、报表或审计检索时，才进入正式写入数据库评估。
 
 建议落点：
 - 临时排查：优先使用 `payload_json` 或审计 JSON，不为一次性检索提前加列。
@@ -216,14 +216,14 @@
 - 查询索引和唯一约束引用
 
 如果未来必须推进：
-- 按独立迁移项目立项，不和当前命名收口混做。
+- 按独立迁移项目立项，不和当前命名收敛混做。
 - 采用“新增列 / 兼容读写 / 回填 / 切换 / 清理”的迁移路径，不建议直接做一次性 `rename column`。
 
 ### 7.3 已完成代码项归档
 
 #### `run_mode`
 
-这个项已经按“只改代码、不改表”完成。当前 `run_mode` 统一由运行时链路写入，覆盖了正常 launch、系统 retry、lease reclaim recover 和补偿 redispatch 几条主路径；如未来要支持筛选 / 报表，再单独评估落库。
+这个项已经按“只改代码、不改表”完成。当前 `run_mode` 统一由运行时链路写入，覆盖了正常 launch、系统 retry、lease reclaim recover 和补偿 redispatch 几条主路径；如未来要支持筛选 / 报表，再单独评估写入数据库。
 
 文件级范围：
 - [batch-common/src/main/java/com/example/batch/common/enums/RunMode.java](/Users/dengchao/Downloads/file-batch-system/batch-common/src/main/java/com/example/batch/common/enums/RunMode.java)
@@ -297,7 +297,7 @@
 - `worker_group` 是调度/消费分组
 - `workerId` 更多是运行时实例标识或日志字段
 
-建议先统一接口、DTO、日志字段名，再决定是否需要进一步落库。
+建议先统一接口、DTO、日志字段名，再决定是否需要进一步写入数据库。
 
 文件级范围：
 - [batch-worker-core/src/main/java/com/example/batch/worker/core/domain/WorkerRegistration.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/com/example/batch/worker/core/domain/WorkerRegistration.java)
@@ -328,6 +328,6 @@
 
 ### 7.5 剩余工作建议
 
-1. `run_mode` 只有在产品明确提出筛选、统计、报表或审计检索需求时，才进入落库评估。
+1. `run_mode` 只有在产品明确提出筛选、统计、报表或审计检索需求时，才进入写入数据库评估。
 2. 在此之前，继续维持“上下文意图”定义，优先使用 `payload_json` 或审计 JSON 承载，不扩散成状态字段。
 3. 物理列统一命名保持冻结；若未来必须推进，单独评估 migration、mapper、索引、回填和切换成本。

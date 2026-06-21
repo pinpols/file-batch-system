@@ -43,7 +43,7 @@ public interface PipelineDefinitionMapper {
       @Param("tenantId") String tenantId);
 
   /**
-   * MVP DAG 兜底校验:FILE_STEP.related_pipeline_code 是否在同租户 pipeline_definition 存在(任意 enabled)。
+   * MVP DAG 回退校验:FILE_STEP.related_pipeline_code 是否在同租户 pipeline_definition 存在(任意 enabled)。
    *
    * <p>单一查询 method:返回该 jobCode 在同租户下的记录数,>0 即存在。
    */

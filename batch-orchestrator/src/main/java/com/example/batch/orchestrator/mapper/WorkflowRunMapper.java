@@ -41,7 +41,7 @@ public interface WorkflowRunMapper {
 
   /**
    * 选 RUNNING 中且 {@code updated_at} 早于 {@code stuckBefore} 的 workflow_run（疑似 stuck，等下游
-   * 推进信号永远没回来）。配合 {@link WorkflowNodeRunMapper#selectByWorkflowRunId} 判定是否所有 node 已终态后做兜底
+   * 推进信号永远没回来）。配合 {@link WorkflowNodeRunMapper#selectByWorkflowRunId} 判定是否所有 node 已终态后做回退
    * finalize。详见 {@code WorkflowRunStuckReconciler}。
    */
   List<WorkflowRunEntity> selectStuckRunningCandidates(

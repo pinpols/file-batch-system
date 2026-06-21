@@ -12,7 +12,7 @@
 | 2 | `EncryptingObjectStore.statSize()` 返回**密文**长度,被 `PreprocessStep` 当明文长度做分区 range 切分;`decoratorEnabled=true` 时必然分片错位(当前默认 false 幸免) | `batch-common/.../EncryptingObjectStore.java` | #395/#398 | 90 | ✅ 新增 `supportsRangeRead()` 能力探测,加密层回退整份流式;statSize/presign 补密文语义文档 |
 | 3 | `pg-write-parameter-matrix.sh` 用 `ALTER SYSTEM` 改实例级 PG 参数,无 PGHOST 守护,`.env.local` 指错地址即改生产实例 | `scripts/local/pg-write-parameter-matrix.sh` | benchmark 系列 | 88 | ✅ 加 localhost 白名单守护(`PG_PARAM_MATRIX_ALLOW_REMOTE=1` 显式越过) |
 | 4 | `attachClause`(Console 可写模板字段)自由文本直拼 `ATTACH PARTITION` DDL,黑名单校验防不了 `/* */` 块注释 | `JdbcMappedImportSpec.validateStageSwap()` | #412 | 88 | ✅ 改白名单字符集校验(仅允许分区边界字面量字符) |
-| 5 | `S3AutoConfiguration` 无 backend 条件:`backend=filesystem` 时仍建 S3Client + 健康探针,readiness 被拉 DOWN | `batch-common/.../S3AutoConfiguration.java` | #394/#395 | 85 | ✅ 加 `@ConditionalOnProperty(backend=s3, matchIfMissing=true)`(properties 注册由 BatchObjectStoreAutoConfiguration 兜底,filesystem 模式不受影响) |
+| 5 | `S3AutoConfiguration` 无 backend 条件:`backend=filesystem` 时仍建 S3Client + 健康探针,readiness 被拉 DOWN | `batch-common/.../S3AutoConfiguration.java` | #394/#395 | 85 | ✅ 加 `@ConditionalOnProperty(backend=s3, matchIfMissing=true)`(properties 注册由 BatchObjectStoreAutoConfiguration 回退,filesystem 模式不受影响) |
 
 ## Important
 
@@ -29,14 +29,14 @@
 ## 验证为正确的关键设计(审查中专项核验,非清单式打勾)
 
 - **导出分片**:hashtext 负数取模 `(h%N+N)%N`、keyset 等宽切分、末片 `includeUpper`、range-slice 行边界对齐(同 Hadoop TextInputFormat split 语义)——无重复无丢数
-- **分区策略**:UTC 整天边界 + ShedLock 互斥 + default 兜底分区;`migrate-process-staging-to-partitioned.sql` 的 relkind 幂等 DO 块是本批最规范 DDL;docker init 与生产脚本结构一致
+- **分区策略**:UTC 整天边界 + ShedLock 互斥 + default 回退分区;`migrate-process-staging-to-partitioned.sql` 的 relkind 幂等 DO 块是本批最规范 DDL;docker init 与生产脚本结构一致
 - **stage-swap 原子性**:DETACH/DROP/RENAME/ATTACH 四步 DDL 在同一事务——PostgreSQL 事务性 DDL 保证整体回滚(MySQL 无此性质)
 - **缓存租户隔离**(#441):业务数据 key 全部过 `keySegment(tenantId)`(转义+hash 防撞);kafka-lag 不带 tenant 是有意的平台级设计
 - **并发原语**:lease registry 读写锁 + `while` 防虚假唤醒 + 单调钟防 NTP 回拨;GracefulKafkaShutdown 三步顺序不可交换且实现对齐
 - **4xx 契约**(#380):`AbstractApiExceptionHandler` 基类统一三模块,`DuplicateKey`/乐观锁 → 409 全覆盖
-- **stale recovery 防误判**(#420):SQL 三重 not-exists 守卫 + 60s 窗口 + DB 唯一键兜底,无静默双执行
+- **stale recovery 防误判**(#420):SQL 三重 not-exists 守卫 + 60s 窗口 + DB 唯一键回退,无静默双执行
 - **ADR-038 续跑**:字节位点截断边界正确,终页不记位点 + `offset=0` 哨兵防崩溃窗口误续跑
 
 ## 总评
 
-工程质量中上。问题集中两类:**`scripts/` 运维脚本缺守护**(最易直连生产出事的地方,主代码路径反而严谨)和**抽象层边角语义**(加密装饰器 statSize/presign、自动配置条件这类静默失败弹)。`biz.process_event_copy` 漏 RLS 再次印证:逐 PR 扫描查不出"全局清单类"缺口,需要定期对标(RLS 表清单 vs 实际带 tenant_id 的表)兜底。
+工程质量中上。问题集中两类:**`scripts/` 运维脚本缺守护**(最易直连生产出事的地方,主代码路径反而严谨)和**抽象层边角语义**(加密装饰器 statSize/presign、自动配置条件这类静默失败弹)。`biz.process_event_copy` 漏 RLS 再次印证:逐 PR 扫描查不出"全局清单类"缺口,需要定期对标(RLS 表清单 vs 实际带 tenant_id 的表)回退。

@@ -100,7 +100,7 @@ public class ConsoleCacheInvalidationAspect {
     for (int i = 0; i < args.length; i++) {
       ctx.setVariable("a" + i, args[i]);
     }
-    // 按参数名绑定（需要编译带 -parameters 或运行期可用；否则兜底用 arg0/arg1）
+    // 按参数名绑定（需要编译带 -parameters 或运行期可用；否则回退用 arg0/arg1）
     String[] names = paramNames.getParameterNames(method);
     if (names != null) {
       for (int i = 0; i < names.length && i < args.length; i++) {

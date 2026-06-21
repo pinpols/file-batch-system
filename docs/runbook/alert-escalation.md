@@ -4,7 +4,7 @@
 
 ## 背景
 
-`batch.alert_event` 表用 `dedup_fingerprint` 去重落库 orchestrator 各子系统(SLA / 熔断 / drain / 对账等)的告警。
+`batch.alert_event` 表用 `dedup_fingerprint` 去重写入数据库 orchestrator 各子系统(SLA / 熔断 / drain / 对账等)的告警。
 此前一条告警 emit 后若无人处理,状态停在 `OPEN` 也只是静静躺着——没有任何机制随时间放大它的存在感。
 升级阶梯补上这一环:OPEN 告警超过 ack-SLA 仍未被确认(状态未转 `ACKED`)时,周期性 sweep 会逐级抬升其
 `escalation_tier`,每升一级打一条 ERROR 日志 + `batch.alert.escalations` 计数,供日志告警 / 指标看板侧的

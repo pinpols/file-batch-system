@@ -120,7 +120,7 @@ public class ImportIngressScanner {
   /**
    * ADR-046 Phase3:把「manifest-only 导出束」清单登记为自完整到达组 trigger 记录。导出无输入数据文件,清单本身就是触发: 一条 trigger 记录的
    * metadata 携带 {@code bundleJobCode} + {@code bundleExportTemplates}(导出模板列表),其 arrival 组 {@code
-   * requiredFileSet} = 自身文件名 → 组凑齐立即触发,{@code BundleArrivalLauncher} 一个声明展成 N 个导出
+   * requiredFileSet} = 自身文件名 → 组满足条件立即触发,{@code BundleArrivalLauncher} 一个声明展成 N 个导出
    * partition。幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过(不重复发射)。
    */
   private void registerManifestOnlyExports(Map<String, ObjectSnapshot> snapshots) {
@@ -171,7 +171,7 @@ public class ImportIngressScanner {
     metadata.put("detectedAt", BatchDateTimeSupport.utcNow().toString());
     metadata.put("bundleJobCode", manifest.jobCode());
     metadata.put("bundleExportTemplates", manifest.exportTemplateCodes());
-    // 自完整到达组:requiredFileSet = 本 trigger 记录自身文件名 → 组(大小 1)立即凑齐触发
+    // 自完整到达组:requiredFileSet = 本 trigger 记录自身文件名 → 组(大小 1)立即满足条件触发
     putArrivalMetadata(metadata, manifest.fileGroupCode(), fileName);
     runtimeRepository.createFileRecord(
         FileRecordParam.builder()
@@ -316,7 +316,7 @@ public class ImportIngressScanner {
     }
     // ADR-046:批次清单 v2 落 metadata 供束 launch 读取——
     //   ① fileMapping 声明本文件绑定:导入束给 templateCode(目标表从模板推),分发束给 targetRef(下游渠道);
-    //   ② jobCode 声明本束凑齐后启动哪个 BUNDLE_* 作业(到达组凑齐时 BundleArrivalLauncher 据此发 launch)。
+    //   ② jobCode 声明本束满足条件后启动哪个 BUNDLE_* 作业(到达组满足条件时 BundleArrivalLauncher 据此发 launch)。
     if (matchedBatch != null) {
       putBundleMetadata(metadata, matchedBatch, fileName);
     }
@@ -562,7 +562,7 @@ public class ImportIngressScanner {
     }
   }
 
-  /** 写入到达组 metadata(到达组 SLA + 凑齐判定所需);group/requiredFileSet 已按批次清单或静态配置解析。 */
+  /** 写入到达组 metadata(到达组 SLA + 满足条件判定所需);group/requiredFileSet 已按批次清单或静态配置解析。 */
   private void putArrivalMetadata(
       Map<String, Object> metadata, String groupCode, String requiredFileSet) {
     metadata.put("fileGroupCode", groupCode);

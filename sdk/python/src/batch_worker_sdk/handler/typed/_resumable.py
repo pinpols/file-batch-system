@@ -51,7 +51,7 @@ class ResumableTemplateMixin:
         """租户在 ``read_rows`` / ``select_input`` 里读「续读起点」的入口。
 
         返回上次断点的 ``break_position``(首次运行 / 已完成 → 空 dict)。租户据此
-        给查询加 ``WHERE id > :last`` 之类续读条件;不调则从头读(靠业务自身幂等兜底)。
+        给查询加 ``WHERE id > :last`` 之类续读条件;不调则从头读(靠业务自身幂等回退)。
         """
         state = ctx.checkpoint().load(ctx.task_id)
         if state is None or state.completed:

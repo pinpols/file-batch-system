@@ -1,6 +1,6 @@
 # Runbook · Phase A · 翻 strict 模式 操作手册
 
-> Phase A 收尾 — 把 RLS 从「transition 模式(未设 SET 兜底允许)」翻到「strict 模式(未设 SET 强制拦截)」。
+> Phase A 收尾 — 把 RLS 从「transition 模式(未设 SET 回退允许)」翻到「strict 模式(未设 SET 强制拦截)」。
 >
 > 配套:`docs/runbook/multi-tenant-rls.md` §3 是设计依据,本文档是**翻转操作手册**(给 on-call 用)。
 

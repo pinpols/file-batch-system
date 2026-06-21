@@ -139,7 +139,7 @@ batch-worker-dispatch
 
 **结构核验后的结论与微调原则**：
 
-- 当前模块划分可以支撑工程落地，暂不调整后端固定模块数量；目录结构仅做表达收口，不改变主模块边界。
+- 当前模块划分可以支撑工程落地，暂不调整后端固定模块数量；目录结构仅做表达收敛，不改变主模块边界。
 - `batch-console-api` 不宜长期直接依赖 `batch-orchestrator` 可执行模块；更合理的做法是在现有模块内继续下沉共享应用服务与持久化接口，并在后续演进时再评估是否抽出共享层。
 - `batch-worker-import` 仅在明确采用 Spring Batch 作为某些 Step 的内部执行引擎时才引入 `spring-boot-starter-batch`；普通 Worker 实现不默认引入。
 - 不新增独立的 `batch-config` 模块；共享配置已通过 `batch-common/src/main/resources/batch-defaults.yml` 实现：各服务模块在 `application.yml` 中使用 `spring.config.import: "classpath:batch-defaults.yml"` 引入共享基线（datasource、kafka、mybatis mapper 路径、actuator、logging pattern、security/kms、MinIO、orchestrator base-url、Kafka topic 名称等），模块级覆盖保留在各自 `application.yml` 中。

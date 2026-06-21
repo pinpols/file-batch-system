@@ -54,13 +54,13 @@ public @interface AuditAction {
    * 目标租户的 SpEL 表达式或参数名,运行时对入参求值得到目标租户 ID。例如 {@code "#tenantId"} 或 {@code "#request.tenantId"}。
    *
    * <p><b>用途:</b>ROLE_ADMIN 跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)})的 {@link
-   * com.example.batch.console.domain.rbac.support.ConsolePrincipal#tenantId()} 为 null, 默认会兜底到
+   * com.example.batch.console.domain.rbac.support.ConsolePrincipal#tenantId()} 为 null, 默认会回退到
    * {@code "system"},导致审计行 tenant_id="system",取证按目标租户查询时漏掉这些行。 显式指定 {@code targetTenantParam}
    * 后,审计行的 tenant_id 取该入参值,而非 principal 的租户。
    *
    * <p><b>解析优先级:</b>targetTenantParam(非空且成功求值) → principal.tenantId() → MDC tenant → "system"。
    *
-   * <p><b>留空(默认):</b>沿用 principal/MDC/system 兜底链,适合 login/logout/系统级动作。
+   * <p><b>留空(默认):</b>沿用 principal/MDC/system 回退链,适合 login/logout/系统级动作。
    */
   String targetTenantParam() default "";
 }

@@ -112,7 +112,7 @@ class HttpTaskExecutionClientTest {
   void reportSwallowsAfterHttpExhaustionWhenOutboxUnavailable() throws Exception {
     // P0 #16: HTTP 重试耗尽 + outbox 不可用时,report() 必须捕获并抑制异常(避免 listener 抛回触发 Kafka
     // 重投导致 task 双执行)。改为记 worker.report.dropped.total{reason=outbox_disabled} 由
-    // orchestrator lease reclaim 兜底。
+    // orchestrator lease reclaim 回退。
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse.Builder().code(503).build());
       server.enqueue(new MockResponse.Builder().code(503).build());

@@ -50,7 +50,7 @@
 │  │  ┌─ HashedWheelTimer (Netty) ────────────────────────────┐  │  │
 │  │  │ tick=100ms, buckets=512, ~5 min worth of tasks       │  │  │
 │  │  │ tick → fire(trigger):                                │  │  │
-│  │  │   ├─ INSERT trigger_request (UNIQUE 约束兜底)        │  │  │
+│  │  │   ├─ INSERT trigger_request (UNIQUE 约束回退)        │  │  │
 │  │  │   ├─ 唯一键冲突 → 跳过(其他 leader 已 fire)          │  │  │
 │  │  │   ├─ 成功 → HTTP 调 LaunchService                    │  │  │
 │  │  │   └─ UPDATE trigger_runtime_state.next_fire_time     │  │  │
@@ -194,7 +194,7 @@ T+33s  A GC 结束,继续执行 fire(T)
 
 ### 3.2 解决方案 — DB 强约束
 
-> ⚠️ **状态更新（2026-05-02）**：本节描述的 `uk_trigger_request_fire_dedup` 索引最终落地为 `V68__add_trigger_request_fire_dedup.sql`（**不是 V101**），后于 `V70__revert_trigger_request_fire_dedup.sql` 撤销。当前 fire 幂等改由 `trigger_request.dedup_key` 唯一约束兜底（`(tenant_id, dedup_key)`），不再依赖 `(trigger_runtime_state_id, scheduled_fire_time)` 组合索引。下面的 SQL 仅作历史决策追溯保留，**勿照抄**。
+> ⚠️ **状态更新（2026-05-02）**：本节描述的 `uk_trigger_request_fire_dedup` 索引最终落地为 `V68__add_trigger_request_fire_dedup.sql`（**不是 V101**），后于 `V70__revert_trigger_request_fire_dedup.sql` 撤销。当前 fire 幂等改由 `trigger_request.dedup_key` 唯一约束回退（`(tenant_id, dedup_key)`），不再依赖 `(trigger_runtime_state_id, scheduled_fire_time)` 组合索引。下面的 SQL 仅作历史决策追溯保留，**勿照抄**。
 
 `trigger_request` 表加 **fire 幂等列 + 唯一约束**:
 
@@ -212,7 +212,7 @@ CREATE UNIQUE INDEX uk_trigger_request_fire_dedup
 -- 历史 API/MANUAL trigger 不受影响(那些列为 NULL)
 ```
 
-### 3.3 fire 流程的强约束兜底
+### 3.3 fire 流程的强约束回退
 
 ```java
 // HashedWheelTriggerScheduler.fire()
@@ -457,10 +457,10 @@ public class HashedWheelTriggerScheduler {
 | 故障模式 | 恢复时间 | 方案 |
 |---|---|---|
 | Leader 进程 kill -9 | 2min(TTL) + 几 s(fast-path) | onLeaderAcquire 立即扫 |
-| Leader GC pause < 30s | 0(extendOrRelease 仍续期) | ShedLock lockAtLeastFor=30s 兜底 |
+| Leader GC pause < 30s | 0(extendOrRelease 仍续期) | ShedLock lockAtLeastFor=30s 回退 |
 | Leader GC pause > 30s 但 < 2min | 2min(锁过期 → 新 leader 接管) | 同 kill 路径 |
 | Leader 网络分区(实例 alive 但连不上 Redis) | 2min(TTL 过期) | 同 kill 路径;但要警惕"分区恢复后老 leader 复活"——见下 |
-| 分区恢复后双 leader | 双方 fire 时 DB UNIQUE 兜底 | §3 fire 强约束 |
+| 分区恢复后双 leader | 双方 fire 时 DB UNIQUE 回退 | §3 fire 强约束 |
 
 ### 6.4 Leader 切换 metric
 
@@ -884,7 +884,7 @@ public void shutdown() throws InterruptedException {
 
 | 风险 | 严重度 | 缓解 |
 |---|---|---|
-| ShedLock TTL 过期但 leader 实际还活着(GC pause 长) | 高 | DB UNIQUE fire 约束兜底(R-1);ShedLock lockAtLeastFor 调到 30s |
+| ShedLock TTL 过期但 leader 实际还活着(GC pause 长) | 高 | DB UNIQUE fire 约束回退(R-1);ShedLock lockAtLeastFor 调到 30s |
 | Wheel 内存占用随 trigger 数增长 | 中 | 100k trigger × 5 min 窗口 ≈ 几 MB;监控 `tasks.scheduled` gauge |
 | HashedWheelTimer.stop() 不释放 wheel 内 task | 中 | shutdown 不依赖 wheel 内 task 完成,DB 状态权威 |
 | `trigger_runtime_state.scheduled_fire_marker` 长期不释放(stale) | 中 | 周期性 release(§4.3),阈值 5 min |

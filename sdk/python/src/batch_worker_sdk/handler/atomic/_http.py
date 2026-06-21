@@ -56,7 +56,7 @@ class HttpAtomicConfig:
             raise ValueError("timeout_seconds must be > 0")
         if self.max_response_bytes <= 0:
             raise ValueError("max_response_bytes must be > 0")
-        # 归一化:大写 method 的 frozenset;空集回退默认。
+        # 归一化:大写 method 的 frozenset;空集默认回退。
         methods = frozenset(m.upper() for m in self.allowed_methods) or _DEFAULT_METHODS
         object.__setattr__(self, "allowed_methods", methods)
         object.__setattr__(self, "blocked_host_patterns", frozenset(self.blocked_host_patterns))

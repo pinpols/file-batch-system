@@ -96,7 +96,7 @@ public class WheelSchedulerProperties {
     /** 最大线程数。突发负载 burst 时扩到此上限。默认 8。 */
     private int maxSize = 8;
 
-    /** 阻塞队列容量。满了走 CallerRunsPolicy(让 wheel worker 兜底跑,提供背压而非丢任务)。默认 1000。 */
+    /** 阻塞队列容量。满了走 CallerRunsPolicy(让 wheel worker 回退跑,提供背压而非丢任务)。默认 1000。 */
     private int queueCapacity = 1000;
 
     /** 非核心线程 keep-alive(秒)。 */

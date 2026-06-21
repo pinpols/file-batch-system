@@ -29,7 +29,7 @@
 
 **❄️ citus 冻结约束(2026-06-14 决策)**:
 
-- **停止 `main → citus` 同步**,citus 上**不再开发**。它降级为"只读参考 + 薄保险"。判据见 `docs/analysis/`:瓶颈在控制面非 PG(PG 写有 10-15× 余量);Citus 解决的是未来才有的多租洪峰写墙;biz 分区先于 biz 分片;真要上有 Azure 托管 Citus 路径 B。
+- **停止 `main → citus` 同步**,citus 上**不再开发**。它降级为"只读参考 + 薄保险"。判据见 `docs/analysis/`:瓶颈在控制面非 PG(PG 写有 10-15× 余量);Citus 解决的是未来才有的多租峰值流量写墙;biz 分区先于 biz 分片;真要上有 Azure 托管 Citus 路径 B。
 - **整支 `citus → main`:❌ 永不**(架构承诺,一直如此)。
 - **耐久学习资产在 docs + 脚本,不在活分支**:`docs/backlog/citus-introduction-plan` / `docs/analysis/citus-w8-runtime-findings` / `docs/runbook/citus-deployment`(§1b 扩展边界)/ `docs/design/partition-idempotency-decision` / `scripts/db/citus/01-distribute.sql`。
 - **解冻流程**(真撞 PG 写墙、且确认自托管而非托管 Citus 时):从 tag 起分支 → 重新审计累积 main delta 的 Citus 正确性(新 `FOR UPDATE`/跨分片 join / 新表分片键)→ 重跑 `01-distribute` → 重跑 sim 验证。**切过去≠能直接跑。**
@@ -51,7 +51,7 @@
 - Orchestrator 是**唯一**状态主机;Worker **不能直接写** `job_instance` / `workflow_run` / `workflow_node_run`
 - Worker 执行前**必须 CLAIM**
 - `outbox_event` 写入**必须与任务状态同事务**
-- **UNIQUE 约束是 upsert 幂等契约的承重墙**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上(如 `outbox_event(tenant_id,event_key)` / `job_instance(tenant_id,dedup_key,run_attempt)`)。**任何改 UNIQUE 列集的动作**(分区/分片/重建表/迁移)都是语义变更而非运维操作——动手前必须 `grep -r 'on conflict'` 全量核对 + 评审幂等语义。2026-06-10 事故复盘:分区脚本实跑致 orchestrator outbox 写入全失败回滚,详见 `scripts/db/partition-migration/01-*.sql` 头注释
+- **UNIQUE 约束是 upsert 幂等契约的关键约束**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上(如 `outbox_event(tenant_id,event_key)` / `job_instance(tenant_id,dedup_key,run_attempt)`)。**任何改 UNIQUE 列集的动作**(分区/分片/重建表/迁移)都是语义变更而非运维操作——动手前必须 `grep -r 'on conflict'` 全量核对 + 评审幂等语义。2026-06-10 事故复盘:分区脚本实跑致 orchestrator outbox 写入全失败回滚,详见 `scripts/db/partition-migration/01-*.sql` 头注释
 - Console-api **不能直接 UPDATE/DELETE** `outbox_event`;运维(cleanup / republish)走 `ConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*`
 - **读写分离仅 console-api**;trigger / orchestrator / worker 严禁引入(状态机依赖 read-after-write 强一致),详见 [`docs/runbook/read-replica.md`](docs/runbook/read-replica.md) §六
 - **禁覆盖** `batch-common` AutoConfiguration 基础设施 bean(`taskScheduler` / `lockProvider` 等),用 `ObjectProvider` 注入扩展点
@@ -134,7 +134,7 @@ CI `pr-gate` 拦截漂移。
 | 5 | 业务异常一律 `BizException.of(ResultCode.X, "error.<scope>.<reason>", args...)`,**禁** `new BizException(code, literal)` / `throw new RuntimeException(...)` | 抛裸 `IllegalArgumentException` |
 | 6 | Controller 返回值一律 `CommonResponse<T>`(走 `ResponseFactory.success()`),**禁**直接返回 DTO 或自封装 envelope | `return user;` |
 | 7 | 日志**用占位符**,不用字符串拼接;ERROR 级必须带 `traceId` / 业务 ID;循环里不打 INFO | `log.info("user=" + u)` |
-| 8 | `@Builder` 加到普通 class 必须配 `@NoArgsConstructor` + `@AllArgsConstructor`(或 `@Tolerate`)兜底空参,否则破坏 Jackson / MyBatis 反射 | 裸 `@Builder` + 隐式空参 class |
+| 8 | `@Builder` 加到普通 class 必须配 `@NoArgsConstructor` + `@AllArgsConstructor`(或 `@Tolerate`)回退空参,否则破坏 Jackson / MyBatis 反射 | 裸 `@Builder` + 隐式空参 class |
 | 9 | if-chain / switch **≥ 3 分支**必须改 `Map<String, Handler>` 路由表 | 4 个 `else if` 散排 |
 | 10 | 集合返回 `List.of()` / `Map.of()` 不可变,**禁**返 `new ArrayList<>(...)` 后又 add | `return new ArrayList<>(list)` |
 

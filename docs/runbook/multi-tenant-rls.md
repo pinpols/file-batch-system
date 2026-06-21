@@ -65,7 +65,7 @@ WITH CHECK (同上)
 - 设了 → 强制等值(已生效,不可绕)
 
 **目的**:渐进上线,生产升级期间 worker 代码不会一夜全挂。**transition 模式下,代码 bug 漏 SET 不会泄露**:
-- 读路径:漏 SET → 返所有租户行 → **业务依然按 `WHERE tenant_id=?` 过滤**,RLS 是兜底没多加
+- 读路径:漏 SET → 返所有租户行 → **业务依然按 `WHERE tenant_id=?` 过滤**,RLS 是回退没多加
 - 写路径:漏 SET → INSERT/UPDATE 允许 → 但漏写 `tenant_id` 列业务侧 ArchTest 已拦
 - 真正的 DB 层强制 = strict 模式
 
@@ -76,7 +76,7 @@ USING (tenant_id = current_setting('app.tenant_id', true))
 WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
 ```
 
-去掉 IS NULL / 空串兜底 — worker 必须 `SET LOCAL` 才能读写,否则:
+去掉 IS NULL / 空串回退 — worker 必须 `SET LOCAL` 才能读写,否则:
 - 读:返 0 行
 - 写:`new row violates row-level security policy` 异常
 
@@ -146,7 +146,7 @@ WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
 | 任一路径 `RLS SET LOCAL failed` warn > 0 | ❌ 先定位修接线,再考虑翻 |
 | 新增 biz.* 表后 | ⏸ 等新表也接线 ≥ 1 周再翻 |
 
-**保守策略**:transition 模式本身已经提供 80% 价值(设了 SET 就强制),翻 strict 是把剩 20% 兜底变硬。**不是必须立刻翻**。
+**保守策略**:transition 模式本身已经提供 80% 价值(设了 SET 就强制),翻 strict 是把剩 20% 回退变硬。**不是必须立刻翻**。
 
 ## 4. 应用代码怎么用
 
@@ -215,7 +215,7 @@ jdbcTemplate(adminDs).queryForList("SELECT tenant_id, count(*) FROM biz.customer
 2026-05-31T12:00 c.e.b.w.i.l.LoadStep - inserted 0 rows for tenant=ta
 ```
 
-**transition 模式下**:几乎不会因 RLS 返 0 行(未设兜底允许)。先排查业务过滤 / 数据本身。
+**transition 模式下**:几乎不会因 RLS 返 0 行(未设回退允许)。先排查业务过滤 / 数据本身。
 
 **strict 模式下**:首要怀疑漏 SET LOCAL。
 
@@ -303,4 +303,4 @@ A: 不直接 — SDK 租户 worker 连自己 DB,跟平台 biz.* 无关。若 SDK
 | 2026-05-31 | #158 | 高层接线:`AbstractPipelineStepExecutionAdapter` ThreadLocal + `SqlTransformComputePlugin.commit` SET LOCAL |
 | 2026-05-31 | #160 | 底层接线:import LoadPlugin + 2 个 export DataPlugin(read 路径 readonly tx) |
 | 2026-05-31 | — | 本 runbook §3 重写:transition vs strict 模式 + 接线现状 + 翻 strict checklist + 时机判断 |
-| 待定 | TBD | Phase A strict 模式 — 翻 policy 去掉 IS NULL 兜底(§3.4 描述) |
+| 待定 | TBD | Phase A strict 模式 — 翻 policy 去掉 IS NULL 回退(§3.4 描述) |

@@ -27,7 +27,7 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum BatchLifecycleStatus implements DictEnum {
-  /** 已落库但未参与调度。 */
+  /** 已写入数据库但未参与调度。 */
   CREATED("CREATED", "已创建"),
   /** 等待依赖 / 资源（DAG 上游、批次窗口、配额释放等）。 */
   WAITING("WAITING", "等待中"),

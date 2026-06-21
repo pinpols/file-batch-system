@@ -145,7 +145,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 ### F. Workflow 设计规范 8 校验项 · P1
 
-> 性质：设计 review checklist，非实施工作。Workflow 落库前 PR review 时勾选。
+> 性质：设计 review checklist，非实施工作。Workflow 写入数据库前 PR review 时勾选。
 
 | ID | 主题 | 来源 |
 |---|---|---|

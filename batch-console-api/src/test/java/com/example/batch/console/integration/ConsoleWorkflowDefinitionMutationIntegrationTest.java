@@ -15,7 +15,7 @@ import org.springframework.http.MediaType;
  * <p>守护:
  *
  * <ul>
- *   <li>合法 DAG 全字段落库,3 张表行一致
+ *   <li>合法 DAG 全字段写入数据库,3 张表行一致
  *   <li>嵌套 nodes[].nodeCode 含空格 → 400(@Valid 下钻生效)
  *   <li>嵌套 edges[].fromNodeCode 含中文 → 400
  *   <li>workflowCode 重复 → 唯一约束撞

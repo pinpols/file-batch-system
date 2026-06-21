@@ -85,7 +85,7 @@ public abstract class AbstractIntegrationTest {
   /**
    * 供子类显式调用的 outbox 表 truncate 辅助方法。
    *
-   * <p>**不放 @BeforeEach 全局兜底**:实测 ImportFailureE2eIT 等测试在测试方法内依赖 outbox event scheduler 投递时间窗,全局
+   * <p>**不放 @BeforeEach 全局回退**:实测 ImportFailureE2eIT 等测试在测试方法内依赖 outbox event scheduler 投递时间窗,全局
    * truncate 会清掉 application 启动时已写入的 测试 fixture / 异步事件 → 测试 timeout。
    *
    * <p>只让确实需要「上轮残留必清」的测试(如 MultiTenantConcurrentE2eIT 的租户隔离断言) 显式在 @BeforeEach 调本方法。

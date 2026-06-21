@@ -101,7 +101,7 @@ public record TaskContext(
 | Week 2 day 3-4 | `HttpTaskExecutor` |
 | Week 2 day 5 | 整体安全审计 + ArchUnit 守护(禁绕过 sandbox / 禁直接 `Runtime.exec`) |
 
-#### 跟对标项目差距收口
+#### 跟对标项目差距收敛
 
 | 能力 | DS | Airflow | XXL-Job | Azkaban | 本项目(Phase 3 完成后) |
 |---|---|---|---|---|---|

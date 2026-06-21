@@ -295,7 +295,7 @@ class SdkAbstractProcessHandlerTest {
   }
 
   @Test
-  @DisplayName("transform 中途抛异常 → 输入流仍 close()(try-with-resources 兜底,不泄露)")
+  @DisplayName("transform 中途抛异常 → 输入流仍 close()(try-with-resources 回退,不泄露)")
   void shouldCloseInputStream_whenTransformThrowsMidIteration() {
     // 准备
     AtomicInteger closeCalls = new AtomicInteger();

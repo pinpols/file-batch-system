@@ -156,7 +156,7 @@ ADR-017 result_version 加 `status = DRY_RUN`：
 | 方案 | 拒绝 |
 |---|---|
 | 完全镜像 UAT 环境跑 | 数据 / 配置 / topic 全要 mirror，运维成本巨大；同时 prod 上的演练诉求依然解不了 |
-| 让 worker 内部加 if-else 判断 dry_run | 散乱、漏改风险高；统一 Guard 才能 lint 兜底 |
+| 让 worker 内部加 if-else 判断 dry_run | 散乱、漏改风险高；统一 Guard 才能 lint 回退 |
 | 复用 bypass-mode | 语义不同：bypass 是"放行不安全"，dry-run 是"安全但不副作用"；混在一起易误用 |
 
 ## 不变量
@@ -184,14 +184,14 @@ ADR-017 result_version 加 `status = DRY_RUN`：
 
 短期看不到上述场景就不开工；占住这个 ADR 编号即可。
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|
 | 1 | dry_run 写 staging 还是 mock | **mock**：dry_run 不写任何业务侧表（包括 staging）；只写 audit / metric / result_version |
 | 2 | 跨 job 依赖：dry_run jobA 的 output 给 dry_run jobB 用还是 real jobA | **dry_run 链 vs real 链分离**：dry_run jobB 只读 dry_run jobA 的 output（DRY_RUN result_version）；不允许 dry_run 消费 EFFECTIVE 历史数据（避免污染演练） |
 | 3 | 是否支持"实跑后回滚"作为 dry-run 的替代 | **不做**。回滚不可靠（业务表 + 外部 IO 已改），dry-run 是物理不写的根本保证 |
-| 4 | DryRunGuard 漏接的兜底 | CI lint 必须扫强制；运行期再加 audit "step 内是否调过非 guard 包装的 IO" |
+| 4 | DryRunGuard 漏接的回退 | CI lint 必须扫强制；运行期再加 audit "step 内是否调过非 guard 包装的 IO" |
 
 ### 不会做
 

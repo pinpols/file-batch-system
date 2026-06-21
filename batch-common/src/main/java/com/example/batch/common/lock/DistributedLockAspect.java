@@ -98,7 +98,7 @@ public class DistributedLockAspect {
       Object value = expr.getValue(ctx);
       return prefix + ":" + (value == null ? "null" : value);
     } catch (Exception e) {
-      // SpEL 求值失败用方法签名兜底,避免误锁全局
+      // SpEL 求值失败用方法签名回退,避免误锁全局
       log.warn(
           "DistributedLock SpEL eval failed, falling back to signature key: method={}, key={},"
               + " error={}",

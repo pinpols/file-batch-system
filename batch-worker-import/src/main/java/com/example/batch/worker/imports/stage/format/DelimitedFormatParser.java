@@ -135,7 +135,7 @@ public class DelimitedFormatParser implements FormatParser {
     // headerRows / footerRows / schema fields 由本层按行逻辑处理，不让 Univocity 自动抽 header
     settings.setHeaderExtractionEnabled(false);
     settings.setSkipEmptyLines(true);
-    // 任何字段长度 / 列数 的硬限都由 PreprocessStep.SPOOL_THRESHOLD_BYTES / ReceiveStep 的堆联动兜底；
+    // 任何字段长度 / 列数 的硬限都由 PreprocessStep.SPOOL_THRESHOLD_BYTES / ReceiveStep 的堆联动回退；
     // 解析器自身放开上限避免宽字段/宽表误拒
     settings.setMaxCharsPerColumn(-1);
     settings.setMaxColumns(10_000);

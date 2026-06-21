@@ -89,7 +89,7 @@ batch:
       default-tenant-id: ${BATCH_CONSOLE_DEFAULT_TENANT_ID:}
       # 允许访问的租户白名单（空列表表示不限制；生产建议通过 BATCH_CONSOLE_ALLOWED_TENANTS 显式指定）
       allowed-tenants: ${BATCH_CONSOLE_ALLOWED_TENANTS:}
-      # 默认授权列表（SSE ticket / bypass-mode 未带 role header 时的兜底）
+      # 默认授权列表（SSE ticket / bypass-mode 未带 role header 时的回退）
       default-authorities:
         - ROLE_ADMIN
         - ROLE_AUDITOR

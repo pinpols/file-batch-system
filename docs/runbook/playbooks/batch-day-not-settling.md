@@ -4,7 +4,7 @@
 
 ## TL;DR
 
-**症状**:`batch.batch_day_instance.day_status='SETTLING'` 长时间不变,batch day 不收口,SLA 告警飘红,下游补跑(catch-up)不触发。
+**症状**:`batch.batch_day_instance.day_status='SETTLING'` 长时间不变,batch day 不收敛,SLA 告警飘红,下游补跑(catch-up)不触发。
 **一行修复**:多数情况是 `metrics.activeCount > 0`(还有 in-flight job)→ 等 job 跑完;若 metrics 永远不归零,人工排查 `job_instance` 状态;最后一招走治理接口 reopen。
 
 ---
@@ -24,7 +24,7 @@
   - `batch day settle cas conflict; will retry next tick` — 偶发 OK,频繁出现要查
   - `finalizeSettling invoked outside transaction context` — 不应该在生产出现,说明事务上下文丢了
   - 应当看到的:`batch day settled as SETTLED` / `batch day settled as FAILED`,**长时间没有**就是卡了
-- **用户反馈**:"今天 batch day 已 cutoff 半小时还没收口" / "catch-up 没起" / "SLA dashboard 飘红"。
+- **用户反馈**:"今天 batch day 已 cutoff 半小时还没收敛" / "catch-up 没起" / "SLA dashboard 飘红"。
 
 ---
 
@@ -105,7 +105,7 @@
     order by dispatched_at;
    ```
 2. 单条 stuck → 按通用 job stuck 流程(`incident-response.md`),可走治理接口标记 FAILED 或重试。
-3. 所有 stuck job 进终态后,下一个 `BatchDaySettleScheduler` tick(默认 60s,见 `batch.batch-day.settle-scan-interval-millis`)自动收口。
+3. 所有 stuck job 进终态后,下一个 `BatchDaySettleScheduler` tick(默认 60s,见 `batch.batch-day.settle-scan-interval-millis`)自动收敛。
 
 ### 方案 B:scheduler 释锁 + 重启(5 min)
 

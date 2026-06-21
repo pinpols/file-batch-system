@@ -8,14 +8,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 导出地区(region)解析(per-run + 默认兜底 + 字典校验),与导入 {@code GenericJdbcMappedImportLoadPlugin#applyRegion}
+ * 导出地区(region)解析(per-run + 默认回退 + 字典校验),与导入 {@code GenericJdbcMappedImportLoadPlugin#applyRegion}
  * 对称。
  *
  * <p>导出侧 region 语义与导入不同:导入把 region <b>写入</b>目标列(${region} binding),导出把 region 当作<b>读取过滤</b>条件
  * ({@code :region} 具名参数)+ 文件名占位({@code ${region}})。解析在 PrepareStep 统一完成,结果经 exportSnapshot 透传给
  * GENERATE 阶段的查询插件与文件名生成。
  *
- * <p>优先级:触发参数 {@code metadata.region} &gt; 模板 {@code defaultRegion} 兜底。{@code allowedRegions}
+ * <p>优先级:触发参数 {@code metadata.region} &gt; 模板 {@code defaultRegion} 回退。{@code allowedRegions}
  * 非空时做字典校验,非法地区直接 {@link WorkerConfigException} 拒绝(受控词表,非自由文本)。
  *
  * <p>地区配置取自模板 {@code query_param_schema} 下的导出插件块({@code sqlTemplateExport} / {@code
@@ -67,7 +67,7 @@ public final class ExportRegionResolver {
       mergeRegionKeys(out, asMap(schema.get("jdbcMappedExport")));
       mergeRegionKeys(out, asMap(schema.get("jdbc_mapped_export")));
     }
-    // 顶层兜底(最低优先级)
+    // 顶层回退(最低优先级)
     mergeRegionKeys(out, templateConfig);
     return out;
   }

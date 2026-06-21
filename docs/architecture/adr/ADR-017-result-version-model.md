@@ -7,7 +7,7 @@
 
 ## 背景
 
-当前重跑（`RerunRequest` 暴露 `resultPolicy ∈ {CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE}` + `configVersionPolicy`）只在 API 入参 + `rerun_policy_snapshot` JSON 落库；**底层多版本结果模型并不存在**：
+当前重跑（`RerunRequest` 暴露 `resultPolicy ∈ {CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE}` + `configVersionPolicy`）只在 API 入参 + `rerun_policy_snapshot` JSON 写入数据库；**底层多版本结果模型并不存在**：
 
 - 同一 `(tenantId, jobCode, bizDate)` 重跑后会产生 ≥ 2 行 `instance_status='SUCCESS'` 的 `job_instance`，下游消费"用哪份"靠隐式约定（最大 `run_attempt`、最晚 `finished_at`）；
 - worker 的实际产物（`fileId` / `recordCount` / `outputs:Map`）目前只散落在 `file_record` / `pipeline_step_run` / `workflow_node_run.output` 等业务表上，没有"哪一份现在生效"的稳定锚点；
@@ -54,7 +54,7 @@ batch.result_version
 | Workflow job | `workflow:{workflowCode}:{bizDate}` | `workflow:EOD_SETTLE:2026-05-04` |
 | 分区级（细粒度） | `job:{jobCode}:{bizDate}:p={partitionKey}` | `job:RPT_DETAIL:2026-05-04:p=BR_001` |
 
-`business_key` 由 worker 上报或 orchestrator 计算，写入 `result_version` 时落库；下游消费按此 key 反查 EFFECTIVE 版本。
+`business_key` 由 worker 上报或 orchestrator 计算，写入 `result_version` 时写入数据库；下游消费按此 key 反查 EFFECTIVE 版本。
 
 ### 状态机（version.status）
 
@@ -168,12 +168,12 @@ batch.result-version.retention.scan-cron         = "0 30 3 * * *"
 - E2E：跨重跑场景下游 SQL 拿到的 payload 始终对应 EFFECTIVE 版本
 - 守护：`ResultVersionEffectivenessInvariantTest` 强制断言"同 business_key 至多 1 行 EFFECTIVE"
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|
 | 1 | 分区级版本 | **v1 只做 job 级**。`business_key` 末尾 `:p={partitionKey}` 后缀作为扩展点保留，partition-level 版本由后续 ADR 触发实施（需要时）。当前所有 worker 仍按 job-level 上报 outputs |
-| 2 | 跨 job 引用 | 由 [ADR-018](./ADR-018-cross-batch-day-dag-dependency.md) 收口：`workflow_node.cross_day_dependencies` 隐含使用 `EFFECTIVE_ONLY` 语义；ADR-018 §决策已注明，本 ADR 不再单独定义 `consume_version_strategy` |
+| 2 | 跨 job 引用 | 由 [ADR-018](./ADR-018-cross-batch-day-dag-dependency.md) 收敛：`workflow_node.cross_day_dependencies` 隐含使用 `EFFECTIVE_ONLY` 语义；ADR-018 §决策已注明，本 ADR 不再单独定义 `consume_version_strategy` |
 | 3 | payload 大小阈值 | **默认 1 MB INLINE_JSON 切 EXTERNAL_REF**；可由 `batch.result-version.payload-inline-threshold-bytes` 覆盖（默认 `1048576`）。worker 上报 outputs 时若 serialize 超阈值，writer 自动落 OSS 并写 payload_ref；用户可显式 `payload_storage` 强制指定 |
 | 4 | 跨租户共享 | **不在范围**。`business_key` 始终租户内唯一，`tenant_id` 是 result_version 的 PK 一部分。跨租户聚合（SaaS 平台级）需新建 ADR；本 ADR 不预留特殊列 |
 

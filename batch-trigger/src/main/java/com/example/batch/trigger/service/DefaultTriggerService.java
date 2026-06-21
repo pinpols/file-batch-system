@@ -50,7 +50,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>{@link #launchScheduled} — Quartz 定时触发，先解析业务日历得到 bizDate；若 bizDate=null
  *       表示日历标记为节假日+SKIP，直接跳过不产生 trigger_request。
  *   <li>{@link #createPendingCatchUp} — CatchUpPolicy=MANUAL_APPROVAL 路径，把请求以 {@code ACCEPTED}
- *       状态落库等待人工审批，不立即转给 Orchestrator。
+ *       状态写入数据库等待人工审批，不立即转给 Orchestrator。
  *   <li>{@link #approvePendingCatchUp} — 人工审批通过后补跑：CAS 将 {@code ACCEPTED →
  *       PROCESSING}（防并发双审批），再在事务外 HTTP 转发， 成功后更新为 {@code LAUNCHED}。
  * </ul>
@@ -234,7 +234,7 @@ public class DefaultTriggerService implements TriggerService {
 
   /**
    * ADR-010 异步路径:在 REQUIRES_NEW 单事务内 SELECT 去重 + INSERT trigger_request + INSERT
-   * trigger_outbox_event。两表一起提交,任何一步失败整体回滚 → 不会出现 "trigger_request 落库但 outbox 缺失" 的不一致。
+   * trigger_outbox_event。两表一起提交,任何一步失败整体回滚 → 不会出现 "trigger_request 写入数据库但 outbox 缺失" 的不一致。
    */
   private TriggerRequestEntity insertPendingAndOutboxOrReturnExisting(
       LaunchRequest launchRequest, String dedupKey) {
@@ -260,9 +260,9 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   /**
-   * 收口到 {@link TriggerOutboxDomainEventPublisher} 的唯一 trigger_outbox_event 写入入口。
+   * 收敛到 {@link TriggerOutboxDomainEventPublisher} 的唯一 trigger_outbox_event 写入入口。
    *
-   * <p>之前主路径直接 mapper.insert(buildOutboxEntity),抽象未真正收口字段语义会持续漂移。 现在统一走 publisher.publishRaw
+   * <p>之前主路径直接 mapper.insert(buildOutboxEntity),抽象未真正收敛字段语义会持续漂移。 现在统一走 publisher.publishRaw
    * 路径(性能等价 — 都是 LaunchEnvelope JSON 一次序列化, 跳过 DomainEvent.payload Map ↔ record 来回转换)。
    */
   private void publishLaunchOutbox(LaunchRequest r, String dedupKey) {
@@ -412,7 +412,7 @@ public class DefaultTriggerService implements TriggerService {
     }
     // R-arch-audit-2026-05-23 P1: 用 toUnmodifiableSet 替代 toSet，防止下游意外修改 holidays /
     // workdayOverrides。CalendarBizDateDefinition 是 record，字段引用不可变但 Set 本身可写，
-    // toUnmodifiableSet 明确兜底，符合 CLAUDE.md §集合 "返回不可变集合" 约定。
+    // toUnmodifiableSet 明确回退，符合 CLAUDE.md §集合 "返回不可变集合" 约定。
     Set<LocalDate> holidays =
         rules.stream()
             .filter(rule -> isDayType(rule, "HOLIDAY"))

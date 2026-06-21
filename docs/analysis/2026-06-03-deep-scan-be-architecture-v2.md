@@ -64,13 +64,13 @@
   | `resource_queue` | 3 | 4 | 资源队列 |
   | `tenant_quota_policy` | 3 | 4 | 租户配额 |
 
-- **根因**:console-api 把"定义类"配置(用户在 UI 改)的 CUD 都做在 console 侧,orchestrator 又在内部"模板默认值 seeding / 升级迁移 / 内部修复"路径下也写;**两条写路径没有走同一 service / 同一事务边界 / 同一审计**。Outbox 红线被 `ConsoleOrchestratorProxyService` 收口,但**定义类没走同样收口**。
+- **根因**:console-api 把"定义类"配置(用户在 UI 改)的 CUD 都做在 console 侧,orchestrator 又在内部"模板默认值 seeding / 升级迁移 / 内部修复"路径下也写;**两条写路径没有走同一 service / 同一事务边界 / 同一审计**。Outbox 红线被 `ConsoleOrchestratorProxyService` 收敛,但**定义类没走同样收敛**。
 - **实际后果**:① 同字段两端 entity 不一致(见 v2-P0-B),console 写时若字段缺失会回写 `null` 覆盖 orchestrator 之前写入的非空字段;② 审计与对账难追(同一行 history 有两个改写来源);③ 缓存失效路径不统一(`OrchestratorConfigCacheService` 只懂 orchestrator 改的);④ ArchUnit 类型守护 + Mapper XML guard 都不会拦"两端都 INSERT 同一张表",当前 `BatchOutboxConsoleWriteGuard` 仅拦 outbox。
 - **建议**:
   1. 立 ArchTest:扫所有同名 Mapper XML,若两端都有 `<insert/<update/<delete` 同 `id` 标签 → fail。
   2. 决议每张表的"主入口模块":定义类(workflow/job_definition/batch_window/business_calendar/resource_queue/tenant_quota_policy)归 **console-api**(用户操作高频);orchestrator 端改成只读 + 走 `ConsoleDefinitionProxyService`(对称 outbox proxy 模式)。
-  3. 同步:删除 orchestrator 侧对应 Mapper 的 INSERT/UPDATE/DELETE 标签,留 SELECT;或反向收口看业务流到底谁该写。
-  4. CLAUDE.md §持久化补一行:"同一定义表两端写入必须走 ProxyService 收口,不得 Mapper 双写"。
+  3. 同步:删除 orchestrator 侧对应 Mapper 的 INSERT/UPDATE/DELETE 标签,留 SELECT;或反向收敛看业务流到底谁该写。
+  4. CLAUDE.md §持久化补一行:"同一定义表两端写入必须走 ProxyService 收敛,不得 Mapper 双写"。
 
 ### v2-P0-B 同 6 张表 entity 字段两端漂移 ⚠️⚠️
 
@@ -174,7 +174,7 @@
 - **位置**:`batch-console-api/application-local.yml:50` / `orchestrator-local:60` / `trigger-local:59` / `worker-atomic-local:40` / `worker-dispatch-local:41` / `worker-export-local:37` / `worker-import-local:34` / `worker-process-local:33` 8 处全 `batch.security.bypass-mode: true`。
 - `batch-common/batch-defaults.yml:210` 已经留了 `bypass-mode: ${BATCH_SECURITY_BYPASS_MODE:false}` 占位,prod profile 强制 false。
 - **根因**:本地默认开 bypass 的需求是真实的(本地 IDEA 跑不带 auth),但 8 个模块各自维护重复,任何"修改本地默认值"要 8 处同步改;若漏改 1 处 → 部分 worker 启动会因 auth header 缺失 401。
-- **建议**:① `batch-common` 出 `application-local.yml`(已有)集中维护 `batch.security.bypass-mode: true`,通过 `spring.config.import` 共享;② 删 8 处重复;③ 加 `ConfigDriftGuardTest` 兜底,扫 `application-local.yml` 不得出现已在 batch-defaults / batch-common-local 已定义的 key。
+- **建议**:① `batch-common` 出 `application-local.yml`(已有)集中维护 `batch.security.bypass-mode: true`,通过 `spring.config.import` 共享;② 删 8 处重复;③ 加 `ConfigDriftGuardTest` 回退,扫 `application-local.yml` 不得出现已在 batch-defaults / batch-common-local 已定义的 key。
 
 ### v2-P1-D `mapper-locations` 在 5 个 application-local.yml 重声明,覆盖 batch-defaults
 
@@ -296,7 +296,7 @@
 
 ### v2-P3-7 测试 fixture 文件命名不齐(`Fixture` / `TestBuilder` / `TestFactory` 三派并存)
 
-- 实测 6 处 fixture(`SensorWaitFixtureE2eIT` / `ProcessE2eFixture` / `E2eScenarioFixture` / `LaunchIntegrationFixture` / `ParseStepFixtureTest` / `JsonFixtureContractTest`)— 无 `TestBuilder` / `TestFactory` 命中。命名风格一致,但 6 个 fixture 分布散乱(e2e-tests / orch-integration / worker-import / sdk-contract)。建议 batch-common test-jar 收口公共 fixture(已部分有 `AbstractIntegrationTest`),减重复维护。
+- 实测 6 处 fixture(`SensorWaitFixtureE2eIT` / `ProcessE2eFixture` / `E2eScenarioFixture` / `LaunchIntegrationFixture` / `ParseStepFixtureTest` / `JsonFixtureContractTest`)— 无 `TestBuilder` / `TestFactory` 命中。命名风格一致,但 6 个 fixture 分布散乱(e2e-tests / orch-integration / worker-import / sdk-contract)。建议 batch-common test-jar 收敛公共 fixture(已部分有 `AbstractIntegrationTest`),减重复维护。
 
 ## §6 N/A — 看过但实际不是问题
 

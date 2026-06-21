@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>路径语法非法(根不是 $ / 子段缺失) → 立即抛 {@link BizException}(WORKFLOW_PARAM_REF_INVALID)
  *   <li>引用未知 node code → 立即抛 BizException
- *   <li>引用已知 node 但 output 字段缺失 / output 整体为 null → 返回 null(让业务侧 null 检查兜底)
+ *   <li>引用已知 node 但 output 字段缺失 / output 整体为 null → 返回 null(让业务侧 null 检查回退)
  * </ul>
  *
  * <p>不会修改入参:递归遍历 Map / List 时返回新结构。
@@ -142,7 +142,7 @@ public class WorkflowParamResolver {
       return null;
     }
     // P2-11：移除 containsKey 二次分割校验（与 resolveDottedPath 行为不一致）。
-    // 整段路径统一由 resolveDottedPath 决定：缺失 key / 中间非 Map 节点 → null（业务侧 null 兜底）。
+    // 整段路径统一由 resolveDottedPath 决定：缺失 key / 中间非 Map 节点 → null（业务侧 null 回退）。
     return resolveDottedPath(shared, key);
   }
 

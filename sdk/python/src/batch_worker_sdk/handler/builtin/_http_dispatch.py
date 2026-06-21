@@ -231,7 +231,7 @@ class HttpDispatchHandler:
             return
         # 快速字符串 host 抽取 —— httpx 没暴露公共 URL parser,``urllib.parse``
         # 足够。我们只在 host 是字面 IP 且落在私网空间时拦截;基于 DNS 的拦截
-        # 需要异步解析,对于 SSRF 兜底场景而言延迟不划算(对齐 Java 中
+        # 需要异步解析,对于 SSRF 回退场景而言延迟不划算(对齐 Java 中
         # ``InetAddress.getByName`` 的等价路径)。
         host = urlparse(self._resolve_url(url)).hostname
         if not host:

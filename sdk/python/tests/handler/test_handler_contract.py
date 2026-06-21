@@ -41,7 +41,7 @@ ALL_HANDLERS = ATOMIC_HANDLERS + BUILTIN_HANDLERS + TYPED_HANDLERS
 
 
 def _instantiate(dotted: str, cls_name: str):
-    """无参实例化 handler;必要时用最小 fake 兜底。"""
+    """无参实例化 handler;必要时用最小 fake 回退。"""
     mod = require_module(dotted)
     cls = get_attr(mod, cls_name)
     # 具体 handler 必须能无参构造(参数由 SdkTaskContext 提供)。
@@ -59,7 +59,7 @@ def _instantiate(dotted: str, cls_name: str):
             def _stub(self, *a: Any, **kw: Any) -> Any:
                 return None
 
-            # 其余还抽象的成员用宽松桩兜底。
+            # 其余还抽象的成员用宽松桩回退。
             def __getattr__(self, item: str) -> Any:  # pragma: no cover
                 return self._stub
 

@@ -320,7 +320,7 @@ workerExport:
   replicaCount: 2
   port: 18084
   # Export 任务通常更长（生成大文件），给更宽窗口；超时未完成的 task 由 orchestrator
-  # PartitionLeaseReclaimScheduler 兜底重派。
+  # PartitionLeaseReclaimScheduler 回退重派。
   # R3-P0-8：之前 180s < preStop(15) + spring drain(120) + awaitDrain(120) = 255s
   # → SIGKILL 中断进行中的 GB 文件导出。新值 = 15+120+120+30(buffer) = 285s。
   gracefulShutdown:

@@ -10,7 +10,7 @@ import java.util.stream.Stream;
  * ADR-036 — Export 模板:tenant → external(tenant DB → file)。
  *
  * <p>模板序:{@code openSink → buildQuery → streamRows → formatRow(逐行) → writeOut(收尾)}。子类只填 5 个钩子,
- * 计数与结果兜底由模板统一处理。
+ * 计数与结果回退由模板统一处理。
  *
  * <p>本类是 {@link SdkAbstractTypedExportHandler} 在「裸 Map 入参」下的特例:钩子只收 {@code ctx},模板循环复用 typed 基类。
  * 需要强类型入参时直接用 {@link SdkAbstractTypedExportHandler}。
@@ -35,7 +35,7 @@ public abstract class SdkAbstractExportHandler<R>
   /** 单行格式化写出(写一行到 sink)。 */
   protected abstract void formatRow(SdkTaskContext ctx, R row) throws Exception;
 
-  /** 收尾(flush / close / upload),返回最终结果(可放文件 URI 等到 counts.toOutput 之外);返 null 走计数器兜底。 */
+  /** 收尾(flush / close / upload),返回最终结果(可放文件 URI 等到 counts.toOutput 之外);返 null 走计数器回退。 */
   protected abstract SdkTaskResult writeOut(SdkTaskContext ctx, SdkRowResult counts)
       throws Exception;
 

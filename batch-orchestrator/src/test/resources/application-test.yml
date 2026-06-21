@@ -82,7 +82,7 @@ batch:
   scheduler:
     # 测试关闭快照持久化，避免写库与时序影响
     snapshot-persist-enabled: false
-    # 拉长周期（理论上不应触发），兜底避免误触发
+    # 拉长周期（理论上不应触发），回退避免误触发
     snapshot-persist-ms: 600000
     # P2-3 收敛 (2026-04-26 maturity-assessment §6 #1): worker-cache 改为开启 + ttl 极短 (100ms)。
     # 之前全局 enabled=false 导致 prod 主路径 (Redis 缓存 + JSON 序列化 + fail-open) 在 IT 层不被

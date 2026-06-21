@@ -138,7 +138,7 @@ STEPS_CSV=1,2,4,8,16 IMPORT_PROFILE=medium \
 
 ### Process / Dispatch / Atomic / Trigger 控制面压测
 
-导入/导出收口后，其他 worker 默认用独立脚本跑，避免每轮夹带 IMPORT/EXPORT：
+导入/导出收敛后，其他 worker 默认用独立脚本跑，避免每轮夹带 IMPORT/EXPORT：
 
 ```bash
 cd ..

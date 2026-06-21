@@ -38,7 +38,7 @@ API 触发
 手工触发
 ```
 
-触发后先生成 `LaunchRequest`，再由 orchestrator 的 `DefaultLaunchService.launch()` 落库生成：
+触发后先生成 `LaunchRequest`，再由 orchestrator 的 `DefaultLaunchService.launch()` 写入数据库生成：
 
 ```text
 job_instance

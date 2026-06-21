@@ -4,7 +4,7 @@
 
 背景：曾发生 read-replica 在 application.yml fallback=true 但
 docker/compose/app.yml 默认 :-false 的 bug，导致行为静默不一致。
-本脚本作为 CI 兜底，确保两边 default 永远对齐。
+本脚本作为 CI 回退，确保两边 default 永远对齐。
 
 匹配规则：
   application.yml: ${VAR:default}    (Spring Boot 占位符)

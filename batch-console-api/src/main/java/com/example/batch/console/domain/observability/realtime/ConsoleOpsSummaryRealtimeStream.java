@@ -40,7 +40,7 @@ public class ConsoleOpsSummaryRealtimeStream {
   private final ConsoleTenantGuard tenantGuard;
   private final BatchDateTimeSupport dateTimeSupport;
   // P0:scheduledRefreshes 在 finally 里有 remove,但异常 / cancel 路径下仍可能漏删,
-  // 加 maximumSize 兜底防止租户基数增长后无界堆积。
+  // 加 maximumSize 回退防止租户基数增长后无界堆积。
   private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes =
       new ConcurrentHashMap<>();
   // P0:summaryCache 原裸 ConcurrentHashMap 仅在读路径判 TTL,从不删除,租户基数大时永久驻留。
@@ -160,7 +160,7 @@ public class ConsoleOpsSummaryRealtimeStream {
   private ConsoleOpsSummaryResponse loadSummary(String tenantId, boolean forceRefresh) {
     long now = dateTimeSupport.currentEpochMillis();
     CachedSummary cached = summaryCache.getIfPresent(tenantId);
-    // 双重 TTL 控制:Caffeine expireAfterWrite 兜底 10s,业务侧再用 cachedAtMillis 精确判过期
+    // 双重 TTL 控制:Caffeine expireAfterWrite 回退 10s,业务侧再用 cachedAtMillis 精确判过期
     // —— 保留原逻辑等价语义,改动只是把无界存储换成有界 Caffeine。
     if (!forceRefresh
         && cached != null

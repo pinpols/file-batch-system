@@ -85,7 +85,7 @@
 ### P1-4 `ApiKeyVerifier` @Async 自调用失效,PBKDF2 同步阻塞请求线程(置信 95)
 
 - **位置**:`batch-orchestrator/.../auth/ApiKeyVerifier.java:63,65`(`touchAsync` / `upgradeLegacyHashAsync` 为 `this.` 调用,AOP 代理失效;测试注释已自证)。
-- **后果**:每次认证同步执行 DB 写 + PBKDF2(50–200ms CPU),洪峰可耗尽 Tomcat 线程池。
+- **后果**:每次认证同步执行 DB 写 + PBKDF2(50–200ms CPU),峰值流量可耗尽 Tomcat 线程池。
 - **修法**:CLAUDE.md 豁免①模式 `@Lazy @Autowired private ApiKeyVerifier self;`(同时把 CLAUDE.md self-injection 计数 9→10,见 P3-4 实为 10→11)。
 
 ### P1-5 `FileGovernanceScheduler.sweepStaleRunningPipelines` 两步 UPDATE 非同事务(置信 85)
@@ -127,7 +127,7 @@
 
 ## P3 / 低优先 & 文档
 
-1. **lease 混合时钟域**:写入用应用时钟、过期判定用 DB `current_timestamp`(`DefaultTaskAssignmentService.java:161/375` vs `JobPartitionMapper.xml:209/218`);NTP 漂移缩短 lease 寿命 → 提前 reclaim(幂等兜底存在)。修法:lease 写入改 DB 时钟,一处 SQL;ShedLock/Redis 已正确用服务端时钟。
+1. **lease 混合时钟域**:写入用应用时钟、过期判定用 DB `current_timestamp`(`DefaultTaskAssignmentService.java:161/375` vs `JobPartitionMapper.xml:209/218`);NTP 漂移缩短 lease 寿命 → 提前 reclaim(幂等回退存在)。修法:lease 写入改 DB 时钟,一处 SQL;ShedLock/Redis 已正确用服务端时钟。
 2. **rate-limit 默认全关**:`rate-limit.enabled=false`、per-tenant launch 维度 0、`global-max-running-jobs=0`——launch 风暴入口默认无闸(quota 子系统/MQ per-tenant routing 默认开,能力在)。prod profile 给保守默认值。
 3. **回滚策略未成文**:migration 纪律强(checklist/NOT VALID guard/expand-contract 事实执行),但"前滚 only + 例外清单"没写下来。db-migration-checklist 加一节即可。
 4. **文档漂移三处**:`event-routing-policy.md:80` 称 OutboxRetryScheduler 扫 `event_outbox_retry` 重投,代码现状仅 console 展示;CLAUDE.md self-injection 计数 9 → 实际 10(`DefaultRetryGovernanceService.replayTransactionalSelf`);docker init 004 注释提及不存在的 loan_* 表。
@@ -140,7 +140,7 @@
 - **R1 参数超限**:12 项 ≥7 硬违规(`ConsoleWebhookSubscriptionMapper.insert/update`、`DeadLetterTaskMapper.markReplayFailure`、`ForensicExportLogMapper.markCompleted`、`ConsoleAlertRoutingApplicationService.list` 接口+实现+Controller、`ConsoleExcelStyles.addDropdownValidation`、`DispatchManifestSupport.manifestPayload`、`ConfigPackageExcelValidator` ×2、`DataQualityCheckExecutor.writeCheck`)+ 14 项 =6 的 Mapper/Service 接口(convention-audit skill 规则要求封装)。已有 8 处 `@SuppressWarnings(PMD)` 注释豁免合规。
 - **R3 FQN**:42 处必须修,分布 25 文件(高发:`DefaultWorkflowDagService` 8 处、`TriggerOutboxRelay` 5 处、`SqlTemplateExportDataPlugin` 5 处),纯机械改 import 零行为风险。合法豁免(同名冲突被迫 FQN)已排除。
 - **R4**:4 处 `@Autowired(required=false)` field 注入(见 P2-10)。
-- **R5**:Controller/Mapper 上 @Transactional 0;35 处非默认传播(8 MANDATORY outbox 防护 + 27 REQUIRES_NEW 调度隔离)是**规则文本与既成架构的系统性冲突**,建议 CLAUDE.md 修订 carve-out / ADR 收口,不改代码。
+- **R5**:Controller/Mapper 上 @Transactional 0;35 处非默认传播(8 MANDATORY outbox 防护 + 27 REQUIRES_NEW 调度隔离)是**规则文本与既成架构的系统性冲突**,建议 CLAUDE.md 修订 carve-out / ADR 收敛,不改代码。
 - **R6**:`ShellTaskExecutor:300` 裸 RuntimeException、`TenantConfigCopyRequest:75` IAE 硬编码英文,均建议修。
 - 修复执行可走 `/convention-audit`(自动修复流程)。
 
@@ -156,7 +156,7 @@
 |---|---|---|
 | P0-1 SDK Kafka offset 语义 | ✅ 已修(DispatchDecision 三态 + seek/pause,仅 SUBMITTED/DROP_TERMINAL commit,含 3 个专项测试) | PR #439 |
 | P1-1 CSRF | ✅ 已修(double-submit + CsrfCookieMaterializeFilter) | PR #439 |
-| P1-2 pr-gate 兜底闭环 | ❌ 未动(GitHub ruleset 不强制,见 P1-8) | — |
+| P1-2 pr-gate 回退闭环 | ❌ 未动(GitHub ruleset 不强制,见 P1-8) | — |
 | P1-3 COPY 缓冲 + chunk 上限 | 🟡 部分(上限已加 10000;streaming 未做,见 P2-12) | PR #439 |
 | P1-4 strict idempotency 默认 | ✅ 已修(YAML 默认 true,仅 local 豁免) | PR #439 |
 | P1-5 参数基线漂移 | 🟡 大体修(V169 对齐;CI 防回漂未加,见 P2-11) | V169 |

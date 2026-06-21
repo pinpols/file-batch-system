@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  *
  * <ol>
  *   <li><b>Global</b>（{@code governance.resourceScheduler.globalMaxRunningJobs}）：整个集群的活跃 job 硬上限，
- *       防止洪峰压垮 DB/Kafka。任一轮超限即 block。
+ *       防止峰值流量压垮 DB/Kafka。任一轮超限即 block。
  *   <li><b>Tenant</b>：以 {@code TenantQuotaPolicy} 为源。支持 <b>fair-share group</b> 跨租户共享配额 （同 {@code
  *       fairShareGroup} 的 job 总数封顶），再走 {@code maxRunningJobsPerTenant} 基础配额 + {@code burstLimit}
  *       软弹性——通过 {@link QuotaRuntimeStateService} 在 Redis 里管理预留与滑动窗口重置。
@@ -125,7 +125,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
   /**
    * ADR-041 Phase2.3:租户显式配了 {@code exceeded_strategy} 以其为准;未配则走平台默认 {@code
    * batch.resource-scheduler.default-exceeded-strategy}(默认 {@code QUEUE_DEFER} 有界队列 + 背压), 而非旧的硬拒默认
-   * —— 洪峰下不误拒未单独配策略的正常租户。
+   * —— 峰值流量下不误拒未单独配策略的正常租户。
    */
   private QuotaExceededStrategy resolveStrategy(String configured) {
     if (Texts.hasText(configured)) {

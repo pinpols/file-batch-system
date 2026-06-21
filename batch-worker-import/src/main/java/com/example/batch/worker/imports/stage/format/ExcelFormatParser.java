@@ -385,7 +385,7 @@ public class ExcelFormatParser implements FormatParser {
     @Override
     public void startRow(int rowNum) {
       currentRow.clear();
-      // SAX rowNum 为 0-based 物理行号;落库统一 +1 对齐用户在 Excel 里看到的行号。
+      // SAX rowNum 为 0-based 物理行号;写入数据库统一 +1 对齐用户在 Excel 里看到的行号。
       currentPhysicalRow = rowNum + 1;
     }
 

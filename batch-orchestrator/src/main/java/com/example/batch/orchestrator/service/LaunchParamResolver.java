@@ -40,7 +40,7 @@ public class LaunchParamResolver {
    * 派单参数合并(SDK Phase 3 M3.1 任务 3.1.5),优先级 低→高:
    *
    * <ol>
-   *   <li>SDK 声明的自定义 taskType {@code descriptor.defaults}(模板替换后)—— 最低优先级,只兜底未显式给值的 key
+   *   <li>SDK 声明的自定义 taskType {@code descriptor.defaults}(模板替换后)—— 最低优先级,只回退未显式给值的 key
    *   <li>{@code job_definition.default_params}
    *   <li>请求 / node 运行态参数({@code request.params()})
    * </ol>

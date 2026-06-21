@@ -29,7 +29,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * Workflow DAG designer 全量替换的 BE 兜底拓扑校验(MVP)。
+ * Workflow DAG designer 全量替换的 BE 回退拓扑校验(MVP)。
  *
  * <p>FE 已做 client-side validators,但 BE 是数据真相源:防绕过 / 防恶意输入 / 防工具脚本写脏。校验在持久化前同步执行,任何 违反规则直接抛 {@link
  * BizException} (VALIDATION_ERROR),不会进入 nodeMapper / edgeMapper。
@@ -160,7 +160,7 @@ public class WorkflowDagValidator {
    *
    * <p>JOB 节点的 {@code related_job_code} 可指向 {@code job_type=WORKFLOW} 的 job(workflow 套
    * workflow)。{@link #validate} 里的 Kahn 环检测只看单 workflow 内的边,发现不了 A→B→A / 自引用 这类跨定义引用环 —— 运行期 {@code
-   * ChildJobLaunchSupport} 虽有兜底,但配置期就拦住能给设计者更早反馈。
+   * ChildJobLaunchSupport} 虽有回退,但配置期就拦住能给设计者更早反馈。
    *
    * <p>以 {@code rootWorkflowCode} 为起点,沿「JOB 节点 → WORKFLOW 类型 job」展开 workflow 图做 DFS 着色: root
    * 的边取自本次请求(可能尚未持久化),其余 workflow 的边读 DB 的 live 定义;遇到回到「访问中」节点即判环。引用的 job 不是 WORKFLOW 类型、或目标

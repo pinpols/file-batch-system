@@ -26,13 +26,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Outbox 写入：把“要派发的任务消息”以统一协议落库到 {@code batch.outbox_event}。
+ * Outbox 写入：把“要派发的任务消息”以统一协议写入数据库到 {@code batch.outbox_event}。
  *
  * <p>为什么要统一走 outbox：
  *
  * <ul>
- *   <li><strong>协议收口</strong>：launch / retry / reclaim 等入口都复用同一套消息结构（{@link TaskDispatchMessage}）。
- *   <li><strong>事务一致性</strong>：DB 状态更新与 outbox 落库在同一事务；Kafka 投递由 forwarder 异步完成。
+ *   <li><strong>协议收敛</strong>：launch / retry / reclaim 等入口都复用同一套消息结构（{@link TaskDispatchMessage}）。
+ *   <li><strong>事务一致性</strong>：DB 状态更新与 outbox 写入数据库在同一事务；Kafka 投递由 forwarder 异步完成。
  *   <li><strong>可审计可补偿</strong>：消息投递记录（delivery log）与失败重试均可追溯。
  * </ul>
  */
@@ -52,7 +52,7 @@ public class TaskDispatchOutboxService {
    * <p>约束/语义：
    *
    * <ul>
-   *   <li>{@code eventKey} 是 outbox 的幂等键（同一个 eventKey 重复写入会被上层避免；DB 层也有唯一约束兜底）。
+   *   <li>{@code eventKey} 是 outbox 的幂等键（同一个 eventKey 重复写入会被上层避免；DB 层也有唯一约束回退）。
    *   <li>{@code idempotencyKey} 优先使用 partition 的幂等键（保证同分片重复派发不会导致多次执行）。
    *   <li>当无 partition（极少数场景）时，退化使用 {@code tenantId:taskId} 作为幂等键。
    * </ul>
@@ -88,7 +88,7 @@ public class TaskDispatchOutboxService {
     // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
     // 时 EffectiveTaskConfig 实时读 DB;此处只保留 task key + 路由元数据。
     // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
-    // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非塞进 message 临时透传。
+    // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非写入 message 临时透传。
     persistRunModeOverride(task, runModeOverride);
     TaskDispatchMessage message =
         new TaskDispatchMessage(
@@ -111,7 +111,7 @@ public class TaskDispatchOutboxService {
 
     // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
     // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
-    // 兜底:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
+    // 回退:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
     Integer priority = task.getPriority() != null ? task.getPriority() : jobInstance.getPriority();
     String resolvedKey =
         eventKey == null || eventKey.isBlank() ? task.getTenantId() + ":" + task.getId() : eventKey;

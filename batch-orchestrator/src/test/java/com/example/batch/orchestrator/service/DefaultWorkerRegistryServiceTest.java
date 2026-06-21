@@ -36,7 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  *
  * <ul>
  *   <li>DRAINING / DECOMMISSIONED 不可被心跳重置回 ONLINE(防止 worker 端心跳悄悄回滚运维 drain)
- *   <li>heartbeat 未注册时自动降级到 register(兜底首次 register 丢失)
+ *   <li>heartbeat 未注册时自动降级到 register(回退首次 register 丢失)
  *   <li>register 同 workerCode 走 upsert 不报错(支持 worker 重启)
  *   <li>deactivate 走 updateStatus OFFLINE
  * </ul>
@@ -173,7 +173,7 @@ class DefaultWorkerRegistryServiceTest {
   // ===== heartbeat 降级 register =====
 
   @Test
-  @DisplayName("heartbeat: 未注册 → 自动降级走 register(兜底首次 register 丢失)")
+  @DisplayName("heartbeat: 未注册 → 自动降级走 register(回退首次 register 丢失)")
   void heartbeatFallsBackToRegisterWhenNotRegistered() {
     // heartbeat 读 null → 走 register;register 内部也读 null → 走 insert 路径
     // 最后 persist 后重读返回 ONLINE entity
@@ -227,7 +227,7 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
-  @DisplayName("register: 不支持的 protocolVersion(v3)→ 拒绝(VALIDATION_ERROR),不落库")
+  @DisplayName("register: 不支持的 protocolVersion(v3)→ 拒绝(VALIDATION_ERROR),不写入数据库")
   void registerUnsupportedProtocolVersionRejected() {
     assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "v3")))
         .isInstanceOf(BizException.class)
@@ -238,7 +238,7 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
-  @DisplayName("register: 无法解析的 protocolVersion(garbage)→ 拒绝,不落库")
+  @DisplayName("register: 无法解析的 protocolVersion(garbage)→ 拒绝,不写入数据库")
   void registerUnparseableProtocolVersionRejected() {
     assertThatThrownBy(() -> service.register(dto(WorkerRegistryStatus.ONLINE.code(), "abc")))
         .isInstanceOf(BizException.class)
@@ -248,7 +248,8 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
-  @DisplayName("register: 上报非枚举状态(自托管 SDK 恒发 RUNNING)→ 落库归一为 ONLINE,不违反 ck_worker_registry_status")
+  @DisplayName(
+      "register: 上报非枚举状态(自托管 SDK 恒发 RUNNING)→ 写入数据库归一为 ONLINE,不违反 ck_worker_registry_status")
   void registerNonEnumStatusNormalizedToOnline() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
@@ -342,7 +343,8 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName(
-      "register: descriptor.defaults 含 secret → Lane C SensitiveDataValidator 抛 BizException,不落库")
+      "register: descriptor.defaults 含 secret → Lane C SensitiveDataValidator 抛"
+          + " BizException,不写入数据库")
   void registerRejectsDescriptorWithCredential_LaneC() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));

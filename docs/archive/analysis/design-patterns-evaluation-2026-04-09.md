@@ -104,7 +104,7 @@ switch (compensationType) {
 
 #### ④ 分区数量解析 → Strategy ✅ 已完成
 
-**现状**：`DefaultSchedulePlanBuilder.resolveDynamicPartitionCount()` 含 5 层嵌套条件（固定值 / SIZE_BASED / RUNTIME_BASED / WORKER_BASED / 兜底）。
+**现状**：`DefaultSchedulePlanBuilder.resolveDynamicPartitionCount()` 含 5 层嵌套条件（固定值 / SIZE_BASED / RUNTIME_BASED / WORKER_BASED / 回退）。
 
 **方案**：抽 `PartitionCountResolver` 策略接口，按 `shard_strategy` 枚举选取具体 Resolver，各自独立测试，消除嵌套。
 
@@ -120,7 +120,7 @@ switch (compensationType) {
 
 **方案**：定义 `Stateful<S>` 泛型接口，各实体实现后直接调用，编译期即可发现问题。
 
-**实现说明**：新增 `Stateful` 接口（`domain/statemachine` 包，`String getStatus()`）；`JobInstanceEntity`（返回 `instanceStatus`）、`JobPartitionEntity`（返回 `partitionStatus`）、`JobTaskEntity`（返回 `taskStatus`）、`JobStepInstanceEntity`（返回 `stepStatus`）四个实体类实现 `Stateful`；`DefaultStateMachine.resolveState()` 在反射循环之前优先检查 `instanceof Stateful`，反射作为其他类型的兜底保留。
+**实现说明**：新增 `Stateful` 接口（`domain/statemachine` 包，`String getStatus()`）；`JobInstanceEntity`（返回 `instanceStatus`）、`JobPartitionEntity`（返回 `partitionStatus`）、`JobTaskEntity`（返回 `taskStatus`）、`JobStepInstanceEntity`（返回 `stepStatus`）四个实体类实现 `Stateful`；`DefaultStateMachine.resolveState()` 在反射循环之前优先检查 `instanceof Stateful`，反射作为其他类型的回退保留。
 
 ---
 

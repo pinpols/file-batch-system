@@ -13,7 +13,7 @@
 - [ ] (本次 PR 范围外的违约/技术债)
 
 ## 性能 / 健壮性(独立 PR)
-- [ ] (e.g. Compensation stale-RUNNING reconciler 兜底)
+- [ ] (e.g. Compensation stale-RUNNING reconciler 回退)
 
 ---
 

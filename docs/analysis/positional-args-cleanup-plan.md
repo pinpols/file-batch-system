@@ -69,7 +69,7 @@
 
 ### 3.1 桶 ①：方法签名 argc>6 封装
 
-每处生成新 `<Method>Param` 或 `<Domain>Command` record + `@Builder`，方法签名收口为单参，所有调用方一并改 builder + 引用变量。
+每处生成新 `<Method>Param` 或 `<Domain>Command` record + `@Builder`，方法签名收敛为单参，所有调用方一并改 builder + 引用变量。
 
 ```
 @Builder
@@ -96,11 +96,11 @@ repository.insert(param);
 
 1. **目标类加 `@Builder`** ——
    - record：直接加（零风险）
-   - class：加 `@Builder` 同时**用注解兜底空参**，**不降级**（见 §3.4）
+   - class：加 `@Builder` 同时**用注解回退空参**，**不降级**（见 §3.4）
 2. **调用方提取引用变量**：`Type t = Type.builder()....build(); f(t);`
 3. **null / false / 0 字段不显式 set**，靠 Lombok 默认值（见 §3.5）
 
-### 3.3 加 `@Builder` 时空参构造的注解兜底（关键决策）
+### 3.3 加 `@Builder` 时空参构造的注解回退（关键决策）
 
 按用户决策"使用注解解决空参问题，不要降级到只提取引用"。
 
@@ -164,7 +164,7 @@ public class XxxDto {
 | 改动项 | 预估 diff |
 |---|---:|
 | ① 7 处方法封装 + 7 个新 Param record + 调用方 ~10 处 | ~300 行 |
-| ② 54 处 inline argc>6 + ~25 类型加 `@Builder`（含 class 注解兜底） | ~600 行 |
+| ② 54 处 inline argc>6 + ~25 类型加 `@Builder`（含 class 注解回退） | ~600 行 |
 | 守护测试 `PositionalArgsConventionTest` | ~120 行 |
 | CLAUDE.md §方法参数约束 追加调用方子节 | ~30 行 |
 | docs/changelog.md 追加规约变更条目 | ~5 行 |
@@ -184,7 +184,7 @@ public class XxxDto {
 | # | 风险 | 缓解 |
 |---|---|---|
 | R1 | Mybatis XML `#{q.xxx}` 字段引用 | 加 `@Builder` 不动字段名/顺序，零影响 |
-| R2 | `@Builder` 在 class 上消除隐式空参 → 反射 break | §3.3 注解兜底（三连或 `@Tolerate`），**不降级** |
+| R2 | `@Builder` 在 class 上消除隐式空参 → 反射 break | §3.3 注解回退（三连或 `@Tolerate`），**不降级** |
 | R3 | Lombok 默认值与原位置参数等价性 | boolean=false / int=0 / long=0L / 引用=null，与 §3.4 表对齐 |
 | R4 | 测试 mock `thenReturn(new DispatchResult(...))` | 一并扫 test 路径迁移到 builder/引用 |
 | R5 | 桶 ① 封装后调用方未一并迁 | 7 处方法封装与调用方迁移在同一 commit，避免编译断点 |

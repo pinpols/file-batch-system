@@ -494,7 +494,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         // 提示驱动分批取,避免无界堆读。容量从上限和一个合理批量中取较小值。
         r.setFetchSize(Math.min(cap > 0 ? cap : 1000, 1000));
       } catch (SQLException ignore) {
-        // 部分驱动/REFCURSOR 不支持 setFetchSize,忽略(仍由下面的行数上限兜底)。
+        // 部分驱动/REFCURSOR 不支持 setFetchSize,忽略(仍由下面的行数上限回退)。
       }
       ResultSetMetaData md = r.getMetaData();
       int cols = md.getColumnCount();
@@ -520,7 +520,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
    * 在当前事务内 pin search_path:{@code SET LOCAL search_path = pg_catalog, <schema>}。schema = 过程名
    * schema(若 qualified)否则 {@link StoredProcExecutorProperties#getDefaultSchema()}。 防止调用方借 session
    * search_path 把过程解析到攻击者可控 schema。仅在事务中生效(SET LOCAL),autoCommit=true 时无事务, 退化为对单条语句生效。非 PG /
-   * 不支持时静默忽略(由白名单 + 限定名兜底)。
+   * 不支持时静默忽略(由白名单 + 限定名回退)。
    */
   private void pinSearchPath(Connection conn, String procName) {
     String schema = schemaOf(procName);

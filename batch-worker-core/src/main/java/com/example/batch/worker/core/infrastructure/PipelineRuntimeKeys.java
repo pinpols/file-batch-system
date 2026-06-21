@@ -91,14 +91,14 @@ public final class PipelineRuntimeKeys {
   /**
    * V94: data_interval 半开区间起点 (Airflow 风格 {@code Instant}). 触发侧已计算 (CRON 取本次 fireAt, FIXED_RATE 同)
    * 或 API 调用方显式提供. 业务可拼 SQL {@code WHERE update_time >= :dataIntervalStart}. null 时表示退化为 bizDate 单点
-   * 模式, 业务侧自行用 bizDate.atStartOfDay 兜底.
+   * 模式, 业务侧自行用 bizDate.atStartOfDay 回退.
    */
   public static final String DATA_INTERVAL_START = "dataIntervalStart";
 
   /**
    * V94: data_interval 半开区间终点 (Airflow 风格 {@code Instant}). CRON 路径取 nextFireAt, FIXED_RATE 取
    * fireAt+interval. 业务可拼 SQL {@code WHERE update_time < :dataIntervalEnd}. null 时业务侧用 bizDate+1
-   * 兜底.
+   * 回退.
    */
   public static final String DATA_INTERVAL_END = "dataIntervalEnd";
 

@@ -99,7 +99,7 @@ curl -X POST /api/console/tenants \
 ```
 
 ```jsonc
-// query_param_schema:落库映射。配合上面的 field_mappings,这里可极简。
+// query_param_schema:写入数据库映射。配合上面的 field_mappings,这里可极简。
 {"jdbcMappedImport":{
   "schema":"biz", "table":"customer_account", "tenantColumn":"tenant_id",
   // ① columnMappings 可整段省略:留空时按 field_mappings 自动推断——
@@ -180,7 +180,7 @@ WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)
 |---|---|---|
 | 漏填关键字段 | `readiness.blocking[].hint/docRef` 直接说"去哪填、抄哪份" | §2 |
 | Excel 配置包填错 | upload→`preview` 一次性列出所有字段/SQL/引用错 | §4 |
-| 导入有坏行 | `file_error_record` 落库**带 Excel 物理行号 + 出错列**,能回原表定位 | 坏行治理 |
+| 导入有坏行 | `file_error_record` 写入数据库**带 Excel 物理行号 + 出错列**,能回原表定位 | 坏行治理 |
 | 导入整列变 null | 多半是**表头名拼错**——现在 LOAD 前会校验表头存在性,fail-fast 报缺哪列 | §3a |
 | 不确定某字段含义/格式 | Excel 字段说明 sheet(§4)是字段字典的**单一权威源** | §4 |
 

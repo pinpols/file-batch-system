@@ -74,7 +74,7 @@ public class ChildJobLaunchSupport {
   /**
    * 跨 workflow 嵌套环检测上溯 parent_instance_id 链的硬上限。环本身在每次拉起前就会被拦截(见 {@link
    * #guardAgainstNestingCycle}),链上不会真正出现"不同 job_code 的环",故上溯必然终止于根;此上限只为给 rerun 长链 /
-   * 异常数据兜底,避免万一异常数据导致无界 DB 读。命中视为异常但 fail-open(放行)——真正的环已在更早层被拦。
+   * 异常数据回退,避免万一异常数据导致无界 DB 读。命中视为异常但 fail-open(放行)——真正的环已在更早层被拦。
    */
   private static final int MAX_ANCESTOR_WALK = 256;
 
@@ -164,7 +164,7 @@ public class ChildJobLaunchSupport {
       hops++;
     }
     if (hops >= MAX_ANCESTOR_WALK) {
-      // fail-open：真正的环已在更早层被拦,这里只是兜底异常数据,放行但留痕便于排查。
+      // fail-open：真正的环已在更早层被拦,这里只是回退异常数据,放行但留痕便于排查。
       log.warn(
           "workflow nesting ancestor walk hit cap {} for tenant={} parentInstance={} node={};"
               + " cycle check may be incomplete",
@@ -209,7 +209,7 @@ public class ChildJobLaunchSupport {
     virtualPartition.setRetryCount(0);
     virtualPartition.setBusinessKey(refJobCode + ":" + node.nodeCode());
     // DBA-2026-05-20 P2-4: V124 partial UNIQUE 防 CLAIM 穿透依赖 idempotencyKey 非空,
-    // 这里属于"上游构造非空,但跨函数边界容易回归"的位置,显式 Guard 兜底。
+    // 这里属于"上游构造非空,但跨函数边界容易回归"的位置,显式 Guard 回退。
     Guard.requireText(idempotencyKey, "job_partition.idempotency_key (workflow virtual)");
     virtualPartition.setIdempotencyKey(idempotencyKey);
     virtualPartition.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));

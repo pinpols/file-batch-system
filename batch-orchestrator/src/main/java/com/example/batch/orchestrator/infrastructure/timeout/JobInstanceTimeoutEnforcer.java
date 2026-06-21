@@ -20,13 +20,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Job-level timeout 兜底强制器（ADR-参考 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.1）。
+ * Job-level timeout 回退强制器（ADR-参考 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.1）。
  *
  * <p>周期扫 {@code job_instance.instance_status='RUNNING' AND now - started_at >
  * job_definition.timeout_seconds} 的实例，CAS 推到 FAILED 终态。
  *
- * <p>与 {@code PartitionLeaseReclaimScheduler} 互补：lease reclaim 兜底 worker 心跳丢失（worker 宕机），timeout
- * enforcer 兜底业务跑得太久（worker 在但任务卡住）。CAS 失败安静跳过（并发已推进）。
+ * <p>与 {@code PartitionLeaseReclaimScheduler} 互补：lease reclaim 回退 worker 心跳丢失（worker 宕机），timeout
+ * enforcer 回退业务跑得太久（worker 在但任务卡住）。CAS 失败安静跳过（并发已推进）。
  *
  * <p>{@code timeout_seconds = 0} 表示无 timeout（默认值），不会被本 enforcer 选中。
  */

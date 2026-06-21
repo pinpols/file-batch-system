@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>{@code enabled=true}（默认）周期清理终结态 workflow_run / workflow_node_run； {@code retentionDays}
  * 控制保留窗口（默认 30 天）。Cron 默认每天凌晨 04:15 跑（与 file-governance / quota reset 错峰）。
  *
- * <p>对应人工兜底脚本：{@code scripts/db/cleanup-workflow-runs.sql}（同一删除语义，可手工补充清理）。
+ * <p>对应人工回退脚本：{@code scripts/db/cleanup-workflow-runs.sql}（同一删除语义，可手工补充清理）。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.workflow.archive")

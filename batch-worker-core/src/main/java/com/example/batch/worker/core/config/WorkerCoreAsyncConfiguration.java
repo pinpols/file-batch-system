@@ -30,7 +30,7 @@ public class WorkerCoreAsyncConfiguration {
     scheduler.setRemoveOnCancelPolicy(true);
     scheduler.setWaitForTasksToCompleteOnShutdown(false);
     scheduler.setAwaitTerminationSeconds(Math.max(0, properties.getAwaitTerminationSeconds()));
-    // watchdog 任务极轻 (一次性 check); 极端情况下用 caller-runs 兜底, 避免静默丢失
+    // watchdog 任务极轻 (一次性 check); 极端情况下用 caller-runs 回退, 避免静默丢失
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     return scheduler;
   }

@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * INSERT ... WHERE NOT EXISTS}(应用层)。该弱化的**唯一可接受前提**是:所有 outbox 写入收敛到单一 choke point {@code
  * OutboxDomainEventPublisher.publish}(内部用 NOT EXISTS 去重),且 event_key 含与被锁聚合 version 绑定的判别位。
  *
- * <p>一旦有人新增"裸 {@code outboxEventMapper.insert(...)}"绕过该入口,NOT EXISTS 去重就被旁路,竞态重新引入且无 DB 兜底。本测试静态扫描
+ * <p>一旦有人新增"裸 {@code outboxEventMapper.insert(...)}"绕过该入口,NOT EXISTS 去重就被旁路,竞态重新引入且无 DB 回退。本测试静态扫描
  * main src,锁死这个不变量。
  */
 class OutboxWriteChokePointArchTest {

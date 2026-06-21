@@ -1,6 +1,6 @@
 package com.example.batch.common.lock;
 
-/** 抢分布式锁失败时抛出。调用方 catch 兜底为「资源忙,稍后重试」业务语义。 */
+/** 抢分布式锁失败时抛出。调用方 catch 回退为「资源忙,稍后重试」业务语义。 */
 public class DistributedLockAcquireException extends RuntimeException {
 
   private final String lockKey;

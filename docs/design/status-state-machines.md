@@ -17,7 +17,7 @@
 | `outbox_event.publish_status` | `OutboxPublishStatus` | V21 | ✓ | NEW / PUBLISHING / PUBLISHED / FAILED / GIVE_UP |
 | `trigger_outbox_event.publish_status` | `OutboxPublishStatus` | V80 | ✓ | 同上 |
 | `event_outbox_retry.retry_status` | 内部 enum | V21 | ✓ | WAITING / RUNNING / SUCCESS / FAILED / EXHAUSTED / CANCELLED |
-| `trigger_request.request_status` | _无 Java enum class，仅 DB CHECK 兜底_ | V5 / V39 / V60 | ⚠️ DB-only | PENDING / PROCESSING / ACCEPTED / DUPLICATE / REJECTED / LAUNCHED / FORWARD_FAILED / GIVE_UP（V60 扩展，含 ADR-010 trigger 异步链路 forward retry 状态） |
+| `trigger_request.request_status` | _无 Java enum class，仅 DB CHECK 回退_ | V5 / V39 / V60 | ⚠️ DB-only | PENDING / PROCESSING / ACCEPTED / DUPLICATE / REJECTED / LAUNCHED / FORWARD_FAILED / GIVE_UP（V60 扩展，含 ADR-010 trigger 异步链路 forward retry 状态） |
 | `compensation_command.command_status` | `CompensationCommandStatus` | V13 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / CANCELLED |
 | `worker_registry.status` | `WorkerRegistryStatus` | V7 | ✓ | ONLINE / DRAINING / OFFLINE / DECOMMISSIONED |
 
@@ -93,7 +93,7 @@ PENDING → ACCEPTED → LAUNCHED
    │         └─→ FAILED ─┘
    │              │
    ↓              ↓
-   └─→ GIVE_UP ←─┘ （ad-hoc reconciler 兜底）
+   └─→ GIVE_UP ←─┘ （ad-hoc reconciler 回退）
 ```
 
 ## 4. 状态推进的硬约束
@@ -120,7 +120,7 @@ batch-common/src/main/java/com/example/batch/common/enums/
   ├─ OutboxPublishStatus.java
   ├─ CompensationCommandStatus.java
   └─ WorkerRegistryStatus.java
-  # trigger_request.request_status 无 Java enum class，仅靠 V60 DB CHECK 约束兜底
+  # trigger_request.request_status 无 Java enum class，仅靠 V60 DB CHECK 约束回退
 ```
 
 所有 enum 实现 `DictEnum` 接口（CLAUDE.md §领域数据字典），提供 `code()` / `label()`，统一通过 `DictEnum.fromCode()` 反查。
@@ -134,4 +134,4 @@ batch-common/src/main/java/com/example/batch/common/enums/
 ## 7. 未来工作
 
 - 考虑提取 `StateMachineEngine<T extends DictEnum>` 通用框架，集中校验"非法状态转移"（目前由各 service 散落 if-else 校验）
-- `pipeline_instance.COMPENSATING` 与 `compensation_command` 的关系建议增强文档（目前两者更新不在一个事务内，靠最终一致性兜底）
+- `pipeline_instance.COMPENSATING` 与 `compensation_command` 的关系建议增强文档（目前两者更新不在一个事务内，靠最终一致性回退）

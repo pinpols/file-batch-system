@@ -46,7 +46,7 @@
 ## §3 数字可信 —— 跑成功的批敢不敢拿去出账 【核心门槛】
 
 **审核点**
-- 精确一次(全 worker 组崩溃/重投/GC pause 旧 leader 都不重复)、防终态复活(`NotFromTerminal` 谓词 + 状态机 guardTerminal 双防线)、幂等承重墙(56 处 `ON CONFLICT` 承重在全局 UNIQUE)。
+- 精确一次(全 worker 组崩溃/重投/GC pause 旧 leader 都不重复)、防终态复活(`NotFromTerminal` 谓词 + 状态机 guardTerminal 双防线)、幂等关键约束(56 处 `ON CONFLICT` 承重在全局 UNIQUE)。
 - **rerun 后旧结果会不会被下游误用**(readiness 口径=最新 attempt 为 SUCCESS,不放行过期成功)。
 - 对账:声明总额/笔数 vs 实际累加(命中即拦,标 `source`)。
 - outbox 与状态写**同事务**在每条写路径成立(含新增 defer / pause 路径);CAS 前态核了**全部**写入路径(历史教训:markAcked 漏同步 ack)。
@@ -63,7 +63,7 @@
 
 **审核点**
 - 批处理死线(凌晨账期窗口必须跑完);真实账期数据量下吞吐(已知单机 ~20–60 jobs/s,**瓶颈在控制面**:launch 单线程消费 + report/claim 争用,PG 写有 10–15× 余量)。
-- 逼近上限的余量 + 扩展预案;**补数/重跑不拖垮在线批**;洪峰下 `outbox` 积压不发散、Kafka consumer lag 收敛。
+- 逼近上限的余量 + 扩展预案;**补数/重跑不拖垮在线批**;峰值流量下 `outbox` 积压不发散、Kafka consumer lag 收敛。
 
 **形式化落地红旗**:标称吞吐是空跑 helloworld 测的,真实大文件/复杂 DAG 掉一个数量级;没人测过"月底全量重算"峰值。
 
@@ -147,7 +147,7 @@
 
 ## §11 调度准确性 —— 不重、不漏、不早、不晚
 
-**审核点**:防双 fire(marker CAS + select-by-dedupKey 软幂等 + `job_instance` 唯一约束三层兜底);misfire 处置(NONE/AUTO/MANUAL_APPROVAL)语义正确;leader 选举(ShedLock)+ leader 失守检测 + stale marker 接管;cron 语义 + **DST 重叠/跳变**(`fire_sequence` + `schedule_timezone` 快照);catch-up 限流防雪崩;readiness defer 不干扰 misfire 分流。
+**审核点**:防双 fire(marker CAS + select-by-dedupKey 软幂等 + `job_instance` 唯一约束三层回退);misfire 处置(NONE/AUTO/MANUAL_APPROVAL)语义正确;leader 选举(ShedLock)+ leader 失守检测 + stale marker 接管;cron 语义 + **DST 重叠/跳变**(`fire_sequence` + `schedule_timezone` 快照);catch-up 限流防雪崩;readiness defer 不干扰 misfire 分流。
 
 **形式化落地红旗**:调度只在单实例测过(多 leader 漂移、GC pause 旧 leader 重发没验);DST 那两天没人想过;misfire 风暴打挂 LaunchService。
 
@@ -195,19 +195,19 @@
 
 ## §15 性能隔离与公平 —— 大租户不饿死小租户
 
-**审核点**:租户间互不影响(fair-share group + 队列 `queue_code` + 优先级 `priority`);单租户洪峰不拖垮全局;补数/重跑与在线批资源隔离;active 任务按租户/队列/公平组限流(`countActiveByFairShareGroup` 等)。
+**审核点**:租户间互不影响(fair-share group + 队列 `queue_code` + 优先级 `priority`);单租户峰值流量不拖垮全局;补数/重跑与在线批资源隔离;active 任务按租户/队列/公平组限流(`countActiveByFairShareGroup` 等)。
 
 **形式化落地红旗**:一个大租户月底全量重算把整个平台拖垮;没有公平/优先级,先到先占;隔离只是理论。
 
 **验证方法**:多租户混合负载压测(一个大租户 + 多小租户)观察小租户 SLA 是否被饿死;公平组/队列限流实测。
 
-**判据**:洪峰下小租户 SLA 不被大租户饿死;公平/优先级/队列限流生效。
+**判据**:峰值流量下小租户 SLA 不被大租户饿死;公平/优先级/队列限流生效。
 
 ---
 
 ## §16 升级与向后兼容 —— 滚动升级不破存量
 
-**审核点**:服务滚动升级不中断在飞任务(优雅停 + lease 保活);**SDK wire-protocol 版本兼容**(v3 未知大版本不提交 offset 等硬契约;缺失 schema 按 v1 accept);schema 演进不破存量(新增列默认值、`@Builder` 配空参兜底 Jackson/MyBatis);**禁重命名字段**(破 mybatis `#{q.xxx}` / canonical constructor)。
+**审核点**:服务滚动升级不中断在飞任务(优雅停 + lease 保活);**SDK wire-protocol 版本兼容**(v3 未知大版本不提交 offset 等硬契约;缺失 schema 按 v1 accept);schema 演进不破存量(新增列默认值、`@Builder` 配空参回退 Jackson/MyBatis);**禁重命名字段**(破 mybatis `#{q.xxx}` / canonical constructor)。
 
 **形式化落地红旗**:升级要停机;新版 orchestrator 不认旧 worker;改字段名静默破反序列化;SDK 升级不向后兼容逼客户同步升。
 
@@ -231,9 +231,9 @@
 
 ## §18 安全机制纵深 —— 审批 / 脱敏 / 隔离 / 密钥 / 审计
 
-**审核点**:审批链(MANUAL_APPROVAL catch-up、workflow 审批节点)真拦得住;敏感数据脱敏(log masking);**atomic worker RCE 隔离**(ADR-029,shell/sql/stored-proc/http 特权隔离);SSRF / sensitive-data 拦截;密钥非明文落库 + 强度校验 + 轮换;内部端点鉴权(orchestrator `InternalAuthFilter` + 各 worker `/internal` 同源,刚补 import);审计完整(谁改了什么、敏感操作留痕)。
+**审核点**:审批链(MANUAL_APPROVAL catch-up、workflow 审批节点)真拦得住;敏感数据脱敏(log masking);**atomic worker RCE 隔离**(ADR-029,shell/sql/stored-proc/http 特权隔离);SSRF / sensitive-data 拦截;密钥非明文写入数据库 + 强度校验 + 轮换;内部端点鉴权(orchestrator `InternalAuthFilter` + 各 worker `/internal` 同源,刚补 import);审计完整(谁改了什么、敏感操作留痕)。
 
-**形式化落地红旗**:审批只是 UI 摆设不真拦;敏感数据进日志;atomic worker 能任意 RCE;密钥明文落库;内部端点缺少鉴权(刚发现 import 缺鉴权,**其余 worker 要同样对标**)。
+**形式化落地红旗**:审批只是 UI 摆设不真拦;敏感数据进日志;atomic worker 能任意 RCE;密钥明文写入数据库;内部端点缺少鉴权(刚发现 import 缺鉴权,**其余 worker 要同样对标**)。
 
 **验证方法**:威胁模型逐信任边界 + 越权矩阵;CodeQL/trivy;RCE 隔离 IT 证据;审计留痕真实场景验。
 

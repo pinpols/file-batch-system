@@ -38,7 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
  *   <li>正常 launch 成功 → ack + counter
  *   <li>反序列化失败 → ack + 跳过(DLQ counter)
  *   <li>envelope/launchRequest 为 null → ack + 跳过
- *   <li>409 dedup 命中 → 视为成功 ack(uk_job_instance_tenant_dedup 兜底)
+ *   <li>409 dedup 命中 → 视为成功 ack(uk_job_instance_tenant_dedup 回退)
  *   <li>429 限流 → 不 ack,抛出让 Kafka listener container 重投
  *   <li>RuntimeException → 抛出走 listener 重试
  *   <li>writeBack 成功:trigger_request 推到 LAUNCHED + relatedJobInstanceId
@@ -163,7 +163,7 @@ class TriggerLaunchConsumerTest {
 
     consumer.consume(record(envelope), ack);
 
-    // 仍回写 LAUNCHED,relatedJobInstanceId 为 null(让对账 reconciler 后续兜底补 PK)
+    // 仍回写 LAUNCHED,relatedJobInstanceId 为 null(让对账 reconciler 后续回退补 PK)
     verify(triggerRequestMapper).updateAcceptance("tenant-a", "req-wb2", "LAUNCHED", null);
     verify(ack).acknowledge();
   }

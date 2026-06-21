@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * rowcount=1 才发推,=0 表示已被其他实例 / 上次轮询处理过。
  *
  * <p>调度:自管理 {@link ScheduledExecutorService}(console-api 未启用全局 {@code @EnableScheduling},参 {@code
- * ReplicaLagMonitor})。单 JVM 内 {@code fixedDelay} 顺序串行;多 replica 部署时靠 UNIQUE 兜底去重。
+ * ReplicaLagMonitor})。单 JVM 内 {@code fixedDelay} 顺序串行;多 replica 部署时靠 UNIQUE 回退去重。
  *
  * <p>开关:{@code batch.console.push.job-notify.enabled=false}(默认关),启用前需先验 VAPID key 配齐 + 前端订阅链路连通。
  */

@@ -1,7 +1,7 @@
 # 与 orchestrator 集成测试对齐：Flyway 使用与 orchestrator 相同的 db/migration（经 testResource 复制）；后台任务尽量静默。
 #
 # E2eShedLockConfiguration 覆盖默认 JDBC ShedLock 自动配置时仍读取 shedlock.auto-create（与 batch-trigger IT 一致）：
-# 启动期兜底建 batch.shedlock，避免仅 init schema、未跑完 Flyway 或本地起嵌入式应用时调度器抢锁失败。
+# 启动期回退建 batch.shedlock，避免仅 init schema、未跑完 Flyway 或本地起嵌入式应用时调度器抢锁失败。
 spring:
   flyway:
     locations: classpath:db/migration

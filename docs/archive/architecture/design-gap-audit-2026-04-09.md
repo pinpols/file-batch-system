@@ -27,7 +27,7 @@
 
 ### 8. 资源调度与运行控制
 
-- 已实现：窗口检查、租户/队列并发、**突发额度**（`tenant_quota_policy.burst_limit` / `partition_burst_limit`，`resource_queue.burst_limit`）、**公平共享组跨租户作业上限**（`fair_share_group` + `group_shared_max_running_jobs`，`JobInstanceMapper.countActiveByFairShareGroup`）、**`quota_reset_policy` 运行时闭环**（`CALENDAR_DAY / SLIDING_WINDOW` 的 `quota_runtime_state` 落库、调度器评估与周期重置）、**`worker_registry.current_load`** + 心跳 DTO **`currentLoad`**、**Worker 选择优先低负载再比心跳**、**调度实时快照与历史**（`TenantSchedulerSnapshotService` / `tenant_scheduler_snapshot` 表 + 定时写入）、控制台 **`/api/console/scheduler/snapshot`** 代理 Orchestrator。
+- 已实现：窗口检查、租户/队列并发、**突发额度**（`tenant_quota_policy.burst_limit` / `partition_burst_limit`，`resource_queue.burst_limit`）、**公平共享组跨租户作业上限**（`fair_share_group` + `group_shared_max_running_jobs`，`JobInstanceMapper.countActiveByFairShareGroup`）、**`quota_reset_policy` 运行时闭环**（`CALENDAR_DAY / SLIDING_WINDOW` 的 `quota_runtime_state` 写入数据库、调度器评估与周期重置）、**`worker_registry.current_load`** + 心跳 DTO **`currentLoad`**、**Worker 选择优先低负载再比心跳**、**调度实时快照与历史**（`TenantSchedulerSnapshotService` / `tenant_scheduler_snapshot` 表 + 定时写入）、控制台 **`/api/console/scheduler/snapshot`** 代理 Orchestrator。
 - 部分缺失：
   - 其他高级资源公平与容量评估项仍按后续轮次继续补齐
 - **已补齐（原审计误记为缺失）**：Worker **排空超时与扫描间隔** 由 Orchestrator 配置 **`batch.worker.drain.default-timeout-seconds`**、**`check-interval-millis`**（环境变量 `BATCH_WORKER_DRAIN_TIMEOUT_SECONDS`、`BATCH_WORKER_DRAIN_CHECK_INTERVAL_MILLIS`）及 Flyway **`V19__worker_registry_drain.sql`**（`drain_started_at` / `drain_deadline_at`）承载；控制台代理 **`/api/console/workers/{code}/drain|force-offline|claimed-tasks`**。**新任务派发**仅选 `worker_registry.status=ONLINE`（见 `DefaultWorkerSelector`），`DRAINING` 节点不会接收新路由。
@@ -109,7 +109,7 @@
 
 ### 15. 多租户与安全
 
-- 已实现：租户注入、角色权限、配置发布、密钥版本、预签名下载；**文件模板安全开关**已通过 Flyway **`V17__file_template_security_flags.sql`** 落库，并在 **`DefaultFileGovernanceService`**、控制台查询/预签名请求、**`ImportDataQualityService`** 等路径参与**预览/错误行/日志脱敏与下载门禁**。
+- 已实现：租户注入、角色权限、配置发布、密钥版本、预签名下载；**文件模板安全开关**已通过 Flyway **`V17__file_template_security_flags.sql`** 写入数据库，并在 **`DefaultFileGovernanceService`**、控制台查询/预签名请求、**`ImportDataQualityService`** 等路径参与**预览/错误行/日志脱敏与下载门禁**。
 - 另已补 **平台级测试开关 `batch.security.testing-open`**，用于前期联调时放开 console 认证、preview / error-line 脱敏与 import 侧预解密校验。
 - 仍有缺口（相对说明书「端到端生产级」）：
   - **`content_encryption_enabled` + `encryption_key_ref`** 的对象落盘 **KMS/加解密全链路**与密钥版本轮换的**可证明**闭环（当前偏策略、审计与门禁字段）。
@@ -118,7 +118,7 @@
 
 ### 16. 可观测性与运行手册
 
-- 已实现：actuator 暴露、部分 Micrometer 指标、SLA/file governance 定时检查；**告警落库**（`batch.alert_event`，Flyway **`V18__alert_event.sql`**）；**结构化日志 pattern** 在 console/import 等模块 `application.yml` 中已统一字段占位；仓库内已有 **runbook**（[`docs/runbook/`](/Users/dengchao/Downloads/file-batch-system/docs/runbook)）、**Prometheus/Grafana 基线**（[`docs/observability/prometheus-grafana-baseline.md`](/Users/dengchao/Downloads/file-batch-system/docs/observability/prometheus-grafana-baseline.md)、`grafana-dashboard-batch.json`）；**第 7 轮补齐**了 [`prometheus-batch-rules.yml`](/Users/dengchao/Downloads/file-batch-system/docs/observability/prometheus-batch-rules.yml)、[`alertmanager-batch-template.yml`](/Users/dengchao/Downloads/file-batch-system/docs/observability/alertmanager-batch-template.yml)、[`structured-logging-pipeline.md`](/Users/dengchao/Downloads/file-batch-system/docs/observability/structured-logging-pipeline.md)、[`scripts/ops/inspect-observability.sh`](/Users/dengchao/Downloads/file-batch-system/scripts/ops/inspect-observability.sh)。
+- 已实现：actuator 暴露、部分 Micrometer 指标、SLA/file governance 定时检查；**告警写入数据库**（`batch.alert_event`，Flyway **`V18__alert_event.sql`**）；**结构化日志 pattern** 在 console/import 等模块 `application.yml` 中已统一字段占位；仓库内已有 **runbook**（[`docs/runbook/`](/Users/dengchao/Downloads/file-batch-system/docs/runbook)）、**Prometheus/Grafana 基线**（[`docs/observability/prometheus-grafana-baseline.md`](/Users/dengchao/Downloads/file-batch-system/docs/observability/prometheus-grafana-baseline.md)、`grafana-dashboard-batch.json`）；**第 7 轮补齐**了 [`prometheus-batch-rules.yml`](/Users/dengchao/Downloads/file-batch-system/docs/observability/prometheus-batch-rules.yml)、[`alertmanager-batch-template.yml`](/Users/dengchao/Downloads/file-batch-system/docs/observability/alertmanager-batch-template.yml)、[`structured-logging-pipeline.md`](/Users/dengchao/Downloads/file-batch-system/docs/observability/structured-logging-pipeline.md)、[`scripts/ops/inspect-observability.sh`](/Users/dengchao/Downloads/file-batch-system/scripts/ops/inspect-observability.sh)。
 - 仍有缺口：
   - 集中式日志管道如果要对接 ELK / OpenTelemetry，可在现有示例上继续补生产侧接入细节。
   - Kafka lag 若要接入平台统一告警，仍建议再补 Kafka exporter 或 Prometheus adapter。

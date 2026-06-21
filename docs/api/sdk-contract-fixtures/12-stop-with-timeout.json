@@ -1,6 +1,6 @@
 {
   "scenario": "stop-with-timeout",
-  "description": "SIGTERM 触发 stop(30s)→ 拒新消息 / drain in-flight / deactivate;必须在 timeout 内完成,否则 K8s SIGKILL 兜底(丢任务)",
+  "description": "SIGTERM 触发 stop(30s)→ 拒新消息 / drain in-flight / deactivate;必须在 timeout 内完成,否则 K8s SIGKILL 回退(丢任务)",
   "given": {
     "config": { "tenantId": "acme", "workerCode": "w-1" },
     "state":  { "inFlight": 2, "fsm": "NORMAL" }

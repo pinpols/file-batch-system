@@ -2,7 +2,7 @@
 # P2-4: 创建流复制用户 replicator + 放行 replica 容器在 batch-network 子网的连接。
 # 主库容器首次启动（数据目录空）时由 postgres 官方 entrypoint 自动调用本脚本。
 #
-# REPLICATION_PASSWORD 优先从环境读取（POSTGRES_REPLICATION_PASSWORD），未设时回退默认值
+# REPLICATION_PASSWORD 优先从环境读取（POSTGRES_REPLICATION_PASSWORD），未设时默认回退值
 # repl_pass_dev_only。生产强制覆盖。
 
 set -euo pipefail

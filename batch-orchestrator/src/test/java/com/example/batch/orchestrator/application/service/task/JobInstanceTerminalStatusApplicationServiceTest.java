@@ -29,7 +29,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * 守护 job_instance 终态 CAS + 子表收口的事务原子语义:
+ * 守护 job_instance 终态 CAS + 子表收敛的事务原子语义:
  *
  * <ul>
  *   <li>CAS 命中(rows > 0): 必须调 reconcileChildren(同事务保证子表跟进) + afterCommit 上报 metrics

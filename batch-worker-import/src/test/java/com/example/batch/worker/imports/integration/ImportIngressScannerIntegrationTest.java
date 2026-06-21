@@ -146,7 +146,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     assertThat(String.valueOf(row.get("metadata_json")))
         .contains("bundleTemplateCode")
         .contains("TPL_ORDER")
-        // 2c-2a:本束该启动的 BUNDLE_IMPORT 作业 code 也落库,供 2c-2b 凑齐发 launch
+        // 2c-2a:本束该启动的 BUNDLE_IMPORT 作业 code 也写入数据库,供 2c-2b 满足条件后发 launch
         .contains("bundleJobCode")
         .contains("BUNDLE_IMPORT_IT");
   }

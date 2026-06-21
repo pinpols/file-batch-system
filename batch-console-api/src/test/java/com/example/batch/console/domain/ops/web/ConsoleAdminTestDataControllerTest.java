@@ -88,7 +88,7 @@ class ConsoleAdminTestDataControllerTest {
 
   @Test
   void shouldRejectBlankPrefixAtMethodGuard() throws Exception {
-    // controller 内部 if (prefix.isBlank()) 兜底,@Pattern 在 standalone MockMvc 不触发
+    // controller 内部 if (prefix.isBlank()) 回退,@Pattern 在 standalone MockMvc 不触发
     // (MethodValidationPostProcessor 需要 Spring context),所以这里走方法内 guard
     mockMvc
         .perform(delete("/api/console/admin/test-data").param("prefix", "   "))

@@ -93,7 +93,7 @@ class SdkTaskContext(BaseModel):
     """本次任务执行的"最新值胜出"进度槽位(P4)。
 
     Handler 在长循环里调用 ``ctx.progress_reporter.report({...})``;
-    租约续期调度器每次 tick 采样 ``latest()`` 并塞进 renew 请求体的
+    租约续期调度器每次 tick 采样 ``latest()`` 并写入 renew 请求体的
     ``details`` 字段,使平台的 job-task 详情页保持新鲜。仅在尚未升级的
     P0.5 时期调用方处为 ``None``。
     """

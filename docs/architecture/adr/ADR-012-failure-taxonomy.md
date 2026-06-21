@@ -13,7 +13,7 @@
 |---|---|
 | 7 enum 封闭分类 + DictEnum 一等公民 | 让 worker 自定义新 FailureClass（枚举封闭） |
 | 按 class 派发 retry / alert / RERUN | 把 FailureClass 拆成多个终态（保留 FAILED 单一终态 + class 列） |
-| Worker 显式上报 + classifier chain 兜底 | 让 ops 在 console 手填 errorClassHint 改分类（污染审计） |
+| Worker 显式上报 + classifier chain 回退 | 让 ops 在 console 手填 errorClassHint 改分类（污染审计） |
 | `retry_policy_by_class` JSONB 让 job 级覆盖 | 按 class 分流到不同 worker pool（与 ADR-027 正交，v1 不做） |
 
 ## 背景
@@ -69,12 +69,12 @@ public enum FailureClass implements DictEnum {
 
 1. **Worker 上报时显式标**：`TaskExecutionReportDto.failureClass`，worker 业务侧最知根因；
 2. **BizException 携带**：`BizException` 增加 `failureClass` 字段，`error.<scope>.<reason>` key 在 `messages.properties` 维护对应 class（例：`error.data.row_validation_failed=DATA_QUALITY`）；
-3. **Orchestrator 兜底分类器**：`FailureClassifier`（chain）按异常类型 / SQL state / HTTP code / timeout 模式做 fallback；
+3. **Orchestrator 回退分类器**：`FailureClassifier`（chain）按异常类型 / SQL state / HTTP code / timeout 模式做 fallback；
 4. **不知道就 UNKNOWN**：永远不要为了显得"有分类"瞎猜；UNKNOWN 触发 alert 让 ops 看一眼。
 
 ### 响应派发
 
-| FailureClass | 默认 retry | escalation alert | 自动 RERUN | 反向兜底 |
+| FailureClass | 默认 retry | escalation alert | 自动 RERUN | 反向回退 |
 |---|---|---|---|---|
 | INFRASTRUCTURE | EXPONENTIAL up to 5 | INFO → WARN @ retry=3 | ✓ 含 jitter | ✓ DB CAS retry_count |
 | DATA_QUALITY | NONE | ERROR 立即 | ✗ | 写 `data_quality_check`（ADR-021） |
@@ -110,7 +110,7 @@ NULL = 用 §响应派发 默认表。
 |---|---|
 | 持久层 | `job_instance / job_task` 各加 1 列（nullable），archive 同步；`job_definition` 加 1 JSONB 列 |
 | 模块 | 新 `FailureClassifier` chain bean；orchestrator 终态推进路径接入；worker SDK 暴露 `failureClass` 字段；retry policy 解析层加按 class 分支 |
-| 兼容性 | 老数据 `failure_class IS NULL` → 视为 UNKNOWN；老 worker 不上报 = orchestrator 用 classifier 兜底；零行为变化前提下逐步替换 |
+| 兼容性 | 老数据 `failure_class IS NULL` → 视为 UNKNOWN；老 worker 不上报 = orchestrator 用 classifier 回退；零行为变化前提下逐步替换 |
 | 监控 | metric tag `failure_class` 维度；alert routing 重构（加个 dispatcher） |
 
 ## 实施分阶段
@@ -118,7 +118,7 @@ NULL = 用 §响应派发 默认表。
 | Stage | 范围 | 状态 |
 |---|---|---|
 | 1 | schema + enum + 默认 NULL 不影响现有 | ✓ V111 + `FailureClass` enum |
-| 2 | `FailureClassifier` chain + 兜底分类器（exception 类 / SQL state） | ✓ `service/failure/FailureClassifier` + `FailureClassifierTest` 7/7 |
+| 2 | `FailureClassifier` chain + 回退分类器（exception 类 / SQL state） | ✓ `service/failure/FailureClassifier` + `FailureClassifierTest` 7/7 |
 | 3 | Worker SDK 接 `TaskExecutionReportDto.failureClass`，BizException 携带 | ✓ `BizException.of(code, FailureClass, ...)` + Worker DTO + `TaskOutcomeCommand` 透传 + `finishTask` / `updateProgress` 写库 |
 | 4 | retry policy 按 class 派发；`retry_policy_by_class` JSONB 解析 | ☐ **deferred follow-up** —— Stage 1 已落 schema 列，应用层未接；触发条件：失败重试想按 class 微调时再做（默认全局 retry_policy 仍工作） |
 | 5 | metric / alert routing / Console 列展示 | ✓ `batch.job.failure{tenant,jobCode,class}` counter；`ConsoleMetaQueryService` 注册 `failureClass` + OpenAPI MetaEnums 同步 |
@@ -147,7 +147,7 @@ NULL = 用 §响应派发 默认表。
 - E2E：监控看板 4 类 failure 分布正确
 - 守护：`FailureClassEnumRegistrationTest` 强制 enum 在 `ConsoleMetaQueryService.REGISTRATIONS` 登记
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|

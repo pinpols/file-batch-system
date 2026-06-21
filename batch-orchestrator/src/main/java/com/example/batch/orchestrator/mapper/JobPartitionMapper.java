@@ -63,7 +63,7 @@ public interface JobPartitionMapper {
       @Param("batchSize") Integer batchSize);
 
   /**
-   * 兜底扫描：partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task 的死态。 仅用于升级前历史残留清理；新代码已通过
+   * 回退扫描：partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task 的死态。 仅用于升级前历史残留清理；新代码已通过
    * REQUIRES_NEW + 抛异常回滚消除产生路径。
    */
   List<JobPartitionEntity> selectOrphanReadyPartitionsWithRunningTask(
@@ -106,7 +106,7 @@ public interface JobPartitionMapper {
       @Param("readyStatus") String readyStatus, @Param("runningStatus") String runningStatus);
 
   /**
-   * 当 {@code job_instance} 已进入终态但子分区仍为非终态（历史并发/缺陷残留）时，批量收口分区状态并清空 lease， 避免 {@code
+   * 当 {@code job_instance} 已进入终态但子分区仍为非终态（历史并发/缺陷残留）时，批量收敛分区状态并清空 lease， 避免 {@code
    * DefaultPartitionThrottle} 把 READY/RUNNING/RETRYING 计入活跃配额导致泄漏。
    */
   int closeNonTerminalPartitionsForTerminalInstance(

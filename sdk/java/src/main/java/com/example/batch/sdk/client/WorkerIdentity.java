@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * Worker 运行身份快照 — register 时确定,heartbeat 周期内不变。
  *
- * <p>用于 {@link com.example.batch.sdk.scheduler.HeartbeatScheduler} 在每次 tick 时把这 6 个字段塞进 heartbeat
+ * <p>用于 {@link com.example.batch.sdk.scheduler.HeartbeatScheduler} 在每次 tick 时把这 6 个字段写入 heartbeat
  * body, 与 Python SDK PR #320 对齐:
  *
  * <ul>
@@ -16,7 +16,7 @@ import java.util.List;
  * </ul>
  *
  * <p>历史上 SDK 在 heartbeat 仅发 5 字段(tenantId/workerCode/status/heartbeatAt/currentLoad),依赖 "平台从
- * register 拿"的隐式约定。但 worker 长跑后若 worker_registry 行被运维误删 / 平台冷启动重建索引,heartbeat 兜底降级到 register
+ * register 拿"的隐式约定。但 worker 长跑后若 worker_registry 行被运维误删 / 平台冷启动重建索引,heartbeat 回退降级到 register
  * 路径({@code DefaultWorkerRegistryService#heartbeat} 中 {@code registry == null →
  * self.register(request)})时这些字段就丢了 — 把它们带在每次心跳里消除该窗口。
  *

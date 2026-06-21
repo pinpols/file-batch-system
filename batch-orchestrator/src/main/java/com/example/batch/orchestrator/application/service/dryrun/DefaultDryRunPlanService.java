@@ -371,7 +371,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   // planner-only,但那是对 PG 实现细节的单层依赖(个别语句如 CREATE INDEX CONCURRENTLY / REFRESH
   // MAT VIEW 历史上有越过 ANALYZE 标志真执行的分支)。此处先做语句类型白名单,把 DML/DDL 挡在
   // EXPLAIN 之前。用首关键字而非 AST 解析:合法探测 SQL 本就是 SELECT/WITH,零误伤;WITH..DML 这类
-  // CTE 内嵌 DML 仍由下游 ANALYZE FALSE 兜底。注释/前导空白由 \\s* + 关键字边界覆盖。
+  // CTE 内嵌 DML 仍由下游 ANALYZE FALSE 回退。注释/前导空白由 \\s* + 关键字边界覆盖。
   private static final Pattern SELECT_OR_WITH_PREFIX =
       Pattern.compile("^\\s*(SELECT|WITH)\\b", Pattern.CASE_INSENSITIVE);
 
@@ -397,7 +397,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         continue;
       }
       if (!SELECT_OR_WITH_PREFIX.matcher(trimmed).find()) {
-        // 纵深防御:非 SELECT/WITH(即 DML/DDL)在进入 EXPLAIN 之前直接拒绝,不依赖 ANALYZE FALSE 兜底。
+        // 纵深防御:非 SELECT/WITH(即 DML/DDL)在进入 EXPLAIN 之前直接拒绝,不依赖 ANALYZE FALSE 回退。
         findings.add(
             DryRunFinding.error(
                 "EXEC_SQL_NON_SELECT_REJECTED",

@@ -17,7 +17,7 @@ CLAUDE.md §架构硬约束：
 
 | 文件 | 用途 | JdbcTemplate 合理性 |
 |---|---|---|
-| [ShedLockProviderFactory.java](batch-common/src/main/java/com/example/batch/common/config/ShedLockProviderFactory.java) | JDBC LockProvider 兜底（trigger / worker 用） | ShedLock JDBC 实现要求 |
+| [ShedLockProviderFactory.java](batch-common/src/main/java/com/example/batch/common/config/ShedLockProviderFactory.java) | JDBC LockProvider 回退（trigger / worker 用） | ShedLock JDBC 实现要求 |
 | [BatchStartupSelfCheck.java](batch-common/src/main/java/com/example/batch/common/health/BatchStartupSelfCheck.java) | `information_schema.tables/columns` 启动健康检查 | 系统表查询无 mapper 必要 |
 | [ArchiveSchemaDriftCheck.java](batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java) | 归档表 schema 漂移检测 | `information_schema` 查询 |
 | [OrchestratorStartupLeaseAudit.java](batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/startup/OrchestratorStartupLeaseAudit.java) | 启动 lease 审计 | 一次性诊断查询 |

@@ -27,7 +27,7 @@ Security fixes are applied to the current main development line.
 
 ### 访问控制与脱敏
 - **`ConsoleTenantGuard`**：控制台 API 请求强制租户隔离，跨租户请求直接 403。
-- **`ConsoleAiPromptGuard`**（AI Gateway）：AI 提示词请求的内容安全守卫，含分类（REJECTED_DISABLED / SAFETY / SCOPE / APPROVED）和审计日志落库（`console_ai_audit_log`）。
+- **`ConsoleAiPromptGuard`**（AI Gateway）：AI 提示词请求的内容安全守卫，含分类（REJECTED_DISABLED / SAFETY / SCOPE / APPROVED）和审计日志写入数据库（`console_ai_audit_log`）。
 - **`ContentMaskingUtils`**：PII 脱敏支持 STRICT / PCI / GDPR 三档规则集（卡有效期、IPv4、邮编等）。
 
 ### 凭证管理注意事项

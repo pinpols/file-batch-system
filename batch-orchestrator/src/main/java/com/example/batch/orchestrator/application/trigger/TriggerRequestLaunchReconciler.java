@@ -16,19 +16,19 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * ADR-010 Stage 6: trigger_request 状态机闭环兜底。
+ * ADR-010 Stage 6: trigger_request 状态机闭环回退。
  *
  * <p><b>背景</b>:async launch 路径下,trigger 端 {@code persistAndForward} 把 trigger_request 推到 {@code
  * ACCEPTED} 即返回; orchestrator 端 {@link TriggerLaunchConsumer} 消费成功 launch 后会 best-effort 回写 {@code
  * LAUNCHED + relatedJobInstanceId}, 但回写本身可能因 DB 瞬时异常 / 事务隔离失败 — 主路径已 ack 不会 retry,trigger_request
  * 会留在 ACCEPTED, 审计 / SLA 报表无法判定"job 是否真跑了"。
  *
- * <p><b>本 reconciler</b>:周期 60s 扫一批"卡 ACCEPTED + 已有 job_instance 落库 + 未回写 jobInstanceId" 的
+ * <p><b>本 reconciler</b>:周期 60s 扫一批"卡 ACCEPTED + 已有 job_instance 写入数据库 + 未回写 jobInstanceId" 的
  * trigger_request,按 (tenant_id, dedup_key) JOIN 到对应 job_instance.id, 走 CAS update 把状态推到
  * LAUNCHED。仅做"已发生事实的事后回写" — 不会引发新 launch、 不会改业务语义,失败也只是下一轮再试,绝对幂等。
  *
  * <p><b>静默期</b> {@code min-age-seconds}(默认 300s):刚 ack 的请求让 consumer writeBack 自己处理, reconciler 不参与
- * 抢同一行;过 5 min 未闭环再兜底,避免 reconciler 与 consumer 在 ms 级窗口内并发写。
+ * 抢同一行;过 5 min 未闭环再回退,避免 reconciler 与 consumer 在 ms 级窗口内并发写。
  *
  * <p><b>不解决的问题</b>(交给 ops backlog):trigger_request 卡 ACCEPTED 但 job_instance 始终没出现 (consumer 异常 /
  * launch 失败) — 需要单独的"过期 ACCEPTED"告警 + 人工排查,本 reconciler 不会自动 GIVE_UP。

@@ -268,7 +268,7 @@ public class BizException extends RuntimeException {
 - `OrchestratorApiExceptionHandler`（orchestrator）
 - `TriggerApiExceptionHandler`（trigger）
 
-处理链：`BizException` → `SystemException` → `MethodArgumentNotValidException` → `ConstraintViolationException` → ... → `Exception`（兜底）
+处理链：`BizException` → `SystemException` → `MethodArgumentNotValidException` → `ConstraintViolationException` → ... → `Exception`（回退）
 
 ---
 
@@ -442,7 +442,7 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 | 原则                     | 说明                                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| **包即词汇表**              | `entity` / `query` / `command`一眼可读；不要把 API 的 `*Request` / `*Dto` 塞进 `domain`（除非明确是跨层复用的查询契约）。          |
+| **包即词汇表**              | `entity` / `query` / `command`一眼可读；不要把 API 的 `*Request` / `*Dto` 写入 `domain`（除非明确是跨层复用的查询契约）。          |
 | **禁止 `*Record` 表映射后缀** | 表行一律 `*Entity`；Java `record` 关键字仍可用于 **非表** 的不可变 DTO。                                                  |
 | **单向依赖**               | `command` / `query` → 可依赖 `common`；**避免** `entity` 依赖 `command`；子域模型（`pipeline`）尽量只吃 JDK + `common`。   |
 | **与 §1 参数规约衔接**        | 对外 `Command` 若构造字段很多，按 CLAUDE.md：`argc > 6` 须 `@Builder` 且调用方先赋变量再传入；`domain.param` 中 Mapper 单次写入参数同理。 |
@@ -455,7 +455,7 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 | ---------- | --------------------------------------------------------------------------------------------------------------- |
 | **命名**     | `XxxEntity`，与表含义对应，不缩写业务词。                                                                                      |
 | **形态**     | **默认** `class` + `@Data`，运行态大行、多 null 更新、`version` 乐观锁时更合适。                                                     |
-| **Lombok** | 需 MyBatis 无参构造时：`@NoArgsConstructor` + `@AllArgsConstructor`；若加 `@Builder`，三连兜底（与 CLAUDE.md 「Builder 与反射路径」一致）。 |
+| **Lombok** | 需 MyBatis 无参构造时：`@NoArgsConstructor` + `@AllArgsConstructor`；若加 `@Builder`，三连回退（与 CLAUDE.md 「Builder 与反射路径」一致）。 |
 | **可变边界**   | 仅在编排内核、状态推进路径上允许对 Entity 做「读完—改字段—写回」；不要在 Controller 层持有可变 Entity 横穿多层。                                         |
 | **可选：不可变** | 少数只读/窄表可用 `record` + XML `resultMap`/`<constructor>`；新代码无必要时优先与大多数字段对齐用 `@Data` class。                          |
 | **接口混入**   | 实现 `Stateful`、`LocalizedErrorCarrier` 等横切接口时保持类在 `entity` 内，不为此单独开包。                                            |
@@ -685,7 +685,7 @@ public class ConsoleJobController {
 **注解式 `@DistributedLock`(batch-common/lock):业务方法级,acquire-execute-release**
 
 - 适合:防止并发重复执行的业务方法(RERUN / 资源占用 / 防双 submit)
-- SpEL key 解析方法参数,失败降级方法签名兜底
+- SpEL key 解析方法参数,失败降级方法签名回退
 - 抢锁失败按 `throwOnFailure` 决定抛 `DistributedLockAcquireException` 或静默跳过
 - 配置开关:`batch.lock.distributed.enabled`
 
@@ -1108,7 +1108,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | Webhook/JWT/消息时间 | `Instant` | `BatchDateTimeSupport.nowInstant()` |
 | 批量日 | `LocalDate` | `BatchDateTimeSupport.currentBatchDate()`；调度触发链路优先使用 `CalendarBizDateResolver` / 后续 `BusinessDateService` |
 | 业务日期 | `LocalDate` | `BatchDateTimeSupport.currentBusinessDate()`；需要节假日/顺延时走 `BusinessCalendarService` |
-| Cron 触发计算 | `ZonedDateTime` / `Instant` | 使用作业 `timezone` 或日历时区解析出的 `scheduleZoneId`，结果落库和消息传输转 `Instant` |
+| Cron 触发计算 | `ZonedDateTime` / `Instant` | 使用作业 `timezone` 或日历时区解析出的 `scheduleZoneId`，结果写入数据库和消息传输转 `Instant` |
 | 展示给用户 | `ZonedDateTime` / `String` | `BatchDateTimeSupport.toZonedDateTime(...)` / `formatForDisplay(...)`，时区来自用户、租户或平台默认 |
 | 文件名可读时间 | `String` | `BatchDateTimeSupport.formatForFileTimestamp(...)` / `currentFileTimestamp()` |
 
@@ -1167,7 +1167,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 | 层                                           | 默认                                     | 场景                                                                |
 | ------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------- |
-| Java 字段 `bypassMode`                        | `false`                                | 兜底最安全，防未知 profile 意外放开                                            |
+| Java 字段 `bypassMode`                        | `false`                                | 回退最安全，防未知 profile 意外放开                                            |
 | `application-local.yml`（6 个模块）              | `true`                                 | IDE 本地跑默认旁路，开发者调试不受安全链拖累                                          |
 | `docker/compose/app.yml` env                | `${BATCH_SECURITY_BYPASS_MODE:-false}` | docker-compose 起容器默认不旁路，环境形态贴近生产；需要旁路时显式设 env 覆盖                  |
 | `.env.local` / `.env.test` / `.env.example` | `false`                                | 跟 compose 对齐                                                      |

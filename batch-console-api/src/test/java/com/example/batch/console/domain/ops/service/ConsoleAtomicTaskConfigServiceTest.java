@@ -30,7 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * <p>覆盖:
  *
  * <ul>
- *   <li>合法创建 → 落库 + 回读返回 entity
+ *   <li>合法创建 → 写入数据库 + 回读返回 entity
  *   <li>schema 校验失败:taskType 未知 / 缺必填 / 非法 key
  *   <li>凭据字段静态拒入(SensitiveDataValidator 接入守护)
  *   <li>列表只允许已知 taskType

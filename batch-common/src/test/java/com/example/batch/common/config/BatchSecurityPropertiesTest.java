@@ -17,7 +17,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  *   <li>prod / production / staging / uat / preprod 等 PROD_LIKE profile 下 {@code bypassMode=true} →
  *       抛 FATAL
  *   <li>占位符密钥（CHANGE_ME / change-me / changeme / placeholder / secret 等大小写下划线连字符变体）→ 抛 FATAL
- *   <li>密钥长度 < 16 → 抛 FATAL（弱密钥强度兜底）
+ *   <li>密钥长度 < 16 → 抛 FATAL（弱密钥强度回退）
  *   <li>非 prod profile 下完全宽松（local / dev / test）
  *   <li>无 Environment（纯单元测试场景）安全早返回
  * </ul>

@@ -37,7 +37,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
- * AI 对话入口：集成 Spring AI、多层防护、审计落库，确保助手只能在受控边界内回答。
+ * AI 对话入口：集成 Spring AI、多层防护、审计写入数据库，确保助手只能在受控边界内回答。
  *
  * <p>多层防护（任一层拒绝即返回 refusal 响应并仍写审计）：
  *
@@ -52,7 +52,7 @@ import org.springframework.stereotype.Service;
  * <p>合规审计（{@link #buildAuditCommand}）：
  *
  * <ul>
- *   <li><b>原文不落库</b>：prompt / response 只落 <b>SHA-256 哈希</b> + 前 512 字符 preview， 防 PII /
+ *   <li><b>原文不写入数据库</b>：prompt / response 只落 <b>SHA-256 哈希</b> + 前 512 字符 preview， 防 PII /
  *       敏感业务数据泄露到审计表。
  *   <li><b>拒绝也记录</b>：被 gate 拦下的请求同样写审计（带 refusalReason），便于安全团队复盘。
  * </ul>
@@ -338,7 +338,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
       // R7 安全扫描 2026-05-16 P1：原 Integer.toHexString(hashCode) 漏前导 0
       // (semgrep bad-hexa-conversion)；改 %08x 保留 8 字符全长。
-      // 注：SHA-256 在现代 JDK 必定可用，这条 catch 实际不可达，做兜底而已。
+      // 注：SHA-256 在现代 JDK 必定可用，这条 catch 实际不可达，做回退而已。
       return String.format("%08x", value.hashCode());
     }
   }

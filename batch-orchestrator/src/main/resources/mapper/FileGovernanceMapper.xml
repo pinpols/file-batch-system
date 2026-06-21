@@ -289,11 +289,11 @@
             #{sourceType}, null, #{fileStatus}, null, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
         )
         <!--
-          TOCTOU 兜底(2026-06 加固):reconcileObject 的 existsFileRecordByStoragePath → insert 两步非原子,
-          原先仅靠调用方 @SchedulerLock(file_governance_reconcile) 串行兜底。此 insert 恒以
-          checksum_type='NONE' / checksum_value=null 落库,命中 V124 的 partial unique index
+          TOCTOU 回退(2026-06 加固):reconcileObject 的 existsFileRecordByStoragePath → insert 两步非原子,
+          原先仅靠调用方 @SchedulerLock(file_governance_reconcile) 串行回退。此 insert 恒以
+          checksum_type='NONE' / checksum_value=null 写入数据库,命中 V124 的 partial unique index
           uk_file_record_no_checksum ON (tenant_id, storage_path) WHERE checksum_value IS NULL。
-          加 ON CONFLICT DO NOTHING 把"靠锁"升级为"DB 唯一约束兜底":并发/锁失效下重复路径静默跳过,
+          加 ON CONFLICT DO NOTHING 把"靠锁"升级为"DB 唯一约束回退":并发/锁失效下重复路径静默跳过,
           不再抛 DuplicateKeyException 污染事务。冲突时不返回生成主键,id 保持 null,
           调用方 FileGovernanceRepository#createReconciledFileRecord 已对 null id 做"已存在,跳过"语义。
         -->

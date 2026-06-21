@@ -51,7 +51,7 @@ class SdkAbstractTypedExportHandlerTest {
   }
 
   @Test
-  @DisplayName("强类型入参 → buildQuery 用其字段,逐行写出,计数器 output 兜底")
+  @DisplayName("强类型入参 → buildQuery 用其字段,逐行写出,计数器 output 回退")
   void shouldExportRows_whenInputParsed() {
     // 准备
     RecordingTypedExport handler = new RecordingTypedExport();

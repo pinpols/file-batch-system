@@ -80,7 +80,7 @@
      ↓ ConfigPackageExcelValidator (新增 DAG 拓扑校验 + 其它字段校验)
      ↓ Preview workbook 返回 findings + WorkflowMermaidRenderer 出图
      ↓ 用户看图确认 findings
-     ↓ Apply 同步落库 + audit log
+     ↓ Apply 同步写入数据库 + audit log
      ↓ orchestrator
 ```
 

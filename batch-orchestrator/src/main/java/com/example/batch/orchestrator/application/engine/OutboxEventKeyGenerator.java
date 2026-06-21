@@ -16,7 +16,7 @@ package com.example.batch.orchestrator.application.engine;
  * </ul>
  *
  * <p><b>幂等保证</b>:DB 层 {@code uk_outbox_event_key UNIQUE (tenant_id, event_key)} + {@code on
- * conflict do nothing} 兜底。同一场景内同一目标重复生成必产生同一 key,自动去重。
+ * conflict do nothing} 回退。同一场景内同一目标重复生成必产生同一 key,自动去重。
  *
  * <p><b>Format 约定</b>:{@code <tenant>:<scope>:<key parts joined by ":">},scope 名小写连字符。最大长度 256,超长由
  * {@link #truncate} 自动 trim 末尾(行级 audit / 复现以 outbox_event_id 为准,key 截断不影响幂等性 — 撞 prefix 极小概率,可接受)。
@@ -89,7 +89,7 @@ public final class OutboxEventKeyGenerator {
 
   /**
    * Workflow 终态事件:{@code <tenant>:workflow:<workflowRunId>:terminal}。同 workflow_run
-   * 进入终态多次(理论上由前态守护拦掉)被 dedup 兜底。
+   * 进入终态多次(理论上由前态守护拦掉)被 dedup 回退。
    */
   public static String forWorkflowTerminal(String tenantId, Long workflowRunId) {
     return build(tenantId, "workflow", String.valueOf(workflowRunId), "terminal");

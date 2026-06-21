@@ -38,7 +38,7 @@ import org.springframework.test.context.ActiveProfiles;
  *   <li>orchestrator 端 {@code TriggerLaunchConsumer} 真消费消息(@KafkaListener)
  *   <li>反序列化 LaunchEnvelope 成功
  *   <li>调用 {@code LaunchApplicationService.launch(launchRequest)} 现有内部 API
- *   <li>job_instance 行真被 INSERT(uk_job_instance_tenant_dedup 兜底)
+ *   <li>job_instance 行真被 INSERT(uk_job_instance_tenant_dedup 回退)
  * </ol>
  *
  * <p>本测试与 batch-trigger 模块的 {@code TriggerAsyncLaunchE2eIT}(Layer 1)互补:Layer 1 覆盖 trigger
@@ -91,7 +91,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
     kafkaTemplate.send(BatchTopics.TRIGGER_LAUNCH_V1, key, payload).get();
 
     // 4) 断言:orchestrator TriggerLaunchConsumer 消费 → 调 LaunchApplicationService.launch →
-    //    job_instance 行被 INSERT(uk_job_instance_tenant_dedup 兜底,含 dedup_key)
+    //    job_instance 行被 INSERT(uk_job_instance_tenant_dedup 回退,含 dedup_key)
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(200))
@@ -110,7 +110,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
 
   @Test
   void duplicateKafkaMessage_dedupKeyEnsuresOnlyOneJobInstance() throws Exception {
-    // 验证 ADR-010 §不变量:同 requestId 多次消费 → uk_job_instance_tenant_dedup 兜底,只产生 1 个 job_instance
+    // 验证 ADR-010 §不变量:同 requestId 多次消费 → uk_job_instance_tenant_dedup 回退,只产生 1 个 job_instance
     LaunchSeed seed =
         E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
             jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);

@@ -9,7 +9,7 @@
 | 维度 | 已有资产(实查存在) | 状态 |
 |---|---|---|
 | 功能完整 | 648 单测 + 114 IT + 27 e2e(`*E2eIT`)+ sim 25 阶段(import/export/process/dispatch/trigger/atomic)+ sim-4day | ✅ full-ci-gate 门禁 |
-| **数据一致(承重墙)** | `ConcurrentTaskClaimIntegrationTest`(防双 claim)/ `ConcurrentTaskFinishIntegrationTest`(CAS 防双 finish)/ `OutboxEventToKafkaDispatch`·`OutboxPublish`(outbox 精确一次)/ `SqlConsistencyIntegrationTest` / `JobRetryFlowIntegrationTest` | ✅ IT 覆盖 |
+| **数据一致(关键约束)** | `ConcurrentTaskClaimIntegrationTest`(防双 claim)/ `ConcurrentTaskFinishIntegrationTest`(CAS 防双 finish)/ `OutboxEventToKafkaDispatch`·`OutboxPublish`(outbox 精确一次)/ `SqlConsistencyIntegrationTest` / `JobRetryFlowIntegrationTest` | ✅ IT 覆盖 |
 | 多租隔离 | batch.*:`MultiTenantIsolationIntegrationTest` + `MapperXmlTenantGuardArchTest`(静态扫 mapper);biz.* RLS:`RlsTenantIsolationIntegrationTest`·`RlsStrictModePreflight`·`RlsTenantSession`·`RlsPhaseAMigrationCoverage`;路由:`BusinessMultiShardRouting*` | ✅ IT 覆盖(batch 列 + biz RLS + 分片路由) |
 | 韧性 | `WorkerHeartbeatTimeoutScheduler`·`PartitionLeaseReclaim`·`StaleCompensationCommandReconciler`(lease/超时回收)、sim **stage25 checkpoint-crash 续跑**、3×`*ToxicIT`(混沌注入)、`DeadLetterController`(DLQ) | ✅ 逻辑层覆盖(端到端全 worker 组崩溃见 §2-C) |
 | 容量 | load-tests 10 Gatling 场景(JobLaunch / CapacityBaseline / ControlPlaneMixedPressure / WorkerTaskLifecycle / SchedulingBacklog…)+ SLO 旋钮 `slo.write.p95ms` / `slo.read.p99ms` / `slo.maxErrorPct` / `users.peak` | ✅ 工具就绪(需跑到靶点,见 §2-B) |
@@ -42,7 +42,7 @@
 ### D 安全签收
 - [ ] 越权矩阵:batch 列级 + biz RLS(`SET LOCAL app.tenant_id` 跨租返 0 行)+ 路由分片——以 §0 的 IT 为证据,**并在 staging 真数据补一次跨租查询验证**
 - [ ] **prod profile 强制 `batch.security.bypass-mode=off`**(认证/加解密/审批不放行)
-- [ ] atomic worker RCE 隔离(ADR-029,shell/sql/http/storedproc 特权隔离)、SSRF/sensitive-data 拦截、Kafka topic/consumer-group ACL 防跨租漂移、密钥注入(非明文落库)
+- [ ] atomic worker RCE 隔离(ADR-029,shell/sql/http/storedproc 特权隔离)、SSRF/sensitive-data 拦截、Kafka topic/consumer-group ACL 防跨租漂移、密钥注入(非明文写入数据库)
 
 ### E 可观测验收
 - [ ] OTel trace 端到端贯通:trigger → orchestrator → worker → report
@@ -50,7 +50,7 @@
 - [ ] health / liveness 探针 + 优雅停机预算实测(drain 期间 lease 保活、不丢在飞)
 
 ## 3. Phase 2 — 割接演练
-- [ ] Flyway 在 **prod-sized 数据**上 dry-run:记录耗时 + 锁影响;承重墙复核 `grep -r 'on conflict'` 全量(56 处 UNIQUE 幂等语义迁移后不变)
+- [ ] Flyway 在 **prod-sized 数据**上 dry-run:记录耗时 + 锁影响;关键约束复核 `grep -r 'on conflict'` 全量(56 处 UNIQUE 幂等语义迁移后不变)
 - [ ] **回滚脚本演练**(迁移可逆 / 数据可回退)
 - [ ] 配置开关核对:bypass-mode、Citus(默认关)、读写分离仅 console-api
 

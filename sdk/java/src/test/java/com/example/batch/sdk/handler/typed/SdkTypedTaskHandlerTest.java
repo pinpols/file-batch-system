@@ -88,7 +88,7 @@ class SdkTypedTaskHandlerTest {
 
   @Test
   void handleExceptionBubblesUpToDispatcher() {
-    // 契约:handle() 抛异常不被 execute() 吞,透传给 TaskDispatcher 统一兜底转 fail + REPORT failure。
+    // 契约:handle() 抛异常不被 execute() 吞,透传给 TaskDispatcher 统一回退转 fail + REPORT failure。
     // 仅入参反序列化失败(IllegalArgumentException 来自 convertValue)才在 execute 内转 fail。
     SdkTypedTaskHandler<ImportRequest, ImportResult> handler =
         new SdkTypedTaskHandler<>() {

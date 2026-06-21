@@ -33,7 +33,7 @@ CLAIM → 业务 execute → REPORT (HTTP POST orch)
 - **开关**：`batch.worker.report-outbox.enabled`（默认 `false`）；`**storage`**：`PLATFORM_PG`（默认，依赖 orchestrator Flyway **V96**）或 `SQLITE`（`sqlite-path`）。
 - **写**：`HttpTaskExecutionClient.report` 在内置 HTTP 重试耗尽后，若开关开启且 outbox UPSERT 成功，则计量 `batch.worker.report.duration{outcome=deferred_outbox}` 并返回（不向调用方抛异常）。
 - **读**：短事务内 **抢占**（NEW→`PUBLISHING`）；PostgreSQL 使用 `**FOR UPDATE SKIP LOCKED`**；SQLite 双语句近似独占。随后调用 `submitReportOverHttp`；成功 DELETE；失败退避并将状态回到 NEW，直至 `**max-publish-attempts`** → `**GIVE_UP**`。
-- **陈旧恢复**：定时将超时仍停在 `**PUBLISHING`** 的行重置为 **NEW**（进程崩溃兜底）。
+- **陈旧恢复**：定时将超时仍停在 `**PUBLISHING`** 的行重置为 **NEW**（进程崩溃回退）。
 - **续租熔断**：`pause-poll-when-renew-circuit-open=true`（默认）时，`WorkerTaskLeaseRenewer` 熔断 OPEN 则跳过 poll，避免 orch 不可达时无效 hammer。
 - **未纳入**：业务 `**TaskExecutionPool`** 线程内 JDBC 与 outbox **同一数据库事务**（需更大重构）；Kafka **EOS / 事务型 producer** 未引入。
 
@@ -62,7 +62,7 @@ CLAIM → 业务 execute → REPORT (HTTP POST orch)
 
 ### 关键语义
 
-- orch 重派路径仍由 ADR-014 **invocation_id** 兜底（过期 REPORT 被拒）。
+- orch 重派路径仍由 ADR-014 **invocation_id** 回退（过期 REPORT 被拒）。
 - REPORT 重试与业务线程解耦；进程重启后 PG/SQLite 未投递行由 poller 续推。
 - **同事务业务 JDBC + outbox** 未纳入（见上文「不变量（落地版）」）。
 
@@ -121,7 +121,7 @@ orch 周期 poll worker 的 `/internal/results` endpoint。
 
 ## 不变量（落地版）
 
-- **Kafka offset**：listener 仅在 `execute` + `report`（含 deferred enqueue）路径完整返回后才 ack；**enqueue 成功先于 offset 提交**，避免「结果未落库却已提交位移」。
+- **Kafka offset**：listener 仅在 `execute` + `report`（含 deferred enqueue）路径完整返回后才 ack；**enqueue 成功先于 offset 提交**，避免「结果未写入数据库却已提交位移」。
 - `**PLATFORM_PG`**：依赖平台 PostgreSQL 耐久（worker **flyway 默认关闭**，迁移由 orchestrator 先行）。
 - `**SQLITE`**：`sqlite-path` 必须 PVC / 持久卷。
 - **未承诺**：业务 **business** 库 JDBC 与 outbox **同一数据库事务**（`TaskExecutionPool` 异步执行模型限制）；后续若收紧需在 adapter 层引入统一单元事务边界。

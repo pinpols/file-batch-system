@@ -14,7 +14,7 @@
 --   psql -d batch_business -f scripts/db/business/rls-phase-a-strict.sql
 --
 -- 效果:
---   - DROP transition policy(允许 IS NULL/空 兜底)
+--   - DROP transition policy(允许 IS NULL/空 回退)
 --   - CREATE strict policy(必须 SET LOCAL app.tenant_id 才能读写)
 --   - 漏 SET 的 SQL → SELECT 返 0 行 / INSERT 抛 row-level security violation
 --
