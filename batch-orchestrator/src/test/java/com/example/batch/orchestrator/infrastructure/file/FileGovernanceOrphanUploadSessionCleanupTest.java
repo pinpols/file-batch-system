@@ -56,7 +56,8 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
             storage,
             properties,
             mock(FileGovernanceMetricsCacheService.class),
-            new SimpleMeterRegistry());
+            new SimpleMeterRegistry(),
+            mock(BundleArrivalLauncher.class));
   }
 
   @Test
@@ -132,7 +133,8 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
             storage,
             disabled,
             mock(FileGovernanceMetricsCacheService.class),
-            new SimpleMeterRegistry());
+            new SimpleMeterRegistry(),
+            mock(BundleArrivalLauncher.class));
 
     // act
     disabledScheduler.cleanupOrphanUploadSessions();

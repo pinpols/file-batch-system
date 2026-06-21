@@ -53,7 +53,8 @@ class FileGovernanceArrivalGroupGuardTest {
             mock(S3GovernanceStorage.class),
             properties,
             mock(FileGovernanceMetricsCacheService.class),
-            new SimpleMeterRegistry());
+            new SimpleMeterRegistry(),
+            mock(BundleArrivalLauncher.class));
   }
 
   @Test
