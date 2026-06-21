@@ -8,8 +8,12 @@ import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
 import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
+import com.example.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,20 +39,28 @@ public class TaskController {
 
   @PostMapping("/{taskId}/claim")
   public EffectiveTaskConfig claim(
-      @PathVariable Long taskId, @RequestBody TaskClaimRequest request) {
-    return taskControllerApplicationService.claim(taskId, request);
+      @PathVariable Long taskId,
+      @RequestBody TaskClaimRequest request,
+      HttpServletRequest httpRequest) {
+    return taskControllerApplicationService.claim(taskId, normalize(request, httpRequest));
   }
 
   @PostMapping("/{taskId}/report")
   public void report(
-      @PathVariable Long taskId, @Valid @RequestBody TaskExecutionReportDto request) {
+      @PathVariable Long taskId,
+      @Valid @RequestBody TaskExecutionReportDto request,
+      HttpServletRequest httpRequest) {
+    request.setTenantId(
+        InternalRequestTenantGuard.resolveTenant(httpRequest, request.getTenantId()));
     taskControllerApplicationService.report(taskId, request);
   }
 
   @PostMapping("/{taskId}/renew")
   public TaskHeartbeatResponse renew(
-      @PathVariable Long taskId, @RequestBody TaskHeartbeatRequest request) {
-    return taskControllerApplicationService.renew(taskId, request);
+      @PathVariable Long taskId,
+      @RequestBody TaskHeartbeatRequest request,
+      HttpServletRequest httpRequest) {
+    return taskControllerApplicationService.renew(taskId, normalize(request, httpRequest));
   }
 
   /**
@@ -56,13 +68,64 @@ public class TaskController {
    * cancelRequested=true} 后主动停(不等 lease 超时)。幂等:重复 / 对非 RUNNING task 调用均返回 200。
    */
   @PostMapping("/{taskId}/cancel")
-  public void cancel(@PathVariable Long taskId, @RequestBody TaskCancelRequest request) {
-    taskControllerApplicationService.cancel(taskId, request);
+  public void cancel(
+      @PathVariable Long taskId,
+      @RequestBody TaskCancelRequest request,
+      HttpServletRequest httpRequest) {
+    String tenantId =
+        InternalRequestTenantGuard.resolveTenant(
+            httpRequest, request == null ? null : request.tenantId());
+    taskControllerApplicationService.cancel(
+        taskId, new TaskCancelRequest(tenantId, request == null ? null : request.reason()));
   }
 
   @PostMapping("/leases/renew-batch")
-  public TaskLeaseRenewBatchResponse renewBatch(@RequestBody TaskLeaseRenewBatchRequest request) {
-    return taskControllerApplicationService.renewBatch(request);
+  public TaskLeaseRenewBatchResponse renewBatch(
+      @RequestBody TaskLeaseRenewBatchRequest request, HttpServletRequest httpRequest) {
+    return taskControllerApplicationService.renewBatch(normalize(request, httpRequest));
+  }
+
+  private static TaskClaimRequest normalize(
+      TaskClaimRequest request, HttpServletRequest httpRequest) {
+    String tenantId =
+        InternalRequestTenantGuard.resolveTenant(
+            httpRequest, request == null ? null : request.tenantId());
+    return new TaskClaimRequest(
+        tenantId,
+        request == null ? null : request.workerId(),
+        request == null ? null : request.partitionInvocationId());
+  }
+
+  private static TaskHeartbeatRequest normalize(
+      TaskHeartbeatRequest request, HttpServletRequest httpRequest) {
+    String tenantId =
+        InternalRequestTenantGuard.resolveTenant(
+            httpRequest, request == null ? null : request.tenantId());
+    return new TaskHeartbeatRequest(
+        tenantId,
+        request == null ? null : request.workerId(),
+        request == null ? null : request.partitionInvocationId(),
+        request == null ? null : request.details());
+  }
+
+  private static TaskLeaseRenewBatchRequest normalize(
+      TaskLeaseRenewBatchRequest request, HttpServletRequest httpRequest) {
+    if (request == null || request.items() == null) {
+      return request;
+    }
+    List<TaskLeaseRenewItemPayload> items = new ArrayList<>(request.items().size());
+    for (TaskLeaseRenewItemPayload item : request.items()) {
+      String tenantId =
+          InternalRequestTenantGuard.resolveTenant(
+              httpRequest, item == null ? null : item.tenantId());
+      items.add(
+          new TaskLeaseRenewItemPayload(
+              tenantId,
+              item == null ? null : item.taskId(),
+              item == null ? null : item.workerId(),
+              item == null ? null : item.partitionInvocationId()));
+    }
+    return new TaskLeaseRenewBatchRequest(items);
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)

@@ -8,6 +8,7 @@ import com.example.batch.orchestrator.controller.request.WorkerTenantRequest;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.service.WorkerRegistryServerService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,58 +34,123 @@ public class WorkerController {
   private final WorkerDrainGovernanceService workerDrainGovernanceService;
 
   @PostMapping("/register")
-  public WorkerRegistryEntity register(@RequestBody WorkerHeartbeatDto request) {
-    return workerRegistryService.register(request);
+  public WorkerRegistryEntity register(
+      @RequestBody WorkerHeartbeatDto request, HttpServletRequest httpRequest) {
+    return workerRegistryService.register(normalize(request, httpRequest));
   }
 
   // SDK Phase 2 §2.3:心跳回包从 WorkerRegistryEntity 改为下发 platform directive。
   // 老 worker 忽略响应体(worker-core toBodilessEntity / SDK 旧版不消费),切换无 break。
   @PostMapping("/{workerCode}/heartbeat")
   public WorkerHeartbeatResponse heartbeat(
-      @PathVariable String workerCode, @RequestBody(required = false) WorkerHeartbeatDto request) {
-    WorkerRegistryEntity worker = workerRegistryService.heartbeat(workerCode, request);
+      @PathVariable String workerCode,
+      @RequestBody(required = false) WorkerHeartbeatDto request,
+      HttpServletRequest httpRequest) {
+    WorkerRegistryEntity worker =
+        workerRegistryService.heartbeat(workerCode, normalize(request, httpRequest));
     return WorkerHeartbeatResponse.fromWorkerState(worker.status(), worker.maxConcurrent());
   }
 
   @PostMapping("/{workerCode}/deactivate")
-  public void deactivate(@PathVariable String workerCode, @RequestBody WorkerHeartbeatDto request) {
-    workerRegistryService.deactivate(request.tenantId(), workerCode);
+  public void deactivate(
+      @PathVariable String workerCode,
+      @RequestBody WorkerHeartbeatDto request,
+      HttpServletRequest httpRequest) {
+    workerRegistryService.deactivate(resolveTenant(request, httpRequest), workerCode);
   }
 
   @PostMapping("/{workerCode}/status")
   public WorkerRegistryEntity updateStatus(
-      @PathVariable String workerCode, @RequestBody WorkerHeartbeatDto request) {
-    return workerRegistryService.updateStatus(request.tenantId(), workerCode, request.status());
+      @PathVariable String workerCode,
+      @RequestBody WorkerHeartbeatDto request,
+      HttpServletRequest httpRequest) {
+    return workerRegistryService.updateStatus(
+        resolveTenant(request, httpRequest), workerCode, request.status());
   }
 
   @PostMapping("/{workerCode}/drain")
   public WorkerRegistryEntity drain(
-      @PathVariable String workerCode, @RequestBody WorkerDrainRequest request) {
+      @PathVariable String workerCode,
+      @RequestBody WorkerDrainRequest request,
+      HttpServletRequest httpRequest) {
+    String tenantId =
+        InternalRequestTenantGuard.resolveTenant(
+            httpRequest, request == null ? null : request.tenantId());
     return workerDrainGovernanceService.startDrain(
-        request.tenantId(), workerCode, request.timeoutSeconds());
+        tenantId, workerCode, request == null ? null : request.timeoutSeconds());
   }
 
   @PostMapping("/{workerCode}/force-offline")
   public WorkerRegistryEntity forceOffline(
-      @PathVariable String workerCode, @RequestBody WorkerTenantRequest request) {
-    return workerDrainGovernanceService.forceOffline(request.tenantId(), workerCode);
+      @PathVariable String workerCode,
+      @RequestBody WorkerTenantRequest request,
+      HttpServletRequest httpRequest) {
+    return workerDrainGovernanceService.forceOffline(
+        resolveTenant(request, httpRequest), workerCode);
   }
 
   @PostMapping("/{workerCode}/takeover")
   public WorkerRegistryEntity takeover(
-      @PathVariable String workerCode, @RequestBody WorkerTenantRequest request) {
-    return workerDrainGovernanceService.takeover(request.tenantId(), workerCode);
+      @PathVariable String workerCode,
+      @RequestBody WorkerTenantRequest request,
+      HttpServletRequest httpRequest) {
+    return workerDrainGovernanceService.takeover(resolveTenant(request, httpRequest), workerCode);
   }
 
   @PostMapping("/{workerCode}/warmup")
   public WorkerRegistryEntity warmup(
-      @PathVariable String workerCode, @RequestBody WorkerTenantRequest request) {
-    return workerDrainGovernanceService.warmup(request.tenantId(), workerCode);
+      @PathVariable String workerCode,
+      @RequestBody WorkerTenantRequest request,
+      HttpServletRequest httpRequest) {
+    return workerDrainGovernanceService.warmup(resolveTenant(request, httpRequest), workerCode);
   }
 
   @GetMapping("/{workerCode}/claimed-tasks")
   public List<JobTaskEntity> claimedTasks(
-      @PathVariable String workerCode, @RequestParam String tenantId) {
-    return workerDrainGovernanceService.listClaimedTasks(tenantId, workerCode);
+      @PathVariable String workerCode,
+      @RequestParam String tenantId,
+      HttpServletRequest httpRequest) {
+    return workerDrainGovernanceService.listClaimedTasks(
+        InternalRequestTenantGuard.resolveTenant(httpRequest, tenantId), workerCode);
+  }
+
+  private static WorkerHeartbeatDto normalize(
+      WorkerHeartbeatDto request, HttpServletRequest httpRequest) {
+    if (request == null) {
+      String tenantId = InternalRequestTenantGuard.resolveTenant(httpRequest, null);
+      return tenantId == null
+          ? null
+          : new WorkerHeartbeatDto(
+              tenantId, null, null, null, null, null, null, null, null, null, null, null, null,
+              null, null, null);
+    }
+    String tenantId = resolveTenant(request, httpRequest);
+    return new WorkerHeartbeatDto(
+        tenantId,
+        request.workerCode(),
+        request.workerGroup(),
+        request.status(),
+        request.hostName(),
+        request.hostIp(),
+        request.processId(),
+        request.buildId(),
+        request.sdkVersion(),
+        request.heartbeatAt(),
+        request.capabilityTags(),
+        request.currentLoad(),
+        request.taskTypes(),
+        request.rowsProcessed(),
+        request.totalRowsHint(),
+        request.protocolVersion());
+  }
+
+  private static String resolveTenant(WorkerHeartbeatDto request, HttpServletRequest httpRequest) {
+    return InternalRequestTenantGuard.resolveTenant(
+        httpRequest, request == null ? null : request.tenantId());
+  }
+
+  private static String resolveTenant(WorkerTenantRequest request, HttpServletRequest httpRequest) {
+    return InternalRequestTenantGuard.resolveTenant(
+        httpRequest, request == null ? null : request.tenantId());
   }
 }

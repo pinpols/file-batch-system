@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.service.sensor;
 
 import com.example.batch.common.enums.SensorType;
+import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.SensorProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -8,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -38,12 +40,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class DbRowExistsSensorPolicy implements SensorPolicy {
 
   private final NamedParameterJdbcTemplate jdbc;
+  private final DataSource dataSource;
   private final SensorProperties props;
   private final ObjectMapper objectMapper;
 
   public DbRowExistsSensorPolicy(
-      NamedParameterJdbcTemplate jdbc, SensorProperties props, ObjectMapper objectMapper) {
+      NamedParameterJdbcTemplate jdbc,
+      DataSource dataSource,
+      SensorProperties props,
+      ObjectMapper objectMapper) {
     this.jdbc = jdbc;
+    this.dataSource = dataSource;
     this.props = props;
     this.objectMapper = objectMapper;
   }
@@ -78,6 +85,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
     Map<String, Object> params = resolveParams(spec, ctx);
 
     try {
+      RlsTenantSessionSupport.applyIfPresent(dataSource);
       List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
       if (rows.isEmpty()) {
         return SensorProbeResult.notYet();

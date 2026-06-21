@@ -90,6 +90,9 @@ class DefaultLaunchServiceTest {
     partitionDispatchService = mock(PartitionDispatchService.class);
     triggerRequestMapper = mock(TriggerRequestMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
+    // V182:insert 现返回 dedup 账本受影响行数(1=成功,0=重复)。happy-path 默认 1;
+    // DefaultLaunchService 据此判定幂等重复(inserted<=0 抛 DuplicateKey)。
+    when(jobInstanceMapper.insert(any())).thenReturn(1);
     workflowRunMapper = mock(WorkflowRunMapper.class);
     workflowNodeRunMapper = mock(WorkflowNodeRunMapper.class);
     jobMappers =

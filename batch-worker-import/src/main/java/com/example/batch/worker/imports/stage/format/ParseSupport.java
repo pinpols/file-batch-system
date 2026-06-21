@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.stage.format;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
@@ -23,8 +24,8 @@ import lombok.Builder;
 /** Shared utilities used by all {@link FormatParser} implementations. */
 public class ParseSupport {
 
-  static final String KEY_PARSED_COUNT = "parsedCount";
-  static final String KEY_SCHEMA_FIELDS = "schemaFields";
+  static final String KEY_PARSED_COUNT = PipelineRuntimeKeys.IMPORT_PARSED_COUNT;
+  static final String KEY_SCHEMA_FIELDS = PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS;
 
   private final ObjectMapper objectMapper;
   private final ImportRecordGovernanceService recordGovernanceService;

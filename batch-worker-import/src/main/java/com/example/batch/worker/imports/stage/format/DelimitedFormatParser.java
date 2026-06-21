@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.univocity.parsers.csv.CsvParser;
@@ -25,7 +26,7 @@ import java.util.Set;
  */
 public class DelimitedFormatParser implements FormatParser {
 
-  private static final String KEY_SCHEMA_FIELDS = "schemaFields";
+  private static final String KEY_SCHEMA_FIELDS = PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS;
 
   private final ParseSupport support;
 

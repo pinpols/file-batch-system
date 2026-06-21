@@ -20,6 +20,17 @@
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.OutboxEventEntity"
             useGeneratedKeys="true" keyProperty="id">
+        with claimed_key as (
+            insert into batch.outbox_event_dedup_key (
+                tenant_id,
+                event_key
+            ) values (
+                #{tenantId},
+                #{eventKey}
+            )
+            on conflict (tenant_id, event_key) do nothing
+            returning 1
+        )
         insert into batch.outbox_event (
             tenant_id,
             aggregate_type,
@@ -33,9 +44,6 @@
             trace_id,
             priority
         )
-        <!-- 分区后全局 (tenant_id,event_key) 唯一不可用 DB 约束表达,NOT EXISTS 等价替代旧
-             ON CONFLICT DO NOTHING(跳过时同样不回填 id);竞态可接受性论证见
-             docs/design/partition-idempotency-decision.md。幂等承重在 OutboxDomainEventPublisher 单一入口 -->
         select
             #{tenantId},
             #{aggregateType},
@@ -48,10 +56,7 @@
             #{nextPublishAt},
             #{traceId},
             coalesce(#{priority}, 5)
-        where not exists (
-            select 1 from batch.outbox_event
-            where tenant_id = #{tenantId} and event_key = #{eventKey}
-        )
+        from claimed_key
     </insert>
 
     <select id="selectPending" resultMap="OutboxEventResultMap">
@@ -107,6 +112,7 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and publish_status = #{publishingStatus}
     </update>
 
     <update id="markGiveUp">
@@ -115,6 +121,7 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and publish_status = #{publishingStatus}
     </update>
 
     <delete id="deletePublishedBefore">
@@ -193,6 +200,17 @@
         select count(*) from batch.outbox_event
         where publish_status = #{publishingStatus}
           and updated_at &lt; current_timestamp - (#{timeoutSeconds} || ' seconds')::interval
+    </select>
+
+    <select id="countDuplicateEventKeysSince" resultType="long">
+        select count(*)
+        from (
+            select tenant_id, event_key
+            from batch.outbox_event
+            where created_at &gt;= #{since}
+            group by tenant_id, event_key
+            having count(*) &gt; 1
+        ) duplicate_keys
     </select>
 
     <!-- archive scheduler: 按 status + created_at 选出可归档 id（带 limit 防长事务） -->

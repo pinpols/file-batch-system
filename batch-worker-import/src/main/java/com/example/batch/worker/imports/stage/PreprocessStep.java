@@ -103,7 +103,9 @@ public class PreprocessStep implements ImportStageStep {
     }
     Map<String, Object> attrs = context.getAttributes();
     ImportPayload importPayload =
-        attrs.get("importPayload") instanceof ImportPayload payload ? payload : null;
+        attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
+            ? payload
+            : null;
     if (!Texts.hasText(context.getRawPayload())
         && (importPayload == null
             || (!Texts.hasText(importPayload.content())
@@ -194,7 +196,7 @@ public class PreprocessStep implements ImportStageStep {
       if (isBinaryImportFormat(formatType)) {
         attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
         context.setRawPayload("");
-        attrs.remove("normalizedPayload");
+        attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
       } else {
         Charset charset = resolveCharset(importPayload, templateConfigObject);
         if (processed.length >= SPOOL_THRESHOLD_BYTES) {
@@ -202,7 +204,7 @@ public class PreprocessStep implements ImportStageStep {
         } else {
           String normalized = decodeWithGuards(processed, charset, context);
           context.setRawPayload(normalized);
-          attrs.put("normalizedPayload", normalized);
+          attrs.put(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, normalized);
           attrs.remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
         }
       }
@@ -414,7 +416,7 @@ public class PreprocessStep implements ImportStageStep {
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
       context.setRawPayload("");
-      context.getAttributes().remove("normalizedPayload");
+      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
       context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
       log.info(
           "import preprocess streamed object to spool (no heap buffering): bucket={}, object={},"
@@ -559,7 +561,7 @@ public class PreprocessStep implements ImportStageStep {
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
       context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
       context.setRawPayload("");
-      context.getAttributes().remove("normalizedPayload");
+      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
       context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
       log.info(
           "import preprocess range-sliced object to spool: bucket={}, object={}, partition={}/{},"
@@ -804,7 +806,7 @@ public class PreprocessStep implements ImportStageStep {
     context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
     context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
     context.setRawPayload("");
-    context.getAttributes().remove("normalizedPayload");
+    context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
     context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
     log.info(
         "[ImportPreprocess] large payload {} bytes spooled to {}; PARSE will stream decode as {}",

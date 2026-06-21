@@ -183,13 +183,20 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
               event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
           if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
             outboxEventMapper.markGiveUp(
-                event.getTenantId(), event.getId(), OutboxPublishStatus.GIVE_UP.code());
+                event.getTenantId(),
+                event.getId(),
+                OutboxPublishStatus.GIVE_UP.code(),
+                OutboxPublishStatus.PUBLISHING.code());
             recordRetry(event, publishAttemptNo, null, "retry attempts exhausted");
             giveUpCounter.increment();
           } else {
             Instant nextRetryAt = computeNextRetryAt(publishAttemptNo, governance.outbox());
             outboxEventMapper.markFailed(
-                event.getTenantId(), event.getId(), OutboxPublishStatus.FAILED.code(), nextRetryAt);
+                event.getTenantId(),
+                event.getId(),
+                OutboxPublishStatus.FAILED.code(),
+                nextRetryAt,
+                OutboxPublishStatus.PUBLISHING.code());
             recordRetry(event, publishAttemptNo, nextRetryAt, "publish failed");
           }
         }

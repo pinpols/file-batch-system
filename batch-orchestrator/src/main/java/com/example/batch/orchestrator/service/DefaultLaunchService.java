@@ -41,6 +41,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -311,7 +312,16 @@ public class DefaultLaunchService implements LaunchService {
             request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
     JobInstanceEntity jobInstance =
         buildJobInstanceEntity(request, loaded, effectiveParams, traceId, batchDaySlaDeadlineAt);
-    jobMappers.jobInstanceMapper.insert(jobInstance);
+    int inserted = jobMappers.jobInstanceMapper.insert(jobInstance);
+    if (inserted <= 0) {
+      throw new DuplicateKeyException(
+          "duplicate job_instance idempotency key: tenant="
+              + request.tenantId()
+              + ", dedupKey="
+              + jobInstance.getDedupKey()
+              + ", runAttempt="
+              + jobInstance.getRunAttempt());
+    }
     launchBatchDayService.upsertBatchDayInstance(
         request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
 

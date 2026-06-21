@@ -16,6 +16,7 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
+import com.example.batch.orchestrator.config.InternalAuthFilter;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.TaskController;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -110,6 +111,35 @@ class TaskControllerTest {
         .andExpect(jsonPath("$.retryMaxCount").value(5))
         .andExpect(jsonPath("$.timeoutSeconds").value(600))
         .andExpect(jsonPath("$.highWaterMarkIn").value("wm-1"));
+  }
+
+  @Test
+  void shouldRejectApiKeyTenantMismatchOnClaim() throws Exception {
+    mockMvc
+        .perform(
+            post("/internal/tasks/10/claim")
+                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"tenant-b\",\"workerId\":\"w1\"}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void shouldUseResolvedTenantWhenApiKeyRequestOmitsBodyTenant() throws Exception {
+    JobTaskEntity task = new JobTaskEntity();
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setAssignedWorkerCode("w1");
+    when(taskExecutionService.assignWorker(eq("tenant-a"), eq(10L), eq("w1"))).thenReturn(task);
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/10/claim")
+                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
+                .contentType(APPLICATION_JSON)
+                .content("{\"workerId\":\"w1\"}"))
+        .andExpect(status().isOk());
+
+    verify(taskExecutionService).assignWorker("tenant-a", 10L, "w1");
   }
 
   @Test

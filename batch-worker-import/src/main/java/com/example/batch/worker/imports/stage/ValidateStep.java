@@ -163,8 +163,10 @@ public class ValidateStep implements ImportStageStep {
   }
 
   private ValidationSession openValidationSession(ImportJobContext context) {
-    List<String> schemaFields = stringList(context.getAttributes().get("schemaFields"));
-    long totalCount = numberValue(context.getAttributes().get("totalCount"));
+    List<String> schemaFields =
+        stringList(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS));
+    long totalCount =
+        numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
     injectManifestExpectedCount(context);
     ValidationSession session =
         dataQualityService.beginValidation(context, totalCount, schemaFields);
@@ -378,21 +380,28 @@ public class ValidateStep implements ImportStageStep {
     context
         .getAttributes()
         .put(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH, validatedRecordsPath.toString());
-    context.getAttributes().put("validatedCount", validatedCount);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, validatedCount);
     context.getAttributes().put("qualityChecks", session.appliedChecks());
-    context.getAttributes().put("customerPayloadCount", loadedCandidateCount);
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.IMPORT_CUSTOMER_PAYLOAD_COUNT, loadedCandidateCount);
     ImportStageSupport.updateFileStatusRecoverAware(
         runtimeRepository,
         context,
         "VALIDATED",
         Map.of(
-            "validatedCount", validatedCount,
-            "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
-            "badRecordCount", badRecordCount(context),
+            PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
+            validatedCount,
+            PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
+            numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)),
+            "badRecordCount",
+            badRecordCount(context),
             "manualReviewRequired",
-                Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
-            "qualityChecks", session.appliedChecks(),
-            "validatedRecordsPath", validatedRecordsPath.toString()));
+            Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
+            "qualityChecks",
+            session.appliedChecks(),
+            "validatedRecordsPath",
+            validatedRecordsPath.toString()));
   }
 
   private record StreamingValidationResult(

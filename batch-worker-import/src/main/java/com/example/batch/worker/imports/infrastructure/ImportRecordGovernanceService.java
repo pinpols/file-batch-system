@@ -47,7 +47,7 @@ public class ImportRecordGovernanceService {
   private static final String BAD_RECORDS_KEY = "badRecords";
 
   // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String KEY_SKIPPED_COUNT = "skippedCount";
+  private static final String KEY_SKIPPED_COUNT = PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT;
   // C-2.15：按 stage 细分的 skipped / failed 计数，独立于 KEY_SKIPPED_COUNT 兜底语义；
   // 运维可单独看 parse vs validation 哪一步在丢数据，上层后续可引入双阈值配置
   private static final String KEY_PARSE_SKIPPED_COUNT = "parseSkippedCount";
@@ -162,7 +162,7 @@ public class ImportRecordGovernanceService {
             .errorMessage(message)
             .build();
     recordBadRecord(brc);
-    context.getAttributes().put("skipThresholdExceeded", true);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED, true);
   }
 
   public boolean withinThreshold(ImportJobContext context) {
@@ -170,7 +170,8 @@ public class ImportRecordGovernanceService {
       return true;
     }
     long skippedCount = numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
-    long totalCount = numberValue(context.getAttributes().get("totalCount"));
+    long totalCount =
+        numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
     SkipThresholdMode mode = resolveThresholdMode();
     if (mode == SkipThresholdMode.PERCENTAGE) {
       double rate = totalCount <= 0 ? 0D : (double) skippedCount / (double) totalCount;
@@ -181,7 +182,7 @@ public class ImportRecordGovernanceService {
 
   public void markThresholdExceeded(ImportJobContext context) {
     if (context != null) {
-      context.getAttributes().put("skipThresholdExceeded", true);
+      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED, true);
     }
   }
 
@@ -207,13 +208,17 @@ public class ImportRecordGovernanceService {
     metadata.put("successCount", numberValue(attrs.get("successCount")));
     metadata.put(KEY_SKIPPED_COUNT, numberValue(attrs.get(KEY_SKIPPED_COUNT)));
     metadata.put("failedCount", numberValue(attrs.get("failedCount")));
-    metadata.put("totalCount", numberValue(attrs.get("totalCount")));
+    metadata.put(
+        PipelineRuntimeKeys.IMPORT_TOTAL_COUNT,
+        numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT)));
     // C-2.15：把 parse / validate 两阶段的细分计数一并登记，便于问题定位
     metadata.put(KEY_PARSE_SKIPPED_COUNT, numberValue(attrs.get(KEY_PARSE_SKIPPED_COUNT)));
     metadata.put(KEY_VALIDATE_SKIPPED_COUNT, numberValue(attrs.get(KEY_VALIDATE_SKIPPED_COUNT)));
     metadata.put(KEY_PARSE_FAILED_COUNT, numberValue(attrs.get(KEY_PARSE_FAILED_COUNT)));
     metadata.put(KEY_VALIDATE_FAILED_COUNT, numberValue(attrs.get(KEY_VALIDATE_FAILED_COUNT)));
-    metadata.put("skipThresholdExceeded", Boolean.TRUE.equals(attrs.get("skipThresholdExceeded")));
+    metadata.put(
+        PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED,
+        Boolean.TRUE.equals(attrs.get(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED)));
     metadata.put(
         "manualReviewRequired",
         Boolean.TRUE.equals(attrs.get("manualReviewRequired")) || shouldManualReview());

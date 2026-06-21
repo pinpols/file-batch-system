@@ -29,10 +29,14 @@ public interface OutboxEventMapper {
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("status") String status,
-      @Param("nextPublishAt") Instant nextPublishAt);
+      @Param("nextPublishAt") Instant nextPublishAt,
+      @Param("publishingStatus") String publishingStatus);
 
   int markGiveUp(
-      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("status") String status,
+      @Param("publishingStatus") String publishingStatus);
 
   /**
    * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久卡死。
@@ -51,6 +55,9 @@ public interface OutboxEventMapper {
   long countStalePublishing(
       @Param("publishingStatus") String publishingStatus,
       @Param("timeoutSeconds") long timeoutSeconds);
+
+  /** 分区 outbox 幂等观测：统计窗口内重复 (tenant_id,event_key) 组数。 */
+  long countDuplicateEventKeysSince(@Param("since") Instant since);
 
   /**
    * Console 运维清理：按租户删除 PUBLISHED 状态、updated_at 早于 cutoff 的事件。 仅供 OutboxOpsApplicationService 在
