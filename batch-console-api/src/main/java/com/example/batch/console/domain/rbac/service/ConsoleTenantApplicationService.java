@@ -285,7 +285,7 @@ public class ConsoleTenantApplicationService {
     param.setCreatedBy(operator);
     tenantMapper.insert(param);
     // 2026-05 角色重设计:租户首账号必须是 TENANT_ADMIN,后续由它派生 TENANT_USER。
-    // 若给 TENANT_USER,新租户没人能加员工,平台 ADMIN 还要补一刀,500 租户场景下不可持续。
+    // 若给 TENANT_USER,新租户没人能加员工,还需平台 ADMIN 额外介入,500 租户场景下不可持续。
     userAccountMapper.insert(
         tenantId, username, tenantName, passwordHash, ConsoleRoles.TENANT_ADMIN, operator);
   }

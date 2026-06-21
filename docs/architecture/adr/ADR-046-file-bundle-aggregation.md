@@ -133,10 +133,10 @@ manifest **扩 `batch-manifest-v1` 为 v2**(不另造 sibling,旧清单零改照
 上游投递 .batch.json(v2) → ingress scanner(worker-import)解析 fileMapping
    → 把每文件 template_code 落到 file_record(随文件登记)
    → launch(BUNDLE_IMPORT,orchestrator)读该组 N 个 file_record
-   → 展成 N 个异构 partition,写 source_file_id/template_code/target_ref(第一刀加的列)
+   → 展成 N 个异构 partition,写 source_file_id/template_code/target_ref(Phase1 地基新增的绑定列)
 ```
 
-launch 不懂 manifest 格式,只读 DB(file_record),模块边界干净,且正好用上第一刀的 partition 绑定列。**实施切片**:2a `BatchManifest` v2 模型(纯加法,#已落)→ 2b scanner 落 file_record.template_code → 2c launch 按组展异构 partition(碰 `DefaultSchedulePlanBuilder`,最重)。
+launch 不懂 manifest 格式,只读 DB(file_record),模块边界干净,且正好复用 Phase1 地基的 partition 绑定列。**实施切片**:2a `BatchManifest` v2 模型(纯加法,#已落)→ 2b scanner 落 file_record.template_code → 2c launch 按组展异构 partition(改动 `DefaultSchedulePlanBuilder`,改动面最大)。
 
 ## 适用范围(跨 worker 类型 = 一套束骨架 + per-type 绑定 profile)
 
