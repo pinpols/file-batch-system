@@ -5,6 +5,13 @@ global:
 rule_files:
   - /etc/prometheus/rules/batch.yml
 
+# 告警投递:把 fire 的规则推给 Alertmanager(同 batch-network,容器内端口 9093)。
+# 缺这一段时 70 条规则会在 Prometheus 内部变红却永远推不出去 → 形同装了报警器没接电。
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 scrape_configs:
   # Java 应用：由 prometheus-entrypoint.sh 根据 BATCH_DEPLOY_MODE 自动生成 targets 文件
   #   container 模式 → 容器名:容器端口（Docker 网络内直连）

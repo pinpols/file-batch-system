@@ -1,0 +1,897 @@
+groups:
+  - name: batch-platform
+    rules:
+      - alert: BatchServiceDown
+        expr: up{job=~"batch-(console-api|trigger|orchestrator|worker-import|worker-export|worker-process|worker-dispatch|worker-atomic)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: platform
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "Prometheus target {{ $labels.instance }} for {{ $labels.job }} is not scraping successfully."
+
+      - alert: BatchSlaViolationsPresent
+        expr: batch_job_sla_violation_count > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: sla
+        annotations:
+          summary: "SLA violations detected"
+          description: "At least one SLA violation is still outstanding."
+
+      - alert: BatchAlertEventsGrowing
+        expr: increase(batch_alert_events_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Batch alert events are still being emitted"
+          description: "Alert event total increased over the last 10 minutes."
+
+      - alert: BatchJobDefinitionFailingRepeatedly
+        # 同一 (tenant, jobCode) 1h 内失败 >= 5 次 → 配置异常 / 模板坏 / 资源缺,
+        # 持续 trigger 只会生成脏 job_instance + 污染日志,人工介入禁用或修
+        expr: sum by (tenant, jobCode) (increase(batch_job_failure_total[1h])) >= 5
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job
+        annotations:
+          summary: "Job {{ $labels.tenant }}/{{ $labels.jobCode }} 1h 内失败 {{ $value | humanize }} 次"
+          description: "同一 job_definition 短时间持续失败,通常意味着配置错误(模板缺密钥 / 资源不存在 / 数据 schema 不匹配)。请到 console 查看实例日志并禁用该定义,避免 trigger 持续放炮生成脏数据。"
+
+      - alert: BatchDispatchCircuitsOpen
+        expr: batch_dispatch_circuits_open > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: dispatch
+        annotations:
+          summary: "Dispatch circuit breaker is open"
+          description: "One or more dispatch channels are currently in cooldown."
+
+      - alert: BatchDispatchFailureRateHigh
+        expr: sum(rate(batch_dispatch_deliveries_total{result="failure"}[5m])) / clamp_min(sum(rate(batch_dispatch_deliveries_total[5m])), 1) > 0.2
+        for: 10m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: dispatch
+        annotations:
+          summary: "Dispatch failure ratio is high"
+          description: "Failure ratio over the last 5 minutes is above 20%."
+
+      - alert: BatchHeapUsageHigh
+        expr: sum by (job) (jvm_memory_used_bytes{area="heap"}) / clamp_min(sum by (job) (jvm_memory_max_bytes{area="heap"}), 1) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Heap usage is high"
+          description: "Heap usage exceeds 85% for one or more batch services."
+
+      # 需 kafka-exporter（如 danielqsj/kafka-exporter）或 Prometheus Kafka 适配器
+      # 暴露 kafka_consumergroup_lag 指标。各 batch worker 使用的消费组为
+      # batch-worker-import、batch-worker-export、batch-worker-process、batch-worker-dispatch、batch-worker-atomic。
+      - alert: BatchKafkaConsumerLagHigh
+        expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|process|dispatch)"} > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: kafka
+        annotations:
+          summary: "Kafka consumer lag is high for {{ $labels.consumergroup }}"
+          description: "Consumer group {{ $labels.consumergroup }} topic {{ $labels.topic }} partition {{ $labels.partition }} lag exceeds 1000 messages for 10 minutes."
+
+      - alert: BatchTaskClaimLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(batch_task_claim_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: task
+        annotations:
+          summary: "Task claim latency is high for {{ $labels.job }}"
+          description: "P95 worker claim latency stayed above 2 seconds for 10 minutes. Check DB locks, worker_registry, and task assignment contention."
+
+      - alert: BatchOutboxPublishLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(batch_outbox_publish_duration_seconds_bucket[5m]))) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox publish latency is high"
+          description: "P95 outbox publish batch latency stayed above 5 seconds for 10 minutes. Check Kafka acknowledgements, producer pool saturation, and DB update latency."
+
+      - alert: BatchPipelineStepExecutionLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(batch_pipeline_step_execution_duration_seconds_bucket[5m]))) > 60
+        for: 15m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "Pipeline step execution latency is high for {{ $labels.job }}"
+          description: "P95 worker pipeline step execution stayed above 60 seconds for 15 minutes. Inspect slow plugins, datasource latency, and file/object storage dependencies."
+
+      - alert: BatchRedisMemoryUsageHigh
+        expr: redis_memory_max_bytes > 0 and redis_memory_used_bytes / redis_memory_max_bytes > 0.80
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: valkey
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage has exceeded 80% for 10 minutes. Check replay buffer retention, session keys, and cache TTL settings."
+
+      - alert: BatchRedisConnectedClientsHigh
+        expr: redis_connected_clients > 200
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: valkey
+        annotations:
+          summary: "Redis connected clients are high"
+          description: "Redis connected clients stayed above 200 for 10 minutes. Check SSE fanout load, exporter connections, and leaked clients."
+
+      - alert: BatchConsoleRealtimeReplayCursorMissGrowing
+        expr: sum by (stream) (increase(batch_console_realtime_replay_cursor_miss_total[10m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime replay cursor misses are growing"
+          description: "Replay cursor misses for stream {{ $labels.stream }} exceeded 5 in the last 10 minutes. Replay TTL or buffer size may be insufficient."
+
+      - alert: BatchConsoleRealtimeReplayDecodeFailures
+        expr: sum by (stream) (increase(batch_console_realtime_replay_decode_failures_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime replay decode failures detected"
+          description: "Replay buffer decode failures were observed for stream {{ $labels.stream }} in the last 10 minutes."
+
+      - alert: BatchConsoleRealtimePubSubDecodeFailures
+        expr: increase(batch_console_realtime_pubsub_decode_failures_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime Pub/Sub decode failures detected"
+          description: "At least one Redis Pub/Sub payload failed to decode in the last 10 minutes."
+
+      - alert: BatchConsoleRealtimePubSubHandleFailures
+        expr: sum by (stream, eventType) (increase(batch_console_realtime_pubsub_handle_failures_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime Pub/Sub handling failures detected"
+          description: "Pub/Sub handling failures were observed for stream {{ $labels.stream }} eventType {{ $labels.eventType }} in the last 10 minutes."
+
+      # ── Outbox / DLQ 积压告警（BatchBacklogMetricsScheduler 每 30 秒采样） ──────────
+      # 触发 → 人工：kubectl / make ops-inspect 看堆积明细
+      #         → 无根因消退则 scripts/ops/heal-stuck-outbox.sh / heal-dead-letters.sh
+      # 禁止配自动 heal：隐藏真实故障（见 docs/runbook/troubleshooting-decision-tree.md）
+      - alert: BatchOutboxBacklogHigh
+        expr: batch_outbox_pending_events > 5000
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox pending events backlog is high"
+          description: "Outbox NEW+FAILED events stayed above 5000 for 5 minutes. Check Kafka health, circuit breaker state, and orchestrator poll scheduler."
+
+      - alert: BatchOutboxBacklogCritical
+        expr: batch_outbox_pending_events > 20000
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox pending events backlog is critical"
+          description: "Outbox NEW+FAILED events exceeded 20000 for 2 minutes — downstream workers are starving. Escalate immediately."
+
+      # resetStalePublishing 正常会每轮清 0。长期 >0 意味着 poll 本身挂了或锁永久持有。
+      - alert: BatchOutboxStalePublishingStuck
+        expr: batch_outbox_publishing_stale_events > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox events stuck in PUBLISHING state"
+          description: "{{ $value }} Outbox events remain in PUBLISHING beyond timeout for 5 minutes. resetStalePublishing is not running — check orchestrator poll scheduler and ShedLock state for lock name 'outbox_poll'."
+
+      # 2026-05-01 加 — outbox 事件转入 GIVE_UP 终态(5 次重试耗尽后 markGiveUp 触发)。
+      # 稳态应为 0(任何转入都意味着事件最终丢投到 Kafka,只能手工 republish);非 0 必须人工介入排查。
+      # counter rate 只要在 5min 窗口内有任何增长就触发,无忍耐窗口(5 次失败重试已经给了足够"等等看"的时间)。
+      - alert: BatchOutboxEventsGivenUp
+        expr: rate(batch_outbox_events_give_up_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox events transitioned to GIVE_UP terminal state"
+          description: "{{ $value }} outbox events/sec entered GIVE_UP in last 5min. These events are permanently failed and need ops intervention — check Kafka health, then run scripts/ops/heal-stuck-outbox.sh or POST /internal/outbox/republish."
+
+      - alert: BatchDeadLetterBacklogHigh
+        expr: batch_dead_letter_tasks_pending > 100
+        for: 30m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: dlq
+        annotations:
+          summary: "Dead letter tasks backlog is growing"
+          description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Investigate root cause before running scripts/ops/heal-dead-letters.sh."
+
+      - alert: BatchWorkerStaleOnlinePresent
+        expr: batch_worker_registry_stale_online_count > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "ONLINE workers have stale heartbeats"
+          description: "{{ $value }} ONLINE worker(s) exceeded heartbeat timeout. Check WorkerHeartbeatTimeoutScheduler and worker connectivity."
+
+      - alert: BatchWorkerDrainOverduePresent
+        expr: batch_worker_registry_draining_overdue_count > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "DRAINING workers passed drain deadline"
+          description: "{{ $value }} DRAINING worker(s) are past drain_deadline_at. Check takeover scheduler or run ops drain healing after root-cause review."
+
+      - alert: BatchDecommissionedWorkerActiveClaims
+        expr: batch_worker_registry_decommissioned_active_claims_count > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "DECOMMISSIONED workers still own active tasks"
+          description: "{{ $value }} decommissioned worker(s) still have CREATED/READY/RUNNING task claims. Reclaim affected tasks before scaling further."
+
+      - alert: BatchInvalidWorkerCapabilityTags
+        expr: batch_worker_capability_tags_invalid_count > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "Worker capability_tags contain invalid JSON shapes"
+          description: "{{ $value }} active worker(s) have capability_tags that selector treats as no capability. Fix worker registration payload."
+
+      - alert: BatchTerminalInstanceActiveChildren
+        expr: batch_job_instance_terminal_active_children_count > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: task
+        annotations:
+          summary: "Terminal job instances still have active children"
+          description: "{{ $value }} terminal job_instance(s) still have active partition/task rows. JobInstanceTerminalChildStateReconciler is missing a path or failed."
+
+      # ── ADR-010 trigger 异步解耦专项告警 ────────────────────────────────────
+      # 异步路径已于 2026-05-02 固化为唯一链路（无开关）. 告警阈值与
+      # 验收指标(batch.trigger.outbox.publish.latency p99 < 5s)对齐. 三条告警覆盖:
+      #   - 投递管道堆积(产出 > 消费)
+      #   - consumer 失败暴增
+      #   - GIVE_UP 数据 — 任意 1 条都需运维介入
+
+      # relay 投出去的速率 > orchestrator 消费速率超过 5/s 持续 10min,
+      # 说明 trigger_outbox 在堆积或 consumer 反压.
+      - alert: TriggerOutboxBacklogGrowing
+        expr: rate(batch_trigger_outbox_publish_latency_seconds_count[5m])
+              - rate(batch_trigger_launch_consumed_total[5m]) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox backlog is growing (publish > consume)"
+          description: "TriggerOutboxRelay 投递速率(batch_trigger_outbox_publish_latency_seconds_count)超过 orchestrator consumer 消费速率(batch_trigger_launch_consumed_total){{ $value | humanize }}/s 持续 10min. consumer 可能滞后 / lag 过大. 检查 batch.trigger.outbox.publish.latency p99 + Kafka consumer group orchestrator-trigger-launch."
+
+      - alert: TriggerOutboxPendingHigh
+        expr: batch_trigger_outbox_pending_events > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox pending backlog is high"
+          description: "{{ $value }} trigger_outbox_event rows are NEW+FAILED. Check Kafka producer and TriggerOutboxRelay logs."
+
+      - alert: TriggerOutboxStalePublishing
+        expr: batch_trigger_outbox_publishing_stale_events > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox rows stuck in PUBLISHING"
+          description: "{{ $value }} trigger_outbox_event rows stayed PUBLISHING past timeout. TriggerOutboxRelay stale reset is not clearing them."
+
+      # consumer 端 launch 失败(非 rate_limited)率超过 1/s 持续 5min — 可能是
+      # LaunchApplicationService 内部异常 / DB 连接池耗尽 / orchestrator 崩溃风暴.
+      - alert: TriggerLaunchFailureSpike
+        expr: rate(batch_trigger_launch_failed_total{reason!="rate_limited"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger launch failure rate is high"
+          description: "trigger launch 失败率 {{ $value | humanize }}/s (非限流原因) 持续 5min. 检查 orchestrator 日志 + DB / Kafka 健康. 失败的 envelope 会留在 Kafka topic 不丢, 但 trigger_request 状态可能错乱."
+
+      # outbox 行被标 GIVE_UP — 通常是 payload 反序列化失败 / 重试上限耗尽,
+      # 任意 1 条都需要运维介入(数据问题, 等不到自愈).
+      - alert: TriggerOutboxGiveUp
+        expr: increase(batch_trigger_outbox_give_up_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox events marked GIVE_UP"
+          description: "{{ $value | humanize }} trigger_outbox_event(s) 在过去 1h 进入 GIVE_UP 状态. 通常是 payload 反序列化失败或重试上限耗尽 — 需要人工查 last_error + 修源端配置 / 删 zombie 行."
+
+      # ── ADR §5.11 webhook durability ────────────────────────────────────
+      # WebhookDeliveryRelay 把 EXHAUSTED 行重投到 absolute-max-attempts 仍失败 → GIVE_UP,
+      # 任意 1 条都需运维介入(订阅 URL 失效 / 持续 5xx / payload 数据问题).
+      - alert: WebhookDeliveryGiveUp
+        expr: increase(batch_webhook_delivery_give_up_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: webhook
+        annotations:
+          summary: "Webhook delivery rows marked GIVE_UP"
+          description: "{{ $value | humanize }} webhook_delivery_log 行在过去 1h 进入 GIVE_UP 状态. 检查对应 subscription_id 的 callback URL 健康 + last response_body. 必要时 disable 订阅或修业务方接收端."
+
+      # ── PostgreSQL Replication ──────────────────────────────────────────
+      # 本地 dev env 主从断了 11 天没人发现(BE 一直读旧数据),pg_stat_replication 空 +
+      # replay_lag 巨大 → 必须主动监控。postgres-exporter 已采集 pg_replication_lag_seconds
+      # 和 pg_replication_slots metrics(v0.16+ 默认开启)。
+      #
+      # 触发场景:
+      #   - 主库重启后 replica 连不回来
+      #   - WAL 段被清(主从断开太久) → recovery 永久卡
+      #   - 网络阻塞 / 从库 disk 慢
+
+      - alert: PostgresReplicationStopped
+        # 主库 pg_stat_replication 表为空 = 没有任何 active replica 连接
+        # 持续 1min 视为真断(避免 reconnect 抖动误报)
+        expr: pg_stat_replication_count == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication has zero active replicas"
+          description: "主库无任何 active replica 连接超过 1min。从库可能断连、WAL 已被清、network 阻塞。读写分离会持续提供 stale 数据。立刻查 docker logs postgres-replica + 重建从库 base backup。"
+
+      - alert: PostgresReplicationLagHigh
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication lag > 30s on {{ $labels.instance }}"
+          description: "从库 {{ $labels.instance }} 落后主库 {{ $value | humanize }}s,持续 5min。可能 disk IO 慢 / 大事务复制中。BE 应回退读主库(已配 lag-aware circuit breaker 兜底,验证生效)。"
+
+      - alert: PostgresReplicationLagCritical
+        # replay_lag > 5min = read 严重过期,业务读到旧数据有风险
+        expr: pg_replication_lag > 300
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication lag > 5min on {{ $labels.instance }}"
+          description: "从库严重滞后 {{ $value | humanize }}s,业务可能读到 5min 前的数据。立刻让 BE 全切主库读 + 排查从库 IO/CPU/network。"
+
+      - alert: PostgresReplicationSlotInactive
+        # replication slot 存在但 active=false:从库连接断了但 slot 还在保留 WAL → 主库 WAL 堆积风险
+        expr: pg_replication_slots_active == 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication slot {{ $labels.slot_name }} inactive"
+          description: "Slot {{ $labels.slot_name }} 存在但无 active replica 连接,主库 WAL 会持续累积到 slot 被 drop。检查从库连接 + 必要时 SELECT pg_drop_replication_slot('{{ $labels.slot_name }}')。"
+
+  - name: batch.sre
+    rules:
+      - alert: HikariCpConnectionExhausted
+        # 等待连接的线程数 > 10 持续 5m → 池过小或上游慢查询堆积,业务侧会感知到延迟
+        expr: hikaricp_connections_pending > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: infrastructure
+        annotations:
+          summary: "HikariCP pool {{ $labels.pool }} on {{ $labels.application }} pending {{ $value }} connections"
+          description: "连接池长期有 >10 个线程在等连接,通常意味着池容量不足或下游 SQL 慢。检查 pool size + 慢 SQL,必要时扩池或定位阻塞查询。"
+
+      - alert: HikariCpAcquireTimeout
+        # 拿连接超时(SQLTransientConnectionException);任何持续非零都意味着请求被直接 5xx
+        expr: rate(hikaricp_connections_timeout_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: infrastructure
+        annotations:
+          summary: "HikariCP pool {{ $labels.pool }} on {{ $labels.application }} acquire timeout {{ $value | humanize }}/s"
+          description: "线程在 connectionTimeout 内拿不到连接,请求会直接 fail。立刻排查池容量 / 数据库可用性 / 是否有泄漏的连接未归还。"
+
+      - alert: HttpServerErrorRateHigh
+        # 全局 5xx 占比 > 5% → 服务整体异常,需立即介入
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: http
+        annotations:
+          summary: "HTTP 5xx ratio {{ $value | humanizePercentage }} > 5%"
+          description: "近 5min HTTP 5xx 占比超过 5%。结合 grafana-dashboard-batch-sre 中按 uri 分组的 P99 / 5xx 占比定位异常端点。"
+
+  - name: batch.mainline
+    rules:
+      - alert: WorkerReportDropped
+        # 数据丢失类:REPORT 在 worker 侧被丢弃(队列满 / 序列化失败等)→ orchestrator 永远收不到结果
+        expr: rate(worker_report_dropped_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker REPORT dropped on {{ $labels.tenant_id }}"
+          description: "5m 内有 REPORT 被 worker 丢弃,orchestrator 不会收到任务结果,等价数据丢失。立刻看 worker 日志 + REPORT 队列容量。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-report-dropped"
+
+      - alert: WorkerReportOutboxGaveUp
+        # 数据丢失类:REPORT outbox 重试耗尽后 give_up,该 REPORT 永远不会送达 orchestrator
+        expr: increase(batch_worker_report_outbox_give_up_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker REPORT outbox gave up"
+          description: "REPORT outbox 重试耗尽,该任务结果永久丢失。立刻定位 give_up 的 task_id 走 orchestrator 强制 RECONCILE。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-report-outbox-give-up"
+
+      - alert: WorkerDlqPublishFailed
+        # DLQ 发布失败 → 失败任务无处归档,审计/排障盲区
+        expr: rate(worker_dlq_publish_failed_total[5m]) > 0.01
+        for: 10m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker DLQ publish failing"
+          description: "DLQ 发布失败率 > 0.01/s 持续 10m,失败任务无 DLQ 留底。检查 DLQ topic / Kafka 健康。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-dlq-publish-failed"
+
+      - alert: WorkerTaskTimeoutHigh
+        # 超时率高 → worker 容量不足或任务异常长尾
+        expr: rate(worker_task_execution_timeout_total[5m]) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker task timeout rate high"
+          description: "Worker 任务超时率 > 0.05/s 持续 10m,容量不足或任务长尾。看 worker pool 利用率 + 任务分布。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-task-timeout-high"
+
+      - alert: WorkerThreadLeaked
+        # 线程泄漏:执行线程未被中断回收 → 池容量持续下降
+        expr: increase(worker_task_execution_thread_leaked_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker thread leaked"
+          description: "近 1h 检测到执行线程泄漏,worker 池容量在持续下降。立刻 thread dump 看泄漏栈 + 重启 worker。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-thread-leaked"
+
+      - alert: FileArrivalSlaViolation
+        # 文件到达 SLA 违反:上游延迟到货,下游 pipeline 起不来
+        expr: batch_file_arrival_delay_violations > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "File arrival SLA violated"
+          description: "文件到达 SLA 违反持续 10m,上游延迟或文件缺失。看 batch_file_arrival_group_* 找出哪个组在 waiting。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#file-arrival-sla"
+
+      - alert: PipelineProcessingSlaViolation
+        # Pipeline 处理 SLA 违反:文件已到但处理超时
+        expr: batch_pipeline_processing_delay_violations > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Pipeline processing SLA violated"
+          description: "Pipeline 处理 SLA 违反持续 10m。看 worker_task_execution_duration P99 + pipeline stage 卡点。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#pipeline-processing-sla"
+
+      - alert: JobFailureRateHigh
+        # Job 失败率高(失败 / 完成 > 10%)
+        expr: |
+          rate(batch_orchestrator_job_failure_total[5m])
+            / clamp_min(rate(batch_orchestrator_job_completion_total[5m]), 0.001) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Job failure rate > 10%"
+          description: "Job 失败率 > 10% 持续 10m。按 error_code 分组看 batch_orchestrator_job_failure_total 找主因。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#job-failure-rate-high"
+
+      - alert: WorkerSelectionNoMatch
+        # 调度选不到 worker → 任务积压,通常是 worker 全宕或 tag/affinity 配置错
+        expr: rate(batch_scheduler_worker_selection_no_match[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Scheduler cannot find matching worker"
+          description: "调度选不到 worker > 0.1/s 持续 5m。检查 worker 健康 + tag/affinity 配置。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-selection-no-match"
+
+      - alert: OrchestratorCasMiss
+        # CAS 失败率高 → 并发竞争或重复 REPORT,可能有重复消费 bug
+        expr: rate(batch_orchestrator_cas_miss[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Orchestrator CAS miss rate high"
+          description: "状态机 CAS 失败 > 0.5/s 持续 5m,通常意味着重复消费 / 并发 bug。看 entity/from_status 维度 + 关联 trace。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#orchestrator-cas-miss"
+
+      - alert: WorkflowStuckFinalized
+        # workflow 卡在 finalized 之前(节点全跑完但 workflow_run 未收尾)
+        expr: increase(batch_workflow_stuck_finalized_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Workflow stuck before finalized"
+          description: "近 1h 有 workflow 节点全跑完但 workflow_run 未 finalized。看 orchestrator finalize 调度 + retry。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#workflow-stuck-finalized"
+
+  - name: batch.mainline-ext
+    rules:
+      - alert: TimeoutEnforcerFailed
+        # timeout enforcer 自身出错 → 超时任务可能不再被强杀
+        expr: rate(batch_timeout_enforcer_failed_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Timeout enforcer failing"
+          description: "timeout enforcer 错误率 > 0.01/s 持续 5m,超时任务可能逃逸强杀。看 orchestrator 日志 + 数据库锁。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#timeout-enforcer-failed"
+
+      - alert: DispatchChannelProbeFailing
+        # 派发通道探活失败 → 下游不可达,任务即将堆积
+        expr: rate(batch_dispatch_channel_probe_failures[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Dispatch channel probe failing"
+          description: "dispatch channel 探活失败 > 0.1/s 持续 5m。检查下游 worker / kafka 通道可达性。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#dispatch-channel-probe-failing"
+
+      - alert: WorkerLeaseCircuitOpen
+        # worker lease 熔断器跳闸 → 该 worker 实际已脱管,任务会被回收
+        expr: rate(batch_worker_lease_circuit_open_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Worker lease circuit open"
+          description: "worker lease 熔断打开 > 0.01/s 持续 5m,该 worker 即将被踢出。看 worker_id 维度 + 心跳通道。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-lease-circuit-open"
+
+      - alert: ProcessStagingOldestAgeHigh
+        # process 模块 staging 区最老文件超过 1h → 孤儿文件没被消费
+        expr: max(batch_worker_process_staging_oldest_age_seconds) > 3600
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Process staging oldest age > 1h"
+          description: "process worker staging 区最老文件存在 > 1h,通常是 stage 转换失败遗留孤儿。看 worker_id + 文件清单。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#process-staging-oldest-age-high"
+
+      - alert: ReplicaReplayLagHigh
+        # console 读副本回放延迟 > 5s,读写分离会读到陈旧数据
+        expr: max(batch_console_replica_replay_lag_seconds) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Console replica replay lag > 5s"
+          description: "console-api 读副本回放延迟持续 > 5s,UI 会看到陈旧状态。检查 PG replication 与 replay 进程。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#replica-replay-lag-high"
+
+      - alert: VerifierFailureRateHigh
+        # content verifier 校验失败率 > 0.05/s,持续 10m → 上游文件批次质量异常或 verifier 配置漂
+        expr: sum(rate(batch_verifier_failures_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-final
+        annotations:
+          summary: "Content verifier failure rate > 0.05/s"
+          description: "verifier 失败率 > 0.05/s 持续 10m。按 verifier + reason label 拆维度,排查源文件或 verifier 规则。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#verifier-failure-rate-high"
+
+      - alert: JobErrorCodeRateHigh
+        # 单一 error_code 5m 内 rate > 0.1/s,定位错误归因聚集
+        expr: sum by (error_code) (rate(batch_orchestrator_job_failure_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-final
+        annotations:
+          summary: "Job failure rate high for error_code={{ $labels.error_code }}"
+          description: "error_code={{ $labels.error_code }} 失败率 > 0.1/s 持续 10m。看具体 error_code 对应根因(资源/超时/依赖)。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#job-error-code-rate-high"
+
+      - alert: ReplicaFailoverOccurred
+        # console 读副本 failover 一旦发生立即告警(rate > 0 即触发)— 表示 primary 不可达或 failover 触发
+        expr: increase(batch_console_replica_failover_count_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-final
+        annotations:
+          summary: "Console replica failover occurred"
+          description: "console-api 读副本发生 failover ≥ 1 次。检查 PG primary 健康 + 路由表是否切换正确,确认无静默主备切换。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#replica-failover-occurred"
+
+  - name: batch.mainline-extra
+    rules:
+      - alert: WebhookDeliveryGiveUpHigh
+        # webhook delivery 累计放弃率 > 0.01/s 持续 10m,说明下游 endpoint 持续不可达或速率被限
+        expr: sum(rate(batch_webhook_delivery_give_up_total[5m])) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Webhook delivery give-up rate > 0.01/s"
+          description: "webhook 投递放弃率 > 0.01/s 持续 10m。检查目标 endpoint 健康 / 鉴权 / dispatcher 配置。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#webhook-delivery-give-up-high"
+
+      - alert: RealtimeReplayCursorMissHigh
+        # SSE 重放 cursor miss > 0.5/s 持续 5m,客户端断连后落入空洞,需检查 buffer 容量 / TTL
+        expr: sum(rate(batch_console_realtime_replay_cursor_miss_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Realtime SSE replay cursor miss > 0.5/s"
+          description: "SSE 客户端重连频繁落入 cursor 空洞 (> 0.5/s for 5m),buffer TTL/容量不足或客户端断连过久。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#realtime-replay-cursor-miss-high"
+
+      - alert: WorkerLeaseFastRetryStorm
+        # lease 快速重试 > 1/s 持续 5m,说明 lease 续约抖动,可能是网络/orch 拥塞/时钟漂移
+        expr: sum(rate(batch_worker_lease_fast_retry_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Worker lease fast-retry storm (> 1/s)"
+          description: "worker lease 快速重试 > 1/s 持续 5m。按 reason 拆维度,常见根因:orchestrator 拥塞 / 网络抖动 / 时钟漂移。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-lease-fast-retry-storm"
+
+      - alert: WorkerReportOutboxGiveUpHigh
+        # worker report outbox give_up 增长 > 0,说明 orch 长时间不可达导致 outbox 放弃
+        expr: increase(batch_worker_report_outbox_give_up_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Worker report outbox give-up occurred"
+          description: "worker report outbox 放弃投递 ≥ 1 条 (10m 内)。orchestrator 长时间不可达或回报 endpoint 错误,会丢失状态回报。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-report-outbox-give-up-high"
+
+  # ===========================================================================
+  # 容量护栏(2026-06-10 审计 P2-7 补)。
+  # 背景:归档/清理调度若坏死(ShedLock 卡死 / cron 配错 / 调度异常),原本只有
+  #   应用级 backlog 告警,缺"磁盘 / 库体积"这道兜底——磁盘写满是所有组件的共因故障。
+  #   历史教训:process_staging 曾积压 118GB dead、Docker.raw 147G bloat 才被发现。
+  # 数据源:node-exporter(9100)/ postgres-exporter(9187)/ cadvisor,均已在 prometheus.yml scrape。
+  # 注:归档调度"最近成功时间"目前无直接指标(scheduler 未埋点);此处用「库体积持续增长 +
+  #   磁盘水位」作代理——归档失效必然表现为这两者异常。要精确定位"哪个调度停了",
+  #   后续给 OutboxArchiveScheduler / WorkflowArchiveScheduler / FileGovernanceScheduler 加
+  #   last-success 时间戳 Gauge,再补 `time() - batch_*_archive_last_success_seconds > N` 告警。
+  # ===========================================================================
+  - name: batch.capacity
+    rules:
+      - alert: NodeDiskSpaceLow
+        # 真实数据盘(排除 tmpfs/overlay 等虚拟挂载)可用率 < 15%
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Disk space low (<15% free) on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "挂载点 {{ $labels.mountpoint }} 可用空间 {{ $value | humanizePercentage }},持续 10m。PG 数据盘写满会导致主库拒写、全链路 outage。先查 pg_database_size 与 process_staging 是否失控,确认归档/清理调度在跑。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#磁盘水位与容量护栏"
+
+      - alert: NodeDiskSpaceCritical
+        # 可用率 < 7% = 逼近写满,任何大事务/WAL 突增就 outage
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}) < 0.07
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Disk space CRITICAL (<7% free) on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "挂载点 {{ $labels.mountpoint }} 可用 {{ $value | humanizePercentage }},逼近写满。PG 主库一旦无法写 WAL 即停服。立刻人工干预:DROP 过期分区 / 清归档表 / 扩盘。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#磁盘水位与容量护栏"
+
+      - alert: NodeDiskWillFillIn4Hours
+        # 按近 1h 写入斜率线性外推,预测 4h 内写满 → 提前告警争取处置窗口
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}[1h], 4 * 3600) < 0
+        for: 15m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Disk on {{ $labels.instance }}:{{ $labels.mountpoint }} will fill within 4h"
+          description: "按近 1h 写入速率外推,{{ $labels.mountpoint }} 将在 ~4h 内写满。常见根因:归档/清理调度停摆导致表无界增长。查 ProcessStagingOldestAge 与 Outbox backlog 告警是否同时触发。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#磁盘水位与容量护栏"
+
+      - alert: PostgresDatabaseGrowthHigh
+        # 单库 6h 净增 > 10GB = 异常增长(正常增量批处理远低于此);归档失效的最早可观测信号
+        expr: increase(pg_database_size_bytes{datname=~"batch_platform|batch_business"}[6h]) > 10 * 1024 * 1024 * 1024
+        for: 30m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "PostgreSQL database {{ $labels.datname }} grew >10GB in 6h"
+          description: "库 {{ $labels.datname }} 6h 内净增 {{ $value | humanize1024 }}B。正常增量同步远低于此——多半是归档/清理调度坏死(outbox PUBLISHED 不归档 / process_staging 不清 / run 表不归档)。查对应 ShedLock 是否卡死、scheduler 日志有无异常。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#库体积增长治理"
+
+      - alert: PostgresDatabaseSizeHigh
+        # 绝对体积早期预警(默认 200GB,按实际盘容量调)。给运维"该清理/扩容了"的提前量
+        expr: pg_database_size_bytes{datname=~"batch_platform|batch_business"} > 200 * 1024 * 1024 * 1024
+        for: 30m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "PostgreSQL database {{ $labels.datname }} size > 200GB"
+          description: "库 {{ $labels.datname }} 体积 {{ $value | humanize1024 }}B 超 200GB 阈值。确认归档保留策略与分区回收符合预期;阈值按实际数据盘容量在本规则内调整。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#库体积增长治理"
+
+      - alert: PostgresBackupStale
+        # 备份新鲜度:依赖备份脚本成功后 push 一个 unix 时间戳到 Pushgateway(见 backup-and-pitr.md)。
+        # 指标缺失(absent)或 > 26h 未更新都告警——26h 容纳每日备份 + 2h 抖动窗口。
+        expr: |
+          (time() - batch_pg_last_successful_backup_timestamp_seconds > 26 * 3600)
+          or absent(batch_pg_last_successful_backup_timestamp_seconds)
+        for: 10m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "PostgreSQL backup is stale or missing ({{ $labels.datname }})"
+          description: "距上次成功备份已超 26h,或备份新鲜度指标缺失。备份链路(pg_basebackup / pg_dump / WAL 归档)可能已断——这是数据安全底线,立刻排查备份 cron 与归档目标可写性。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#备份新鲜度监控"
