@@ -1,0 +1,52 @@
+{
+  "fragments": {
+    "importFieldMappings": "[{\"name\":\"customerNo\",\"targetColumn\":\"customer_no\",\"type\":\"STRING\",\"required\":true,\"maxLength\":32},{\"name\":\"openDate\",\"targetColumn\":\"open_date\",\"type\":\"DATE\",\"required\":true,\"format\":\"yyyy-MM-dd\"}]\n怎么填: name=文件里的列名; targetColumn=入库的表列名(与 name 同名时可不填,系统按大小写/下划线自动归一,如 customerNo→customer_no);type 取 STRING/DATE/DECIMAL 等; required/maxLength/format 是质量校验项;想校验但不入库的列加 \"persist\":false。",
+    "exportFieldMappings": "[{\"name\":\"customerNo\",\"sourceColumn\":\"customer_no\",\"type\":\"STRING\",\"header\":\"customerNo\"},{\"name\":\"creditLimit\",\"sourceColumn\":\"credit_limit\",\"type\":\"DECIMAL\",\"header\":\"creditLimit\",\"format\":\"#,##0.00\"}]\n怎么填: name=逻辑名; sourceColumn=取数 SQL 的结果列名; header=导出文件的表头文字;DECIMAL/DATE 可用 format 控制格式(如 #,##0.00、yyyy-MM-dd)。",
+    "importQueryParamSchema": "{\"jdbcMappedImport\":{\"schema\":\"biz\",\"table\":\"customer_account\",\"tenantColumn\":\"tenant_id\",\"columnMappings\":[{\"from\":\"phone\",\"to\":\"mobile_no\"}],\"conflictColumns\":[\"customer_no\"],\"standardAuditBindings\":true}}\n怎么填: schema/table=落库的库.表; tenantColumn=租户列(一般 tenant_id);columnMappings 只写名字对不上的列(如 phone→mobile_no),其余与 field_mappings 同名列自动推断(大小写/下划线兼容);conflictColumns 是重跑幂等键,系统会自动补 tenant_id;standardAuditBindings=true 一键写入标准审计列(source_file_name/batch_no/trace_id/created_by/updated_by),不想用就改写 systemBindings 显式声明。",
+    "exportQueryParamSchema": "{\"type\":\"object\",\"properties\":{\"tenantId\":{\"type\":\"string\",\"required\":true},\"status\":{\"type\":\"string\",\"required\":false}}} // 游标分页用 {\"sqlTemplateExport\":{\"cursorColumn\":\"id\"}}",
+    "exportQuerySql": "SELECT customer_no, customer_name, status FROM biz.customer_account WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)\n怎么填: 单条 SELECT(禁 UPDATE/DELETE/SELECT *); 命名参数用 :tenantId/:status(运行时绑定,别写 ? 占位符); 必须按 tenant_id = :tenantId 过滤本租户; SELECT 列名需与 field_mappings.sourceColumn 对齐。",
+    "importValidationRuleSet": "{\"maxErrorRate\":0.05,\"stopOnFirstError\":false,\"duplicateKeyCheck\":{\"enabled\":true,\"keys\":[\"customerNo\"]}}\n怎么填: maxErrorRate=坏行率阈值(0.05=5%,超过则整批失败); stopOnFirstError=遇首个坏行即停;duplicateKeyCheck.keys 取 field_mappings.name(批内重复键检测)。",
+    "channelConfigJson": "{\"endpoint\":\"sftp://sftp.example.com:22/inbound\",\"auth\":{\"type\":\"PASSWORD\",\"username\":\"batch_user\"},\"credentials\":{\"passwordRef\":\"kms://channel/sftp_inbound\"}}",
+    "jobDefaultParams": "{\"templateCode\":\"TPL_IMPORT_CUSTOMER\",\"bizDate\":\"${bizDate}\"}",
+    "processStepParams": "{\"targetSchema\":\"biz\",\"targetTable\":\"customer_summary\",\"sql\":\"SELECT customer_no, count(*) AS cnt FROM biz.customer_account WHERE tenant_id = :tenantId GROUP BY customer_no\",\"columnMappings\":[{\"from\":\"customer_no\",\"to\":\"customer_no\"}]}",
+    "dispatchStepParams": "{\"channelCode\":\"sftp_inbound\",\"fileChannelCode\":\"sftp_inbound\"}"
+  },
+  "sheets": {
+    "dependency": {
+      "headers": ["source_sheet", "source_field", "target_sheet", "target_key", "db_fallback", "required_when", "说明", "示例"],
+      "rows": [
+        ["job_definition", "queue_code", "resource_queue", "queue_code", "TRUE", "queue_code 非空", "作业绑定的资源队列必须存在", "import-queue -> resource_queue.queue_code"],
+        ["job_definition", "calendar_code", "business_calendar", "calendar_code", "TRUE", "calendar_code 非空", "作业绑定的业务日历必须存在", "default-calendar -> business_calendar.calendar_code"],
+        ["job_definition", "window_code", "batch_window", "window_code", "TRUE", "window_code 非空", "作业绑定的批次窗口必须存在", "always-open -> batch_window.window_code"],
+        ["job_definition", "default_params.templateCode", "file_template_config", "template_code + version", "TRUE", "templateCode 非空", "默认参数引用的文件模板必须存在", "TPL_IMPORT_CUSTOMER -> file_template_config.template_code"],
+        ["pipeline_definition", "job_code", "job_definition", "job_code", "TRUE", "总是", "流水线必须挂在已定义的作业上", "JOB_IMPORT_CUSTOMER -> job_definition.job_code"],
+        ["pipeline_step_definition", "job_code + version", "pipeline_definition", "job_code + version", "FALSE", "总是", "步骤必须属于本包内的流水线（不允许 DB fallback）", "JOB_IMPORT_CUSTOMER/1 -> pipeline_definition"],
+        ["pipeline_step_definition", "step_params.templateCode", "file_template_config", "template_code + version", "TRUE", "templateCode 非空", "步骤引用的文件模板必须存在", "TPL_IMPORT_CUSTOMER -> file_template_config.template_code"],
+        ["pipeline_step_definition", "step_params.channelCode / fileChannelCode", "file_channel_config", "channel_code", "TRUE", "channelCode 非空", "派发步骤引用的通道必须存在", "sftp_inbound -> file_channel_config.channel_code"],
+        ["workflow_node", "workflow_code + workflow_version", "workflow_definition", "workflow_code + version", "FALSE", "总是", "节点必须属于本包内的工作流（不允许 DB fallback）", "WF_SETTLEMENT/1 -> workflow_definition"],
+        ["workflow_node", "related_job_code", "job_definition", "job_code", "TRUE", "related_job_code 非空", "节点引用的作业必须存在", "JOB_IMPORT_CUSTOMER -> job_definition.job_code"],
+        ["workflow_node", "related_pipeline_code", "pipeline_definition", "job_code", "TRUE", "related_pipeline_code 非空", "FILE_STEP 节点引用的流水线必须存在", "JOB_IMPORT_CUSTOMER -> pipeline_definition.job_code"],
+        ["workflow_node", "window_code", "batch_window", "window_code", "TRUE", "window_code 非空", "节点绑定的批次窗口必须存在", "always-open -> batch_window.window_code"],
+        ["workflow_edge", "workflow_code + workflow_version", "workflow_definition", "workflow_code + version", "FALSE", "总是", "边必须属于本包内的工作流（不允许 DB fallback）", "WF_SETTLEMENT/1 -> workflow_definition"],
+        ["workflow_edge", "from_node_code / to_node_code", "workflow_node", "node_code", "FALSE", "总是", "边两端节点必须在本包内（不允许 DB fallback）", "NODE_IMPORT -> workflow_node.node_code"]
+      ]
+    },
+    "fourWorker": {
+      "headers": ["worker_type", "job_type", "pipeline_type", "stage_chain", "required_sheets", "template_requirement", "channel_requirement", "key_params", "demo_description"],
+      "rows": [
+        ["IMPORT", "IMPORT", "IMPORT", "RECEIVE -> PREPROCESS -> PARSE -> VALIDATE -> LOAD -> FEEDBACK", "job_definition, file_template_config, pipeline_definition, pipeline_step_definition", "query_param_schema.jdbcMappedImport 配 schema/table/columnMappings/conflictColumns", "可选，取决于 RECEIVE 来源", "default_params.templateCode=TPL_IMPORT_CUSTOMER；query_param_schema=${importQueryParamSchema}", "文件导入到业务表（biz.customer_account）"],
+        ["EXPORT", "EXPORT", "EXPORT", "PREPARE -> GENERATE -> STORE -> REGISTER -> COMPLETE", "job_definition, file_template_config, pipeline_definition, pipeline_step_definition", "default_query_sql 或 query_param_schema.jdbcMappedExport", "STORE 可依赖对象存储；派发另配 DISPATCH", "default_query_sql=${exportQuerySql}；field_mappings 见字段说明", "查询业务表生成文件（CSV/Excel/JSON）"],
+        ["PROCESS", "PROCESS", "PROCESS", "PREPARE -> COMPUTE -> VALIDATE -> COMMIT -> FEEDBACK", "job_definition, pipeline_definition, pipeline_step_definition", "通常不需要文件模板", "不需要", "step_params=${processStepParams}", "SQL transform / 加工落表"],
+        ["DISPATCH", "DISPATCH", "DISPATCH", "PREPARE -> DISPATCH -> ACK -> RETRY -> COMPENSATE -> COMPLETE", "job_definition, file_channel_config, pipeline_definition, pipeline_step_definition", "通常不需要文件模板；派发导出文件时引用 export 产物", "必须，channelCode 指向 file_channel_config.channel_code", "step_params=${dispatchStepParams}；channel config_json 见字段说明", "推送文件或消息到外部系统（SFTP/API）"]
+      ]
+    },
+    "bundle": {
+      "headers": ["job_type", "worker_type", "shard_strategy", "config_sheets", "submit_manifest_example", "demo_description"],
+      "rows": [
+        ["BUNDLE_IMPORT", "IMPORT", "DYNAMIC", "job + file_template(每表一模板);清单 requiredFiles 列出数据文件", "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"daily-import\",\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_IMPORT_DAILY\",\"requiredFiles\":[\"order.csv\",\"customer.csv\"],\"fileMapping\":[{\"fileName\":\"order.csv\",\"templateCode\":\"TPL_ORDER\"},{\"fileName\":\"customer.csv\",\"templateCode\":\"TPL_CUST\"}]}", "一次导入多文件→多表;把数据文件 + 此清单投到 ingress,凑齐自动展 N 个导入分区"],
+        ["BUNDLE_EXPORT", "EXPORT", "DYNAMIC", "job + file_template(每表一导出模板);清单无 requiredFiles(导出无输入文件)", "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"eod-export\",\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_EXPORT_EOD\",\"fileMapping\":[{\"fileName\":\"risk_out\",\"templateCode\":\"EXP_RISK\"},{\"fileName\":\"trade_out\",\"templateCode\":\"EXP_TRADE\"}]}", "一次导出多表→多文件;仅投此清单(无数据文件),清单本身即触发,展 N 个导出分区"],
+        ["BUNDLE_DISPATCH", "DISPATCH", "DYNAMIC", "job + file_channel(每下游一渠道);清单 fileMapping.targetRef 指 channel_code", "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"eod-dispatch\",\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_DISPATCH_EOD\",\"requiredFiles\":[\"risk.csv\",\"trade.csv\"],\"fileMapping\":[{\"fileName\":\"risk.csv\",\"targetRef\":\"CH_SFTP_A\"},{\"fileName\":\"trade.csv\",\"targetRef\":\"CH_OSS_B\"}]}", "一次把多文件分发到多下游;把待分发文件 + 此清单投到 ingress,展 N 个分发分区"]
+      ]
+    }
+  }
+}
