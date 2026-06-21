@@ -50,6 +50,14 @@
         <if test="requestId != null and requestId != ''">
             and tr.request_id = #{requestId}
         </if>
+        <if test="bizDate != null and bizDate != ''">
+            and tr.biz_date = cast(#{bizDate} as date)
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (tr.request_id ilike '%' || #{keyword} || '%'
+                 or tr.job_code ilike '%' || #{keyword} || '%'
+                 or tr.trace_id ilike '%' || #{keyword} || '%')
+        </if>
         order by tr.id desc
         <choose>
             <when test="cursorId != null">
@@ -72,6 +80,14 @@
         </if>
         <if test="requestId != null and requestId != ''">
             and request_id = #{requestId}
+        </if>
+        <if test="bizDate != null and bizDate != ''">
+            and biz_date = cast(#{bizDate} as date)
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (request_id ilike '%' || #{keyword} || '%'
+                 or job_code ilike '%' || #{keyword} || '%'
+                 or trace_id ilike '%' || #{keyword} || '%')
         </if>
     </select>
 </mapper>
