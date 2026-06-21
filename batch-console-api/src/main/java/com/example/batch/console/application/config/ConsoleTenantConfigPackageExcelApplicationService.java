@@ -5,6 +5,7 @@ import com.example.batch.console.web.response.config.TenantConfigPackageExcelApp
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
 import java.io.IOException;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -20,6 +21,10 @@ public interface ConsoleTenantConfigPackageExcelApplicationService {
       throws IOException;
 
   TenantConfigPackageExcelPreviewResponse preview(String uploadToken);
+
+  /** 内联编辑回写:把出错行被改的单元格合并进上传会话,重校验后返回新预览(不落库)。 */
+  TenantConfigPackageExcelPreviewResponse patchRow(
+      String uploadToken, String sheetName, int rowNo, Map<String, String> values);
 
   ResponseEntity<StreamingResponseBody> downloadPreviewWorkbook(String uploadToken);
 
