@@ -52,7 +52,7 @@
 | 043 | [ADR-043-dependency-aware-fire.md](./ADR-043-dependency-aware-fire.md) | 依赖感知 fire:trigger `doFire` 前插上游就绪闸,触发器声明 `dependsOn`,上游未就绪则 defer/不丢批（Accepted） |
 | 044 | [ADR-044-instance-pause-resume.md](./ADR-044-instance-pause-resume.md) | 实例/工作流 pause/resume:新增 `PAUSED` 状态(非终态可暂停、终态不可进),派发前检查即时生效 + 批次日严格串行（Accepted） |
 | 045 | [ADR-045-console-ai-ops-assistant.md](./ADR-045-console-ai-ops-assistant.md) | 控制台 AI 运维助手定位:只读问答(指路 + 取数)、默认关、不裁定业务对错/不写状态/不进主链、可无损下沉移除（Accepted） |
-| 046 | [ADR-046-file-bundle-aggregation.md](./ADR-046-file-bundle-aggregation.md) | 文件束聚合:在单文件单元之上加一层批量编排,低千~上万 fan-out(多表导入/多下游导出)下把控制面 churn O(N)→O(N/K),束包住独立 file-unit(两层幂等/部分失败/文件级 checkpoint),三根墙不破。**配置层**:1 束作业(BUNDLE_IMPORT/DISPATCH)+ M 模板(批量导/可复用)+ 提交 manifest,**不 per-表配 job**。已拍板:扩展 partition(异构 file-unit)/ PARTIAL_FAILED 独立重试 / request-scoped 分组+大小上限 / Phase1 先行（Proposed,方向已定） |
+| 046 | [ADR-046-file-bundle-aggregation.md](./ADR-046-file-bundle-aggregation.md) | 文件束聚合:低千~上万 fan-out(多表导入/多下游导出)下把控制面 churn O(N)→O(N/K)。**轻量版(评审收敛)**:束=一个 job_instance + K 个**异构且各自独立**的 partition;省 churn 靠 **claim/report 多行批量**,**不加束状态机/不加 worker 束执行/不新表**——partition 三根墙原样,纯加法。**配置层**:1 束作业(BUNDLE_IMPORT/DISPATCH)+ M 模板(批量导/可复用)+ 提交 manifest,**不 per-表配 job**。Phase1 配置收口+launch批量先行,Phase2 多行 claim/report 命中上万再上（Proposed,方向已定） |
 
 ### 优先级 + 范围边界纪律
 
