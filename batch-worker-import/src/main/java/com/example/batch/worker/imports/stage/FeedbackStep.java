@@ -40,9 +40,15 @@ public class FeedbackStep implements ImportStageStep {
     Map<String, Object> attrs = context.getAttributes();
     Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     Map<String, Object> detailSummary = new LinkedHashMap<>();
-    detailSummary.put("parsedCount", attrs.get("parsedCount"));
-    detailSummary.put("validatedCount", attrs.get("validatedCount"));
-    detailSummary.put("loadedCount", attrs.get("loadedCount"));
+    detailSummary.put(
+        PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
+        attrs.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
+    detailSummary.put(
+        PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
+        attrs.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
+    detailSummary.put(
+        PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
+        attrs.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
     detailSummary.put("pipelineInstanceId", attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     runtimeRepository.appendAudit(
         FileAuditParam.builder()

@@ -45,6 +45,9 @@ public class InternalAuthFilter extends OncePerRequestFilter {
   /** Filter 校验通过后写入,值为 {@link ApiKeyEntity};secret 通道写 null。 */
   public static final String ATTR_API_KEY_RECORD = "batch.auth.apiKeyRecord";
 
+  private static final String API_KEY_INTERNAL_PREFIX_TASKS = "/internal/tasks/";
+  private static final String API_KEY_INTERNAL_PREFIX_WORKERS = "/internal/workers/";
+
   private static final String UNAUTHORIZED_BODY =
       "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid credentials"
           + " (X-Internal-Secret or X-Batch-Api-Key+X-Batch-Tenant-Id)\"}";
@@ -74,16 +77,14 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     String apiKey = request.getHeader(HEADER_API_KEY);
     String tenantHeader = request.getHeader(HEADER_TENANT);
     if (apiKey != null && !apiKey.isBlank() && apiKeyVerifier != null) {
-      // /internal/workers/* 和 /internal/tasks/* 走 worker 操作类 endpoint,强制
-      // worker.execute scope(老 key scopes='*' 通配通过,无需轮转)。
-      String requiredScope =
-          (uri.startsWith("/internal/workers/") || uri.startsWith("/internal/tasks/"))
-              ? ApiKeyVerifier.SCOPE_WORKER_EXECUTE
-              : null;
+      // 租户 API-Key 只允许自托管 worker 的 task/worker 生命周期端点;其它内部治理接口仍必须走
+      // X-Internal-Secret,避免 per-tenant key 横向触达平台级内部能力。
+      if (!isApiKeyAllowedUri(uri)) {
+        writeUnauthorized(response);
+        return;
+      }
       Optional<ApiKeyEntity> rec =
-          requiredScope == null
-              ? apiKeyVerifier.verify(apiKey, tenantHeader)
-              : apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, requiredScope);
+          apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
       if (rec.isPresent()) {
         request.setAttribute(ATTR_RESOLVED_TENANT_ID, rec.get().tenantId());
         request.setAttribute(ATTR_API_KEY_RECORD, rec.get());
@@ -104,6 +105,11 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     }
 
     writeUnauthorized(response);
+  }
+
+  private static boolean isApiKeyAllowedUri(String uri) {
+    return uri.startsWith(API_KEY_INTERNAL_PREFIX_WORKERS)
+        || uri.startsWith(API_KEY_INTERNAL_PREFIX_TASKS);
   }
 
   private static void writeUnauthorized(HttpServletResponse response) throws IOException {

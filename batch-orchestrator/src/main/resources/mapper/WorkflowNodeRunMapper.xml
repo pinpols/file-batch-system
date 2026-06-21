@@ -88,6 +88,11 @@
             <!-- ADR-009 Stage 1.2: 写 worker 上报的产出 JSON 到 output JSONB 列 -->
             output = #{output,jdbcType=VARCHAR}::jsonb
         where id = #{id}
+          and (
+              node_status = #{nodeStatus}
+              or node_status not in ('SUCCESS','FAILED','SKIPPED')
+              or (node_status = 'FAILED' and #{nodeStatus} = 'SKIPPED')
+          )
     </update>
 
     <select id="selectByWorkflowRunId" resultMap="WorkflowNodeRunResultMap">

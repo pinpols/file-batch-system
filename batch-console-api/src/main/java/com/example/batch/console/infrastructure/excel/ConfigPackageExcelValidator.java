@@ -294,6 +294,28 @@ public class ConfigPackageExcelValidator {
     }
   }
 
+  @FunctionalInterface
+  private interface ExcelRowValidator {
+    void validate(Map<String, String> row, int rowNo, List<String> rowIssues);
+  }
+
+  private static SheetResult validateRows(
+      String sheetName, List<Map<String, String>> rows, ExcelRowValidator validator) {
+    List<WorkbookIssue> issues = new ArrayList<>();
+    List<Map<String, String>> valid = new ArrayList<>();
+    int rowNo = 2;
+    for (Map<String, String> row : rows) {
+      List<String> rowIssues = new ArrayList<>();
+      validator.validate(row, rowNo, rowIssues);
+      addIssues(rowIssues, sheetName, rowNo, issues);
+      if (rowIssues.isEmpty()) {
+        valid.add(withRowNo(row, rowNo));
+      }
+      rowNo++;
+    }
+    return new SheetResult(sheetName, rows.size(), valid, issues);
+  }
+
   public PackageValidationResult validate(PackageExcelSession session) {
     String tid = session.tenantId();
     SheetResult resourceQueues = validateResourceQueueRows(tid, session.resourceQueueRows());
@@ -342,81 +364,49 @@ public class ConfigPackageExcelValidator {
   }
 
   private SheetResult validateResourceQueueRows(String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      QueueRow queue = ResourceQueueExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      if (hasText(queue.queueCode()) && !seen.add(queue.queueCode())) {
-        ri.add("duplicate queue_code in excel: " + queue.queueCode());
-      }
-      addIssues(ri, RESOURCE_QUEUE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(RESOURCE_QUEUE_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        RESOURCE_QUEUE_SHEET,
+        rows,
+        (row, rowNo, ri) -> {
+          QueueRow queue = ResourceQueueExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+          if (hasText(queue.queueCode()) && !seen.add(queue.queueCode())) {
+            ri.add("duplicate queue_code in excel: " + queue.queueCode());
+          }
+        });
   }
 
   private SheetResult validateBusinessCalendarRows(
       String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      CalendarRow calendar = BusinessCalendarExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      if (hasText(calendar.calendarCode()) && !seen.add(calendar.calendarCode())) {
-        ri.add("duplicate calendar_code in excel: " + calendar.calendarCode());
-      }
-      addIssues(ri, BUSINESS_CALENDAR_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(BUSINESS_CALENDAR_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        BUSINESS_CALENDAR_SHEET,
+        rows,
+        (row, rowNo, ri) -> {
+          CalendarRow calendar = BusinessCalendarExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+          if (hasText(calendar.calendarCode()) && !seen.add(calendar.calendarCode())) {
+            ri.add("duplicate calendar_code in excel: " + calendar.calendarCode());
+          }
+        });
   }
 
   private SheetResult validateBatchWindowRows(String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      WindowRow window = BatchWindowExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
-        ri.add("duplicate window_code in excel: " + window.windowCode());
-      }
-      addIssues(ri, BATCH_WINDOW_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(BATCH_WINDOW_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        BATCH_WINDOW_SHEET,
+        rows,
+        (row, rowNo, ri) -> {
+          WindowRow window = BatchWindowExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+          if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
+            ri.add("duplicate window_code in excel: " + window.windowCode());
+          }
+        });
   }
 
   private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      validateJobRow(tenantId, row, seen, ri);
-      addIssues(ri, JOB_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(JOB_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        JOB_SHEET, rows, (row, rowNo, ri) -> validateJobRow(tenantId, row, seen, ri));
   }
 
   private static void validateJobRow(
@@ -463,20 +453,9 @@ public class ConfigPackageExcelValidator {
   }
 
   private SheetResult validateChannelRows(String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      validateChannelRow(tenantId, row, seen, ri);
-      addIssues(ri, CHANNEL_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(CHANNEL_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        CHANNEL_SHEET, rows, (row, rowNo, ri) -> validateChannelRow(tenantId, row, seen, ri));
   }
 
   private static void validateChannelRow(
@@ -495,27 +474,20 @@ public class ConfigPackageExcelValidator {
   }
 
   private SheetResult validateFileTemplateRows(String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-      validateFormatConditionals(row, ri);
-      validateExportSql(row, ri);
-      validateTemplateJsonStructure(row, ri);
-      String key = templateKey(template.templateCode(), template.version());
-      if (hasText(template.templateCode()) && !seen.add(key)) {
-        ri.add("duplicate template_code + version in excel: " + key);
-      }
-      addIssues(ri, FILE_TEMPLATE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(FILE_TEMPLATE_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        FILE_TEMPLATE_SHEET,
+        rows,
+        (row, rowNo, ri) -> {
+          TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+          validateFormatConditionals(row, ri);
+          validateExportSql(row, ri);
+          validateTemplateJsonStructure(row, ri);
+          String key = templateKey(template.templateCode(), template.version());
+          if (hasText(template.templateCode()) && !seen.add(key)) {
+            ri.add("duplicate template_code + version in excel: " + key);
+          }
+        });
   }
 
   private static final Pattern SELECT_STAR = Pattern.compile("(?i)select\\s+\\*");
@@ -599,20 +571,9 @@ public class ConfigPackageExcelValidator {
   }
 
   private SheetResult validatePipelineRows(String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      validatePipelineRow(tenantId, row, seen, ri);
-      addIssues(ri, PIPELINE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(PIPELINE_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        PIPELINE_SHEET, rows, (row, rowNo, ri) -> validatePipelineRow(tenantId, row, seen, ri));
   }
 
   private static void validatePipelineRow(
@@ -641,23 +602,16 @@ public class ConfigPackageExcelValidator {
     // 按模块懒加载 step_registry 白名单；空集表示该 module 的 worker 未启动过登记，降级为不校验
     // （防止首次部署没跑 worker 就导致所有上传被拒）
     Map<String, Set<String>> registryByModule = new HashMap<>();
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      validateStepRow(row, pipelineKeys, pipelineKeyToType, registryByModule, seen, ri);
-      // 业务表/列精确校验的"硬拦截"故意不放在这里——Validator 只做 Excel 格式 + 枚举 / registry
-      // 层面的校验，不耦合业务 schema。biz_table_schema 的信息通过模板下拉在 ConfigPackageExcelWorkbookWriter
-      // 里以下拉选项形式呈现给填表用户；真正的 schema 漂移由 LoadStep 在运行时报业务错。
-      addIssues(ri, STEP_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(STEP_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        STEP_SHEET,
+        rows,
+        (row, rowNo, ri) -> {
+          validateStepRow(row, pipelineKeys, pipelineKeyToType, registryByModule, seen, ri);
+          // 业务表/列精确校验的"硬拦截"故意不放在这里——Validator 只做 Excel 格式 + 枚举 / registry
+          // 层面的校验，不耦合业务 schema。biz_table_schema 的信息通过模板下拉在 ConfigPackageExcelWorkbookWriter
+          // 里以下拉选项形式呈现给填表用户；真正的 schema 漂移由 LoadStep 在运行时报业务错。
+        });
   }
 
   private static Map<String, String> buildPipelineKeyToType(
@@ -800,20 +754,9 @@ public class ConfigPackageExcelValidator {
   }
 
   private SheetResult validateWfDefRows(String tenantId, List<Map<String, String>> rows) {
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      validateWfDefRow(tenantId, row, seen, ri);
-      addIssues(ri, WF_DEF_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(WF_DEF_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        WF_DEF_SHEET, rows, (row, rowNo, ri) -> validateWfDefRow(tenantId, row, seen, ri));
   }
 
   private static void validateWfDefRow(
@@ -841,20 +784,9 @@ public class ConfigPackageExcelValidator {
                         + KEY_SEP_COLON
                         + normalize(r.get(COL_VERSION)))
             .collect(Collectors.toSet());
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      validateWfNodeRow(row, wfKeys, seen, ri);
-      addIssues(ri, WF_NODE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(WF_NODE_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        WF_NODE_SHEET, rows, (row, rowNo, ri) -> validateWfNodeRow(row, wfKeys, seen, ri));
   }
 
   private static void validateWfNodeRow(
@@ -904,19 +836,8 @@ public class ConfigPackageExcelValidator {
                         + KEY_SEP_HASH
                         + normalize(r.get(COL_NODE_CODE)))
             .collect(Collectors.toSet());
-    List<WorkbookIssue> issues = new ArrayList<>();
-    List<Map<String, String>> valid = new ArrayList<>();
-    int rowNo = 2;
-    for (Map<String, String> row : rows) {
-      List<String> ri = new ArrayList<>();
-      validateWfEdgeRow(row, wfKeys, nodeKeys, ri);
-      addIssues(ri, WF_EDGE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) {
-        valid.add(withRowNo(row, rowNo));
-      }
-      rowNo++;
-    }
-    return new SheetResult(WF_EDGE_SHEET, rows.size(), valid, issues);
+    return validateRows(
+        WF_EDGE_SHEET, rows, (row, rowNo, ri) -> validateWfEdgeRow(row, wfKeys, nodeKeys, ri));
   }
 
   private static void validateWfEdgeRow(

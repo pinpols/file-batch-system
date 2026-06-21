@@ -57,7 +57,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ParseStep implements ImportStageStep {
 
-  private static final String KEY_PARSED_COUNT = "parsedCount";
+  private static final String KEY_PARSED_COUNT = PipelineRuntimeKeys.IMPORT_PARSED_COUNT;
   private static final String FORMAT_EXCEL = "EXCEL";
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
@@ -105,10 +105,14 @@ public class ParseStep implements ImportStageStep {
     Map<String, Object> attrs = context.getAttributes();
     try {
       String payloadText =
-          String.valueOf(attrs.getOrDefault("normalizedPayload", context.getRawPayload()));
+          String.valueOf(
+              attrs.getOrDefault(
+                  PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, context.getRawPayload()));
       payloadText = peelTrailerControlRecord(context, payloadText, attrs);
       ImportPayload importPayload =
-          attrs.get("importPayload") instanceof ImportPayload payload ? payload : null;
+          attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
+              ? payload
+              : null;
       stagingFile = createStagingFile(context, "parsed");
       long totalCount =
           parsePayloads(
@@ -132,8 +136,9 @@ public class ParseStep implements ImportStageStep {
               ? partitionedCount
               : support.numberValue(existingParsedCount);
       attrs.put(KEY_PARSED_COUNT, parsedCountValue);
-      attrs.put("totalCount", totalCount);
-      if (totalCount == 0 && support.numberValue(attrs.get("skippedCount")) == 0) {
+      attrs.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
+      if (totalCount == 0
+          && support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)) == 0) {
         deleteQuietly(stagingFile);
         return ImportStageResult.failure(
             stage(),
@@ -161,10 +166,10 @@ public class ParseStep implements ImportStageStep {
           Map.of(
               KEY_PARSED_COUNT,
               support.numberValue(attrs.get(KEY_PARSED_COUNT)),
-              "totalCount",
+              PipelineRuntimeKeys.IMPORT_TOTAL_COUNT,
               totalCount,
-              "skippedCount",
-              support.numberValue(attrs.get("skippedCount")),
+              PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
+              support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)),
               "badRecordCount",
               badRecordCount(context),
               "parsedRecordsPath",

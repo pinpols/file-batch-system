@@ -150,6 +150,10 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          and (
+              task_status = #{taskStatus}
+              or task_status not in ('SUCCESS','FAILED','CANCELLED','TERMINATED')
+          )
     </update>
 
     <update id="finishTask">
@@ -201,6 +205,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          and task_status in ('READY','RUNNING','FAILED')
     </update>
 
     <update id="promoteStatus">
@@ -221,6 +226,7 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and task_status not in ('SUCCESS','FAILED','CANCELLED','TERMINATED')
     </update>
 
     <update id="updateHeartbeatDetails">

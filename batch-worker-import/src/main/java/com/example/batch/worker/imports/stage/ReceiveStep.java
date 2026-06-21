@@ -172,7 +172,7 @@ public class ReceiveStep implements ImportStageStep {
           runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
       context.setFileId(String.valueOf(fileId));
     }
-    attrs.put("importPayload", importPayload);
+    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     return ImportStageResult.success(stage());
   }
 
@@ -200,7 +200,7 @@ public class ReceiveStep implements ImportStageStep {
   }
 
   private ImportPayload resolvePayload(ImportJobContext context) {
-    Object existing = context.getAttributes().get("importPayload");
+    Object existing = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
     if (existing instanceof ImportPayload importPayload) {
       return importPayload;
     }

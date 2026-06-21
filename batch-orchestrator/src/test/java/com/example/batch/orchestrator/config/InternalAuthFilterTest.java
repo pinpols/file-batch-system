@@ -83,6 +83,21 @@ class InternalAuthFilterTest {
     assertThat(resp.getStatus()).isEqualTo(401);
   }
 
+  @Test
+  void apiKeyCannotReachNonWorkerInternalEndpoint() throws Exception {
+    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/instances/launch");
+    req.addHeader("X-Batch-Api-Key", "raw-key");
+    req.addHeader("X-Batch-Tenant-Id", "tx");
+
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    filter.doFilterInternal(req, resp, chain);
+
+    assertThat(resp.getStatus()).isEqualTo(401);
+    verify(verifier, never()).verifyWithScope(any(), any(), anyString());
+    verify(chain, never()).doFilter(any(), any());
+  }
+
   // ─── path 2: legacy secret ────────────────────────────────────────────────
 
   @Test
