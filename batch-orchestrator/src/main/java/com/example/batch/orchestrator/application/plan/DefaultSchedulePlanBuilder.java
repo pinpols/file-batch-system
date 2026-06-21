@@ -59,7 +59,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     plan.setQueueCode(jobDefinition == null ? null : jobDefinition.queueCode());
     plan.setWorkerGroup(jobDefinition == null ? null : jobDefinition.workerGroup());
     plan.setWindowCode(jobDefinition == null ? null : jobDefinition.windowCode());
-    plan.setDefaultWorkerType(jobDefinition == null ? null : jobDefinition.jobType());
+    // ADR-046:束作业的 worker 类型须投射到交付类型(BUNDLE_IMPORT→IMPORT 等),否则 task_type=BUNDLE_* 会违反
+    // ck_job_task_type 且无 worker 认领。非束作业 workerTypeCode()==自身 code,行为不变;未知 job_type 回退原字面量。
+    plan.setDefaultWorkerType(resolveDefaultWorkerType(jobDefinition));
     plan.setPriority(jobDefinition == null ? 5 : jobDefinition.priority());
     plan.setPartitionCount(resolvePartitionCount(jobDefinition, planParams));
 
@@ -114,6 +116,15 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     }
     plan.setPartitions(partitionPlans);
     return plan;
+  }
+
+  /** 解析分区任务的 worker 类型:束作业投射到交付类型,非束/未知作业保持原 job_type 字面量。 */
+  private static String resolveDefaultWorkerType(JobDefinitionEntity jobDefinition) {
+    if (jobDefinition == null) {
+      return null;
+    }
+    JobType type = DictEnum.fromCode(JobType.class, jobDefinition.jobType());
+    return type != null ? type.workerTypeCode() : jobDefinition.jobType();
   }
 
   private Map<String, Object> mergePlanParams(
