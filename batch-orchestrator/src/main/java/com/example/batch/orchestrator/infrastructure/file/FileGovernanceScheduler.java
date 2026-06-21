@@ -50,6 +50,10 @@ public class FileGovernanceScheduler {
   private final FileGovernanceProperties properties;
   private final FileGovernanceMetricsCacheService metricsCacheService;
   private final MeterRegistry meterRegistry;
+
+  /** ADR-046 第二刀-2c-2b:到达组凑齐若是文件束则发 BUNDLE_IMPORT launch。 */
+  private final BundleArrivalLauncher bundleArrivalLauncher;
+
   private final AtomicLong arrivalDelayViolations = new AtomicLong();
   private final AtomicLong arrivalDelayMaxSeconds = new AtomicLong();
   private final AtomicLong arrivalGroupWaitingCount = new AtomicLong();
@@ -495,6 +499,7 @@ public class FileGovernanceScheduler {
               new ArrivalGroupUpdateState(
                   STATUS_TRIGGERED, "TIMEOUT_OVERRIDE_" + timeoutAction, now),
               new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+      bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
       return new ArrivalGroupDecision(STATUS_TRIGGERED);
     }
     if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
@@ -513,6 +518,7 @@ public class FileGovernanceScheduler {
                 key,
                 new ArrivalGroupUpdateState(STATUS_TRIGGERED, "ALL_FILES_ARRIVED", now),
                 new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+        bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
         return new ArrivalGroupDecision(STATUS_TRIGGERED);
       }
       updateGroupState(
