@@ -46,6 +46,30 @@ public class ConsoleWorkflowRunController {
         orchestratorProxyService.workflowRunAction(id, tenantId, "terminate"));
   }
 
+  @PostMapping("/{id}/pause")
+  @AuditAction(
+      action = "workflowRun.pause",
+      aggregateType = "workflow_run",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
+  public CommonResponse<Map<String, Object>> pause(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        orchestratorProxyService.workflowRunAction(id, tenantId, "pause"));
+  }
+
+  @PostMapping("/{id}/resume")
+  @AuditAction(
+      action = "workflowRun.resume",
+      aggregateType = "workflow_run",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
+  public CommonResponse<Map<String, Object>> resume(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        orchestratorProxyService.workflowRunAction(id, tenantId, "resume"));
+  }
+
   @PostMapping("/{id}/skip-node")
   @AuditAction(
       action = "workflowRun.skipNode",
