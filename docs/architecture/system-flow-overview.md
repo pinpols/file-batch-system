@@ -188,7 +188,7 @@ flowchart LR
   RELAY -. "UPDATE PUBLISHED / FAILED+退避" .-> TOX
   KT ==>|"@KafkaListener consume"| TLC
   TLC ==>|"调内部 launch API"| LS
-  LS -. "uk_job_instance_tenant_dedup 兜底重复" .-> LS
+  LS -. "uk_job_instance_tenant_dedup 防重复" .-> LS
 
   classDef sync fill:#e3f2fd,stroke:#1565c0;
   classDef async fill:#fff3e0,stroke:#ef6c00;
@@ -276,7 +276,7 @@ flowchart LR
   linkStyle 14 stroke:#1565c0,stroke-width:2.5px
   %%   15    COMP → ORCH 补偿（蓝 = HTTP 同步）
   linkStyle 15 stroke:#1565c0,stroke-width:2.5px
-  %%   16    ORCH → compensation_command 落库（绿 = JDBC 写）
+  %%   16    ORCH → compensation_command 写入数据库（绿 = JDBC 写）
   linkStyle 16 stroke:#2e7d32,stroke-width:2.5px
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
@@ -291,7 +291,7 @@ flowchart LR
 - **配置改动必须走 console**：直改 DB 不会触发 afterCommit 事件 → orchestrator Redis 缓存失效要等 5min TTL；运维场景请用 `POST /api/console/ops/cache/evict-*` 6 个端点手动 evict（详见 `ConsoleConfigCacheController`）。
 - **SSE 客户端绑定到具体实例**：实例死亡 → SSE 断开 → 浏览器 reconnect 落到新实例 → 从 Redis Streams replay buffer 续推（见 `ConsoleRealtimeEventHub` + `ConsoleRealtimeReplayStore`）。
 - **AI 走代理出网**：所有 prompt 经 `ConsoleAiPromptGuard` 过滤分类（PLATFORM / REJECTED_*），结果写 `console_ai_audit_log` 留痕。
-- **补偿命令落库 + outbox 派发**：`POST .../compensate` 经 console → orchestrator `/internal/compensate` → INSERT `compensation_command` + 同事务 `outbox_event(eventType=COMPENSATE)`，由 OutboxPollScheduler 异步发到 Kafka，对应 worker 反向执行（DELETE biz / 删 MinIO 对象 / 通知外部对端撤销）。
+- **补偿命令写入数据库 + outbox 派发**：`POST .../compensate` 经 console → orchestrator `/internal/compensate` → INSERT `compensation_command` + 同事务 `outbox_event(eventType=COMPENSATE)`，由 OutboxPollScheduler 异步发到 Kafka，对应 worker 反向执行（DELETE biz / 删 MinIO 对象 / 通知外部对端撤销）。
 
 ---
 
@@ -1465,7 +1465,7 @@ public class MyProcessPlugin implements ProcessComputePlugin {
 1. **不写 staging 的自定义插件,等于绕过 WAP+bookends 保障** —— VALIDATE/COMMIT/FEEDBACK 没事可做,失败时无法 forensics 也无法 atomic publish。除非业务能用其他机制(target 表自身幂等键 + 应用层事务)代偿,否则建议至少把数据先 INSERT staging 让框架走完整 5 段。
 2. **写 staging 必须遵守 staging 表 schema 与 batch_key 隔离** —— `tenant_id / target_schema / target_table / batch_key` 4 列必填(P0-2 多租户隔离前提)。
 3. **highWaterMarkOut 上报方式** —— 业务在 compute()/feedback() 里 `ctx.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "...")`,DefaultTaskExecutionWrapper 会回报 orchestrator 持久化到 `job_instance.high_water_mark_out`。
-4. **失败保留语义** —— compute() 返回 failure 即跳过后续 stage;插件应在 compute() 内部决定要不要清自己写的 staging,框架只在框架视角的 P1-6/P1-7 兜底清理。
+4. **失败保留语义** —— compute() 返回 failure 即跳过后续 stage;插件应在 compute() 内部决定要不要清自己写的 staging,框架只在框架视角的 P1-6/P1-7 补充清理。
 
 完整代码示例见 `batch-worker-process/src/test/java/.../ProcessPipelineE2eIT.java` 的 `e2eProcessCompute` 测试桩。
 

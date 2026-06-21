@@ -112,7 +112,7 @@ RULE_DEFAULTS = {
     ),
     "java:S1192": (
         "SKIP_BULK",
-        "字符串常量化噪音 256 条；DB 列名 / JSON key / 配置 key 已在 BatchFileConstants/PipelineRuntimeKeys/RESERVED_PARAMS 收口；剩余多为日志模板/测试 fixture，提常量得不偿失",
+        "字符串常量化噪音 256 条；DB 列名 / JSON key / 配置 key 已在 BatchFileConstants/PipelineRuntimeKeys/RESERVED_PARAMS 收敛；剩余多为日志模板/测试 fixture，提常量得不偿失",
     ),
     "java:S6213": (
         "SKIP_BULK",

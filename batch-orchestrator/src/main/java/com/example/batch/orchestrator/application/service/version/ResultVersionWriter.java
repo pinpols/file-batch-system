@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>同 {@code (tenant_id, business_key)} 至多 1 行 EFFECTIVE（旧 EFFECTIVE 同事务推到 SUPERSEDED）；
  *   <li>每个 job_instance 至多 1 行 result_version（{@link ResultVersionMapper#selectByJobInstanceId}
- *       幂等保护，重复 report 不重复落库）；
+ *       幂等保护，重复 report 不重复写入数据库）；
  *   <li>{@link #resolvePromotionPolicy} 从 {@code job_instance.rerun_policy_snapshot.resultPolicy}
  *       推导：{@code CREATE_NEW_VERSION} → AUTO_LATEST，{@code KEEP_BOTH / MANUAL_CONFIRM_EFFECTIVE} →
  *       MANUAL_APPROVAL，无 snapshot → AUTO_LATEST（首跑默认）。

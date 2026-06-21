@@ -433,9 +433,9 @@ class TaskDispatcher:
             logger.info("task %s already claimed by peer (HTTP 409); skipping execution", task_id)
             return
 
-        # 路由键 = 平台 JSON 字段 `workerType`(v2);v1 旧名 `taskType` 经兜底兼容,与 Java
+        # 路由键 = 平台 JSON 字段 `workerType`(v2);v1 旧名 `taskType` 经回退兼容,与 Java
         # @JsonAlias("taskType") / Rust serde alias 跨语言对齐(防漂移)。平台 v2 已只发 workerType,
-        # 此兜底是 belt-and-suspenders;守护见 test_dispatcher 的 workerType→handler 绑定用例。
+        # 此回退是 belt-and-suspenders;守护见 test_dispatcher 的 workerType→handler 绑定用例。
         worker_type = msg.get("workerType") or msg.get("taskType") or ""
         handler = self._handlers.get(worker_type)
         if handler is None:

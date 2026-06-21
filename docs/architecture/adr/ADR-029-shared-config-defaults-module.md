@@ -11,7 +11,7 @@
 
 ### 修订摘要
 
-**取消独立模块 `batch-config-defaults`,把 `batch-defaults.yml` 搬回 `batch-common/src/main/resources/`。** 原 drift 守护测试 `ConfigDriftGuardTest` 继续生效,并新增 classpath 存在性断言作为"模块缺失"的兜底。
+**取消独立模块 `batch-config-defaults`,把 `batch-defaults.yml` 搬回 `batch-common/src/main/resources/`。** 原 drift 守护测试 `ConfigDriftGuardTest` 继续生效,并新增 classpath 存在性断言作为"模块缺失"的回退。
 
 ### 修订理由
 

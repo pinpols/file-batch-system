@@ -130,7 +130,8 @@ class DefaultConsoleAiApplicationServiceTest {
 
   @Test
   @DisplayName(
-      "Prompt guard REJECTED_SAFETY → refusal 响应 + 审计落库（含 refusalReason，decision=REJECTED_SAFETY）")
+      "Prompt guard REJECTED_SAFETY → refusal 响应 + 审计写入数据库（含"
+          + " refusalReason，decision=REJECTED_SAFETY）")
   void shouldReturnRefusalResponse_andRecordAudit_whenSafetyRejected() {
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
     when(promptGuard.check(any()))
@@ -153,7 +154,7 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(audit.promptDecision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY.code());
     assertThat(audit.promptCategory()).isEqualTo(AiPromptCategory.OUT_OF_SCOPE.code());
     assertThat(audit.refusalReason()).isEqualTo("blocked-by-keyword");
-    // 防 PII 泄漏：原文不落库，只落哈希 + preview
+    // 防 PII 泄漏：原文不写入数据库，只落哈希 + preview
     assertThat(audit.promptHash()).hasSize(64); // SHA-256 hex
     // ChatClient 完全不被触达
     verify(chatClientProvider, never()).getIfAvailable();

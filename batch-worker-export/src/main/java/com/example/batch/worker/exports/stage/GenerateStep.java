@@ -253,7 +253,7 @@ public class GenerateStep implements ExportStageStep {
     }
     // 与 JdbcMappedImportSpec.extractJdbcMappedImport 的双层 lookup 对齐：顶层没有时再查
     // query_param_schema 里的 export_data_ref。schema 里 file_template_config 没有独立
-    // export_data_ref 列，seed 通常把它塞进 query_param_schema jsonb。
+    // export_data_ref 列，seed 通常把它写入 query_param_schema jsonb。
     Object qps = tc.get("query_param_schema");
     Map<String, Object> qpsMap = toStringKeyMap(qps);
     Object nested = qpsMap.get("export_data_ref");
@@ -399,7 +399,7 @@ public class GenerateStep implements ExportStageStep {
           decision.suppressedSincePrevious(),
           msg);
     } else {
-      // 抑制窗口内:留一条 DEBUG 兜底,便于 verbose 排查
+      // 抑制窗口内:留一条 DEBUG 回退,便于 verbose 排查
       SwallowedExceptionLogger.info(GenerateStep.class, "catch:Exception (throttled)", ex);
     }
   }

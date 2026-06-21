@@ -13,7 +13,7 @@
 | 对比对象 | 关键特征 | 跟本系统主要差异 |
 |---|---|---|
 | **Spring Batch** | JSR-352 标准 chunk processing，单 JVM 内 retry/skip listener | 不分布式；retry 在 worker 内做，本系统在 orch 决策 |
-| **Temporal / Cadence** | activity worker long-poll server，server-side cancel + heartbeat | 严格 exactly-once；本系统是 at-least-once + 业务幂等兜底 |
+| **Temporal / Cadence** | activity worker long-poll server，server-side cancel + heartbeat | 严格 exactly-once；本系统是 at-least-once + 业务幂等回退 |
 | **Apache Airflow** | task instance + executor (Celery/K8s)，per-task subprocess | task 完整隔离 + on_kill；本系统 listener 同步跑 + Semaphore 背压 |
 | **AWS Batch / GCP Batch** | 托管 + array job + per-task container | container 级隔离；本系统是同进程 thread-level |
 
@@ -30,7 +30,7 @@
 | **执行模型** | Kafka listener 单线程消费 → `Semaphore(maxConcurrentTasks=8)` 背压；满则 `container.pause()`、permit 释放后 `resume()`。**所有 task 在 listener 线程同步跑**，不分线程池 | `AbstractTaskConsumer:69` |
 | **Graceful drain** | 三步：(1) 标 worker `DRAINING` (2) `kafkaListenerEndpointRegistry.stop()` (3) `ActiveTaskLeaseRegistry.awaitDrain(120s)`；ReadWriteLock 防 TOCTOU + drain monitor wait/notify | `GracefulKafkaShutdown:75` + `ActiveTaskLeaseRegistry:108` |
 | **Retry / 错误** | Worker **不**重试业务失败：捕获异常 → `StageExecutionResult.failure` → `report` 给 orchestrator 决策。HTTP report 自身有指数退避重试（409/5xx/IO）。毒丸消息 → DLQ topic，DLQ 写失败才不 ack | `HttpTaskExecutionClient:148` + `AbstractTaskConsumer:141` |
-| **幂等** | `idempotencyKey` 仅放 `ExecutionContext` 透传，**worker 端无去重表**；at-least-once 语义靠业务 SQL `ON CONFLICT DO NOTHING/UPDATE` 兜底 | `SqlTransformComputePlugin:508` |
+| **幂等** | `idempotencyKey` 仅放 `ExecutionContext` 透传，**worker 端无去重表**；at-least-once 语义靠业务 SQL `ON CONFLICT DO NOTHING/UPDATE` 回退 | `SqlTransformComputePlugin:508` |
 | **观测** | Micrometer：`batch.worker.semaphore.available`、`lease.consecutive_failures`、`lease.fast_retry`、`drain.{duration_seconds,outcome_total,initial_active_leases}`、`worker.report.failed.total`、`batch.worker.report.duration{p50/p95/p99}`；MDC 注入 tenantId/traceId/taskId/workerId/jobInstanceId/workerType/runMode | 全 worker-core |
 | **WAP 5-stage（process）** | `AbstractStageExecutor` while 循环跑 PREPARE→COMMIT→FEEDBACK，每 stage 调 `runtimeRepository.startStepRun/finish*`（落 `pipeline_step_run`），失败默认终止；支持 `onSuccessNextStepCode/onFailureNextStepCode` 跳转。**stage 之间无 transaction，COMMIT 单独 `@Transactional(REQUIRES_NEW)`**，FEEDBACK 失败被 swallow + metric | `AbstractStageExecutor:32` + `DefaultProcessStageExecutor:120` |
 
@@ -84,7 +84,7 @@
 
 6. **CLAIM 无幂等保护，重复 CLAIM 同一 taskId 时重复执行**
    - **位置**：`TaskDispatchExecutor:32`
-   - **现象**：直接 CLAIM → execute；如果 Kafka 重投递（report 失败但任务已跑完），第二次 CLAIM orch 侧若任务还在 RUNNING 会拒，但若已被回收为 READY 则会再次成功 → 业务逻辑被执行两次（仅靠 `ON CONFLICT` 兜底，不是所有业务都用 SqlTransformCompute）
+   - **现象**：直接 CLAIM → execute；如果 Kafka 重投递（report 失败但任务已跑完），第二次 CLAIM orch 侧若任务还在 RUNNING 会拒，但若已被回收为 READY 则会再次成功 → 业务逻辑被执行两次（仅靠 `ON CONFLICT` 回退，不是所有业务都用 SqlTransformCompute）
    - **业界**：activity invocation id + server-side dedupe（Temporal）/ `idempotency-key` table（Stripe pattern）
 
 7. **`AbstractStageExecutor` cycle guard 太宽松**
@@ -108,7 +108,7 @@
 
 11. **`awaitDrain` deadline 用 `System.currentTimeMillis()`**（`ActiveTaskLeaseRegistry:108`）— NTP 时钟回拨期间会让 `remaining` 变负 → 立即返回 timeout=false。应该用 `System.nanoTime()` 单调钟
 
-12. **`WorkerRegistration.currentLoad` 永远是 0**（`DefaultHeartbeatService:34`）— 只做 null→0 兜底，无人写入实际负载。orch 无法基于 worker 实际并发做 least-loaded 调度，capability_tags 也只能做静态匹配
+12. **`WorkerRegistration.currentLoad` 永远是 0**（`DefaultHeartbeatService:34`）— 只做 null→0 回退，无人写入实际负载。orch 无法基于 worker 实际并发做 least-loaded 调度，capability_tags 也只能做静态匹配
 
 13. **`WorkerKafkaSubscribeProperties` PATTERN 模式 regex `\.[^.]+` 过于宽松**（`AbstractTaskConsumer:352`）— 任意一段后缀都匹配，**跨租户 topic 泄漏风险**（一个 worker 可能消费别的租户的 topic）。Production 应强制 TENANT_SCOPED 模式 + allowlist
 

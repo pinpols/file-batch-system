@@ -18,7 +18,7 @@ class JobTypeTest {
   @ParameterizedTest
   @EnumSource(JobType.class)
   void everyJobTypeHasNonNullBatchType(JobType type) {
-    // batchType() 的 switch 必须穷尽——新增枚举忘补映射会在此 NPE/编译失败兜底。
+    // batchType() 的 switch 必须穷尽——新增枚举忘补映射会在此 NPE/编译失败回退。
     assertThat(type.batchType()).isNotNull();
   }
 

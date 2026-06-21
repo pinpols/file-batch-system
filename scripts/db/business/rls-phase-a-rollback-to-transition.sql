@@ -11,7 +11,7 @@
 --
 -- 效果:
 --   - 删除 strict policy
---   - 重建 transition policy(允许 IS NULL/空 兜底)
+--   - 重建 transition policy(允许 IS NULL/空 回退)
 --   - 漏 SET 的应用代码恢复正常工作
 --
 -- 后续:复盘根因(为何漏接线),修复后再次走翻 strict 流程(见 rls-phase-a-strict.sql)

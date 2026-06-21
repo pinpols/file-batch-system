@@ -84,7 +84,7 @@
           and trigger_type = #{expectedTriggerType}
     </update>
 
-    <!-- ADR-010 reconciler:扫"卡 ACCEPTED + 已有 job_instance 落库 + 未回写 jobInstanceId"的 trigger_request。
+    <!-- ADR-010 reconciler:扫"卡 ACCEPTED + 已有 job_instance 写入数据库 + 未回写 jobInstanceId"的 trigger_request。
          JOIN 走 (tenant_id, dedup_key) — uk_job_instance_tenant_dedup 保证 ji 至多一行;
          trigger_request 唯一约束在 (tenant_id, request_id),也至多一行。
          olderThan 过滤掉刚 ack 的请求(避免与 consumer writeBack 抢同一行,留 5min 静默期)。 -->

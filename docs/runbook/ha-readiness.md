@@ -23,7 +23,7 @@
   - **helm**:`helm/values-prod.yaml` `kafka.broker.{replicas=3,replicationFactor=3,minInsyncReplicas=2}` 声明期望拓扑(chart 不自建 broker,值须与 Strimzi CR 一致)。
 - **① 运维件(ops 启用步骤)**:① 装 Strimzi operator(`scripts/ha/install-operators.sh`);② 改 `deploy/ha/20-kafka-strimzi.yaml` 占位符(`STORAGE_CLASS` 等)后 `scripts/ha/apply-stage123.sh`;③ 建业务 topic 时带 `KAFKA_TOPIC_REPLICATION_FACTOR=3 KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2`;④ 存量 RF=1 topic 用 `kafka-reassign-partitions` 提到 RF=3。MSK 路径:3-AZ broker,topic/内部 topic RF=3 + min.insync=2 同理。
 - **② 应用侧**:✅ **已做**——producer `acks=all` + `enable.idempotence=true` + `retries=5` + `delivery.timeout.ms`(`batch-defaults.yml`);consumer `ack-mode=manual_immediate`(at-least-once)+ CLAIM 唯一性防重复执行。
-- **RPO 目标**:**RF=3 + min.insync.replicas=2 + producer acks=all 下,已确认(acked)的在途事件 RPO=0(0 丢)**——写入要求至少 2 个同步副本落盘才返回成功,单 broker 盘损不丢已 ack 事件;配 `unclean.leader.election=false`(Strimzi CR 推荐)杜绝落后副本当 leader 造成已确认数据回退。对照:当前单 broker RF=1,broker 盘损=在途事件只能靠 outbox republish 兜底,无硬 RPO。
+- **RPO 目标**:**RF=3 + min.insync.replicas=2 + producer acks=all 下,已确认(acked)的在途事件 RPO=0(0 丢)**——写入要求至少 2 个同步副本落盘才返回成功,单 broker 盘损不丢已 ack 事件;配 `unclean.leader.election=false`(Strimzi CR 推荐)杜绝落后副本当 leader 造成已确认数据回退。对照:当前单 broker RF=1,broker 盘损=在途事件只能靠 outbox republish 回退,无硬 RPO。
 - **验证**:滚动重启 1 broker,生产/消费不中断、无丢消息;`kafka-topics --describe` 看 RF=3 / ISR=3 / Configs 含 `min.insync.replicas=2`。本地用 `docker-compose.kafka-ha.yml`(见其头注释 §验证)先验;真集群按 `deploy/ha/README.md` §验证表(阶段 2)。
 - **回滚**:topic RF 不可在线降;先扩 broker 再 `kafka-reassign-partitions` 提 RF。
 
@@ -40,7 +40,7 @@
 - **② 应用侧**:✅ 备份新鲜度告警 `PostgresBackupStale`(`prometheus-batch-rules.yml`,gauge 缺失/>26h critical)已就位,等运维 push 指标。备份脚本骨架 `scripts/db/backup/pg-backup.sh`(base + 两库逻辑 dump + 可选 WAL 清理 + 新鲜度指标 push)已落地,等运维按 §1.3 cron 编排。
 - **SLO 目标**:**RTO ≤ 30min / RPO ≤ 5min**(依据 + 调紧路径见 `backup-and-pitr.md` §1.4)。RPO 由 WAL `archive_timeout=300` 封顶,RTO 由 base+WAL replay / `pg_restore -j4` 保证。
 - **验证**:**至少跑一次恢复演练**(逻辑全量 + PITR 到某时刻),记录并对 RTO 做 SLO 断言——`bash scripts/db/backup/dr-drill.sh`(默认 WARN,`--strict-rto` 超阈值硬 fail;`backup-and-pitr.md` §2)。**没演练过的备份=没有备份。**
-- **回滚**:N/A(本身是兜底)。
+- **回滚**:N/A(本身是回退)。
 
 ### P0-4 应用多副本(已就绪,确认)
 - **① 运维件**:Helm 设 orchestrator/console 3 副本、worker N 副本、K8s PodDisruptionBudget。
@@ -58,7 +58,7 @@
 ### P1-1 Redis Sentinel / Cluster
 - **现状**:Valkey 单点。ShedLock 选主 + quota + cache 依赖它。
 - **① 运维件**:Sentinel(3 哨兵 + 1 主 N 从)或 Cluster;或 ElastiCache。
-- **② 应用侧**:✅ cache fail-open(Redis 挂→直通 DB,`worker-cache.enabled` fail-open);⚠️ ShedLock 依赖 Redis,Redis 全挂期间调度互斥退化——可配 ShedLock 走 PG 兜底(`docs/runbook/redis-shedlock-down.md`)。
+- **② 应用侧**:✅ cache fail-open(Redis 挂→直通 DB,`worker-cache.enabled` fail-open);⚠️ ShedLock 依赖 Redis,Redis 全挂期间调度互斥退化——可配 ShedLock 走 PG 回退(`docs/runbook/redis-shedlock-down.md`)。
 - **验证**:Sentinel 主从切换,缓存/选主短暂抖动后恢复,业务不崩。
 
 ### P1-2 连接池 / 扇出治理(上 Citus 重点;单机可选)

@@ -16,7 +16,7 @@ import lombok.Builder;
  *   <li>{@code failureThreshold}：仅 failure 路径使用；success 传 {@code 0}（被忽略）。
  *   <li>{@code probeIntervalMillis} / {@code maxBackoffMillis}：recalcBackoff 使用；其他路径传 {@code
  *       0}（被忽略）。
- *   <li>{@code probeMessage} / {@code probeEvidence}：success / failure 两路都会落库；recalcBackoff 不读取。
+ *   <li>{@code probeMessage} / {@code probeEvidence}：success / failure 两路都会写入数据库；recalcBackoff 不读取。
  * </ul>
  */
 @Builder

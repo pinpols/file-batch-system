@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
  * <p>守护:
  *
  * <ul>
- *   <li>合法 calendarCode 落库,字段透传 (timezone, holidayRollRule, catchUpPolicy)
+ *   <li>合法 calendarCode 写入数据库,字段透传 (timezone, holidayRollRule, catchUpPolicy)
  *   <li>含空格 / 中文 / 数字开头的 calendarCode → 400(BE @ValidResourceCode 拦截)
  *   <li>同 tenantId + calendarCode 重复创建 → 唯一约束撞
  * </ul>

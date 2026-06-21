@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.integration.support;
 import com.example.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 
 /**
- * 集成测试夹具工具：把跨用例 {@link WorkerRegistryCache} 状态清理收口到测试基础设施。
+ * 集成测试夹具工具：把跨用例 {@link WorkerRegistryCache} 状态清理收敛到测试基础设施。
  *
  * <p>之前 {@code WorkerRegistryCache.evictTenantWorkerSelectors(tenantId)} 是仅给集成测试用的辅助方法
  * 渗入生产代码（IMPORT / DEFAULT / IT / 空 group 4 个 worker_group 一次性 evict 是测试夹具需求,生产 永远走单 group {@link

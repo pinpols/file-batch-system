@@ -60,7 +60,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  *
  * <ul>
  *   <li>真起 SDK 全链路(mock server / mock kafka consumer 跑 offset 副作用)— 需要 testkit + JDK HttpClient 抽象
- *   <li>responseBody 与 OpenAPI schema 的深度字段比对(swagger-parser 引入成本高,先靠 fixture 自校验 + 人工评审兜底)
+ *   <li>responseBody 与 OpenAPI schema 的深度字段比对(swagger-parser 引入成本高,先靠 fixture 自校验 + 人工评审回退)
  * </ul>
  *
  * <p>与 Python {@code sdk-python/tests/contract/test_contract_runner.py} 是镜像关系:两侧均已驱动决策核做行为断言(Python
@@ -275,7 +275,7 @@ class JsonFixtureContractTest {
 
     // 其余 fixture(register / report-idempotency-key / partition-invocation / kafka-pause /
     // decode-error /
-    // paused-task-type 等)需真 HTTP / kafka offset 副作用,纯函数层不可驱动 → 交结构测兜底。
+    // paused-task-type 等)需真 HTTP / kafka offset 副作用,纯函数层不可驱动 → 交结构测回退。
     return null;
   }
 
@@ -349,7 +349,7 @@ class JsonFixtureContractTest {
       return out;
     }
     if (ex.isServerError()) {
-      // 09:5xx — 指数退避重试后放弃(orchestrator lease 超时兜底重派)。
+      // 09:5xx — 指数退避重试后放弃(orchestrator lease 超时回退重派)。
       out.put("action", "retry-then-drop");
       out.put("retry", true);
       out.put("retryBackoffMs", RETRY_BACKOFF_MS);

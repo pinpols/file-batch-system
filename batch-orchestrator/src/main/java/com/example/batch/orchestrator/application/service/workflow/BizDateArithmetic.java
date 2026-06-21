@@ -144,7 +144,7 @@ public class BizDateArithmetic {
         dates.add(cursor);
       }
       cursor = cursor.minusDays(1);
-      // 兜底防御：避免极端配置无限循环（理论上 count ≤ RANGE_MAX_DAYS，循环会停）
+      // 回退防御：避免极端配置无限循环（理论上 count ≤ RANGE_MAX_DAYS，循环会停）
       if (cursor.isBefore(bizDate.minusYears(1))) {
         break;
       }

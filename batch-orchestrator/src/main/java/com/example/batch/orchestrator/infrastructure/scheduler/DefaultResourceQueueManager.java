@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  *   <li>{@code fairShareWeight} 倒序——权重大的队列更可能被选中。
  *   <li>{@code maxRunningJobs} 倒序——容量大的队列优先。
  *   <li>{@code maxRunningPartitions} 倒序——分区容量大的优先。
- *   <li>{@code queueCode} 字典序兜底，保证挑选结果稳定（防并发下随机性）。
+ *   <li>{@code queueCode} 字典序回退，保证挑选结果稳定（防并发下随机性）。
  * </ol>
  *
  * <p>{@code fairShareWeight / maxRunningJobs / maxRunningPartitions} 的 null / ≤0 值统一规范化为 1。

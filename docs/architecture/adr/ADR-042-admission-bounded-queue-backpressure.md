@@ -19,7 +19,7 @@
 
 ## 背景
 
-V89 引入 `tenant_quota_policy.exceeded_strategy`,三态齐备且 `QUEUE_DEFER` 的 defer 链路(`ResourceCheck.waitForCapacity` → partition 留 WAITING → `WaitingPartitionDispatchScheduler` re-dispatch)已完整实现。但 `QuotaExceededStrategy.from(null/blank)` 的回退是 `REJECT`——**配了 max-running 限额却未显式选策略的租户,洪峰下被硬拒**(launch 抛 BizException、instance 置 FAILED),这正是「误拒正常请求」的来源。全局闸门(`global-max-running-jobs`)早已是 defer,只有租户级未配策略时硬拒。
+V89 引入 `tenant_quota_policy.exceeded_strategy`,三态齐备且 `QUEUE_DEFER` 的 defer 链路(`ResourceCheck.waitForCapacity` → partition 留 WAITING → `WaitingPartitionDispatchScheduler` re-dispatch)已完整实现。但 `QuotaExceededStrategy.from(null/blank)` 的回退是 `REJECT`——**配了 max-running 限额却未显式选策略的租户,峰值流量下被硬拒**(launch 抛 BizException、instance 置 FAILED),这正是「误拒正常请求」的来源。全局闸门(`global-max-running-jobs`)早已是 defer,只有租户级未配策略时硬拒。
 
 ## 决策
 
@@ -31,7 +31,7 @@ V89 引入 `tenant_quota_policy.exceeded_strategy`,三态齐备且 `QUEUE_DEFER`
 
 ## 影响
 
-- 配了 max-running 但没配策略的租户:洪峰下从「FAILED 硬拒」变为「WAITING 排队、容量释放后自动跑」——**更安全、不误杀**,符合准实时批量「宁排队不误拒」诉求。
+- 配了 max-running 但没配策略的租户:峰值流量下从「FAILED 硬拒」变为「WAITING 排队、容量释放后自动跑」——**更安全、不误杀**,符合准实时批量「宁排队不误拒」诉求。
 - 显式配 `REJECT` 的租户:行为不变(仍硬拒)。
 - 无新表、无新事件类型、orchestrator 仍是唯一状态主机、WAITING 重评走既有 scheduler。
 

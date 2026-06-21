@@ -19,7 +19,7 @@ import java.time.Instant;
  *
  * @param launchRequest 完整的 launch
  *     命令参数(tenantId/jobCode/bizDate/triggerType/requestId/traceId/params)
- * @param dedupKey trigger 端已计算的去重 key(orchestrator 仍会通过 uk_job_instance_tenant_dedup 兜底)
+ * @param dedupKey trigger 端已计算的去重 key(orchestrator 仍会通过 uk_job_instance_tenant_dedup 回退)
  * @param sourceFireTime trigger 实际 fire 时刻,UTC instant
  * @param envelopeVersion 协议版本号,当前 1
  */

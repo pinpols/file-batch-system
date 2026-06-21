@@ -68,7 +68,7 @@ public interface JobInstanceMapper {
   long countSlaEscalationCandidates(@Param("escalationBefore") Instant escalationBefore);
 
   /**
-   * 选 RUNNING 中超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 兜底）。
+   * 选 RUNNING 中超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 回退）。
    *
    * <p>JOIN job_definition 拿 timeout_seconds（{@code > 0} 才生效，{@code = 0} 表示无 timeout）。
    *

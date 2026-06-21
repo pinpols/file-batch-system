@@ -167,7 +167,7 @@ check "Flyway 最高版本"   "$SNAP_FLYWAY"  "$(q "$TGT_PLATFORM" "SELECT max(v
 if [[ "$HAS_BUSINESS" == "1" ]]; then
   check "biz.customer_account 行数" "$SNAP_BIZ" "$(q "$TGT_BUSINESS" "SELECT count(*) FROM biz.customer_account")"
   # RLS policy 校验对齐"事故前快照"(恢复后==恢复前),而非硬编码阈值;
-  # 另做一个 >0 的下限兜底(防恢复后 RLS 整个丢失也算"匹配 0")。
+  # 另做一个 >0 的下限回退(防恢复后 RLS 整个丢失也算"匹配 0")。
   check "biz RLS policy 数(对齐基线)" "$SNAP_POLICIES" "$(q "$TGT_BUSINESS" "SELECT count(*) FROM pg_policies WHERE schemaname='biz'")"
   if [[ "${SNAP_POLICIES:-0}" -le 0 ]]; then
     checks+=("  ${YELLOW}⚠${RESET} 基线 biz policy=0 —— 源库 RLS 未启用?恢复无从比对"); fi

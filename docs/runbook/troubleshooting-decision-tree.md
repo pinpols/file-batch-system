@@ -108,7 +108,7 @@ kubectl scale deployment/batch-worker-import -n batch-prod --replicas=4
       → kubectl scale sts batch-orchestrator --replicas=4
 ```
 
-### 应急兜底
+### 应急回退
 
 ```bash
 # 只有明确是"一次性历史积压、新增速率已回正常"才跑

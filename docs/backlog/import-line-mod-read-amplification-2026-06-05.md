@@ -44,7 +44,7 @@
 2. **`template_config.partition_aware_parse=false`** → 单流处理,扫描段零放大。
    **⚠ 正确性前提:必须同时把分片数压回 1**(`targetBytesPerPartition` 调到比文件还大,或显式
    `partitionCount=1`)。否则 orchestrator 仍按文件大小 fan-out N 片,而每片关掉过滤后**保留全部行**
-   → N 个分片各自 Load 全量 → **N× 重复写**,只靠 `ON CONFLICT` 去重兜底(浪费 + 依赖幂等)。
+   → N 个分片各自 Load 全量 → **N× 重复写**,只靠 `ON CONFLICT` 去重回退(浪费 + 依赖幂等)。
    故此项**不是**独立优化,而是"放弃并行、退回单流"的开关,要与片数=1 成对使用。
 
 ## 触发条件(满足才做)

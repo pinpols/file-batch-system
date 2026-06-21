@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Windows / PowerShell 版 clean-restart，等价于 `make dev-restart-clean` 的 Docker 版
-  兜底方案。执行步骤：
+  回退方案。执行步骤：
     1) docker compose down -v   删除本项目所有容器、网络与【数据卷】
     2) docker compose build --no-cache   清缓存全量重建应用镜像
     3) docker compose up -d --wait        重新拉起依赖 + 应用并等待健康

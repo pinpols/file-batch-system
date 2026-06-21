@@ -18,7 +18,7 @@
 
 ## P0 — 立即风险
 
-### P0-1 审计 tenant_id 兜底 `"system"` 字符串 → 跨租审计取证断链
+### P0-1 审计 tenant_id 回退 `"system"` 字符串 → 跨租审计取证断链
 
 **文件**: `batch-console-api/src/main/java/com/example/batch/console/domain/audit/support/AuditAspect.java:246-271`
 
@@ -27,11 +27,11 @@ private static String resolveTenantFallback(String principalTenantId) {
   if (principalTenantId != null && !principalTenantId.isBlank()) return principalTenantId;
   String mdcTenant = MDC.get("tenant");
   if (mdcTenant != null && !mdcTenant.isBlank()) return mdcTenant;
-  return "system";   // ← 硬编码兜底
+  return "system";   // ← 硬编码回退
 }
 ```
 
-注释明说兜底是为让 `auth.login` / `auth.logout` 等系统级动作不被 `tenant_id NOT NULL` 拒掉。问题是:
+注释明说回退是为让 `auth.login` / `auth.logout` 等系统级动作不被 `tenant_id NOT NULL` 拒掉。问题是:
 
 - `ROLE_ADMIN` 的 `ConsolePrincipal.tenantId()` 是 `null`,但它能 update / batchCreate **任意 tenant** 的资源(ConsoleTenantController.update / batchCreate 都异常退出 `@AuditAction`)
 - 这些操作的审计行 `tenant_id = "system"`,而不是被改的目标租户
@@ -146,7 +146,7 @@ public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
 - DB 事务因 IOException 回滚 → outbox 行回到 NEW
 - 下一轮转发再次 send → 同一 payload 重复发布到 Kafka topic
 
-依赖**下游 consumer 幂等**(基于 outbox event id / dedupe key)兜底,但当前 SDK Java/Python 路径上**有部分 consumer 未实现去重**(参考 `2026-06-02-java-python-sdk-deep-review.md` 提到的 SDK 一致性问题)。
+依赖**下游 consumer 幂等**(基于 outbox event id / dedupe key)回退,但当前 SDK Java/Python 路径上**有部分 consumer 未实现去重**(参考 `2026-06-02-java-python-sdk-deep-review.md` 提到的 SDK 一致性问题)。
 
 **修法**:
 - 推荐:outbox poller 改成"先在独立 tx 内 mark IN_FLIGHT → send Kafka → 单独 tx mark PUBLISHED",失败靠 IN_FLIGHT 超时回 NEW(state machine 显式)
@@ -268,7 +268,7 @@ MANDATORY 契约满足,无运行时风险。
 
 | 本报告项 | 重叠的既有报告 | 覆盖情况 |
 |---|---|---|
-| P0-1 audit 兜底 | `2026-06-03-deep-scan-be-business-ops.md` / 同日安全审计 PR#314 | 既有报告未明确指出 ROLE_ADMIN 跨租审计断链,本报告**新增**风险论证 |
+| P0-1 audit 回退 | `2026-06-03-deep-scan-be-business-ops.md` / 同日安全审计 PR#314 | 既有报告未明确指出 ROLE_ADMIN 跨租审计断链,本报告**新增**风险论证 |
 | P1-1 Kafka 缺 RLS | `2026-06-02-deep-review-round-2.md` | 既有报告提过 RLS,但未列出 Kafka listener 入口具体缺陷 |
 | P1-2 调度器缺 RLS | `2026-06-03-deep-scan-be-resources-scheduling-v2.md` | 资源调度报告聚焦 JVM/Kafka/OOM,本项**新增** |
 | P1-3 SSE 异步无补偿 | `2026-06-02-sdk-atomic-fe-deep-review.md` 侧重 FE,BE 侧未覆盖 | 本报告**新增** |
@@ -280,7 +280,7 @@ MANDATORY 契约满足,无运行时风险。
 ## 整改建议优先级
 
 **Sprint 内**:
-1. P0-1:审计 tenant 兜底加目标租户提取(2-3d)
+1. P0-1:审计 tenant 回退加目标租户提取(2-3d)
 2. P1-1:TriggerLaunchConsumer + 其他 Kafka listener 入口加 RLS holder(1-2d × N consumer)
 3. P1-2:调度器 per-tenant 循环统一加 RLS holder helper(2-3d 含测试覆盖)
 

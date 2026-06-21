@@ -34,7 +34,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 /**
  * 端到端测试：Outbox forwarder 的重试/耗尽语义（不依赖真实 Kafka）。
  *
- * <p>测试意图：只验证 forwarder 的“状态机 + 审计落库”行为，不验证 Kafka 网络与 broker。 因此这里用 {@link
+ * <p>测试意图：只验证 forwarder 的“状态机 + 审计写入数据库”行为，不验证 Kafka 网络与 broker。 因此这里用 {@link
  * org.springframework.test.context.bean.override.mockito.MockitoBean} 把 {@link OutboxPublisher} 替换为
  * mock，精确控制 publish 成功/失败序列。
  *

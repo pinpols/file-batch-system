@@ -44,7 +44,7 @@ public class JsonFormatParser implements FormatParser {
         // R2-P0-6 streaming envelope：之前 mapper.readTree(parser) 把整个对象树（含 records 数组）
         // 全量加载进堆；100 MB JSON → ~300-500 MB JsonNode 内存（Jackson tree model 3-5× 膨胀）→ OOM。
         // 现在：peek 第一个字段，若是 "records" + 数组 → 走流式 parseJsonArray 一条一条 readTree；
-        // 否则（非典型 envelope 或单对象）回退 readTree 一次性加载，由 ReceiveStep payload size 上限兜底。
+        // 否则（非典型 envelope 或单对象）回退 readTree 一次性加载，由 ReceiveStep payload size 上限回退。
         JsonToken firstFieldToken = parser.nextToken();
         if (firstFieldToken == JsonToken.END_OBJECT) {
           return 0L; // 空对象 {}

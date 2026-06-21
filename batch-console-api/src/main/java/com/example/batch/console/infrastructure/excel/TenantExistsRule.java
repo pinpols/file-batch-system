@@ -13,7 +13,7 @@ import java.util.Set;
  *
  * <p>背景:sim-e2e 第 2 波发现 ta/tb/tc fixture 跑通后,reconciler / quartz scheduler 仍跳过对应租户的 CRON job, 排查发现
  * batch.tenant 表里没插 ta/tb/tc 三行 ACTIVE 租户。这条规则在 fixture 入口对照 tenant 表存在的 tenant_id 集合,缺则报错并指引用
- * sim-e2e-bootstrap.sql 兜底。
+ * sim-e2e-bootstrap.sql 回退。
  *
  * <p>纯函数,不依赖 Spring。调用方传入"fixture 涉及租户"与"DB 已存在租户"两个集合。
  */

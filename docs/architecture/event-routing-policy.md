@@ -20,7 +20,7 @@
 1. **事件量级差异**：trigger fire 是高频事件（生产 95%+ 是定时器触发，每秒可能数千），与业务事件（每秒几十）混在一张表会让 orchestrator 端 outbox 扫描压力陡增。
 2. **消费方差异**：trigger_outbox 只有一个消费方（orchestrator TriggerLaunchConsumer），而 outbox_event 有多个 topic 多个消费方。混在一起的路由元数据会让 schema 变臃肿。
 3. **关联表差异**：trigger_outbox_event 与 `trigger_request` 同事务（一对一），outbox_event 与状态机表（job_instance / workflow_run）同事务（一对多）。事务边界拆开避免互相影响。
-4. **重试策略差异**：trigger 失败靠退避重发即可（trigger_request 自带 dedup_key 兜底），不需要单独的 retry 队列；业务事件失败要走 retry → DLQ → 人工 replay 全套流程。
+4. **重试策略差异**：trigger 失败靠退避重发即可（trigger_request 自带 dedup_key 回退），不需要单独的 retry 队列；业务事件失败要走 retry → DLQ → 人工 replay 全套流程。
 
 ### 2.2 不变量
 
@@ -59,9 +59,9 @@ orchestrator TriggerLaunchConsumer.consume(envelope)
 LaunchApplicationService.launch(launchRequest) → INSERT job_instance + outbox_event(同事务)
 ```
 
-**幂等兜底**：
+**幂等回退**：
 - `(tenant_id, request_id)` UNIQUE（trigger_outbox_event 重发拒绝）
-- `uk_job_instance_tenant_dedup`（orchestrator 端兜底）
+- `uk_job_instance_tenant_dedup`（orchestrator 端回退）
 - consumer 收到 409 CONFLICT 视为 ack 成功
 
 ### 3.2 outbox_event（通用业务事件）
@@ -89,7 +89,7 @@ OutboxRetryScheduler 扫 event_outbox_retry
   ↓
 是不是 trigger fire（定时 / 手动 / API）→ orchestrator launch？
   │
-  ├─ 是 → 用 trigger_outbox_event（已有 LaunchEnvelope schema 兜底，新增 trigger_type 即可）
+  ├─ 是 → 用 trigger_outbox_event（已有 LaunchEnvelope schema 回退，新增 trigger_type 即可）
   │
   └─ 否 → 用 outbox_event
            │

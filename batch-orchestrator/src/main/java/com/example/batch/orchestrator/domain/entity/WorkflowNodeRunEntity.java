@@ -6,7 +6,7 @@ import java.time.Instant;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-// #8-1: 实现 Stateful 接口，消除 DefaultStateMachine 中的反射兜底路径
+// #8-1: 实现 Stateful 接口，消除 DefaultStateMachine 中的反射回退路径
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class WorkflowNodeRunEntity extends AbstractLocalizedErrorEntity implements Stateful {

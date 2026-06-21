@@ -151,7 +151,7 @@ class DefaultPartitionLifecycleServiceTest {
         ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
     verify(jobPartitionMapper, times(2)).markStatus(cap.capture());
     for (MarkPartitionStatusParam param : cap.getAllValues()) {
-      // 防回归:必须推回 WAITING,不能是 READY(否则跳过 outbox 落库)
+      // 防回归:必须推回 WAITING,不能是 READY(否则跳过 outbox 写入数据库)
       assertThat(param.getPartitionStatus()).isEqualTo(PartitionStatus.WAITING.code());
       assertThat(param.getPartitionStatus()).isNotEqualTo(PartitionStatus.READY.code());
     }

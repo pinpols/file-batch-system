@@ -18,7 +18,7 @@
 
 1. SDK Kafka offset commit 与 dispatcher 拒收语义存在不一致，可能导致消息被 commit 但未进入执行。
 2. Console 认证已切 HttpOnly cookie，但后端仍关闭 CSRF，前端只是预留 XSRF 头配置。
-3. PR gate 为提速移除了 IT/E2E，主干质量依赖 full-ci / staging 兜底，必须确保 merge queue 和 required check 配置真的闭环。
+3. PR gate 为提速移除了 IT/E2E，主干质量依赖 full-ci / staging 回退，必须确保 merge queue 和 required check 配置真的闭环。
 4. Import COPY 路径在应用侧仍整块缓冲 CSV，且模板 chunk size 没上限。
 5. Import checkpoint/重试安全依赖 strict idempotency，但默认仍是兼容模式。
 6. 运行参数基线文档、DB seed 和 YAML 默认值存在漂移。
@@ -75,7 +75,7 @@
 - 登录、公钥、健康检查、prometheus、SSE ticket 等按需豁免。
 - 前端已有 xsrf 配置，可直接复用。
 
-### P1-2 PR gate 不跑 IT/E2E，主干质量依赖事后兜底
+### P1-2 PR gate 不跑 IT/E2E，主干质量依赖事后回退
 
 证据：
 
@@ -266,7 +266,7 @@
 - 主链路约束明确：`CLAUDE.md` 36-43 行规定 `DB -> Outbox -> Kafka -> CLAIM -> EXECUTE -> REPORT`，并限制 worker 直接写状态表。
 - 模块边界清楚：runtime 固定 10 模块，SDK/testkit/starter 作为 ADR-035 例外，core SDK 保持 Spring-free。
 - Atomic worker 单独隔离 shell/sql/stored-proc/http executor，符合 dual-use RCE 风险隔离思路。
-- Console security 有兜底：`ConsoleSecurityConfiguration` 对 `/api/console/**` 至少要求有效角色，并对 loggers 限 ADMIN。
+- Console security 有回退：`ConsoleSecurityConfiguration` 对 `/api/console/**` 至少要求有效角色，并对 loggers 限 ADMIN。
 - SQL 模板防线较强：export/process 均限制 SELECT、schema allowlist、禁用函数、必填参数。
 - 前端认证方向正确：JWT 不进 localStorage，HttpOnly cookie 为主；富文本统一通过 `v-safe-html` + DOMPurify。
 - OpenAPI / Kafka topic / Flyway / SQL boundary 已有 CI 守护，工程化底盘比普通项目更成熟。

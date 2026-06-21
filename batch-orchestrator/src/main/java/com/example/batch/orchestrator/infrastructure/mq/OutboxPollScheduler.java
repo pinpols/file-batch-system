@@ -29,7 +29,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
 /**
- * Outbox 轮询调度器（自适应版本）：驱动 {@link DefaultScheduleForwarder} 把已落库的 outbox_event 推到 Kafka。
+ * Outbox 轮询调度器（自适应版本）：驱动 {@link DefaultScheduleForwarder} 把已写入数据库的 outbox_event 推到 Kafka。
  *
  * <p>自适应轮询间隔：
  *
@@ -60,12 +60,12 @@ import org.springframework.stereotype.Component;
 public class OutboxPollScheduler {
 
   /**
-   * ShedLock 兜底持锁上限的余量。在 {@link OutboxProperties#getPublishingTimeoutSeconds()} 基础上加这一段缓冲得到 锁的
+   * ShedLock 回退持锁上限的余量。在 {@link OutboxProperties#getPublishingTimeoutSeconds()} 基础上加这一段缓冲得到 锁的
    * lockAtMost — 保证锁过期晚于 stale 重置阈值,避免"锁过期但 stale 未到"的盲窗;同时把窗口控制在 10s, 不至于让单实例长时间故障后才能切换。
    *
    * <p>历史问题:lockAtMost 与 publishingTimeoutSeconds 严格相等时,GC 停顿或 Kafka 超时期间锁刚过期就被另一
    * 实例抢走,原实例继续推进与新实例并发处理同一批 outbox 事件(outbox UNIQUE(tenant_id, event_key) ON CONFLICT
-   * 兜底但会刷错误日志)。+10s 缓冲将这种竞争窗口压缩到极小。
+   * 回退但会刷错误日志)。+10s 缓冲将这种竞争窗口压缩到极小。
    */
   private static final Duration LOCK_AT_MOST_BUFFER = Duration.ofSeconds(10);
 
@@ -143,7 +143,7 @@ public class OutboxPollScheduler {
   }
 
   // P1 治理: executor 生命周期改由 Spring 容器统一管理 (outboxPollScheduler bean), 这里不再
-  // 手动 shutdown / awaitTermination — Spring 通过 awaitTerminationSeconds=30 等价兜底。
+  // 手动 shutdown / awaitTermination — Spring 通过 awaitTerminationSeconds=30 等价回退。
   // 原 setDaemon(true) 副作用 (JVM 退出时 daemon 线程被直接终止, awaitTermination 形同虚设)
   // 也因 bean 切换为非 daemon 一并修复。
 
@@ -293,7 +293,7 @@ public class OutboxPollScheduler {
   /**
    * shardTotal = 1：lock name 为 "outbox_poll"，与原行为完全兼容。 shardTotal > 1：每个分片独立持锁，允许多实例并行。
    *
-   * <p>DYNAMIC 模式下每轮都重新查询分配；rebalance 期间可能有短暂重叠，由 Outbox 事件幂等设计兜底。
+   * <p>DYNAMIC 模式下每轮都重新查询分配；rebalance 期间可能有短暂重叠，由 Outbox 事件幂等设计回退。
    */
   private LockConfiguration lockConfig() {
     ShardAssignment assignment = shardAssignmentProvider.current();

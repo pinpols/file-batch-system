@@ -73,7 +73,7 @@
 适用:`CONSUMER-ID=-` 或者某个 worker 实例僵死。
 
 1. 定位是哪个服务:`kafka-consumer-groups.sh --describe` 里 `HOST` 列对得上 worker 容器主机名。
-2. 优雅重启(走 Spring graceful shutdown,会等当前 in-flight task 落库 + REPORT)
+2. 优雅重启(走 Spring graceful shutdown,会等当前 in-flight task 写入数据库 + REPORT)
    ```bash
    docker compose restart batch-worker-import   # 例
    ```

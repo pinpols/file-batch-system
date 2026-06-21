@@ -38,7 +38,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   private final String memberId;
   private final Duration memberTtl;
 
-  /** 缓存上次成功读到的 assignment，Redis 异常时兜底用。 */
+  /** 缓存上次成功读到的 assignment，Redis 异常时回退用。 */
   private final AtomicReference<ShardAssignment> lastKnown =
       new AtomicReference<>(ShardAssignment.single());
 

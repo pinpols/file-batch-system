@@ -21,7 +21,7 @@
 - 业务域级限流配置没有统一入口，每条策略要重复配 (tenant, queue) → 配置爆失败；
 - 平台监控视角缺少"业务域"维度的配额视图。
 
-**当前兜底**：
+**当前回退**：
 
 - "一域一租户"部署模式 — 完全可行，但跨域报表 / 跨域审计要双倍 SSO / 数据汇聚成本；
 - 同租户多 worker_group 物理切 — 解决 worker 争抢，但配额逻辑（DB 写入 / 限流计数）仍混在一起。
@@ -111,7 +111,7 @@ ResourceQuota.check   ──── 通过 → DISPATCH
 
 ### Redis / DB 双写
 
-复用现有 quota 双轨（`RedisQuotaRuntimeStateService` 主路径 / `DatabaseQuotaRuntimeStateService` 兜底）：
+复用现有 quota 双轨（`RedisQuotaRuntimeStateService` 主路径 / `DatabaseQuotaRuntimeStateService` 回退）：
 
 - Redis Hash key：`batch:domain-quota:{tenantId}:{domainCode}` → fields { active, pending, rate_window_start, rate_count }
 - DB 表 `domain_quota_runtime_state`（snapshot + recovery 用，结构对齐 `quota_runtime_state`）
@@ -163,7 +163,7 @@ ResourceQuota.check   ──── 通过 → DISPATCH
 - 性能：domain check P99 < 5ms（Redis 主路径）；DB fallback < 30ms；
 - 守护：`DomainHierarchyValidator` 启动期 cycle / orphan check fail-fast。
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|

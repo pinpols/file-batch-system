@@ -82,7 +82,7 @@ public class GenerateCursorCodec {
 
   /**
    * 把 {@link #encodeCursor} 的输出还原为精确 Java 类型。marker 损坏 / 标签未知时抛 {@link
-   * IllegalArgumentException},调用方按「位点损坏 → 从头跑」兜底。
+   * IllegalArgumentException},调用方按「位点损坏 → 从头跑」回退。
    */
   public Object decodeCursor(String encoded) {
     if (encoded == null) {

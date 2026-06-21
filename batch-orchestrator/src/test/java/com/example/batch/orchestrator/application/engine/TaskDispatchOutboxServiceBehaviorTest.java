@@ -27,9 +27,9 @@ import org.springframework.test.util.ReflectionTestUtils;
  *
  * <ul>
  *   <li>priority band 路由 (HIGH ≤3 / MEDIUM 4-6 / LOW ≥7)
- *   <li>idempotencyKey resolution (partition 优先 / eventKey 兜底 / 派生 fallback)
+ *   <li>idempotencyKey resolution (partition 优先 / eventKey 回退 / 派生 fallback)
  *   <li>eventKey 缺省时用 tenant:taskId 形态
- *   <li>priority 字段:task.priority 优先,jobInstance.priority 兜底
+ *   <li>priority 字段:task.priority 优先,jobInstance.priority 回退
  *   <li>payload v2 字段完整性
  * </ul>
  */

@@ -2,7 +2,7 @@
 -- 一次性迁移:batch.process_staging 非分区旧表 → 天级 RANGE 分区
 -- =========================================================
 -- 🔴 危险 / 破坏性 DDL:本脚本 `DROP TABLE batch.process_staging CASCADE` 后按分区表重建,
---    PRIMARY KEY 改为 (batch_key, row_seq, staged_at)(承重墙级约束变更)。**执行前必须**:
+--    PRIMARY KEY 改为 (batch_key, row_seq, staged_at)(关键约束级约束变更)。**执行前必须**:
 --    ① 确认无 in-flight PROCESS 任务(维护窗口);② 核对依赖 process_staging 的 ON CONFLICT /
 --    幂等写不受新 PK 影响;③ 执行后重跑 rls-phase-a.sql 恢复 RLS。
 --    (禁令标记范式同 scripts/db/partition-migration/01-outbox-event-partitioned.sql 头注释。)

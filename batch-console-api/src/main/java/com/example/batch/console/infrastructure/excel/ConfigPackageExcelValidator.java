@@ -346,7 +346,7 @@ public class ConfigPackageExcelValidator {
             session.pipelineRows());
     // ADR-025:Excel import 阶段静态 DAG 拓扑校验,拒绝有环/不可达/孤立终端/CONDITION 缺 expr/
     // DSL 引用非法或非上游节点的图。复杂规则(V9/V10 GATEWAY join_mode 与 V16 WAIT sensor_spec)留 enable 时由
-    // orchestrator WorkflowGraphValidator 兜底,Excel 阶段先拦截致命问题。
+    // orchestrator WorkflowGraphValidator 回退,Excel 阶段先拦截致命问题。
     crossIssues.addAll(validateWorkflowGraphTopology(wfNodes.validRows(), wfEdges.validRows()));
     return new PackageValidationResult(
         resourceQueues,

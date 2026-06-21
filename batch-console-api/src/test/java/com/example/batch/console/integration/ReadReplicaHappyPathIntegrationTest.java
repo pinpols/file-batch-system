@@ -69,7 +69,7 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
           .withUrlParam("sslmode", "disable")
           // socketTimeout：query 在已建立连接上读响应的最大时长（秒）。Hikari 的 connectionTimeout
           // 只覆盖"从池里借连接"，不覆盖"连接已借出后查询读响应"。replica 容器被 pause 后，
-          // 在已校验过的存量连接上跑 query 会挂死在 TCP read，需要 driver 层的 socketTimeout 兜底。
+          // 在已校验过的存量连接上跑 query 会挂死在 TCP read，需要 driver 层的 socketTimeout 回退。
           .withUrlParam("socketTimeout", "2")
           .withUrlParam("loginTimeout", "2")
           .withInitScript("db/platform-init.sql");

@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   <li>{@code optional:file:${BATCH_CONSOLE_MENU_FILE:config/menu.yml}} —— 部署侧外置覆盖(运维可改,免重编译)
  * </ol>
  *
- * <p>注意:菜单只对「已存在的前端路由」挂入口 + 做访问 allowlist;**配置化不能新增页面**(页面/路由仍在 FE 编译期)。minRole 仍是安全收口源(路由守卫
+ * <p>注意:菜单只对「已存在的前端路由」挂入口 + 做访问 allowlist;**配置化不能新增页面**(页面/路由仍在 FE 编译期)。minRole 仍是安全收敛源(路由守卫
  * hasBackendMenuAccess 依赖之),改 yml 时勿越权放开。
  *
  * <p>用可变 JavaBean(@Data)承接绑定(比 record 绑定更稳),由 ConsoleMenuRegistry 转换为对外 MenuGroup record。

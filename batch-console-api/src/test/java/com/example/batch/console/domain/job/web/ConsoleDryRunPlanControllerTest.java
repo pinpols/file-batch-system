@@ -157,7 +157,7 @@ class ConsoleDryRunPlanControllerTest {
   @Test
   void planShouldPropagateOrchestratorFailureEnvelope() throws Exception {
     // orchestrator 显式返 success=false envelope 时(理论上 retrieve() 会因 HTTP 4xx 抛错先
-    // 拦截,但 helper 自身的 success-flag 检查作为防御层兜底),console 必须把失败信号传出去,
+    // 拦截,但 helper 自身的 success-flag 检查作为防御层回退),console 必须把失败信号传出去,
     // 不能把它当 success(payload) 让 FE 误以为成功。
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))

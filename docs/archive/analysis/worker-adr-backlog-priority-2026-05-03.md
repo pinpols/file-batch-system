@@ -37,7 +37,7 @@ worker A 业务执行中
 |---|---|
 | **真实频率** | **罕见 (月级)**。GC pause 长到 lease 过期 (默认 120s) 现实少见;Kafka rebalance 中等频率 |
 | **当前 mitigations** | DB CAS `where partition_status='READY'` 防"同时"重复;业务侧自带幂等 (SqlTransformCompute ON CONFLICT / outbox uk_event_key / job_instance uk_dedup) 兜 ~80% 场景 |
-| **不做代价** | 偶发业务重复执行;**不丢数据**(约束兜底);用户感知:多余 file_record / pipeline_step_run 行 / outbox 重发 |
+| **不做代价** | 偶发业务重复执行;**不丢数据**(约束回退);用户感知:多余 file_record / pipeline_step_run 行 / outbox 重发 |
 | **真窟窿** | **没自带幂等的业务路径**:file 解析、外部 API call、邮件发送 |
 | **必要性** | **中**:罕见但真出事,业务路径越扩张窟窿越多 |
 
@@ -136,7 +136,7 @@ worker 业务执行成功
 
 假设你**不知道生产部署规模**:
 
-- **不阻 ship**:三个都不做也能上生产,业务侧幂等 + DLQ 兜底覆盖 ~80% 场景
+- **不阻 ship**:三个都不做也能上生产,业务侧幂等 + DLQ 回退覆盖 ~80% 场景
 - **若立即决策一个先做**:**ADR-014** 优先级最高 (基石,影响 ADR-015 设计)
 - **若按 ROI 排**:
   1. **ADR-016 MVP** (~3h) — 投入最小,大规模时收益最大,无 schema 改动风险

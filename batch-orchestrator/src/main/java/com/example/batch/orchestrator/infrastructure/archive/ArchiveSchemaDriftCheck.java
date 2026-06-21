@@ -146,7 +146,7 @@ public class ArchiveSchemaDriftCheck {
       Map<String, ColumnMeta> hotMeta = columnMetaOf("batch", hot);
       Map<String, ColumnMeta> coldMeta = columnMetaOf("archive", hot + "_archive");
       if (hotMeta.isEmpty() || coldMeta.isEmpty()) {
-        // 与 checkOnStartup 行为一致:任一侧表缺失,skip(列名集合检查会兜底)
+        // 与 checkOnStartup 行为一致:任一侧表缺失,skip(列名集合检查会回退)
         continue;
       }
       Set<String> shared = new TreeSet<>(hotMeta.keySet());

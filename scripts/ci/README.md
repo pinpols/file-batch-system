@@ -69,7 +69,7 @@ python3 scripts/ci/check-dependency-boundaries.py
 补 `check-migration-safety.sh`(squawk 只扫 `db/migration`)的盲区:`scripts/db/**`(尤其 `business/` 不走 Flyway、`partition-migration/`)下的手工 DDL 脚本同样能跑危险变更。
 
 - **WARN**(不阻断):脚本含 `ON CONFLICT` → 提示核对幂等契约是否受约束变更影响。
-- **FAIL**:脚本含承重墙级危险 DDL(改 UNIQUE/PK 列集 / `DROP TABLE` / `DROP CONSTRAINT`)**且**文件头部无禁令标记(🔴/⚠/DANGER/禁止执行/破坏性…)→ 强制要求头注释显式声明风险与前置条件。
+- **FAIL**:脚本含关键约束级危险 DDL(改 UNIQUE/PK 列集 / `DROP TABLE` / `DROP CONSTRAINT`)**且**文件头部无禁令标记(🔴/⚠/DANGER/禁止执行/破坏性…)→ 强制要求头注释显式声明风险与前置条件。
 
 接入 `pr-gate.yml` 的 `static-checks` job。排除 `*-seed`。
 

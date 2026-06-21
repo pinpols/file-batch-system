@@ -721,7 +721,7 @@ if [[ "$ADVANCED" == "1" ]]; then
       result fail "Trigger CRON 真触发" "120s 内 trigger_request 无 SCHEDULED 新增 (baseline=$fxr_baseline), 检查 reconciler 30s + cron 周期 60s"
     fi
     # 立即 disable + 显式删 job_definition (避免 PROBE CRON 持续 fire 污染后续 run)
-    # do_cleanup 兜底也会清, 这里 explicit 减少 fire 间隔
+    # do_cleanup 回退也会清, 这里 explicit 减少 fire 间隔
     psql_q "UPDATE batch.job_definition SET enabled=false WHERE id=$fxr_def_id" >/dev/null
     psql_q "DELETE FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE'" >/dev/null
     psql_q "DELETE FROM batch.job_definition WHERE id=$fxr_def_id" >/dev/null

@@ -21,7 +21,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** Import FEEDBACK 阶段单测：审计聚合 / dry-run 跳过 / null 上下文兜底。 */
+/** Import FEEDBACK 阶段单测：审计聚合 / dry-run 跳过 / null 上下文回退。 */
 @ExtendWith(MockitoExtension.class)
 class FeedbackStepTest {
 

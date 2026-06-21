@@ -91,10 +91,10 @@ public class AuditAspect {
 
     String aggregateId = resolveAggregateId(ann, method, pjp.getArgs());
     // P0(2026-06-03 audit-tenant):ROLE_ADMIN 跨租操作 principal.tenantId() 为 null,
-    // 之前默认兜底到 "system",导致审计行 tenant_id="system" 而非目标租户,取证查询漏。
+    // 之前默认回退到 "system",导致审计行 tenant_id="system" 而非目标租户,取证查询漏。
     // 在调用 record 前先按 targetTenantParam 解析目标租户,作为最高优先级覆盖。
     String targetTenantId = resolveTargetTenant(ann, method, pjp.getArgs());
-    // 敏感操作(login / API Key create)显式 recordParams=false 跳过 params 落库,
+    // 敏感操作(login / API Key create)显式 recordParams=false 跳过 params 写入数据库,
     // 避免 password / 加密载荷 / 明文密钥泄露到审计表
     String paramsJson = ann.recordParams() ? serializeParams(method, pjp.getArgs()) : null;
 
@@ -267,8 +267,8 @@ public class AuditAspect {
    *       ROLE_ADMIN 跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)}),保证审计行 tenant_id
    *       是被改的租户而非 "system"
    *   <li>{@code principal.tenantId()} —— 普通租户用户的会话租户
-   *   <li>MDC tenant —— 异步上下文 / TenantGuard 注入的兜底
-   *   <li>{@code "system"} 字面值兜底 —— 真正无租路径(login/logout/系统级 healthcheck),避免 NOT NULL 约束拒绝丢失审计行
+   *   <li>MDC tenant —— 异步上下文 / TenantGuard 注入的回退
+   *   <li>{@code "system"} 字面值回退 —— 真正无租路径(login/logout/系统级 healthcheck),避免 NOT NULL 约束拒绝丢失审计行
    * </ol>
    */
   private OperatorInfo currentOperator(String targetTenantId) {

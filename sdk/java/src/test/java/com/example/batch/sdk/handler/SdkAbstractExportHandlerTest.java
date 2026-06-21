@@ -125,7 +125,7 @@ class SdkAbstractExportHandlerTest {
   }
 
   @Test
-  @DisplayName("writeOut 返回 null → 框架兜底 ok(\"exported 50 rows\") + counts output")
+  @DisplayName("writeOut 返回 null → 框架回退 ok(\"exported 50 rows\") + counts output")
   void fallsBackToDefaultResult_whenWriteOutReturnsNull() {
     // 准备
     ProbeExportHandler h = ProbeExportHandler.ofRows(rows(50), null);
@@ -218,7 +218,7 @@ class SdkAbstractExportHandlerTest {
   }
 
   @Test
-  @DisplayName("formatRow 中途抛异常 → 行流仍 close()(try-with-resources 兜底,不泄露)")
+  @DisplayName("formatRow 中途抛异常 → 行流仍 close()(try-with-resources 回退,不泄露)")
   void closesRowStream_whenFormatRowThrowsMidIteration() {
     // 准备
     ProbeExportHandler h =

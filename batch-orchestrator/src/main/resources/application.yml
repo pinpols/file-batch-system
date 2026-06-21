@@ -195,7 +195,7 @@ batch:
     # 全局并发上限（所有租户合计运行中任务数）：<=0 表示关闭
     global-max-running-jobs: ${BATCH_RESOURCE_SCHEDULER_GLOBAL_MAX_RUNNING_JOBS:0}
     # ADR-042 Phase2.3：租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。
-    # QUEUE_DEFER=有界队列+背压（默认，洪峰不误拒）；REJECT=恢复旧的硬拒默认。仅作用于未显式配策略的租户。
+    # QUEUE_DEFER=有界队列+背压（默认，峰值流量不误拒）；REJECT=恢复旧的硬拒默认。仅作用于未显式配策略的租户。
     default-exceeded-strategy: ${BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY:QUEUE_DEFER}
   rate-limit:
     # 是否启用显式限流（时间窗/令牌桶）：默认关闭，避免影响现有行为
@@ -257,7 +257,7 @@ batch:
       # 文件处于 complete 状态时是否触发到达事件
       trigger-on-complete: ${BATCH_FILE_GOVERNANCE_ARRIVAL_TRIGGER_ON_COMPLETE:true}
       # 触发前是否要求组内每个成员都已完整性背书（checksum_type != NONE，即入站 MANIFEST 注入了 checksum）。
-      # 默认 false（仅文件名凑齐即触发）；true 时缺校验背书的成员会让组保持等待（超时仍走 timeout-action）。
+      # 默认 false（仅文件集合满足条件即触发）；true 时缺校验背书的成员会让组保持等待（超时仍走 timeout-action）。
       require-verified: ${BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED:false}
       # 人工等待延长期（秒）：用于人工确认前延长窗口
       manual-wait-extension-seconds: ${BATCH_FILE_GOVERNANCE_ARRIVAL_MANUAL_WAIT_EXTENSION_SECONDS:1800}

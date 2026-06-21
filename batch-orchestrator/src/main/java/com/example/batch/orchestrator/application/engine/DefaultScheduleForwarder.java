@@ -32,7 +32,7 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 /**
- * Outbox → Kafka 批量推送：把已落库的 {@code outbox_event} 分批发布，并按结果更新状态与重试记录。
+ * Outbox → Kafka 批量推送：把已写入数据库的 {@code outbox_event} 分批发布，并按结果更新状态与重试记录。
  *
  * <p>采用三阶段批处理以解耦"DB 连接 + 行锁"与"Kafka RTT"：
  *

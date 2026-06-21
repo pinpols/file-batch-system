@@ -36,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 主动打开批次日实例。
  *
- * <p>触发链路仍保留 {@code LaunchBatchDayService} 的 upsert 兜底；本调度器负责让日切后的 {@code batch_day_instance}
+ * <p>触发链路仍保留 {@code LaunchBatchDayService} 的 upsert 回退；本调度器负责让日切后的 {@code batch_day_instance}
  * 在没有作业触发时也先成为可观察、可门闩判断的一等运行对象。
  */
 @Slf4j

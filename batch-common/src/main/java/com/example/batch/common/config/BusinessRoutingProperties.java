@@ -35,7 +35,7 @@ public class BusinessRoutingProperties {
   /** 多片路由总开关。false(默认)=单片无损;true=按 shards 装配 multiShard。 */
   private boolean enabled = false;
 
-  /** placement 来源:CONFIG(默认,hash + siloOverrides)或 TABLE(表覆盖 + hash 兜底)。 */
+  /** placement 来源:CONFIG(默认,hash + siloOverrides)或 TABLE(表覆盖 + hash 回退)。 */
   private PlacementSource placementSource = PlacementSource.CONFIG;
 
   /**
@@ -67,7 +67,7 @@ public class BusinessRoutingProperties {
   public enum PlacementSource {
     /** hash 池化 + config 里的 siloOverrides;改 placement = 改配置 + 重启。 */
     CONFIG,
-    /** 表(batch.business_tenant_placement)覆盖 + hash 兜底;迁片/silo 在线维护。 */
+    /** 表(batch.business_tenant_placement)覆盖 + hash 回退;迁片/silo 在线维护。 */
     TABLE
   }
 

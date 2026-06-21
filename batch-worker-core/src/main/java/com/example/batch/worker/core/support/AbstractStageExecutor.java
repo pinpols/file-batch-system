@@ -49,7 +49,7 @@ public abstract class AbstractStageExecutor<
             context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
     // P1-7: visited-set 早期检测真正的 cycle (重访同一 stepCode),与数值 guard 双保险。
-    // 数值 guard 是兜底 (恶意配置耗尽循环次数);visited 是直接检测 (一旦重访立即停)。
+    // 数值 guard 是回退 (恶意配置耗尽循环次数);visited 是直接检测 (一旦重访立即停)。
     Set<String> visitedStepCodes = new HashSet<>();
     PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
     while (currentStep != null) {

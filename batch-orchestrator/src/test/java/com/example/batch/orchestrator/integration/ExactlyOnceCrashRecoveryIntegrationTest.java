@@ -19,11 +19,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Exactly-once 崩溃/重投不变量的真实 DB 验证。
  *
- * <p>系统的去重承重墙全在 orchestrator 的 DB CAS 上(worker 只是调用方),所以"整队 worker 崩 / Kafka 消息重投两遍 / GC-pause 旧
+ * <p>系统的去重关键约束全在 orchestrator 的 DB CAS 上(worker 只是调用方),所以"整队 worker 崩 / Kafka 消息重投两遍 / GC-pause 旧
  * leader 复活"在 IT 里等价于"同一命令被投递两次,断言只有一次生效"。本测试不 fork worker fat-jar(避开 JDK25 嵌套 jar loader 长期停滞),全程
  * in-process + testcontainers PG,本机可跑。
  *
- * <p>覆盖三道承重墙:
+ * <p>覆盖三道关键约束:
  *
  * <ol>
  *   <li>REPORT 重投幂等:{@code finishTask} 的 {@code WHERE task_status = expectedStatus} CAS 让重复

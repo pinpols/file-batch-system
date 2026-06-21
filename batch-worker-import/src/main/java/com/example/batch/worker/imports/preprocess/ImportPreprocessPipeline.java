@@ -52,7 +52,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
  *   <li>{@code UNTAR_GZ} — 解 tar.gz / tgz（先 GUNZIP 再 UNTAR），同样支持 {@code entryName}
  *   <li>{@code AES_GCM_DECRYPT} — AES/GCM/NoPadding 解密，需提供 {@code aesKeyBase64} / {@code
  *       aesIvBase64}
- *   <li>{@code VERIFY_DIGEST} — SHA-256 / MD5 摘要校验，期望值来自步骤配置或 {@link ImportPayload#checksumValue()}
+ *   <li>{@code VERIFY_DIGEST} — SHA-256 摘要校验，期望值来自步骤配置或 {@link ImportPayload#checksumValue()}
  *   <li>{@code VERIFY_RSA_SHA256} — RSA 签名验证，需提供 PEM 公钥和 Base64 签名
  *   <li>{@code CHARSET_TRANSCODE} — 字节编码转换（{@code fromCharset} / {@code toCharset}）
  * </ul>
@@ -351,14 +351,20 @@ public final class ImportPreprocessPipeline {
       byte[] input, Map<String, Object> step, ImportPayload payload, Map<String, Object> template)
       throws Exception {
     String algorithm =
-        firstNonBlank(stringProp(step, "algorithm"), digestAlgorithm(template, payload));
+        normalizeDigestName(
+            firstNonBlank(stringProp(step, "algorithm"), digestAlgorithm(template, payload)));
+    if (POLICY_NONE.equalsIgnoreCase(algorithm)) {
+      throw new ImportPreprocessException(
+          "IMPORT_PREPROCESS_DIGEST_ALGORITHM_MISSING",
+          "VERIFY_DIGEST requires a concrete digest algorithm");
+    }
     String expected = firstNonBlank(stringProp(step, "expectedHex"), checksumExpected(payload));
     if (!Texts.hasText(expected)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DIGEST_EXPECTED_MISSING",
           "VERIFY_DIGEST requires expectedHex or ImportPayload.checksumValue");
     }
-    MessageDigest digest = MessageDigest.getInstance(algorithm);
+    MessageDigest digest = messageDigestForFileIntegrity(algorithm);
     byte[] hash = digest.digest(input);
     String actual = HexFormat.of().formatHex(hash);
     if (!actual.equalsIgnoreCase(expected.trim().replace(" ", EMPTY))) {
@@ -377,7 +383,7 @@ public final class ImportPreprocessPipeline {
     if (!Texts.hasText(expected)) {
       return;
     }
-    MessageDigest digest = MessageDigest.getInstance(algorithm);
+    MessageDigest digest = messageDigestForFileIntegrity(algorithm);
     byte[] hash = digest.digest(input);
     String actual = HexFormat.of().formatHex(hash);
     if (!actual.equalsIgnoreCase(expected.trim().replace(" ", EMPTY))) {
@@ -404,13 +410,19 @@ public final class ImportPreprocessPipeline {
       return POLICY_NONE;
     }
     String upper = raw.trim().toUpperCase(Locale.ROOT);
-    if ("MD5".equals(upper)) {
-      return "MD5";
-    }
     if ("SHA-256".equals(upper) || "SHA256".equals(upper)) {
       return "SHA-256";
     }
     return upper;
+  }
+
+  private static MessageDigest messageDigestForFileIntegrity(String algorithm) throws Exception {
+    if ("SHA-256".equals(algorithm)) {
+      return MessageDigest.getInstance("SHA-256");
+    }
+    throw new ImportPreprocessException(
+        "IMPORT_PREPROCESS_DIGEST_ALGORITHM_UNSUPPORTED",
+        "unsupported digest algorithm " + algorithm);
   }
 
   private static String checksumExpected(ImportPayload payload) {
@@ -459,7 +471,7 @@ public final class ImportPreprocessPipeline {
    * worker 拖死。
    *
    * <p>默认 = {@code max(inputLen × 2 + 1MB, 16MB)}；模板可通过 step.{@code outputSizeCap} 覆盖。超限抛 {@link
-   * IllegalArgumentException}，由 ReceiveStep / PreprocessStep 的 catch 兜底 落
+   * IllegalArgumentException}，由 ReceiveStep / PreprocessStep 的 catch 回退 落
    * file_record.reason_message。
    */
   private static final long CHARSET_TRANSCODE_MIN_CAP_BYTES = 16L * 1024L * 1024L;

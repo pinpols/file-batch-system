@@ -48,7 +48,7 @@ PreprocessStep - import preprocess streamed object to spool (no heap buffering):
 - PARSE 逐行流式解码 → VALIDATE → LOAD(`GenericJdbcMappedImportLoadPlugin` `batchUpdate` 每批 500 行 UPSERT)
 - 阶段推进:RECEIVE→PREPROCESS→PARSE→VALIDATE→LOAD 全过,`run_status=SUCCESS`,`finished 11:07:14`
 
-### 3.3 落库校验(batch_business.biz.wide_demo)
+### 3.3 写入数据库校验(batch_business.biz.wide_demo)
 
 | 指标 | 值 |
 |---|---|

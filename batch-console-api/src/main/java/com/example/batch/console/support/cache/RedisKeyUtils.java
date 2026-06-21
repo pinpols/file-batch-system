@@ -54,7 +54,7 @@ public final class RedisKeyUtils {
         deleted += deleteBatch(redisTemplate, batch);
       }
     } catch (RuntimeException ex) {
-      // 工具层吞异常,调用方负责日志输出;残余 key 走自然 TTL 兜底。
+      // 工具层吞异常,调用方负责日志输出;残余 key 走自然 TTL 回退。
       return deleted;
     }
     return deleted;

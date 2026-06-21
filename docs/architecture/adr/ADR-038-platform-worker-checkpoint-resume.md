@@ -14,7 +14,7 @@
 2. **崩溃 / 重派证据**:已出现真实的任务崩溃 + 重派记录(非偶发);第 0 行重跑的累计代价(biz DB 重压 + 幂等检查 + 长时间占用 worker slot)已远超续跑实现成本。
 
 初评(2026-06-01)依据的"成本 >> 收益"假设里,**收益项被低估**了一个量级:
-- Import LOAD 即使"数据安全"(`ON CONFLICT` 兜底),百万行重跑等于把业务库再来一次 INSERT/UPDATE 风暴,影响业务库 QPS;
+- Import LOAD 即使"数据安全"(`ON CONFLICT` 回退),百万行重跑等于把业务库再来一次 INSERT/UPDATE 风暴,影响业务库 QPS;
 - Export GENERATE 临时文件"重入安全"不等于"重跑廉价",大结果集的 cursor 分页 + 文件 IO 在百万行级是分钟级延迟,SLA 已被冲击;
 - 续跑实现成本(位点表 + archive 镜像 + 同事务边界改动)只是一次性的,而重跑代价是**按每次崩溃叠加**。
 
@@ -39,14 +39,14 @@
 - 「**worker 内并行**」✗ —— 已有 orchestrator 层 `lineNo % partitionCount` 逻辑分区(ParseStep),不重复造 worker 内并行
 - 「**orchestrator 主动取消信号**」✗ —— 现有超时 → `Thread.interrupt()` → watchdog(`cancelGraceSeconds`)已足够,不在本 ADR 范围
 
-❌ 不做:不引入 worker 内线程池并行、不改 worker→orchestrator 的 REPORT 异步语义(HTTP + report-outbox 兜底是设计如此)、不做单条记录级回滚。
+❌ 不做:不引入 worker 内线程池并行、不改 worker→orchestrator 的 REPORT 异步语义(HTTP + report-outbox 回退是设计如此)、不做单条记录级回滚。
 
 ## 背景
 
 平台 pipeline worker 当前是**全量重跑**模型:
 
 - **Import LOAD**(`LoadStep.executeStreaming`):`BufferedReader` 逐行读 → 攒满 `chunkSize` → `flushChunk()`。流式、内存有界,但:
-  - "已加载到第几行"只存在内存变量 `loadedCount` 里,**不落库**;
+  - "已加载到第几行"只存在内存变量 `loadedCount` 里,**不写入数据库**;
   - 每个 chunk 是**独立事务**(plugin 内 `loadChunk` 各自提交),chunk N 提交后 chunk N+1 失败,N 不回滚;
   - 任务超时 / 进程崩 / lease 被回收后重派,下一个 worker 从**第 0 行**重头跑,已写入的数据要么重复、要么靠业务自己去重。
 - **Export GENERATE**(`AbstractExportFormat.generatePaged`):cursor 分页 `while(true)` 跟 `nextCursor` 写文件。同样**不存位点**,崩了从 `cursor=null` 重头分页。
@@ -108,9 +108,9 @@ flushChunkWithPosition(plugin, chunk, position):
 | 位点 | 已处理**行号**(staging file 是 append-only,行号稳定可定位) | 序列化的 **cursor**(plugin 的 `nextCursor`) |
 | 续跑 | 重读 staging file,`skip` 到 `行号` 后继续 | 从存的 cursor 调 `loadDetailPage(cursor)` 续页 |
 | 同事务 | ✓ chunk 业务写 + 行号位点,DB 同事务 | △ 文件写非事务;按"分片临时文件 + 已确认页位点"补偿,续跑时丢弃未确认的尾部重写 |
-| 幂等前提 | plugin `loadChunk` 需幂等或目标表有唯一键(多租已强制 `UNIQUE(tenant_id, ...)`)兜底重复 | 续跑重写从 cursor 起,临时文件覆盖,最终 STORE 阶段才落正式文件 |
+| 幂等前提 | plugin `loadChunk` 需幂等或目标表有唯一键(多租已强制 `UNIQUE(tenant_id, ...)`)防重复 | 续跑重写从 cursor 起,临时文件覆盖,最终 STORE 阶段才落正式文件 |
 
-Import 的幂等天然有多租唯一约束兜底;Export 因为只在 STORE 阶段才产出正式文件,GENERATE 续跑重写临时分片是安全的。
+Import 的幂等天然有多租唯一约束回退;Export 因为只在 STORE 阶段才产出正式文件,GENERATE 续跑重写临时分片是安全的。
 
 ### 决策四:阶段级续跑(轻量)
 

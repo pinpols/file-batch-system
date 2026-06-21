@@ -164,7 +164,7 @@ class LocalizedErrorRendererTest {
     assertThat(error.renderedMessage()).hasSizeLessThanOrEqualTo(1024);
   }
 
-  /** P3：args 含复杂对象不阻塞落库（仅 log.warn）；JSON 序列化仍能完成。 */
+  /** P3：args 含复杂对象不阻塞写入数据库（仅 log.warn）；JSON 序列化仍能完成。 */
   @Test
   void bizExceptionUtilsAcceptsComplexArgsWithoutThrowing() {
     BizException ex =

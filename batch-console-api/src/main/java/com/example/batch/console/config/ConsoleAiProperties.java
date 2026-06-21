@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Console AI 助手配置（{@code batch.console.ai}）。
  *
  * <p>AI 是 Console 控制面辅助能力，<b>不接触</b> orchestrator / worker / trigger 主链路。 输入边界：仅元数据 + 脱敏日志 +
- * 配置草稿；输出边界：仅建议 / 草稿 / 风险提示，不直接落库。
+ * 配置草稿；输出边界：仅建议 / 草稿 / 风险提示，不直接写入数据库。
  *
  * <p>详见 design/multi-tenant-and-security.md §11 + design/tech-stack-and-principles.md §4。
  */

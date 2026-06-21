@@ -83,7 +83,7 @@
 混淆点：
 
 - **`RunMode` 与 `TriggerType` 部分重叠**：`RunMode.RERUN` 与 `TriggerType.RERUN`（V62 新增）含义相同。
-- **没有"全量 / 增量"这层抽象**。增量目前靠业务在 SQL 模板里手写 `where update_time > :last_high_water_mark`，框架层完全无知 —— 没办法统一管理水位、补数窗口、乱序兜底。
+- **没有"全量 / 增量"这层抽象**。增量目前靠业务在 SQL 模板里手写 `where update_time > :last_high_water_mark`，框架层完全无知 —— 没办法统一管理水位、补数窗口、乱序回退。
 - 分片（ShardStrategy）和"按数据范围切分一次执行的内容"是**两件事**，但当前模型里两个一起决定行为。
 
 ### 2.3 TriggerType ↔ `TriggerType`
@@ -318,7 +318,7 @@ public record TaskDispatchMessage(
 **2026-05-01 Stage 3 hardening — 暴露 partition 信息给 worker**：
 
 ```java
-// EffectiveTaskConfig 末尾追加 3 字段,nullable 兜底
+// EffectiveTaskConfig 末尾追加 3 字段,nullable 回退
 public record EffectiveTaskConfig(
     ... 原 20 字段保持位置不变 ...,
     Integer partitionNo,    // 1-based,读自 job_partition.partition_no

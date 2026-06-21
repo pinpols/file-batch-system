@@ -118,7 +118,7 @@ PWA 用户点击启用通知
 
 - 后端 `ConsolePushController.vapidPublicKey()` 返回 `CommonResponse<ConsolePushVapidPublicKeyResponse>`，实际 JSON 是 `{"code":...,"data":{"publicKey":"..."}}`。前端 `../batch-console/src/composables/useWebPush.ts:67` 到 `:69` 直接解构顶层 `{ publicKey }`，会拿到 `undefined`。
 - 后端 `subscribe` / `unsubscribe` 要求 query 参数 `tenantId`：`batch-console-api/src/main/java/com/example/batch/console/web/ConsolePushController.java:55` 到 `:63`、`:68` 到 `:74`。前端 `useWebPush.ts:79` 到 `:83` 与 `:95` 到 `:99` 没有传 `tenantId`，会 400。
-- 后端注释声称 VAPID 公钥是“公开端点”：`ConsolePushController.java:39` 到 `:43`。但安全兜底 `ConsoleSecurityConfiguration.java:68` 到 `:85` 只放行 auth/login/logout/static，`/api/console/push/vapid-public-key` 实际仍要求 Console 角色。若产品期望登录前订阅，当前会 401。
+- 后端注释声称 VAPID 公钥是“公开端点”：`ConsolePushController.java:39` 到 `:43`。但安全回退 `ConsoleSecurityConfiguration.java:68` 到 `:85` 只放行 auth/login/logout/static，`/api/console/push/vapid-public-key` 实际仍要求 Console 角色。若产品期望登录前订阅，当前会 401。
 - 前端文件顶部仍写“当前后端这 3 个端点还没上”：`useWebPush.ts:15` 到 `:17`，说明契约没有被回归验证。
 
 影响：
@@ -271,7 +271,7 @@ DispatchCommand
 - `ConsoleSecurityConfiguration` 禁用了 HTTP Basic，Console 走 HttpOnly Cookie JWT。
 - `/api/console/**` 默认要求有效角色，避免新 controller 漏 `@PreAuthorize` 直接裸露。
 - 高危端点如 actuator loggers、worker drain/force offline、config publish、tenant 管理均有更严格角色约束。
-- `ConsoleAiController` 无 `@PreAuthorize` 但有 `/api/console/**` 兜底与 `ConsoleAiAuthorizationService.assertAllowed()`，不是裸露接口。
+- `ConsoleAiController` 无 `@PreAuthorize` 但有 `/api/console/**` 回退与 `ConsoleAiAuthorizationService.assertAllowed()`，不是裸露接口。
 
 风险：
 
@@ -307,7 +307,7 @@ DispatchCommand
 检查点：
 
 - Console 到 Trigger 已通过 `TriggerInternalRestClient` 注入 `X-Internal-Secret`，不再复用污染的 `RestClient.Builder`。
-- `DefaultTriggerService` 采用 trigger request + trigger outbox 同事务落库，提交后异步 relay 到 Kafka。
+- `DefaultTriggerService` 采用 trigger request + trigger outbox 同事务写入数据库，提交后异步 relay 到 Kafka。
 - Trigger outbox mapper 使用 `FOR UPDATE SKIP LOCKED`，并发 relay 不会重复抢同一批行。
 - Catch-up 审批路径也使用内部 secret client。
 
@@ -449,7 +449,7 @@ DispatchCommand
 | P1-10 | 安全 | ✅ 修 | `WorkflowDefinitionMapper.xml` SQL `where tenant_id = #{tenantId}` 强制非可选;`WorkflowDefinitionQuery` canonical ctor 拒绝 null/blank,失败前移到构造点 |
 | P2-1 | 性能 | 📝 技术债 | `DefaultWorkflowDagService` N+1 登记,触发条件 = DAG ≥ 20 节点 + 50 并发 run |
 | P2-2 | 异步 | 📝 技术债 | `ConsoleRealtimeEventHub` 心跳单线程,触发条件 = 连接数 > 200 改为全局批扫 |
-| P2-3 | 异步 | 📝 文档化 | `OutboxPollScheduler` DYNAMIC rebalance 重叠依赖业务幂等兜底,代码已注释 |
+| P2-3 | 异步 | 📝 文档化 | `OutboxPollScheduler` DYNAMIC rebalance 重叠依赖业务幂等回退,代码已注释 |
 | P2-4 | 部署 | ✅ 修 | `values-prod.yaml` 显式 `otelCollector.enabled=false` + 外部 Collector 引导注释 |
 | P2-5 | CI | ⏭ 误报 | `staging-gate` 验证 OK,无 `-Dmaven.test.skip=true` 残留 |
 

@@ -176,7 +176,7 @@ FROM missing
 ON CONFLICT (pipeline_definition_id, step_code) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
--- 6. file_channel_config.config_json SFTP key 统一 sftp_* 命名(SQL 兜底)
+-- 6. file_channel_config.config_json SFTP key 统一 sftp_* 命名(SQL 回退)
 --     仅作用于 channel_type='SFTP' 且仍残留旧 key 的行。
 -- ----------------------------------------------------------------------------
 UPDATE batch.file_channel_config

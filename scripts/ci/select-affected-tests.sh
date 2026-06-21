@@ -12,7 +12,7 @@
 #     在 Maven Central 不存在(2026-05 验证 repo1.maven.org/.../maven-metadata.xml 404,
 #     central.sonatype.com 搜索无结果)。
 #   - 该插件 GitHub 仓库亦 404,无活跃维护。
-#   - 兜底用 python 扫 import 列表反向索引 + 同 package simple-name 匹配
+#   - 回退用 python 扫 import 列表反向索引 + 同 package simple-name 匹配
 #     + 5 跳传递闭包,见 select-affected-tests.py。
 #
 # 这是 POC 脚本,**不接入 pr-gate.yml**,待人工 review 后再决定是否启用。

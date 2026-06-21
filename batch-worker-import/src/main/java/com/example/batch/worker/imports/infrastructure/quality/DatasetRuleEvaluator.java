@@ -55,7 +55,7 @@ public class DatasetRuleEvaluator {
   }
 
   /**
-   * file_record.metadata_json 里 sidecar(.chk manifest)声明的期望记录数,由 ValidateStep 在打开校验会话前 塞进 context
+   * file_record.metadata_json 里 sidecar(.chk manifest)声明的期望记录数,由 ValidateStep 在打开校验会话前 写入 context
    * 属性。校验侧据此对账"声明行数 vs 实际累加行数"。
    */
   public static final String ATTR_EXPECTED_RECORD_COUNT = "expectedRecordCount";
@@ -76,7 +76,7 @@ public class DatasetRuleEvaluator {
       Integer manifestExpectedCount) {
     Map<String, Object> rule = configSupport.firstMap(ruleSet, "rowCountCheck", "row_count_check");
     boolean ruleEnabled = !rule.isEmpty() && enabled(rule);
-    // sidecar 声明的期望行数:模板未显式 pin exact 时,用 manifest 声明值兜底对账(ADR-040)。
+    // sidecar 声明的期望行数:模板未显式 pin exact 时,用 manifest 声明值回退对账(ADR-040)。
     // 模板已显式给 exact → 模板优先(template wins),不被 manifest 覆盖。
     Integer ruleExact = ruleEnabled ? integerValue(rule.get("exact")) : null;
     boolean fromManifest = ruleExact == null && manifestExpectedCount != null;

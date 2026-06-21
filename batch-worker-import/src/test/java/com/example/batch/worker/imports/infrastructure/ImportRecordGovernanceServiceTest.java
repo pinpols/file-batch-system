@@ -29,7 +29,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * 单测：ImportRecordGovernanceService —— 跳过策略 / 阈值判定 / 坏记录落库 / 错误汇总。
+ * 单测：ImportRecordGovernanceService —— 跳过策略 / 阈值判定 / 坏记录写入数据库 / 错误汇总。
  *
  * <p>覆盖主链路 happy path 与典型分支：CONTINUE / FAIL_BATCH / MANUAL_REVIEW、ABSOLUTE / PERCENTAGE
  * 阈值、ERROR_FILE / ERROR_TABLE sink、parse vs validate stage 分桶计数、bypassMode 关脱敏等。

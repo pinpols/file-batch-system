@@ -178,7 +178,7 @@ HTTP/Gatling 结果:
 | dispatch | `lt_dispatch_local_job` | 180 | 123 | 57 | 0 | quota reject 已终态化为 FAILED/NO_TASK |
 | atomic direct + trigger | `atomic_sql_demo` | 360 | 230 | 130 | 0 | 成功子集正常;拒绝子集不再滞留 CREATED |
 
-结论:T1/T2 状态机 P0 已收口。高压下 FAILED 是本地容量策略 `tenant_quota_policy.exceeded_strategy=REJECT` 的可观察终态,不是 worker 长期停滞或 Kafka 积压。
+结论:T1/T2 状态机 P0 已收敛。高压下 FAILED 是本地容量策略 `tenant_quota_policy.exceeded_strategy=REJECT` 的可观察终态,不是 worker 长期停滞或 Kafka 积压。
 
 ## Task 延迟
 
@@ -235,4 +235,4 @@ HTTP/Gatling 结果:
 
 ## 当前判断
 
-这轮没有暴露 worker 执行慢的问题;P95 claim 延迟和执行耗时都可接受。真正阻断高压端到端的是 orchestrator launch T1/T2 在资源调度 fail-fast 下留下 `CREATED + NO_TASK`;该 P0 已由 `ctlw-202606080130-t1t2` 复验收口。后续优化顺序转为 1w/10w task storm、故障注入、重试/背压和 worker 参数矩阵。
+这轮没有暴露 worker 执行慢的问题;P95 claim 延迟和执行耗时都可接受。真正阻断高压端到端的是 orchestrator launch T1/T2 在资源调度 fail-fast 下留下 `CREATED + NO_TASK`;该 P0 已由 `ctlw-202606080130-t1t2` 复验收敛。后续优化顺序转为 1w/10w task storm、故障注入、重试/背压和 worker 参数矩阵。

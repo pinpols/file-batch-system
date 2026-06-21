@@ -17,12 +17,12 @@
 
 ### 1.1 全局 / Route / Action 三层一览
 
-| 层 | 实现 | 是否兜底 | 评分 |
+| 层 | 实现 | 是否回退 | 评分 |
 |---|---|---|---|
 | 全局 fullscreen | **未使用** `ElLoading.service`(grep 0 命中) | — | 合理(SPA 不该锁屏) |
 | Route 切换条 | `RouteProgressBar` + `routeProgress` store | `12s safetyTimer` + `220ms hideTimer` 防闪 | 良好 |
 | 列表 / 卡片三态 | `DataState` (loading / error / empty / data 自动切骨架) | `TableSkeleton` 6 行,`EmptyState` 9 variants | 良好但落地少 |
-| Action 按钮 | `useAsyncAction` busy + cooldown + 自动 onScopeDispose | 兜底自动幂等键 + EP `:loading` 自动 disabled | 优秀 |
+| Action 按钮 | `useAsyncAction` busy + cooldown + 自动 onScopeDispose | 回退自动幂等键 + EP `:loading` 自动 disabled | 优秀 |
 | Brief | `useBriefActionLoading(280ms)` 保证最少展示防闪 | 由 `useListFilterFeedback` 引用 | 优秀 |
 
 ### 1.2 落地裂口(P1)
@@ -31,11 +31,11 @@
 - `useAsyncAction` 仅 **26** 处使用,`cooldownMs` 仅 **3** 处显式设(`ApiKeyList` / `SystemParameterList` / `TenantBatchCreateDialog`)。绝大多数"保存 / 提交 / 触发"按钮**没有冷却窗口**,200ms 双击仍可重复触发(下游靠 BE 幂等拦截器 + axios 静默 IDEMPOTENT_REPLAY 救场,但出错时仍是 409 静默)。
 - `useBriefActionLoading` 仅在 `useListFilterFeedback` 内部用——筛选闪烁防抖只覆盖列表筛选条这一种场景。
 
-### 1.3 长期停滞兜底
+### 1.3 长期停滞回退
 
 - `routeProgress.start()` 有 `12s safetyTimer` 强制 `finish()`,**良好**。
 - `useSseAutoReload` 5 次指数退避后 `onFallback` 弹一次"实时推送暂不可用",**良好**。
-- 但 `useListLoadState` / `useAsyncAction` **没有超时上限**——一个 hang 在 pending 的请求会一直让按钮 loading,需要靠 axios `timeout`(默认 0)兜底。建议给 `client.ts` 默认 `timeout: 30_000`。**(P1)**
+- 但 `useListLoadState` / `useAsyncAction` **没有超时上限**——一个 hang 在 pending 的请求会一直让按钮 loading,需要靠 axios `timeout`(默认 0)回退。建议给 `client.ts` 默认 `timeout: 30_000`。**(P1)**
 
 ### 1.4 计数显示
 
@@ -356,7 +356,7 @@ staleTime: 30s, gcTime: 5min, retry: 1, refetchOnWindowFocus: false
 | Loading 框架设计 | 4.5 | useAsyncAction + DataState + RouteProgressBar 三层完整 |
 | Loading 铺开比例 | 2.0 | DataState 5%、useAsyncAction 15% |
 | Error 拦截器 | 5.0 | HTTP/Biz/Trace 分流 + 静默 refresh + 维护透传 + 幂等静默 |
-| Error 翻译 | 3.5 | i18n key 机制可,中文 message 兜底缺 EN |
+| Error 翻译 | 3.5 | i18n key 机制可,中文 message 回退缺 EN |
 | TraceId 暴露 | 5.0 | 复制按钮 + 整段点击 + clipboard fallback |
 | Toast 一致性 | 4.0 | grouping 防重 + 错误统一走 errorToast,但 ElMessage 散落 238 处 |
 | 空态分类 | 4.0 | 9 variant 设计好,铺开少 |

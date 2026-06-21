@@ -13,7 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.trigger.launch.reconcile")
 public class TriggerLaunchReconcilerProperties {
 
-  /** 静默期(秒):刚 ack 的 trigger_request 让 consumer writeBack 自处理,过该时长再兜底。默认 300。 */
+  /** 静默期(秒):刚 ack 的 trigger_request 让 consumer writeBack 自处理,过该时长再回退。默认 300。 */
   private int minAgeSeconds = 300;
 
   /** 单批扫描的最大记录数。默认 200。 */

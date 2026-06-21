@@ -43,7 +43,7 @@ public class WorkerReportOutboxProperties {
    */
   private boolean pausePollWhenRenewCircuitOpen = true;
 
-  /** PUBLISHING 超过该时间未删除则恢复为 NEW（进程崩溃兜底），毫秒。 */
+  /** PUBLISHING 超过该时间未删除则恢复为 NEW（进程崩溃回退），毫秒。 */
   private long publishingStaleRecoverAfterMillis = 120_000L;
 
   /** 陈旧 PUBLISHING 扫描间隔。 */

@@ -13,7 +13,7 @@ import javax.sql.DataSource;
  * 统一装配 worker 的 biz 数据源,消除 import/export/process 三处重复(原本各自一份近乎相同的 Hikari 构造 + applyBusiness +
  * 路由包裹,改一处要 3×)。
  *
- * <p>逐字保留原 per-worker 构造语义(条件兜底 + pg-session 应用);末尾按 {@link BusinessRoutingProperties}:关(默认)→ 单片路由
+ * <p>逐字保留原 per-worker 构造语义(条件回退 + pg-session 应用);末尾按 {@link BusinessRoutingProperties}:关(默认)→ 单片路由
  * DS(全租户落 shard-0=现库,无损);开 → 按 shards 各建一池 + multiShard 路由。各 worker 的 @Bean 仅保留薄声明。
  */
 public final class BusinessDataSourceBuilder {
@@ -22,9 +22,9 @@ public final class BusinessDataSourceBuilder {
 
   /**
    * @param hikariConfig 各 worker 的 @ConfigurationProperties("batch.datasource.business.hikari")
-   *     bean (已注入 yml 显式配置),本方法只补未显式设的兜底;多片开启时作为 shard-0(现库)的池配置
+   *     bean (已注入 yml 显式配置),本方法只补未显式设的回退;多片开启时作为 shard-0(现库)的池配置
    * @param properties biz 数据源属性(url/账密/池参数;单片或多片缺省片的凭据)
-   * @param pgSessionProperties pg-session(RLS/keepalive 兜底)配置
+   * @param pgSessionProperties pg-session(RLS/keepalive 回退)配置
    * @param routingProperties 多片路由配置(默认 enabled=false → 单片无损)
    * @param placementRepository TABLE 模式 resolver 读 placement 表的 repository(单片/CONFIG 模式忽略)
    * @param appName 解析后的应用名(用于 application_name 标识)
@@ -46,7 +46,7 @@ public final class BusinessDataSourceBuilder {
     return buildSingleShard(hikariConfig, properties, pgSessionProperties, appName);
   }
 
-  /** 单片(无损):沿用注入的 yml hikari bean,补兜底 + pg-session,包成单片路由 DS。 */
+  /** 单片(无损):沿用注入的 yml hikari bean,补回退 + pg-session,包成单片路由 DS。 */
   private static DataSource buildSingleShard(
       HikariConfig hikariConfig,
       BusinessDataSourceProperties properties,
@@ -94,7 +94,7 @@ public final class BusinessDataSourceBuilder {
     return BusinessRoutingDataSourceFactory.multiShard(shards, resolver);
   }
 
-  /** 业务库连接池兜底,避免默认值导致连接耗尽 + 主备切换硬化(逐字保留原 per-worker 语义)。 */
+  /** 业务库连接池回退,避免默认值导致连接耗尽 + 主备切换硬化(逐字保留原 per-worker 语义)。 */
   private static void applyPoolDefaults(
       HikariConfig hikariConfig, BusinessDataSourceProperties properties) {
     if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
@@ -112,7 +112,7 @@ public final class BusinessDataSourceBuilder {
     if (hikariConfig.getLeakDetectionThreshold() <= 0) {
       hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
     }
-    // HA:主备切换硬化——主动回收旧连接 + 校验快速失败;keepalive 由 applyBusiness 统一兜底
+    // HA:主备切换硬化——主动回收旧连接 + 校验快速失败;keepalive 由 applyBusiness 统一回退
     if (properties.getMaxLifetimeMs() > 0) {
       hikariConfig.setMaxLifetime(properties.getMaxLifetimeMs());
     }

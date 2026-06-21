@@ -95,7 +95,7 @@
         where tenant_id = #{tenantId} and id = #{id}
     </delete>
 
-    <!-- MVP DAG 兜底校验:FILE_STEP.related_pipeline_code 必须在同租户 pipeline_definition 存在。 -->
+    <!-- MVP DAG 回退校验:FILE_STEP.related_pipeline_code 必须在同租户 pipeline_definition 存在。 -->
     <select id="countByJobCode" resultType="long">
         select count(1)
         from batch.pipeline_definition

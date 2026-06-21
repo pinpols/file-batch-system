@@ -23,7 +23,7 @@
 | Quartz misfire 矩阵 | 部分 | CRON 用 `DO_NOTHING`、FIXED_RATE 用 `RESCHEDULE_NEXT_WITH_EXISTING_COUNT` ✅;**SimpleTrigger 一次性 trigger 未显式配 misfire** → 默认 `SMART_POLICY` 行为不确定(P2-14) |
 | ShedLock 全调度矩阵 | 部分 | 全 40 个 @SchedulerLock 矩阵化复核:`SensorPoll.lockAtLeastFor=PT1S` **偏低**,200ms tick 全 hit 时刷 redis;**v1 误报 BatchDayCutoff 缺 lockAtLeast**(实际为 PT20S) — 撤销 v1 P2-9 |
 | reclaim 数学 | 已校验 | v1 P1-5 已落地 budget=75% × lockAtMost=120s=90s,**与 SKIP LOCKED 配合 ✅**;但 `partition_orphan_sweep` lockAtMost=PT2M 与同名 lockAtMost(2M)的 reclaim 同 name space → 锁名不同实际不冲突(澄清) |
-| Kafka exactly-once | 未扫 | producer `enable.idempotence=true` ✅ 但 **未启 `transactional.id`**;outbox forwarder + consumer ack 走 at-least-once,**业务侧靠 CLAIM 幂等兜底**(不算缺陷,但需文档明示)(P2-15) |
+| Kafka exactly-once | 未扫 | producer `enable.idempotence=true` ✅ 但 **未启 `transactional.id`**;outbox forwarder + consumer ack 走 at-least-once,**业务侧靠 CLAIM 幂等回退**(不算缺陷,但需文档明示)(P2-15) |
 | Outbox / DLQ 风暴防御 | v1 §7 | DLQ retry 单 tick batchSize=100 ✅ 已有上限;**outbox forwarder 自适应轮询无"突发 5k 事件 push"反向限流** → orchestrator 短时高峰会全速持续推送 Kafka,触发 producer buffer.memory 默认 32MB 边界(P1-14) |
 | 压测 SLO vs 实测 | v1 §11 备注 | `load-tests/README.md` 已挂 6 类 Gatling 场景 + `pipeline_completion` 端到端 + SLO 阈值(`write.p95=500ms / read.p99=300ms / err<1%`),**但无任何"实测 baseline 数据归档"** → 阈值未证实(P1-15) |
 | 索引 V160-V165 利用率 | v1 未扫 | V160(`job_task_effective_parameters` 列加,无 idx) / V161(无 idx) / V162(无 idx) / V163(无 idx) / V164(`idx_pipeline_progress_tenant_instance` + `idx_pipeline_progress_completed_at`) / V165(`idx_atomic_task_config_tenant_type`) → 近期新增的 3 条 idx **未在 mapper 路径验证 EXPLAIN ANALYZE 是否真被命中**(P2-16) |
@@ -220,7 +220,7 @@ spring.quartz:
 
 - `scheduler-impl=wheel` 时 Quartz 不该再建主调度循环,但 Spring Boot QuartzAutoConfiguration 创建 SchedulerFactoryBean 时已初始化 ThreadPool。
 - 内存影响小(每 thread 1MB stack = 10MB),但 K8s pod startup latency / CPU profiler 噪音存在。
-- **修复**: trigger application.yml 加 `org.quartz.threadPool.threadCount: 1`(wheel 兜底回退 Quartz 时也够用,catch-up rate 单线程 10 req/s);若彻底切 wheel 则在 wheel 启用时不创建 SchedulerFactoryBean。
+- **修复**: trigger application.yml 加 `org.quartz.threadPool.threadCount: 1`(wheel 回退回退 Quartz 时也够用,catch-up rate 单线程 10 req/s);若彻底切 wheel 则在 wheel 启用时不创建 SchedulerFactoryBean。
 
 ### 5.3 P2-14 [Quartz] SimpleTrigger misfire 未显式配
 

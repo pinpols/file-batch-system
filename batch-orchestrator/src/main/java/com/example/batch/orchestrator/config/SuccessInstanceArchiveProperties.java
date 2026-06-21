@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 自动归档配置 （{@code
  * batch.job-instance.archive}）。
  *
- * <p>对应人工兜底脚本 {@code scripts/db/cleanup-success-instances.sql}（同删除语义、同级联顺序）。
+ * <p>对应人工回退脚本 {@code scripts/db/cleanup-success-instances.sql}（同删除语义、同级联顺序）。
  *
  * <p>注：FAILED / CANCELLED / TERMINATED 实例由 {@code cleanup-historical-failures.sql}（手工脚本）
  * 处理；调度器自动化暂只覆盖 SUCCESS / PARTIAL_FAILED（保留 30 天的长归档场景）。

@@ -164,7 +164,7 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
   /** 模板里允许 schema 列表:沿用 spec.schema() 自身白名单语义,这里以 spec 的 schema 作为唯一允许项做形态校验。 */
   private static List<String> allowedSchemas(JdbcMappedImportSpec spec) {
     // spec.schema() 已是模板声明的目标 schema;LOAD 阶段 validateIdentifiers 已按 securityProperties 白名单校验过。
-    // 补偿阶段无 securityProperties，这里复用同一 schema 做 requireInAllowlist 的形态 + 一致性兜底
+    // 补偿阶段无 securityProperties，这里复用同一 schema 做 requireInAllowlist 的形态 + 一致性回退
     // （仅允许删与 LOAD 同一 schema，不放大范围）。
     return List.of(spec.schema().trim().toLowerCase(Locale.ROOT));
   }

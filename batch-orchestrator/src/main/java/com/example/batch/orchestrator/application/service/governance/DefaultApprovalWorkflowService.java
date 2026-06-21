@@ -128,7 +128,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     ApprovalCommandEntity entity =
         approvalCommandMapper.selectByTenantAndApprovalNo(tenantId, approvalNo);
     if (entity == null) {
-      // 审批单不存在 → 404 NOT_FOUND（之前抛 IllegalStateException 被兜底 handler 当 500 系统错误,
+      // 审批单不存在 → 404 NOT_FOUND（之前抛 IllegalStateException 被回退 handler 当 500 系统错误,
       // console 代理如实透传 500 误导调用方）。approve / reject / get 共用本方法,一处修三处生效。
       throw BizException.of(ResultCode.NOT_FOUND, "error.approval.not_found");
     }

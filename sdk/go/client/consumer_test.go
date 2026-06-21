@@ -83,7 +83,7 @@ func TestPipeline_WorkerTypeBinding_V2(t *testing.T) {
 	}
 }
 
-// v1 旧名 taskType 经 UnmarshalJSON 兜底 -> 绑到 WorkerType(与 Java @JsonAlias / Rust serde alias 对齐)。
+// v1 旧名 taskType 经 UnmarshalJSON 回退 -> 绑到 WorkerType(与 Java @JsonAlias / Rust serde alias 对齐)。
 func TestPipeline_WorkerTypeBinding_V1Alias(t *testing.T) {
 	p := NewMessagePipeline("t1", NewFSM(), 4, func() int { return 0 }, quietLogger())
 	msg, disp := p.OnMessage(rec(`{"taskId":"b","tenantId":"t1","schemaVersion":"v1","taskType":"echo"}`))

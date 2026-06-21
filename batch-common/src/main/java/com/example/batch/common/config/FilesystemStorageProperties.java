@@ -34,7 +34,7 @@ public class FilesystemStorageProperties {
   private String presignSecret;
 
   /**
-   * presign URL 默认 TTL。FS 端点是能力令牌（不绑 IP / 不含内容哈希），TTL 短为佳；默认 5 分钟。 仅作为兜底参考，接口 {@code
+   * presign URL 默认 TTL。FS 端点是能力令牌（不绑 IP / 不含内容哈希），TTL 短为佳；默认 5 分钟。 仅作为回退参考，接口 {@code
    * presign(bucket, key, ttl)} 仍优先用入参。
    */
   private Duration defaultPresignTtl = Duration.ofMinutes(5);

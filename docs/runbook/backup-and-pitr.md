@@ -16,7 +16,7 @@
 
 两库同住一个 `postgres-primary` 实例(docker volume `batch_postgres-primary-data`,容器内 `5432`,宿主映射 `${POSTGRES_PORT}`,默认 15432)。**备份必须同时覆盖两个库**——只备 platform 会丢全部业务数据。
 
-> ⚠️ **Kafka 不在备份范围且 RF=1**:单 broker、`*_REPLICATION_FACTOR=1`。topic 数据丢失后,在途但未消费的派发/回报事件无法从备份恢复,只能靠 outbox(`PUBLISHED` 保留 7 天内可 republish)+ lease 超时重派兜底。详见 `playbooks/kafka-rebalance-stuck.md`。生产建议 broker ≥3 + RF=3,但那是 HA 不是本 runbook 范畴。
+> ⚠️ **Kafka 不在备份范围且 RF=1**:单 broker、`*_REPLICATION_FACTOR=1`。topic 数据丢失后,在途但未消费的派发/回报事件无法从备份恢复,只能靠 outbox(`PUBLISHED` 保留 7 天内可 republish)+ lease 超时重派回退。详见 `playbooks/kafka-rebalance-stuck.md`。生产建议 broker ≥3 + RF=3,但那是 HA 不是本 runbook 范畴。
 
 ---
 
@@ -96,7 +96,7 @@ WAL 归档是 `archive_command` 实时触发的,不进 cron。
 
 | 指标 | 定义 | **SLO 目标** | 依据 / 由什么保证 |
 |---|---|---|---|
-| **RPO**(可容忍数据丢失) | 灾难时点 → 最近可恢复点 的时间差 | **≤ 5 min** | WAL 连续归档 `archive_timeout=300`(§1.1)封顶:低峰也每 5min 切一个 WAL 段归档,故最坏丢 5min。逻辑 dump(C 层)RPO=24h,仅作跨版本/单表兜底,不是主 RPO。 |
+| **RPO**(可容忍数据丢失) | 灾难时点 → 最近可恢复点 的时间差 | **≤ 5 min** | WAL 连续归档 `archive_timeout=300`(§1.1)封顶:低峰也每 5min 切一个 WAL 段归档,故最坏丢 5min。逻辑 dump(C 层)RPO=24h,仅作跨版本/单表回退,不是主 RPO。 |
 | **RTO**(恢复耗时) | 开始恢复 → 应用可服务 的耗时 | **≤ 30 min** | 单实例两库:base 解包 + WAL replay 到目标点 + 应用拉起健康。`pg_restore -j4` 并行 + base streamed(`-Xs`)。`dr-drill.sh` 实测本地逻辑恢复远小于此(秒级),生产真实 RTO 受 dump 体积/网络/盘速影响,30min 是含人工介入的保守上限。 |
 
 **SLO 选值依据**:本系统是批量控制面,非 7×24 在线交易;主链 `DB→Outbox→Kafka→CLAIM→EXECUTE→REPORT` 在恢复后靠 lease 超时重派 + outbox republish **自愈收敛**(见 `ha-readiness.md` P0-5),允许分钟级恢复窗口,无需亚分钟 RTO/RPO(那需要同步多副本 + 自动 failover,成本与收益不匹配)。若未来 SLA 收紧:RPO 靠缩短 `archive_timeout` + 流复制 standby 同步提交;RTO 靠 Patroni 自动 failover(P0-2)+ 预热待命实例。
@@ -191,7 +191,7 @@ EOF
 3. WAL 归档目录积压(slot inactive 导致):见 `PostgresReplicationSlotInactive` 告警 + failover playbook。
 4. 扩盘 / 迁移卷。
 
-> 历史教训:`process_staging` 曾积压 118GB dead、Docker.raw 147G bloat 才被发现——就是因为缺这层兜底。
+> 历史教训:`process_staging` 曾积压 118GB dead、Docker.raw 147G bloat 才被发现——就是因为缺这层回退。
 
 ---
 

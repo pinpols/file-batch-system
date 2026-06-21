@@ -31,7 +31,7 @@ public class ImportEchoHandler extends SdkAbstractImportHandler<String> {
   /**
    * 声明 taskType 描述符 —— 无需填 {@code code},框架装配时以 {@link #taskType()} 为权威。
    *
-   * <p>纪律:敏感凭据(SFTP 密码 / S3 secret)<b>禁止</b>走 {@code defaults} —— 这些值会落库
+   * <p>纪律:敏感凭据(SFTP 密码 / S3 secret)<b>禁止</b>走 {@code defaults} —— 这些值会写入数据库
    * {@code custom_task_type_registry} 并回显 console;凭据走 worker 进程的环境变量。
    */
   @Override

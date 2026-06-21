@@ -30,7 +30,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * P0: ConsoleAdminMaintenanceController 热更新 + 状态序列化。
  *
  * <p>覆盖:GET 当前状态、PUT 部分字段更新、affectedServices 透传、AtomicReference 不可变替换、@AuditAction
- * 注解仍写审计(本测试不验证审计落库, 由 AuditAspect 单测覆盖)。
+ * 注解仍写审计(本测试不验证审计写入数据库, 由 AuditAspect 单测覆盖)。
  */
 class ConsoleAdminMaintenanceControllerTest {
 

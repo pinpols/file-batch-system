@@ -22,7 +22,7 @@ export BATCH_PG_PLATFORM_STATEMENT_TIMEOUT=2h
 export BATCH_PG_SESSION_ENABLED=false
 ```
 
-迁移完成后**记得恢复默认**，否则失去对线上跑死 SQL 的兜底防护。后续如果迁移频繁可考虑给 Flyway 单独 DataSource (业界常见做法，跟运行态池解耦)。
+迁移完成后**记得恢复默认**，否则失去对线上跑死 SQL 的回退防护。后续如果迁移频繁可考虑给 Flyway 单独 DataSource (业界常见做法，跟运行态池解耦)。
 
 ### 2. PROCESS WAP COMMIT 撞 `idle_in_transaction`
 

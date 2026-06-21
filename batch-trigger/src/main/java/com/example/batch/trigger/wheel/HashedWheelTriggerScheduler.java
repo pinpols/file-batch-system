@@ -64,7 +64,7 @@ import org.springframework.stereotype.Component;
  *
  *   wheel tick (100ms 精度)
  *      ↓ fire(state, scheduledFireTime)
- *      ↓ INSERT trigger_request (UNIQUE 约束兜底重复 fire,R-1 防御)
+ *      ↓ INSERT trigger_request (UNIQUE 约束防重复 fire,R-1 防御)
  *      ↓ triggerService.launchScheduled(...)
  *      ↓ advanceAfterFire (next_fire_time += cron.next, 释放 marker)
  * </pre>
@@ -426,7 +426,7 @@ public class HashedWheelTriggerScheduler {
   /**
    * 实际 fire 主路径(共享 SCHEDULED + CATCH_UP 两种 triggerType)。
    *
-   * <p><b>R-1 重复 fire 三层兜底</b>(无需 trigger_request 自加 fire dedup unique):
+   * <p><b>R-1 重复 fire 三层回退</b>(无需 trigger_request 自加 fire dedup unique):
    *
    * <ol>
    *   <li>marker CAS(claimForSchedule + version):同一 trigger 同 next_fire_time 不可能两个 leader 同时 claim
@@ -572,7 +572,7 @@ public class HashedWheelTriggerScheduler {
       // 1) ERROR 级 + 完整 stack（运维可见根因）
       // 2) 指标计数 advanceAfterFire_failed，可触发告警
       // 3) **不**重新抛出 — 调用方（fire success 路径 / catch 失败路径）若被打断，会导致 ScheduledExecutor
-      //    取消 wheel tick，影响所有 trigger。WheelTriggerReconciler 周期对账会兜底修复 next_fire_time。
+      //    取消 wheel tick，影响所有 trigger。WheelTriggerReconciler 周期对账会补偿修复 next_fire_time。
       log.error(
           "advanceAfterFire failed for job={} tenantId={}: next_fire_time NOT advanced — RECONCILER"
               + " WILL FIX",

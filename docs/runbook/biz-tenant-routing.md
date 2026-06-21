@@ -10,7 +10,7 @@
 - **解决**:biz 数据层水平扩展——把租户分到多片 PG(池化 shard + 大租户 silo 独占),突破单实例上限。
 - **不解决**:控制面吞吐(瓶颈在 orchestrator launch 消费,见 throughput 分析)、平台库(`batch.*`)扩展。
 - **为什么不是 Citus**:RLS 在 Citus 分布表上失效(GUC 不跨节点传播,PoC 实证返 0 行/写报错);
-  且当前无多租洪峰写墙需求(PG 写有 10-15× 余量)。tenant-routing 用 vanilla PG,对标 Notion(480 片)/ Figma(自研 DBProxy)。
+  且当前无多租峰值流量写墙需求(PG 写有 10-15× 余量)。tenant-routing 用 vanilla PG,对标 Notion(480 片)/ Figma(自研 DBProxy)。
 
 ## 2. 三层模型(Tiered)
 
@@ -40,7 +40,7 @@
   └─ BusinessRoutingDataSource (extends AbstractRoutingDataSource)
        └─ determineCurrentLookupKey() = resolver.resolve(currentTenant)
             ├─ CONFIG: HashAndSiloPlacementResolver  (hash 取模 + siloOverrides)
-            └─ TABLE : DbTablePlacementResolver       (placement 表覆盖 + hash 兜底)
+            └─ TABLE : DbTablePlacementResolver       (placement 表覆盖 + hash 回退)
        └─ 选中 placement key → 对应 shard 的 HikariDataSource
 ```
 
@@ -48,7 +48,7 @@
 |---|---|---|
 | placement 接口 | `BusinessPlacementResolver` | batch-common `tenant/routing` |
 | hash + silo | `HashAndSiloPlacementResolver` | 同上 |
-| 表驱动 + 缓存兜底 | `DbTablePlacementResolver` | 同上 |
+| 表驱动 + 缓存回退 | `DbTablePlacementResolver` | 同上 |
 | placement 表读(MyBatis) | `BusinessTenantPlacementMapper`(+XML)/ `MyBatisTenantPlacementRepository` / `BusinessTenantPlacementEntity` | batch-common |
 | 路由数据源 | `BusinessRoutingDataSource` / `BusinessRoutingDataSourceFactory`(single/multiShard) | 同上 |
 | 装配收敛 | `BusinessDataSourceBuilder` / `BusinessPlacementResolverFactory` | batch-common `config` |

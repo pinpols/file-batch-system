@@ -1,6 +1,6 @@
 # Worker 吞吐优化与 Benchmark 总控计划
 
-> 状态:**P0/P1 已收口:import/export/process 完成 1000w 级 benchmark;dispatch/atomic/trigger 高压复验已消除 `CREATED + NO_TASK` 残留**。
+> 状态:**P0/P1 已收敛:import/export/process 完成 1000w 级 benchmark;dispatch/atomic/trigger 高压复验已消除 `CREATED + NO_TASK` 残留**。
 > 日期:2026-06-07
 > 范围:`batch-worker-import`,`batch-worker-export`,`batch-worker-process`,`batch-worker-dispatch`,`batch-worker-atomic`,`batch-trigger`,`batch-orchestrator`
 > 关联:
@@ -11,7 +11,7 @@
 ## 结论
 
 1. **import/export P0/P1 已完成并系统复验**。导入覆盖 1000w `PARTITION_REPLACE_COPY` / 分片 guard / stage-swap；导出覆盖 1000w 单片、4 分片正确性、multipart/store 段、参数读取和 4 分片真并行。最终导出 trace `bb7343da2bd24313b8abbb99b8807c1f`,4 个 task 同秒 RUNNING,instance wall `144.092s`。
-2. **process 已完成 1000w 大数据 benchmark 和 P1 收口**。聚合 1000w -> 10w 端到端 40.966s；旧 JSONB copy 867.606s；新增 `stagingMode=DIRECT` 后 1000w copy 端到端 62.978s,staging 残留 0。
+2. **process 已完成 1000w 大数据 benchmark 和 P1 收敛**。聚合 1000w -> 10w 端到端 40.966s；旧 JSONB copy 867.606s；新增 `stagingMode=DIRECT` 后 1000w copy 端到端 62.978s,staging 残留 0。
 3. **dispatch/atomic/trigger 已完成小基线 + 高压复验**。小基线全部通过；修复后高压 RUN_ID `ctlw-202606080130-t1t2` 的 HTTP/Gatling 900/900 OK,540/540 实例全部进入终态,不再残留 `CREATED + NO_TASK`。
 4. **本地高压失败是容量策略下的可观察终态,不是 worker 长期停滞**。本地 `tenant_quota_policy.exceeded_strategy=REJECT`、`dispatch_queue` 只有 3 job / 6 partition,高压下部分实例被终态化为 `FAILED/NO_TASK`;这是预期的背压结果。
 5. **当前还不是 1w/10w 容量上限结论**。P0 状态机缺陷已修,下一步 task storm、故障注入、重试/背压上限可独立跑。
@@ -19,7 +19,7 @@
 
 ## 覆盖口径
 
-本轮可以判断为 **5 类 worker 的 P0/P1 性能优化和主链路验证已收口**。这里的 5 类按执行域合并统计:
+本轮可以判断为 **5 类 worker 的 P0/P1 性能优化和主链路验证已收敛**。这里的 5 类按执行域合并统计:
 
 | 类别 | 覆盖的 worker | 本轮完成口径 |
 |---|---|---|
@@ -33,20 +33,20 @@
 
 | 方向 | 未全量覆盖项 | 决策 |
 |---|---|---|
-| import | JVM 生产参数、PG WAL/checkpoint、`work_mem` / `maintenance_work_mem`、chunk/batch size 多组合 | 后续容量画像;当前主链路和配置能力已收口 |
-| export | 更高分片数、真实 S3、多租户混压、不同格式大文件矩阵 | 后续容量画像;当前 4 分片真并行和 1GiB+ multipart 已收口 |
+| import | JVM 生产参数、PG WAL/checkpoint、`work_mem` / `maintenance_work_mem`、chunk/batch size 多组合 | 后续容量画像;当前主链路和配置能力已收敛 |
+| export | 更高分片数、真实 S3、多租户混压、不同格式大文件矩阵 | 后续容量画像;当前 4 分片真并行和 1GiB+ multipart 已收敛 |
 | process | 大数据失败恢复、幂等重跑、中途失败恢复、staging 分片/索引矩阵 | 后续 failure / capacity profile;当前 DIRECT 主收益已验证 |
 | dispatch / atomic | 故障注入、失败重试风暴、下游异常、lease renew 极限、atomic executor 分类矩阵 | 后续稳定性 profile;当前高压下无 `CREATED + NO_TASK` 残留 |
-| trigger | 高频 cron、misfire 补点风暴、Quartz scan/index 矩阵、1w/10w task storm | 后续容量上限 profile;当前 API launch + scheduler read P1 已收口 |
+| trigger | 高频 cron、misfire 补点风暴、Quartz scan/index 矩阵、1w/10w task storm | 后续容量上限 profile;当前 API launch + scheduler read P1 已收敛 |
 
 因此后续沟通统一用两个口径:
 
-- **P0/P1 收口**:已完成,可作为本轮 worker 性能优化交付结论。
+- **P0/P1 收敛**:已完成,可作为本轮 worker 性能优化交付结论。
 - **全场景矩阵**:未完成,按容量画像 / failure profile / 真实外部依赖 profile 继续排期。
 
 ## 业务场景 / 逻辑分支覆盖口径
 
-本轮不是业务全分支验收。已覆盖的是每类 worker 的主业务链路和 P0/P1 高风险分支;未覆盖的是低频格式、外部依赖、失败恢复和组合矩阵。后续不能把“P0/P1 性能收口”等同于“业务逻辑分支全覆盖”。
+本轮不是业务全分支验收。已覆盖的是每类 worker 的主业务链路和 P0/P1 高风险分支;未覆盖的是低频格式、外部依赖、失败恢复和组合矩阵。后续不能把“P0/P1 性能收敛”等同于“业务逻辑分支全覆盖”。
 
 | Worker | 已系统覆盖的业务分支 | 只做了单测 / 小基线的分支 | 未系统覆盖的业务分支 |
 |---|---|---|---|
@@ -89,7 +89,7 @@
 | 5. Dispatch/Atomic 外部依赖模拟 | 补外部下游成功/失败/超时 | 已完成 Dispatch HTTP 成功/500 retry/no-retry/补偿、LOCAL/NAS/SFTP sidecar，Atomic SQL/stored-proc/shell/HTTP 真成功/timeout/shell cancel 中断；EMAIL/OSS 待 profile | dispatch/atomic 业务分支结果表 |
 | 6. Trigger 补齐 | 补调度类业务分支 | 已完成 API launch、requestId/dedup、30/60 storm、scheduler fire、misfire pending、pending->catch-up 自动关联、replay approve；高频 cron 待容量压测 | trigger 业务分支结果表 |
 | 7. 统一自动化入口 | 降低复跑成本 | `load-tests/scripts/run-worker-business-scenario-matrix.sh` 默认 smoke 已覆盖 `2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c`;Stage 2d 需 skip profile 显式运行 | 一键 smoke/full |
-| 8. 文档沉淀 | 形成验收口径 | 新增 `docs/verifications/worker-business-scenario-matrix-2026-06-08.md` 并回填本文档 | 最终业务矩阵报告 |
+| 8. 文档沉淀 | 形成验收敛径 | 新增 `docs/verifications/worker-business-scenario-matrix-2026-06-08.md` 并回填本文档 | 最终业务矩阵报告 |
 
 ### 建议自动化入口
 
@@ -135,7 +135,7 @@ load-tests/target/worker-business-scenario-report-<RUN_ID>.md
 | P0 | 复跑现有 sim 基线 + import/export/process 主业务分支补齐 | 已完成 |
 | P1 | dispatch/atomic 外部 mock failure + trigger cron/misfire smoke | 已完成本地 smoke；容量/故障注入另排 |
 | P2 | full 业务矩阵、1k task storm、真实外部依赖替身扩展 | 后续容量画像 / 外部依赖 profile |
-| P2 | **多租户并发洪峰 benchmark**(N 租户同时各跑批,N=3/5/10;观测 DB 写吞吐墙、各租户 SLA 劣化曲线)。这是 Citus 决策门槛③的唯一数据源(`citus-introduction-plan-2026-06-06.md` §0)——单租户单流已证 Citus 不缩耗时,没有洪峰实测就永远无法 go/no-go | 排入容量画像周期;复用 sim 多租户 ta/tb/tc + storm 脚本 |
+| P2 | **多租户并发峰值流量 benchmark**(N 租户同时各跑批,N=3/5/10;观测 DB 写吞吐墙、各租户 SLA 劣化曲线)。这是 Citus 决策门槛③的唯一数据源(`citus-introduction-plan-2026-06-06.md` §0)——单租户单流已证 Citus 不缩耗时,没有峰值流量实测就永远无法 go/no-go | 排入容量画像周期;复用 sim 多租户 ta/tb/tc + storm 脚本 |
 
 结论:这轮可以在本地做“模拟真实上下游”的系统级业务覆盖,但结论必须标注为本地模拟环境;真实 S3/邮件网关/客户 SFTP/NAS/第三方 HTTP SLA 仍需生产相似环境单独验收。
 
@@ -299,13 +299,13 @@ bash load-tests/scripts/run-control-plane-worker-benchmark.sh
 
 Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-ctlw-202606080130-t1t2.md`;Gatling HTML:`load-tests/target/gatling-results/controlplanemixedpressuresimulation-20260607173104566/index.html`。
 
-结论:T1/T2 状态机 P0 已收口。高压下的 FAILED 是本地容量策略 `REJECT` 的可观察终态,不是 worker 长期停滞或未派发残留。
+结论:T1/T2 状态机 P0 已收敛。高压下的 FAILED 是本地容量策略 `REJECT` 的可观察终态,不是 worker 长期停滞或未派发残留。
 
 ## 执行顺序
 
 | 顺序 | Worker | 原因 | 预计阶段 |
 |---:|---|---|---|
-| 1 | import/export 复验 | 代码已完成,需要收口结果 | P0 收尾 |
+| 1 | import/export 复验 | 代码已完成,需要收敛结果 | P0 收尾 |
 | 2 | process | PG/staging/聚合风险最大 | P0 |
 | 3 | dispatch/atomic | 控制面吞吐与背压影响全链路 | P0/P1 |
 | 4 | trigger | 调度触发高频但可独立验证 | P1 |
@@ -338,7 +338,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 | `work_mem` / `maintenance_work_mem` | 已完成 | 结构化 session 参数已支持并单测验证;三轮矩阵转后续容量画像 |
 | `chunk_size` / JDBC batch size | 已配置并复验主链路 | `chunk_size=10000` 已用于 1000w;JDBC batch 对 replace-copy 非主收益 |
 | JVM/GC 参数 | 后续容量画像 | 需要固定重启窗口;不作为 P1 阻塞 |
-| index rebuild 与 staging/swap 组合 | 已由 stage-swap 主链路收口 | 单独 drop/rebuild 只在后续矩阵里测,不作为 P1 阻塞 |
+| index rebuild 与 staging/swap 组合 | 已由 stage-swap 主链路收敛 | 单独 drop/rebuild 只在后续矩阵里测,不作为 P1 阻塞 |
 
 ## Export Worker
 
@@ -367,7 +367,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 | S3/MinIO multipart | 已完成并复验 | 复跑 1GiB+ 输出,4 分片 STORE 段 `12.1-15.5s/片` |
 | `fetch_size` / `page_size` / `chunk_size` | 已完成并复验 | `page/fetch=5000`,`chunk=10000` 跑通 1000w;全局默认不放大 |
 | `query_param_schema` / keyset-range 读取 | 已完成并复验 | 真实模板 API 已验证 `query_param_schema`/cursor/fetch 配置读取;keyset-range 作为可选模板能力保留 |
-| export JVM/GC 参数 | 后续容量画像 | 需要固定重启窗口;当前 P0 已由真并行收口,不作为 P1 阻塞 |
+| export JVM/GC 参数 | 后续容量画像 | 需要固定重启窗口;当前 P0 已由真并行收敛,不作为 P1 阻塞 |
 
 ## Process Worker
 
@@ -431,7 +431,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 | consumer concurrency 矩阵 | 后续容量画像 | P0/P1 主链路已无积压;1/2/4/8 只用于上限测算 |
 | outbox poll batch | 后续容量画像 | 当前不牺牲公平性去改默认值 |
 | claim/report HTTP 批量化 | 暂不改协议 | 当前瓶颈不是 worker 执行慢;只在 task storm 暴露后启动 |
-| atomic executor 分类 | 后续 profile | SQL/HTTP/stored-proc/shell 分开测;不影响本轮 P1 收口 |
+| atomic executor 分类 | 后续 profile | SQL/HTTP/stored-proc/shell 分开测;不影响本轮 P1 收敛 |
 
 ## Trigger Worker
 
@@ -458,7 +458,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 
 | 项 | 动作 | 取舍 |
 |---|---|---|
-| Quartz scan/index | 后续容量画像 | 当前 P1 已通过 API launch + scheduler read 并行压测收口 |
+| Quartz scan/index | 后续容量画像 | 当前 P1 已通过 API launch + scheduler read 并行压测收敛 |
 | batch size / poll interval | 后续容量画像 | 只在持续 fire QPS 达触发线后调整 |
 | misfire 策略 | smoke 已完成；自动关联已补 | Stage 6d 复验 pending 自动创建/关联 catch-up request，并可按 `pendingId` approve |
 | wheel scheduler ADR 复核 | 只在持续高 fire QPS 达触发线后启动 | ADR-033 是后续重架构,不是本轮 P0 |

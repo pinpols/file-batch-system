@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 /**
  * R3-5 — {@code batch.atomic_task_config}(V165)读写 mapper。
  *
- * <p>多租 UNIQUE(tenant_id, task_type, name)由 DB 兜底;mapper WHERE 一律强制带 tenant_id, 见
+ * <p>多租 UNIQUE(tenant_id, task_type, name)由 DB 回退;mapper WHERE 一律强制带 tenant_id, 见
  * MapperXmlTenantGuardArchTest 守护。
  */
 public interface AtomicTaskConfigMapper {

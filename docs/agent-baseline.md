@@ -150,7 +150,7 @@
 - `batch-common`
   - 通用枚举、异常、DTO、上下文、工具、公共协议、跨模块模型
 - `batch-trigger`
-  - Quartz 触发、手工/API 触发、Misfire 处理、触发请求落库与转发
+  - Quartz 触发、手工/API 触发、Misfire 处理、触发请求写入数据库与转发
 - `batch-orchestrator`
   - 编排、状态推进、DAG、分片规划、Worker 路由、Pipeline 执行定义、一致性与 Outbox
 - `batch-worker-core`
@@ -327,7 +327,7 @@ Quartz 相关表只能放在 `quartz` schema，不要混入 `batch`。
   - 分片规划
   - 状态推进
   - Worker 路由
-  - Outbox 落库
+  - Outbox 写入数据库
 - Worker 负责：
   - 执行具体步骤
   - 回写执行结果

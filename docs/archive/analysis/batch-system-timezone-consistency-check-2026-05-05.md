@@ -52,7 +52,7 @@ TZ: Asia/Shanghai
 
 这还不算真正的统一时区。
 
-这只是运行环境层面的兜底，不能作为业务时间判断依据。
+这只是运行环境层面的回退，不能作为业务时间判断依据。
 
 ---
 
@@ -732,7 +732,7 @@ DST overlap：RUN_ONCE / USE_EARLIER_OFFSET
 10. worker 不允许自行计算 bizDate；
 11. console 只做展示时区转换；
 12. 禁止业务逻辑依赖 ZoneId.systemDefault()；
-13. 生产容器建议统一 TZ=UTC，JVM 可设置 -Duser.timezone=UTC 作为兜底；
+13. 生产容器建议统一 TZ=UTC，JVM 可设置 -Duser.timezone=UTC 作为回退；
 14. 业务时区必须来自配置，不来自机器环境。
 ```
 

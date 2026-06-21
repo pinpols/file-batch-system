@@ -19,7 +19,7 @@ public class WorkerExecutionTimeoutProperties {
    */
   private int poolSize = 16;
 
-  /** 默认 task 超时 (秒). 当 EffectiveTaskConfig.timeoutSeconds 为 null/0 时兜底. 默认 30 分钟. */
+  /** 默认 task 超时 (秒). 当 EffectiveTaskConfig.timeoutSeconds 为 null/0 时回退. 默认 30 分钟. */
   private long defaultTimeoutSeconds = 1800L;
 
   /** 上限 (秒). 超过此值即截断 (防配置错误: timeout=999999 会长期占用 worker 执行线程). */

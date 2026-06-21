@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * P2-5: 派发 topic 路由器。在 {@link BatchMqTopicsProperties#resolveDispatchTopic(String)} 决定的 基 topic 上，按
  * {@link MqRoutingProperties} 配置追加 tenant / priority 后缀。
  *
- * <p>失败兜底：当模式要求的字段（tenantId / priorityBand）缺失时，回退到基 topic（不分流）； 不让 routing 配置错误打断派发。
+ * <p>失败回退：当模式要求的字段（tenantId / priorityBand）缺失时，回退到基 topic（不分流）； 不让 routing 配置错误打断派发。
  */
 @Component
 @RequiredArgsConstructor

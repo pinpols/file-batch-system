@@ -18,7 +18,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * </ol>
  *
  * <p>同事务约束:Import 业务写在租户 business DB、位点在平台 DB,跨库无法 1PC 原子。 实施采用「业务先 commit → 位点后 advance」+ 插件幂等(多租
- * UNIQUE + ON CONFLICT)兜底; 崩溃窗口内最多重复处理 1 个 chunk,数据安全交由 plugin 幂等约束守护。详见 {@code
+ * UNIQUE + ON CONFLICT)回退; 崩溃窗口内最多重复处理 1 个 chunk,数据安全交由 plugin 幂等约束守护。详见 {@code
  * docs/runbook/platform-worker-checkpoint-howto.md}。
  */
 @Data

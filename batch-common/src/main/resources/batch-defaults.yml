@@ -44,14 +44,14 @@ spring:
     # JDBC 驱动类
     driver-class-name: org.postgresql.Driver
     # ── Hikari 故障切换硬化(所有服务共享;各服务 application.yml 只覆盖 pool-size,这些 failover
-    #    参数由此统一兜底)。主备切换(Patroni/HAProxy/VIP)时池中旧连接已断但 Hikari 不知道,
+    #    参数由此统一回退)。主备切换(Patroni/HAProxy/VIP)时池中旧连接已断但 Hikari 不知道,
     #    下次借出即 "Connection reset" 把请求打挂。下面三件配合主动回收+探活,避免坏连接被借出。
     hikari:
       # 连接最长存活(应 < 后端/HAProxy/PgBouncer idle 上限 + < PG wait_timeout),到点主动重建,
       # 让切换后残留的旧连接在一个生命周期内被淘汰。29min 留余量,避免与常见 30min 基础设施上限打平。
       max-lifetime: ${BATCH_PLATFORM_DB_MAX_LIFETIME_MS:1740000}
-      # keepalive-time 不在此处配:HikariPgSessionSupport 对所有 PG 池统一兜底 30s(PR #454),
-      # 在此重复设只会让该兜底成 dead code 且形成双源默认。需覆盖时调 HikariPgSessionSupport。
+      # keepalive-time 不在此处配:HikariPgSessionSupport 对所有 PG 池统一回退 30s(PR #454),
+      # 在此重复设只会让该回退成 dead code 且形成双源默认。需覆盖时调 HikariPgSessionSupport。
       # 借出前连接校验超时:校验慢/长期停滞时快速判失败重取,避免切换瞬间长时间阻塞在坏连接上。
       validation-timeout: ${BATCH_PLATFORM_DB_VALIDATION_TIMEOUT_MS:3000}
   servlet:
@@ -91,7 +91,7 @@ spring:
       # topic `task.dispatch.import.node.<workerId>`）时，必须从 earliest 开始消费，
       # 否则 dispatcher 比 worker 先把消息写进去 → consumer rebalance 后 reset 到 latest
       # 直接跳过那条任务，partition 永远 READY 不动。worker 端的 CLAIM 已是幂等
-      # （CLAIM 失败就 skip）兜底，重复消费旧消息无副作用。
+      # （CLAIM 失败就 skip）回退，重复消费旧消息无副作用。
       auto-offset-reset: ${BATCH_KAFKA_CONSUMER_AUTO_OFFSET_RESET:earliest}
       properties:
         # P1-10 Kafka 三角硬化：显式 session.timeout / heartbeat.interval / max.poll.interval / 分配策略
@@ -222,7 +222,7 @@ logging:
 batch:
   # 全局时区（所有业务路径上的 ZoneId.systemDefault() 改走 BatchTimezoneProvider）。
   # IANA 名，默认 Asia/Shanghai（= UTC+8），可用 BATCH_TIMEZONE_DEFAULT_ZONE 覆盖。
-  # business_calendar.timezone 仍然优先；此值只在日历未配置 timezone 时作为兜底。
+  # business_calendar.timezone 仍然优先；此值只在日历未配置 timezone 时作为回退。
   timezone:
     default-zone: ${BATCH_TIMEZONE_DEFAULT_ZONE:Asia/Shanghai}
 

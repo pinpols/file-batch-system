@@ -134,7 +134,7 @@ class TaskDispatcherTest {
     assertThat(dispatcher.partitionInvocation(42L)).isNull();
   }
 
-  // ─── handler 异常兜底 ────────────────────────────────────────────────────────
+  // ─── handler 异常回退 ────────────────────────────────────────────────────────
 
   @Test
   void handlerExceptionStillReportsFailure() throws Exception {

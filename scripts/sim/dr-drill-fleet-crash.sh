@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------------------
 # 上线就绪检查表 docs/runbook/go-live-readiness.md §2-C 的可执行件。
 #
-# 验证的承重墙:整组 worker 在飞时全崩,平台靠 lease/task 超时回收 + Kafka 重投
+# 验证的关键约束:整组 worker 在飞时全崩,平台靠 lease/task 超时回收 + Kafka 重投
 # 让任务在另一副本重跑;终态必须「精确一次」——不得出现重复终态、重复 outbox、
 # job_instance 复活或长期停滞。逻辑层已有 IT 覆盖(ConcurrentTaskFinish / Outbox*
 # / WorkerHeartbeatTimeoutScheduler);本演练在生产同构 staging 上端到端实证。
@@ -76,7 +76,7 @@ log "重启 worker:$WORKER_CONTAINERS"
 for c in $WORKER_CONTAINERS; do
   docker start "$c" >/dev/null 2>&1 || { echo "❌ 无法重启 $c" >&2; exit 2; }
 done
-KILLED=""  # 已主动拉回,后续 EXIT trap 不再重复 start(仅在中途中断时兜底)
+KILLED=""  # 已主动拉回,后续 EXIT trap 不再重复 start(仅在中途中断时回退)
 
 # ---- 5) 轮询直到沉降(无 RUNNING/READY 残留)或超时 ----------------------
 log "轮询沉降(≤ ${SETTLE_TIMEOUT_S}s)"

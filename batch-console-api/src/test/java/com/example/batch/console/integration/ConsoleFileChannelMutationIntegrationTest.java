@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
  * <p>守护:
  *
  * <ul>
- *   <li>合法 channelCode 落库,channelType/targetEndpoint 字段透传
+ *   <li>合法 channelCode 写入数据库,channelType/targetEndpoint 字段透传
  *   <li>空格 / 中文 channelCode → 400(@ValidResourceCode 拦截)
  *   <li>同 tenantId + channelCode 重复 → 唯一约束撞
  * </ul>

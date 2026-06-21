@@ -146,7 +146,7 @@
 | **atomic executor** | shell `allowedEnvKeys=空` 是机制保护;sql/proc/http 凭据散落在 dataSource bean / Properties,**业务方仍可在 parameters 里塞** |
 | **前端** | `descriptor` 详情 drawer 有静态 alert 文案;**试填表单层无 `password/secret/credential` 字段检测** |
 
-→ 三层加在一起,运营/开发者只要不读文档,**仍能轻易把凭据从 FE 试填 → 派单 parameters → BE 落库**,留下事故根因。
+→ 三层加在一起,运营/开发者只要不读文档,**仍能轻易把凭据从 FE 试填 → 派单 parameters → BE 写入数据库**,留下事故根因。
 
 ### 4.3 dry-run / strict-verify 这条质量链 atomic 路径有缺口
 
@@ -189,7 +189,7 @@
 | **6** | **集中 SDK 文档到 `docs/sdk/`**(quickstart + wire-protocol + troubleshooting + architecture)+ 独立 template repo | SDK | 2d | 🟠 高 | 降租户 onboarding 成本 50%+ |
 | **7** | **e2e 分级:smoke + critical 进 pr-gate(15min cap),全量分片 4x staging-gate** | FE | 1d | 🟡 中 | regression 反馈周期 10min → 5min,e2e 总耗 9h → 2.5h |
 | **8** | **B.2 升级为可保存配置**(atomic 节点真正写库,接 workflow_node 或新表) | FE+BE | 3d | 🟡 中 | B 区真正落地"运营在 console 配置原子节点"的产品诉求 |
-| **9** | **SDK ↔ BE 集成测 + K8s 验收 CI hook**(消除 ADR-035 验收 section "K8s 待验") | SDK | 3-4d | 🟡 中 | 真实环境兼容性兜底,避免"上线才发现"的事故 |
+| **9** | **SDK ↔ BE 集成测 + K8s 验收 CI hook**(消除 ADR-035 验收 section "K8s 待验") | SDK | 3-4d | 🟡 中 | 真实环境兼容性回退,避免"上线才发现"的事故 |
 | **10** | **类型双源消化**:推 BE OpenAPI 完善 customTaskTypes 字段,删 FE 手写 wrapper,`gen:api:check` 自动守护 | FE+BE | 1d FE+1d BE | 🟡 中 | 类型权威源回归单一,减少团队疑惑 |
 
 **前 6 项做完 ≈ 1.5 周**,可把生产成熟度从当前 ~3.8/5 提到 4.5/5。
@@ -217,7 +217,7 @@
 
 **架构层**:三处都已搭得稳——SDK 模块边界清晰、协议向后兼容设计成熟;atomic 物理隔离教科书级、四执行器各有 fail-closed 设计;前端约束体系 + 设计语言一致。**这是过去 H2 sprint 的核心产出**。
 
-**收口层**:三处共有的"最后一公里"问题——**生产 hardening 缺失(SDK Kafka pause / atomic fail-closed)、可观测端点缺失(fingerprint / progress 看板)、运营 UX 缺失(凭据警示 / atomic 可保存配置 / SDK 接入旅程)**——决定了从 "demo ready" 到 "运营自己上线" 的距离。
+**收敛层**:三处共有的"最后一公里"问题——**生产 hardening 缺失(SDK Kafka pause / atomic fail-closed)、可观测端点缺失(fingerprint / progress 看板)、运营 UX 缺失(凭据警示 / atomic 可保存配置 / SDK 接入旅程)**——决定了从 "demo ready" 到 "运营自己上线" 的距离。
 
 **建议节奏**:把 TOP 1-3(P0)在下一个 sprint 内做完,TOP 4-6(高 ROI)排入再下个 sprint,TOP 7-10 按需排。**完成 TOP 6 后,本批 SDK 自托管 + atomic + FE 三角能从"功能交付"进入"运营可用",才真正完成 H2 立项目标**。
 

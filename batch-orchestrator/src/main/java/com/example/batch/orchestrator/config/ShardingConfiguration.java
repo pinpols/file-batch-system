@@ -51,7 +51,7 @@ public class ShardingConfiguration {
     if (configured != null && !configured.isBlank()) {
       return configured;
     }
-    // K8s Downward API 注入的 POD_NAME 优先；否则 hostname 兜底
+    // K8s Downward API 注入的 POD_NAME 优先；否则 hostname 回退
     String pod = System.getenv("POD_NAME");
     if (pod != null && !pod.isBlank()) {
       return pod;

@@ -1,7 +1,7 @@
 # Spike: ADR-038 P3 Export GENERATE 文件恢复方案对比
 
 - **Status**: ✅ **已落地（2026-06-05）** —— 采用**单文件 + 字节位点截断**方案（详见下方「落地说明」），非本 spike 原推荐的 Option A（chunk 分片 + STORE 拼接）。
-- **落地说明**: 本 spike 原推荐 Option A（每页写 `chunk-N` 文件、STORE 阶段按格式拼接）。落地时改走更轻的**单文件法**:GENERATE 仍写单文件,每页 `flush + FileDescriptor.sync()` 后把 `<byteOffset>@<typed-cursor>` 记进位点;续跑时 `FileChannel.truncate(byteOffset)` 排除崩溃残尾 + 从 cursor 续写;STORE **完全不改**。两者崩溃安全性等价(都靠 fsync 边界 durability + 续跑前先 truncate,不会重复/丢行),但单文件法省掉了整套 concat 机器与 4 套 per-format 拼接逻辑(数据完整性风险点大减),且与 `WorkerCheckpointProperties` javadoc 既有的「Export 续 cursor」描述一致。Excel 不可 append/truncate → 全量重跑兜底(同 Option C);cursor 类型不可序列化(如 UUID)→ 降级全量跑 + WARN。实现见 `batch-worker-export` 的 `GenerateCheckpoint` / `GenerateCursorCodec` / `ResumableExportFile` + `GenerateStep`;运维见 [runbook](../runbook/platform-worker-checkpoint-howto.md) §Export GENERATE 续跑。
+- **落地说明**: 本 spike 原推荐 Option A（每页写 `chunk-N` 文件、STORE 阶段按格式拼接）。落地时改走更轻的**单文件法**:GENERATE 仍写单文件,每页 `flush + FileDescriptor.sync()` 后把 `<byteOffset>@<typed-cursor>` 记进位点;续跑时 `FileChannel.truncate(byteOffset)` 排除崩溃残尾 + 从 cursor 续写;STORE **完全不改**。两者崩溃安全性等价(都靠 fsync 边界 durability + 续跑前先 truncate,不会重复/丢行),但单文件法省掉了整套 concat 机器与 4 套 per-format 拼接逻辑(数据完整性风险点大减),且与 `WorkerCheckpointProperties` javadoc 既有的「Export 续 cursor」描述一致。Excel 不可 append/truncate → 全量重跑回退(同 Option C);cursor 类型不可序列化(如 UUID)→ 降级全量跑 + WARN。实现见 `batch-worker-export` 的 `GenerateCheckpoint` / `GenerateCursorCodec` / `ResumableExportFile` + `GenerateStep`;运维见 [runbook](../runbook/platform-worker-checkpoint-howto.md) §Export GENERATE 续跑。
 - **原 Status**: Spike（方案对比 + 推荐落地草案，纯文档不动代码）
 - **Related**: [ADR-038 Platform Worker Checkpoint & Resume](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)
 - **Runbook**: [platform-worker-checkpoint-howto](../runbook/platform-worker-checkpoint-howto.md)
@@ -44,7 +44,7 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 
 ### 2.1 对比表
 
-| 维度 | **A. 分片临时文件 + STORE 拼接** | **B. 单文件 APPEND + byte offset** | **C. 全 STORE 重做（兜底）** |
+| 维度 | **A. 分片临时文件 + STORE 拼接** | **B. 单文件 APPEND + byte offset** | **C. 全 STORE 重做（回退）** |
 | --- | --- | --- | --- |
 | **核心想法** | 每 page 写独立 `chunk-N.<ext>`；STORE 阶段顺序拼接产正式文件 | 单一临时文件以 `APPEND` 打开；位点存 byte offset，崩后 `truncate(offset)` 再续写 | 不引入文件级恢复；GENERATE 失败永远从头重做 |
 | **续跑行为** | 扫 tmpdir 已落地 chunk → `lastSafeChunk = max(N)` → 删 > N（可能 partial）→ 从 chunk-N 对应 cursor 续写 chunk-(N+1) | 读位点 `(cursor, byteOffset)` → `truncate(byteOffset)` → seek 末尾 → 续写 | 删 tmpdir → cursor=null 从头 generate |
@@ -52,7 +52,7 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 | **侵入性** | 中：`AbstractExportFormat.generatePaged` 改成"每页一个文件"；STORE 增加 concat 步骤 | 高：四个 format 各自要实现 truncate + 续写头/尾；Excel 改不了 | 低：基本只改 cursor 缓存 |
 | **STORE 兼容** | 需要新增 `concatChunks(tmpdir) → finalFile` 步骤再走 `.part → copy promote`；正式文件 SHA 不变 | STORE 不变（仍单文件） | STORE 不变 |
 | **格式适配** | JSON / Delimited / FixedWidth 天然适合；Excel **不适用**（单 workbook） | JSON 数组要在拼接时补 `]`；Delimited / FixedWidth 直接 append；Excel **不可行** | 全部适用，但等于不解决 |
-| **实现量（LOC 估）** | ~600（含 STORE concat + 4 个 format 改造 + 单测） | ~900（4 个 format truncate 各自实现 + JSON 数组语法补丁 + 单测；Excel 仍要兜底回 C） | ~80（仅 cursor 缓存） |
+| **实现量（LOC 估）** | ~600（含 STORE concat + 4 个 format 改造 + 单测） | ~900（4 个 format truncate 各自实现 + JSON 数组语法补丁 + 单测；Excel 仍要回退回 C） | ~80（仅 cursor 缓存） |
 | **失败模式** | chunk 文件中途崩溃 → 删该 chunk → cursor 退一格；fsync 时机要管 | offset 错位即整段污染，难以发现；Excel 只能放弃 | 大任务每次重跑分钟级延迟，**未解决 ADR-038 立项问题** |
 | **是否解决 P3 痛点** | ✅ 完整 | ⚠️ 仅文本三种格式 | ❌ |
 
@@ -72,7 +72,7 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 - **JSON**：每 chunk 写"裸数组元素列表"，不带 `[]`；STORE concat 时统一加 `[`、chunk 间 `,`、最后 `]`。难度低。
 - **Delimited**：chunk-0 带 header，chunk-N(N≥1) 不带；concat 直接字节拼。难度低。
 - **FixedWidth**：无 header 概念，纯行流，concat 字节拼。难度低。
-- **Excel**：单 workbook 必须 `workbook.write()` 整体输出，**无法分片**。该 format **回退到 C 全 STORE 重做**，并在 P3 实施 PR 里显式声明。难度：放弃，文档化兜底。
+- **Excel**：单 workbook 必须 `workbook.write()` 整体输出，**无法分片**。该 format **回退到 C 全 STORE 重做**，并在 P3 实施 PR 里显式声明。难度：放弃，文档化回退。
 
 **失败模式**：
 
@@ -97,7 +97,7 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 **实现量**：~80 LOC，只优化 plugin cursor 查询缓存（位点不写文件，崩了 cursor=null 重头分页）。
 
 - 不解决 ADR-038 立项时记录的"百万行级 cursor 重头分页是 SLA 风险"；
-- 适合作为 Excel **兜底**，但不能作为 P3 的总策略。
+- 适合作为 Excel **回退**，但不能作为 P3 的总策略。
 
 ---
 
@@ -112,7 +112,7 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 5. **失败半径小**：单 chunk 重写最多丢一页（chunkSize 默认 500 行），B 方案一次 offset bug 可能整文件污染。
 
 B 否决：Excel 死路 + JSON 语法补丁逻辑分散在四处。
-C 否决：未解决用户痛点，仅作为 Excel 兜底嵌入 A。
+C 否决：未解决用户痛点，仅作为 Excel 回退嵌入 A。
 
 ---
 
@@ -194,7 +194,7 @@ File finalLocal = concatChunks(pipelineInstanceId, format);
 
 ## 5. 不做项（明确划出范围）
 
-1. **Excel append**：POI 限制，不投入；Excel 走 C 兜底并在用户文档标注"Excel 导出不支持续跑，崩溃将重做"。
+1. **Excel append**：POI 限制，不投入；Excel 走 C 回退并在用户文档标注"Excel 导出不支持续跑，崩溃将重做"。
 2. **STORE 跨 worker 协调**：当前 STORE 仍由单 worker 完成，分片只是本地 tmpdir 优化，不引入多 worker 合并 chunk。
 3. **chunk 文件加密 / 校验和**：单 chunk 损坏靠 fsync + 删除策略覆盖，不引入 per-chunk SHA。
 4. **chunkSize 动态调整**：保持现有 config 取值，spike 范围内不调。
@@ -208,7 +208,7 @@ File finalLocal = concatChunks(pipelineInstanceId, format);
 | --- | --- | --- |
 | **PR1** | 模型扩展（`position_marker` 解析）+ JSON / Delimited 分片 + STORE concat 主路径 + 单测 + e2e 续跑 fixture | P1 / P2 已合 |
 | **PR2** | FixedWidth 分片 + concat | PR1 |
-| **PR3** | Excel 全 STORE 兜底文档化 + cursor 缓存优化 + runbook 更新（"Excel 不支持续跑") | PR1 |
+| **PR3** | Excel 全 STORE 回退文档化 + cursor 缓存优化 + runbook 更新（"Excel 不支持续跑") | PR1 |
 
 每 PR 单独走 strict-verify（local + dispatch），不进 main push 门禁（沿用项目约定）。
 
@@ -217,6 +217,6 @@ File finalLocal = concatChunks(pipelineInstanceId, format);
 ## 7. 决策记录
 
 - **作者**：Round-3 #12 spike
-- **结论**：推荐 A 方案；B 因 Excel + offset 脆弱性否决；C 仅作 Excel 兜底
+- **结论**：推荐 A 方案；B 因 Excel + offset 脆弱性否决；C 仅作 Excel 回退
 - **影响范围**：`batch-worker-export` 内部 GENERATE / STORE 边界，不影响 plugin SDK、不影响 console、不影响 STORE 对外 `.part → copy` 契约
 - **回滚策略**：A 方案的 chunk 目录可空可存在，feature flag `export.recovery.chunked=false` 时退化为单文件（即 P3 排除前行为），无 schema 风险

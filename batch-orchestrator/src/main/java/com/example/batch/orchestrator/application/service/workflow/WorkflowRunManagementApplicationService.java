@@ -251,7 +251,7 @@ public class WorkflowRunManagementApplicationService {
 
   /**
    * 人工 skip 后把节点视作"已成功"继续推进 DAG：沿 SUCCESS / ALWAYS / CONDITION 边解析下游并 dispatch；命中 END 节点时仅记日志，
-   * workflow_run 终态由后续节点的 outcome 自然收口（避免在管理路径里复刻 state machine + outbox 的全套切换）。
+   * workflow_run 终态由后续节点的 outcome 自然收敛（避免在管理路径里复刻 state machine + outbox 的全套切换）。
    */
   private void advanceDownstreamAfterSkip(WorkflowRunEntity run, String nodeCode) {
     if (run.getRelatedJobInstanceId() == null || run.getWorkflowDefinitionId() == null) {

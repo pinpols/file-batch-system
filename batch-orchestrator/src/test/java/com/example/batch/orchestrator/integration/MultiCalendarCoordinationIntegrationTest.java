@@ -26,7 +26,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <ul>
  *   <li>calendar_dependency: HK 等 CN SETTLED — 当 CN.day_status≠SETTLED 时 HK 不开；CN 标 SETTLED 后 HK 可开
  *   <li>disaster_day_override: SKIP override 触发后 batch_day_instance 状态为 SKIPPED / DEFERRED
- *   <li>cutoff_schedule JSONB 字段成功落库可读
+ *   <li>cutoff_schedule JSONB 字段成功写入数据库可读
  * </ul>
  */
 @SpringBootTest(

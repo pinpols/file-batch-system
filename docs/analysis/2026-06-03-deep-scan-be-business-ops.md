@@ -24,7 +24,7 @@
 
 ## 1. 总体评估
 
-整体业务层已经达到「核心路径有不变量、状态机有明确 CAS、终态有 outbox 事件、调度有 ShedLock + 内存重入双闸、坏点有 reconciler 兜底」的成熟度。明显的硬伤已被前几轮(R2/R3/V88/V90/P1-x)修过,残留的高危项更多偏向运维端点的语义缺口和告警侧的薄弱(无 routing / 无 silence / 无 escalation),而不是核心状态机本身。
+整体业务层已经达到「核心路径有不变量、状态机有明确 CAS、终态有 outbox 事件、调度有 ShedLock + 内存重入双闸、坏点有 reconciler 回退」的成熟度。明显的硬伤已被前几轮(R2/R3/V88/V90/P1-x)修过,残留的高危项更多偏向运维端点的语义缺口和告警侧的薄弱(无 routing / 无 silence / 无 escalation),而不是核心状态机本身。
 
 核心亮点(本次复核确认):
 
@@ -53,7 +53,7 @@
 - 建议(优先级排序):
   1. 把 `SELF_SERVICE` 写入 `ApprovalType` enum,补 label;
   2. 删 CLAUDE.md / 任务描述里 `WORKFLOW_NODE` / `OUTBOX_CLEANUP` 的 approval 路由要求,或补实现(后者更危险:OUTBOX 删事件无审批);
-  3. 加 `ApprovalCommandEntity.approval_type` 写入路径的 DictEnum 校验(insert 前 `ApprovalType.fromCode` 兜底)。
+  3. 加 `ApprovalCommandEntity.approval_type` 写入路径的 DictEnum 校验(insert 前 `ApprovalType.fromCode` 回退)。
 
 ### P0-2 `BatchDayReplayTerminalReconciler.findEntry` 只按 (sessionId, tenantId, jobCode) 匹配,同一 session 内同 jobCode 多次重放会回填到第一条 entry
 
@@ -133,7 +133,7 @@
 - 文件:`DefaultWorkflowNodeDispatchService.java:561-580`
 - 现象:`nextRunSeq` 走 `selectLatestByWorkflowRunIdAndNodeCode`(无锁)拿 max+1,再 insert。两个线程同时跑同节点(理论上已被 `isNodeAlreadyActivated` 的 `selectLatestForUpdate` 拦死),但当 latest_run 行尚未存在时(首次激活),`selectLatestForUpdate` 返回 null → 两个线程都通过,各自算 runSeq=1 → 走到 insert 撞 unique 索引(`workflow_node_run UNIQUE(workflow_run_id, node_code, run_seq)`)抛 `DuplicateKeyException`。
 - 影响:第二个线程的 dispatchNode 整事务回滚,outbox 写入也跟着回 — 这其实是想要的语义(同 partition 不重复 dispatch),但**调用方 `DefaultTaskOutcomeService.advanceDagNodes` 没有 catch 这个异常**,会让单条 task outcome 的 commit 失败,worker 那边视为 report 失败重试 → 第二次 report 会发现节点已被对方派发,跳过。整体最终一致,但伴随一次明显的 ERROR 日志和一次额外 worker 重试。
-- 建议:在 `recordNodeRunReady` / `recordNodeRunFinish` 插入路径外层 catch DuplicateKeyException 转 INFO 日志 + 让事务正常提交(已有行视为前序对手已落地)。代码里注释行 104 提了"残留 race 由 unique 索引 + DuplicateKeyException catch 兜底"但**没有真 catch**。
+- 建议:在 `recordNodeRunReady` / `recordNodeRunFinish` 插入路径外层 catch DuplicateKeyException 转 INFO 日志 + 让事务正常提交(已有行视为前序对手已落地)。代码里注释行 104 提了"残留 race 由 unique 索引 + DuplicateKeyException catch 回退"但**没有真 catch**。
 
 ### P2-2 `SensorStateMachine.advanceDownstream` 失败不写审计 + 不级联 SKIPPED
 
@@ -226,7 +226,7 @@
 
 ### 6.5 `DefaultRetryGovernanceService` 把"任务级重试" + "死信自动重放"两条链统一在一个 service
 
-虽然两者都用 `TaskDispatchOutboxService` 收口,合并到一处可读性偏差。建议长远拆分(retry / dead-letter)两个 service,但功能上无 bug。
+虽然两者都用 `TaskDispatchOutboxService` 收敛,合并到一处可读性偏差。建议长远拆分(retry / dead-letter)两个 service,但功能上无 bug。
 
 ---
 

@@ -7,7 +7,7 @@
 
 ## TL;DR
 
-1. **何时启用**:Tier-A + Tier-B 全做完仍不达目标,**且**有多租户并发洪峰实测信号(单租户单流 Citus 不缩耗时)。
+1. **何时启用**:Tier-A + Tier-B 全做完仍不达目标,**且**有多租户并发峰值流量实测信号(单租户单流 Citus 不缩耗时)。
 2. **改的是运维,但应用层改动 ≠ 极小**——见下方 ⚠️ 修正。
 3. **路径二选一**:**A** 自托管开源 Citus(免费、可控)/ **B** Azure Cosmos DB for PostgreSQL(托管 Citus,免 AGPL + 免运维)。
 4. **两个并列阻塞前置 POC**:① **RLS 过 coordinator**(`SET LOCAL app.tenant_id` 透传 worker,不过则路径作废)② **PK 复合化爆失败半径**(见 §0.5)。
@@ -27,7 +27,7 @@
 >
 > **修正后定位**:Citus 不是"运维改造为主、应用极小",而是 **PK 复合化驱动的跨 23 表 + 千处应用代码重构**(估 12-20 周)。所以 §7 RLS POC **之外**必须再加一个 **PK 复合化 POC**(选 1-2 张核心表先改复合主键,实测应用层爆失败半径),两个 POC 都过才进入实施。
 >
-> **2026-06-10 复核(实库直查)**:上述阻塞全部仍成立——10/10 核心表(`job_instance`/`pipeline_instance`/`outbox_event`/`workflow_run`/`file_record`/`trigger_request`/`dead_letter_task`/`job_partition`/`pipeline_step_run`/`workflow_node_run`)PK 仍为单列 `id`;`useGeneratedKeys` 43 → **49 处**(阻塞面在涨)。已采取的止血:CLAUDE.md §多租隔离新增「新表 PK 前瞻」(新多租大表一律复合 PK);洪峰 benchmark(门槛③)已排入 `worker-throughput-benchmark-plan-2026-06-07.md` P2。另:`outbox_event`/`job_instance` 月分区(partition-migration 01/02)同日在本地环境实跑——**触发新硬阻塞后已回滚**:分区键进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)` 等 upsert 契约,orchestrator outbox 写入全失败(6 个 mapper 受影响,清单见脚本 01 头注释)。**该教训直接外推到 Citus**:distributed table 同样要求 UNIQUE 含分片键,同一批 ON CONFLICT 全部会失败——§0.5 的"PK 复合化爆失败半径"POC 必须把 `grep -r 'on conflict'` 全量 mapper 清单纳入评估范围,这是比 `findById` 更隐蔽的爆失败点。
+> **2026-06-10 复核(实库直查)**:上述阻塞全部仍成立——10/10 核心表(`job_instance`/`pipeline_instance`/`outbox_event`/`workflow_run`/`file_record`/`trigger_request`/`dead_letter_task`/`job_partition`/`pipeline_step_run`/`workflow_node_run`)PK 仍为单列 `id`;`useGeneratedKeys` 43 → **49 处**(阻塞面在涨)。已采取的止血:CLAUDE.md §多租隔离新增「新表 PK 前瞻」(新多租大表一律复合 PK);峰值流量 benchmark(门槛③)已排入 `worker-throughput-benchmark-plan-2026-06-07.md` P2。另:`outbox_event`/`job_instance` 月分区(partition-migration 01/02)同日在本地环境实跑——**触发新硬阻塞后已回滚**:分区键进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)` 等 upsert 契约,orchestrator outbox 写入全失败(6 个 mapper 受影响,清单见脚本 01 头注释)。**该教训直接外推到 Citus**:distributed table 同样要求 UNIQUE 含分片键,同一批 ON CONFLICT 全部会失败——§0.5 的"PK 复合化爆失败半径"POC 必须把 `grep -r 'on conflict'` 全量 mapper 清单纳入评估范围,这是比 `findById` 更隐蔽的爆失败点。
 
 ## 章节速览
 
@@ -56,7 +56,7 @@
 |---|---|
 | ① single-node-throughput §1.6 Tier-A 跑完 | 数据已上传至文档 |
 | ② Tier-B(B1 多值 INSERT / B2 真 COPY)跑完仍不达单流 < 15s | 数据已上传至文档 |
-| ③ 实测**多租户并发洪峰**确认 Citus 是甜点场景(N 个租户同时各跑批) | benchmark 报告 |
+| ③ 实测**多租户并发峰值流量**确认 Citus 是甜点场景(N 个租户同时各跑批) | benchmark 报告 |
 | ④ §7 **RLS POC 通过** | POC 报告 |
 | ⑤ 法务确认 AGPL v3 政策(仅自托管路径需要) | 法务批复 |
 
@@ -312,7 +312,7 @@ COMMIT;
 | 🟡 透传需配 `citus.propagate_set_commands = 'transaction'`(社区有此参数) | 配上,re-POC,通过则绿 |
 | ❌ 任何配置都无法透传 | **路径死,放弃 Citus**,改走 §1.7 应用层分片或 hardware scale-up |
 
-### 7.4 兜底验证
+### 7.4 回退验证
 
 - 跨租户隔离:租户 A session 强行 `SELECT FROM biz.poc_tenant WHERE tenant_id='tb'` → **必须空行或拒绝**(Citus + RLS 双层防线)
 - 跨片查询时 RLS 仍生效:UNION/JOIN 多分片查询不绕过策略

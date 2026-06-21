@@ -10,7 +10,7 @@ import java.util.stream.Stream;
  * ADR-036 — Import 模板:external → tenant(file → tenant DB)。
  *
  * <p>本类是 {@link SdkAbstractTypedImportHandler} 在「裸 Map 入参」下的特例(无需强类型入参的简单场景):钩子只收 {@code ctx}, 分批 /
- * 流式 / 计数兜底的模板循环全部复用 typed 基类,避免重复实现。需要强类型入参时直接用 {@link SdkAbstractTypedImportHandler}。
+ * 流式 / 计数回退的模板循环全部复用 typed 基类,避免重复实现。需要强类型入参时直接用 {@link SdkAbstractTypedImportHandler}。
  *
  * @param <R> 行类型
  */

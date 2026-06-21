@@ -1,6 +1,6 @@
 {
   "scenario": "kafka-schema-version-v3-reject",
-  "description": "schemaVersion §A:未知 major v3+ → reject,不 commit offset(让平台/新版 SDK 兜底)。一个旧 SDK 收到未来 v3 消息必须安全拒绝而非误解析。",
+  "description": "schemaVersion §A:未知 major v3+ → reject,不 commit offset(让平台/新版 SDK 回退)。一个旧 SDK 收到未来 v3 消息必须安全拒绝而非误解析。",
   "given": {
     "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 },
     "state": { "inFlight": 0 }

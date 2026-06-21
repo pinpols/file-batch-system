@@ -81,7 +81,7 @@ public final class ExcelMapRowReader {
     return normalizedUpper;
   }
 
-  /** 必填整数（带最小值兜底）：blank / 非整数 → 返回 min 并报错；&lt; min → 报错但仍返回原值。 */
+  /** 必填整数（带最小值回退）：blank / 非整数 → 返回 min 并报错；&lt; min → 报错但仍返回原值。 */
   public static Integer requireInteger(
       Map<String, String> values, String key, int min, List<String> issues) {
     String normalized = ConsoleTextSanitizer.normalize(values.get(key));
@@ -104,7 +104,7 @@ public final class ExcelMapRowReader {
     }
   }
 
-  /** 选填布尔：TRUE/Y/1/YES → true，FALSE/N/0/NO → false，其他 → 报错并回退默认值；blank → 默认值。 */
+  /** 选填布尔：TRUE/Y/1/YES → true，FALSE/N/0/NO → false，其他 → 报错并默认回退值；blank → 默认值。 */
   public static Boolean optionalBoolean(
       Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
     String normalized = ConsoleTextSanitizer.normalize(values.get(key));

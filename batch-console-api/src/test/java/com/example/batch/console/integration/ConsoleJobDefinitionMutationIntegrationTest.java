@@ -16,10 +16,10 @@ import org.springframework.http.MediaType;
  * <p>守护:
  *
  * <ul>
- *   <li>合法 jobCode 落库,job_definition 行可查
+ *   <li>合法 jobCode 写入数据库,job_definition 行可查
  *   <li>BE @ValidResourceCode 在 controller 入口拦截 q q q / 中文
  *   <li>同 tenantId+jobCode 重复创建 → 409 唯一约束
- *   <li>tenantId 强一致:body.tenantId 决定落库 tenant_id,不会漂移
+ *   <li>tenantId 强一致:body.tenantId 决定写入数据库 tenant_id,不会漂移
  * </ul>
  */
 @SpringBootTest(

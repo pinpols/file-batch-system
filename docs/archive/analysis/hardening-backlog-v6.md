@@ -56,8 +56,8 @@
 |---|---|---|---|
 | V6-P2-WEBHOOK-DURABILITY（deep-issue §5.11）| webhook 投递持久化 — V81 `delivery_status` CHECK 加 `GIVE_UP` + `(status, next_retry_at)` 部分索引；`WebhookDeliveryRelay` 278 LOC（@ConditionalOnProperty 默认开 + ShedLock 互斥 + 5/10/20/30min cap 退避 + absolute-max-attempts=8 后 GIVE_UP）；`WebhookEventPayload` + `WebhookDeliveryResult` 顶级类；`batch_webhook_delivery_give_up_total` counter + `WebhookDeliveryGiveUp` Prometheus 告警；7 单测全部通过 | ✅ | `b74e0a0c`（2026-04-30 14:55）|
 | V6-P2-ORCHESTRATOR-GODCLASS | `DefaultTaskOutcomeService` 926 → 795 LOC（-14%）：抽 `TaskOutcomePayloadSupport`(104) + `TaskOutcomeSummaryBuilder`(76) + 内联 helper。`DefaultWorkflowNodeDispatchService` 840 → 371 LOC（-56%）：抽 `WorkflowNodePayloadBuilder`(311, Cluster F：payload 拼装 + 上游 partition output 合并 + ADR-009 DSL 解析) + `ChildJobLaunchSupport`(276, Cluster B+C：JOB 节点子作业拉起全套)；保留 25 LOC 重复（`recordNodeRunReady`/`nextRunSeq`）较抽公共类成本低；主 service 留 `dispatchNode`/`dispatchTaskNode`/`dispatchGatewayNode` 核心调度路径；test 构造器 5 → 4 参同步；12 个 `*WorkflowNode*Test` + `*Dispatch*Test` 全部通过，506 IT 仅 1 已知 race flake（`WorkerClaimProgressCompleteIT`，isolation 重跑通过） | ✅ | `b74e0a0c` + `7d6faad6`（2026-04-30 20:46）|
-| V6-P2-EXCEL-GODCLASS | 7 个 god class 主 service 平均 -67% LOC，新增 13 个收口类（详见下表） | ✅ 6/7 | `002b8864` + `bd0f0532` + `b9eefb47` |
-| V6-P2-CONSOLE-IDEMPOTENCY（deep-issue §5.5/§5.6/§5.10）| 三层幂等边界 — Layer 1：`ConsoleIdempotencyInterceptor` 全文重写（key 绑定 tenant+method+uri+idempotencyKey；两阶段占问题 PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE 释放；Redis fail-closed 503）。Layer 2：`DefaultTriggerService.approvePendingCatchUp:134-142` 用 `idempotencyKey` 查 `trigger_request` 已 LAUNCHED 短路；类 Javadoc:60-71 明示"trigger 层只做尽力去重，最终去重由 orchestrator 兜底"。Layer 3：`db/migration/V37` 删 `uk_trigger_request_tenant_dedup` + `uk_job_instance_tenant_dedup` 作为最终事实源。设计定稿见 [`ADR-011`](../architecture/adr/ADR-011-idempotency-boundary-alignment.md) | ✅ | — |
+| V6-P2-EXCEL-GODCLASS | 7 个 god class 主 service 平均 -67% LOC，新增 13 个收敛类（详见下表） | ✅ 6/7 | `002b8864` + `bd0f0532` + `b9eefb47` |
+| V6-P2-CONSOLE-IDEMPOTENCY（deep-issue §5.5/§5.6/§5.10）| 三层幂等边界 — Layer 1：`ConsoleIdempotencyInterceptor` 全文重写（key 绑定 tenant+method+uri+idempotencyKey；两阶段占问题 PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE 释放；Redis fail-closed 503）。Layer 2：`DefaultTriggerService.approvePendingCatchUp:134-142` 用 `idempotencyKey` 查 `trigger_request` 已 LAUNCHED 短路；类 Javadoc:60-71 明示"trigger 层只做尽力去重，最终去重由 orchestrator 回退"。Layer 3：`db/migration/V37` 删 `uk_trigger_request_tenant_dedup` + `uk_job_instance_tenant_dedup` 作为最终事实源。设计定稿见 [`ADR-011`](../architecture/adr/ADR-011-idempotency-boundary-alignment.md) | ✅ | — |
 
 **EXCEL-GODCLASS 7 类拆分明细**：
 
@@ -77,7 +77,7 @@
 - **范围**（业界对齐后收窄）：① 方法签名 argc=7 共 7 处 + ② inline argc>6 共 54 处 = **61 处**
   - **删桶 ③**（argc=4-6 共 137 处）：Effective Java / Google Style / Oracle Conventions 均未禁止 `f(new Foo(a..f))`，业界无依据
   - **豁免声明式注册类**：`ConsoleMenuRegistry`（41 处 MenuItem + 8 处 MenuGroup）/ Excel `*SchemaRegistry`（8 处 SheetDef）等，inline new 在声明式数据结构里是业界鼓励写法
-- **统一动作**：② 加 `@Builder` + 提取引用 + 默认值不显式 set；class 加 `@Builder` 用 `@NoArgsConstructor` + `@AllArgsConstructor` 三连或 `@Tolerate` 兜底空参，**不降级**
+- **统一动作**：② 加 `@Builder` + 提取引用 + 默认值不显式 set；class 加 `@Builder` 用 `@NoArgsConstructor` + `@AllArgsConstructor` 三连或 `@Tolerate` 回退空参，**不降级**
 - **提交策略**：1 个大 PR 内 4 commit 拆分（① / ② / 守护测试 / 文档），~1100 行 diff
 - **规约同步**：CLAUDE.md §方法参数约束 追加"调用方约束"子节 + `docs/changelog.md` 2026-05-01 条目 + 守护 `PositionalArgsConventionTest` 白名单方式拦回潮
 - **不做**：Spring Data JDBC entity 强制 `@Builder` / 重排 record 字段 / argc≤6 治理 / 声明式注册类 / test 重灾区 fixture builder（独立立项）
@@ -193,7 +193,7 @@
 | 编号 | 主题 | 状态 | 落地证据 |
 |---|---|---|---|
 | V6-DBA-P1-1 | `job_instance` 索引补强 | 🟡 加新完成，DROP 待取证 | V143 加 partial active + `(tenant_id, biz_date DESC, instance_status)`；DROP 流程见 [`runbook/index-consolidation-2026-05.md`](../runbook/index-consolidation-2026-05.md)（需生产 `pg_stat_user_indexes.idx_scan` 数据再 V144 DROP） |
-| V6-DBA-P1-2 | `workflow_run` 整合 + 兜底 UNIQUE | ✅ UNIQUE 完成 / 🟡 索引整合待取证 | V142 加 `UNIQUE(tenant_id, id)`；DAO 审计：用户路径 7/7 带 tenant_id，2 处 by-design 旁路（`selectByIdAnyTenant` / cluster reconciler），**无穿透 bug** |
+| V6-DBA-P1-2 | `workflow_run` 整合 + 回退 UNIQUE | ✅ UNIQUE 完成 / 🟡 索引整合待取证 | V142 加 `UNIQUE(tenant_id, id)`；DAO 审计：用户路径 7/7 带 tenant_id，2 处 by-design 旁路（`selectByIdAnyTenant` / cluster reconciler），**无穿透 bug** |
 | V6-DBA-P1-3 | `NotValidConstraintGuard` | ✅ 已存在 | `batch-orchestrator/.../startup/NotValidConstraintGuard.java`（R7 DB 审计 P1-5 时落地） |
 | V6-DBA-P1-4 | `ArchiveSchemaDriftCheck` 扩展 | 🟡 表清单已扩，列级比对未做 | `ARCHIVED_TABLES` 追加 `trigger_outbox_event` / `dead_letter_task`；`console_operation_audit` 仍无 archive 表（V132 by design）；列级（类型 / nullability）比对推后到独立条目 |
 
@@ -203,8 +203,8 @@
 |---|---|---|---|
 | V6-DBA-P2-1 | `event_delivery_log.outbox_event_id` FK 索引 | ✅ | V134 |
 | V6-DBA-P2-2 | `file_record.storage_path` → TEXT | ✅ | V135 |
-| V6-DBA-P2-3 | `job_instance` CHECK 兜底 | ✅ | V136 NOT VALID + V137 VALIDATE 同 PR |
-| V6-DBA-P2-4 | `job_partition.idempotency_key` 收口 | ✅ | 审计仅 2 处 INSERT，均设确定性非空 key；`DefaultPartitionLifecycleService` + `ChildJobLaunchSupport` 补 `Guard.requireText` 防回归 |
+| V6-DBA-P2-3 | `job_instance` CHECK 回退 | ✅ | V136 NOT VALID + V137 VALIDATE 同 PR |
+| V6-DBA-P2-4 | `job_partition.idempotency_key` 收敛 | ✅ | 审计仅 2 处 INSERT，均设确定性非空 key；`DefaultPartitionLifecycleService` + `ChildJobLaunchSupport` 补 `Guard.requireText` 防回归 |
 | V6-DBA-P2-5 | `file_record.metadata_json` 计划稳定性 | ✅ | `scripts/db/analyze-hot-tables.sql` 13 表 ANALYZE + last_analyze 校验；partial GIN 评估推后到取证后 |
 | V6-DBA-P2-6 | `file_dispatch_record.file_id` CASCADE | ✅ | V138 |
 

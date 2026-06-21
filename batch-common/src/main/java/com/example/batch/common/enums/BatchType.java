@@ -14,7 +14,7 @@ import lombok.experimental.Accessors;
  *   <li>{@link #PROCESS} —— 系统内部加工(聚合 / 清洗 / 状态推进),首期占位,worker 模块按需补
  *   <li>{@link #DISPATCH} —— 结果向外分发(MQ / FTP / 第三方接口)
  *   <li>{@link #SYNC} —— 系统之间对齐(DB→DB / CDC),首期占位,worker 模块按需补
- *   <li>{@link #GENERAL} —— carryover:未归类 / 无 pipeline 模板的兜底
+ *   <li>{@link #GENERAL} —— carryover:未归类 / 无 pipeline 模板的回退
  *   <li>{@link #WORKFLOW} —— carryover:工作流编排型,本身不是数据流类型
  * </ul>
  *

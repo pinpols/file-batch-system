@@ -265,7 +265,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   /**
    * F P1：task NEW→RUNNING 启动延迟(派单到 worker 起跑的等待时长)。
    *
-   * <p>语义:task 行 {@code created_at} 是 orchestrator 派单落库时刻;入参 {@code startedAt} 是 worker CLAIM
+   * <p>语义:task 行 {@code created_at} 是 orchestrator 派单写入数据库时刻;入参 {@code startedAt} 是 worker CLAIM
    * 后实际起跑时刻。差值 = 调度队列等待 + worker 拉取 + CLAIM 往返。SLA 关键路径。
    *
    * <p>tag 受控:tenant_id + task_type(均低基数);**不**带 task_id / job_instance_id(高基数会爆 cardinality)。
@@ -421,7 +421,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
    * {@code workerCode} 注册时，再按配置的 fallback 租户查一次。
    *
    * <p>本地联调 / 共享 dev 环境里任务的 tenantId 可能是 {@code ta/tb/tc}，但真实跑着的只有 {@code default-tenant} 的
-   * worker；selector 做过 fallback 选中 default-tenant 的 workerCode 后 把 {@code selectedWorkerId} 塞进
+   * worker；selector 做过 fallback 选中 default-tenant 的 workerCode 后 把 {@code selectedWorkerId} 写入
    * outbox，worker 消费后 HTTP POST 回来 claim，如果这里不对称 处理，会卡在"主租户 worker_registry 查不到 →
    * isWorkerClaimable=false → claim 返 409"的死角。 生产 profile 不设置此配置，严格保留 §多租户隔离。
    */

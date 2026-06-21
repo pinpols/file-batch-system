@@ -65,7 +65,7 @@ class TaskDispatchOutboxServiceMandatoryTest {
 
   @Test
   void writeDispatchEvent_withRunModeOverride_persistsToTaskPayload() {
-    // P1-2.2:RunMode 不再塞进 Kafka message,而是 UPDATE job_task.task_payload,
+    // P1-2.2:RunMode 不再写入 Kafka message,而是 UPDATE job_task.task_payload,
     // worker CLAIM 时由 EffectiveTaskConfig 实时读到。
     JobInstanceEntity jobInstance = new JobInstanceEntity();
     jobInstance.setId(1L);

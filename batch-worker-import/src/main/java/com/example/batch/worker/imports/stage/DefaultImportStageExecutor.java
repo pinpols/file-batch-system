@@ -59,7 +59,7 @@ public class DefaultImportStageExecutor
 
   @Override
   public List<ImportStageResult> execute(ImportJobContext context) {
-    // 主链路：执行 stage loop；无论成功/失败都尝试收口错误明细产物（用于对账/审计）。
+    // 主链路：执行 stage loop；无论成功/失败都尝试收敛错误明细产物（用于对账/审计）。
     try {
       return runStageLoop(context);
     } finally {

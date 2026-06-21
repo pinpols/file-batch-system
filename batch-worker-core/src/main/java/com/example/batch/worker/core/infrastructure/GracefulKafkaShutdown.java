@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
  *       batch.worker.graceful-shutdown.timeout-seconds}（默认 120s）控制。
  *   <li>排空完成后主动 {@code deactivate}（置 {@code OFFLINE}），让 registry 行立即下线、 不必干等 {@code
  *       WorkerHeartbeatTimeoutScheduler} 的心跳超时窗口（~120s）才被翻 OFFLINE。 计划内重启/滚动升级因此即时摘除；OFFLINE
- *       可在进程重启后 re-register 复活（非 DECOMMISSIONED）。 best-effort：失败仅告警，心跳超时治理仍是兜底。
+ *       可在进程重启后 re-register 复活（非 DECOMMISSIONED）。 best-effort：失败仅告警，心跳超时治理仍是回退。
  * </ol>
  *
  * <p><b>v6 hardening · drain 可观测性</b>：记录 drain 持续时间、起始 active lease 数量、是否触发 timeout。 让运维可以在
@@ -109,7 +109,7 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
 
   /**
    * 排空后主动把本进程所有注册置 OFFLINE。best-effort：单条失败仅告警，{@link WorkerHeartbeatTimeoutScheduler}
-   * 的心跳超时仍兜底。OFFLINE 可在重启后 re-register 复活。
+   * 的心跳超时仍回退。OFFLINE 可在重启后 re-register 复活。
    */
   private void deactivateAll(Collection<WorkerRegistration> registrations) {
     for (WorkerRegistration registration : registrations) {
@@ -120,7 +120,7 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
         workerRegistryService.deactivate(registration);
       } catch (Exception ex) {
         log.warn(
-            "failed to deactivate worker on shutdown (心跳超时兜底): workerId={}, cause={}",
+            "failed to deactivate worker on shutdown (心跳超时回退): workerId={}, cause={}",
             registration.getWorkerId(),
             ex.getMessage());
       }

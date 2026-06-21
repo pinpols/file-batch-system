@@ -44,7 +44,7 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
 
   /**
    * 请求体反序列化失败（如 enum 非法值 {@code DryRunLevel="BOGUS_LEVEL"}、JSON 格式错）→ 400 INVALID_ARGUMENT， 而非落到
-   * {@code Exception} 兜底的 500 系统错误。对标 console 侧同款处理,保证非法入参对外是 4xx。
+   * {@code Exception} 回退的 500 系统错误。对标 console 侧同款处理,保证非法入参对外是 4xx。
    */
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<CommonResponse<Void>> handleMessageNotReadable(
@@ -58,7 +58,7 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
   }
 
   /**
-   * 瞬时 DB 并发失败(死锁 / 锁获取超时,如并发 task-outcome 推进同一 job 多分区时的行锁竞争)→ 503 可重试, 而非落到 {@code Exception} 兜底的
+   * 瞬时 DB 并发失败(死锁 / 锁获取超时,如并发 task-outcome 推进同一 job 多分区时的行锁竞争)→ 503 可重试, 而非落到 {@code Exception} 回退的
    * 500「unexpected exception」(语义=服务端 bug + 刷 ERROR 噪声)。 report / launch 等入口幂等(idempotency key + 状态机
    * CAS),调用方(worker SDK §C)按 5xx 退避重投即收敛。 {@link TransientDataAccessException} 覆盖
    * DeadlockLoserDataAccessException / CannotAcquireLockException / QueryTimeoutException 等一族瞬时错。

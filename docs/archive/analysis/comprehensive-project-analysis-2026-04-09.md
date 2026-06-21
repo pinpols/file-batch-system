@@ -228,7 +228,7 @@
 1. **`MANUAL_IMMEDIATE` 模式**（`KafkaConsumerConfiguration.java:76`）：`AckMode.MANUAL_IMMEDIATE`，非 auto commit，由子类显式调用 `acknowledgment.acknowledge()`。
 2. **Ack 时机正确**（如 `ImportTaskConsumer.java:60-63`）：`doConsume()` 返回 `true`（CLAIM → 执行 → REPORT 全部完成）才提交 offset；背压拒绝时返回 `false` 不提交，消息自动重投。
 3. **CLAIM CAS 幂等**（`TaskDispatchExecutor.java:22`）：即使重复消费，Worker 必须 `claim()` 成功才执行，CLAIM 是 CAS 操作，重复消费时 claim 失败直接跳过。
-4. **DLQ 兜底**（`AbstractTaskConsumer.java:103-109`）：异常消息发送死信队列后仍 ack，防止毒丸阻塞消费。
+4. **DLQ 回退**（`AbstractTaskConsumer.java:103-109`）：异常消息发送死信队列后仍 ack，防止毒丸阻塞消费。
 
 **Rebalance 停顿**：Consumer Group Rebalance 期间的秒级停顿是 Kafka 固有行为，非 bug。`maxPollIntervalMs=600000`（10 分钟）配置合理，给长任务足够处理时间，避免不必要的 rebalance。
 
@@ -356,7 +356,7 @@
 | 增量同步 | ⚠️ 无增量标记机制 | 需业务层设计水位线 |
 | 多格式解析（CSV/XML/JSON） | ✅ ParseStep 支持 5 种格式：JSON（流式解析，支持数组/`{records:[]}` 信封）、DELIMITED（CSV）、XML、FIXED_WIDTH、EXCEL；resolveFormat 自动探测 | ✅ |
 | 错误行跳过与汇总 | ⚠️ 全量失败，无行级错误跳过 | 需补 partial-success 语义 |
-| 实时同步兜底 | ❌ 仅批量，无 CDC 兜底 | 超出当前系统边界 |
+| 实时同步回退 | ❌ 仅批量，无 CDC 回退 | 超出当前系统边界 |
 
 ---
 
@@ -381,7 +381,7 @@
 |----------|------|------|
 | 数据保留策略 | ❌ 无自动归档/清理 | 需设计 retention 策略 |
 | HIPAA 合规 | ⚠️ ContentMaskingUtils 有 PII 脱敏 | ⚠️ 未见 PHI 专项处理 |
-| 访问日志不可篡改 | ✅ 落库 | ⚠️ 无防篡改签名 |
+| 访问日志不可篡改 | ✅ 写入数据库 | ⚠️ 无防篡改签名 |
 | 异地灾备 | ❌ 无多活设计 | 超出当前系统边界 |
 
 ---

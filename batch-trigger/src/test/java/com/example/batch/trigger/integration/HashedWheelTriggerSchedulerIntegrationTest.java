@@ -137,7 +137,7 @@ class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest
   }
 
   /**
-   * R-1 重复 fire 防御:wheel 不再自己 INSERT trigger_request 走 DB UNIQUE 兜底 (已通过 V70 撤销)。改为依赖三层防御:marker
+   * R-1 重复 fire 防御:wheel 不再自己 INSERT trigger_request 走 DB UNIQUE 回退 (已通过 V70 撤销)。改为依赖三层防御:marker
    * CAS + LaunchService persistAndForward 软幂等 + job_instance.uk_job_instance_tenant_dedup。
    *
    * <p>本测试覆盖第二层:模拟"另一 leader 已经写了 trigger_request 同 dedupKey 行", 然后 wheel 调

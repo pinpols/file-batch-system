@@ -36,7 +36,7 @@ public abstract class AbstractApiExceptionHandler {
     this.bizMessageResolver = bizMessageResolver;
   }
 
-  // standalone MockMvc 测试场景(无 Spring 容器),提供 no-arg 兜底:
+  // standalone MockMvc 测试场景(无 Spring 容器),提供 no-arg 回退:
   // bizMessageResolver=null 时,resolveBizMessage / resolveCommonCode 已有 null 短路降级。
   protected AbstractApiExceptionHandler() {
     this(null);
@@ -102,7 +102,7 @@ public abstract class AbstractApiExceptionHandler {
   }
 
   /**
-   * 404 NoResourceFoundException 显式按 404 + INFO 处理,不走 Exception.class 兜底的 500 + ERROR 路径。否则任何请求不存在
+   * 404 NoResourceFoundException 显式按 404 + INFO 处理,不走 Exception.class 回退的 500 + ERROR 路径。否则任何请求不存在
    * URL(浏览器探测 favicon.ico / 误填 actuator path)都会被记成 ERROR 刷屏,且返回 500 误导调用方。
    */
   @ExceptionHandler(NoResourceFoundException.class)
@@ -117,7 +117,7 @@ public abstract class AbstractApiExceptionHandler {
   }
 
   /**
-   * 400 path variable / 查询参数类型转换失败(如 {@code /internal/x/{id}} 的 id 传了非数字)。否则落到 Exception.class 兜底的
+   * 400 path variable / 查询参数类型转换失败(如 {@code /internal/x/{id}} 的 id 传了非数字)。否则落到 Exception.class 回退的
    * 500,console BFF 透传下游 status 会把这类入参错误当系统崩溃展示给操作员。
    */
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)

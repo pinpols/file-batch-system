@@ -76,7 +76,7 @@ class FeedbackStepTest {
   }
 
   @Test
-  @DisplayName("plugin.feedback() 返回 null → 兜底 success")
+  @DisplayName("plugin.feedback() 返回 null → 回退 success")
   void shouldReturnSuccess_whenPluginReturnsNull() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.feedback(any())).thenReturn(null);

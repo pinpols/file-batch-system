@@ -31,7 +31,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 资源调度统一收口：给定一个 {@link ResourceSchedulingRequest}，按固定 pipeline 依次判定可派发性， 任一阶段 block 即 short-circuit
+ * 资源调度统一收敛：给定一个 {@link ResourceSchedulingRequest}，按固定 pipeline 依次判定可派发性， 任一阶段 block 即 short-circuit
  * 返回 {@code dispatchable=false} 的决策（带 reasonCode），不再继续后续检查。
  *
  * <p>Pipeline 顺序：
@@ -94,7 +94,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   private final BatchTimezoneProvider timezoneProvider;
   private final BatchDateTimeSupport dateTimeSupport;
 
-  /** 资源调度统一收口在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
+  /** 资源调度统一收敛在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
   @Override
   public ResourceSchedulingDecision schedule(ResourceSchedulingRequest request) {
     ResourceQueueEntity queue = resourceQueueManager.resolveQueue(request);

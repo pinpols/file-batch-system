@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>启用控制：实际默认由 application.yml 的 {@code ${BATCH_CONSOLE_READ_REPLICA_ENABLED:true}} 决定（生产 + 本地
  * docker-compose + .env.example 都为 true）；测试在 application-test.yml 覆盖为 {@code false}。Java 字段默认
- * {@code false} 仅作 yml 完全缺失时的兜底。
+ * {@code false} 仅作 yml 完全缺失时的回退。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.console.read-replica")

@@ -187,7 +187,7 @@
                 <version>${jsqlparser.version}</version>
             </dependency>
             <!-- POI Excel:batch-common (test) + worker-import/export + console-api 共用,
-                 之前散在 4 个 module 写死 5.4.0,bump 时易遗漏 → 收口 parent。 -->
+                 之前散在 4 个 module 写死 5.4.0,bump 时易遗漏 → 收敛 parent。 -->
             <dependency>
                 <groupId>org.apache.poi</groupId>
                 <artifactId>poi-ooxml</artifactId>
@@ -199,7 +199,7 @@
                 <version>${commons-compress.version}</version>
             </dependency>
             <!-- BouncyCastle:bcprov 1.84 是 CVE-2026-5598 安全 patch(见 properties 注释);
-                 之前 console-api 显式 1.78.1 跟 parent 1.84 冲突 → 收口 parent。 -->
+                 之前 console-api 显式 1.78.1 跟 parent 1.84 冲突 → 收敛 parent。 -->
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
@@ -488,7 +488,7 @@
                                         阈值留 ~8-10% 安全余量到 LINE 80%；BRANCH 阈值不加（部分类 branch 偏低，
                                         加了会触发误报，分支覆盖另案治理）。
                                         类被改名 / 拆分时需同步更新 includes；rule 失效（include 不匹配任何类）jacoco
-                                        默认 silent，定期 jacoco-aggregate 看 BUNDLE 是否漂移做兜底。
+                                        默认 silent，定期 jacoco-aggregate 看 BUNDLE 是否漂移做回退。
                                     -->
                                     <rule>
                                         <element>CLASS</element>

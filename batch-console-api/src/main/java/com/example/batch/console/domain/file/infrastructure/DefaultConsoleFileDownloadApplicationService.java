@@ -227,7 +227,7 @@ public class DefaultConsoleFileDownloadApplicationService
    *
    * <p>不绑定 fileId 会导致同租越权:租户内任一已 APPROVED 的下载审批单都能解锁<b>任意</b>加密文件下载。 审批创建侧（{@code
    * DefaultConsoleFileApplicationService#presignDownload}）以 {@code targetType="FILE"} + {@code
-   * targetId=fileId} 落库,这里据此 1:1 比对。
+   * targetId=fileId} 写入数据库,这里据此 1:1 比对。
    */
   private void requireApprovedApproval(String tenantId, String approvalNo, Long fileId) {
     RestClient restClient = orchestratorInternalRestClient.build();

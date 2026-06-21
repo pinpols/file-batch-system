@@ -18,7 +18,7 @@ public class ProcessJobContext implements ExecutionContext {
 
   /**
    * 在 PREPARE 阶段一次性解析出来的 plugin 实例,供后续 4 个 stage 复用,避免每个 stage 都查一次 step_definition 找 COMPUTE step
-   * 的 impl_code。无匹配 plugin 时为 null,框架会用默认 stage step(全 success)兜底。
+   * 的 impl_code。无匹配 plugin 时为 null,框架会用默认 stage step(全 success)回退。
    */
   private ProcessComputePlugin resolvedPlugin;
 

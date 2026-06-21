@@ -11,7 +11,7 @@
 1. 触发方在 `LaunchRequest.params` 中显式指定。
 2. 作业定义（`JobDefinition`）中配置的默认值。
 3. 平台全局默认值（`batch.defaults.partition-count`）。
-4. 兜底硬编码值（1）。
+4. 回退硬编码值（1）。
 
 最初在 `PartitionDispatchService` 中通过 if-else 链处理这四个来源，代码难以扩展（新增来源需修改核心类）且难以测试（需要构造复杂的上下文）。
 
@@ -34,7 +34,7 @@ public interface PartitionCountResolver {
 | 3 | `RuntimeBasedPartitionCountResolver` | 历史执行时长 ÷ 目标分区时长 |
 | 4 | `WorkerBasedPartitionCountResolver` | 在线 worker 数 × 并发因子（DYNAMIC=2，AUTO=1） |
 
-兜底：所有 resolver 都返回 0 → `DefaultSchedulePlanBuilder.resolveDynamicPartitionCount` 返回 1。
+回退：所有 resolver 都返回 0 → `DefaultSchedulePlanBuilder.resolveDynamicPartitionCount` 返回 1。
 
 链上第一个返回正值的解析器生效，后续 resolver 仍会被调用以便记录覆盖事件（INFO log，2026-05-01 hardening 加入）。这避免了"我配了 `targetItemsPerPartition` 但不生效"的静默调试痛点——日志格式：
 

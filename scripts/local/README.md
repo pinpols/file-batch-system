@@ -14,7 +14,7 @@
   - `make dev-health` 是它的别名
 - `watchdog.sh`：长时间联调时挂在另一 tab 自动拉起被系统回收的 worker 进程
 （macOS 闲置数小时会回收 JVM；docker-compose 模式不需要本脚本，靠 docker
-自带 `restart: unless-stopped` 兜底）
+自带 `restart: unless-stopped` 回退）
 - `build-apps.sh`：Maven 打包六个应用模块（-DskipTests）
 - `import-copy-worth-benchmark.sh`：IMPORT LOAD 写入微基准,对比当前 JDBC batch UPSERT 与
   `COPY -> temp table -> merge` 路径,用于判断是否值得实现 COPY。

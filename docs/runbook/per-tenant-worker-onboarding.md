@@ -46,7 +46,7 @@ per-tenant:    batch.task.dispatch.{type}.{tenantId}
    （`batch-orchestrator/.../application.yml:177`，**默认已是 TENANT**）。
    只有这样该租户任务才会被发到 `base.{tenantId}` 后缀 topic。
 
-> 第 4 层兜底：即便订阅/路由配错，`AbstractTaskConsumer.acceptsConfiguredTenantScope()`
+> 第 4 层回退：即便订阅/路由配错，`AbstractTaskConsumer.acceptsConfiguredTenantScope()`
 > 在运行期仍会拒绝 `tenant-id` 不匹配的消息（`default-tenant` 通配除外）。这是 backstop，
 > 不能替代上面三要素——否则任务被拒后只是进 DLQ，不会被正确的池消费。
 

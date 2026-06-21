@@ -13,7 +13,7 @@
 
 ### 1. Console 高风险控制器缺少角色授权
 
-`ConsoleSecurityConfiguration` 对未显式匹配的 `/api/console/**` 只要求登录，未兜底要求角色；多个控制器没有 `@PreAuthorize`。结果是任意已认证用户可访问审批、文件治理、批次日重放、结果版本 promote/reject 等高危操作。
+`ConsoleSecurityConfiguration` 对未显式匹配的 `/api/console/**` 只要求登录，未回退要求角色；多个控制器没有 `@PreAuthorize`。结果是任意已认证用户可访问审批、文件治理、批次日重放、结果版本 promote/reject 等高危操作。
 
 证据：
 
@@ -24,7 +24,7 @@
 - `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleResultVersionController.java:26`
 - `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:26`
 
-建议：所有写操作控制器补齐最小权限 `@PreAuthorize`；SecurityFilterChain 增加 `/api/console/**` 的保守兜底角色；补回越权回归测试。
+建议：所有写操作控制器补齐最小权限 `@PreAuthorize`；SecurityFilterChain 增加 `/api/console/**` 的保守回退角色；补回越权回归测试。
 
 ### 2. 文件治理 BFF 缺少租户隔离校验
 

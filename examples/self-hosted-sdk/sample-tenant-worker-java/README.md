@@ -61,7 +61,7 @@ public SdkTaskTypeDescriptor descriptor() {
 3. **console 查询** — 租户/平台管理员经 `GET /api/console/custom-task-types?tenantId=` 列出、`/{taskTypeCode}` 看 descriptor 全文(API-P3-1),据 `inputSchema` 渲染表单、据 `defaults` 预填。
 4. **派单合并** — orchestrator 派单时按 `descriptor.defaults < job default_params < node.parameters` 三级合并,并对 `${bizDate}` 等模板变量做替换(ORCH-P3-2b),合并后的 `effective_parameters` 落 `job_task`(ORCH-P3-3)。
 
-> **凭据纪律**:SFTP 密码 / S3 secret 等敏感值**禁止**走 `defaults` —— 它们会落库 `custom_task_type_registry` 并回显 console。凭据一律走 worker 进程的环境变量。
+> **凭据纪律**:SFTP 密码 / S3 secret 等敏感值**禁止**走 `defaults` —— 它们会写入数据库 `custom_task_type_registry` 并回显 console。凭据一律走 worker 进程的环境变量。
 
 ## 验证
 

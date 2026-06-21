@@ -19,7 +19,7 @@ public class BizException extends RuntimeException {
   private final String messageKey;
   private final transient Object[] messageArgs;
 
-  /** ADR-012 失败分类。null 时由 orchestrator 端 FailureClassifier 兜底；显式声明优先级最高。 */
+  /** ADR-012 失败分类。null 时由 orchestrator 端 FailureClassifier 回退；显式声明优先级最高。 */
   private final FailureClass failureClass;
 
   /** 历史 literal 构造器:message 是字面量,ExceptionHandler 直接透出。 */
@@ -98,7 +98,7 @@ public class BizException extends RuntimeException {
     return messageArgs;
   }
 
-  /** ADR-012 显式失败分类;null = 由 FailureClassifier 兜底推断。 */
+  /** ADR-012 显式失败分类;null = 由 FailureClassifier 回退推断。 */
   public FailureClass getFailureClass() {
     return failureClass;
   }

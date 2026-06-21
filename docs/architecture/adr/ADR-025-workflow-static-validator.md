@@ -42,7 +42,7 @@
 | V2 | 不可达节点（从 START 走不到） | ERROR |
 | V3 | 不可终止节点（走不到 END） | ERROR |
 | V4 | DSL 引用 nodeCode 不存在 | ERROR |
-| V5 | DSL 引用 output key 在上游 outputs 契约表里没声明 | WARN（暂为 WARN，下游 worker 自己 fail 兜底） |
+| V5 | DSL 引用 output key 在上游 outputs 契约表里没声明 | WARN（暂为 WARN，下游 worker 自己 fail 回退） |
 | V6 | 跨日依赖 offset 解析失败（业务日历不识别） | ERROR |
 | V7 | 跨日依赖 range 跨度 > 90 天（接 ADR-018 上限） | ERROR |
 | V8 | 跨日依赖 OPTIONAL 节点的 output 被下一日 REQUIRED 引用（传染性退化） | ERROR |
@@ -133,7 +133,7 @@ public class ImportLoadStep implements StepPlugin { ... }
 - IT：批量导入 100 个 workflow，1 个错全部拒绝（all-or-nothing）
 - E2E：跨日依赖配错 → enable 时拒绝 + 错误清单可见
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|

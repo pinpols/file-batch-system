@@ -39,7 +39,7 @@
     </update>
 
     <!--
-      列出早于 cutoffYmd 的天级子分区,排除 DEFAULT 兜底分区(名为 process_staging_default,不匹配正则)。
+      列出早于 cutoffYmd 的天级子分区,排除 DEFAULT 回退分区(名为 process_staging_default,不匹配正则)。
       relname 形如 process_staging_p20260607,截末 8 位日期串按字典序比较(定宽等价数值序)。
     -->
     <select id="listExpiredDailyPartitions" resultType="java.lang.String">

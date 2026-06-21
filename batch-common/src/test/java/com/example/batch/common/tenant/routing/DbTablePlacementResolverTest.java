@@ -32,7 +32,7 @@ class DbTablePlacementResolverTest {
   private final AtomicLong clock = new AtomicLong(1000L);
 
   private DbTablePlacementResolver resolver(FakeRepository repo, long ttlMs) {
-    // pooledShardCount=2 的 hash 兜底,用于验证未登记租户走 hash
+    // pooledShardCount=2 的 hash 回退,用于验证未登记租户走 hash
     HashAndSiloPlacementResolver fallback = new HashAndSiloPlacementResolver(2, Map.of());
     return new DbTablePlacementResolver(repo, fallback, ttlMs, clock::get);
   }
@@ -73,7 +73,7 @@ class DbTablePlacementResolverTest {
   }
 
   @Test
-  @DisplayName("未登记租户:退回 hash 兜底")
+  @DisplayName("未登记租户:退回 hash 回退")
   void missFallsBackToHash() {
     FakeRepository repo = new FakeRepository();
     DbTablePlacementResolver r = resolver(repo, 5000L);
@@ -84,7 +84,7 @@ class DbTablePlacementResolverTest {
   }
 
   @Test
-  @DisplayName("空租户:退回兜底(default key)")
+  @DisplayName("空租户:退回回退(default key)")
   void blankTenantFallsBack() {
     FakeRepository repo = new FakeRepository();
     DbTablePlacementResolver r = resolver(repo, 5000L);

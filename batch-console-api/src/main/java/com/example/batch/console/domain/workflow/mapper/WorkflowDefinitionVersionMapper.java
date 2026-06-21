@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 /**
  * workflow-dag-designer Polish — {@code batch.workflow_definition_version}(V167)读写 mapper。
  *
- * <p>多租 UNIQUE(tenant_id, workflow_definition_id, version)由 DB 兜底;mapper WHERE 一律强制带 tenant_id, 见
+ * <p>多租 UNIQUE(tenant_id, workflow_definition_id, version)由 DB 回退;mapper WHERE 一律强制带 tenant_id, 见
  * MapperXmlTenantGuardArchTest 守护。
  */
 public interface WorkflowDefinitionVersionMapper {

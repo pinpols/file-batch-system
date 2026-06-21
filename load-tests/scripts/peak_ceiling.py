@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""多租户并发洪峰 — 单机控制面吞吐天花板压测。
+"""多租户并发峰值流量 — 单机控制面吞吐天花板压测。
 
 对 ta/tb/tc 等比并发 launch 轻量 atomic_sql_demo(纯控制面:orchestrator+DB+Kafka+worker,
 不含重 worker CPU),按梯度抬升 offered load,测每级的:

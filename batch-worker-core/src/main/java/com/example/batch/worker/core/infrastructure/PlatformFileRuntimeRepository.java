@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@code createFileRecord} / {@code updateFileStatus} / {@code updateFileMetadata} — 文件记录管理
  *   <li>{@code ensurePipelineDefinition} / {@code createPipelineInstance} — Pipeline 生命周期
  *   <li>{@code startStepRun} / {@code finishStepRun} — 步骤运行记录
- *   <li>{@code insertFileErrorRecord} — 坏记录落库
+ *   <li>{@code insertFileErrorRecord} — 坏记录写入数据库
  *   <li>{@code appendAudit} — 审计日志
  * </ul>
  */

@@ -28,7 +28,7 @@
 **规则**：`SET NOT NULL` 前必须有一个：
 ```sql
 DELETE FROM batch.<table> WHERE tenant_id IS NULL;
--- 或显式 backfill 兜底
+-- 或显式 backfill 回退
 UPDATE batch.<table> SET tenant_id='__ORPHAN__' WHERE tenant_id IS NULL;
 ```
 
@@ -65,7 +65,7 @@ END $$;
 
 ### 5. FK `ON DELETE CASCADE` 不用于审计 / 长寿数据
 
-**反例**：[V119](../../db/migration/V119__job_partition_fk_cascade.sql) 把 `job_execution_log.job_partition_id` 改 CASCADE，意图是 cleanup 序列遗漏时兜底。结果是 partition 删除时**整条 audit log 跟着物理删**——审计追溯权威被静默 wipe。R7 收尾 V128 改 `SET NULL`。
+**反例**：[V119](../../db/migration/V119__job_partition_fk_cascade.sql) 把 `job_execution_log.job_partition_id` 改 CASCADE，意图是 cleanup 序列遗漏时回退。结果是 partition 删除时**整条 audit log 跟着物理删**——审计追溯权威被静默 wipe。R7 收尾 V128 改 `SET NULL`。
 
 **规则**：
 - 审计表 / 业务长寿表 → `ON DELETE SET NULL`（解除引用，保数据）
@@ -79,7 +79,7 @@ END $$;
 **规则**：
 - 新加归档表 → 同 PR 加入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES`
 - 热表 `ALTER ADD COLUMN` → 同 PR 加 `ALTER archive.<x>_archive ADD COLUMN`（V77 → V79 三轮同步是反例参考）
-- 启动期 drift check 是最后兜底，不是替代
+- 启动期 drift check 是最后回退，不是替代
 
 ### 7. `CHECK` 状态机枚举二次扩展 → release-engineering 锁序
 

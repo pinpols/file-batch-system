@@ -18,12 +18,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /**
  * workflow_run 终态事件 outbox 写入。
  *
- * <p>在 SUCCESS / FAILED / TERMINATED 状态切换的同事务内落库一条 {@code outbox_event}（{@code
+ * <p>在 SUCCESS / FAILED / TERMINATED 状态切换的同事务内写入数据库一条 {@code outbox_event}（{@code
  * aggregate_type=WORKFLOW_RUN}，{@code event_type=WORKFLOW_TERMINAL}），由 OutboxForwarder 异步投递到 Kafka
  * topic {@code batch.workflow.terminal.v1}，给 SLA / 监控 / webhook 消费者一份事务一致的工作流终态信号。
  *
  * <p>幂等键 {@code tenantId:workflow:{id}:terminal}：同一 workflow_run 重复进入终态（理论上由前态守护拦掉）也只会落一条 NEW， 重复
- * insert 由 outbox_event 的唯一约束兜底（见 V61 迁移）。
+ * insert 由 outbox_event 的唯一约束回退（见 V61 迁移）。
  */
 @Service
 @RequiredArgsConstructor

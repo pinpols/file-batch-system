@@ -96,7 +96,7 @@ public class BatchDayReplayTerminalReconciler {
    * <ol>
    *   <li>rerun_instance_id == jobInstanceId 精确反查(本 reconciler 第一次执行就会回填
    *       rerun_instance_id,后续重入/重试天然命中);
-   *   <li>(sessionId, sourceInstanceId == jobInstanceId 的父 source) 精确反查 —— 兜底覆盖单次首报场景,只要
+   *   <li>(sessionId, sourceInstanceId == jobInstanceId 的父 source) 精确反查 —— 回退覆盖单次首报场景,只要
    *       jobInstanceId 是 rerun 实例本身,会与 entry.rerun_instance_id 匹配走分支 1;若上游传的是 source 实例 id(legacy
    *       路径),走分支 2;
    *   <li>退化到 (sessionId, tenantId, jobCode) 线性扫第一条 —— 仅在 source/rerun 都对不上时使用,保留向后兼容。
@@ -121,7 +121,7 @@ public class BatchDayReplayTerminalReconciler {
         return bySource;
       }
     }
-    // 3) jobCode 兜底
+    // 3) jobCode 回退
     List<BatchDayReplayEntryEntity> all = entryMapper.selectBySessionId(sessionId);
     if (all == null) {
       return null;

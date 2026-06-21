@@ -12,7 +12,7 @@
 |---|---|---|---|
 | Phase 0 | `ADR-041 控制总额贯穿闸`(设计) | 1(docs) | 立 ADR |
 | Phase 1 | 对账完整性闭环 | ~5 | 全部不动架构/不越界 |
-| Phase 2 | 可靠性 / 长跑 / 洪峰 | ~3 | 含 1 个需小 ADR |
+| Phase 2 | 可靠性 / 长跑 / 峰值流量 | ~3 | 含 1 个需小 ADR |
 | Phase 3 | 结算治理 / 合规 | ~4 | 含 1 个需 ADR-021 对齐 |
 | Phase 4 | 调度 / 到达 / 准实时 | ~4 | 多数需 ADR |
 | **合计** | | **≈ 1–2 ADR + 16 实现 PR(约 18 PR)** | 多周程序 |
@@ -33,13 +33,13 @@
 
 > 这 5 条是「一个东西的五个面」,建议在 ADR-041 下统一设计、分 PR 落地。完成后系统「结算级对账」短板补上大半。
 
-## Phase 2 — 可靠性 / 长跑 / 洪峰（~3 PR）
+## Phase 2 — 可靠性 / 长跑 / 峰值流量（~3 PR）
 
 | PR | 内容 | 模块 | 备注 |
 |---|---|---|---|
 | 2.1 | **长任务 task 级心跳**(atomic 执行中续 task 心跳,防长 shell/sql 被误判 worker 死) | worker-atomic + core | 直接 |
 | 2.2 | **ADR-038 checkpoint/resume 接入** `LoadStep`/`GenerateStep`(表+store 已就绪,接 advance 调用) | worker-core/import/export | 已有 ADR-038 |
-| 2.3 | **准入控制 / 过载软节流**(硬拒改软节流/排队,洪峰不误拒正常请求) | orchestrator | ⚠️ 需小 ADR 决策 |
+| 2.3 | **准入控制 / 过载软节流**(硬拒改软节流/排队,峰值流量不误拒正常请求) | orchestrator | ⚠️ 需小 ADR 决策 |
 
 ## Phase 3 — 结算治理 / 合规（~4 PR）
 

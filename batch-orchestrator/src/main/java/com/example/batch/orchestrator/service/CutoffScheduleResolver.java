@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li>{@code cutoffSchedule} JSONB 字符串（schema 见 ADR-023 §决策）；
  *   <li>{@code bizDate} 当前批次日；
- *   <li>{@code defaultCutoffTime} business_calendar.cutoff_time 兜底。
+ *   <li>{@code defaultCutoffTime} business_calendar.cutoff_time 回退。
  * </ul>
  *
  * <p>解析顺序：

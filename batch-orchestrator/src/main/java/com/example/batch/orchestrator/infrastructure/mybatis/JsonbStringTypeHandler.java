@@ -23,7 +23,7 @@ public class JsonbStringTypeHandler extends BaseTypeHandler<JsonbString> {
   @Override
   public void setNonNullParameter(
       PreparedStatement ps, int i, JsonbString parameter, JdbcType jdbcType) throws SQLException {
-    // 写路径在 mapper xml 内用 cast(#{...} as jsonb)，本方法理论上不被调用；保留兜底。
+    // 写路径在 mapper xml 内用 cast(#{...} as jsonb)，本方法理论上不被调用；保留回退。
     ps.setString(i, parameter.getValue());
   }
 

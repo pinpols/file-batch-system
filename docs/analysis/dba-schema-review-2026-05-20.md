@@ -14,7 +14,7 @@ Schema 整体已较为成熟：
 - **多租户隔离**：`tenant_id` 普遍下沉到业务表（V84/V85 已修复 workflow_node、workflow_edge），UNIQUE 约束大多包含 `tenant_id`。
 - **约束体系**：CHECK 枚举（status、priority 范围）、UNIQUE、partial UNIQUE（V124 修复 NULL 绕过）覆盖较全。
 - **归档机制**：`archive.*` 影子库 + `ArchiveSchemaDriftCheck` 启动校验已建立。
-- **持续硬化迹象**：V84/V85（tenant 收口）、V124/V127（约束 NOT VALID + VALIDATE）、V130–V132（console_operation_audit + 归档 + 策略种子）。
+- **持续硬化迹象**：V84/V85（tenant 收敛）、V124/V127（约束 NOT VALID + VALIDATE）、V130–V132（console_operation_audit + 归档 + 策略种子）。
 
 **主要风险集中在三处**：
 
@@ -54,7 +54,7 @@ Schema 整体已较为成熟：
 ### 3.3 workflow_run 主键不含 tenant_id
 - **证据**：V5 创建 `workflow_run` PK 仅为 `(id)`，V124 增加部分 UNIQUE 但 PK 仍未含租户。
 - **影响**：跨租户隔离仅靠应用层 WHERE，DAO 若漏带 tenant_id 即穿透。
-- **建议**：添加 `UNIQUE(tenant_id, id)` 兜底索引；审计 workflow_run 查询路径强制 tenant_id 过滤；可考虑在 `BaseTenantInterceptor` 加强制断言。
+- **建议**：添加 `UNIQUE(tenant_id, id)` 回退索引；审计 workflow_run 查询路径强制 tenant_id 过滤；可考虑在 `BaseTenantInterceptor` 加强制断言。
 
 ### 3.4 V124 NOT VALID 约束的窗口期风险
 - **证据**：V124 引入 `NOT VALID` CHECK/FK，V127 VALIDATE。
@@ -192,7 +192,7 @@ Schema 整体已较为成熟：
 | P1 | job_instance 索引整合 + biz_date 索引 | 调度 | 1–2 天 |
 | P1 | NOT VALID 守护 + drift 列级比对 | 平台 / CI | 1 天 |
 | P2 | storage_path TEXT、event_delivery_log FK 索引、CHECK 补齐 | 平台 | 0.5 天 |
-| P2 | workflow_run 兜底 UNIQUE + DAO 审计 | 工作流 | 1 天 |
+| P2 | workflow_run 回退 UNIQUE + DAO 审计 | 工作流 | 1 天 |
 
 ---
 

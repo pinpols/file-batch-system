@@ -197,7 +197,7 @@ class SdkAbstractImportHandlerTest {
   }
 
   @Test
-  @DisplayName("loadBatch 中途抛异常 → 行流仍 close()(try-with-resources 兜底,不泄露)")
+  @DisplayName("loadBatch 中途抛异常 → 行流仍 close()(try-with-resources 回退,不泄露)")
   void shouldCloseRowStream_whenLoadBatchThrowsMidIteration() {
     // 准备
     RecordingImportHandler handler = new RecordingImportHandler(rows(100), 30, false, false, true);

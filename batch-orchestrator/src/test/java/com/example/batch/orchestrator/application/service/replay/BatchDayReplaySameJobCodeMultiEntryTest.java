@@ -119,7 +119,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     // 断言
     verify(entryMapper)
         .updateStatus(eq(201L), eq(ENTRY_SUCCEEDED), eq(7100L), any(), any(), any(), any(), any());
-    // 不需要 source 兜底也不需要线性扫
+    // 不需要 source 回退也不需要线性扫
     verify(entryMapper, org.mockito.Mockito.never())
         .selectBySessionAndSourceInstanceId(anyLong(), anyString(), anyLong());
     verify(entryMapper, org.mockito.Mockito.never()).selectBySessionId(anyLong());

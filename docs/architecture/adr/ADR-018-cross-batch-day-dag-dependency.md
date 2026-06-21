@@ -14,7 +14,7 @@
   - **月度汇总**：5 月报表读取 5/1 ~ 5/31 共 31 个日表；
   - **T+5 调账**：T+5 的 settlement job 必须等 T 日的清算 EFFECTIVE；
   - **回写式补数**：T+1 的对账若发现 T 日数据错，需要先 trigger T 日 result_version promote 再跑 T+1。
-- 当前兜底：worker 自己 SQL 拼 `WHERE biz_date BETWEEN ? AND ?`，orchestrator 失去依赖图的可视化与重放管控；workflow_dependency_guide.md 也明确点出"跨批量日依赖未支持"。
+- 当前回退：worker 自己 SQL 拼 `WHERE biz_date BETWEEN ? AND ?`，orchestrator 失去依赖图的可视化与重放管控；workflow_dependency_guide.md 也明确点出"跨批量日依赖未支持"。
 - ADR-017 一旦落地，"上游某 bizDate 的 EFFECTIVE 版本"成为可寻址锚点，本 ADR 才有意义。
 
 ## 决策（提案）
@@ -155,7 +155,7 @@ CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNN
 ## 不变量
 
 1. 跨日依赖只能引用 `result_version.status='EFFECTIVE'`（除非显式声明 `LATEST_INCLUDING_PENDING`），不引用 RUNNING / FAILED；
-2. 解析失败的引用永远 fail-fast，不会用 stale / partial 数据兜底（杜绝静默错配）；
+2. 解析失败的引用永远 fail-fast，不会用 stale / partial 数据回退（杜绝静默错配）；
 3. `WAITING_DEPENDENCY` 占用资源 = 0：不持锁、不占 worker，只在 reconciler 扫描时短暂消耗 DB；
 4. `CrossDayDependencyResolver` 永远不写状态，只读 + 决策；状态变更由 reconciler / dispatcher 写。
 
@@ -166,7 +166,7 @@ CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNN
 - E2E：5 月月度汇总 workflow 拉 31 个日表 EFFECTIVE 跑通
 - 性能基准：30 条依赖项的解析 < 50ms（连 DB cache hit）
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|
@@ -179,7 +179,7 @@ CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNN
 
 - ❌ **不让 workflow_run 携带多 bizDate**（gather 模型）—— 已在「替代方案 B」明确拒绝；状态机二维笛卡尔不可承受
 - ❌ **不允许跨日依赖引用 RUNNING / FAILED 版本** —— 不变量 #1；唯一让步是显式声明 `LATEST_INCLUDING_PENDING`（消费 PENDING 的版本由 ops 自负风险）
-- ❌ **不静默兜底 stale / partial 数据** —— 不变量 #2；解析失败永远 fail-fast 写 audit log
+- ❌ **不静默回退 stale / partial 数据** —— 不变量 #2；解析失败永远 fail-fast 写 audit log
 - ❌ **不在 worker 内部做依赖解析** —— 解析必经 orchestrator，保留单一状态主机 + 重放可控（不变量 #4）
 - ❌ **v1 不做"按 partition 跨日依赖"** —— 跨日依赖只到 job-level；如确需 partition-level 走 ADR-017 §开放问题 #1 的扩展路径
 

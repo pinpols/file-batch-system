@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * P3-3 archive 系列：outbox_event 自动归档配置（{@code batch.outbox.archive}）。
  *
- * <p>对应人工兜底脚本 {@code scripts/db/cleanup-outbox-events.sql}（同删除语义，可手工补充清理）。
+ * <p>对应人工回退脚本 {@code scripts/db/cleanup-outbox-events.sql}（同删除语义，可手工补充清理）。
  *
  * <p>策略：
  *

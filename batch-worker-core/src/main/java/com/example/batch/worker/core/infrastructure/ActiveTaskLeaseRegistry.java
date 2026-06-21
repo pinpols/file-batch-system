@@ -259,7 +259,7 @@ public class ActiveTaskLeaseRegistry {
    * <ul>
    *   <li>只用于优雅停机阶段：停止拉取新任务后，等待已有任务自然结束
    *   <li>不抛异常：避免 shutdown hook 因异常导致更糟的退出路径
-   *   <li>超时返回：保证不会无限阻塞进程退出
+   *   <li>超时返回：保证不会无限阻写入程退出
    * </ul>
    *
    * @return {@code true} 表示在超时前已干净排空，{@code false} 表示触发超时（仍有未完成任务）或被中断

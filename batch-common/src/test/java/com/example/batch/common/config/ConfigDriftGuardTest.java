@@ -70,7 +70,7 @@ class ConfigDriftGuardTest {
           "batch.mq.topics.dead-letter");
 
   /**
-   * 已收口到单点的键：这些键必须只从 {@code batch-defaults.yml}（值经 {@code ${ENV:default}} 解析） + {@code .env} / helm
+   * 已收敛到单点的键：这些键必须只从 {@code batch-defaults.yml}（值经 {@code ${ENV:default}} 解析） + {@code .env} / helm
    * secret 注入，**禁止**在任何模块的 application-local.yml 里重复声明（避免凭据/基础设施配置扩散到各模块）。
    *
    * <p>与 {@link #OWNED_KEYS} 的区别：OWNED_KEYS 守护 application.yml + 非 local profile；本集合专门守护
@@ -189,7 +189,7 @@ class ConfigDriftGuardTest {
     }
     assertThat(scatter)
         .as(
-            "application-local.yml 不应重复声明已收口到单点的键（kafka bootstrap / KMS / S3 凭据）；"
+            "application-local.yml 不应重复声明已收敛到单点的键（kafka bootstrap / KMS / S3 凭据）；"
                 + "本机如需不同值请改 .env 的对应 ENV 变量，不要在 local-yml 写死（见 CONSOLIDATED_LOCAL_KEYS 注释）")
         .isEmpty();
   }

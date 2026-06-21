@@ -47,7 +47,7 @@ public class BatchTimezoneProvider {
   /**
    * 平台默认业务时区。
    *
-   * <p>来自 batch.timezone.default-zone。配置为空或非法时，兜底 Asia/Shanghai。永远非 null。
+   * <p>来自 batch.timezone.default-zone。配置为空或非法时，回退 Asia/Shanghai。永远非 null。
    */
   public ZoneId defaultZone() {
     return defaultZone;

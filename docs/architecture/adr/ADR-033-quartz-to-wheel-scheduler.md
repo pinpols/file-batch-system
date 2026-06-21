@@ -51,7 +51,7 @@
 - **时间轮 tick** = 100ms(批处理 SLA 够用,实时交易场景不适用 — SLA 矩阵见 [`quartz-replacement-design.md`](../quartz-replacement-design.md) §4)
 - **leader 选举**:ShedLock(已在用)选 1 trigger 实例为 leader,只 leader 推 trigger 到时间轮
 - **滑动窗口预扫**:每分钟扫"未来 5 min 内将 fire"的 trigger 推到内存时间轮;内存 dedup set 防重复 push
-- **fire 强约束**:DB 加 `UNIQUE(trigger_id, scheduled_fire_time)` 兜底,GC pause + 锁过期场景应用层幂等防不住的双 fire 由 DB 兜
+- **fire 强约束**:DB 加 `UNIQUE(trigger_id, scheduled_fire_time)` 回退,GC pause + 锁过期场景应用层幂等防不住的双 fire 由 DB 兜
 - **failover fast-path**:`onLeaderAcquire` 立即扫一次窗口,不等下一个 minute tick,避免冷启动 30s+ delay
 - **cron 解析**:**继续用 Quartz 库的 `CronExpression`**,不自研(已是事实标准,跟当前 trigger 语义零差异)
 
@@ -109,8 +109,8 @@
 
 ## 5. 关联文档
 
-- [`docs/architecture/quartz-replacement-evaluation.md`](../quartz-replacement-evaluation.md) — 战略层评估(为什么换、何时换的 5 项风险兜底校准)
-- [`docs/architecture/quartz-replacement-design.md`](../quartz-replacement-design.md) — 战术层实施(详细架构 + 5 项风险兜底 + Pre-flight Checklist)
+- [`docs/architecture/quartz-replacement-evaluation.md`](../quartz-replacement-evaluation.md) — 战略层评估(为什么换、何时换的 5 项风险回退校准)
+- [`docs/architecture/quartz-replacement-design.md`](../quartz-replacement-design.md) — 战术层实施(详细架构 + 5 项风险回退 + Pre-flight Checklist)
 - [`docs/runbook/quartz-capacity-baseline.md`](../../runbook/quartz-capacity-baseline.md) — 当前 Quartz 容量基线测算
 - [`scripts/db/quartz-replacement-preflight-scan.sql`](../../../scripts/db/quartz-replacement-preflight-scan.sql) — 切换前 SQL 预扫(cron 兼容性 / fire 唯一约束验证)
 - [`docs/analysis/todo-master.md`](../../analysis/todo-master.md) §三-E — Quartz 切换 backlog 7 项(staging/ops 配合)

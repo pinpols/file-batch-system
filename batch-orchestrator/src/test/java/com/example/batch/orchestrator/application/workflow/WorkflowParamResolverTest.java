@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
  * <ol>
  *   <li>语法非法($.foo / $$.x)→ BizException
  *   <li>未知 node code → BizException
- *   <li>nodes 引用 但 output 缺字段 → 返回 null(非 fail-fast,业务侧兜底)
+ *   <li>nodes 引用 但 output 缺字段 → 返回 null(非 fail-fast,业务侧回退)
  * </ol>
  */
 class WorkflowParamResolverTest {
@@ -94,7 +94,7 @@ class WorkflowParamResolverTest {
 
   @Test
   void resolve_knownNodeButMissingOutputField_returnsNull() {
-    // 节点存在,output 上报但没有该 key → null fallback(让业务侧 null check 兜底)
+    // 节点存在,output 上报但没有该 key → null fallback(让业务侧 null check 回退)
     WorkflowRunContext ctx = ctx(Map.of("SETTLE", Map.of("fileId", 1L)), Map.of());
     assertThat(resolver.resolve("$.nodes.SETTLE.output.unknownKey", ctx)).isNull();
   }

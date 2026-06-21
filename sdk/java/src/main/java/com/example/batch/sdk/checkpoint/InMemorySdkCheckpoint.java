@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * JdbcSdkCheckpoint} 或租户自家控制表实现。
  *
  * <p>注意:这里的 {@link #save} 是单纯写 Map,<b>不提供业务数据同事务</b>(进程内 Map 没有事务概念)。它只用来跑通续跑 / 取消的协议语义, 真要的「业务 +
- * 断点同事务」原子性由 JDBC 实现兜底。
+ * 断点同事务」原子性由 JDBC 实现回退。
  */
 public final class InMemorySdkCheckpoint implements SdkCheckpoint {
 

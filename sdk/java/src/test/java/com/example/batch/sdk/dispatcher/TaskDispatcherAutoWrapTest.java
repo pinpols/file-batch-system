@@ -407,7 +407,7 @@ class TaskDispatcherAutoWrapTest {
     MismatchHandler handler = new MismatchHandler();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
-    // 执行 — dispatcher 兜底把异常转 fail report,不抛出
+    // 执行 — dispatcher 回退把异常转 fail report,不抛出
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
     // 断言

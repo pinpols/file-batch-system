@@ -37,7 +37,7 @@ public class WheelSchedulerConfiguration {
    * 雪崩。
    *
    * <p>改为:wheel worker 仅 submit,真正的 fire 逻辑跑在本池。{@code CallerRunsPolicy} 让 wheel worker
-   * 兜底执行,提供背压而非丢 fire(关键 — 丢 fire 后 next_fire_time 不推进会反复重试)。
+   * 降级执行,提供背压而非丢 fire(关键 — 丢 fire 后 next_fire_time 不推进会反复重试)。
    *
    * <p>WheelMetrics 注册 {@code batch.trigger.wheel.fire.queue.size} gauge 监控队列堆积。
    */

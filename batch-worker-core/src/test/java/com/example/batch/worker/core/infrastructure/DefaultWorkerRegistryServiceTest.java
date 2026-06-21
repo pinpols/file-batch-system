@@ -26,7 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * <ul>
  *   <li>register 远程响应缺时间戳时本地补齐 registeredAt + lastHeartbeatAt
  *   <li>renew 心跳后刷新本地 lastHeartbeatAt
- *   <li>updateStatus null/blank 兜底为 ONLINE
+ *   <li>updateStatus null/blank 回退为 ONLINE
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
@@ -107,7 +107,7 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
-  @DisplayName("updateStatus: null status 兜底为 ONLINE,转发到 client")
+  @DisplayName("updateStatus: null status 回退为 ONLINE,转发到 client")
   void updateStatus_nullStatus_fallsBackToOnline() {
     WorkerRegistration input = new WorkerRegistration();
     when(client.updateStatus(any())).thenReturn(input);
@@ -120,7 +120,7 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
-  @DisplayName("updateStatus: blank status 兜底为 ONLINE")
+  @DisplayName("updateStatus: blank status 回退为 ONLINE")
   void updateStatus_blankStatus_fallsBackToOnline() {
     WorkerRegistration input = new WorkerRegistration();
     when(client.updateStatus(any())).thenReturn(input);

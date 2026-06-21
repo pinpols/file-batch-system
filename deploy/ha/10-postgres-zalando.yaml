@@ -72,4 +72,4 @@ spec:
   #   - 生产:AWS_S3_ENDPOINT=<集群外/异地 S3>(独立故障域)
   #   - dev/staging:AWS_S3_ENDPOINT=http://minio.minio.svc:9000(集群内,仅图省事)
   # 备份保留策略(base 份数 / PITR 窗口)在 operator configmap 设,别用默认无限堆。
-  # 备份新鲜度由 prometheus PostgresBackupStale 告警兜底(>26h critical)。
+  # 备份新鲜度由 prometheus PostgresBackupStale 告警回退(>26h critical)。

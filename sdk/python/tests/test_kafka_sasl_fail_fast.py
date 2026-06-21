@@ -5,7 +5,7 @@ aiokafka 在 SASL 凭据错 / broker 不可达时会无限 retry,没有内置 ti
 
 - ``test_start_raises_platform_error_when_underlying_start_hangs``
   模拟 aiokafka start 永不返回,断言抛 ``PlatformError(code='kafka_start_timeout')``,
-  且耗时受限于 timeout 常量,**不会**hang 直到 K8s liveness 兜底。
+  且耗时受限于 timeout 常量,**不会**hang 直到 K8s liveness 回退。
 - ``test_start_succeeds_when_underlying_start_quick``
   正常路径(start 立即返回)下不抛、不 timeout、_running=True。
 """

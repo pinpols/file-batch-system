@@ -18,7 +18,7 @@
 
 - **[P2]** `batch-orchestrator/.../redis/OrchestratorConfigCacheService.java:41-42` — `negativeCache` 使用 `ConcurrentHashMap` 作本地 negative TTL 缓存,注释声明"容量上限 10000,到达后整体重置",但翻阅全文件未见对 `NEGATIVE_CACHE_MAX` 进行计数检查并执行重置的实现代码。若 tenant/code 对数量急剧增长(测试注入或攻击性请求),map 无界增长直至 OOM。建议确认重置实现存在(或补充),并添加 Micrometer `gauge` 监控 map 大小。
 
-- **[P2]** `batch-orchestrator/.../mq/OutboxPollScheduler.java:67-69` — ShedLock `LOCK_AT_MOST=120s` 与 `publishingTimeoutSeconds`(默认 120s)完全对齐,存在以下竞争窗口:持锁实例在 GC 停顿或 Kafka 超时期间锁过期被另一实例抢走,原实例继续运行与新实例并发处理同一批 outbox 事件(outbox `UNIQUE(tenant_id, event_key)` ON CONFLICT 可兜底但会产生噪音)。建议在 Javadoc 中明确记录此竞争窗口与幂等兜底语义,或将 `LOCK_AT_MOST` 设为 `publishingTimeoutSeconds + 10s`(130s)以缩小竞争窗口。
+- **[P2]** `batch-orchestrator/.../mq/OutboxPollScheduler.java:67-69` — ShedLock `LOCK_AT_MOST=120s` 与 `publishingTimeoutSeconds`(默认 120s)完全对齐,存在以下竞争窗口:持锁实例在 GC 停顿或 Kafka 超时期间锁过期被另一实例抢走,原实例继续运行与新实例并发处理同一批 outbox 事件(outbox `UNIQUE(tenant_id, event_key)` ON CONFLICT 可回退但会产生噪音)。建议在 Javadoc 中明确记录此竞争窗口与幂等回退语义,或将 `LOCK_AT_MOST` 设为 `publishingTimeoutSeconds + 10s`(130s)以缩小竞争窗口。
 
 ---
 
@@ -26,9 +26,9 @@
 
 - **[P0]** `batch-orchestrator/.../scheduler/BatchDayCutoffScheduler.java:42` / `BatchDayOpenScheduler.java:59` / `StaleCompensationCommandReconciler.java:42` / `ResultVersionRetentionScheduler.java:56` — `@Transactional` 直接标注在 `@Scheduled` 方法(或非 Service 公共方法)上,违反 CLAUDE.md 规则 #4("`@Transactional` 只放 Service 公共方法,不放 Controller / Mapper")。具体风险:`BatchDayCutoffScheduler.scheduledAdvance()` 同时有 `@Transactional`、`@Scheduled`、`@SchedulerLock` 三个注解叠加,ShedLock AOP 与事务 AOP 的代理嵌套顺序依赖 Bean 加载时序,不同 Spring Boot 版本行为差异可能导致锁在事务提交前释放(反之亦然)。业务事务逻辑应下沉至被调用的 Service/Component 方法,Scheduler 只负责触发和异常隔离。(4 处同类违反,建议统一整改。)
 
-- **[P1]** `batch-orchestrator/.../statemachine/DefaultStateMachine.java:52-65` — 状态解析使用反射兜底:对未实现 `Stateful` 的类型依次尝试 `getMethod(name)` + `invoke()` 6 次(`getInstanceStatus`/`getPartitionStatus`/`getTaskStatus`/`getRunStatus`/`getNodeStatus`/`getStatus`),每次调用均无 Method 对象缓存,在高频调度热路径上有可见性能损耗,且对方法名拼写错误无编译期保护。建议要求所有参与状态机的实体强制实现 `Stateful` 接口(可借助 ArchUnit 在测试期守护),彻底移除反射路径,或为已知类型做一次 `ConcurrentHashMap<Class<?>, Method>` 启动期缓存。
+- **[P1]** `batch-orchestrator/.../statemachine/DefaultStateMachine.java:52-65` — 状态解析使用反射回退:对未实现 `Stateful` 的类型依次尝试 `getMethod(name)` + `invoke()` 6 次(`getInstanceStatus`/`getPartitionStatus`/`getTaskStatus`/`getRunStatus`/`getNodeStatus`/`getStatus`),每次调用均无 Method 对象缓存,在高频调度热路径上有可见性能损耗,且对方法名拼写错误无编译期保护。建议要求所有参与状态机的实体强制实现 `Stateful` 接口(可借助 ArchUnit 在测试期守护),彻底移除反射路径,或为已知类型做一次 `ConcurrentHashMap<Class<?>, Method>` 启动期缓存。
 
-- **[P1]** `batch-orchestrator/.../idempotency/DatabaseIdempotencyGuard.java:23-33` — `executeOnce()` 内,占位成功后执行 `action.execute()` 但未将 result 回写到 `idempotency_record`(插入时 result 字段传 null)。后续 `isAlreadyExecuted()` / `selectResultByKey()` 返回 null,调用方无法通过接口拿到上次执行结果,幂等语义不完整("已执行"但结果丢失)。建议在 action 执行成功后调用 `updateResult(tenantId, idempotencyKey, result)` 持久化结果,并在 `@Transactional` 边界内完成,保证 result 与占位行同事务落库。
+- **[P1]** `batch-orchestrator/.../idempotency/DatabaseIdempotencyGuard.java:23-33` — `executeOnce()` 内,占位成功后执行 `action.execute()` 但未将 result 回写到 `idempotency_record`(插入时 result 字段传 null)。后续 `isAlreadyExecuted()` / `selectResultByKey()` 返回 null,调用方无法通过接口拿到上次执行结果,幂等语义不完整("已执行"但结果丢失)。建议在 action 执行成功后调用 `updateResult(tenantId, idempotencyKey, result)` 持久化结果,并在 `@Transactional` 边界内完成,保证 result 与占位行同事务写入数据库。
 
 - **[P1]** `batch-orchestrator/.../mq/OutboxPublishCircuitBreaker.java:99-114` — 半开探测逻辑边缘情况:`allowNow()` 的慢路径在 `redis.evalLong(ALLOW_SCRIPT, ...)` 返回 null 时,`resolvedOpen = 0`,熔断器被强制置为"关闭"态(`state = new CircuitState(0L, ...)`)。若此时 Redis 本身不可用(返回 null 是因网络故障),熔断器将在 Redis 故障期间持续放行所有轮次,失去保护作用。建议区分"Redis 返回 0(正常关闭)"与"Redis 返回 null(不可达)",后者应使用上次缓存的 `state` 而非强制关闭。
 

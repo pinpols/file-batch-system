@@ -11,14 +11,14 @@
 
 | 维度 | 状态 | 关键依据 |
 |---|---|---|
-| 认证 / RBAC | **良好** | console JWT(HS256 + 派生 + jti revocation + IP/UA 软绑定),`/api/console/**` 默认要求至少一角色兜底;trigger / orchestrator 走 `X-Internal-Secret` + 可选 `X-Batch-Api-Key` 双通道,`MessageDigest.isEqual` 常量时间比对 |
+| 认证 / RBAC | **良好** | console JWT(HS256 + 派生 + jti revocation + IP/UA 软绑定),`/api/console/**` 默认要求至少一角色回退;trigger / orchestrator 走 `X-Internal-Secret` + 可选 `X-Batch-Api-Key` 双通道,`MessageDigest.isEqual` 常量时间比对 |
 | CSRF | **可接受** | 全栈 STATELESS + Authorization-Bearer / Cookie SameSite;CSRF disable 配 CORS allowlist + 自定义 header,符合 SPA + HttpOnly cookie 取舍 |
 | CORS | **良好** | `allowedOrigins` 必须显式列表(空 = 同域,不发头);`allowCredentials=true` 但严格禁止 `*` origin |
 | SQL 注入 | **良好** | Mapper XML 全无 `${}` 拼接;原生 `Statement.execute` 仅 4 处,均拼接受控字面量(RLS GUC + atomic sql executor 用户脚本,后者三道闸已挡 OS 能力角色) |
 | SSRF | **良好** | `HttpTaskExecutor` 域名白名单 + glob + `InetAddress.getAllByName` → 内网/loopback/link-local/IPv4-mapped IPv6 全拒;显式 `Redirect.NEVER` 阻断 30x 绕过 |
 | 命令注入 | **良好** | `ShellTaskExecutor` 直接 `execve` 不走 shell;命令白名单 + 正则 + `..` 拒绝 + `env.clear()` + workdir 隔离 |
 | 路径遍历 | **可接受(有内部信任假设)** | Import/Export 都从 pipeline `context.getAttributes()` 取路径,不直接读用户 URL;Forensic 下载从 DB 取 `storagePath`,无 user-supplied filename 拼接 |
-| 凭据落库 | **良好** | `SensitiveDataValidator` 在 atomic shell / sql / storedproc / http 4 个 executor 入口统一拦截,关键字列表 + 大小写/分隔符归一 + 嵌套 Map / Iterable 递归 |
+| 凭据写入数据库 | **良好** | `SensitiveDataValidator` 在 atomic shell / sql / storedproc / http 4 个 executor 入口统一拦截,关键字列表 + 大小写/分隔符归一 + 嵌套 Map / Iterable 递归 |
 | 多租隔离 | **良好** | MyBatis Mapper XML 由 `MapperXmlTenantGuardArchTest` ArchUnit 守护,只允许 6 张白名单(全为 admin 跨租运维);其他 mapper 全无条件 `AND tenant_id = #{tenantId}` |
 | 加密 | **良好** | `BatchObjectCryptoService` AES/GCM/NoPadding + 12B random IV + 128-bit tag + 魔数自描述 + keyRef 轮转 + 密码 Argon2id |
 | 日志泄露 | **良好** | log.warn/info 全部用占位符;ConsoleJwtService binding drift 只打 username/tenant,不打 token;atomic executors error msg 摘要不出 stdout/stderr 全文 |
@@ -30,7 +30,7 @@
 
 1. **设计层面已经走"纵深防御"路线**:每条对外可达路径至少叠 2 层(认证+RBAC,白名单+IP 校验,SensitiveDataValidator+黑名单,租户 mapper guard + RLS GUC)。这种结构降低单点失守爆失败半径。
 2. **守护测试(ArchUnit / boot test)覆盖关键约束**:MapperXmlTenantGuardArchTest / PipelineWorkerAtomicClasspathCheck / `@PostConstruct` 启动期校验在 prod profile 强拒占位符,均能在 PR 阶段拦住误改。
-3. **遗留弱点偏"防御折扣"**:P1-1 / P1-2 不是直接漏洞,而是某层防御被简化(SHA-256 无盐 / profile 缺失默认非 prod);单层失守仍有其他层兜底,但应补回深度。
+3. **遗留弱点偏"防御折扣"**:P1-1 / P1-2 不是直接漏洞,而是某层防御被简化(SHA-256 无盐 / profile 缺失默认非 prod);单层失守仍有其他层回退,但应补回深度。
 4. **生态依赖跟进及时**:Boot 4.0.6 / Netty 4.2.13 / Postgres 42.7.11 都是最新 LTS,过去 30 天连续 OSS 扫描发现 14 个 CVE 已修复。建议自动化日常 CVE 扫描接入 PR gate(security-scan 模块已存在,建议接 cron)。
 
 
@@ -58,7 +58,7 @@
 | P2-2 | A03 Injection | RLS `SET LOCAL` 用字符串拼接 + 手工 escape;虽 GUC 名为常量、tenantId 已 @ValidTenantId 校验,但缺 PG `set_config(.,.,true)` 标准 prepared 替代 |
 | P2-3 | A09 Logging | HTTP executor response body 进 output map,虽截断到 maxResponseBytes 但可能落 Kafka payload + DB;无白/黑名单 header 过滤(`Authorization` 回声 / `Set-Cookie` 透传) |
 | P2-4 | A07 Auth | JWT IP 绑定漂移仅 WARN,移动网/CDN 抖动场景全噪;未提供 strict deny 配置项,纵深价值有限 |
-| P2-5 | A08 Software & Data Integrity | `decryptIfNeeded` 调用方必须 close 流才触发 GCM tag 校验;调用契约靠 Javadoc,无静态检查兜底(早读早丢导致完整性失效) |
+| P2-5 | A08 Software & Data Integrity | `decryptIfNeeded` 调用方必须 close 流才触发 GCM tag 校验;调用契约靠 Javadoc,无静态检查回退(早读早丢导致完整性失效) |
 
 ### P3 — Low / 长期改善
 
@@ -146,7 +146,7 @@ try (PreparedStatement ps = conn.prepareStatement("SELECT set_config('app.tenant
 }
 ```
 
-### P2-3 — HTTP executor 响应头/体可能含敏感数据落库
+### P2-3 — HTTP executor 响应头/体可能含敏感数据写入数据库
 
 **位置**:`batch-worker-atomic/src/main/java/com/example/batch/worker/atomic/http/HttpTaskExecutor.java:505-509`
 
@@ -159,7 +159,7 @@ output.put("responseBody", responseBody);
 
 **修复**:
 1. `responseHeaders` 默认黑名单 `Set-Cookie` / `Authorization` / `Proxy-Authorization` / `Cookie`。
-2. 新增 `batch.worker.executors.http.response-redaction-patterns` 配置,允许租户级 regex 脱敏 body 落库前内容。
+2. 新增 `batch.worker.executors.http.response-redaction-patterns` 配置,允许租户级 regex 脱敏 body 写入数据库前内容。
 3. 文档警示:HTTP executor 不适合调有 PII 返回的下游(应走 SDK 自托管 worker)。
 
 ### P2-4 — JWT IP/UA 绑定漂移仅 WARN
@@ -222,13 +222,13 @@ console-api 仅放 `health/info/prometheus` 3 个具体路径,trigger 这边 `**
 - 黑名单 `*.blockedHostPatterns`(metadata.* / 169.254.*)
 - 解析 IP 后 `isLoopback/isLinkLocal/isSiteLocal/isAnyLocal/isMulticast` + 169.254/16(含 IPv4-mapped IPv6 `::ffff:`)
 - `Redirect.NEVER` 防 30x 二次绕过
-- DNS rebinding 风险:解析的 IP 与实际 socket 用 IP 可能不同(JDK HttpClient 内部缓存),目前依赖白名单兜底,acceptable
+- DNS rebinding 风险:解析的 IP 与实际 socket 用 IP 可能不同(JDK HttpClient 内部缓存),目前依赖白名单回退,acceptable
 
 ### 命令注入 — Shell executor 直接 execve
 
 `ProcessBuilder.start()` 不走 `/bin/sh -c`;参数中 `;`/`&&`/`|` 全字面量。命令白名单 + 正则 + `..` 父目录拒绝 + `env.clear()` + isolated workdir + stdout/stderr 4096 byte ring buffer + waitFor 强制超时 + `destroyForcibly`。
 
-### 凭据落库 — SensitiveDataValidator 覆盖矩阵
+### 凭据写入数据库 — SensitiveDataValidator 覆盖矩阵
 
 | Executor | 入口拦截 | 备注 |
 |---|---|---|
@@ -241,7 +241,7 @@ console-api 仅放 `health/info/prometheus` 3 个具体路径,trigger 这边 `**
 
 ### 多租隔离 — MapperXmlTenantGuardArchTest
 
-`MapperXmlTenantGuardArchTest`(orchestrator + console-api 各一份)扫描所有 mapper XML 中的 `<if test="tenantId != null">AND tenant_id = #{tenantId}</if>` 模式,只允许 6 张 admin 跨租观察台白名单。新增 mapper 走静态扫描兜底,任何"可空"租户过滤即 fail 测试。
+`MapperXmlTenantGuardArchTest`(orchestrator + console-api 各一份)扫描所有 mapper XML 中的 `<if test="tenantId != null">AND tenant_id = #{tenantId}</if>` 模式,只允许 6 张 admin 跨租观察台白名单。新增 mapper 走静态扫描回退,任何"可空"租户过滤即 fail 测试。
 
 ### 加密 — AES/GCM/NoPadding + KMS keyRef + Argon2id
 
@@ -274,8 +274,8 @@ console-api 仅放 `health/info/prometheus` 3 个具体路径,trigger 这边 `**
 
 - console JWT HS256 + SHA-256 派生 key + jti revocation(Redis blacklist) + session_version(单点登录) + token_type 守护
 - 内部 `/internal/**` `X-Internal-Secret`(`MessageDigest.isEqual` 常量时间)+ `X-Batch-Api-Key` 双通道,API key 通道强制写回 resolved tenantId 防租户冒充
-- `@PreAuthorize` 154 处覆盖 74 controller(均覆 ≥ 2 处);`/api/console/**` 兜底要求至少一角色防漏 annotation
-- SecurityContextHolder.clearContext() 兜底放 finally,防容器线程池复用污染
+- `@PreAuthorize` 154 处覆盖 74 controller(均覆 ≥ 2 处);`/api/console/**` 回退要求至少一角色防漏 annotation
+- SecurityContextHolder.clearContext() 回退放 finally,防容器线程池复用污染
 
 ### CSRF / CORS / Headers
 
@@ -308,7 +308,7 @@ console-api 仅放 `health/info/prometheus` 3 个具体路径,trigger 这边 `**
 主链 `outbox_event` → Kafka 走 protobuf-on-JSON,不带凭据。但 `payload` JSONB 列允许任意业务字段;如果上游 controller 漏调 SensitiveDataValidator,会把 password 透传到 Kafka topic + 下游 consumer。
 
 **当前防御**:
-- atomic executor 4 个 SPI 在 worker 入口扫(本节 §4 凭据落库表)
+- atomic executor 4 个 SPI 在 worker 入口扫(本节 §4 凭据写入数据库表)
 - 但 trigger / orchestrator 入口未扫;若 console controller 透传 `parameters` 到 trigger,凭据会先到 `trigger_outbox_event` payload,再被消费时由 worker 拒入(此时已落 DB)
 - **缺口**:trigger fire 入口缺前置 validator;建议在 `TriggerInvocationService` / orchestrator launch handler 各加一层
 
@@ -350,9 +350,9 @@ console-api 上传走 `MultipartFile`(已限制大小,见 application.yml `sprin
 | Spoofing | 伪造 JWT / 伪 worker | HS256 + 派生 + token_type 守护 + IP/UA 软绑定;API key SHA-256 hash + tenant 双匹配 | P1-1(DB 泄露后弱哈希暴力),P2-4(IP 漂移仅 WARN) |
 | Tampering | 改 task params / 改 outbox payload | MyBatis prepared + tenant_id 全 mapper 守护 + outbox 与状态机同事务 | 中等(orchestrator 内部信任假设) |
 | Repudiation | 操作无审计 | `batch_day_operation_audit` + outbox event 全保留 + Forensic export 按 bizDate 圈包 | 低 |
-| Info Disclosure | 凭据落 DB/Kafka/log | SensitiveDataValidator 入口拦截 + 日志占位符 + log 摘要 | P2-3 HTTP response 落库 |
+| Info Disclosure | 凭据落 DB/Kafka/log | SensitiveDataValidator 入口拦截 + 日志占位符 + log 摘要 | P2-3 HTTP response 写入数据库 |
 | DoS | 慢查询 / 写穿 | Statement timeout + RateLimiter(全局+租户)+ maintenance mode + Outbox 退避 | 低 |
-| Elevation of Privilege | 跨租 / 提权 | 全表 tenant_id + RLS + `/api/console/**` 兜底 hasAnyAuthority + @PreAuthorize 154 处 | P1-2 profile 漂移 + bypass-mode 降级 |
+| Elevation of Privilege | 跨租 / 提权 | 全表 tenant_id + RLS + `/api/console/**` 回退 hasAnyAuthority + @PreAuthorize 154 处 | P1-2 profile 漂移 + bypass-mode 降级 |
 
 ### OWASP Top-10 2021 命中表
 
@@ -366,7 +366,7 @@ console-api 上传走 `MultipartFile`(已限制大小,见 application.yml `sprin
 | A06 Vulnerable & Outdated Components | (无,版本均 latest) |
 | A07 Identification & Authentication Failures | P1-1;P2-4 |
 | A08 Software & Data Integrity Failures | P2-5 GCM tag 未必触发 |
-| A09 Security Logging & Monitoring Failures | P2-3 HTTP response 落库;P3-2 logback 散落 |
+| A09 Security Logging & Monitoring Failures | P2-3 HTTP response 写入数据库;P3-2 logback 散落 |
 | A10 SSRF | (无,HttpExecutor 五层防御到位) |
 
 ### Subresource Integrity / Supply chain

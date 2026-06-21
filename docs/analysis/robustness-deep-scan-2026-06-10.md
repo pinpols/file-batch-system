@@ -33,4 +33,4 @@
 
 - `mvn clean compile` 4 模块(common/orchestrator/worker-dispatch/worker-import + 上游)✅
 - 相关单测全部通过:`DefaultDryRunPlanServiceTest`(7)、`SizeBasedPartition*`、`LoadStepCheckpointTest`(5)/`LoadStepTest`(12)/`LoadStepCheckpointPrecheckTest`(6)、`BatchSecurityPropertiesTest`(21)✅
-- 完整 test 留 CI 兜底
+- 完整 test 留 CI 回退

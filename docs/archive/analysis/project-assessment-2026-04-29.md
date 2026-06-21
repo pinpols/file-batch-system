@@ -163,7 +163,7 @@
 | 项 | Commit | 说明 |
 |---|---|---|
 | 半完成重构 #2 | `4e634c7c` | 4×`ERROR_OBJECT_MAPPER` + 4×`loadConfiguredSteps` + 3×`handlePipelineFailure` 上提到基类,消除 ~150 行复制;`AbstractPipelineStepExecutionAdapter:265` 一处 FQN 违规修了 |
-| i18n 业务路径收口 | `23137b2c` | 56 文件横扫 console / orchestrator / trigger / worker 业务路径,BizException 全量从 literal message 迁到 i18n key + args 三元组(配套 9 个 test 同步成 messageKey/messageArgs 行为断言);承接 `c74a9644`(plugin)+ `4e634c7c`(SqlPlugin)同流水线 |
+| i18n 业务路径收敛 | `23137b2c` | 56 文件横扫 console / orchestrator / trigger / worker 业务路径,BizException 全量从 literal message 迁到 i18n key + args 三元组(配套 9 个 test 同步成 messageKey/messageArgs 行为断言);承接 `c74a9644`(plugin)+ `4e634c7c`(SqlPlugin)同流水线 |
 | ops 增量 | `f0eff4ae` | prometheus 告警规则 + seed/load 脚本同步 |
 | 评估快照 | `d325e44a` / `79e3a35b` | 本文档落盘 + 后续追加下一步计划 |
 | S5-d 真删 X-Console-Token compat | `ff20c36f` | 主代码 + yaml + OpenAPI + 测试全量物理删除(9 文件 +20/-168);只留 JWT + SSE ticket + bypass-mode 三条认证链 |
@@ -255,7 +255,7 @@
 | **Stage 2** ✅ | TriggerOutboxRelay 周期发布器(ShedLock 互斥 + FOR UPDATE SKIP LOCKED + 退避)+ 7 单测 | `TriggerOutboxRelay.java` 224 行 + `TriggerOutboxRelayTest` 7/7 全部通过 — `087f6b7a` |
 | **Stage 3** ✅ | DefaultTriggerService 加 outbox 写入分支(同事务) + 灰度开关 `batch.trigger.async-launch.enabled` | `DefaultTriggerService.java:202-225 persistAndForward` 异步路径分支 + `insertPendingAndOutboxOrReturnExisting` 同事务 INSERT — `1ca3a957` |
 | **Stage 4** ✅ | trigger 端 KafkaTriggerEventPublisher impl + ProducerConfig;orchestrator 端 ConsumerConfig + TriggerLaunchConsumer @KafkaListener | `KafkaTriggerEventPublisher.java` 101 行(headers: X-Trace-Id/X-Tenant-Id/X-Envelope-Version) / `TriggerLaunchConsumer.java`(409→ack / 429→ack / runtime→抛出 listener 重试) / `BatchTopics.TRIGGER_LAUNCH_V1` 常量 — `22b330ea` |
-| **Stage 5** ✅(全栈) | 单测 9 + 全 Testcontainer Kafka E2E 6 = 15 全部通过 | (a) 单测 9/9:TriggerLaunchConsumerTest 6 + KafkaTriggerEventPublisherTest 3 — `22b330ea`。(b) **Layer 1** trigger 端 4 个 E2E IT(`TriggerAsyncLaunchE2eIT` in batch-trigger,真起 PG+Kafka):happy path / 同 idempotencyKey 双写防重 / crash recovery / 坏 payload GIVE_UP — **4/4 in 45.89s** — `788b637d`。(c) **Layer 2** 跨模块全链路 E2E(`TriggerAsyncLaunchFullChainE2eIT` in batch-e2e-tests):手工 publish Kafka → orchestrator TriggerLaunchConsumer 真消费 → LaunchApplicationService.launch → job_instance INSERT(含 dedup 兜底验证) — **2/2 in 74.66s** — `68bc49e8`。配套:`E2eTriggerApplication` scaffold、batch-e2e-tests pom 加 trigger 依赖、batch-trigger pom 加 spring-boot exec classifier(让 e2e 模块拉得到普通类) |
+| **Stage 5** ✅(全栈) | 单测 9 + 全 Testcontainer Kafka E2E 6 = 15 全部通过 | (a) 单测 9/9:TriggerLaunchConsumerTest 6 + KafkaTriggerEventPublisherTest 3 — `22b330ea`。(b) **Layer 1** trigger 端 4 个 E2E IT(`TriggerAsyncLaunchE2eIT` in batch-trigger,真起 PG+Kafka):happy path / 同 idempotencyKey 双写防重 / crash recovery / 坏 payload GIVE_UP — **4/4 in 45.89s** — `788b637d`。(c) **Layer 2** 跨模块全链路 E2E(`TriggerAsyncLaunchFullChainE2eIT` in batch-e2e-tests):手工 publish Kafka → orchestrator TriggerLaunchConsumer 真消费 → LaunchApplicationService.launch → job_instance INSERT(含 dedup 回退验证) — **2/2 in 74.66s** — `68bc49e8`。配套:`E2eTriggerApplication` scaffold、batch-e2e-tests pom 加 trigger 依赖、batch-trigger pom 加 spring-boot exec classifier(让 e2e 模块拉得到普通类) |
 | **Stage 6** ✅(文档) | 灰度切换 runbook | `docs/runbook/trigger-async-launch-rollout.md` 225 行(staging 验证 / prod-canary 24h / prod 全量 + 回滚预案 + 24h 对账 SQL + Prometheus 告警建议)— `22b330ea`。**剩余 operational**:实际执行灰度按 runbook 进行 |
 | **Stage 7** ✅(标记) | HttpOrchestratorTriggerAdapter `@Deprecated(forRemoval=true, since="ADR-010 Stage 6")` + DefaultTriggerService.forwardToOrchestrator 首次进入 1 条 deprecation WARN(AtomicBoolean 防刷屏)| `22b330ea`。**剩余**:灰度全量切稳定 1 minor 后物理删除 HTTP 同步路径 |
 
@@ -301,7 +301,7 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
 | # | 项 | 估时 | 触发 |
 |---|---|---|---|
 | a | I4 `buildContext` 模板抽取 | 0.5 天 | 等 4 个 `*JobContext` 出现共同基类时再做(避免现在强抽 scope creep) |
-| b | i18n 测试债二轮扫荡 | 1 天 | 23137b2c 已收 9 处,但 `assertThat.hasMessageContaining` 这类断言全仓再扫一遍兜底 |
+| b | i18n 测试债二轮扫荡 | 1 天 | 23137b2c 已收 9 处,但 `assertThat.hasMessageContaining` 这类断言全仓再扫一遍回退 |
 | c | trigger SecurityIntegrationTest 守护补齐 | 1 天 | S1 已落 Security,但若 CI 还没有"无 token → 401"守护测试,补一个;同款扩到 console/orchestrator |
 | d | 真删 `X-Console-Token` 兼容路径 | 1-2 天 | 当所有前端都切到 JWT 后,从 `ConsoleSecurityProperties` / 应用 yaml / OpenAPI 彻底删除 legacy header 分支(不再 deprecated 而是物理删除) |
 
@@ -317,7 +317,7 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
                        + §10 文档 + e2e seed 锚点) — a9469407(实装) / 8b520102(文档)
   Worker 73 处 failure 迁 i18n 三元组 - c74a9644(V78 八表 errorKey 真生效)
   SqlPlugin i18n key 收尾 - 4e634c7c
-  半完成基类重构 + i18n 业务路径收口 - 4e634c7c / 23137b2c
+  半完成基类重构 + i18n 业务路径收敛 - 4e634c7c / 23137b2c
 
   ★ S3 - ADR-010 trigger → orchestrator 异步解耦 全 7 Stage 完成
     Stage 1: V80 trigger_outbox_event + LaunchEnvelope DTO + Mapper — 9587b8bf

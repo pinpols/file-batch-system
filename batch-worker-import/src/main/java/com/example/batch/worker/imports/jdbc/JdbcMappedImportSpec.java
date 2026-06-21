@@ -75,7 +75,7 @@ public record JdbcMappedImportSpec(
     if (Boolean.TRUE.equals(toBoolean(root.get("standardAuditBindings")))) {
       system = withStandardAuditBindings(system);
     }
-    // 地区维度(per-run):defaultRegion 触发未传 region 时兜底;allowedRegions 非空时作字典校验。
+    // 地区维度(per-run):defaultRegion 触发未传 region 时回退;allowedRegions 非空时作字典校验。
     Object dr = root.get("defaultRegion");
     String defaultRegion = dr == null ? null : String.valueOf(dr).trim();
     List<String> allowedRegions = parseStringList(root.get("allowedRegions"));

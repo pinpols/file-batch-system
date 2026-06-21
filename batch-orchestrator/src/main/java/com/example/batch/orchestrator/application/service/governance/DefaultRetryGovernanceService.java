@@ -65,7 +65,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>避免多处（launch / retry / reclaim）各自拼 Kafka 消息协议，减少漂移风险。
- *   <li>事务边界清晰：DB 状态更新与 outbox 落库同事务，Kafka 投递由 forwarder 异步完成。
+ *   <li>事务边界清晰：DB 状态更新与 outbox 写入数据库同事务，Kafka 投递由 forwarder 异步完成。
  * </ul>
  */
 @Slf4j

@@ -4,11 +4,11 @@
 
 **Goal:** 把全仓对象存储客户端从 `io.minio:minio:8.6.0` 全量换成 `software.amazon.awssdk:s3` v2(同步 + apache-client);MinIO **服务器不动**,只换客户端 SDK。
 
-**Architecture:** S3ObjectStore 是唯一 SDK 收口点(9 方法换 AWS SDK v2);client 构造从 MinioClient 单 bean 变为 S3Client + S3Presigner 双 bean(v2 presign 独立);6 处漏网生产代码 1 处收口 BatchObjectStore、5 处换 SDK;Minio* 类改名 S3*;配置 key 不动。
+**Architecture:** S3ObjectStore 是唯一 SDK 收敛点(9 方法换 AWS SDK v2);client 构造从 MinioClient 单 bean 变为 S3Client + S3Presigner 双 bean(v2 presign 独立);6 处漏网生产代码 1 处收敛 BatchObjectStore、5 处换 SDK;Minio* 类改名 S3*;配置 key 不动。
 
 **Tech Stack:** Java 21、Spring Boot AutoConfiguration、AWS SDK for Java v2(`s3` + `apache-client` + `s3` presigner)、JUnit5 + AssertJ、Testcontainers `MinIOContainer`(server 仍是 MinIO)。
 
-**设计依据:** 本对话已批准的 3 决策(收口边界 / 改名 / 配置不动)。
+**设计依据:** 本对话已批准的 3 决策(收敛边界 / 改名 / 配置不动)。
 
 ---
 
@@ -45,7 +45,7 @@
 | `MinioBucketSupport.java` → `S3BucketSupport.java` | headBucket/createBucket | Rename+Modify |
 | `MinioHealthIndicator.java` → `S3HealthIndicator.java` | headBucket 探活 | Rename+Modify |
 | `BatchObjectStoreAutoConfiguration.java` | 注入 S3Client+S3Presigner 建 S3ObjectStore | Modify |
-| `RemoteFilesystemDispatchSupport.java` | put/stat/remove 收口到 `BatchObjectStore` | Modify(收口) |
+| `RemoteFilesystemDispatchSupport.java` | put/stat/remove 收敛到 `BatchObjectStore` | Modify(收敛) |
 | 5 处漏网 | MinioClient→S3Client / 改 import | Modify |
 | 12 测试文件 | 验证客户端 MinioClient→S3Client | Modify |
 | `docs/runbook/object-storage-s3-backends.md` | 「MinIO Java SDK」→「AWS SDK v2」 | Modify |
@@ -380,14 +380,14 @@ git commit -m "feat(s3): S3ObjectStore/AutoConfig/BucketSupport/HealthIndicator 
 
 **Files:** Modify 6 文件
 
-- [ ] **Step 1: RemoteFilesystemDispatchSupport 收口 BatchObjectStore**
+- [ ] **Step 1: RemoteFilesystemDispatchSupport 收敛 BatchObjectStore**
 
 读 `batch-worker-dispatch/.../channel/RemoteFilesystemDispatchSupport.java` 的 `dispatchOss` / `dispatchNas` 等方法。把 `minioClient.putObject(...)` / `statObject` / `removeObject` 改为调注入的 `BatchObjectStore.put/statSize/delete`。
 > 该类是 static util,需把 `BatchObjectStore` 作参数传入(调用方 OssDispatchChannelAdapter / NasDispatchChannelAdapter 改为注入 `BatchObjectStore` 而非 `MinioClient`)。删 `io.minio.*` import。
 
 - [ ] **Step 2: OssDispatchChannelAdapter / DispatchChannelHealthService — MinioClient → S3Client / BatchObjectStore**
 
-- OssDispatchChannelAdapter:`ObjectProvider<MinioClient>` → `ObjectProvider<BatchObjectStore>`(收口后 dispatch 走 store)。
+- OssDispatchChannelAdapter:`ObjectProvider<MinioClient>` → `ObjectProvider<BatchObjectStore>`(收敛后 dispatch 走 store)。
 - DispatchChannelHealthService:持有 `MinioClient` 仅探活 → 改 `S3Client` headBucket,或注入 `BatchObjectStore`(若只 exists 探活)。读实际用法定。
 
 - [ ] **Step 3: MinioBucketSupport 调用点已在 Task 4 改名,核对 import**
@@ -403,7 +403,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 5: Commit**
 ```bash
 git add batch-worker-dispatch/ batch-orchestrator/ batch-console-api/
-git commit -m "refactor(s3): 6 处漏网换 SDK(RemoteFilesystemDispatchSupport 收口 BatchObjectStore)"
+git commit -m "refactor(s3): 6 处漏网换 SDK(RemoteFilesystemDispatchSupport 收敛 BatchObjectStore)"
 ```
 
 ---
@@ -434,7 +434,7 @@ git commit -m "test(s3): 12 测试验证客户端 MinioClient → S3Client(MinIO
 
 ---
 
-## Task 7: 移除 minio 依赖 + 收口校验 + 文档
+## Task 7: 移除 minio 依赖 + 收敛校验 + 文档
 
 **Files:** Modify 9 pom + `docs/runbook/object-storage-s3-backends.md`
 

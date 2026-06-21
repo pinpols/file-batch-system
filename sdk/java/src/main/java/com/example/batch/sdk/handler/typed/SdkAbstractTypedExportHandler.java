@@ -27,7 +27,7 @@ import java.util.stream.Stream;
  * setFetchSize(N)} 才是真流式,否则 PostgreSQL 默认一次性拉全量结果集超过内存。
  *
  * @param <I> 强类型入参(从 parameters 反序列化)
- * @param <O> 业务结果(序列化进 output;writeOut 自带结果优先,其次 summarize,最后计数器兜底)
+ * @param <O> 业务结果(序列化进 output;writeOut 自带结果优先,其次 summarize,最后计数器回退)
  * @param <R> 行类型
  */
 public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstractTaskHandler {
@@ -58,7 +58,7 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstract
   /** 单行格式化写出(写一行到 sink)。 */
   protected abstract void formatRow(I input, SdkTaskContext ctx, R row) throws Exception;
 
-  /** 收尾(flush / close / upload);返 null 则走 summarize / 计数器兜底。 */
+  /** 收尾(flush / close / upload);返 null 则走 summarize / 计数器回退。 */
   protected SdkTaskResult writeOut(I input, SdkTaskContext ctx, SdkRowResult counts)
       throws Exception {
     return null;

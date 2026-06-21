@@ -3,7 +3,7 @@
 > 落地 `docs/plans/2026-06-13-ha-deployment-plan.md` 阶段 1-3 的**通用 HA**(分支无关:服务 main 镜像,也服务 feature 未分布镜像)。
 > 这些是 **K8s operator CR / manifest 模板**——集群相关项(storageClass、镜像版本、副本数、密钥、域名)用占位符,**ops 按真实集群改后 apply**,并在真集群跑 §验证。本目录文件**不可在本机验证**(无集群),只做语法/结构正确性保证。
 >
-> Citus(阶段 4)**不在此目录**:前置是洪峰 benchmark 达标 + `feature/partition-readiness` 合 main,届时同一 postgres-operator 加 worker 即可,见规划 §2.2 / §4 阶段 4。
+> Citus(阶段 4)**不在此目录**:前置是峰值流量 benchmark 达标 + `feature/partition-readiness` 合 main,届时同一 postgres-operator 加 worker 即可,见规划 §2.2 / §4 阶段 4。
 
 ## 关键选型(对规划的执行期优化)
 

@@ -34,7 +34,7 @@ public interface BatchTaskExecutor {
   /**
    * 真正的执行入口。实现方负责自己的超时 / 资源隔离 / 审计语义。
    *
-   * <p>异常应被 catch 并转 {@link TaskResult#fail(Throwable)};未捕获异常会被上层路由器兜底转 failure response, 但失去业务级错误码
+   * <p>异常应被 catch 并转 {@link TaskResult#fail(Throwable)};未捕获异常会被上层路由器回退转 failure response, 但失去业务级错误码
    * + 友好消息。
    */
   TaskResult execute(TaskContext ctx);

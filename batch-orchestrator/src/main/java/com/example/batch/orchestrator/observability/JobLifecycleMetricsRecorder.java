@@ -24,7 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <ul>
  *   <li>{@code
  *       JobInstanceTerminalStatusApplicationService.updateTerminalStatusAndReconcileChildren} — 运维
- *       / 超时直接收口
+ *       / 超时直接收敛
  *   <li>{@code DefaultTaskOutcomeService.applyTaskOutcome} — worker 上报终态
  * </ul>
  *
@@ -34,7 +34,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *   <li>必须在 {@code @Transactional} 内调用; 无同步上下文时静默 skip(不抛)。
  *   <li>afterCommit 路径再 selectById 拿 createdAt + jobDefinitionId; 多 1 次 SELECT 是 metrics 显式成本,
  *       仅终态切换发生时命中。
- *   <li>整个 try/catch 兜底; metrics 失败不影响业务事务也不抛。
+ *   <li>整个 try/catch 回退; metrics 失败不影响业务事务也不抛。
  * </ul>
  */
 @Slf4j

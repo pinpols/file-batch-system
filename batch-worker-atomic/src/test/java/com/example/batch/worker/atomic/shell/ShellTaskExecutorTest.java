@@ -254,7 +254,7 @@ class ShellTaskExecutorTest {
       // 用 yes + head 模拟大量输出;直接 head 限制不行(进程会被 SIGPIPE 杀)
       // 改用 /bin/echo 重复 yes 串
       props.setMaxStdoutBytes(50);
-      // /usr/bin/yes 输出 "y\n" 无限;timeout 兜底
+      // /usr/bin/yes 输出 "y\n" 无限;timeout 回退
       props.setDefaultTimeout(Duration.ofSeconds(2));
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/usr/bin/yes")));
       // yes 会无限输出直到 reader truncate + drain 完才算结束 → 这里超时也合理

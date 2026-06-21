@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * P1-7:`batch.process_staging` 孤儿清理调度配置,绑定 {@code batch.worker.process.staging-cleanup}。
  *
  * <p>用途:VALIDATE 失败保留 staging 是设计;但 worker 在 COMMIT 后崩溃 / 网络分区导致 FEEDBACK 失败 / 历史 batchKey
- * 重跑后旧行未被覆盖,会留下孤儿 staging 行。本调度作为兜底,按 {@code retentionHours} 删除超过保留期的 staging 行(以 {@code staged_at}
+ * 重跑后旧行未被覆盖,会留下孤儿 staging 行。本调度作为回退,按 {@code retentionHours} 删除超过保留期的 staging 行(以 {@code staged_at}
  * 为准)。
  */
 @Data
@@ -37,7 +37,7 @@ public class ProcessStagingCleanupProperties {
   private int retentionDays = 3;
 
   /**
-   * 预建未来日分区天数。每次 tick 确保 [今天, 今天+preCreateDays] 的日分区都存在,避免写入落到 default 兜底分区。 默认 2 天冗余,容忍调度抖动 /
+   * 预建未来日分区天数。每次 tick 确保 [今天, 今天+preCreateDays] 的日分区都存在,避免写入落到 default 回退分区。 默认 2 天冗余,容忍调度抖动 /
    * worker 短暂离线。
    */
   private int preCreateDays = 2;

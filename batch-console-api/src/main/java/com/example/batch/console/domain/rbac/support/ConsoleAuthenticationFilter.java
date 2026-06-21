@@ -42,7 +42,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <p>历史：第 3 条 Legacy X-Console-Token 共享密钥路径已于 2026-04-30 物理删除（S5-d）。详见
  * docs/analysis/project-assessment-2026-04-29.md §8 S5-d 修订记录。
  *
- * <p>{@code finally clearContext()} 兜底：不论哪条认证链执行或抛异常，都清理 {@code SecurityContextHolder}， 防止容器线程池复用时
+ * <p>{@code finally clearContext()} 回退：不论哪条认证链执行或抛异常，都清理 {@code SecurityContextHolder}， 防止容器线程池复用时
  * ThreadLocal 污染下一个请求。
  */
 @Component
@@ -105,7 +105,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
           }
         }
         if (payload != null) {
-          // R4-P1-1：用 ticket 签发时绑定的真实角色集；空角色（旧数据兼容）走配置默认值兜底。
+          // R4-P1-1：用 ticket 签发时绑定的真实角色集；空角色（旧数据兼容）走配置默认值回退。
           LinkedHashSet<String> authorities =
               payload.authorities().isEmpty()
                   ? new LinkedHashSet<>(properties.getDefaultAuthorities())

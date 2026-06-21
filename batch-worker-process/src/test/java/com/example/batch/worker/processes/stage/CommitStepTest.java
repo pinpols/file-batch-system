@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
  *
  * <ul>
  *   <li>plugin 已解析 → 委托到 plugin.commit() 并返回其结果
- *   <li>plugin 返回 null → 视为 success 兜底
+ *   <li>plugin 返回 null → 视为 success 回退
  *   <li>plugin 未解析（context.resolvedPlugin = null）→ success no-op
  *   <li>dry-run → success no-op，不调 plugin（COMMIT 是最大副作用入口）
  * </ul>
@@ -47,7 +47,7 @@ class CommitStepTest {
   }
 
   @Test
-  @DisplayName("plugin.commit() 返回 null → 兜底成 success(COMMIT)")
+  @DisplayName("plugin.commit() 返回 null → 回退成 success(COMMIT)")
   void shouldReturnSuccess_whenPluginReturnsNull() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.commit(any())).thenReturn(null);

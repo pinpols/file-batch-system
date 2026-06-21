@@ -50,7 +50,7 @@
 | 模块 | 定位 | 依赖边界 |
 |---|---|---|
 | `batch-worker-sdk` | 核心 SDK,非 Spring 租户直接依赖 | 不含 Spring / Boot / MyBatis / Flyway / Redis;继续守 `jar < 2 MB` |
-| `batch-worker-sdk-spring-boot-starter` | 可选适配层,给 Spring Boot 租户省掉手写 `main()` wiring | 依赖 core + `spring-boot-autoconfigure`;不把 Spring 类塞进 core jar |
+| `batch-worker-sdk-spring-boot-starter` | 可选适配层,给 Spring Boot 租户省掉手写 `main()` wiring | 依赖 core + `spring-boot-autoconfigure`;不把 Spring 类引入 core jar |
 
 这是对 CLAUDE.md "固定 10 模块"的显式例外,性质同 `batch-worker-sdk-testkit`:属于 SDK 发布/适配模块,不是新增平台运行时服务模块,不改变 trigger / orchestrator / worker / console-api 主链。比照 ADR-029 的模块数例外,本节作为评审依据;真正创建模块时同步更新 CLAUDE.md 模块说明。
 
@@ -347,7 +347,7 @@ P1.5 后 SDK 核心闭环已通,对照同形态开源系统(control plane + tena
 |---|---|---|
 | Heartbeat 带 progress payload(Temporal Activity heartbeat)| 长任务断点续 — **目前 5 抽象类(ADR-036)+ 业务上无长任务**(租户业务都 stateless 短调用);真需要时 server 加列 + SDK API 一起改 |
 | End-to-end cancel(Temporal/Zeebe job cancel)| 运维 cancel — **lease 超时自动回收够用**;真需要时 server 加 Kafka cancel topic;`SdkTaskHandler.cancel(taskId)` 已有默认 no-op 占位 |
-| Server-side retry policy(Temporal RetryPolicy)| SDK 本地 `fixed(3, 2s)` + server lease 兜底 — **目前足够**,集中配置是大规模治理需要,我们 1~N 个租户先不上 |
+| Server-side retry policy(Temporal RetryPolicy)| SDK 本地 `fixed(3, 2s)` + server lease 回退 — **目前足够**,集中配置是大规模治理需要,我们 1~N 个租户先不上 |
 | Capability tags 完整路由(Temporal Task Queue / GHA labels)| 已部分有(register 上报 `capabilityTags`),**没真"按 tag 派单"诉求**(都按 worker_type 路由够用);扩了用不上 |
 | `SdkTestEngine` 测试框架(Zeebe `ZeebeTestEngine`)| 框架级测试工具 — **目前 0 个真租户**,先看 1-2 个早期租户怎么写测试再决定要不要造轮子,过早抽象跟真需求脱节 |
 

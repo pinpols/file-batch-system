@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
  * <p>守护:
  *
  * <ul>
- *   <li>合法 templateCode 落库,charset/templateType/encryptType 字段透传
+ *   <li>合法 templateCode 写入数据库,charset/templateType/encryptType 字段透传
  *   <li>含空格 / 中文 templateCode → 400(@ValidResourceCode 拦截)
  *   <li>同 tenantId + templateCode 重复创建 → 唯一约束撞
  * </ul>
