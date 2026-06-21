@@ -45,6 +45,8 @@ public final class PipelineRuntimeKeys {
   public static final String FILE_RECORD = "fileRecord";
   public static final String TEMPLATE_CONFIG = "templateConfig";
   public static final String CHANNEL_CONFIG = "channelConfig";
+  public static final String IMPORT_PAYLOAD = "importPayload";
+  public static final String IMPORT_NORMALIZED_PAYLOAD = "normalizedPayload";
   public static final String PARSED_RECORDS_PATH = "parsedRecordsPath";
   public static final String VALIDATED_RECORDS_PATH = "validatedRecordsPath";
   public static final String GENERATED_FILE_PATH = "generatedFilePath";
@@ -61,6 +63,15 @@ public final class PipelineRuntimeKeys {
 
   /** 配合 {@link #IMPORT_LARGE_TEXT_PATH}：spool 文件的原始字符集（Charset 对象）。 */
   public static final String IMPORT_LARGE_TEXT_CHARSET = "importLargeTextCharset";
+
+  public static final String IMPORT_SCHEMA_FIELDS = "schemaFields";
+  public static final String IMPORT_TOTAL_COUNT = "totalCount";
+  public static final String IMPORT_PARSED_COUNT = "parsedCount";
+  public static final String IMPORT_VALIDATED_COUNT = "validatedCount";
+  public static final String IMPORT_CUSTOMER_PAYLOAD_COUNT = "customerPayloadCount";
+  public static final String IMPORT_LOADED_COUNT = "loadedCount";
+  public static final String IMPORT_SKIPPED_COUNT = "skippedCount";
+  public static final String IMPORT_SKIP_THRESHOLD_EXCEEDED = "skipThresholdExceeded";
 
   /** 导出快照：snapshotMode、snapshotTs、sourcePartitions（可 JSON 序列化的 Map） */
   public static final String EXPORT_SNAPSHOT = "exportSnapshot";

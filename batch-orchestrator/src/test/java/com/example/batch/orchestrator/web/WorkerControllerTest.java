@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
+import com.example.batch.orchestrator.config.InternalAuthFilter;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.WorkerController;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -101,6 +102,17 @@ class WorkerControllerTest {
         .andExpect(status().isOk());
 
     verify(workerDrainGovernanceService).warmup("t1", "worker-1");
+  }
+
+  @Test
+  void shouldRejectApiKeyTenantMismatchOnWorkerGovernanceRequest() throws Exception {
+    mockMvc
+        .perform(
+            post("/internal/workers/worker-1/drain")
+                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"tenant-b\",\"timeoutSeconds\":1}"))
+        .andExpect(status().isForbidden());
   }
 
   // SDK Phase 2 §2.3:心跳回包下发 platform directive

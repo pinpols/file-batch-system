@@ -114,6 +114,21 @@
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobInstanceEntity"
             useGeneratedKeys="true" keyProperty="id">
+        with claimed_key as (
+            insert into batch.job_instance_dedup_key (
+                tenant_id,
+                dedup_key,
+                run_attempt,
+                first_biz_date
+            ) values (
+                #{tenantId},
+                #{dedupKey},
+                #{runAttempt},
+                coalesce(#{bizDate}, CURRENT_DATE)
+            )
+            on conflict (tenant_id, dedup_key, run_attempt) do nothing
+            returning 1
+        )
         insert into batch.job_instance (
             tenant_id,
             job_definition_id,
@@ -154,7 +169,8 @@
             sla_alerted_at,
             replay_session_id,
             dry_run
-        ) values (
+        )
+        select
             #{tenantId},
             #{jobDefinitionId},
             #{triggerRequestId},
@@ -197,7 +213,7 @@
                 <when test="dryRun != null">#{dryRun}</when>
                 <otherwise>false</otherwise>
             </choose>
-        )
+        from claimed_key
     </insert>
 
     <select id="selectByQuery" resultMap="JobInstanceResultMap">

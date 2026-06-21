@@ -159,9 +159,15 @@ public class DefaultImportStageExecutor
     summary.put("message", result.message());
     summary.put("stage", result.stage().name());
     summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    summary.put("parsedCount", context.getAttributes().get("parsedCount"));
-    summary.put("validatedCount", context.getAttributes().get("validatedCount"));
-    summary.put("loadedCount", context.getAttributes().get("loadedCount"));
+    summary.put(
+        PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
+        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
+    summary.put(
+        PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
+        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
+    summary.put(
+        PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
+        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
     return summary;
   }
 

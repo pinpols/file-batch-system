@@ -90,6 +90,12 @@
             and run_status in
             <foreach collection="expectedStatuses" item="s" open="(" separator="," close=")">#{s}</foreach>
         </if>
+        <if test="expectedStatuses == null or expectedStatuses.isEmpty()">
+            and (
+                run_status = #{runStatus}
+                or run_status not in ('SUCCESS','FAILED','TERMINATED','SUCCESS_DRY_RUN','FAILED_DRY_RUN')
+            )
+        </if>
     </update>
 
     <update id="markRunning">
@@ -100,6 +106,7 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and run_status in ('CREATED','RUNNING')
     </update>
 
     <!-- stuck recovery: 选 RUNNING 且 updated_at 早于 stuckBefore 的实例，由 reconciler 判定是否所有

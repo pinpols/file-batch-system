@@ -195,7 +195,7 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
 
   /** 与 LoadStep.buildLoadContext 一致:batchNo 取 importPayload.batchNo,缺省回退 bizDate。 */
   private String resolveBatchNo(Map<String, Object> attributes) {
-    Object payloadObj = attributes.get("importPayload");
+    Object payloadObj = attributes.get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
     if (payloadObj instanceof ImportPayload payload && Texts.hasText(payload.batchNo())) {
       return payload.batchNo();
     }

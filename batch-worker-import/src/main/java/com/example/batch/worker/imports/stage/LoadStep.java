@@ -53,8 +53,8 @@ public class LoadStep implements ImportStageStep {
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_FILE_NAME = "file_name";
   private static final String KEY_SUCCESS_COUNT = "successCount";
-  private static final String KEY_SKIPPED_COUNT = "skippedCount";
-  private static final String KEY_LOADED_COUNT = "loadedCount";
+  private static final String KEY_SKIPPED_COUNT = PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT;
+  private static final String KEY_LOADED_COUNT = PipelineRuntimeKeys.IMPORT_LOADED_COUNT;
   private static final String KEY_MANUAL_REVIEW_REQUIRED = "manualReviewRequired";
 
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
@@ -97,7 +97,7 @@ public class LoadStep implements ImportStageStep {
         return markLoaded(context, 0L);
       }
       ImportPayload importPayload =
-          attrs.get("importPayload") instanceof ImportPayload item ? item : null;
+          attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload item ? item : null;
       Object fileRecord = attrs.get(PipelineRuntimeKeys.FILE_RECORD);
       String sourceFileName =
           fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null

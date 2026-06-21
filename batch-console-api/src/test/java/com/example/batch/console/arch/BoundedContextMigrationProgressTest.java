@@ -4,6 +4,7 @@ import static com.example.batch.console.arch.BoundedContextDependencyArchTest.BO
 import static com.example.batch.console.arch.BoundedContextDependencyArchTest.DOMAIN_ROOT;
 import static com.example.batch.console.arch.BoundedContextDependencyArchTest.SHARED_ROOT;
 import static com.example.batch.console.arch.BoundedContextDependencyArchTest.hasBoundedContextSuppression;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -34,6 +35,12 @@ import org.junit.jupiter.api.Test;
  * <p>启用守护测试 {@link BoundedContextDependencyArchTest} 的前提:本测试输出 0。
  */
 class BoundedContextMigrationProgressTest {
+
+  /**
+   * 2026-06-21 基线:当前 console bounded context 直接依赖违规数。这个测试先作为 ratchet 护栏防新增债务;每次迁移减少后必须同步下调预算。降到 0
+   * 后删除本预算并启用 {@link BoundedContextDependencyArchTest}。
+   */
+  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1697;
 
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 
@@ -86,6 +93,11 @@ class BoundedContextMigrationProgressTest {
           "[BoundedContext] No violations detected — safe to remove @Disabled from "
               + "BoundedContextDependencyArchTest.");
     }
+    assertThat(total)
+        .as(
+            "bounded-context cross dependencies must not increase; lower this budget as migration"
+                + " progresses")
+        .isLessThanOrEqualTo(MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS);
   }
 
   private static String boundedContextOf(String pkg) {
