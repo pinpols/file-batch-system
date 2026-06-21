@@ -31,16 +31,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
   void shouldReturnEmptyWhenNoAlertsExist() {
     List<AlertEventEntity> results =
         alertEventMapper.selectByQuery(
-            new AlertEventQuery(
-                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                new PageRequest(1, 10),
-                null));
+            AlertEventQuery.ofTenant(
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
     assertThat(results).isEmpty();
   }
@@ -111,16 +103,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
     // fromTime = 2 天前 → 只命中 recent
     AlertEventQuery query =
-        new AlertEventQuery(
-            tenantId,
-            null,
-            null,
-            null,
-            null,
-            now.minusSeconds(172800),
-            null,
-            new PageRequest(1, 10),
-            null);
+        AlertEventQuery.ofLastSeenRange(
+            tenantId, now.minusSeconds(172800), null, new PageRequest(1, 10));
 
     List<AlertEventEntity> rows = alertEventMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);

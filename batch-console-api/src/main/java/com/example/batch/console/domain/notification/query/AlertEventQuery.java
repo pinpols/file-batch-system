@@ -32,4 +32,10 @@ public record AlertEventQuery(
     return new AlertEventQuery(
         tenantId, null, null, alertType, null, null, null, pageRequest, null);
   }
+
+  public static AlertEventQuery ofLastSeenRange(
+      String tenantId, Instant fromTime, Instant toTime, PageRequest pageRequest) {
+    return new AlertEventQuery(
+        tenantId, null, null, null, null, fromTime, toTime, pageRequest, null);
+  }
 }
