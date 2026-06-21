@@ -25,7 +25,8 @@ import org.springframework.stereotype.Component;
  * metadata 里出现的键 emit 一个超集(templateCode 取 {@code bundleTemplateCode}、targetRef 取 {@code
  * bundleTargetRef}),具体保留/丢弃交 orchestrator 的 类型化 extract,故本类对绑定 profile 不感知。
  *
- * <p>(导出束无「文件到达」这种自然事件,不走本到达组路径,触发另议。)
+ * <p>导出束(manifest-only):导出无输入数据文件,由 scanner 把导出清单本身登记为一条自完整 trigger 记录,其 {@code
+ * metadata.bundleExportTemplates} 携带导出模板列表;本类据此一个声明展成 N 项 {@code {templateCode}} (无 sourceFileId)。
  *
  * <p><b>边界与安全</b>:仅对带 {@code bundleJobCode} 的组发(普通到达组 per-file 默认不变);异常隔离(launch 失败只 ERROR 日志,不阻断
  * governance sweep);幂等靠确定性 {@code requestId}(同组同 bizDate → 同 requestId → {@code trigger_request}
@@ -42,6 +43,9 @@ public class BundleArrivalLauncher {
   private static final String META_BUNDLE_TEMPLATE_CODE = "bundleTemplateCode";
   // ADR-046 Phase3:分发束 per-file 绑定下游渠道(channel_code),落 file_record metadata.bundleTargetRef。
   private static final String META_BUNDLE_TARGET_REF = "bundleTargetRef";
+  // ADR-046 Phase3:导出束「manifest-only」——一条 trigger 记录的 metadata 携带导出模板 code 列表(导出无源文件,
+  // 一个声明展成 N 个 partition),scanner 落 metadata.bundleExportTemplates。
+  private static final String META_BUNDLE_EXPORT_TEMPLATES = "bundleExportTemplates";
 
   private final ObjectProvider<LaunchService> launchServiceProvider;
 
@@ -71,7 +75,18 @@ public class BundleArrivalLauncher {
         if (bizDate == null) {
           bizDate = toLocalDate(file.get("biz_date"));
         }
-        // emit 一个超集绑定:有文件 + 至少一个绑定键(模板或下游渠道)就落一项,
+        // 导出束(manifest-only):一条 trigger 记录的 bundleExportTemplates 列表 → 每个模板展一项
+        // {templateCode}(导出无源文件,不带 sourceFileId)。
+        List<String> exportTemplates = textList(meta.get(META_BUNDLE_EXPORT_TEMPLATES));
+        if (!exportTemplates.isEmpty()) {
+          for (String tpl : exportTemplates) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("templateCode", tpl);
+            bundleFiles.add(entry);
+          }
+          continue;
+        }
+        // 导入/分发束:每个到达文件 emit 一个超集绑定(有文件 + 至少一个绑定键),
         // 具体保留哪些字段交 orchestrator 的类型化 BundlePlanParams.extract 按束类型裁定。
         if (fileId != null && (templateCode != null || targetRef != null)) {
           Map<String, Object> entry = new LinkedHashMap<>();
@@ -150,6 +165,21 @@ public class BundleArrivalLauncher {
     }
     String s = String.valueOf(value).trim();
     return s.isEmpty() ? null : s;
+  }
+
+  /** 把 metadata 里的「字符串列表」字段(如 bundleExportTemplates)归一成非空 trim 后的 List;非 List / 空 → 空表。 */
+  private static List<String> textList(Object value) {
+    if (!(value instanceof List<?> list)) {
+      return List.of();
+    }
+    List<String> result = new ArrayList<>();
+    for (Object item : list) {
+      String s = text(item);
+      if (s != null) {
+        result.add(s);
+      }
+    }
+    return result;
   }
 
   private static Long toLong(Object value) {

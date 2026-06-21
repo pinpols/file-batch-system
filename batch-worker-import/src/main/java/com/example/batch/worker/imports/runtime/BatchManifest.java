@@ -63,4 +63,27 @@ public record BatchManifest(
         .map(extractor)
         .findFirst();
   }
+
+  /**
+   * 是否「manifest-only 导出束」清单(ADR-046 Phase3 导出触发):有 {@link #jobCode}(BUNDLE_EXPORT 作业)+ fileMapping
+   * 声明 ≥1 个导出模板(templateCode)+ <b>无 {@link #requiredFiles}</b>(导出无输入数据文件,清单本身即触发,
+   * 不等文件到达)。导入/分发束清单必有 requiredFiles(数据文件),故不会命中。
+   */
+  public boolean isManifestOnlyExport() {
+    return jobCode != null
+        && !jobCode.isBlank()
+        && (requiredFiles == null || requiredFiles.isEmpty())
+        && !exportTemplateCodes().isEmpty();
+  }
+
+  /** 导出束清单声明的导出模板 code 列表(fileMapping 里非空 templateCode,按声明顺序);无则空表。 */
+  public List<String> exportTemplateCodes() {
+    if (fileMapping == null) {
+      return List.of();
+    }
+    return fileMapping.stream()
+        .filter(m -> m != null && m.templateCode() != null && !m.templateCode().isBlank())
+        .map(FileMapping::templateCode)
+        .toList();
+  }
 }

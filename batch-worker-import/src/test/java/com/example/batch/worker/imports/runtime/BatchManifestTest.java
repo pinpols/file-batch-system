@@ -116,4 +116,57 @@ class BatchManifestTest {
     BatchManifest m = objectMapper.readValue("{\"fileMapping\":[]}", BatchManifest.class);
     assertThat(m.hasFileMapping()).isFalse();
   }
+
+  @Test
+  @DisplayName("manifest-only 导出束:jobCode + 模板集 + 无 requiredFiles → isManifestOnlyExport")
+  void detectsManifestOnlyExportBundle() throws Exception {
+    String json =
+        """
+        {
+          "schemaVersion": "batch-manifest-v2",
+          "fileGroupCode": "export-eod",
+          "bizDate": "2026-06-21",
+          "tenantId": "t1",
+          "jobCode": "BUNDLE_EXPORT_EOD",
+          "fileMapping": [
+            { "fileName": "risk_out", "templateCode": "EXP_RISK" },
+            { "fileName": "trade_out", "templateCode": "EXP_TRADE" }
+          ]
+        }
+        """;
+    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+    assertThat(m.isManifestOnlyExport()).isTrue();
+    assertThat(m.exportTemplateCodes()).containsExactly("EXP_RISK", "EXP_TRADE");
+  }
+
+  @Test
+  @DisplayName("导入束清单(有 requiredFiles)不是 manifest-only 导出")
+  void importBundleIsNotManifestOnlyExport() throws Exception {
+    String json =
+        """
+        {
+          "schemaVersion": "batch-manifest-v2",
+          "fileGroupCode": "bundle-daily",
+          "jobCode": "BUNDLE_IMPORT_DAILY",
+          "requiredFiles": ["order.csv"],
+          "fileMapping": [ { "fileName": "order.csv", "templateCode": "TPL_ORDER" } ]
+        }
+        """;
+    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+    assertThat(m.isManifestOnlyExport()).isFalse();
+  }
+
+  @Test
+  @DisplayName("无 jobCode 或无模板 → 不是 manifest-only 导出")
+  void exportRequiresJobCodeAndTemplates() throws Exception {
+    BatchManifest noJob =
+        objectMapper.readValue(
+            "{\"fileMapping\":[{\"fileName\":\"o\",\"templateCode\":\"EXP_A\"}]}",
+            BatchManifest.class);
+    assertThat(noJob.isManifestOnlyExport()).isFalse();
+    BatchManifest noTpl =
+        objectMapper.readValue("{\"jobCode\":\"BUNDLE_EXPORT_X\"}", BatchManifest.class);
+    assertThat(noTpl.isManifestOnlyExport()).isFalse();
+    assertThat(noTpl.exportTemplateCodes()).isEmpty();
+  }
 }
