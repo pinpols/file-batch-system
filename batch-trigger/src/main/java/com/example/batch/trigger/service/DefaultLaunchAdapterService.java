@@ -44,7 +44,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   @Override
   public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
     var request = command.request();
-    // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 兜底)
+    // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 回退)
     LaunchRequest launchRequest =
         LaunchRequest.builder()
             .tenantId(request.getTenantId())
@@ -110,7 +110,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
   /**
    * V94: 算下一次 fire 时刻, 用作 data_interval_end. 失败 (cron 非法 / scheduleType 未识别) 时返 null, 上游 instance 落
-   * NULL data_interval, 由 worker 走 bizDate 兜底; 不阻断 launch.
+   * NULL data_interval, 由 worker 走 bizDate 回退; 不阻断 launch.
    */
   private Instant resolveNextFireAt(
       String scheduleType, String scheduleExpression, ZoneId zoneId, Instant fireAt) {
@@ -127,7 +127,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         Duration interval = parseFixedRateInterval(scheduleExpression);
         return interval == null ? null : fireAt.plus(interval);
       }
-      // MANUAL / 其他类型不算 interval, 走 worker bizDate 兜底
+      // MANUAL / 其他类型不算 interval, 走 worker bizDate 回退
       return null;
     } catch (RuntimeException ex) {
       log.warn(

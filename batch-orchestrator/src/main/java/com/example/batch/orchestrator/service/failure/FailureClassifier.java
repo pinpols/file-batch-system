@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * ADR-012 失败分类兜底链。
+ * ADR-012 失败分类回退链。
  *
  * <p>分类来源由近及远（{@link #classify} 单一入口逐级决定）：
  *
@@ -26,7 +26,7 @@ import org.springframework.web.client.ResourceAccessException;
  *       com.example.batch.orchestrator.controller.request.TaskExecutionReportDto#getFailureClass()}
  *       —— worker 业务侧最知根因；
  *   <li>{@link BizException#getFailureClass()} —— 业务方 throw 时显式声明；
- *   <li>本类的 exception/SQL state 兜底分类器 —— 经验规则；
+ *   <li>本类的 exception/SQL state 回退分类器 —— 经验规则；
  *   <li>都不知道 → {@link FailureClass#UNKNOWN}（ops review 信号，不是 bug）。
  * </ol>
  *
@@ -65,7 +65,7 @@ public class FailureClassifier {
       }
       cursor = cursor.getCause();
     }
-    // 3) 兜底分类（按异常类型 / SQL state）
+    // 3) 回退分类（按异常类型 / SQL state）
     return classifyByThrowable(throwable);
   }
 
@@ -108,7 +108,7 @@ public class FailureClassifier {
       if (cursor instanceof NonTransientDataAccessException) {
         return FailureClass.DATA_QUALITY;
       }
-      // 泛 DataAccessException 兜底:剩下的(瞬态语义弱但未显式标 Transient)归基础设施。
+      // 泛 DataAccessException 回退:剩下的(瞬态语义弱但未显式标 Transient)归基础设施。
       if (cursor instanceof DataAccessException) {
         return FailureClass.INFRASTRUCTURE;
       }

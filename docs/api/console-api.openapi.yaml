@@ -11038,7 +11038,7 @@ components:
           maxLength: 256
         configPayloadJson:
           type: string
-          description: 配置内容序列化为 JSON 字符串(BE 不解析,直接落库)
+          description: 配置内容序列化为 JSON 字符串(BE 不解析,直接写入数据库)
         grayScopeJson:
           type: string
         effectiveFromAt:
@@ -13547,7 +13547,7 @@ components:
     ConsoleOperationAuditResponse:
       type: object
       description: |
-        通用控制台用户操作审计(@AuditAction Aspect 落库)。
+        通用控制台用户操作审计(@AuditAction Aspect 写入数据库)。
         字段顺序对齐 batch.console_operation_audit 表 + 将来 Kafka payload schema,
         新增字段务必非必填 + 同步升 eventVersion。
       properties:
@@ -14180,7 +14180,7 @@ components:
       description: |
         批量租户配置初始化请求。
         mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。
-        dryRun=true 时只校验不落库。
+        dryRun=true 时只校验不写入数据库。
         各 List<XxxSpec> 字段为可选；未传则该类配置不初始化。
       properties:
         targetTenantIds:

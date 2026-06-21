@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
  *   <li>{@code DEGRADE_PRIORITY} → waitForCapacity 但 reasonCode 末尾打 _DEGRADED 标记， 供
  *       DefaultResourceScheduler 把决策 priority/band 降到最低
  *   <li>null / 未配策略 → 走平台默认 {@code batch.resource-scheduler.default-exceeded-strategy} （ADR-041
- *       Phase2.3 起默认 {@code QUEUE_DEFER} 有界队列,洪峰不误拒）
+ *       Phase2.3 起默认 {@code QUEUE_DEFER} 有界队列,峰值流量不误拒）
  * </ul>
  */
 class QuotaExceededStrategyLimiterTest {

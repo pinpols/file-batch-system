@@ -110,7 +110,7 @@ public class WaitingPartitionDispatchScheduler {
         BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
         try {
           if (tenantTag == null || tenantTag.isBlank()) {
-            // 没 tenantId 的 partition 进不了 RLS 路径，直接退回兜底（与原行为等价：buildCandidate 会再判 null）
+            // 没 tenantId 的 partition 进不了 RLS 路径，直接退回回退（与原行为等价：buildCandidate 会再判 null）
             candidate = buildCandidate(partition);
           } else {
             // RLS Phase B：buildCandidate 内部走 jobTask / jobInstance / jobDefinition /

@@ -70,7 +70,7 @@ public record EffectiveTaskConfig(
      */
     String partitionKey,
     /**
-     * V94: data_interval 半开区间起点 (Airflow 风格). null 表示 trigger 没算 / API 没传, worker 业务用 bizDate 兜底退化为
+     * V94: data_interval 半开区间起点 (Airflow 风格). null 表示 trigger 没算 / API 没传, worker 业务用 bizDate 回退退化为
      * {@code [bizDate.atStartOfDay, bizDate+1.atStartOfDay)}.
      */
     Instant dataIntervalStart,

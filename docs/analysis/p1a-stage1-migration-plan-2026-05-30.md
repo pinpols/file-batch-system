@@ -188,7 +188,7 @@
    Excel 导入,跨 file / workflow / job / config / ops。
 
 4. **`infrastructure/ops/DefaultConsoleOpsApplicationService` → AlertEventMapper + ApprovalCommandMapper + JobInstanceMapper + OutboxDeliveryLogMapper + OutboxRetryLogMapper + WorkerRegistryMapper**
-   ops 概览聚合 5 个上下文的状态 — 健康摘要;**建议拆分为只读 query service**,经 observability 收口或保留为 ops 自治。
+   ops 概览聚合 5 个上下文的状态 — 健康摘要;**建议拆分为只读 query service**,经 observability 收敛或保留为 ops 自治。
 
 5. **`infrastructure/query/ConsoleQuerySupport`(及 `ConsoleJobOpsSupport`、`ConsoleFileQueryService`、`ConsoleJobQueryService`、`ConsoleWorkflowQueryService`、`ConsoleOpsQueryService`)**
    这一组 `infrastructure/query/*` 是面向 dashboard 的横切只读层,**几乎一定要拆**,但拆法影响下游;Stage 1 保留集中,标 **高耦合**。

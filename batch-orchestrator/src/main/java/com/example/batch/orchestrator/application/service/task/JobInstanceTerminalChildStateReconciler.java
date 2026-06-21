@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** job_instance 写入终态时，把仍为非终态的 {@code job_partition}/{@code job_task} 收口到一致终态，防止节流按活跃分区计数时出现配额泄漏。 */
+/** job_instance 写入终态时，把仍为非终态的 {@code job_partition}/{@code job_task} 收敛到一致终态，防止节流按活跃分区计数时出现配额泄漏。 */
 @Slf4j
 @Component
 @RequiredArgsConstructor

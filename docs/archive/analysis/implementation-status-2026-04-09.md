@@ -34,13 +34,13 @@
 | 死信队列发布 | ✅ 完整 | `DeadLetterPublisher`（`batch.task.dead-letter`，异常静默吞噬，错误截断至 2000 字符） |
 | 多租户/安全/配置发布/密钥版本 | ✅ 完整 | `ConsoleTenantGuard`、`ConfigReleaseMapper`、`SecretVersionMapper`、V17 Flyway（文件模板安全开关） |
 | AI 提示词网关（分类/脱敏/审计日志） | ✅ 完整 | `ConsoleAiPromptGuard`（REJECTED_DISABLED/SAFETY/SCOPE/APPROVED）、`DefaultConsoleAiAuditService` |
-| SLA & 文件治理定时检查 + 告警落库 | ✅ 完整 | `JobSlaScheduler`、`FileGovernanceScheduler`、V18 Flyway（`batch.alert_event`） |
+| SLA & 文件治理定时检查 + 告警写入数据库 | ✅ 完整 | `JobSlaScheduler`、`FileGovernanceScheduler`、V18 Flyway（`batch.alert_event`） |
 | Worker 排空/下线（drain/force-offline） | ✅ 完整 | `WorkerDrainGovernanceService`、`WorkerDrainTimeoutScheduler`、V19 Flyway（`drain_started_at`/`drain_deadline_at`） |
 | K8s 健康探针 + Worker 优雅停机（停止接新活 + 等 in-flight） | ✅ 完整 | `batch-defaults.yml` 启用 Actuator probes；`GracefulKafkaShutdown`（stop listener → `awaitDrain` 120s）；`ActiveTaskLeaseRegistry.awaitDrain(Duration)` |
 | Orchestrator 多实例 HA（乐观锁） | ✅ 完整 | `job_instance/partition/task` 状态转换均含 `version CAS`；mapper 返回 `int`，affected=0 静默放弃 |
 | Kafka 消费并发 + 背压 | ✅ 完整 | 三类 worker `concurrency=4`、`max-poll-records`；`AbstractTaskConsumer` Semaphore + container pause/resume |
 | 连接池角色隔离 | ✅ 完整 | `BusinessDataSourceConfiguration` 改造为 `HikariConfig @ConfigurationProperties`；各模块按角色定容（orchestrator platform=10；import biz=15；export biz=20；dispatch platform=10） |
-| 临时文件兜底清理 | ✅ 完整 | `StaleTempFileCleanup`（ApplicationReadyEvent，清 `batch-*` 超 6h 孤儿文件） |
+| 临时文件补充清理 | ✅ 完整 | `StaleTempFileCleanup`（ApplicationReadyEvent，清 `batch-*` 超 6h 孤儿文件） |
 | 调度快照与控制台代理 | ✅ 完整 | `TenantSchedulerSnapshotService`、`ConsoleSchedulerSnapshotController` |
 | 默认运行参数目录 | ✅ 完整 | V24 Flyway（`batch.batch_runtime_default_parameter`）、`runtime-default-parameters.md` |
 | Flyway 完整迁移序列（V1–V40，跳过 V31） | ✅ 完整 | 无重复版本号；V27–V40 新增：ShedLock、批处理日、乐观锁版本、控制台账户、幂等记录表、多个 CHECK 约束扩展 |
@@ -98,7 +98,7 @@
 | `DefaultSchedulePlanBuilderTest` | orchestrator | NONE/STATIC/DYNAMIC/AUTO 分区策略、上限 256 |
 | `DefaultPrioritySchedulerTest` | orchestrator | 1–9 夹断、HIGH/MEDIUM/LOW 优先级带 |
 | `DefaultStepRegistryTest` | orchestrator | 步骤注册与查找 |
-| `DefaultStateMachineTest` | orchestrator | 状态机事件到目标状态映射、null/空白事件兜底 |
+| `DefaultStateMachineTest` | orchestrator | 状态机事件到目标状态映射、null/空白事件回退 |
 | `QuotaResetPolicyTest` | orchestrator | from()/isRuntimeManaged()/startOfCalendarDay() |
 | `QuotaRuntimeStateServiceTest` | orchestrator | NONE/SLIDING_WINDOW/CALENDAR_DAY evaluateAndReserve、describe、reconcile |
 | `DefaultWorkerDrainGovernanceServiceTest` | orchestrator | startDrain/forceOffline/takeoverAfterDrainTimeout、guard 条件 |
@@ -138,20 +138,20 @@
 
 | 测试类 | 所在模块 | 覆盖重点 |
 |---|---|---|
-| `OutboxPublishIntegrationTest` | orchestrator | Outbox→Kafka 消息到达 + `EventDeliveryLog` 落库 |
+| `OutboxPublishIntegrationTest` | orchestrator | Outbox→Kafka 消息到达 + `EventDeliveryLog` 写入数据库 |
 | `RetryScheduleIntegrationTest` | orchestrator | 重试计划 CRUD、markRunning 并发保护、markSuccess/markFailed |
 | `WorkerRegistryIntegrationTest` | orchestrator | ONLINE→DRAINING→DECOMMISSIONED 数据库状态流转 |
 | `QuotaRuntimeStateIntegrationTest` | orchestrator | NONE/SLIDING_WINDOW/CALENDAR_DAY 评估与 peak 追踪、reconcile |
 | `ApprovalWorkflowIntegrationTest` | orchestrator | submit/approve/reject/markExecuted 全链路，幂等保护 |
 | `BatchOrchestratorApplicationStartupIT` | orchestrator | Spring 上下文加载 |
-| `ImportIngressScannerIntegrationTest` | worker-import | MinIO 文件发现→平台 FileRecord 落库（幂等） |
+| `ImportIngressScannerIntegrationTest` | worker-import | MinIO 文件发现→平台 FileRecord 写入数据库（幂等） |
 | `BatchWorkerImportApplicationIT` | worker-import | Spring 上下文加载 |
 | `MinioExportStorageIntegrationTest` | worker-export | MinIO 写/SHA-256/复制/删除/存在性 |
 | `BatchWorkerExportApplicationIT` | worker-export | Spring 上下文加载 |
-| `DispatchChannelHealthServiceIntegrationTest` | worker-dispatch | 健康快照 HEALTHY/UNHEALTHY 状态落库、allowDispatch 行为 |
+| `DispatchChannelHealthServiceIntegrationTest` | worker-dispatch | 健康快照 HEALTHY/UNHEALTHY 状态写入数据库、allowDispatch 行为 |
 | `BatchWorkerDispatchApplicationIT` | worker-dispatch | Spring 上下文加载 |
-| `ConsoleAiAuditServiceIntegrationTest` | console-api | AI 审计日志落库与多条件查询 |
-| `AlertEventIntegrationTest` | console-api | alert_event 落库、按 severity/status/alertType 查询、limit |
+| `ConsoleAiAuditServiceIntegrationTest` | console-api | AI 审计日志写入数据库与多条件查询 |
+| `AlertEventIntegrationTest` | console-api | alert_event 写入数据库、按 severity/status/alertType 查询、limit |
 | `JobInstanceQueryIntegrationTest` | console-api | job_instance 按状态/jobCode/traceId 查询、分页 |
 | `DeadLetterQueryIntegrationTest` | console-api | dead_letter_task 按 replayStatus/sourceType/traceId 查询 |
 | `ConsoleRetryScheduleQueryIntegrationTest` | console-api | retry_schedule 按 status/policy/relatedType 查询 |

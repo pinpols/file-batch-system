@@ -114,7 +114,7 @@ public class LoadStep implements ImportStageStep {
         ((GenericJdbcMappedImportLoadPlugin) plugin).preparePartitionReplace(loadCtx);
       } else {
         // ADR-038 R3-3:续跑开关开时,plugin 必须自报幂等能力(NONE/UNKNOWN 拒跑)。跨库无 1PC,
-        // 崩溃窗口重做最后一个 chunk 的数据安全完全靠 plugin 幂等兜底。
+        // 崩溃窗口重做最后一个 chunk 的数据安全完全靠 plugin 幂等回退。
         requireIdempotentPluginIfCheckpointEnabled(plugin);
       }
       int chunkSize = resolveChunkSize(context);
@@ -316,7 +316,7 @@ public class LoadStep implements ImportStageStep {
         tenantId, pipelineInstanceId, startLineNo, pos.processedCount(), pos.completed());
   }
 
-  /** chunk 落库后推进位点;handle=null 时为关闭态,no-op。 */
+  /** chunk 写入数据库后推进位点;handle=null 时为关闭态,no-op。 */
   private void advanceCheckpoint(CheckpointHandle handle, long lineNoSeen, int chunkSize) {
     if (handle == null) {
       return;
@@ -345,7 +345,7 @@ public class LoadStep implements ImportStageStep {
     try {
       return Math.max(0L, Long.parseLong(marker.trim()));
     } catch (NumberFormatException ex) {
-      // 位点损坏(理论上不应发生)— 退化为 0,从头跑(plugin 幂等兜底)
+      // 位点损坏(理论上不应发生)— 退化为 0,从头跑(plugin 幂等回退)
       return 0L;
     }
   }
@@ -416,7 +416,7 @@ public class LoadStep implements ImportStageStep {
             ? importPayload.bizType()
             : context.getJobCode();
     String templateCode = importPayload != null ? importPayload.templateCode() : null;
-    // 地区(per-run):从触发 payload 的 metadata.region 取(可选);模板 defaultRegion 兜底 + 字典校验在 plugin。
+    // 地区(per-run):从触发 payload 的 metadata.region 取(可选);模板 defaultRegion 回退 + 字典校验在 plugin。
     String region =
         importPayload != null && importPayload.metadata() != null
             ? metaString(importPayload.metadata(), "region")

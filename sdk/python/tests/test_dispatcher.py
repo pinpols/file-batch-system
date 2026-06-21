@@ -250,9 +250,9 @@ async def test_v2_workertype_routes_to_handler(httpx_mock: HTTPXMock) -> None:
 
 
 async def test_v1_tasktype_alias_routes_to_handler(httpx_mock: HTTPXMock) -> None:
-    """v1 旧名 `taskType`(无 workerType)经兜底兼容,路由到 handler 并执行。
+    """v1 旧名 `taskType`(无 workerType)经回退兼容,路由到 handler 并执行。
 
-    与 Java @JsonAlias("taskType") / Rust serde alias / Go UnmarshalJSON 兜底跨语言对齐。
+    与 Java @JsonAlias("taskType") / Rust serde alias / Go UnmarshalJSON 回退跨语言对齐。
     """
     handler = _RecordingHandler("echo", SdkTaskResult.success_with())
     v1_msg = {

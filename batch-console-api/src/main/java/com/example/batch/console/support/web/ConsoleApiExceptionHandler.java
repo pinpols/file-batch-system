@@ -55,7 +55,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  *       / 404 被一律降级为 500 误导前端。
  * </ul>
  *
- * <p>兜底 {@link #handleException} 捕获未显式处理的 {@code Exception}，返回 500 + {@code SYSTEM_ERROR} 并 ERROR
+ * <p>回退 {@link #handleException} 捕获未显式处理的 {@code Exception}，返回 500 + {@code SYSTEM_ERROR} 并 ERROR
  * log 带堆栈，便于线上诊断。
  */
 @RestControllerAdvice
@@ -207,7 +207,7 @@ public class ConsoleApiExceptionHandler {
 
   /**
    * 把下游真实 HTTP status 反查到对应业务 {@link ResultCode}：4xx 映射到语义最贴近的客户端错误码， 5xx / 未识别一律 {@code
-   * SYSTEM_ERROR}。仅在无法解析下游 {@code CommonResponse} body 时作为兜底使用。
+   * SYSTEM_ERROR}。仅在无法解析下游 {@code CommonResponse} body 时作为回退使用。
    */
   private static ResultCode mapStatusToResultCode(HttpStatusCode status) {
     return switch (status.value()) {
@@ -349,7 +349,7 @@ public class ConsoleApiExceptionHandler {
         return "必填字段缺失";
       }
     },
-    // 未识别约束类型兜底：保守按 400（与历史行为一致，避免误把系统错误抬成 409）。
+    // 未识别约束类型回退：保守按 400（与历史行为一致，避免误把系统错误抬成 409）。
     UNKNOWN("", ResultCode.VALIDATION_ERROR) {
       @Override
       String render(String msg) {

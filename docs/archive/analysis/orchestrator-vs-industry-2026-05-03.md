@@ -30,7 +30,7 @@
 - **业界对比**：
   - Temporal: activity-level + workflow-level timeout (start-to-close, schedule-to-close, heartbeat)，自动 fail
   - Airflow: `dagrun_timeout` + `execution_timeout` 自动 mark failed
-- **当前依靠**：`PartitionLeaseReclaimScheduler` 回收 lease 过期的 partition (但这是 worker 心跳丢失的兜底，不是业务 timeout)
+- **当前依靠**：`PartitionLeaseReclaimScheduler` 回收 lease 过期的 partition (但这是 worker 心跳丢失的回退，不是业务 timeout)
 - **影响**：业务声明的"30 分钟 timeout"不生效；失联 worker 跑 8 小时也不会被打断
 
 #### 2.2 workflow_run 无独立 stuck recovery reconciler
@@ -132,6 +132,6 @@
 
 ## 4. 结论
 
-orch 在 **基础正确性 + 多租隔离 + outbox 一致性 + 调度机制** 几个维度做得扎实，**0 严重并发 bug**；缺陷集中在 **可用性兜底** (timeout / stuck) 和 **观测性 / 表达力** 两块。
+orch 在 **基础正确性 + 多租隔离 + outbox 一致性 + 调度机制** 几个维度做得扎实，**0 严重并发 bug**；缺陷集中在 **可用性回退** (timeout / stuck) 和 **观测性 / 表达力** 两块。
 
 短期 (本 session) 收掉 P0 + 1 个 P1 即可让系统离"生产级 batch 调度平台"更近一步；其余 P1 是产品演进方向，建议按 ADR-by-ADR 节奏推进。

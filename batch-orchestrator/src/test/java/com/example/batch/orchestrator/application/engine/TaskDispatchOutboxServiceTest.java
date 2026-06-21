@@ -34,7 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  *
  * <ul>
  *   <li>aggregate_type=JOB_TASK / event_type=task.taskType
- *   <li>eventKey 兜底: 缺失时退化 tenantId:taskId
+ *   <li>eventKey 回退: 缺失时退化 tenantId:taskId
  *   <li>idempotencyKey 优先来自 partition,无 partition 时用 tenantId:task:taskId:instance:instId
  *   <li>priority 取 task.priority,缺时回退 jobInstance.priority
  *   <li>priorityBand 映射: ≤3→HIGH, 4-6→MEDIUM, ≥7→LOW
@@ -59,7 +59,7 @@ class TaskDispatchOutboxServiceTest {
     selfField.set(service, service);
   }
 
-  // ===== eventKey 兜底 =====
+  // ===== eventKey 回退 =====
 
   @Test
   @DisplayName("eventKey 缺失 → 退化为 tenantId:taskId")
@@ -234,7 +234,7 @@ class TaskDispatchOutboxServiceTest {
 
     ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
     verify(domainEventPublisher).publish(cap.capture());
-    // payload 是 outbox 落库的 Map;按真实 Kafka 投递路径往返回 record,验证 SDK 可消费的 wire 契约。
+    // payload 是 outbox 写入数据库的 Map;按真实 Kafka 投递路径往返回 record,验证 SDK 可消费的 wire 契约。
     TaskDispatchMessage roundTrip =
         JsonUtils.fromJson(JsonUtils.toJson(cap.getValue().payload()), TaskDispatchMessage.class);
     SchedulingContext ctx = roundTrip.schedulingContext();

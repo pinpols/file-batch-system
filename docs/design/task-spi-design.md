@@ -318,7 +318,7 @@ batch.worker.enabled-task-types:
 - **现在**:`JobType` 6 个枚举值,改字段就要发 PR
 - **改后**:仍然是字符串字段(DB 不变),但合法值由 `BatchTaskExecutorRegistry.registeredTypes()` **运行期决定**
 - 控制台新建 job 时:下拉框从 `/api/console/meta/task-types`(新增端点)动态拉所有注册的 taskType
-- 验证由 worker 启动注册兜底(job 创建时只校验 type 非空,executor 不存在的运行时 fail-fast + 友好错误)
+- 验证由 worker 启动注册回退(job 创建时只校验 type 非空,executor 不存在的运行时 fail-fast + 友好错误)
 
 ### 5.2 `worker_route` 不变
 
@@ -360,7 +360,7 @@ batch.worker.enabled-task-types:
 | 决策 | 选项 | 推荐 |
 |---|---|---|
 | SPI 包路径 | `batch-common.spi.task` / `batch-worker-core.spi` | **`batch-common.spi.task`**(第三方 jar 只 depend common) |
-| Spring bean 注册 + ServiceLoader 哪个先 | Spring 优先 / SL 优先 | **Spring 优先**(framework-managed 实现先,SL 是兜底) |
+| Spring bean 注册 + ServiceLoader 哪个先 | Spring 优先 / SL 优先 | **Spring 优先**(framework-managed 实现先,SL 是回退) |
 | TaskContext 是否暴露 ApplicationContext | 暴露 / 不暴露 | **不暴露**(强制走显式注入,防滥用) |
 | ShellTaskExecutor 默认是否启用 | 默认开 / 默认关 | **默认关**(`batch.worker.executors.shell.enabled=false`,业务方按需开 + 审批 + 配 cgroup) |
 | 兼容旧 `JobType` 枚举 | 保留 / 弃用 | **保留**(改为 builtin Pipeline 任务类型的展示别名,新加类型不进枚举) |

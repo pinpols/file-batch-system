@@ -270,7 +270,7 @@ step_1_build_restart() {
   # 改成 package:lifecycle 停在 package 不触发 install-plugin,e2e-tests 也能编译通过;
   # 上游模块(orchestrator/trigger/worker-*/console-api/common)的 target/ jar 由 package 产生,
   # Step 2/3/4 实际仍由 m2 旧 SNAPSHOT 解析跨模块依赖 —— 这是本地 acceptance 的 trade-off:
-  # 接受"上次 install 后的 m2 stale"风险,CI full-ci-gate 强制 fresh install 兜底
+  # 接受"上次 install 后的 m2 stale"风险,CI full-ci-gate 强制 fresh install 回退
   # (2026-05-24 那次 stale 暴露问题靠 CI 抓住,本地 acceptance 不重复 CI 职责)。
   # restart.sh 从 target/ 直接拷 console.jar 到 build/runtime-jars/,不走 m2,所以 package 足够。
   # -pl batch-e2e-tests -am 反向拉齐所有上游依赖(等价于 batch-console-api + 全 worker 模块 + orchestrator + trigger + common)。
@@ -422,7 +422,7 @@ step_10_backlog() {
 - [ ] (本次 PR 范围外的违约/技术债)
 
 ## 性能 / 健壮性(独立 PR)
-- [ ] (e.g. Compensation stale-RUNNING reconciler 兜底)
+- [ ] (e.g. Compensation stale-RUNNING reconciler 回退)
 
 ---
 

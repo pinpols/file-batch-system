@@ -107,8 +107,8 @@ public final class BizExceptionUtils {
 
   /**
    * 开发期警告：args 被设计为占位符替换的标量（String / Number / Boolean / 等），传入 Throwable / Map / Collection
-   * 等复杂对象会序列化为 {@code {"key":...}} / {@code [..]} 字面量，渲染时 toString 出来污染前端文案。生产仍正常落库（不抛），仅 log.warn
-   * 提示开发期排查 callsite。
+   * 等复杂对象会序列化为 {@code {"key":...}} / {@code [..]} 字面量，渲染时 toString 出来污染前端文案。生产仍正常写入数据库（不抛），仅
+   * log.warn 提示开发期排查 callsite。
    */
   private static void warnOnComplexArgs(Object[] args) {
     for (Object arg : args) {

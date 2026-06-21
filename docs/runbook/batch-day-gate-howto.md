@@ -20,7 +20,7 @@
 | 值 | 行为 |
 |---|---|
 | `ALLOW_OVERLAP`(默认) | 前日没结清也放行 — 无批量行为 |
-| `WAIT_PREVIOUS_DAY` | 前日没 SETTLED → Day-2 进 `batch_day_waiting_launch` 等待,前日收口后**自动释放**(由 `BatchDayWaitingReleaseScheduler` 定时扫,默认 60s 一次) |
+| `WAIT_PREVIOUS_DAY` | 前日没 SETTLED → Day-2 进 `batch_day_waiting_launch` 等待,前日收敛后**自动释放**(由 `BatchDayWaitingReleaseScheduler` 定时扫,默认 60s 一次) |
 | `REJECT_IF_PREVIOUS_OPEN` | 前日没 SETTLED → Day-2 直接 REJECTED,不排队 |
 
 ### 2.2 job 级:`job_definition.previous_day_dependency_scope`
@@ -142,7 +142,7 @@ SELECT tenant_id, request_id, released_at, released_by
 
 ### Q3. 等待行 `wait_status` 永远在 WAITING
 
-查 `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesOnRelease` 验证逻辑;若线上确实卡住,可能命中已知边界:同 requestId 二次 launch 被 gate 再次卡为 WAIT 时,`on conflict do nothing` 会让原行保留 — 此时 `wait_status` 仍是 WAITING,等下一轮 settle 完成会被 auto-release 重试。若反复多次仍未释放,人工 `RELEASE` 操作兜底。
+查 `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesOnRelease` 验证逻辑;若线上确实卡住,可能命中已知边界:同 requestId 二次 launch 被 gate 再次卡为 WAIT 时,`on conflict do nothing` 会让原行保留 — 此时 `wait_status` 仍是 WAITING,等下一轮 settle 完成会被 auto-release 重试。若反复多次仍未释放,人工 `RELEASE` 操作回退。
 
 ## 8. 相关代码 / 文档
 

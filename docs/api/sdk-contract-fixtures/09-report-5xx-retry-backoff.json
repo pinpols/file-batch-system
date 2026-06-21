@@ -1,6 +1,6 @@
 {
   "scenario": "report-5xx-retry-backoff",
-  "description": "report 时平台 5xx(短暂故障)→ BYO SDK 必须指数退避(200ms / 400ms / 800ms,默认 retryMaxAttempts=3)。三次全失败后 log + drop,下次 lease renew 时 orch 兜底回收",
+  "description": "report 时平台 5xx(短暂故障)→ BYO SDK 必须指数退避(200ms / 400ms / 800ms,默认 retryMaxAttempts=3)。三次全失败后 log + drop,下次 lease renew 时 orch 回退回收",
   "given": {
     "config": {
       "tenantId": "acme",

@@ -32,7 +32,7 @@ class StaticShardAssignmentProviderTest {
 
   @Test
   void singleTotalWithNonZeroIndexFallsBackToSingle() {
-    // 兜底：shardTotal=1 无论 shardIndex 写成啥（配置错）都视为 single
+    // 回退：shardTotal=1 无论 shardIndex 写成啥（配置错）都视为 single
     OutboxProperties props = new OutboxProperties();
     props.setShardTotal(1);
     props.setShardIndex(5); // 无效，但 provider 直接返回 single 不抛异常

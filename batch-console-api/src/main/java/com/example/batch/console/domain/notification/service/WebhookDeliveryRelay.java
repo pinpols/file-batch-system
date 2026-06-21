@@ -47,7 +47,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>退避策略:失败时 {@code next_retry_at = now + min(30min, 2^(attempt - inlineMax) * 5min)}。
  *
- * <p>条件启用:默认开 ({@code batch.webhook.relay.enabled=true});关掉就退化为 dispatcher burst-only 兜底(EXHAUSTED
+ * <p>条件启用:默认开 ({@code batch.webhook.relay.enabled=true});关掉就退化为 dispatcher burst-only 回退(EXHAUSTED
  * 行躺平,与 ADR §5.11 改造前一致)。
  */
 @Component

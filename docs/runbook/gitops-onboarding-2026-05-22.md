@@ -141,7 +141,7 @@ imagePullSecrets:
 2. 选上一个 healthy revision → Rollback
 3. Argo 会自动 sync 到该 revision 的 helm values(等价于 ops repo 那次 commit)
 
-### 5.2 紧急情况手动 helm rollback(兜底)
+### 5.2 紧急情况手动 helm rollback(回退)
 
 Argo UI 异常退出 / 仍在 sync 卡住时:
 

@@ -191,7 +191,7 @@ public class SubscriptionRuleWebhookDispatcher {
 
   /**
    * 从 channel config_json 构造内存版订阅。复用 {@link WebhookSubscriptionEntity} 仅为喂给 {@link
-   * WebhookDispatcher#attemptDelivery},不落库。
+   * WebhookDispatcher#attemptDelivery},不写入数据库。
    */
   private WebhookSubscriptionEntity toSyntheticSubscription(
       String channelCode, Map<String, Object> rule) {

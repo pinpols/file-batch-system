@@ -41,7 +41,7 @@ public class ImportScannerProperties {
   private String bizDatePattern = "";
 
   /**
-   * {@link #bizDatePattern} 不命中时的兜底业务日（{@code yyyy-MM-dd}）。空 / 非法 → scanner
+   * {@link #bizDatePattern} 不命中时的回退业务日（{@code yyyy-MM-dd}）。空 / 非法 → scanner
    * 跳过该对象（不再静默使用机器当前自然日，避免日切前后误归档）。
    */
   private String defaultBizDate = "";

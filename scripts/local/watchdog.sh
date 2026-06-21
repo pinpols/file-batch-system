@@ -6,7 +6,7 @@
 #   start-all.sh 用 java -jar 启动 worker；macOS 长时间闲置（数小时）后系统会
 #   把闲置的 JVM 进程回收（OOM killer / energy saver），导致 worker 静默消失。
 #   docker-compose 模式靠 docker 自带 restart 不会有这个问题；本地脚本模式没有
-#   这层兜底，本脚本补上。
+#   这层回退，本脚本补上。
 #
 # 行为：
 #   - 每 :interval_seconds (默认 30s) 检查一次：trigger / orchestrator / console-api /

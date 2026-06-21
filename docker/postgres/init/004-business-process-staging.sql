@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS batch.process_staging (
     PRIMARY KEY (batch_key, row_seq, staged_at)
 ) PARTITION BY RANGE (staged_at);
 
--- 兜底分区:维护调度滞后时写入落到 default,绝不因缺分区 INSERT 失败。
+-- 回退分区:维护调度滞后时写入落到 default,绝不因缺分区 INSERT 失败。
 CREATE TABLE IF NOT EXISTS batch.process_staging_default
     PARTITION OF batch.process_staging DEFAULT;
 

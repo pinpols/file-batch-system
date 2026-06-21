@@ -26,7 +26,7 @@
 |---|---|---|
 | 对象存储轮询到达 | ✅ | `ImportIngressScanner`(30s 轮询) |
 | 完成标记 `.chk` / 稳定窗口 | ✅ | done-file 后缀可配 + naming + MANIFEST(本轮 #569/#570) |
-| 文件组凑齐 / 动态成组 | ✅ | arrival group + 批次清单(ADR-040,本轮) |
+| 文件组满足条件 / 动态成组 | ✅ | arrival group + 批次清单(ADR-040,本轮) |
 | size/checksum/签名校验 | ✅ | sidecar manifest(#570) + RSA 验签(`ImportPreprocessPipeline`) |
 | 解压/解密/转码 | ✅ | ZIP/GZIP/TAR/AES/charset(#569) |
 | 字段/行/数据集校验 | ✅ | `DatasetRuleEvaluator`:row_count_check / checksum_check / schema |
@@ -78,14 +78,14 @@
 | 关注点 | 现状 | 备注 |
 |---|---|---|
 | DAG / 补偿 / 资源调度 / retry-DLQ / 长期停滞检测 / 跨日依赖 / 批次日 / 部分失败 | ✅ | 见上,生产级 |
-| **准入控制 / 过载 load-shedding** | 🟡 PARTIAL | 限流是**硬拒绝**,无软节流/排队/降级——结算洪峰下正常请求会被拒(已知控制面瓶颈) |
+| **准入控制 / 过载 load-shedding** | 🟡 PARTIAL | 限流是**硬拒绝**,无软节流/排队/降级——结算峰值流量下正常请求会被拒(已知控制面瓶颈) |
 | **实例 pause/resume** | 🟡 PARTIAL | 无 PAUSED 态,cancel 是破坏性的;无法"周五停、周一续" |
 | **审批作为 DAG 节点** | 🟡 PARTIAL | 审批是独立 approval_command,**不是** workflow 节点;无法管线中嵌入审批闸 |
 | **SLA 升级阶梯** | 🟡 PARTIAL | 只发单条告警事件,无 1h→2h→4h 分级升级 |
 | **批次日严格串行依赖** | 🟡 PARTIAL | 日 N+1 不等日 N 完成,设计文档自标"缺口";并行跑日有跨日污染风险 |
 | workflow 长期停滞判定 | 🟡 PARTIAL | 只按 `updated_at` 超时,无 DAG 活性检查(上游全终态但本节点没派发) |
 
-**编排侧 Top 缺口**:① 准入/过载降级(PARTIAL,洪峰风险)② pause/resume 缺失 ③ 审批未进 DAG ④ SLA 单级告警 ⑤ 批次日串行未强制。
+**编排侧 Top 缺口**:① 准入/过载降级(PARTIAL,峰值流量风险)② pause/resume 缺失 ③ 审批未进 DAG ④ SLA 单级告警 ⑤ 批次日串行未强制。
 
 ## E. 原子任务（batch-worker-atomic）
 
@@ -151,13 +151,13 @@
 
 > 这五条是**一个东西的五个面**:一条「控制总额(笔数+金额)从入站声明 → 逐跳重核 → 出站内嵌 → 落地回读」的贯穿闸。建议合成一个 ADR 统一设计,而不是散点补。**这是对你这套结算系统价值最高的一块,且明确属"文件传输完整性"、不越 ADR-021「不裁定业务对错」的边界。**
 
-### 🟠 第二优先:可靠性 / 长跑 / 洪峰
+### 🟠 第二优先:可靠性 / 长跑 / 峰值流量
 
 | # | 缺口 | 域 |
 |---|---|---|
 | 6 | 长任务 **task 级心跳**(长 shell/sql 误判 worker 死) | E |
 | 7 | **ADR-038 checkpoint/resume 接入**(大文件崩从头跑) | G |
-| 8 | **准入控制 / 过载 load-shedding**(洪峰硬拒正常请求) | D |
+| 8 | **准入控制 / 过载 load-shedding**(峰值流量硬拒正常请求) | D |
 
 ### 🟠 第三优先:结算治理 / 合规
 
@@ -198,7 +198,7 @@
 
 > **待 5 个 agent 回填 C–G 后,在此给出全系统综合排序。** 截至目前(A+B)最高优先级:
 >
-> 1. 🔴 **头/尾控制记录校验**(入站 trailer 笔数/金额 vs 实际)——结算对账承重墙,行业第一道闸,`trailer_template` 列已躺在那未实现。
+> 1. 🔴 **头/尾控制记录校验**(入站 trailer 笔数/金额 vs 实际)——结算对账关键约束,行业第一道闸,`trailer_template` 列已躺在那未实现。
 > 2. 🔴 **端到端控制总额连续性**——import→process→export→dispatch 无跨阶段对账,process 静默丢 10% 仍标 SUCCESS。
 > 3. 🔴 **投递后目的端回读校验**——落地内容不验证,传输中损坏/半写不发现。
 > 4. 🟠 **出站内嵌控制记录**——下游只能靠可丢的 sidecar,文件本身无对账依据。

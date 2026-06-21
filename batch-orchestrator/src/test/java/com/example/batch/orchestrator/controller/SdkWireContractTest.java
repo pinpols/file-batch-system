@@ -128,7 +128,7 @@ class SdkWireContractTest {
   void heartbeatRequestDeserializesToWorkerHeartbeatDto() throws Exception {
     // Python SDK PR #320 / Java SDK fix/sdk-java-heartbeat-fields-align 对齐:
     // heartbeat 必须能携带 workerGroup / hostName / hostIp / processId / capabilityTags / buildId
-    // 这 6 字段(register 时已上报,但平台兜底降级 register 路径时需要它们消除字段丢失窗口)。
+    // 这 6 字段(register 时已上报,但平台回退降级 register 路径时需要它们消除字段丢失窗口)。
     HeartbeatRequest sdkSide =
         new HeartbeatRequest(
             "tenant-acme",

@@ -56,9 +56,9 @@ public class TaskDispatcher {
   private final ExecutorService executor;
 
   /**
-   * P0 backpressure 承重墙:把「已提交到 executor 但尚未跑完」的消息计入容量。{@link Executors#newFixedThreadPool}
+   * P0 backpressure 关键约束:把「已提交到 executor 但尚未跑完」的消息计入容量。{@link Executors#newFixedThreadPool}
    * 的工作队列无界,单看 {@link #inFlight}(CLAIM 成功后才加)在平台 5xx / claim 慢 / HTTP 卡住时挡不住——worker 线程全卡在
-   * claim,inFlight 始终低,consumer 仍会持续把消息塞进无界队列并提交 offset;一旦进程崩,这些 「已提交 offset 但从未 CLAIM」的任务没有
+   * claim,inFlight 始终低,consumer 仍会持续把消息写入无界队列并提交 offset;一旦进程崩,这些 「已提交 offset 但从未 CLAIM」的任务没有
    * lease,orchestrator 的 lease-timeout 重投兜不到(TaskTimeoutEnforcer 只扫 task_status='RUNNING')。故在
    * {@link #onMessage} 提交前 {@code tryAcquire} 一个 permit,涵盖 queued+claiming+running; 无 permit 直接
    * {@code RETRY_LATER}(不提交 offset),permit 在 runnable 完整跑完后释放。
@@ -226,7 +226,7 @@ public class TaskDispatcher {
     }
     if (!platformState.get().acceptsNewTasks()) {
       // Phase 2 §2.4:平台 PAUSED / DRAINING — 拒新任务。正常路径下 KafkaTaskConsumer 已 pause partition
-      // 不再投递,此处是防御性兜底(pause 生效前可能有消息已在途)。高频路径走 throttledLog 防刷屏。
+      // 不再投递,此处是防御性回退(pause 生效前可能有消息已在途)。高频路径走 throttledLog 防刷屏。
       throttledLog.info(
           "platform_state_" + platformState.get(),
           "dispatcher platformState={}, skipping new dispatch msg taskId={}",
@@ -360,7 +360,7 @@ public class TaskDispatcher {
         result = SdkTaskResult.fail("handler returned null");
       }
     } catch (Throwable t) {
-      // 任意异常兜底(含 OOM / 业务 RuntimeException)— 防 dispatcher 线程因业务问题死
+      // 任意异常回退(含 OOM / 业务 RuntimeException)— 防 dispatcher 线程因业务问题死
       log.error(
           "handler {} threw exception on taskId={}", handler.getClass().getName(), msg.taskId(), t);
       result = SdkTaskResult.fail(t);
@@ -394,7 +394,7 @@ public class TaskDispatcher {
         recordClientError(httpEx.statusCode(), msg.taskId(), "REPORT");
       }
     } catch (Exception reportEx) {
-      // 传输层 / 其它错误:orchestrator lease 超时兜底重派,记 error 给运维查。
+      // 传输层 / 其它错误:orchestrator lease 超时回退重派,记 error 给运维查。
       log.error(
           "report failed for taskId={}, orchestrator will retry on lease timeout",
           msg.taskId(),

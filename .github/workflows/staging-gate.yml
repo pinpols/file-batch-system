@@ -14,7 +14,7 @@ name: staging-gate
 #
 # 与 full-ci-gate 关系:
 #   - full-ci-gate(main push)已并行跑全量 e2e-shard,本 workflow 是 staging branch
-#     / nightly schedule 的额外兜底,**不替代** full-ci-gate。
+#     / nightly schedule 的额外回退,**不替代** full-ci-gate。
 #
 # 标签策略详见 docs/runbook/e2e-tier-strategy.md。
 

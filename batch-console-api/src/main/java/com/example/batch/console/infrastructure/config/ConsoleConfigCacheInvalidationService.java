@@ -12,7 +12,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
  * Console 配置变更后的 Redis 缓存失效服务：把 console 的配置写操作与 orchestrator 读热点（ {@code
- * OrchestratorConfigCacheService}）之间的缓存一致性收口到这里。
+ * OrchestratorConfigCacheService}）之间的缓存一致性收敛到这里。
  *
  * <p>核心约束：
  *

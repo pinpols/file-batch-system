@@ -149,7 +149,7 @@ class KafkaTaskConsumer:
         except TimeoutError as e:
             # aiokafka 在 SASL 凭据错 / broker 不可达时会无限 retry —— 这里
             # 转 PlatformError 让上层 BatchPlatformClient.start() fail-fast,
-            # 比让 K8s livenessProbe 兜底快得多。
+            # 比让 K8s livenessProbe 回退快得多。
             raise PlatformError(
                 (
                     f"Kafka consumer.start() exceeded {KAFKA_START_TIMEOUT_S}s "

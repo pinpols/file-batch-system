@@ -93,7 +93,7 @@ public class WorkflowNodePayloadBuilder {
 
   /**
    * 扫描当前 workflow_run 同一 job_instance 下已 SUCCESS 的兄弟分区的 {@code output_summary},把 {@code fileId} /
-   * {@code fileCode} 这类跨节点常用字段挑出来塞进 payload。保守做法:只挑已知少量字段(避免把 partition 内部诊断字段污染到 worker
+   * {@code fileCode} 这类跨节点常用字段挑出来写入 payload。保守做法:只挑已知少量字段(避免把 partition 内部诊断字段污染到 worker
    * payload)。多分区并存时最新成功的胜出。
    */
   private static final List<String> UPSTREAM_OUTPUT_WHITELIST =
@@ -161,7 +161,7 @@ public class WorkflowNodePayloadBuilder {
     }
   }
 
-  // 兜底：partition.output_summary 不含 fileId 时，通过 trace_id 或 batchNo 反查 file_record。
+  // 回退：partition.output_summary 不含 fileId 时，通过 trace_id 或 batchNo 反查 file_record。
   // 两条独立的线索都要查：
   //   (a) trace_id - 本次 run 期间 EXPORT worker 新建的 file_record 会打同一 trace_id
   //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
@@ -195,7 +195,7 @@ public class WorkflowNodePayloadBuilder {
     }
   }
 
-  /** Mapper 调用兜底：查询失败（DB 异常）记 warn 返 null，不让 dispatch 链路因此失败。 */
+  /** Mapper 调用回退：查询失败（DB 异常）记 warn 返 null，不让 dispatch 链路因此失败。 */
   private Long safeFileIdLookup(
       BiFunction<String, String, Long> lookup,
       String tenantId,

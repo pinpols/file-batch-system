@@ -21,7 +21,7 @@ public enum ApprovalType implements DictEnum {
   private final String code;
   private final String label;
 
-  /** 反查：用于 ApprovalCommand 写入路径做兜底校验，未知 code 返回 null。 */
+  /** 反查：用于 ApprovalCommand 写入路径做回退校验，未知 code 返回 null。 */
   public static ApprovalType fromCode(String code) {
     if (code == null) {
       return null;

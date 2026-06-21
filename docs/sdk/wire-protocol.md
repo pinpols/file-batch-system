@@ -92,7 +92,7 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 | **Kafka in-flight 满**(SDK 处理跟不上) | SDK | 下一次 poll | `KafkaTaskConsumer.applyBackpressure()` pause assignment,Kafka 不再投,直到 in-flight 降回 |
 | **Kafka SASL 凭据错** | SDK | 第一次 poll | 当前无 fail-fast,会 retry — 见 §6 待补 |
 | **平台主动取消任务** | SDK | `leaseRenewInterval`(60s) | `cancelRequested` 经 renew 响应回来,handler 通过 `CancellationSignal` 检测 |
-| **SDK 优雅停止** | orch | `deactivate` 调用立刻 + 心跳停更兜底 | DB `status → DRAINING → OFFLINE` |
+| **SDK 优雅停止** | orch | `deactivate` 调用立刻 + 心跳停更回退 | DB `status → DRAINING → OFFLINE` |
 | **SDK 进程崩(SIGKILL)** | orch | 心跳停更 120s | `OFFLINE` + Kafka partition rebalance |
 
 ## 4. 典型调用顺序(完整生命周期)
@@ -200,7 +200,7 @@ Java SDK 端 `SdkTaskResult.fail(throwable)` 默认填 `throwable.getClass().get
 | `TIMEOUT` | 执行超 task 配置 timeout | TRANSIENT |
 | `KILLED` / `CANCELLED` | cancelRequested 触发的主动停 | TERMINAL_USER |
 | `SECURITY_REJECTED` | SensitiveDataValidator 拦截 / 凭据放在 parameters | TERMINAL_CONFIG |
-| `EXECUTION_FAILED` | 业务逻辑抛(默认兜底分类) | BUSINESS |
+| `EXECUTION_FAILED` | 业务逻辑抛(默认回退分类) | BUSINESS |
 | `CONFIG_INVALID` | EffectiveTaskConfig 校验失败 / 缺必填 | TERMINAL_CONFIG |
 | `RESOURCE_EXHAUSTED` | 内存 / 磁盘 / 连接池耗尽 | TRANSIENT |
 

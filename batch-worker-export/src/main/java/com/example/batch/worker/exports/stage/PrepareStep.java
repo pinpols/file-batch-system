@@ -61,7 +61,7 @@ public class PrepareStep implements ExportStageStep {
               : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
       attrs.put("exportPayload", payload);
       Map<String, Object> templateConfig = Map.of();
-      // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 兜底加载导出模板;
+      // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 回退加载导出模板;
       // 否则 TEMPLATE_CONFIG 为空 → GenerateStep 报「export_data_ref is required」、导出永久失败转死信。
       // 约定不命中(如 *_TPL2)则 loadLatestTemplateConfig 返回空,回退原行为(清晰失败),无副作用。
       String effectiveTemplateCode =
@@ -87,7 +87,7 @@ public class PrepareStep implements ExportStageStep {
             objectMapper);
       }
       String fileFormatType = resolveText(templateConfig.get("file_format_type"), "JSON");
-      // 地区(per-run):metadata.region 优先 → 模板 defaultRegion 兜底 → allowedRegions 字典校验。
+      // 地区(per-run):metadata.region 优先 → 模板 defaultRegion 回退 → allowedRegions 字典校验。
       // 在此统一解析:既喂文件名 ${region} 占位,也经 exportSnapshot 透传给 GENERATE 查询插件绑定 :region。
       String region = ExportRegionResolver.resolve(templateConfig, payload.metadata());
       int partitionNo = intOrDefault(attrs.get(PipelineRuntimeKeys.PARTITION_NO), 1);

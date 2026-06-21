@@ -110,7 +110,7 @@
     </update>
 
     <!-- stuck recovery: 选 RUNNING 且 updated_at 早于 stuckBefore 的实例，由 reconciler 判定是否所有
-         node 终态后兜底 finalize（参考 WorkflowRunStuckReconciler）。 -->
+         node 终态后回退 finalize（参考 WorkflowRunStuckReconciler）。 -->
     <select id="selectStuckRunningCandidates" resultMap="WorkflowRunResultMap">
         select *
         from batch.workflow_run

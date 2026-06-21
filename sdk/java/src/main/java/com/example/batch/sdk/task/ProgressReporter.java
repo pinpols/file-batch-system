@@ -11,7 +11,7 @@ import java.util.Map;
  *
  * <p>「最新值覆盖」语义:只保留最近一次快照,续租周期(默认远低于业务循环步长)自然采样,不积压。
  *
- * <p><b>敏感凭据禁入 details</b>(DB 密码 / OAuth secret 走环境变量,roadmap §5.5)—— details 会落库并对运维可见。
+ * <p><b>敏感凭据禁入 details</b>(DB 密码 / OAuth secret 走环境变量,roadmap §5.5)—— details 会写入数据库并对运维可见。
  *
  * <p>{@code volatile} 保证执行线程的写对续约线程立即可见。
  */

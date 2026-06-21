@@ -10,7 +10,7 @@
 | 机制 | 现状 | 关键文件 |
 |---|---|---|
 | **biz_date 计算** | Quartz fire→`CalendarBizDateResolver` 按 cutoffTime 滚算（< cutoff = 昨天）+ 节假日 SKIP/PREV/NEXT roll；API 触发由调用方传 `bizDate`，不再 resolve | `CalendarBizDateResolver.java:42` `DefaultLaunchAdapterService.java:49` |
-| **batch_day 创建** | **lazy upsert**：第一条命中 `(tenant,calendar,bizDate)` 的 `job_instance` 落库时由 `LaunchBatchDayService.upsertBatchDayInstance` 顺手插入；无定时器预创建 | `LaunchBatchDayService.java:101` `DefaultLaunchService.java:164` |
+| **batch_day 创建** | **lazy upsert**：第一条命中 `(tenant,calendar,bizDate)` 的 `job_instance` 写入数据库时由 `LaunchBatchDayService.upsertBatchDayInstance` 顺手插入；无定时器预创建 | `LaunchBatchDayService.java:101` `DefaultLaunchService.java:164` |
 | **cutoff** | 独立扫描器：每 60s 扫 OPEN 候选，本地时间过 cutoff 时单行 CAS 翻 CUTOFF；ShedLock 防双 leader | `BatchDayCutoffScheduler.java:38` |
 | **late_arrival** | EVENT 触发路径专属：`routeLateArrivalIfNeeded` 判 cutoff 后 + 容忍窗口内→LATE_ACCEPTED 继续走；窗口外→DB CAS 把 trigger_type EVENT→CATCH_UP 路由补跑 | `LaunchBatchDayService.java:410` |
 | **settle** | 60s 扫 CUTOFF/IN_FLIGHT，按 active/failed/total 计数推进：active>0→IN_FLIGHT；failed>0→FAILED+driveCatchUp；其余→SETTLED | `BatchDaySettleScheduler.java:101` |
@@ -20,7 +20,7 @@
 | **作业实例化** | `prepareJobInstance` (T1) 单事务 insert `job_instance` + upsert `batch_day_instance`；`PartitionDispatchService` (T2) 走 `SchedulePlanBuilder` 算 partition 并 insert `job_partition`/`job_task` + outbox | `DefaultLaunchService.java:152` `DefaultPartitionDispatchService.java:91` |
 | **partition fanout** | `ShardStrategy ∈ {NONE/STATIC/DYNAMIC/AUTO}`；DYNAMIC 走 `@Order` resolver chain（Explicit→Size→Runtime→Worker），第一个正值胜出；硬上限 256 | `DefaultSchedulePlanBuilder.java:99` |
 | **idempotency** | `(tenant_id, dedup_key, run_attempt)` 唯一键；RERUN 取 max+1；时间轮路径 `dedup_key=tenant:job:fireTimeMs`，Quartz/API 路径 `tenant:job:fireTime` 字符串 | V62 `DefaultLaunchService.java:309` `DefaultTriggerService.java:268` |
-| **rerun** | TriggerType.RERUN 短路 dedup 短路；`run_attempt` 递增；并发竞争由唯一键兜底（`hasSqlStateInChain "23505"`） | `DefaultLaunchService.java:104,309` |
+| **rerun** | TriggerType.RERUN 短路 dedup 短路；`run_attempt` 递增；并发竞争由唯一键回退（`hasSqlStateInChain "23505"`） | `DefaultLaunchService.java:104,309` |
 | **dependency** | **未实现**：grep 全仓 0 命中 `JobDependency` / `prerequisite` / `depends_on`；workflow 内的 DAG 是节点级 edge，没有 job-之间-job 的依赖 | （缺失） |
 
 ---
@@ -83,7 +83,7 @@
 #### 3.6 没有 job-到-job 依赖（仅 workflow 内 DAG）
 - **位置**：grep 全仓 0 命中（无 `JobDependencyResolver`、`prerequisite`、`depends_on` 业务列）
 - **业界**：Airflow `ExternalTaskSensor` / `Dataset`；DolphinScheduler 工作流任务依赖另一工作流；银行核心批 1000+ step 全靠依赖图
-- **影响**：跨 job 编排只能塞进同一个 `workflow_definition`；多业务域分别 own 自己的 job 时无法表达"风控批必须等账务批 SETTLED"
+- **影响**：跨 job 编排只能写入同一个 `workflow_definition`；多业务域分别 own 自己的 job 时无法表达"风控批必须等账务批 SETTLED"
 - **修法**：新表 `job_dependency (tenant_id, downstream_job_code, upstream_job_code, condition_type)` + `LaunchValidationService` 启动前查 `batch_day_instance(upstream).day_status` 决定是否放行 / WAITING
 
 #### 3.7 `bizDate` 仅 `LocalDate` 单点，缺数据区间语义（`data_interval_start/end`）
@@ -136,7 +136,7 @@
 | **P0-2** | §3.4 late_arrival 覆盖所有 triggerType | EVENT-only 假设错误，cutoff 后 SCHEDULED misfire 是真实场景 | 1d |
 | **P0-3** | §3.5 SETTLED 不可 reopen | 财务对账正确性硬要求；改 `shouldReopenBatchDay` + 补 reopen audit | 1d |
 | **P0-4** | §3.3 `job_instance.calendar_code` 快照列 | 配置变更不污染历史 + settle 性能改善（少一次 JOIN） | 1d + 数据回填 |
-| **P1-1** | §3.2 batch_day counter 语义文档化 | 短期文档兜底；长期改主事务需配合 §3.4 | 0.5d 文档 |
+| **P1-1** | §3.2 batch_day counter 语义文档化 | 短期文档回退；长期改主事务需配合 §3.4 | 0.5d 文档 |
 | **P1-2** | §3.7 `data_interval_start/end` 引入 | 小时/周级批次落地的前置条件；单点场景兼容退化 | 2d |
 | **P1-3** | §3.9 job-level cutoff override | 缓解不加区分 calendar 配置膨胀，向 §3.7 演进 | 1d |
 | **P1-4** | §3.6 + §3.10 job-to-job 依赖 | 跨业务域编排刚需；独立 ADR + 新表，2026-Q3 立项 | 5-10d (ADR 级) |

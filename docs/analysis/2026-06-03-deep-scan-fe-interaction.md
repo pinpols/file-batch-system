@@ -87,7 +87,7 @@ function onCreateDrawerClose(done: () => void) {
 ### 1.5 P1 — label-width 不统一
 - `grep label-width | awk` 显示: 88px(18) / 120px(14) / 100px(2) / 92px(1) / 84px(1) / 72px(1) / 56px(1) / 190px(1) / 160px(1) / 128px(1)
 - 用户在不同对话框看到 label 区宽度跳动,扫视性差
-- 建议: 用 `--form-label-w-sm/md/lg` CSS 变量(72/96/128),全站收口三档
+- 建议: 用 `--form-label-w-sm/md/lg` CSS 变量(72/96/128),全站收敛三档
 
 ### 1.6 P1 — `size` 属性混用
 - `size="small"` 276 处 / `size="large"` 6 处 / `size="default"` 4 处 / 多数省略默认 medium

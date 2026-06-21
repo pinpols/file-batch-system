@@ -140,7 +140,7 @@ public class ConsoleQueryController {
   }
 
   /**
-   * GET /operation-audits — 通用控制台用户操作审计列表(由 @AuditAction Aspect 落库)。 跟 /audits 不同:这是
+   * GET /operation-audits — 通用控制台用户操作审计列表(由 @AuditAction Aspect 写入数据库)。 跟 /audits 不同:这是
    * console_operation_audit 表,覆盖告警/审批/Job/Worker/Outbox 等所有写操作。
    */
   @GetMapping("/operation-audits")

@@ -22,7 +22,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
  * RedisShedLockProvider}）即可覆盖默认 JDBC 实现（{@link ConditionalOnMissingBean} 让 auto-config 让位）。
  *
  * <p><b>auto-create 开关</b>：{@code batch.shedlock.auto-create=true} 启动期 {@code ensureShedLockTable}
- * 兜底建 {@code batch.shedlock} 表（仅 dev / 测试，prod 由 Flyway 迁移建表，开关默认 false）。
+ * 回退建 {@code batch.shedlock} 表（仅 dev / 测试，prod 由 Flyway 迁移建表，开关默认 false）。
  *
  * <p><b>历史背景</b>：之前每个模块（trigger / 4 个 worker / console-api）各自 copy 一份 {@code @Configuration
  * ShedLockConfiguration}（6 处重复），新模块加 {@code @Scheduled} 容易漏配 ShedLock

@@ -92,7 +92,7 @@ BEGIN
             'FOR VALUES FROM (%L) TO (%L)',
             pname, start_month, end_month);
     END LOOP;
-    -- DEFAULT 分区兜底未来超期数据；运维应保证 cron 提前建月分区，不让 DEFAULT 接负担
+    -- DEFAULT 分区回退未来超期数据；运维应保证 cron 提前建月分区，不让 DEFAULT 接负担
     EXECUTE 'CREATE TABLE IF NOT EXISTS batch.outbox_event_p_default '
             'PARTITION OF batch.outbox_event_p DEFAULT';
 END$$;

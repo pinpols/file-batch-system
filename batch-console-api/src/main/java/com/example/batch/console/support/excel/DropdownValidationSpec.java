@@ -11,7 +11,7 @@ import org.springframework.context.MessageSource;
  *
  * <p>promptTitle / promptText 以 {@code "excel."} 开头视为 i18n key，writer 传入 {@link MessageSource} +
  * {@link Locale} 时按 locale 翻译；不传则原样落 Excel 提示框。调用方应使用 {@link #builder()}， null/0 字段不显式
- * set，靠默认值兜底（CLAUDE.md §调用方约束）。
+ * set，靠默认值回退（CLAUDE.md §调用方约束）。
  */
 @Builder
 public record DropdownValidationSpec(

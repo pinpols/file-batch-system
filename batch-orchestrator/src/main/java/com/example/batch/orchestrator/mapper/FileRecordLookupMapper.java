@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * Workflow 派发兜底反查 file_record id 的单一职责 Mapper。
+ * Workflow 派发回退反查 file_record id 的单一职责 Mapper。
  *
  * <p>当 partition.output_summary 不含 fileId 时，{@code WorkflowNodePayloadBuilder} 通过两条独立线索反查：
  *

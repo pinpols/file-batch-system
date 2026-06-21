@@ -88,9 +88,9 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
 
   /**
    * R-4.1：Redis 不可达时 <b>fail-open</b>（放行并记 warn），避免把限流模块的 可用性故障升级为整站不可用。业务正确性由上游 DDoS 保护 + Grafana
-   * 告警兜底。
+   * 告警回退。
    *
-   * @return true 表示放行（正常通过 / Redis 故障兜底），false 表示超限拒绝
+   * @return true 表示放行（正常通过 / Redis 故障回退），false 表示超限拒绝
    */
   private boolean tryAcquireFailOpen(
       String key, int limitPerMinute, String category, String identity) {

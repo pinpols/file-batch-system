@@ -26,7 +26,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * <ul>
  *   <li>workerId 空 / 注册不存在 → 静默 skip(不抛异常,不调 renew)
  *   <li>正常路径 → 收集 currentLoad → renew → 写回 cache
- *   <li>WorkerLoadProvider 抛异常 → currentLoad 静默兜底为 0(不影响心跳)
+ *   <li>WorkerLoadProvider 抛异常 → currentLoad 静默回退为 0(不影响心跳)
  *   <li>多 LoadProvider → currentLoad 求和
  * </ul>
  */
@@ -91,7 +91,7 @@ class DefaultHeartbeatServiceTest {
   }
 
   @Test
-  @DisplayName("WorkerLoadProvider 抛异常 → currentLoad 兜底 0,心跳仍正常进行")
+  @DisplayName("WorkerLoadProvider 抛异常 → currentLoad 回退 0,心跳仍正常进行")
   void beat_loadProviderThrows_fallsBackToZero() {
     WorkerRegistration current = new WorkerRegistration();
     current.setWorkerId("w-2");
@@ -112,7 +112,7 @@ class DefaultHeartbeatServiceTest {
     ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
     verify(registrationService, times(1)).renew(captor.capture());
     assertThat(captor.getValue().getCurrentLoad())
-        .as("LoadProvider 异常应被静默捕获并抑制,currentLoad 兜底 0")
+        .as("LoadProvider 异常应被静默捕获并抑制,currentLoad 回退 0")
         .isZero();
   }
 

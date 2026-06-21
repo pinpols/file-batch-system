@@ -27,7 +27,7 @@
 - `ExecutionContext` 是统一上下文主名；`PipelineContext` 只保留为历史检索词
 - `jobCode` 是统一主名；`pipelineCode` / `flowCode` 只保留兼容口径，少量兼容访问器 / 兼容读取不视为漏改
 - `retry_count` / `attemptNo` / `publishAttempt` / `run_seq` 已按层级分开
-- `run_mode` 已作为运行时上下文意图落地，不进入主状态表；当前查询面继续由命令 / 审计承接，如需筛选 / 报表再单独评估落库
+- `run_mode` 已作为运行时上下文意图落地，不进入主状态表；当前查询面继续由命令 / 审计承接，如需筛选 / 报表再单独评估写入数据库
 - `workerId` / `workerCode` / `workerGroup` 已明确职责边界
 - `Step` / `Stage` 的语义边界已定稿
 - `CompensationSubmitCommand` / `ApprovalCommand` 的命令边界已定稿
@@ -355,15 +355,15 @@ job_instance.expected_       ──┘                ↓
 - 兼容读取旧别名 `runMode`，但新 payload / context 一律写 `run_mode`
 - Launch / retry / recover / compensate 链路都会把 `run_mode` 写入 payload 和 worker context
 - 应用日志通过 MDC 输出 `runMode` 字段，便于在 Loki / ELK 中直接检索运行意图
-- 当前不新增数据库字段；只有在需要按 `run_mode` 查询、统计、审计时才评估落库
+- 当前不新增数据库字段；只有在需要按 `run_mode` 查询、统计、审计时才评估写入数据库
 
 数据库层面的当前决议：
 - 本轮继续维持 deferred，不把 `run_mode` 扩散进 `job_instance`、`job_task` 这类主状态表。
 - 当前真正已有查询面是命令侧，不是主运行态；例如 `approval_command` 已可承接控制台查询和审计检索。
 - 临时排查优先使用命令载荷或审计 JSON，不为一次性检索提前加列。
-- 只有当控制台 / API 明确需要按 `run_mode` 做筛选、统计、报表或审计检索时，才进入正式落库评估。
-- 如果未来需要落库，优先落在命令表或审计表，不优先落在主状态表。
-- 物理列统一重命名不属于本轮目标，保持现有 schema 兼容，不顺手把数据库拉进当前命名收口。
+- 只有当控制台 / API 明确需要按 `run_mode` 做筛选、统计、报表或审计检索时，才进入正式写入数据库评估。
+- 如果未来需要写入数据库，优先落在命令表或审计表，不优先落在主状态表。
+- 物理列统一重命名不属于本轮目标，保持现有 schema 兼容，不顺手把数据库拉进当前命名收敛。
 
 ### 5.5 上下文继承规则
 
@@ -486,7 +486,7 @@ job_instance.expected_       ──┘                ↓
 1. 新增设计、接口、表结构时，优先沿用本文档术语。
 2. 看到 `attempt` 时，默认先问是“次数”还是“实体”。
 3. 看到 `run_mode` 时，默认先问它是不是上下文意图，而不是状态。
-4. 看到 `retry / rerun / recover / compensate` 时，必须先区分动作归属，再决定落库表和审计路径。
+4. 看到 `retry / rerun / recover / compensate` 时，必须先区分动作归属，再决定写入数据库表和审计路径。
 5. 如果后续文档与本文档冲突，以本文档为准；如果代码与本文档冲突，以代码为准，但要补文档回写。
 
 ---

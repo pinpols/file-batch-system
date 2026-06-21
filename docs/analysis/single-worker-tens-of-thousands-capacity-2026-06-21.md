@@ -23,12 +23,12 @@
 机制是**全程流式、常数内存**,不是整文件读进堆:
 
 - **PreprocessStep**(`batch-worker-import/.../stage/PreprocessStep.java`):大对象(≥16MiB,`SPOOL_THRESHOLD_BYTES`)走 `streamObjectToSpoolAndReturn`,`Files.copy(InputStream, Path)` 8K 缓冲流到 `/tmp` spool 文件,**从不分配整文件 byte[]**;小文件才走内存路径(受 `MAX_OBJECT_BYTES` 默认 512MiB fail-fast)。
-- **ParseStep** → 逐行解码 spool → 写 NDJSON staging;**ValidateStep** → `BufferedReader` 逐行按 `chunk_size` 校验;**LoadStep** → `BufferedReader` 逐行,凑满 `chunkSize` 即 `plugin.loadChunk` 落库后 `chunk.clear()`,**任意时刻堆里只有一个 chunk**。
+- **ParseStep** → 逐行解码 spool → 写 NDJSON staging;**ValidateStep** → `BufferedReader` 逐行按 `chunk_size` 校验;**LoadStep** → `BufferedReader` 逐行,凑满 `chunkSize` 即 `plugin.loadChunk` 写入数据库后 `chunk.clear()`,**任意时刻堆里只有一个 chunk**。
 - **chunk 默认 2000 行,上限 10000**(`ImportWorkerConfiguration` `DEFAULT_CHUNK_SIZE=2000`;`BATCH_WORKER_IMPORT_CHUNK_SIZE:2000` / `MAX:10000`)。
 
 **实测(真实链路,非空跑)**:
 
-- `docs/verifications/import-partition-replace-copy-10m-system-2026-06-07.md`:**1000 万行 / ~1GiB CSV 单 worker 单流成功**,端到端 ~240s(PREPROCESS 6.5s + PARSE 67.8s + VALIDATE 39.4s + **LOAD 123.6s**),落库 `count=10,000,000` distinct 全对。
+- `docs/verifications/import-partition-replace-copy-10m-system-2026-06-07.md`:**1000 万行 / ~1GiB CSV 单 worker 单流成功**,端到端 ~240s(PREPROCESS 6.5s + PARSE 67.8s + VALIDATE 39.4s + **LOAD 123.6s**),写入数据库 `count=10,000,000` distinct 全对。
 - `docs/verifications/streaming-large-file-import-export-2026-06-06.md`:807MiB / 100 万行宽表,**worker RSS 全程 < 200MB**(处理中 ~180MB,收尾回落 38MB)。
 
 **结论**:上万行对 import 是零头;内存恒定,瓶颈是 **LOAD 阶段的 DB 写入**(逐行 UPSERT + 索引维护 + 单机 PG),不是 worker。
@@ -55,8 +55,8 @@
 
 1. **单大文件 import**:瓶颈在 **LOAD 的 DB 写入**(逐行 UPSERT + 索引 + 单机 PG),worker 内存恒定 < 200MB。
 2. **海量小 task**:瓶颈在 **控制面 launch/dispatch 单线程串行**(~20 jobs/s,有效并发 ~7)。
-3. **内存兜底已做满**:spool 落盘、流式逐行、chunk 分块、`MAX_OBJECT_BYTES` 512MiB fail-fast、解密 Path→Path 流式避免 2× 堆峰。
-4. **失败兜底**:LoadStep 有 **ADR-038 checkpoint 断点续跑**(`batch.worker.checkpoint.enabled`,按 chunk 推进 `positionStore`,续跑跳已处理行号),**默认关闭**,且要求 plugin 自报幂等否则拒跑;失败时**故意保留 staging 文件**便于重放。
+3. **内存回退已做满**:spool 落盘、流式逐行、chunk 分块、`MAX_OBJECT_BYTES` 512MiB fail-fast、解密 Path→Path 流式避免 2× 堆峰。
+4. **失败回退**:LoadStep 有 **ADR-038 checkpoint 断点续跑**(`batch.worker.checkpoint.enabled`,按 chunk 推进 `positionStore`,续跑跳已处理行号),**默认关闭**,且要求 plugin 自报幂等否则拒跑;失败时**故意保留 staging 文件**便于重放。
 
 ## 要扛得更稳 / 更快该怎么配(按性价比)
 

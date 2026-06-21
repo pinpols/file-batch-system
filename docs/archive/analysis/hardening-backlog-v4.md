@@ -38,8 +38,8 @@
 | `biz.transaction` / `biz.risk_score` / `biz.risk_alert` 三张表 | `scripts/db/business/create_biz_tables.sql` | ✅ 已写入，含索引与 CHECK 约束；drop 后重放通过 |
 | `tb/IMP-TRANSACTION-CSV` / `tc/IMP-RISK-SCORE-JSON` 模板补 `jdbcMappedImport` | `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql` | ✅ 追加 UPDATE 块；重置 query_param_schema=NULL 后重放，tb IMPORT 真跑到 SUCCESS |
 | `tc/EXP-RISK-ALERT-JSON` 模板补 `default_query_sql` + `sqlTemplateExport` | 同上 | ✅ 同一 UPDATE 块，含 `:tenantId + :batchNo` 占位符与 `id` 列（避开包装层 ORDER BY 需求）|
-| `default-tenant` 2 条 queue 的 `resource_tag` 清空 | ❌ **不落库** | 临时绕行，根治路径是 P0-2（worker 侧上报 capability_tags），之后 queue.resource_tag 应该恢复 |
-| 2 条 `job_definition.enabled=false`（TA_DISPATCH_ORDER / gen_reconcile） | ❌ **不落库**，operator 动作 | 临时止血；修好 fileId 上游 / GENERAL worker 后重新启用 |
+| `default-tenant` 2 条 queue 的 `resource_tag` 清空 | ❌ **不写入数据库** | 临时绕行，根治路径是 P0-2（worker 侧上报 capability_tags），之后 queue.resource_tag 应该恢复 |
+| 2 条 `job_definition.enabled=false`（TA_DISPATCH_ORDER / gen_reconcile） | ❌ **不写入数据库**，operator 动作 | 临时止血；修好 fileId 上游 / GENERAL worker 后重新启用 |
 | `default-tenant/exp_settlement_csv_v1` 模板修复（workflow SETTLE 用） | ❓ 源头暂未定位 | 该模板在 live DB 是 created_by='system'，应由租户初始化服务/Console 上传插入，非直接 seed；留到 P1-1（workflow 节点串联）批次一并处理 |
 
 **验证**：`drop table biz.{transaction,risk_score,risk_alert}` → `psql -f create_biz_tables.sql`（重建成功）→ `UPDATE ... = NULL` 把模板清空 → 跑 multi-tenant-seed 里的 UPDATE 块 → manual launch tb IMPORT → instance 163 SUCCESS，`biz.transaction` 落行。
@@ -87,7 +87,7 @@
 
 ### V4-P1-1 · Workflow 节点间参数自动串联缺失
 
-**现象**：`wf_eod_process` 实测：START→SETTLE 成功（SETTLE 节点生成了真实 file_record 158 / 236 bytes）→ DISPATCH 失败 `fileId missing`。Workflow 引擎**不会**把 SETTLE 的输出（生成的 fileId）自动塞进 DISPATCH 的 partition payload。
+**现象**：`wf_eod_process` 实测：START→SETTLE 成功（SETTLE 节点生成了真实 file_record 158 / 236 bytes）→ DISPATCH 失败 `fileId missing`。Workflow 引擎**不会**把 SETTLE 的输出（生成的 fileId）自动写入 DISPATCH 的 partition payload。
 
 **两个独立缺口**：
 1. `workflow_node.node_params` 配置不会被合并到下游 partition 的 Kafka 消息里（所以在 DISPATCH 节点上写死 `channelCode` 也不起作用）

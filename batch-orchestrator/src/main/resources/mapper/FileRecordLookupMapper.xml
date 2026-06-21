@@ -3,7 +3,7 @@
 <mapper namespace="com.example.batch.orchestrator.mapper.FileRecordLookupMapper">
 
     <!--
-      Workflow 派发兜底反查：partition.output_summary 不含 fileId 时使用。
+      Workflow 派发回退反查：partition.output_summary 不含 fileId 时使用。
       仅查 source_type='GENERATED' 行避免跨场景串号；ORDER BY id DESC LIMIT 1 取最新生成文件。
     -->
     <select id="selectIdByTenantAndTraceId" resultType="java.lang.Long">

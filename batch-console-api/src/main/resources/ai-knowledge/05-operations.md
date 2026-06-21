@@ -2,7 +2,7 @@
 
 ## 运维通过控制台/代理做,不直接改状态库
 - console-api 对 `outbox_event` 等只读;清理/重投走 `ConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*`。
-- 状态变更最终都由 orchestrator(唯一状态主机)落库。
+- 状态变更最终都由 orchestrator(唯一状态主机)写入数据库。
 
 ## 常用查询(console-api 只读)
 - 查 job 实例、执行日志、失败分类(failure class):用控制台对应列表/详情页。

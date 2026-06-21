@@ -48,7 +48,7 @@ public interface ProcessStagingMapper {
       @Param("toTs") String toTs);
 
   /**
-   * 列出早于 {@code cutoffYmd}(YYYYMMDD)的天级子分区名,不含 DEFAULT 兜底分区。
+   * 列出早于 {@code cutoffYmd}(YYYYMMDD)的天级子分区名,不含 DEFAULT 回退分区。
    *
    * @param cutoffYmd 截止日,形如 {@code 20260604};严格小于此日的日分区被返回
    */

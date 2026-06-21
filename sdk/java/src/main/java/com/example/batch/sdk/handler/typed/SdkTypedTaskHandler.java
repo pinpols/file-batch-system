@@ -28,7 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <ul>
  *   <li>入参反序列化失败(参数结构不匹配)→ 框架直接 {@link SdkTaskResult#fail} 报错,不进业务。
- *   <li>{@link #handle} 抛任何异常 → 透传给 {@code TaskDispatcher} 统一兜底转 fail + REPORT failure。
+ *   <li>{@link #handle} 抛任何异常 → 透传给 {@code TaskDispatcher} 统一回退转 fail + REPORT failure。
  *   <li>{@link #handle} 正常返回 {@code O} → 成功;{@code O} 序列化为 output map(null → 空 map),message 走
  *       {@link #successMessage}(默认 {@code "ok"})。
  * </ul>
@@ -65,7 +65,7 @@ public abstract class SdkTypedTaskHandler<I, O> implements SdkTaskHandler {
     return SdkTaskResult.ok(successMessage(output), params.toOutputMap(output));
   }
 
-  /** 业务实现 —— 拿强类型入参,返业务结果。抛异常即失败(框架兜底)。 */
+  /** 业务实现 —— 拿强类型入参,返业务结果。抛异常即失败(框架回退)。 */
   protected abstract O handle(I input, SdkTaskContext ctx);
 
   /** 成功时的 message,默认 {@code "ok"};按需重写返摘要。 */

@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** systemBindings 占位符解析 + 地区(region)默认兜底/字典校验。 */
+/** systemBindings 占位符解析 + 地区(region)默认回退/字典校验。 */
 class GenericJdbcMappedImportLoadPluginTest {
 
   private static ImportLoadContext ctx() {

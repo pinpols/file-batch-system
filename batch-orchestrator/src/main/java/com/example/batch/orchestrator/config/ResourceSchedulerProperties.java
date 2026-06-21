@@ -17,7 +17,7 @@ public class ResourceSchedulerProperties {
   private long globalMaxRunningJobs = 0;
 
   /**
-   * ADR-041 Phase2.3:租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。默认 QUEUE_DEFER（有界队列 + 背压,洪峰不误拒正常请求）;设
+   * ADR-041 Phase2.3:租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。默认 QUEUE_DEFER（有界队列 + 背压,峰值流量不误拒正常请求）;设
    * REJECT 可恢复旧的硬拒默认。仅作用于「未显式配策略」的租户,显式配了的以租户策略为准。
    */
   private String defaultExceededStrategy = "QUEUE_DEFER";

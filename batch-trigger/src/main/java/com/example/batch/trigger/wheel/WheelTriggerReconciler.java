@@ -83,7 +83,7 @@ public class WheelTriggerReconciler {
   public void doReconcile() {
     List<TriggerDescriptor> dbDescriptors = definitionLoader.loadAll();
     // R-arch-audit-2026-05-23 P1: HashMap 预分配容量，避免大租户 (1k+ triggers) 场景下多次扩容。
-    // 默认 load factor 0.75 → 用 size * 2 兜底，足够容纳全部 enabled CRON descriptor 不触发 resize。
+    // 默认 load factor 0.75 → 用 size * 2 回退，足够容纳全部 enabled CRON descriptor 不触发 resize。
     Map<Long, TriggerDescriptor> wantedById = new HashMap<>(dbDescriptors.size() * 2);
     for (TriggerDescriptor d : dbDescriptors) {
       if (!d.isEnabled() || d.getJobDefinitionId() == null) {

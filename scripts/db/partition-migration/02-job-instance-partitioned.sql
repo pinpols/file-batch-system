@@ -39,7 +39,7 @@
 BEGIN;
 
 -- A) 建分区父表(列集 = pg_dump 实库 DDL,2026-06-10;biz_date 升 NOT NULL,
---    INSERT 时 COALESCE(biz_date, created_at::date) 兜底——分区键不可为 NULL)
+--    INSERT 时 COALESCE(biz_date, created_at::date) 回退——分区键不可为 NULL)
 CREATE TABLE batch.job_instance_p (
     id                        BIGINT       NOT NULL,
     tenant_id                 VARCHAR(64)  NOT NULL,
@@ -168,7 +168,7 @@ CREATE INDEX idx_job_instance_p_tenant_bizdate_status ON batch.job_instance_p (t
 CREATE INDEX idx_job_instance_p_tenant_status_started ON batch.job_instance_p (tenant_id, instance_status, started_at DESC);
 CREATE INDEX idx_job_instance_p_trace_id ON batch.job_instance_p (trace_id);
 
--- D) 复制数据(显式全列;biz_date NULL 用 created_at::date 兜底)
+-- D) 复制数据(显式全列;biz_date NULL 用 created_at::date 回退)
 INSERT INTO batch.job_instance_p (
     id, tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
     biz_date, trigger_type, instance_status, queue_code, worker_group, priority,

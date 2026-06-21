@@ -253,7 +253,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   /**
    * 派发独立 watchdog: cancelGraceSeconds 后检查 future 是否已 done, 没 done 即记账 (说明业务线程不响应 interrupt). 不会强杀线程
-   * (Java 没有安全的强杀); 留给运维通过 metric 告警 + 重启 worker 兜底.
+   * (Java 没有安全的强杀); 留给运维通过 metric 告警 + 重启 worker 回退.
    */
   private void scheduleThreadLeakWatchdog(PulledTask task, Future<?> future) {
     long graceSeconds = Math.max(1L, timeoutProperties.getCancelGraceSeconds());
@@ -331,7 +331,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       // INCREMENTAL pipeline 业务读 attributes 拼 SQL 水位条件;FULL/CDC/历史首跑为 null。
       executionContext.put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, task.getHighWaterMarkIn());
     }
-    // V94: data_interval 半开区间, 业务可拼时间窗 SQL. null 时不放, 业务侧用 bizDate 兜底.
+    // V94: data_interval 半开区间, 业务可拼时间窗 SQL. null 时不放, 业务侧用 bizDate 回退.
     if (task.getDataIntervalStart() != null) {
       executionContext.put(PipelineRuntimeKeys.DATA_INTERVAL_START, task.getDataIntervalStart());
     }
@@ -339,7 +339,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       executionContext.put(PipelineRuntimeKeys.DATA_INTERVAL_END, task.getDataIntervalEnd());
     }
     // partition 信息透传:worker step / plugin 据此 + PARTITION_COUNT 决定切哪部分。null 时按"不分片"处理(下游
-    // ParseStep 等会兜底为 1/1)。
+    // ParseStep 等会回退为 1/1)。
     if (task.getPartitionNo() != null) {
       executionContext.put(PipelineRuntimeKeys.PARTITION_NO, task.getPartitionNo());
     }

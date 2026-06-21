@@ -175,7 +175,7 @@ public class ValidateStep implements ImportStageStep {
   }
 
   /**
-   * ADR-040:把 file_record.metadata_json 里 sidecar(.chk manifest)声明的 expectedRecordCount 塞进 context
+   * ADR-040:把 file_record.metadata_json 里 sidecar(.chk manifest)声明的 expectedRecordCount 写入 context
    * 属性,供 {@link DatasetRuleEvaluator} 在行数校验时对账"声明行数 vs 实际累加行数"。
    *
    * <p>此前 scanner 只写 metadata.expectedRecordCount 无人消费;此处补上读取-对账闭环。读取失败/缺失 时静默跳过(不影响主校验,只是少了

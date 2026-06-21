@@ -282,7 +282,7 @@ CREATE TABLE archive.data_quality_check_archive
 
 字段对 v1.0 全兼容：v1.0 加 `data_quality_rule` 表 + `rule_id` 引用即可，无破坏性 ALTER。
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|

@@ -182,7 +182,7 @@ PartitionDispatchService.dispatch
 ## 不变量
 
 1. `required` 不满足必拒绝（不允许"找不到完美匹配就将就一个"）；
-2. taint NO_SCHEDULE 必须显式 tolerate 才落，无 PREFER 兜底（PREFER_NO_SCHEDULE 才是"软"）；
+2. taint NO_SCHEDULE 必须显式 tolerate 才落，无 PREFER 回退（PREFER_NO_SCHEDULE 才是"软"）；
 3. `affinity_json` 改动需要 PR + audit（高风险变更，影响调度行为）；
 4. WAITING_NO_AFFINITY_MATCH 不算 task 失败（不刷 retry / 不刷 SLA），是临时不可调度；
 5. worker_label / taint 改动 worker 侧上报后立即对**新调度**生效，不动已运行 task。
@@ -205,7 +205,7 @@ PartitionDispatchService.dispatch
 
 单机房 + 同质 worker + 无合规隔离场景不开工 — `worker_group` 完全够用。
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|

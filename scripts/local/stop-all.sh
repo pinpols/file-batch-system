@@ -16,7 +16,7 @@ APP_LOG_DIR="$ROOT/logs/app"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
-# 全量扫描顺序（兜底轮询）；分阶段停止时按 PHASE 使用子集
+# 全量扫描顺序（回退轮询）；分阶段停止时按 PHASE 使用子集
 RUNTIME_JAVA_NAMES=(
   worker-import worker-export worker-process worker-dispatch worker-atomic
   trigger console

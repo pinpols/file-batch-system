@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  *       FORBIDDEN}——跨租户访问一律拒绝，即使是只读请求。
  * </ul>
  *
- * <p>Session 未激活（例如异步上下文）时 {@code ConsoleRequestMetadata} 读取会静默降级为 null， 由上游兜底或抛 {@code
+ * <p>Session 未激活（例如异步上下文）时 {@code ConsoleRequestMetadata} 读取会静默降级为 null， 由上游回退或抛 {@code
  * UNAUTHORIZED}。
  */
 @Component

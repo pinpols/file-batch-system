@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
  *       状态恢复，下一轮 reclaim 仍能扫到该过期 lease 行重试。
  * </ul>
  *
- * <p>新增兜底 sweeper（{@code orphan-sweep-enabled}，默认开启）：清理升级前残留的 "partition READY + lease_expire_at
+ * <p>新增补充 sweeper（{@code orphan-sweep-enabled}，默认开启）：清理升级前残留的 "partition READY + lease_expire_at
  * NULL + 关联 task RUNNING" 死态，避免历史半成功态永久长期停滞。
  *
  * <p>ShedLock 锁名 {@code partition_lease_reclaim} / {@code partition_orphan_sweep}， 同时使用 {@link
@@ -117,10 +117,10 @@ public class PartitionLeaseReclaimScheduler {
   }
 
   /**
-   * 兜底 sweeper：扫描 "partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态。
+   * 补充 sweeper：扫描 "partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态。
    *
    * <p>新代码已通过 REQUIRES_NEW + 抛异常回滚消除产生路径；本 sweeper 仅清理升级前残留的历史死态， 通过对仍在 RUNNING 的 task 调 {@code
-   * resetForRetry}（不再触碰 partition）让其回到 READY，下一轮派发兜底走正常路径。
+   * resetForRetry}（不再触碰 partition）让其回到 READY，下一轮派发回退走正常路径。
    */
   @Scheduled(fixedDelayString = "${batch.partition-lease.orphan-sweep-interval-millis:300000}")
   @SchedulerLock(name = "partition_orphan_sweep", lockAtMostFor = "PT2M", lockAtLeastFor = "PT30S")

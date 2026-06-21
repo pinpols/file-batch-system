@@ -240,12 +240,12 @@
     </select>
 
     <!--
-      孤儿 task 兜底扫描：前序 reclaim 第一步 partition resetForDispatch 已成功
+      孤儿 task 回退扫描：前序 reclaim 第一步 partition resetForDispatch 已成功
       但第二步 task resetForRetry CAS 失败（且未抛异常回滚）的历史死态——
       partition_status 已是 READY 且 lease_expire_at IS NULL（reset 时清空），
       但同 partition 仍存在 task_status = RUNNING 的 task。
       新代码两步 CAS 在 REQUIRES_NEW 事务内、第二步失败抛异常回滚不再产生此态，
-      此 SQL 仅用于兜底清理升级前残留的死态。
+      此 SQL 仅用于补充清理升级前残留的死态。
     -->
     <select id="selectOrphanReadyPartitionsWithRunningTask" resultMap="JobPartitionResultMap">
         select p.*

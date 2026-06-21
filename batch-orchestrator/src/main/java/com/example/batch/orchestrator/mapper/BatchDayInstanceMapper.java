@@ -14,7 +14,7 @@ import org.apache.ibatis.annotations.Param;
  *
  * <ul>
  *   <li>{@link #insert(BatchDayInstanceEntity)} 用 {@code ON CONFLICT (tenant_id, calendar_code,
- *       biz_date) DO NOTHING}：并发首次创建只一行落库；caller 拿不到 id 也无所谓，下一轮 {@link
+ *       biz_date) DO NOTHING}：并发首次创建只一行写入数据库；caller 拿不到 id 也无所谓，下一轮 {@link
  *       #selectByTenantCalendarBizDate} 自然读到。
  *   <li>{@link #updateWithCas(BatchDayInstanceEntity)} 走 {@code WHERE id=? AND version=?} CAS：返回值 0
  *       视为乐观锁冲突，调用方应抛 {@code OptimisticLockingFailureException} 保留 SDJ 时代行为。

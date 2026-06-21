@@ -42,7 +42,7 @@ public class BatchPlatformClientConfig {
 
   /**
    * SDK-P5-3 运行指纹:租户应用构建标识(可空)。建议由 CI 注入(如 git 短 SHA / 镜像 tag),register 时上报到平台
-   * worker_registry.build_id,运维可据此区分同一 SDK 版本下不同业务构建。<b>不要放敏感信息</b>(会落库并对运维可见)。
+   * worker_registry.build_id,运维可据此区分同一 SDK 版本下不同业务构建。<b>不要放敏感信息</b>(会写入数据库并对运维可见)。
    */
   String buildId;
 

@@ -98,7 +98,7 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 
 **⚠️ 状态**：DB 重置后会丢；正确归宿是 `scripts/db/test-seed/platform_seed.sql`，**不是 Flyway**。
 
-### 3.3 queue resource_tag 清理（已落库）
+### 3.3 queue resource_tag 清理（已写入数据库）
 
 `default-tenant` 的 `export_queue` / `workflow_queue` `resource_tag` 清空（worker 没有对应 tag 时永远卡 WAITING 的临时解法）。长期真正的修法是给 worker 注册 capability_tags（#V4-BUG-2 已补代码支持），但 worker 侧心跳上报链路还没改。
 
@@ -191,4 +191,4 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 | deep-issue §5.12 Console Job 过胖 | 🟢 已修 | `DefaultConsoleJobApplicationService` 现 90 LOC 纯 delegate，拆出 `ConsoleJobOpsSupport`(407) / `ConsoleJobQueryService`(226) / `DefaultConsoleJobApprovalService`(192) / `DefaultConsoleJobRecoveryService`(230) / `DefaultConsoleJobTriggerService`(133) 共 6 个兄弟类 |
 | ADR-009 Stage 1.2 worker outputs 上报管线 | 🟢 已修 | `TaskExecutionReport.outputs` + `DefaultTaskExecutionWrapper.java:108-117` 透传 + `WorkflowNodeRunMapper.xml:84-85` 写 jsonb；`ImportStepExecutionAdapter.java:112` 已填 `NODE_OUTPUTS`（E/D/P 按需后补） |
 | 半完成基类重构 | 🟢 已修 | `4e634c7c`（2026-04-29）：4×`ERROR_OBJECT_MAPPER` + 4×`loadConfiguredSteps` + 3×`handlePipelineFailure` 上提到基类，消除 ~150 行复制；FQN 违规修了 |
-| i18n 业务路径收口 | 🟢 已修 | `23137b2c`（2026-04-29）：56 文件 BizException 全量从 literal message 迁到 i18n key + args 三元组；9 个 test 同步 |
+| i18n 业务路径收敛 | 🟢 已修 | `23137b2c`（2026-04-29）：56 文件 BizException 全量从 literal message 迁到 i18n key + args 三元组；9 个 test 同步 |

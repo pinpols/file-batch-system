@@ -118,7 +118,7 @@
 
 **无测试（Pipeline Steps）：**
 - ❌ ValidateStep — 字段/规则验证逻辑
-- ❌ LoadStep — 数据落库逻辑
+- ❌ LoadStep — 数据写入数据库逻辑
 - ❌ FeedbackStep — 回报反馈逻辑
 - ❌ ImportStageStep — Stage 包装器
 - ❌ ImportTaskConsumer — Kafka 消费者
@@ -237,7 +237,7 @@
 
 #### 4.3 Orchestrator 3 个核心 Service
 
-仅补最关键的 3 个，其余 8 个已有集成测试 + E2E 兜底：
+仅补最关键的 3 个，其余 8 个已有集成测试 + E2E 回退：
 
 - `DefaultTaskCreationServiceTest` — 任务从分区到创建的逻辑分支
 - `DefaultTaskExecutionServiceTest` — CLAIM → EXECUTE → REPORT 状态机

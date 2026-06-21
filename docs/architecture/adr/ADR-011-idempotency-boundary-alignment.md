@@ -38,7 +38,7 @@
 
 ### Layer 2 — Trigger Service(`DefaultTriggerService`)
 
-**职责**:在触发服务层做**业务级尽力去重**(查 `trigger_request` 是否已存在该 dedupKey 的 `LAUNCHED` 记录,有就直接返回该记录的 `traceId`)。**不**承担"事实事件唯一性"——那由 orchestrator 兜底。
+**职责**:在触发服务层做**业务级尽力去重**(查 `trigger_request` 是否已存在该 dedupKey 的 `LAUNCHED` 记录,有就直接返回该记录的 `traceId`)。**不**承担"事实事件唯一性"——那由 orchestrator 回退。
 
 **实现要点**:
 
@@ -47,7 +47,7 @@
 - **不强制** `(tenant_id, dedup_key)` 唯一约束 — 同一业务 key 在 trigger_request 表可能产生多条 request_id 不同的记录(调用方重试时 requestId 各不相同但 dedupKey 相同),这是正常 retry 路径而非异常。
 - 转发到 orchestrator 前,trigger 的去重是 best-effort:即使两条 trigger_request 同 dedupKey 各自走通,orchestrator 端仍会被 `uk_job_instance_tenant_dedup` 拦掉一条。
 
-**SLA**:同 dedupKey 大概率短路返回(命中 best-effort dedup),小概率两条 trigger_request 都送到 orchestrator(此时 orchestrator 兜底)。
+**SLA**:同 dedupKey 大概率短路返回(命中 best-effort dedup),小概率两条 trigger_request 都送到 orchestrator(此时 orchestrator 回退)。
 
 ### Layer 3 — Orchestrator DB 唯一约束(`uk_job_instance_tenant_dedup`)
 
@@ -87,7 +87,7 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 ## 不变量
 
 1. **Layer 1 的 24h DONE TTL** ≪ **Layer 3 的永久唯一约束** — Layer 1 只是"短期防重复 POST",过期后会让请求穿透到 Layer 2/3,最终事实唯一性靠 Layer 3。
-2. **Layer 2 是 best-effort,不是 fail-closed** — 单条查不到不代表绝对没人在做,允许两条同时穿透,Layer 3 兜底。
+2. **Layer 2 是 best-effort,不是 fail-closed** — 单条查不到不代表绝对没人在做,允许两条同时穿透,Layer 3 回退。
 3. **Layer 3 不可被绕过** — trigger / kafka / direct API / outbox replay 任何路径写入 `job_instance` 都必须命中本约束。
 
 ## 后果
@@ -101,7 +101,7 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 
 ### 负面 / 接受的取舍
 
-- **Layer 2 的 best-effort 允许极小概率的"两条 trigger_request 都送到 orchestrator"**:接受,理由是 Layer 3 兜底成本低(DB UNIQUE 约束 + select),反而比 trigger 层加锁更稳。
+- **Layer 2 的 best-effort 允许极小概率的"两条 trigger_request 都送到 orchestrator"**:接受,理由是 Layer 3 回退成本低(DB UNIQUE 约束 + select),反而比 trigger 层加锁更稳。
 - **Layer 1 PENDING 30s TTL 内的并发请求会被 409**:有意为之,避免突发并发把同 key 双提交到 Layer 2。
 - **Layer 1 fail-closed**:Redis 不可用时 console POST 全部 503,运维需把 Redis 列入主链路 SLO 一档。
 
@@ -115,7 +115,7 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 | Layer 1 | `batch-console-api/.../ConsoleIdempotencyInterceptor.java`   | 全文重写;两阶段占问题 + 4 路 key 绑定 + 失败释放       |
 | Layer 2 | `batch-trigger/.../DefaultTriggerService.java:134-142`       | `approvePendingCatchUp` 短路 LAUNCHED  |
 | Layer 2 | `batch-trigger/.../DefaultTriggerService.java:60-71`         | 类 Javadoc 说明"trigger 层只做尽力去重"        |
-| Layer 3 | `db/migration/V37__fix_trigger_request_dedup_constraint.sql` | 删 trigger 层约束 + 注释明示 orchestrator 兜底 |
+| Layer 3 | `db/migration/V37__fix_trigger_request_dedup_constraint.sql` | 删 trigger 层约束 + 注释明示 orchestrator 回退 |
 | Layer 3 | `db/migration/V`* `uk_job_instance_tenant_dedup`             | 事实源唯一约束(更早 migration)                |
 
 

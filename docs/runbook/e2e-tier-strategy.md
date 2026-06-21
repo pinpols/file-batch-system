@@ -84,7 +84,7 @@ profile `e2e-smoke` 用 JUnit5 tag 表达式 `smoke | critical` 过滤。
 | `staging-gate.yml` job `e2e-shard-full` | 每天 02:00 北京时间 + workflow_dispatch | **全量** 4 shard 并发(~10min) |
 
 > full-ci-gate 仍跑全量,作为 main push 的最终守护。staging-gate 是 nightly + 手动
-> 兜底,主要价值是「下班期间在 staging branch 上对 release candidate 全跑」。
+> 回退,主要价值是「下班期间在 staging branch 上对 release candidate 全跑」。
 
 ## 命令速记
 
@@ -115,7 +115,7 @@ mvn -pl batch-e2e-tests test -DexcludedGroups='smoke,critical'
 
 ## 反预期场景
 
-- pr-gate 漏掉 regression bug:**预期** — regression 的设计就是 nightly 兜底,fail
+- pr-gate 漏掉 regression bug:**预期** — regression 的设计就是 nightly 回退,fail
   时回滚 staging branch / hotfix。如果同类 bug 反复在 regression 上失败,考虑升级该
   case 到 critical。
 - smoke 跑得不稳:**严重** — smoke 是反馈周期的根基,flaky 必须当 P0 修。

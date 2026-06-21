@@ -41,7 +41,7 @@
 |---|---|---|
 | PG 主库挂 | 所有写失败 + console 502 | 写 |
 | Kafka 不可达 | 派发延迟,outbox 堆 | 派发 |
-| Redis 不可达 | 限流降级 / session 兜底 cache | session / 限流 |
+| Redis 不可达 | 限流降级 / session 回退 cache | session / 限流 |
 | Worker 失联 | orchestrator 不再派给它,task 回收 | 单 worker |
 | 上游 trigger 服务 down | console trigger 列表降级为空(只读) | 见 §2 例外 |
 

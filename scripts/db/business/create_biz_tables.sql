@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS batch.process_staging (
     PRIMARY KEY (batch_key, row_seq, staged_at)
 ) PARTITION BY RANGE (staged_at);
 
--- 兜底分区:维护调度滞后(未来日分区还没建)时写入落到 default,绝不因缺分区 INSERT 失败。
+-- 回退分区:维护调度滞后(未来日分区还没建)时写入落到 default,绝不因缺分区 INSERT 失败。
 -- 正常 default 近乎为空;运维若发现 default 持续增长 → 维护调度失效信号。
 CREATE TABLE IF NOT EXISTS batch.process_staging_default
     PARTITION OF batch.process_staging DEFAULT;

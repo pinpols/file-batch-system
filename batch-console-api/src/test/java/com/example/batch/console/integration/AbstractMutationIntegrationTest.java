@@ -11,7 +11,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 /**
  * Console 写路径(POST/PUT/PATCH/DELETE) 集成测试基类。
  *
- * <p>统一收口前 9 个 *MutationIntegrationTest 各自维护的 {@code WebTestClient} 构造模板与 {@code JdbcTemplate}
+ * <p>统一收敛前 9 个 *MutationIntegrationTest 各自维护的 {@code WebTestClient} 构造模板与 {@code JdbcTemplate}
  * 注入,避免改动单个集成测试时 6 个文件同步改;字段下沉到本基类后,子类只需写业务 fixture + 测试用例。
  *
  * <p>用法:

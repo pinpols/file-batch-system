@@ -40,7 +40,7 @@ public class TriggerKafkaProducerConfiguration {
         BatchKafkaProducerSupport.stringProducerConfig(bootstrapServers, commonProducerProperties);
     // trigger 专属覆盖:max.block.ms 不取全局(默认 5s),而按本模块 sendTimeoutSeconds 推导更紧的
     // 内部阻塞上限——取 sendTimeout 的 80%(最少 1s),超出由 KafkaTriggerEventPublisher 外层
-    // sendTimeout 兜底取消 future,避免双层超时叠加。
+    // sendTimeout 回退取消 future,避免双层超时叠加。
     long sendTimeoutMillis = Math.max(1_000L, kafkaProperties.getSendTimeoutSeconds() * 1_000L);
     long maxBlockMillis = Math.max(1_000L, (long) (sendTimeoutMillis * 0.8));
     properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMillis);

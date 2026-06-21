@@ -68,7 +68,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
   /**
    * ADR-038 R3-3:本 plugin 通过模板 INSERT/UPSERT(典型业务表带 {@code UNIQUE(tenant_id, ...)} 约束 + {@code ON
-   * CONFLICT DO NOTHING/UPDATE}),续跑重做 chunk 时 DB 层兜底重复写。
+   * CONFLICT DO NOTHING/UPDATE}),续跑重做 chunk 时 DB 层幂等约束防重复写。
    */
   @Override
   public IdempotencyCapability idempotencyCapability() {
@@ -85,7 +85,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     // A-3.5：严格幂等模式下，模板必须声明 conflictColumns；否则立即拒绝加载
     spec.validateIdentifiers(
         securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
-    // 地区(per-run):触发未传 region 时用模板 defaultRegion 兜底;allowedRegions 非空时做字典校验。
+    // 地区(per-run):触发未传 region 时用模板 defaultRegion 回退;allowedRegions 非空时做字典校验。
     // 用新局部变量(不重赋参数)——下方匿名内部类引用要求 effectively final。
     final ImportLoadContext loadContext = applyRegion(context, spec);
 
@@ -302,7 +302,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   }
 
   /**
-   * 地区解析:context.region(触发 metadata)优先,缺省用模板 defaultRegion 兜底;allowedRegions 非空时做字典校验, 非法地区直接
+   * 地区解析:context.region(触发 metadata)优先,缺省用模板 defaultRegion 回退;allowedRegions 非空时做字典校验, 非法地区直接
    * WorkerConfigException 拒绝。返回 region 已规整(含默认)的 context 供 ${region} binding 用。
    */
   static ImportLoadContext applyRegion(ImportLoadContext context, JdbcMappedImportSpec spec) {

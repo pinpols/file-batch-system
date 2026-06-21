@@ -74,7 +74,7 @@ public class PartitionReclaimUnit {
         // R2-P2-5：no-task path 的 CAS 失败可能是另一并发流程已推进（良性），
         // 也可能是历史残留死态（partition=READY + lease_expire_at=NULL + 无 task）。
         // selectExpiredLeasesGlobal 过滤 lease_expire_at NOT NULL，死态行只能由此路径碰到；
-        // 升级到 WARN 让运维可见持续告警；orphan-sweep 兜底清理。
+        // 升级到 WARN 让运维可见持续告警；orphan-sweep 补充清理。
         log.warn(
             "reclaim skipped (no-task path) — CAS conflict on partitionId={} version={}; concurrent"
                 + " reclaim or stale READY+null-lease dead-state (orphan-sweep should fix)",

@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       shell / http);
  *   <li>parameters Map key 必须落 schema {@code parameters[].name} 集合;必填字段不可缺;
  *   <li>{@link SensitiveDataValidator} 拒入凭据关键字(#242);
- *   <li>同事务 INSERT,UNIQUE(tenant_id, task_type, name) DB 兜底重复名。
+ *   <li>同事务 INSERT,UNIQUE(tenant_id, task_type, name) DB 唯一约束防重复名。
  * </ol>
  *
  * <p>本 service 只调用 {@link ConsoleAtomicTaskTypeSchemaService},不修改 schema 目录(单一权威源)。
@@ -57,7 +57,7 @@ public class ConsoleAtomicTaskConfigService {
    *
    * @param tenantId 已经 ConsoleTenantGuard.resolveTenant 解析过的 tenantId
    * @param taskType 内置原子 taskType
-   * @param name 同租户同 taskType 内唯一的配置名(本方法不做长度截断,DB VARCHAR(128) 兜底)
+   * @param name 同租户同 taskType 内唯一的配置名(本方法不做长度截断,DB VARCHAR(128) 回退)
    * @param parameters 节点参数(key 必须落 schema)
    * @param createdBy 创建人(可空)
    * @return 持久化后的 entity(含回写的自增 id)
@@ -84,7 +84,7 @@ public class ConsoleAtomicTaskConfigService {
     try {
       parametersJson = objectMapper.writeValueAsString(safeParams);
     } catch (JsonProcessingException ex) {
-      // 业务参数序列化失败属于编程错误 / 不合规 JSON 输入,转 BizException 由 i18n 兜底
+      // 业务参数序列化失败属于编程错误 / 不合规 JSON 输入,转 BizException 由 i18n 回退
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.atomic_task_config.parameters_not_serializable",

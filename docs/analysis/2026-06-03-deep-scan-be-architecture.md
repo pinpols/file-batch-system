@@ -41,7 +41,7 @@
 | P1-7 | sensor / forensic / dry-run / data-quality 子包成型,但 ADR-021 顶部仍写"默认不开工",代码 vs 文档脱钩 | docs/architecture/adr |
 | P1-8 | `LoadStep.executeLegacy` 死代码主路径自调用 + TODO needs-manual-review 4 处堆积 | 跨模块清单 |
 
-### P2(本月 — 维护性 / 一致性 / 收口)
+### P2(本月 — 维护性 / 一致性 / 收敛)
 
 | # | 项目 | 模块 |
 |---|---|---|

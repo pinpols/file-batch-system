@@ -11,7 +11,7 @@ package com.example.batch.common.plugin;
  * <p>详见 {@code docs/runbook/platform-worker-checkpoint-howto.md} §前置校验。
  */
 public enum IdempotencyCapability {
-  /** 业务表多租 UNIQUE 约束 + {@code INSERT ... ON CONFLICT DO NOTHING/UPDATE},DB 层兜底重复写。 */
+  /** 业务表多租 UNIQUE 约束 + {@code INSERT ... ON CONFLICT DO NOTHING/UPDATE},DB 层幂等约束防重复写。 */
   IDEMPOTENT_BY_UNIQUE_CONSTRAINT,
 
   /** plugin 自身在 loadChunk 内做去重(查后写 / 业务键判断),不依赖 DB 唯一约束。 */

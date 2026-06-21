@@ -467,7 +467,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         typedPayload.metadata().forEach((key, value) -> putMetadataParam(params, key, value));
       }
     } else {
-      // 兜底:某些路径(如插件单测)可能还没把 ProcessPayload 注入到 attributes,
+      // 回退:某些路径(如插件单测)可能还没把 ProcessPayload 注入到 attributes,
       // 直接从顶层 attributes 读 bizDate 字符串保持兼容(只读 bizDate 一项,不再全量散开)。
       Object bizDate = context.getAttributes().get("bizDate");
       if (bizDate != null) {

@@ -82,7 +82,7 @@ Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSec
 | 接口 / 基类 | 用途 |
 |---|---|
 | `SdkTaskHandler` | 最小契约:`taskType()` + `execute(ctx)` |
-| `SdkAbstractTaskHandler` | 兜底 try/catch + 异常 → `SdkTaskResult.fail` 转换 |
+| `SdkAbstractTaskHandler` | 回退 try/catch + 异常 → `SdkTaskResult.fail` 转换 |
 | `SdkAbstractImportHandler` / `Export` / `Process` / `Dispatch` / `Atomic` | 5 类业务模板基类,提供 stage 钩子(对齐 ADR-036) |
 | `SdkRetryableHandler` | 用 `@RetryOn` 声明重试策略 |
 | `SdkIdempotentHandler` | 用 `@Idempotent` 声明幂等键 + `SdkIdempotencyStore` 接管落地 |
@@ -142,7 +142,7 @@ Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSec
 | 所有调用必须带 `X-Batch-Tenant-Id` | `PlatformHttpClient` 自动注入,**禁手动覆盖** |
 | Write 操作必须带 `Idempotency-Key` | claim / report 接 string 参数,业务方传 `BatchPlatformClient.newIdempotencyKey()` 或自家可重放 ID |
 | API Key 不进日志 | `PlatformHttpClient` 不 log header |
-| 业务 handler 异常不能拖垮整 worker | `TaskDispatcher` 兜底 catch + `SdkTaskResult.fail()` report,worker 继续跑 |
+| 业务 handler 异常不能拖垮整 worker | `TaskDispatcher` 回退 catch + `SdkTaskResult.fail()` report,worker 继续跑 |
 | SASL 鉴权失败 fast-fail | `KafkaTaskConsumer` catch `AuthenticationException` → 不重试,`BatchPlatformClient` skip deactivate(凭据已错,HTTP 也 401)→ 由 K8s liveness 重启 |
 | Cancel 信号 | `ctx.cancellationSignal()` 实现 `isCancelRequested()`,业务循环里检查后干净退出 |
 

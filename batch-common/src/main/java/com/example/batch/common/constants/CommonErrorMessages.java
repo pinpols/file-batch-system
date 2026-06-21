@@ -3,7 +3,7 @@ package com.example.batch.common.constants;
 /**
  * 统一错误文案。S2.1:全部中文化(原 12 条英文 + 5 helper),与 messages_zh_CN.properties 默认 zh_CN 输出对齐;真要做 i18n
  * 翻译的接入方应直接抛 {@code BizException.of(code, key, args)} 走 MessageSource,而非读这里的常量(常量是 fail-safe
- * 兜底,不能动态切语言)。
+ * 回退,不能动态切语言)。
  */
 public final class CommonErrorMessages {
 

@@ -36,7 +36,7 @@ public interface TriggerRequestMapper {
 
   /**
    * ADR-010 reconciler 用：找出 卡在 ACCEPTED 且 created_at 早于 {@code olderThan}、 但已在 job_instance 中以同
-   * dedup_key 落库的 trigger_request。 返回 (tenantId, requestId, jobInstanceId) 供 reconciler 调 {@link
+   * dedup_key 写入数据库的 trigger_request。 返回 (tenantId, requestId, jobInstanceId) 供 reconciler 调 {@link
    * #reconcileLaunched} 把状态推到 LAUNCHED。
    *
    * <p>JOIN 路径:trigger_request.dedup_key ↔ job_instance.dedup_key(同租户)。 trigger 与 launch 双方都把同一个

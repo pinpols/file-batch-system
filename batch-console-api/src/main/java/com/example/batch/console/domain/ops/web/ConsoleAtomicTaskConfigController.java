@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  * R3-5 / Round-1 TOP-8 — atomic 节点配置写库端点(FE 2-B 工作流编辑器侧后续接入,FE 留 follow-up)。
  *
  * <p>读路径:GET 按 (tenant_id, taskType) 列;写路径:POST 创建。schema 校验 / 凭据拒入由 {@link
- * ConsoleAtomicTaskConfigService} 兜底,Controller 仅做参数收集 + 租户解析。
+ * ConsoleAtomicTaskConfigService} 回退,Controller 仅做参数收集 + 租户解析。
  *
  * <p>与 {@link ConsoleAtomicTaskTypeController}(静态 schema 目录)区分:本控制器面向"已保存的配置",带租户维度。
  */
@@ -68,7 +68,7 @@ public class ConsoleAtomicTaskConfigController {
   }
 
   /**
-   * 创建请求体。tenantId 为空 → 由 {@link ConsoleTenantGuard} 兜底(租户角色用 JWT,全局角色必传)。
+   * 创建请求体。tenantId 为空 → 由 {@link ConsoleTenantGuard} 回退(租户角色用 JWT,全局角色必传)。
    *
    * @param tenantId 可空,见上
    * @param taskType 内置原子 taskType(sql / stored_proc / shell / http)

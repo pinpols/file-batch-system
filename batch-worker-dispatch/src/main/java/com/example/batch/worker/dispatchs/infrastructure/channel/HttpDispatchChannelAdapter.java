@@ -31,11 +31,11 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   public HttpDispatchChannelAdapter(
       HttpDispatchChannelProperties properties, BatchSecurityProperties securityProperties) {
-    // 一次性把 OkHttpClient 构造好（含 callTimeout 兜底 + 自定义 Dns）并复用：
+    // 一次性把 OkHttpClient 构造好（含 callTimeout 回退 + 自定义 Dns）并复用：
     // 1) 每次 dispatch 调用 newBuilder().dns(...).build() 会让 connection / dispatcher /
     //    thread pool 被重建，复用价值归零，高并发下还会泄漏线程；
     // 2) 父 Client 缺 callTimeout 时，connect/read/write 各自不超时 ≠ 总时长不超时——
-    //    比如 read 拉长导致总时长无界，必须显式 callTimeout 收口。
+    //    比如 read 拉长导致总时长无界，必须显式 callTimeout 收敛。
     Dns guardedDns =
         new Dns() {
           @Override

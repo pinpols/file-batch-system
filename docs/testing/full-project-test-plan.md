@@ -27,7 +27,7 @@ Phase 1 测试覆盖矩阵见：`docs/testing/phase-coverage.md`
 
 ### 推荐基建
 
-这个仓库的集成测试，建议统一收口到一套基础测试类：
+这个仓库的集成测试，建议统一收敛到一套基础测试类：
 
 - `AbstractIntegrationTest`
 - `PostgreSQLContainer`
@@ -91,7 +91,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   - Partition lease reclaim
   - Quota runtime reset
   - Worker drain timeout
-  - SLA / alert 落库
+  - SLA / alert 写入数据库
 - `batch-worker-import`
   - 入口扫描 -> parse -> validate -> load
   - 成功样本、校验失败样本、流式大文件样本
@@ -110,7 +110,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
 只保留 4 条主路径，避免测试爆失败。
 
-- 导入主链路：上游文件 -> 扫描 -> parse -> validate -> load -> 业务表落库
+- 导入主链路：上游文件 -> 扫描 -> parse -> validate -> load -> 业务表写入数据库
 - 导出主链路：业务表 -> 生成文件 -> 加密/存储 -> 注册 -> 分发 -> 回执
 - 补偿审批链路：失败任务 -> 审批 -> replay / compensation 成功
 - 治理闭环链路：失败分发 / DLQ / alert / retry / health probe
@@ -143,7 +143,7 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 
 ## 目标
 
-本计划用于把当前仓库已有的单元测试、集成测试、E2E、压测脚本、部署产物和巡检脚本，收口为一套可执行、可验收、可作为发布门禁的完整测试方案。
+本计划用于把当前仓库已有的单元测试、集成测试、E2E、压测脚本、部署产物和巡检脚本，收敛为一套可执行、可验收、可作为发布门禁的完整测试方案。
 
 目标不是继续零散补测试类，而是形成：
 
@@ -180,9 +180,9 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 
 - **247 个测试相关文件**（146 单元 + 59 集成 + 30 E2E + 支撑类）
 
-这说明项目已经完成了测试基线盘点和首轮 P0 回归收口。当前状态可以拆成两类：
+这说明项目已经完成了测试基线盘点和首轮 P0 回归收敛。当前状态可以拆成两类：
 
-- 已完成：测试基线盘点、统一回归入口、P0 首轮收口、console-api Excel / HTTP smoke 收口、Phase 6 门禁接入 CI / staging workflow
+- 已完成：测试基线盘点、统一回归入口、P0 首轮收敛、console-api Excel / HTTP smoke 收敛、Phase 6 门禁接入 CI / staging workflow
 - 未完成：真实 staging 实跑留档、故障演练完整报告、压测基线数值回填、真实发布记录闭环、`helm upgrade --install --atomic` 失败观测
 
 ## 仍需补齐的事情
@@ -195,7 +195,7 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 
 ### 2. 统一全量回归入口
 
-已完成统一脚本收口，且已接入对应说明文档与 workflow。
+已完成统一脚本收敛，且已接入对应说明文档与 workflow。
 
 现有统一脚本 `scripts/ci/run-full-regression.sh` 已包含：
 
@@ -318,11 +318,11 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 
 ### Phase 2：P0 功能回归补齐（已完成首轮）
 
-Phase 2 的详细收口内容已拆到 `docs/testing/phase-coverage.md`。
+Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 
 本节只保留结论：
 
-- 已完成首轮 P0 收口
+- 已完成首轮 P0 收敛
 - 已补齐 `batch-trigger` 首批门禁、接口层校验和 Quartz catch-up 修正
 - 已补齐 `batch-console-api` 权限/租户负向测试、并发 claim、Kafka 外部渠道失败恢复
 - 后续增量项仍是 `batch-worker-core` 协作测试、dedup 幂等冲突、Kafka 重试耗尽和外部渠道进一步验证
@@ -390,7 +390,7 @@ Phase 2 的详细收口内容已拆到 `docs/testing/phase-coverage.md`。
 
 - `load-tests` 模块已通过 `test-compile`
 - `JobLaunchSimulation`、`ConsoleQuerySimulation`、`CapacityBaselineSimulation` 已可编译
-- 已完成压测工具链收口
+- 已完成压测工具链收敛
 - 未完成真实 staging / prod-like 的容量数值回填与门禁留档
 
 ### Phase 5：部署升级回滚验证（工具链已完成，staging 待回填）
@@ -408,7 +408,7 @@ Phase 2 的详细收口内容已拆到 `docs/testing/phase-coverage.md`。
 - 已完成本地和静态验证入口
 - 未完成真实 staging 执行结果、回滚留档和业务验收
 
-### Phase 6：门禁收口（已完成收口，staging 留档待回填）
+### Phase 6：门禁收敛（已完成收敛，staging 留档待回填）
 
 把完整回归接入 CI / staging gate，形成发布前固定流程。
 
@@ -480,6 +480,6 @@ Phase 2 的详细收口内容已拆到 `docs/testing/phase-coverage.md`。
 
 ## 一句话结论
 
-当前项目已经完成测试基础建设、首轮 P0 收口，以及 Phase 3/4/5 的工具链与报告框架，Phase 6 门禁收口也已经接到 CI / staging workflow。
+当前项目已经完成测试基础建设、首轮 P0 收敛，以及 Phase 3/4/5 的工具链与报告框架，Phase 6 门禁收敛也已经接到 CI / staging workflow。
 
 下一阶段的重点不是再零散补测试类，而是把故障演练、压测基线、部署验证和发布门禁在 staging 里真正跑通并留档。当前未完成项主要集中在 staging 证据和最终发布留痕，不是测试骨架缺失。

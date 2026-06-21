@@ -45,7 +45,7 @@ public class ApiKeyVerifier {
   /**
    * 自注入(CLAUDE.md §Java #3 豁免①):{@code touchAsync} / {@code upgradeLegacyHashAsync} 标了
    * {@code @Async}, 必须经 Spring 代理调用才异步。原先 {@code this.touchAsync()} 是同类自调用,绕过代理 → @Async 失效 → DB 写
-   * + PBKDF2(50-200ms CPU)在请求线程同步执行,洪峰会耗尽 Tomcat 线程池。改走 {@code self.xxx()}。
+   * + PBKDF2(50-200ms CPU)在请求线程同步执行,峰值流量会耗尽 Tomcat 线程池。改走 {@code self.xxx()}。
    */
   @Lazy @Autowired private ApiKeyVerifier self;
 

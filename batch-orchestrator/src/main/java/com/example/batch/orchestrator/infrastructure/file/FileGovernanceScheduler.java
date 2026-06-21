@@ -51,7 +51,7 @@ public class FileGovernanceScheduler {
   private final FileGovernanceMetricsCacheService metricsCacheService;
   private final MeterRegistry meterRegistry;
 
-  /** ADR-046:到达组凑齐时,若该组是文件束则发起 BUNDLE_* launch。 */
+  /** ADR-046:到达组满足条件时,若该组是文件束则发起 BUNDLE_* launch。 */
   private final BundleArrivalLauncher bundleArrivalLauncher;
 
   private final AtomicLong arrivalDelayViolations = new AtomicLong();
@@ -73,7 +73,7 @@ public class FileGovernanceScheduler {
     meterRegistry.gauge("batch.pipeline.processing.delay.max.seconds", processingDelayMaxSeconds);
   }
 
-  /** 文件治理指标由中心定时收口，先保证延迟可见，再谈更复杂的告警策略。 */
+  /** 文件治理指标由中心定时收敛，先保证延迟可见，再谈更复杂的告警策略。 */
   public void collectLatencyMetrics() {
     if (!properties.getLatency().isEnabled()) {
       return;

@@ -20,11 +20,11 @@
 
 ## 1. 业务表达力:真实批量场景装得下吗
 
-状态: **大体可承载，仍需少量上线口径收口。**
+状态: **大体可承载，仍需少量上线口径收敛。**
 
 已落地证据:
 
-- readiness defer 已落库并接入触发链路: `V180__trigger_runtime_state_readiness_deferred.sql` 增加 `WAITING_READINESS / WAITING_READINESS_TIMEOUT / SKIPPED_BY_CALENDAR`，`DefaultTriggerService` 在 launch 前检查上游，`HashedWheelTriggerScheduler` 维护 defer window/recheck，不再把当天批直接 skip 掉。
+- readiness defer 已写入数据库并接入触发链路: `V180__trigger_runtime_state_readiness_deferred.sql` 增加 `WAITING_READINESS / WAITING_READINESS_TIMEOUT / SKIPPED_BY_CALENDAR`，`DefaultTriggerService` 在 launch 前检查上游，`HashedWheelTriggerScheduler` 维护 defer window/recheck，不再把当天批直接 skip 掉。
 - 上游成功判定使用最新 attempt: `ReadinessService` / `JobInstanceMapper` 按 `tenantId + jobCode + bizDate` 取最新 attempt，避免 rerun 后旧 SUCCESS 误解锁下游。
 - 重跑/补数有模型: `ADR-020`、`BatchDayReplayService`、`batch_day_replay_session` 支持按 bizDate/session/scope replay，并接 result_version。
 - 文件侧不是玩具: import 已覆盖 XML/FIXED_WIDTH/EXCEL/DELIMITED、非 UTF-8 严格解码、坏行治理、行列定位、checkpoint、分区 COPY、APPEND/UPSERT/REPLACE 小矩阵；benchmark 文档记录了 1000w 级验证。
@@ -54,7 +54,7 @@
 
 ## 3. 数字可信:跑成功的批敢不敢拿去出账
 
-状态: **核心幂等强，对账承重墙已开始落地，但默认阻断语义不足。**
+状态: **核心幂等强，对账关键约束已开始落地，但默认阻断语义不足。**
 
 已落地证据:
 
@@ -78,7 +78,7 @@
 
 - `worker-throughput-benchmark-plan-2026-06-07.md` 记录 import/export P0/P1 已完成:import 1000w、partition replace/stage swap、bad-record、checkpoint；export 1000w、4 分片真并行、multipart、格式矩阵。
 - load-tests 有 Gatling 场景和 SLO 参数，go-live runbook 写明 5-20 jobs/s 目标。
-- 资源调度默认改为 `QUEUE_DEFER`，比直接拒绝更适合批量洪峰。
+- 资源调度默认改为 `QUEUE_DEFER`，比直接拒绝更适合批量峰值流量。
 - autoscaling/runbook 明确 static/dynamic sharding 的扩容前置。
 
 主要风险:
@@ -101,7 +101,7 @@
 主要风险:
 
 - `go-live-readiness.md` 明确 DR/韧性演练是真缺口:全 worker 组崩溃、PITR、PG failover、Kafka 短不可用、DLQ replay 需要 staging 签字。
-- `backup-and-pitr.md` 也明确 Kafka RF=1 时 broker 盘损不能硬保证在途事件 RPO，只能靠 outbox republish/lease 重派兜底。生产必须 broker≥3、RF=3、min ISR 与 acks=all。
+- `backup-and-pitr.md` 也明确 Kafka RF=1 时 broker 盘损不能硬保证在途事件 RPO，只能靠 outbox republish/lease 重派回退。生产必须 broker≥3、RF=3、min ISR 与 acks=all。
 - Process RUNNING cancel / Atomic shell cancel 当前语义偏软取消，不能强杀正在执行的 shell/任务；对高风险长任务要写入运行约束。
 
 ## 6. 多租/权限:真隔离还是演示隔离
@@ -167,7 +167,7 @@
 
 - 文档体量很大，且多份审计/roadmap 之间有落地状态漂移。上线报告必须引用当前代码证据，不要引用旧报告当最终事实。
 - ADR-041 当前 Proposed 但代码已有落地；状态不更新会让评审误判。
-- 大盘/AI/治理类能力不能挤占 control total、DR 演练、告警、runbook 这些上线承重墙。
+- 大盘/AI/治理类能力不能挤占 control total、DR 演练、告警、runbook 这些上线关键约束。
 
 ## 10. 上线就绪:go-live 真能签字
 
@@ -193,7 +193,7 @@ go-live readiness 已给出正确总闸:
 1. 跑 `go-live-staging-execution.md` Phase 1-A~E，并把日志/SQL/trace/截图/签字落到一次执行报告。
 2. 补 console instance/workflow pause/resume 转发 API + `@AuditAction` + 前端入口，避免运维绕内部接口。
 3. 对 ADR-041 关键链路做上线策略表:哪些模板 `controlRecordCheck/controlTotalCheck/countContinuity/readback` 是 WARN，哪些是 BLOCKER。
-4. 把 alert TODO 收口:outbox stale/circuit open、Kafka lag、PG primary/replica/lock、Redis/ShedLock、batch day stuck、readiness timeout、DLQ 增长。
+4. 把 alert TODO 收敛:outbox stale/circuit open、Kafka lag、PG primary/replica/lock、Redis/ShedLock、batch day stuck、readiness timeout、DLQ 增长。
 5. ✅ **【2026-06-21 已闭环 / PR #603】** 合并并验证 alert escalation notifier:`AlertEscalationNotifier`(console-api 轮询共享表 + ShedLock + CAS 通知水位线 V181)已合 main,并 live-smoke 实证 OPEN 告警升级 → `alerts/alert-escalated` 事件 → 现有 webhook 分发器真发 HTTP(payload/幂等/SSRF 均验)。**残留**:EMAIL/钉钉/企微 sender 未实现(v1 仅 WEBHOOK+Web Push),作 P1 跟进。
 6. staging 跑端到端 traceId smoke:trigger → orchestrator → worker → report → console 可检索。
 

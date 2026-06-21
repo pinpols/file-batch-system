@@ -20,7 +20,7 @@ Stage 7 已完成：新增统一自动化入口，默认 smoke 已扩展为 Stag
 
 本轮第三批增量已完成：Import 补 APPEND/UPSERT/`PARTITION_REPLACE_COPY` 小矩阵和 bad-record skip 阈值；Export 补 8 分片小规模、多租户混压、requestId replay 幂等；Process 补真正分片 SQL 参数和取消当前语义；Dispatch 补 LOCAL/NAS/SFTP sidecar manifest；Atomic 补非 loopback HTTP 真成功、SQL timeout 分类和 task cancel 信号；Trigger 补 scheduler 定时触发、misfire pending、replay approve 和 60 请求 storm。
 
-本轮第四批收口已完成：Import checkpoint 真实崩溃续跑 fault-injection profile 通过；Trigger `MANUAL_APPROVAL` misfire pending 自动创建/关联 catch-up request 并可直接按 `pendingId` approve；Process RUNNING cancel 与 Atomic shell cancel 均已从“只置标记”修成 worker 侧中断并以取消失败码终态收口。
+本轮第四批收敛已完成：Import checkpoint 真实崩溃续跑 fault-injection profile 通过；Trigger `MANUAL_APPROVAL` misfire pending 自动创建/关联 catch-up request 并可直接按 `pendingId` approve；Process RUNNING cancel 与 Atomic shell cancel 均已从“只置标记”修成 worker 侧中断并以取消失败码终态收敛。
 
 本轮有效验证 run：
 
@@ -102,7 +102,7 @@ Stage 7 automation run：
 - Atomic Stage 5c：`sim-atomic-stage5c-20260608134703`，日志 `load-tests/target/atomic-stage5c-20260608134703/atomic-stage5c.log`，断言 `SUCCESS|FAILED:TIMEOUT:TIMEOUT|SUCCESS:SUCCESS:true|cancelHttp=200`
 - Trigger Stage 6c：`sim-trigger-stage6c-20260608133013`，日志 `load-tests/target/trigger-stage6c-20260608133013/trigger-stage6c.log`，断言 `scheduled=1|misfire=1|replay=LAUNCHED|19350|storm=60/60`
 
-第四批收口 run：
+第四批收敛 run：
 
 - Import Stage 2e checkpoint crash-resume：`import-stage2e-checkpoint-crash-20260608163051`，日志 `load-tests/target/import-stage2e-checkpoint-crash-20260608163051/import-stage2e-checkpoint-crash.log`，断言 `requestId=sim-stage2e-ckpt-7452142|instance=30293|partition=21817|pipeline=12792|markerBeforeKill=350|processedFinal=20000|rows=20000|status=SUCCESS`
 - Process Stage 4c cancel 复验：`process-stage4c-20260608163544`，日志 `load-tests/target/process-stage4c-20260608163544/process-stage4c.log`，断言 `4|4|16|296.00|16|16|FAILED|FAILED|FAILED`，取消任务 `error_code=WORKER_EXECUTION_CANCELLED`

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** 导出地区解析:per-run 优先 / 模板默认兜底 / allowedRegions 字典校验 / 顶层 + snake_case 别名。 */
+/** 导出地区解析:per-run 优先 / 模板默认回退 / allowedRegions 字典校验 / 顶层 + snake_case 别名。 */
 class ExportRegionResolverTest {
 
   /** query_param_schema.sqlTemplateExport 下配 defaultRegion(可空) + allowedRegions。 */
@@ -74,7 +74,7 @@ class ExportRegionResolverTest {
 
   @Test
   void readsSnakeCaseAliasesAndTopLevelFallback() {
-    // 顶层 default_region / allowed_regions(snake_case 别名)兜底
+    // 顶层 default_region / allowed_regions(snake_case 别名)回退
     Map<String, Object> tpl =
         Map.of("default_region", "SH", "allowed_regions", List.of("BJ", "SH"));
     assertThat(ExportRegionResolver.resolve(tpl, Map.of())).isEqualTo("SH");

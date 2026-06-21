@@ -138,7 +138,7 @@
 **修复**：
 1. 将 `Stateful` 接口从 `batch-orchestrator` 迁移到 `batch-common`（新建 `com.example.batch.common.persistence.Stateful`），orchestrator 侧保留继承别名
 2. `WorkflowRunEntity` 和 `WorkflowNodeRunEntity` 实现 `Stateful` 接口
-3. 加上已有的 `JobInstanceEntity`/`JobPartitionEntity`/`JobTaskEntity`，所有传入 `StateMachine.transition()` 的实体均走编译期安全路径，反射兜底不再触发
+3. 加上已有的 `JobInstanceEntity`/`JobPartitionEntity`/`JobTaskEntity`，所有传入 `StateMachine.transition()` 的实体均走编译期安全路径，反射回退不再触发
 
 **文件**：`Stateful.java`(batch-common 新建), `Stateful.java`(orchestrator 改为别名), `WorkflowRunEntity.java`, `WorkflowNodeRunEntity.java`
 
@@ -160,7 +160,7 @@
 
 ### #6-1 OutboxPollScheduler shutdown 不等待（此前已修复）
 
-**修复**：`stop()` 添加 `awaitTermination(30s)` + `shutdownNow()` 兜底。
+**修复**：`stop()` 添加 `awaitTermination(30s)` + `shutdownNow()` 回退。
 
 ### #9-1 种子数据缺失 workflow_definition（此前已修复）
 

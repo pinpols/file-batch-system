@@ -25,7 +25,7 @@ public class TriggerLaunchRequest {
   private Map<String, Object> params;
 
   /**
-   * V94: 调用方可显式指定 data_interval 半开区间. null 表示走 bizDate 兜底 (worker 端 [bizDate.atStartOfDay(zone),
+   * V94: 调用方可显式指定 data_interval 半开区间. null 表示走 bizDate 回退 (worker 端 [bizDate.atStartOfDay(zone),
    * bizDate+1.atStartOfDay(zone)) 退化). API/MANUAL 触发分钟级批必填.
    */
   private Instant dataIntervalStart;

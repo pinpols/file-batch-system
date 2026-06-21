@@ -35,7 +35,7 @@ public class SparkSubmitExecutorProperties {
   /** 默认 --deploy-mode(client / cluster)。client 模式 driver 在本子进程,可取消;cluster 模式见执行器 TODO。 */
   private String defaultDeployMode = "client";
 
-  /** 用户未配 timeoutSeconds 时的兜底超时。 */
+  /** 用户未配 timeoutSeconds 时的回退超时。 */
   private Duration defaultTimeout = Duration.ofMinutes(30);
 
   /** stdout / stderr 截断上限(防日志爆内存)。 */

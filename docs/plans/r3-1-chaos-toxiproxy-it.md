@@ -9,7 +9,7 @@
 ## 价值
 - 现有 23+ `*E2eIT` 验**业务路径**,但不验**基础设施故障下的行为**(Kafka 延迟、PG 断连、Redis 宕)
 - 现有 `OrchestratorWireMockSupport` 只 mock HTTP,broker / db 层零覆盖
-- 上线后这类故障一旦发生 → 复盘没单测兜底无法 reproduce → 修复后无回归保护
+- 上线后这类故障一旦发生 → 复盘没单测回退无法 reproduce → 修复后无回归保护
 
 ## 范围
 

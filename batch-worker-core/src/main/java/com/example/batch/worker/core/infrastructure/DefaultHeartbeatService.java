@@ -54,7 +54,7 @@ public class DefaultHeartbeatService implements HeartbeatService {
         activeRegistration.getCurrentLoad());
   }
 
-  /** 求和所有 WorkerLoadProvider 实现 (通常是 1 个 AbstractTaskConsumer 子类), 异常静默兜底为 0. */
+  /** 求和所有 WorkerLoadProvider 实现 (通常是 1 个 AbstractTaskConsumer 子类), 异常静默回退为 0. */
   private int collectCurrentLoad() {
     try {
       return loadProviders.stream().mapToInt(WorkerLoadProvider::currentLoad).sum();

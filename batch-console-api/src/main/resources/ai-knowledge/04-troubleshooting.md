@@ -25,4 +25,4 @@
 - 处理:租约超时后由 orchestrator 侧回收/改派;补偿命令遗留 RUNNING 由 `StaleCompensationCommandReconciler` 对账。
 
 ## 重要边界
-- 这些自愈调度器是兜底机制,定位真实 root cause 仍要看执行日志与失败分类(failure class),不要只依赖自愈。
+- 这些自愈调度器是回退机制,定位真实 root cause 仍要看执行日志与失败分类(failure class),不要只依赖自愈。

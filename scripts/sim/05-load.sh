@@ -151,7 +151,7 @@ for t in TENANTS:
     for job, tpl in EXPORTS.get(t, []):
         run("EXPORT", t, job, {"templateCode": tpl})
 
-# DISPATCH 依赖已存在文件:等 EXPORT 落库后,取该租户最近一个 file_record id 当 fileId
+# DISPATCH 依赖已存在文件:等 EXPORT 写入数据库后,取该租户最近一个 file_record id 当 fileId
 def latest_file_id(tenant):
     sql = (f"select id from batch.file_record where tenant_id='{tenant}' "
            f"and file_category='OUTPUT' and source_type='GENERATED' "

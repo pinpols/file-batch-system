@@ -79,7 +79,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>只接受 RUNNING 状态的 task 回报，避免重复 report 导致状态回跳。
- *   <li>并发冲突靠 DB 乐观锁/条件更新兜底（更新行数为 0 → STATE_CONFLICT）。
+ *   <li>并发冲突靠 DB 乐观锁/条件更新回退（更新行数为 0 → STATE_CONFLICT）。
  * </ul>
  */
 @Service
@@ -117,7 +117,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // ⑦ follow-up: worker REPORT 终态写路径也要打 JobLifecycleMetrics,与
       // JobInstanceTerminalStatusApplicationService 走同一 helper 复用 afterCommit 调度。
       JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
-      // ADR-041 Phase1.3b:节点产出落库后跨阶段 count 连续性核对(仅告警)。
+      // ADR-041 Phase1.3b:节点产出写入数据库后跨阶段 count 连续性核对(仅告警)。
       CountContinuityOutboxService countContinuityOutboxService) {}
 
   public DefaultTaskOutcomeService(
@@ -231,7 +231,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     WorkflowNodeRunEntity finished =
         workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
             command.workflowRunId(), command.nodeCode());
-    // ADR-041 Phase1.3b:本节点产出已落库,同事务核跨阶段 count 连续性(仅告警,不翻转状态)。
+    // ADR-041 Phase1.3b:本节点产出已写入数据库,同事务核跨阶段 count 连续性(仅告警,不翻转状态)。
     if (command.success()) {
       collaborators
           .countContinuityOutboxService()
@@ -505,7 +505,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .transition(freshInstance != null ? freshInstance : jobInstance, instanceEvent)
             .toState();
     // ADR-012: instance 级 failure_class 仅在终态且失败类（FAILED / PARTIAL_FAILED）时填；
-    // SUCCESS 终态保持 NULL。来源 = 当前命令本次推断的 class（合并 worker 上报 + classifier 兜底）。
+    // SUCCESS 终态保持 NULL。来源 = 当前命令本次推断的 class（合并 worker 上报 + classifier 回退）。
     String instanceFailureClass =
         isTerminalJobInstanceStatus(instanceStatus)
                 && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
@@ -535,7 +535,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (isTerminalJobInstanceStatus(instanceStatus)) {
       // ⑦ follow-up: worker REPORT 路径的终态切换也要算入 JobLifecycleMetrics,
       // 与 JobInstanceTerminalStatusApplicationService (运维/超时路径) 走同一 helper。
-      // jobFullyComplete 决定 finishedAt 是否进入实例 — null 时 helper 走 afterCommit 时刻兜底。
+      // jobFullyComplete 决定 finishedAt 是否进入实例 — null 时 helper 走 afterCommit 时刻回退。
       collaborators
           .jobLifecycleMetricsRecorder()
           .recordCompletionAfterCommit(

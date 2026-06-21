@@ -231,7 +231,7 @@ class BatchPlatformClientStopTimeoutTest {
     if (v instanceof Set<?> s) {
       return (Set<Long>) s;
     }
-    // 兜底(理论不到)
+    // 回退(理论不到)
     Map<Long, Boolean> back = new ConcurrentHashMap<>();
     HashMap<String, Object> ignored = new HashMap<>();
     ignored.put("k", back);

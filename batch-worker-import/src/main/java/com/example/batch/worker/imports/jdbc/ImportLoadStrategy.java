@@ -2,7 +2,7 @@ package com.example.batch.worker.imports.jdbc;
 
 import com.example.batch.common.exception.WorkerConfigException;
 
-/** jdbc_mapped_import 的落库策略。默认保持原 batch INSERT/UPSERT 行为。 */
+/** jdbc_mapped_import 的写入数据库策略。默认保持原 batch INSERT/UPSERT 行为。 */
 public enum ImportLoadStrategy {
   BATCH_UPSERT,
   PARTITION_REPLACE_COPY,

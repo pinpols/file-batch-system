@@ -25,7 +25,7 @@
 | 维度 | Java | Python | Go | Rust | TS |
 |---|---|---|---|---|---|
 | register 字段齐 | ✅ | ✅ | ✅ `lifecycle.go:137` | ✅ | ✅ |
-| Kafka `workerType`(非旧 taskType) | ✅ `dispatcher/TaskDispatchMessage.java:37` `@JsonAlias` 兜底 | ✅ `dispatcher.py:337` | ✅ `consumer.go` | ✅ `kafka.rs` | ✅ `consumer.ts` |
+| Kafka `workerType`(非旧 taskType) | ✅ `dispatcher/TaskDispatchMessage.java:37` `@JsonAlias` 回退 | ✅ `dispatcher.py:337` | ✅ `consumer.go` | ✅ `kafka.rs` | ✅ `consumer.ts` |
 | protocolVersion 注册门禁 | ✅ "v2" | ✅ "v2" | ✅ `lifecycle.go:137`(末位 supported) | ✅ register "v2" | ✅ |
 | renew 409 → 弃任务/停 handler | ✅ | ✅ | ✅ `scheduler.go:277` | ✅ scheduler | ✅ `scheduler.ts:192` |
 | renew `cancelRequested` → 取消 | ✅ | ✅ | ✅ `scheduler.go:214` MarkCancelled | ✅ | ✅ `scheduler.ts:150` |
@@ -33,7 +33,7 @@
 | backpressure pause/resume | ✅ | ✅ `_kafka.py:263` | ✅ `consumer.go` | ✅ | ✅ `consumer.ts` |
 | 401/403 fail-fast | ✅ | ✅ | ✅ `decide.go` | ✅ | ✅ `transport.ts:14` |
 
-> **非缺口小项**:Python `dispatcher.py:337` 用 `msg.get("workerType")`,无 `taskType` 兜底。BE v2 已不发 `taskType`(`batch-common/.../TaskDispatchMessage.java` 注释),故非正确性缺口;Java 的 `@JsonAlias` 只是 belt-and-suspenders。
+> **非缺口小项**:Python `dispatcher.py:337` 用 `msg.get("workerType")`,无 `taskType` 回退。BE v2 已不发 `taskType`(`batch-common/.../TaskDispatchMessage.java` 注释),故非正确性缺口;Java 的 `@JsonAlias` 只是 belt-and-suspenders。
 
 ## 3. ADR-037(断点续跑/可靠提交)+ 幂等(五语言齐)
 

@@ -25,7 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * REQUIRES_NEW 事务边界集成测试 — Trigger 去重（ADR-010 异步路径）。
  *
  * <p>{@code DefaultTriggerService#insertPendingAndOutboxOrReturnExisting} 使用 {@code
- * PROPAGATION_REQUIRES_NEW} 在同一事务内原子写 trigger_request + trigger_outbox_event。验证：去重检查生效、两表原子落库。
+ * PROPAGATION_REQUIRES_NEW} 在同一事务内原子写 trigger_request + trigger_outbox_event。验证：去重检查生效、两表原子写入数据库。
  */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
@@ -59,7 +59,7 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     var response = triggerService.launch(command);
     assertThat(response).isNotNull();
 
-    // trigger_request 已落库且状态为 ACCEPTED
+    // trigger_request 已写入数据库且状态为 ACCEPTED
     Integer requestCount =
         jdbcTemplate.queryForObject(
             "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
@@ -77,7 +77,7 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
             "idem-async");
     assertThat(status).as("async path should set ACCEPTED status").isEqualTo("ACCEPTED");
 
-    // trigger_outbox_event 与 trigger_request 在同一 REQUIRES_NEW 事务内原子落库
+    // trigger_outbox_event 与 trigger_request 在同一 REQUIRES_NEW 事务内原子写入数据库
     Integer outboxCount =
         jdbcTemplate.queryForObject(
             "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="

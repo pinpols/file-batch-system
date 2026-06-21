@@ -48,7 +48,7 @@ file-batch-system/
 | `batch-worker-export` | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 6 stages(Query/Render/Sink/...) |
 | `batch-worker-process` | `worker/processes/{stage,...}` | 纯业务计算(无文件 IO) |
 | `batch-worker-dispatch` | `worker/dispatch/{stage,target,...}` | 下游分发(向外部系统投递) |
-| `batch-worker-atomic` | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收口) |
+| `batch-worker-atomic` | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛) |
 | `batch-console-api` | `console/{domain,application,controller,...}` | 控制面 REST + 审批 + 运维操作(唯一允许走读写分离的模块) |
 
 ## SDK 4 模块(不属固定 10)

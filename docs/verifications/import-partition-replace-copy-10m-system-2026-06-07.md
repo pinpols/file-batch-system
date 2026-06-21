@@ -87,7 +87,7 @@ IMPORT task processed: taskId=4209, success=true,
 message=imported 10000000 row(s)
 ```
 
-落库校验：
+写入数据库校验：
 
 | Metric | Value |
 |---|---:|
@@ -177,7 +177,7 @@ JSON 内联导入也成功：
 - result：`SUCCESS`
 - message：`imported 2 row(s)`
 
-落库校验：
+写入数据库校验：
 
 | customer_no | customer_name | customer_type |
 |---|---|---|
@@ -261,7 +261,7 @@ or split input into independent files with distinct logical partitions.
 |---|---|---:|---:|---|
 | `codex-reval-xml-1780819472` | `5516865b0d0645448770f4fb300a3c35` | 4018 | 1 | `SUCCESS`，`imported 2 row(s)` |
 
-落库校验：
+写入数据库校验：
 
 | customer_no | customer_name | customer_type |
 |---|---|---|
@@ -337,7 +337,7 @@ file=@docs/test-data/test-full-coverage-import-suite/default-tenant-config-packa
 - `PARTITION_REPLACE_COPY`
 - PG 原生分区表目标
 - `systemBindings ${bizDate}`
-- 单流 1000w 行 COPY 落库
+- 单流 1000w 行 COPY 写入数据库
 - `PARTITION_REPLACE_COPY` 单文件 2 分片负向验证
 - 默认 `BATCH_UPSERT` 内联 CSV 小文件导入
 - 默认 `BATCH_UPSERT` 内联 JSON 小文件导入
@@ -348,7 +348,7 @@ file=@docs/test-data/test-full-coverage-import-suite/default-tenant-config-packa
 
 - `JdbcMappedImportSpec` 对 `loadStrategy`、`replacePartitionColumns`、`systemBindings` 的解析和非法配置拒绝
 - `GenericJdbcMappedImportLoadPlugin` 的 `PARTITION_REPLACE_COPY` prepare + COPY 路径
-- Testcontainers PostgreSQL 真实落库：替换目标逻辑分区、保留其他分区、NULL/quote/newline CSV 转义
+- Testcontainers PostgreSQL 真实写入数据库：替换目标逻辑分区、保留其他分区、NULL/quote/newline CSV 转义
 - `LoadStep` 对 `PARTITION_REPLACE_COPY` 禁止 checkpoint 的 precheck
 - `FIXED_WIDTH field_mappings` 的 PostgreSQL jsonb / PGobject 解析回归
 

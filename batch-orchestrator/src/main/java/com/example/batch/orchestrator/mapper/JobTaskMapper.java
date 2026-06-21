@@ -108,7 +108,7 @@ public interface JobTaskMapper {
 
   /**
    * 与 {@link JobPartitionMapper#closeNonTerminalPartitionsForTerminalInstance} 配对：实例终态下仍为非终态的 task
-   * 批量收口。
+   * 批量收敛。
    */
   int closeNonTerminalTasksForTerminalInstance(
       @Param("tenantId") String tenantId,

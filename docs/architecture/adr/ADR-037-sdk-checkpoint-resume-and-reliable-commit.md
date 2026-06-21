@@ -12,9 +12,9 @@
 
 初次基于仓库静态扫描(唯一租户 worker 是 `examples/sample-tenant-worker` 的 echo/sleep 示范,fixture 全在 ~5000 行级)判为 YAGNI。**该论据被业务负责人推翻**:SDK 侧已有 / 即将有**真实租户自托管 worker**,其 Import/Export/Process 任务实测**既 >10min 又 ≥百万行**——示范 worker 和测试 fixture 不反映真实租户任务画像。重跑代价(浪费十分钟级 CPU + 大数据量内存/重复写压力)已远超实现成本,roadmap 决策 #12 的"真实租户 + >10min"门槛已达到。
 
-**实施决定**:全量 P1~P5。P1(SdkCheckpoint 协议)+ P2(`ctx.commit` 同事务)+ P3(取消落进 commit 安全点)跟在 Phase 5 支柱 A 接口冻结后启动;P4(`SdkAbstractParallelStreamHandler` 分片模板)待支柱 A typed handler 接口稳定再上;P5 文档 + 测试收口。
+**实施决定**:全量 P1~P5。P1(SdkCheckpoint 协议)+ P2(`ctx.commit` 同事务)+ P3(取消落进 commit 安全点)跟在 Phase 5 支柱 A 接口冻结后启动;P4(`SdkAbstractParallelStreamHandler` 分片模板)待支柱 A typed handler 接口稳定再上;P5 文档 + 测试收敛。
 
-**注意**:平台侧 ADR-038 已于 **2026-06-02 翻案 Accepted** —— 平台 Import / Export 同样踩到百万行级真实任务且出现崩溃重派记录,初评的"已有 STORE 边界 + 强制幂等兜底"被"重入安全 ≠ 重跑廉价"+"业务库重压成本被低估"反驳。SDK 侧(本 ADR)与平台侧(ADR-038)的同形态能力按各自分阶段独立推进,协议不强制共享但理念一致。
+**注意**:平台侧 ADR-038 已于 **2026-06-02 翻案 Accepted** —— 平台 Import / Export 同样踩到百万行级真实任务且出现崩溃重派记录,初评的"已有 STORE 边界 + 强制幂等回退"被"重入安全 ≠ 重跑廉价"+"业务库重压成本被低估"反驳。SDK 侧(本 ADR)与平台侧(ADR-038)的同形态能力按各自分阶段独立推进,协议不强制共享但理念一致。
 
 ## 范围边界
 

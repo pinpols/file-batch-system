@@ -35,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  *
  * <p>{@code @Transactional(propagation = MANDATORY)} 强制必须在 trigger_request 同事务内调用,
- * 防止"trigger_request 落库但 outbox 事件丢失" — 见 V80 不变量。
+ * 防止"trigger_request 写入数据库但 outbox 事件丢失" — 见 V80 不变量。
  */
 @Service
 @RequiredArgsConstructor

@@ -48,7 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>关键不变量：
  *
  * <ul>
- *   <li><b>防重双保险</b>：{@link #assertNoRunningConflict} 先查 RUNNING 计数，DB 还有唯一约束兜底 （{@code
+ *   <li><b>防重双保险</b>：{@link #assertNoRunningConflict} 先查 RUNNING 计数，DB 还有唯一约束回退 （{@code
  *       DataIntegrityViolationException} 转为 {@code CONFLICT}），处理并发提交的 TOCTOU。
  *   <li><b>状态必达</b>：handler 抛异常时必须更新命令状态为 FAILED 并写 {@code job_execution_log}， 然后再
  *       rethrow；缺任何一步会让命令停留在 RUNNING 造成"残留补偿"。
@@ -102,7 +102,7 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   /**
-   * 提交补偿指令:落库 command → 路由到 handler 执行 → 统一回写 SUCCESS/FAILED 状态与日志。
+   * 提交补偿指令:写入数据库 command → 路由到 handler 执行 → 统一回写 SUCCESS/FAILED 状态与日志。
    *
    * <p><b>事务模型(2026-05-20 review 修正)</b>:之前用 {@code @Transactional(noRollbackFor =
    * Exception.class)} 让 handler 抛异常时整个外层事务**提交**(包括 handler
@@ -118,7 +118,7 @@ public class DefaultCompensationService implements CompensationService {
    * </ul>
    *
    * <p>权衡:理论上 INSERT 后 / executeAndMarkSuccessInOwnTx 成功提交前 JVM 崩溃,命令会卡 RUNNING。这通过 ops backlog 的
-   * stale-RUNNING reconciler 兜底(范围外,不在本方法处理)。
+   * stale-RUNNING reconciler 回退(范围外,不在本方法处理)。
    */
   @Override
   public String submit(CompensationSubmitCommand command) {

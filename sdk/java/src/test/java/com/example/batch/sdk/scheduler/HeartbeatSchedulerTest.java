@@ -60,7 +60,7 @@ class HeartbeatSchedulerTest {
   @Test
   void tickIncludesIdentityFingerprint_whenWorkerIdentityProvided() throws Exception {
     // Python SDK PR #320 对齐:heartbeat 必须带 workerGroup / hostName / hostIp /
-    // processId / capabilityTags / buildId,防止 platform 兜底走 register 路径时丢字段。
+    // processId / capabilityTags / buildId,防止 platform 回退走 register 路径时丢字段。
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightCount()).thenReturn(1);

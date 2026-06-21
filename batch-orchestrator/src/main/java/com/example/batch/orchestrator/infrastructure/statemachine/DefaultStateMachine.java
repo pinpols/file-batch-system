@@ -69,7 +69,7 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
         return status;
       }
     }
-    // 尚未实现 Stateful 的类型走反射兜底(Method 在 STATUS_GETTER_CACHE 中按 Class 缓存)。
+    // 尚未实现 Stateful 的类型走反射回退(Method 在 STATUS_GETTER_CACHE 中按 Class 缓存)。
     Optional<Method> cached =
         STATUS_GETTER_CACHE.computeIfAbsent(target.getClass(), DefaultStateMachine::resolveGetter);
     if (cached.isPresent()) {
@@ -159,7 +159,7 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
   /**
    * 终态守护：fromState 已是终态时，event 不应再驱动状态变化（除自回边 / NOOP）。
    *
-   * <p>历史上各 mapper SQL 都自带 expectedStatus CAS 兜底；但状态机层做开放映射意味着， 任何未通过那些 mapper 的直接 UPDATE
+   * <p>历史上各 mapper SQL 都自带 expectedStatus CAS 回退；但状态机层做开放映射意味着， 任何未通过那些 mapper 的直接 UPDATE
    * 路径（或测试代码、迁移脚本）都能用本方法构造非法转移 （TERMINATED → SUCCESS 等"复活"）。这里在上游堵住，让"非法转移"在状态机层就退化为 NOOP +
    * WARN，更易诊断。
    */

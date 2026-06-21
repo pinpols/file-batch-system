@@ -93,7 +93,7 @@ public class FileGovernanceProperties {
     /** 单次对账批大小（一次扫描多少 OSS 对象）。 */
     private int batchSize = 200;
 
-    /** 默认租户（多租户对账时未指定的兜底）。 */
+    /** 默认租户（多租户对账时未指定的回退）。 */
     private String defaultTenantId = CommonConstants.DEFAULT_TENANT_ID;
 
     /** OSS 对象前缀（限定对账范围，空 = 全桶）。 */

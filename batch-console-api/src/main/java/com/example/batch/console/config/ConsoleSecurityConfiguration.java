@@ -138,7 +138,7 @@ public class ConsoleSecurityConfiguration {
                     .permitAll()
                     .requestMatchers("/actuator/loggers/**")
                     .hasAuthority(ConsoleRoles.ADMIN)
-                    // P0-1 兜底（ADR audit 2026-05-14）：/api/console/** 默认要求至少一个有效角色，
+                    // P0-1 回退（ADR audit 2026-05-14）：/api/console/** 默认要求至少一个有效角色，
                     // 避免新加 controller 漏加 @PreAuthorize 时被无角色账号访问。
                     // 高危端点已在 controller 上叠加更严格的 @PreAuthorize。
                     .requestMatchers("/api/console/**")

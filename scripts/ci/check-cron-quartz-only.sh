@@ -5,7 +5,7 @@
 # 在 CI 阶段防止 wheel 切换后无法解析的表达式被引入。
 #
 # 这是 scripts/db/quartz-replacement-preflight-scan.sql(PG 端运行时检查)的另一道 CI 防线:
-# 该 SQL 跑在 staging / prod 已落库数据上,本脚本扫源代码里准备落库的 seed,提前 fail。
+# 该 SQL 跑在 staging / prod 已写入数据库数据上,本脚本扫源代码里准备写入数据库的 seed,提前 fail。
 #
 # Quartz 扩展字符:
 #   L = "last"          (e.g. "0 0 0 L * ?" — 每月最后一天)

@@ -13,9 +13,9 @@
 
 > 业务量级接近 1000 万 fire/天 拐点时,**直接用 Netty `HashedWheelTimer` 替换 Quartz**,跳过"Quartz 独立库"中间过渡。内核被 Pulsar / Dubbo / Curator 用了多年,生产级。
 >
-> **工程量(2026-04-25 经外部 review 校准)**:1.5-2 人月开发 + 1 人月 staging/灰度观察 = 真实从开工到全量切换 2-3 个月。原 "≤ 800 行 / 1 人月" 估算偏乐观,**未计入** fire 强约束 / 滑动窗口去重 / failover fast-path / 双引擎防护 / cron 一致性等生产风险兜底。
+> **工程量(2026-04-25 经外部 review 校准)**:1.5-2 人月开发 + 1 人月 staging/灰度观察 = 真实从开工到全量切换 2-3 个月。原 "≤ 800 行 / 1 人月" 估算偏乐观,**未计入** fire 强约束 / 滑动窗口去重 / failover fast-path / 双引擎防护 / cron 一致性等生产风险回退。
 >
-> ⚠️ **动工前必读**:[`quartz-replacement-design.md`](./quartz-replacement-design.md)(详细实施设计 + 5 项风险兜底 + Pre-flight Checklist)。本文档(evaluation)只承载战略决策,设计层细节全部在 design.md。
+> ⚠️ **动工前必读**:[`quartz-replacement-design.md`](./quartz-replacement-design.md)(详细实施设计 + 5 项风险回退 + Pre-flight Checklist)。本文档(evaluation)只承载战略决策,设计层细节全部在 design.md。
 
 ---
 
@@ -257,7 +257,7 @@ public class HashedWheelTriggerScheduler implements TriggerScheduler {
 | 风险 | 缓解 |
 |---|---|
 | Leader 单点:GC pause 1s 全集群延迟 1s | 业务调度精度 SLA 不到秒级,可接受 |
-| Failover 冷启动:leader 挂 → 新 leader 重建 wheel 几秒~几十秒 | misfire catch-up 兜底(`CatchUpPolicyType.AUTO`)能补回 |
+| Failover 冷启动:leader 挂 → 新 leader 重建 wheel 几秒~几十秒 | misfire catch-up 回退(`CatchUpPolicyType.AUTO`)能补回 |
 | ShedLock TTL 期间 leader 漂移导致重复 fire | TTL 设置长于 fire 处理时长(默认 2 min);LaunchService 已有幂等(`trigger_request` 唯一键 `trigger_code + biz_date`) |
 | Cron 表达式解析差异(Spring vs Quartz 5/6 字段) | Spring `CronExpression` 是 6 字段(秒级),与项目历史保持一致(`docs/changelog.md` 2026-04-24 已统一) |
 

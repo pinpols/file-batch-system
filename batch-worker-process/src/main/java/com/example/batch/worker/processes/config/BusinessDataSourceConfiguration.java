@@ -49,7 +49,7 @@ public class BusinessDataSourceConfiguration {
       BusinessTenantPlacementMapper placementMapper,
       @Qualifier("processBusinessHikariConfig") HikariConfig hikariConfig) {
     String appName = environment.getProperty("spring.application.name", "batch-worker-process");
-    // 构造 + pg-session 兜底 + 路由包裹统一收敛到 BusinessDataSourceBuilder;routing 默认关=单片无损,开=多片
+    // 构造 + pg-session 回退 + 路由包裹统一收敛到 BusinessDataSourceBuilder;routing 默认关=单片无损,开=多片
     // placement mapper 供 TABLE 模式 resolver 读 placement 表(单片/CONFIG 模式忽略)
     return BusinessDataSourceBuilder.build(
         hikariConfig,

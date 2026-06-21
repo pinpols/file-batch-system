@@ -22,7 +22,7 @@
 
 ## 2. 现状(代码实证)
 
-### 2.1 IMPORT — `columnMappings` 全量必填,无兜底
+### 2.1 IMPORT — `columnMappings` 全量必填,无回退
 
 `batch-worker-import/.../jdbc/JdbcMappedImportSpec.java:58-61`:
 
@@ -47,7 +47,7 @@ if (batchCols.isEmpty() || detailCols.isEmpty()) {
 ```
 
 - 额外硬约束:`batchSelectColumns` 必须含 `id`(detail FK join 需要,`JdbcMappedExportSpec.java:83-85`)。
-- DELIMITED 表头已有三级兜底(模板 `csvColumns` → 插件 `describeDelimitedColumns()` → 首页数据行推断,`AbstractExportFormat.resolveDelimitedColumns()`),**但这只决定"表头长什么样",不决定"查哪些列"**;`detailSelectColumns` 仍必填。
+- DELIMITED 表头已有三级回退(模板 `csvColumns` → 插件 `describeDelimitedColumns()` → 首页数据行推断,`AbstractExportFormat.resolveDelimitedColumns()`),**但这只决定"表头长什么样",不决定"查哪些列"**;`detailSelectColumns` 仍必填。
 
 ### 2.3 关键洞察:列信息已在 `field_mappings` 声明过一遍
 
@@ -66,7 +66,7 @@ if (batchCols.isEmpty() || detailCols.isEmpty()) {
 
 ## 3. 设计目标(2026-06-20 收窄后)
 
-1. **IMPORT 加列名自动映射兜底** — `columnMappings` 缺省时从 `field_mappings` 推断,显式项只写"名字对不上"的语义差异。这是本设计的**主战场**。
+1. **IMPORT 加列名自动映射回退** — `columnMappings` 缺省时从 `field_mappings` 推断,显式项只写"名字对不上"的语义差异。这是本设计的**主战场**。
 2. **写法差异默认归一化** — snake_case / 下划线 / 大小写差异默认兼容,不需用户配置(见 4.2)。
 3. **EXPORT 不做"默认列"** — 导出的列本质是 **SQL 投影**,归查询管,不是该被默认掉的样板(见 §3.1)。仅在 `jdbc_mapped_export` 路径消除 `sourceColumn` 与 `detailSelectColumns` 的**一处重复声明**(定性为去重,非自动默认)。
 4. **先出设计、不改码** — 本文档即交付物。
@@ -108,11 +108,11 @@ if effective.isEmpty():
 
 `from` 取 `field_mappings[i].name`。
 
-> **定调(2026-06-20 用户确认)**:显式配置只该出现"名字真的对不上"的**语义差异项**(如 `phone → mobile_no`);而 snake_case / 下划线 / 大小写这类**纯写法差异是默认就做掉的**,不是"兜底失败就报错"的弱猜测。即优先级 2 是一条**有信心的默认规则**,绝大多数列走它即可零配置命中。
+> **定调(2026-06-20 用户确认)**:显式配置只该出现"名字真的对不上"的**语义差异项**(如 `phone → mobile_no`);而 snake_case / 下划线 / 大小写这类**纯写法差异是默认就做掉的**,不是"回退失败就报错"的弱猜测。即优先级 2 是一条**有信心的默认规则**,绝大多数列走它即可零配置命中。
 
 > **不入库的字段**:现状靠"不在 columnMappings 里"表达(如 quickstart 的 `creditLimit`)。推断后默认**全部入库**会改变语义,故引入显式排除开关:`field_mappings[i].persist:false` 的项不进 `inferred`(默认 `true`)。这样既保留"校验但不入库"能力,又不需要逐列重写。
 
-### 4.2 列名归一化规则 `normalizeColumn`(默认能力,非兜底)
+### 4.2 列名归一化规则 `normalizeColumn`(默认能力,非回退)
 
 写法差异的兼容是**默认就做掉**的,目标是"`customerNo` / `customer_no` / `CustomerNo` / `CUSTOMER_NO` 这些只是写法不同的同一列,用户不必为它们写任何映射"。
 
@@ -183,7 +183,7 @@ if effective.isEmpty():
 
 - **现有全量显式配置零行为变化**:显式项覆盖同键推断项,结果集与今天逐列写完全一致(e2e seed `import-template-config-seed.sql` / `export-template-config-seed.sql` 应作为回归基线,断言 effective mapping 不变)。
 - **唯一语义变化点**:今天"`columnMappings` 为空 → 报错"变为"为空 → 尝试推断"。无任何模板依赖"空必报错"作为契约,故无破坏性。
-- `conflictColumns` 校验链不放松:`validateIdentifiers` 仍要求 `conflictColumns ⊆ effective 列集`(`JdbcMappedImportSpec.java:233-238`),严格幂等下仍强制非空(`:208-221`)。推断只扩 `effective` 列集,不削弱该承重墙。
+- `conflictColumns` 校验链不放松:`validateIdentifiers` 仍要求 `conflictColumns ⊆ effective 列集`(`JdbcMappedImportSpec.java:233-238`),严格幂等下仍强制非空(`:208-221`)。推断只扩 `effective` 列集,不削弱该关键约束。
 
 ---
 
@@ -197,7 +197,7 @@ if effective.isEmpty():
 
 ## 7. 范围边界(防越界)
 
-本设计**只**消除冗余声明、加推断兜底,属"文件交付闭环"的配置体验改进。**不做**:
+本设计**只**消除冗余声明、加推断回退,属"文件交付闭环"的配置体验改进。**不做**:
 
 - ❌ 不引入"读目标表 `information_schema` 反查列做自动建表/自动对齐"——那是数据治理,越界。
 - ❌ 不改 LOAD/GENERATE 的执行语义(SQL 生成、UPSERT、cursor 分页全不动)。
@@ -241,7 +241,7 @@ if effective.isEmpty():
 
 | 项 | 内容 | 位置 |
 |---|---|---|
-| **B1** Excel 必填↔DB 默认对齐 | 已有 DB 列 `DEFAULT` 的枚举不再 Excel 必填,留空回退默认:`checksum_type`/`compress_type`/`encrypt_type`(NONE)、`priority_policy`(FIFO)、`end_strategy`(FINISH_RUNNING)/`out_of_window_action`(WAIT)、`holiday_roll_rule`(SKIP)/`catch_up_policy`(NONE) | `AbstractSingleSheetExcelService.optionalEnum` + 4 个 `*ExcelRowParser` + 字段说明 sheet |
+| **B1** Excel 必填↔DB 默认对齐 | 已有 DB 列 `DEFAULT` 的枚举不再 Excel 必填,留空默认回退:`checksum_type`/`compress_type`/`encrypt_type`(NONE)、`priority_policy`(FIFO)、`end_strategy`(FINISH_RUNNING)/`out_of_window_action`(WAIT)、`holiday_roll_rule`(SKIP)/`catch_up_policy`(NONE) | `AbstractSingleSheetExcelService.optionalEnum` + 4 个 `*ExcelRowParser` + 字段说明 sheet |
 | **B2** `conflictColumns` 自动补 tenant | 非空但漏 tenant 列时自动前置(多租 UNIQUE 必含 tenant_id);空列表不动 | `JdbcMappedImportSpec.ensureTenantInConflicts` |
 | **B3** `standardAuditBindings` 开关 | `=true` 一键展开标准审计 `systemBindings`(显式项覆盖),省手写 `${...}` 样板 | `JdbcMappedImportSpec.withStandardAuditBindings` |
 
@@ -256,7 +256,7 @@ if effective.isEmpty():
 - **#3** `default_query_sql` 轻治理:仅 SELECT/WITH、禁 `SELECT *`、禁 DML/DDL(worker 期仍跑 JSqlParser 全治理)。
 - **#4a** `file_format_type=DELIMITED` → `delimiter` 必填。
 
-**#4b**(`node_type=TASK` 必须关联 job/pipeline)**不做**:工作流 topology 测试套件有意把无关联裸 TASK 视为合法,且此类工作流语义既定留 enable 时 orchestrator 兜底。
+**#4b**(`node_type=TASK` 必须关联 job/pipeline)**不做**:工作流 topology 测试套件有意把无关联裸 TASK 视为合法,且此类工作流语义既定留 enable 时 orchestrator 回退。
 
 ### 10.3 Excel「填写示例」强化
 

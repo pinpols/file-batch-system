@@ -73,7 +73,7 @@ public final class RlsTenantSessionSupport {
         log.trace("RLS set_config {} = {}", SESSION_VAR_NAME, tenantId);
       }
     } catch (SQLException e) {
-      // Phase A transition 模式下 RLS 不严,SET 失败只是兜底缺失,不阻断业务
+      // Phase A transition 模式下 RLS 不严,SET 失败只是回退缺失,不阻断业务
       log.warn("RLS set_config failed (tenant={}): {}", tenantId, e.getMessage());
     } finally {
       if (releaseAfter) {

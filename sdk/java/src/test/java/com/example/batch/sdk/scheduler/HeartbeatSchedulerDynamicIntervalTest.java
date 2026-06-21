@@ -96,7 +96,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
   }
 
   @Test
-  @DisplayName("hint < 1s → 兜底到 1s(防 orch 配错刷爆心跳)")
+  @DisplayName("hint < 1s → 回退到 1s(防 orch 配错刷爆心跳)")
   void shouldClampToMinFloor_whenHintTooSmall() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     // hint=0 秒 → raw=0ms, clamp 到 1000ms
@@ -119,7 +119,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
   }
 
   @Test
-  @DisplayName("hint > 10 × baseline → 兜底到 10 × baseline(防 orch 配错拖死心跳)")
+  @DisplayName("hint > 10 × baseline → 回退到 10 × baseline(防 orch 配错拖死心跳)")
   void shouldClampToMaxCeiling_whenHintTooLarge() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     // baseline=10s, 10× = 100s; hint=600s 应被 clamp 到 100s

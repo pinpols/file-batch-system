@@ -177,12 +177,12 @@ public class SdkTaskTypeDescriptor {
 
 ```
 effective_parameters = 
-    custom_task_type_registry.parameters_default     (B 层兜底)
+    custom_task_type_registry.parameters_default     (B 层回退)
   + workflow_node.parameters                          (C 层覆盖)
   + 模板变量替换 ${bizDate} ${trigger.fireTime} ...  (E 层注入)
 ```
 
-**实施位置**:orchestrator `TaskDispatchService` 派单前合并;拼好后塞进 `TaskDispatchMessage.parameters`。**SDK 端拿到的是已合并的最终值**,handler 不需要自己再 merge。
+**实施位置**:orchestrator `TaskDispatchService` 派单前合并;拼好后写入 `TaskDispatchMessage.parameters`。**SDK 端拿到的是已合并的最终值**,handler 不需要自己再 merge。
 
 ### 4.1 模板变量(E 层注入)
 

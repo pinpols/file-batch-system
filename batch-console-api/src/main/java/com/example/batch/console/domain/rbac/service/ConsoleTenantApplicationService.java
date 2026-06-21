@@ -82,7 +82,7 @@ public class ConsoleTenantApplicationService {
    *
    * <ul>
    *   <li>{@code default} — V55 seed 的「配置模板」库,新租户初始化时复制 queue/window/calendar/template,**不是业务租户**。
-   *   <li>{@code default-tenant} — V42 演示账号 + V50 自动回填的孤儿;V51 已删账号, V148 在无引用时自动清表,残留场景作为防御性兜底。
+   *   <li>{@code default-tenant} — V42 演示账号 + V50 自动回填的孤儿;V51 已删账号, V148 在无引用时自动清表,残留场景作为防御性回退。
    * </ul>
    *
    * <p>注:{@code system} 保留(管理员需要切到此租户管理跨租户配置),由 FE 按角色决定是否展示。

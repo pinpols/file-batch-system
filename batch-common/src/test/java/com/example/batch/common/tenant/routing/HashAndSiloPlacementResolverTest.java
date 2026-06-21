@@ -18,7 +18,7 @@ class HashAndSiloPlacementResolverTest {
   }
 
   @Test
-  @DisplayName("无租户上下文(null/空)→ shard-0 兜底,不抛")
+  @DisplayName("无租户上下文(null/空)→ shard-0 回退,不抛")
   void shouldFallbackToShard0_whenTenantBlank() {
     HashAndSiloPlacementResolver r = new HashAndSiloPlacementResolver(4, Map.of());
     assertThat(r.resolve(null)).isEqualTo("shard-0");

@@ -87,7 +87,7 @@ $PSQL "set local app.tenant_id='A'; select count(*) from biz.<表> where tenant_
 ```bash
 # Flyway 在 prod-sized 数据上 dry-run(记录耗时 + 锁影响)
 mvn -pl batch-orchestrator flyway:info flyway:migrate -Dflyway.url=<staging-prod-sized>
-# 承重墙复核:UNIQUE 幂等语义迁移后不变
+# 关键约束复核:UNIQUE 幂等语义迁移后不变
 grep -rn 'on conflict' --include=*.sql . | wc -l   # 对照基线;新增/改动 UNIQUE 列集需评审
 # 回滚演练:迁移可逆 / 数据可回退(按你的回滚脚本)
 ```

@@ -236,5 +236,5 @@ def _decode_body(resp: httpx.Response) -> dict[str, Any]:
     if isinstance(decoded, dict):
         return decoded
     # 部分端点(如批量续约)返回数组,这里包成 dict 以让调用方的签名保持
-    # 同质;当前的所有端点都返回 object,本分支属于防御性兜底。
+    # 同质;当前的所有端点都返回 object,本分支属于防御性回退。
     return {"_array": decoded}

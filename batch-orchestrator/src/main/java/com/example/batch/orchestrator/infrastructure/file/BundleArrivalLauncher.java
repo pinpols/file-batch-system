@@ -16,7 +16,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * ADR-046:到达组凑齐(TRIGGERED)→ 若该组是文件束(成员 file_record 的 metadata 带 {@code bundleJobCode})→ 据 {@code
+ * ADR-046:到达组满足条件(TRIGGERED)→ 若该组是文件束(成员 file_record 的 metadata 带 {@code bundleJobCode})→ 据 {@code
  * bundleJobCode} 指向作业的类型发一个 {@code BUNDLE_*} launch。
  *
  * <p>束 launch 把组内 N 个文件作为 {@code params.bundleFiles=[{sourceFileId, templateCode?, targetRef?}]} 传给
@@ -58,7 +58,7 @@ public class BundleArrivalLauncher {
     LAUNCHED
   }
 
-  /** 到达组凑齐时调用;非束组(无 bundleJobCode)直接返回,不发 launch。 */
+  /** 到达组满足条件时调用;非束组(无 bundleJobCode)直接返回,不发 launch。 */
   public LaunchOutcome launchIfBundle(
       String tenantId, String fileGroupCode, List<Map<String, Object>> groupFiles) {
     if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
@@ -206,7 +206,7 @@ public class BundleArrivalLauncher {
 
   private void launchCandidate(
       String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
-    // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 兜底)
+    // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
     String requestId =
         "bundle-arrival-" + tenantId + "-" + fileGroupCode + "-" + candidate.bizDate();
     LaunchRequest request =

@@ -92,7 +92,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   /**
    * #9 修复:被 RETRY_LATER(未知 schema / dispatcher 暂留)seek + pause 的 poison 分区集合,与容量/平台 pause({@link
    * #paused}) 分开记账。容量 resume **只** resume 非 poison 分区,绝不动这里的分区,避免「容量正常→resume 整个 assignment→重 poll
-   * 到被 seek 的 poison 记录→再 RETRY_LATER」的忙旋转。这类分区维持 HOL 暂停,直到 SDK 升级 / 平台兜底(§A fail-loud 本意)。 poll
+   * 到被 seek 的 poison 记录→再 RETRY_LATER」的忙旋转。这类分区维持 HOL 暂停,直到 SDK 升级 / 平台回退(§A fail-loud 本意)。 poll
    * 线程与 rebalance 回调单线程触碰, 但单测从测试线程调 {@link #applyBackpressure()},故用线程安全 set。
    */
   private final Set<TopicPartition> poisonPausedPartitions = ConcurrentHashMap.newKeySet();

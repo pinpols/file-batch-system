@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
  * <p>守护:
  *
  * <ul>
- *   <li>合法 windowCode 落库 + timezone/start_time/end_time 透传
+ *   <li>合法 windowCode 写入数据库 + timezone/start_time/end_time 透传
  *   <li>q q q / 中文 windowCode → 400 + 不入库
  *   <li>(tenant_id, window_code) 重复创建 → 唯一约束撞
  * </ul>

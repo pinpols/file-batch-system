@@ -12,8 +12,8 @@
 |---|---|---|---|---|
 | **ShedLock + Redis** | `RedisShedLockProvider` SET NX + Lua CAS 解锁 | 定时任务跨实例互斥（archive / reconcile / settle / metrics） | **软互斥**（短窗双跑可能，幂等业务必须） | 高（亚毫秒） |
 | **PG 行级锁** `FOR UPDATE SKIP LOCKED` | mapper XML | 多实例并发扫表派发（outbox / trigger_outbox / 队列消费） | 强（PG 事务级）| 中（依赖事务）|
-| **乐观锁 CAS** `version` 列 + `updateWithCas` | mapper SQL `UPDATE ... WHERE version=:expected` | 状态机表（job_instance / job_partition / quota_runtime_state / batch_day_instance）| 强（DB 唯一性兜底） | 高（无阻塞） |
-| **PG advisory lock** `pg_try_advisory_lock` | 当前**未使用**，留作兜底候选 | 必须严格单跑且业务非幂等的任务（金融对账、序列号生成） | 强（PG session 级） | 中 |
+| **乐观锁 CAS** `version` 列 + `updateWithCas` | mapper SQL `UPDATE ... WHERE version=:expected` | 状态机表（job_instance / job_partition / quota_runtime_state / batch_day_instance）| 强（DB 唯一性回退） | 高（无阻塞） |
+| **PG advisory lock** `pg_try_advisory_lock` | 当前**未使用**，留作回退候选 | 必须严格单跑且业务非幂等的任务（金融对账、序列号生成） | 强（PG session 级） | 中 |
 
 ---
 
@@ -49,13 +49,13 @@
 
 ShedLock 文档原话：**"Don't use ShedLock if locking has any direct functional consequences."**
 
-**为什么**：当前实现 = 单 master Redis SET NX，**没用 Redlock**。Redis 主从切换 + 复制延迟窗口里，理论可能两节点同时持锁。ShedLock 故意不实现强互斥（依赖 `lockAtMostFor` 兜底），**这是 ShedLock 的设计哲学**，不是 bug。
+**为什么**：当前实现 = 单 master Redis SET NX，**没用 Redlock**。Redis 主从切换 + 复制延迟窗口里，理论可能两节点同时持锁。ShedLock 故意不实现强互斥（依赖 `lockAtMostFor` 回退），**这是 ShedLock 的设计哲学**，不是 bug。
 
 | ✅ 适合 ShedLock | ❌ 不适合 ShedLock |
 |---|---|
 | archive/reconcile/settle 类幂等运维 | 金融对账、写账（重复执行造成余额错误）|
 | 指标采集、健康检查 | unique 序列号生成（重复造成冲号）|
-| outbox cleanup（DELETE 行级锁兜底）| 一次性事件触发（重复触发用户感知到）|
+| outbox cleanup（DELETE 行级锁回退）| 一次性事件触发（重复触发用户感知到）|
 | 缓存预热 | 计费扣费 |
 
 ### 红线 B — `lockAtMostFor` 必须 > 任务历史 P99 × 5

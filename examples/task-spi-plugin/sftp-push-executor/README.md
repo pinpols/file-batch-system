@@ -65,4 +65,4 @@ mvn install -f examples/sftp-push-executor/pom.xml
 - [ ] 不读 `System.getenv` 暴露租户隔离应有的环境变量
 - [ ] 不直连 DB(走 `TaskContext` 注入的 dataSource;本模板暂不提供,后续 PR 加)
 - [ ] capability 字段诚实(idempotent / cancellable / resourceKinds 跟实际行为一致)
-- [ ] timeout 守护:实现自己的 `recommendedTimeout` 兜底,不要无限阻塞
+- [ ] timeout 守护:实现自己的 `recommendedTimeout` 回退,不要无限阻塞

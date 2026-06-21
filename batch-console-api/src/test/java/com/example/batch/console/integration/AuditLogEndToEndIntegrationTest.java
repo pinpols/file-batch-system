@@ -24,7 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * P2: 验证 @AuditAction 切面在真实 HTTP 调用路径下能成功落库 batch.console_operation_audit。
+ * P2: 验证 @AuditAction 切面在真实 HTTP 调用路径下能成功写入数据库 batch.console_operation_audit。
  *
  * <p>覆盖代表性的写端点:
  *

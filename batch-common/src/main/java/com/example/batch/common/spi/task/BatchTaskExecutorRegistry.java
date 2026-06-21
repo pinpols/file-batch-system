@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 /**
  * {@link BatchTaskExecutor} 的统一注册表 — 启动期收集所有实现,运行期按 {@link BatchTaskExecutor#taskType()} O(1) 路由。
  *
- * <p>双路注册(Spring 优先,ServiceLoader 兜底):
+ * <p>双路注册(Spring 优先,ServiceLoader 回退):
  *
  * <ol>
  *   <li>Spring 容器内所有 {@link BatchTaskExecutor} bean(自动注入 List)

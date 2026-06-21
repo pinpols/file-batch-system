@@ -34,7 +34,7 @@ import org.springframework.test.context.jdbc.Sql;
  *
  * <pre>
  * API 触发 launch → orchestrator 调度/落 outbox → Kafka 派发 → import worker claim → 执行 pipeline
- *     → worker report → orchestrator 落库终态（task/partition/job_instance）
+ *     → worker report → orchestrator 写入数据库终态（task/partition/job_instance）
  * </pre>
  *
  * <p>断言点（典型）：

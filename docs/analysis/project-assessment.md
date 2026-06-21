@@ -94,11 +94,11 @@
 | 项 | 状态 |
 |---|---|
 | 4-29 半完成重构 I1-I4 + FQN | I1/I2/I3 + FQN 修了（`4e634c7c`），I4 deferred |
-| i18n 业务路径收口 | 56 文件 BizException 全量迁 i18n key + 9 测试同步（`23137b2c`）|
+| i18n 业务路径收敛 | 56 文件 BizException 全量迁 i18n key + 9 测试同步（`23137b2c`）|
 | 运行日志噪声治理 | `aa249bf8` ChannelConfigMerge `LEGACY_REDUNDANT_KEYS` + FileGovernance `processingDelayMaxAgeSeconds` |
 | ADR-010 实施代码新增 | trigger +600 LOC main + +800 LOC test；orchestrator +600 LOC main + ~400 LOC test；无新违规 |
 
-### ✅ 残留违规清零（grep 实测，经 `8dc6eac1` 收口）
+### ✅ 残留违规清零（grep 实测，经 `8dc6eac1` 收敛）
 
 | 项 | 状态 |
 |---|---|
@@ -118,7 +118,7 @@
 ### ✅ ADR-010 双层 E2E 闭合
 
 - **Layer 1**（`batch-trigger/.../integration/TriggerAsyncLaunchE2eIT`）：4 个 @Test 真起 PG+Kafka 容器，断言 outbox 状态机 + Kafka topic 真投递 + envelope 字段精确 + 反序列化失败 GIVE_UP + crash recovery
-- **Layer 2**（`batch-e2e-tests/.../TriggerAsyncLaunchFullChainE2eIT`）：2 个 @Test 真起 orchestrator + Kafka，验证 consumer → LaunchApplicationService → job_instance INSERT + 同 envelope 投 3 次只产生 1 instance（`uk_job_instance_tenant_dedup` 兜底）
+- **Layer 2**（`batch-e2e-tests/.../TriggerAsyncLaunchFullChainE2eIT`）：2 个 @Test 真起 orchestrator + Kafka，验证 consumer → LaunchApplicationService → job_instance INSERT + 同 envelope 投 3 次只产生 1 instance（`uk_job_instance_tenant_dedup` 回退）
 - **配套**：`E2eTriggerApplication` scaffold 落盘 + batch-e2e-tests pom 加 trigger 依赖 + batch-trigger pom spring-boot exec classifier
 - **`TriggerOutboxRelayTest` 7 单测**：边界覆盖扎实（空批 / 成功 / 失败 / 反序列化 / 抢占 / 异常隔离 + 退避函数 0-10 全梯度）
 - **`TriggerSecurityFilterTest` 5 守护**：无 token / 错 header / 对 header / actuator 跳过 / bypass-mode
@@ -193,7 +193,7 @@
 | P2-WEBHOOK-DURABILITY | `b74e0a0c` | V81 + Relay 278 行 + 7 单测 + Prometheus 告警 — deep-issue §5.11 闭环 |
 | P2-ORCH-GODCLASS | `b74e0a0c` + `7d6faad6` | `DefaultTaskOutcomeService` 926→797 LOC（-14%）+ `DefaultWorkflowNodeDispatchService` **840→371 LOC**（-56%）— 抽 `WorkflowNodePayloadBuilder`(311) + `ChildJobLaunchSupport`(276)|
 | P2-EXCEL-GODCLASS 6/7 | `b74e0a0c` + `b9eefb47` | WorkflowExcel 1512→**497**（-67%）/ TenantConfigInit 823→**120**（-85%）/ JobDef 887→**663** / BusinessCalendar 1009→**763** / PipelineDef 1061→**822** / TenantConfigPackage 846→**728**；`ConfigPackageExcelValidator` 874 经决策保留 |
-| P2-IDEMPOTENCY | ADR-011 + 3 层实施 | `ConsoleIdempotencyInterceptor` 197 行（PENDING 30s → DONE 24h，Redis fail-closed）+ Layer 2 idempotencyKey 短路 + Layer 3 V37 `uk_job_instance_tenant_dedup` 兜底 — deep-issue §5.5 + §5.6 + §5.10 三处一并闭环 |
+| P2-IDEMPOTENCY | ADR-011 + 3 层实施 | `ConsoleIdempotencyInterceptor` 197 行（PENDING 30s → DONE 24h，Redis fail-closed）+ Layer 2 idempotencyKey 短路 + Layer 3 V37 `uk_job_instance_tenant_dedup` 回退 — deep-issue §5.5 + §5.6 + §5.10 三处一并闭环 |
 | Export 中文 fallback 改英文 | `247f7f4e` | 与 Import / Dispatch 一致 |
 | P2-IMPORT-DQ-GODCLASS | 本日 | `ImportDataQualityService` 809→138 LOC（-83%）— 抽 `infrastructure/quality/` 子包 8 类，48 测试全部通过 |
 

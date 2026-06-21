@@ -27,7 +27,7 @@
 
 - session 描述"重放 (tenantId, calendarCode, bizDate) 的某子集 jobs"的请求 + 进度 + 结果；
 - session 内部把每个 job 的重跑委托给现有 `RerunRequest` 通道；
-- 配审批、版本策略、下游联动、回滚兜底；
+- 配审批、版本策略、下游联动、回滚回退；
 - console-api 暴露完整生命周期 + 审批 UI。
 
 ### 核心模型
@@ -118,7 +118,7 @@ PENDING_APPROVAL ──(approve)──► RUNNING ──(全部完成)──► 
        .build());
    ```
 4. **回填**：`job_instance` 终态阶段（已经会写 result_version, ADR-017）→ 检查 `replay_session_id` 标签 → 反查 entry → 更新 entry.status / rerun_instance_id / result_version_id；session 计数 +1；
-5. **收口**：所有 entry 终态 → session.status = SUCCEEDED / PARTIAL_FAILED；触发完成通知。
+5. **收敛**：所有 entry 终态 → session.status = SUCCEEDED / PARTIAL_FAILED；触发完成通知。
 
 ### OUTPUTS_ONLY 模式
 
@@ -193,7 +193,7 @@ ADR-018 的 `WAITING_DEPENDENCY` 节点会因为上游 EFFECTIVE 切换被 recon
 - E2E：监管复盘场景（ALL scope + MANUAL_CONFIRM_EFFECTIVE policy）跑通，下游 ADR-018 节点正确唤醒
 - 守护：`ReplaySessionUniquenessInvariantTest` 强制断言唯一 active session
 
-## 开放问题（已收口）
+## 开放问题（已收敛）
 
 | # | 问题 | 决策 |
 |---|---|---|

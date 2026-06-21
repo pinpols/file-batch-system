@@ -27,9 +27,9 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li><b>每次 issueToken 都递增 session version</b>（{@link ConsoleSessionRegistry#nextSessionVersion}）
  *       —— 新登录自动踢旧会话，同一账号无法多端并存（{@code singleSessionEnabled=true} 时生效）。
- *   <li><b>tenantId 解析顺序</b>：Principal.tenantId → request metadata → {@code defaultTenantId} 兜底。
+ *   <li><b>tenantId 解析顺序</b>：Principal.tenantId → request metadata → {@code defaultTenantId} 回退。
  *       前两个缺失时用默认租户而不是拒绝，兼容无 Principal 的边界场景（如 legacy header-only）。
- *   <li><b>authorities 兜底</b>：principal 无 authorities 或只含泛化的 {@link ConsoleRoles#USER} 时， 用服务端
+ *   <li><b>authorities 回退</b>：principal 无 authorities 或只含泛化的 {@link ConsoleRoles#USER} 时， 用服务端
  *       {@code defaultAuthorities} 替换——防止未正确配置角色的账号获得空权限集。
  *   <li><b>profile 带菜单</b>：{@link ConsoleAuthProfileResponse} 除身份字段外还附带 {@link
  *       ConsoleMenuRegistry#filterByAuthorities} 过滤后的菜单树，前端不需再单独拉菜单接口。

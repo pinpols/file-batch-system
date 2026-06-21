@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * P2-2(2026-05-16):增加 userId / sessionId / ts / page / props 的大小约束, 避免登录用户用大 payload 灌爆
- * Loki/日志存储,或把敏感字段塞进 props。 Bean Validation 在 @Valid 注解的 controller 入口自动生效,超出即 400。
+ * Loki/日志存储,或把敏感字段加入 props。 Bean Validation 在 @Valid 注解的 controller 入口自动生效,超出即 400。
  */
 public record FrontendTelemetryRequest(
     @NotBlank @Size(max = 50) String app,

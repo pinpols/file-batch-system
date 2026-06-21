@@ -64,7 +64,7 @@
 **任务**:
 1. **#1**:`task/descriptor.py:32` `Field(alias="schema")` → `Field(alias="inputSchema")`。检 wire-protocol §A schema 字段名权威源。
 2. **#2**:`dispatcher/dispatcher.py:50` `_SUPPORTED_SCHEMA_PREFIXES = ("v2",)` → `("v1", "v2")`。对照 Java `TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS`。
-3. **#3**:`TaskDispatcher` 加 `mark_cancel_requested(task_id: int, reason: str) -> None`,内部维护 `_pending_cancellations: dict[int, CancellationSignal]`,在 `on_message` 注入 ctx 时存引用,该方法翻 `signal.mark_cancelled()`。`scheduler/_lease.py:118` 的 `getattr` 兜底删掉。
+3. **#3**:`TaskDispatcher` 加 `mark_cancel_requested(task_id: int, reason: str) -> None`,内部维护 `_pending_cancellations: dict[int, CancellationSignal]`,在 `on_message` 注入 ctx 时存引用,该方法翻 `signal.mark_cancelled()`。`scheduler/_lease.py:118` 的 `getattr` 回退删掉。
 
 **测试**:
 - `tests/test_descriptor_wire_alias.py`:验 `model_dump_json()` 出 `inputSchema`

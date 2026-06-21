@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
  * <p>抢锁失败时:
  *
  * <ul>
- *   <li>{@link #throwOnFailure} = true(默认):抛 {@link DistributedLockAcquireException},调用方 catch 兜底
+ *   <li>{@link #throwOnFailure} = true(默认):抛 {@link DistributedLockAcquireException},调用方 catch 回退
  *   <li>{@link #throwOnFailure} = false:silent 跳过(返回 void / null),适合「重复执行也无害」的幂等业务
  * </ul>
  */

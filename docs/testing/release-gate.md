@@ -180,13 +180,13 @@ deploy smoke 现在分两层：
 
 当前部署升级 / 回滚验证已经补齐了普通 rollback 路径，以上边界应继续作为下一轮加强项，重点放在 `--atomic` 失败观测和业务验收留档。
 
-## Gate 收口状态
+## Gate 收敛状态
 
 当前 `pr-gate.yml`、`full-ci-gate.yml` 与 `scripts/ci/run-full-regression.sh` 已形成闭环：
 
 - PR Gate 负责受影响范围的快速回归
 - Full CI Gate 负责仓库级默认测试与 IT / E2E + 安全扫(secret/deps/hadolint/trivy/Checkov)
-- ~~Staging Gate 负责 deploy smoke、部署升级 / 回滚验证、load smoke 和巡检~~ **(2026-05-23 删除:hosted runner 连不上 `*.svc.cluster.local`,这部分目前没有自动化兜底;deploy smoke / load smoke / 巡检 走人工 SOP 或未来 self-hosted runner)**
+- ~~Staging Gate 负责 deploy smoke、部署升级 / 回滚验证、load smoke 和巡检~~ **(2026-05-23 删除:hosted runner 连不上 `*.svc.cluster.local`,这部分目前没有自动化回退;deploy smoke / load smoke / 巡检 走人工 SOP 或未来 self-hosted runner)**
 
 剩余的不是 gate 结构，而是 staging 留档和 `--atomic` 失败观测的补齐。
 

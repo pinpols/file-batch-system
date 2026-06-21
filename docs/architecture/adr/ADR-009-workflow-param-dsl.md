@@ -19,7 +19,7 @@ Workflow DAG 编排（详见 [`../workflow-dependency-guide.md`](../workflow-dep
 
 - ✅ START → SETTLE → DISPATCH 拓扑能正常推进
 - ✅ workflow_node.node_params 能下发到该节点子作业（commit 3dbb6d22, 2026-04-24）
-- ❌ **上游节点的输出（如 SETTLE 生成的 fileId）不会自动塞进下游节点的 partition payload**
+- ❌ **上游节点的输出（如 SETTLE 生成的 fileId）不会自动写入下游节点的 partition payload**
 
 实测痛点：`wf_eod_process` 跑通 START → SETTLE，但 DISPATCH 立即 `fileId missing`，因为没有机制把 SETTLE 的 file_record.id 暴露给 DISPATCH。
 

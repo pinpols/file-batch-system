@@ -10,11 +10,11 @@ import com.example.batch.common.tenant.routing.TenantPlacementRepository;
  *
  * <ul>
  *   <li>CONFIG → {@link HashAndSiloPlacementResolver}(hash 池化 + siloOverrides)。
- *   <li>TABLE → {@link DbTablePlacementResolver}(platform 表覆盖)+ hash 兜底(未登记租户)。
+ *   <li>TABLE → {@link DbTablePlacementResolver}(platform 表覆盖)+ hash 回退(未登记租户)。
  * </ul>
  *
  * <p>TABLE 模式需 {@link TenantPlacementRepository}(经 MyBatis 读 {@code
- * batch.business_tenant_placement}); hash 兜底参数(pooledShardCount / siloOverrides)两模式共用,故 TABLE
+ * batch.business_tenant_placement}); hash 回退参数(pooledShardCount / siloOverrides)两模式共用,故 TABLE
  * 也支持「少量登记 + 多数 hash」。
  */
 public final class BusinessPlacementResolverFactory {

@@ -27,7 +27,7 @@
 | `batch-common/src/test/.../constants/BatchFileConstantsPartitionTagTest.java`(新) | insertPartitionTag 单测 |
 | `batch-worker-export/src/test/.../plugin/ExportPartitionSliceIT.java`(新) | 真实 PG 分片完整性 IT(无重叠+全覆盖) |
 
-**分片正确性前提**:sql_template 的 `cursorColumn` 缺省兜底 `"id"`、jdbc_mapped 的 `detailOrderByColumn` 模板必填 —— 分片列恒存在,故**不单独做 fail-fast guard**(列不存在时现有 keyset 分页本就报错,非本次引入)。
+**分片正确性前提**:sql_template 的 `cursorColumn` 缺省回退 `"id"`、jdbc_mapped 的 `detailOrderByColumn` 模板必填 —— 分片列恒存在,故**不单独做 fail-fast guard**(列不存在时现有 keyset 分页本就报错,非本次引入)。
 
 ---
 

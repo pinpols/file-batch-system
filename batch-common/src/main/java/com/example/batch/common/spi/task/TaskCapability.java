@@ -12,7 +12,7 @@ import java.util.Set;
  * @param resourceKinds 资源占用集合(可多选,如 SQL = {DB},SFTP = {NET, DISK})
  * @param idempotent 重跑是否安全(true → 失败可直接重试;false → 需补偿)
  * @param cancellable 是否支持 {@link BatchTaskExecutor#cancel(String)}(必须跟实际实现一致)
- * @param recommendedTimeout 建议超时,用户未配置时的兜底值
+ * @param recommendedTimeout 建议超时,用户未配置时的回退值
  */
 public record TaskCapability(
     Set<ResourceKind> resourceKinds,

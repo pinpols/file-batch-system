@@ -22,7 +22,7 @@
 主链路 `DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT` 已是异步解耦,**但触发器入口这一段仍是同步桥**,产生三类问题:
 
 1. **orchestrator 短暂不可用** → trigger 该次 launch 失败,只能依赖 client retry。**重启 trigger 会丢已 fire 但未下发的 launch**:Quartz 已 `fire` 触发记录,HTTP 没成功,trigger 本地 `trigger_request` 留在 `FORWARD_FAILED`,需要人工介入或定时对账重发。
-2. **trigger 重启 + HTTP 在飞中** → Quartz 已 fire,HTTP 请求飞行中,trigger JVM 挂 → 不知道 orchestrator 收没收到 → 只能"宁可错杀重发,靠 idempotencyKey 去重"。但 orchestrator 端实际是 `uk_job_instance_tenant_dedup` 兜底,误差被吞但仍占用一次重试预算。
+2. **trigger 重启 + HTTP 在飞中** → Quartz 已 fire,HTTP 请求飞行中,trigger JVM 挂 → 不知道 orchestrator 收没收到 → 只能"宁可错杀重发,靠 idempotencyKey 去重"。但 orchestrator 端实际是 `uk_job_instance_tenant_dedup` 回退,误差被吞但仍占用一次重试预算。
 3. **同步阻塞 Quartz worker thread** → orchestrator 慢调用拖累调度吞吐;Quartz 默认线程池 10,慢调用突发时容易把 fire 队列堆积。
 
 主链路其它环节都已通过 outbox + Kafka 解耦,触发器入口这一段是整个系统**最后一处不一致**,与"DB 是事实源,Kafka 仅异步驱动"的架构纲领相悖。
@@ -65,7 +65,7 @@ TriggerLaunchConsumer.@KafkaListener
         │  1) 反序列化 LaunchEnvelope (含 LaunchRequest + dedupKey + traceId)
         │  2) 调用 LaunchService.launch(launchRequest)
         │     (复用现有 /internal/launch/single 的内部逻辑,
-        │      uk_job_instance_tenant_dedup 兜底重复消息)
+        │      uk_job_instance_tenant_dedup 防重复消息)
         │  3) ack
         ▼
 [原 launch T1/T2 → outbox → 主链路 ...]
@@ -125,21 +125,21 @@ CREATE UNIQUE INDEX uk_trigger_outbox_request_id
   - `false`:走原同步 HTTP 路径(完全无变化)
   - `true`:走 outbox + Kafka 路径
 - 切换策略:**先 staging E2E 跑通 → 单租户灰度 → 全租户切换**。每阶段保留 24h 观察 `trigger.outbox.publish.lag` 指标。
-- 回滚:配置项改回 `false`,trigger 立刻走 HTTP;在飞 outbox 记录由 relay 继续投递,**不回滚已落库的 trigger_outbox_event**(投出去就投出去,orchestrator dedup 兜底)。
-- 双写期(可选,1-2 周):同时写 trigger_outbox **并** HTTP,双轨观察一致性,兜底信心后关 HTTP。这步可选,不强制。
+- 回滚:配置项改回 `false`,trigger 立刻走 HTTP;在飞 outbox 记录由 relay 继续投递,**不回滚已写入数据库的 trigger_outbox_event**(投出去就投出去,orchestrator dedup 回退)。
+- 双写期(可选,1-2 周):同时写 trigger_outbox **并** HTTP,双轨观察一致性,回退信心后关 HTTP。这步可选,不强制。
 
 ### 守护测试
 
 - `TriggerOutboxRelayTest` 单测:relay 扫描 + 状态推进
 - `TriggerAsyncLaunchE2eIT` 端到端:Testcontainers Kafka + Postgres,trigger fire → trigger_outbox PENDING → relay publish → orchestrator 消费 → job_instance INSERT
 - `TriggerOutboxRetryE2eIT`:模拟 Kafka 不可用,验证 retry_count 递增 + last_error 写入 + 最终 GIVE_UP 告警
-- `TriggerAsyncLaunchIdempotencyE2eIT`:同 requestId 重复消费验证 `uk_job_instance_tenant_dedup` 兜底
+- `TriggerAsyncLaunchIdempotencyE2eIT`:同 requestId 重复消费验证 `uk_job_instance_tenant_dedup` 回退
 
 ## 后果
 
 ### 正面
 
-- **trigger 重启不丢 launch**:Quartz fire 后第一时间落 trigger_outbox(同事务,与 trigger_request 一起),trigger JVM 异常退出 outbox 已落库,relay 重启后继续投递。
+- **trigger 重启不丢 launch**:Quartz fire 后第一时间落 trigger_outbox(同事务,与 trigger_request 一起),trigger JVM 异常退出 outbox 已写入数据库,relay 重启后继续投递。
 - **orchestrator 短暂宕机不阻塞 trigger**:HTTP 同步桥下,orchestrator 重启期间 Quartz worker thread 阻塞;outbox 模式下,trigger 写完 outbox 立即返回,orchestrator 起来后 Kafka 消费跟上。
 - **架构一致**:整条主链路 + trigger 入口都是 DB+outbox+Kafka 模式,运维心智模型统一,可观测性指标统一(`*.outbox.publish.lag` 系列)。
 - **可对账**:trigger_outbox_event + trigger_request 双表,出问题任何一边都能反查。
@@ -149,7 +149,7 @@ CREATE UNIQUE INDEX uk_trigger_outbox_request_id
 - **延迟增加 ~200ms**:同步 HTTP 通常 < 50ms,outbox 引入轮询间隔(默认 200ms)。这个延迟在 SLA 内可接受(用户消息确认过)。
 - **新加 1 张表 + 1 个 @Scheduled bean + 1 个 KafkaListener**,运维资产增加。
 - **多实例 trigger 部署需要行级锁**:`SELECT ... FOR UPDATE SKIP LOCKED` 防止重复发布;复用 ADR-002 已验证模式。
-- **double-publish 风险**:Kafka send 成功但 status 未及时更新到 PUBLISHED → 进程崩溃 → 重启后 relay 再次发同一条。orchestrator 端 `uk_job_instance_tenant_dedup` 兜底,不会真正双跑,但会消耗一次 dedup 检查。
+- **double-publish 风险**:Kafka send 成功但 status 未及时更新到 PUBLISHED → 进程崩溃 → 重启后 relay 再次发同一条。orchestrator 端 `uk_job_instance_tenant_dedup` 回退,不会真正双跑,但会消耗一次 dedup 检查。
 - **Topic 协议演进成本**:加字段需要 v1 → v2,过渡期 consumer 兼容两版。
 
 ## 实施分阶段
@@ -184,7 +184,7 @@ CREATE UNIQUE INDEX uk_trigger_outbox_request_id
 
 - **trigger_outbox_event INSERT 必须与 trigger_request INSERT 同事务**(ADR-002 §同事务约束)
 - **orchestrator 不直写 trigger_outbox_event**(模块边界:trigger 模块独占)
-- **Kafka 消费失败不修改源数据库状态**:消费失败 → ack 失败 → Kafka rebalance / DLQ 兜底,不能反向改 trigger_outbox.status
+- **Kafka 消费失败不修改源数据库状态**:消费失败 → ack 失败 → Kafka rebalance / DLQ 回退,不能反向改 trigger_outbox.status
 - **同 requestId 多次消费必须 idempotent**:依赖 orchestrator 端 `uk_job_instance_tenant_dedup`,不能通过 trigger_outbox 端去重
 
 ## 验收标准

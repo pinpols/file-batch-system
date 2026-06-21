@@ -31,7 +31,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
  *   <li>所有转换以 {@code version} 做乐观锁，CAS 失败时必须回滚或让调用方感知；不得静默捕获并抑制。
  *   <li>{@link #releaseForDispatch} 是 READY 出队的唯一入口——分片与任务状态须原子一起推进， 见方法内的回滚并还原内存对象逻辑。
  *   <li>{@link #reclaimExpiredPartitions} 回收超租后一律回 {@code WAITING} 而非 {@code READY}，
- *       走一遍正常调度与派发，避免跳过 outbox 落库导致任务永远拿不到 Kafka 消息。
+ *       走一遍正常调度与派发，避免跳过 outbox 写入数据库导致任务永远拿不到 Kafka 消息。
  * </ul>
  */
 @Service
@@ -68,8 +68,8 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
       // idempotencyKey 绑定到 jobInstanceId，避免 FIXED_RATE 等同一天多次触发时
       // 不同 job_instance 的分区互相冲突（partitionKey 仅作业务分片键，不作全局唯一约束）
       // DBA-2026-05-20 P2-4: V124 partial UNIQUE (WHERE NOT NULL) 防 CLAIM 穿透依赖
-      // 调用方始终设非空,此处显式 Guard 兜底,任何后续 partitionPlan.partitionNo 为 null 的
-      // 退化分支也会立刻 fail-fast,而不是悄悄落库一行 NULL idempotency_key 绕过 UNIQUE。
+      // 调用方始终设非空,此处显式 Guard 回退,任何后续 partitionPlan.partitionNo 为 null 的
+      // 退化分支也会立刻 fail-fast,而不是悄悄写入数据库一行 NULL idempotency_key 绕过 UNIQUE。
       Guard.require(partitionPlan.getPartitionNo() != null, "job_partition.partition_no");
       String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
       Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
@@ -130,7 +130,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
 
   /**
    * 回收租约到期的分片：状态推回 {@code WAITING}（而非 {@code READY}），让分片重新走一遍调度决策 + outbox 派发，防止直接回 READY 跳过 outbox
-   * 落库导致任务没有 Kafka 消息可消费、永远无人认领。
+   * 写入数据库导致任务没有 Kafka 消息可消费、永远无人认领。
    */
   @Override
   @Transactional

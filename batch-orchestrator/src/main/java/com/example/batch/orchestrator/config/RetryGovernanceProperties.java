@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 重试治理配置（{@code batch.retry}）。
  *
  * <p>控制 {@code retry_schedule} 表的扫描节奏 + 默认重试策略基线。job_definition 可单独 覆盖 {@code retry_policy}（NONE /
- * FIXED / EXPONENTIAL）和 {@code max_retry_count}， 这里的值仅作为未配置时的兜底。
+ * FIXED / EXPONENTIAL）和 {@code max_retry_count}， 这里的值仅作为未配置时的回退。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.retry")

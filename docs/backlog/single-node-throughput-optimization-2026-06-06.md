@@ -88,7 +88,7 @@
 | 方向 | 项目 | 能不能做 | 我的决定 | 原因 / 后续 |
 |---|---|---|---|---|
 | 导入 | staging 新分区 COPY → 建索引 → attach/swap | 能做 | **已做** | 1000w 链路复验成功;注意新分区索引名会保留 `__stage_*` 后缀,后续可做命名清理 |
-| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **不作为 P1 阻塞;转后续容量画像** | P1 的配置能力已完成并验证;三轮矩阵主要用于寻找单机上限,不是正确性/主链路收口条件 |
+| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **不作为 P1 阻塞;转后续容量画像** | P1 的配置能力已完成并验证;三轮矩阵主要用于寻找单机上限,不是正确性/主链路收敛条件 |
 | 导入 | PG session `synchronous_commit=off` | 能做但有风险 | **只允许 benchmark / 单任务 session 级验证,不进生产默认** | 会改变崩溃语义,不能作为多租户生产默认 |
 | 导入 | load 前 drop index / load 后 rebuild | 能做 | **并入 staging/swap 方案一起测,不单独做** | 单独在现有业务分区上 drop index 风险大;新分区里做更干净 |
 | 导入 | parallel COPY / 多连接写不同逻辑分区 | 能做 | **暂缓,P2** | 对单文件单业务日帮助有限;多租户/多业务日并行时再测 |
@@ -106,7 +106,7 @@
 **我的排序**:
 
 1. 导入/导出正确性收尾已完成:stage-swap 1000w、导出 4 分片 1000w、multipart STORE、fetch/chunk 参数均有真实链路证据。
-2. 导出性能 P0 已收口:4 分片同秒启动并成功;下一步只做更高分片数、真实 S3、多租户混压矩阵。
+2. 导出性能 P0 已收敛:4 分片同秒启动并成功;下一步只做更高分片数、真实 S3、多租户混压矩阵。
 3. JVM/GC、parallel COPY 放后面;COPY+UPSERT merge、导出版 COPY、单大文件 replace-copy 分片、本期 Citus 不做。
 
 ### 维护规则
@@ -377,7 +377,7 @@ Baseline 182s
 ### 1.9 触发条件(满足才进 Tier-B / 才考虑 Citus)
 
 - **进 Tier-B**:Tier-A 全做完仍不达 §1.6 目标。
-- **考虑 Citus**:Tier-A + Tier-B 全做完(单流 < 15s),仍不能满足**真实生产负载**;且**实测多租户并发洪峰**确认是 Citus 的甜点场景(单租户单流 Citus 不缩耗时,详见 streaming-large-file §5.3 / Citus 加速维度分析)。
+- **考虑 Citus**:Tier-A + Tier-B 全做完(单流 < 15s),仍不能满足**真实生产负载**;且**实测多租户并发峰值流量**确认是 Citus 的甜点场景(单租户单流 Citus 不缩耗时,详见 streaming-large-file §5.3 / Citus 加速维度分析)。
 
 ---
 
@@ -396,7 +396,7 @@ Baseline 182s
 | Baseline | 182.5s / **5500 行/s** / RSS 180MB | 160.6s / **6230 行/s** / RSS **142MB**(更健康) |
 | 真瓶颈 | **集中**:写 DB(`batchUpdate` UPSERT 逐行 ON CONFLICT) | **分散**:读 DB + 序列化 + 写本地文件 + 上传 MinIO,四段各占一段 |
 | 数量级杀招 | ✅ `batchUpdate` → 多值 INSERT → COPY,**5-20×** | ❌ 无等价物 |
-| 横向加速 | 同 §1.8 不做 Citus | ✅ **keyset 区间分片已在 PR #393 落地**(多租户并发洪峰场景接近 N×) |
+| 横向加速 | 同 §1.8 不做 Citus | ✅ **keyset 区间分片已在 PR #393 落地**(多租户并发峰值流量场景接近 N×) |
 
 **含义**:导入靠 §1.3-1.5 走"换写法快 10×"的路;导出靠 §2.2 多段小调参累积 2-3×,真要数量级提升只能靠 §2.3 已经做完的横向 keyset 分片(且仅多租户并发场景)。
 
@@ -416,7 +416,7 @@ Baseline 182s
 
 - **横向加速 keyset 区间分片**(PR #390 + #393):激活时每分片只读游标列一段值区间走索引区间扫,放大 N× → ~1×。
   详见 `docs/backlog/export-partition-keyset-range-2026-06-06.md`(§10 实现记录)。
-  覆盖多租户并发洪峰场景;单租户单流耗时不缩(同 Citus 限制)。
+  覆盖多租户并发峰值流量场景;单租户单流耗时不缩(同 Citus 限制)。
 - 流式 keyset 游标分页(原有):任意时刻只持一页,worker RSS 常数,无 OOM 风险。
 
 | 场景 | 结果 | 决策 |

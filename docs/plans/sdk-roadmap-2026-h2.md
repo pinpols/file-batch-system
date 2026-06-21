@@ -309,7 +309,7 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 **必做(无论任务长短)**:
 - ✅ Cancel push(关副作用)
-- ✅ 多种 timeout(异常兜底)
+- ✅ 多种 timeout(异常回退)
 
 ### 6.3 PR 拆分
 

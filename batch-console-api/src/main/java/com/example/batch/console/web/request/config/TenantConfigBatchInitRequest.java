@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.Data;
 
-/** mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。dryRun=true 时只校验不落库。 */
+/** mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。dryRun=true 时只校验不写入数据库。 */
 @Data
 public class TenantConfigBatchInitRequest {
 

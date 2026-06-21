@@ -438,7 +438,7 @@ groups:
           alert_group: db
         annotations:
           summary: "PostgreSQL replication lag > 30s on {{ $labels.instance }}"
-          description: "从库 {{ $labels.instance }} 落后主库 {{ $value | humanize }}s,持续 5min。可能 disk IO 慢 / 大事务复制中。BE 应回退读主库(已配 lag-aware circuit breaker 兜底,验证生效)。"
+          description: "从库 {{ $labels.instance }} 落后主库 {{ $value | humanize }}s,持续 5min。可能 disk IO 慢 / 大事务复制中。BE 应回退读主库(已配 lag-aware circuit breaker 回退,验证生效)。"
 
       - alert: PostgresReplicationLagCritical
         # replay_lag > 5min = read 严重过期,业务读到旧数据有风险
@@ -812,7 +812,7 @@ groups:
   # ===========================================================================
   # 容量护栏(2026-06-10 审计 P2-7 补)。
   # 背景:归档/清理调度若坏死(ShedLock 长期停滞 / cron 配错 / 调度异常),原本只有
-  #   应用级 backlog 告警,缺"磁盘 / 库体积"这道兜底——磁盘写满是所有组件的共因故障。
+  #   应用级 backlog 告警,缺"磁盘 / 库体积"这道回退——磁盘写满是所有组件的共因故障。
   #   历史教训:process_staging 曾积压 118GB dead、Docker.raw 147G bloat 才被发现。
   # 数据源:node-exporter(9100)/ postgres-exporter(9187)/ cadvisor,均已在 prometheus.yml scrape。
   # 注:归档调度"最近成功时间"目前无直接指标(scheduler 未埋点);此处用「库体积持续增长 +
@@ -943,7 +943,7 @@ groups:
       - alert: BatchPostgresLockWaitStuck
         # 真"等锁阻塞"会话数(pg_stat_activity wait_event_type='Lock'),来自自定义 query
         # docker/observability/postgres-exporter-queries.yaml。该指标仅在异常退出 query 的部署(compose)
-        # 存在;未挂的环境此规则不 fire(由下面 LongRunningTransaction 用默认指标兜底)。
+        # 存在;未挂的环境此规则不 fire(由下面 LongRunningTransaction 用默认指标回退)。
         expr: pg_lock_waits_waiting_sessions > 0
         for: 5m
         labels:
@@ -956,7 +956,7 @@ groups:
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md"
 
       - alert: BatchPostgresLongRunningTransaction
-        # 长事务≈持锁不放的元凶;用默认 postgres-exporter 指标,各环境通用,作锁等待兜底告警。
+        # 长事务≈持锁不放的元凶;用默认 postgres-exporter 指标,各环境通用,作锁等待补充告警。
         expr: max by (datname) (pg_stat_activity_max_tx_duration{datname="batch_platform"}) > 300
         for: 5m
         labels:

@@ -108,7 +108,7 @@ public class CrossDayDependencyResolver {
             if (spec.isRequired()) {
               waitingReasons.add(missingReason(alias, spec, target.toString()));
             }
-            // OPTIONAL 缺失：alias 不写入 resolved，下游 DSL 取到 null 兜底
+            // OPTIONAL 缺失：alias 不写入 resolved，下游 DSL 取到 null 回退
             continue;
           }
           resolved.put(alias, toEntry(hit.get()));

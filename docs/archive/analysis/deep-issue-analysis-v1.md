@@ -95,12 +95,12 @@ public void writeDispatchEvent(...) { ... }
 DefaultPartitionDispatchService
   ├── createPartitions()        ← 事务 A 提交
   └── createTasksAndMaybeOutboxEvents()
-        └── writeDispatchEvent() ← 若此处抛异常，partition/task 已提交，outbox 未落库
+        └── writeDispatchEvent() ← 若此处抛异常，partition/task 已提交，outbox 未写入数据库
 ```
 
 **影响**：partition 状态为 `READY`，但 outbox_event 永不存在，Worker 永远收不到派发消息——**孤儿任务，不可自愈**。
 
-**根本原因**：partition/task 创建与 outbox 落库应在同一 `@Transactional` 范围内，调用链需重构，确保同一 `Connection` 上完成所有写入后统一提交。
+**根本原因**：partition/task 创建与 outbox 写入数据库应在同一 `@Transactional` 范围内，调用链需重构，确保同一 `Connection` 上完成所有写入后统一提交。
 
 ---
 
@@ -308,7 +308,7 @@ spring.datasource.hikari.leak-detection-threshold: 30000
 
 ## 八、设计缺陷
 
-### #8-1 StateMachine 用硬编码反射方法名兜底 [Medium]
+### #8-1 StateMachine 用硬编码反射方法名回退 [Medium]
 
 **文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/statemachine/DefaultStateMachine.java:39-58`
 

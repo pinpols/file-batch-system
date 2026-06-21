@@ -171,7 +171,7 @@ API 在 `batch-worker-sdk/.../task/SdkTaskContext.java:125`。无自检的 handl
      带 `pausedTaskTypes`,见 `batch-worker-sdk/.../dispatcher/HeartbeatDirective.java`),
      只 drain 指定 type,其他继续。
 3. **drain 老 buildId**:观察 fingerprint summary,v1.2.0 在线 task 归零后 `client.stop(Duration)`
-   → 进程退出 → console fingerprint 表自动剔除(§6 的 timeout scheduler 兜底)。
+   → 进程退出 → console fingerprint 表自动剔除(§6 的 timeout scheduler 回退)。
 
 > 协议侧改字段时另走 [`sdk-dual-rollout.md`](../runbook/sdk-dual-rollout.md) 三步纪律(平台先发 → 观察 → SDK 跟进),
 > 不要跟 buildId 灰度混在一次窗口。
@@ -187,9 +187,9 @@ client.stop(Duration.ofSeconds(60));  // 默认 30s
 ```
 
 签名见 `batch-worker-sdk/.../client/BatchPlatformClient.java:174`。超时未结束的 task 会打
-WARN 列 taskId(由 `TaskDispatcher.stop(Duration)` 报),平台侧 task 留在 RUNNING,靠 §6.2 兜底。
+WARN 列 taskId(由 `TaskDispatcher.stop(Duration)` 报),平台侧 task 留在 RUNNING,靠 §6.2 回退。
 
-### 6.2 平台兜底
+### 6.2 平台回退
 
 orchestrator `WorkerHeartbeatTimeoutScheduler`(每 30s 扫一次):心跳停更
 **默认 timeoutSeconds(90) + graceSeconds(30) = 120s** 后,worker 由 ONLINE/DRAINING

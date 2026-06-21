@@ -3,7 +3,7 @@
 
 模板顺序:``open_sink -> build_query -> stream_rows -> format_row(逐行)
 -> write_out(收尾)``。强类型 pydantic 入参,可选 pydantic ``OutputT``
-出参(None -> 计数器输出兜底)。``write_out`` 可显式返回 :class:`SdkTaskResult`,
+出参(None -> 计数器输出回退)。``write_out`` 可显式返回 :class:`SdkTaskResult`,
 其优先级高于 ``summarize`` 和计数器(对齐 Java 优先级)。
 """
 

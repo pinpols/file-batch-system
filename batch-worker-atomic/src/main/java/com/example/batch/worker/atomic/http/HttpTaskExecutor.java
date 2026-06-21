@@ -606,7 +606,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   }
 
   /**
-   * 出口 HTTP 响应头落库前的固定脱敏黑名单(case-insensitive,RFC 7230 头名不区分大小写)。
+   * 出口 HTTP 响应头写入数据库前的固定脱敏黑名单(case-insensitive,RFC 7230 头名不区分大小写)。
    *
    * <p>对应 docs/analysis/2026-06-03-deep-scan-be-security.md P2-3。这些头若回声到 task_result.output 即等于把
    * 下游会话凭据落 DB / Kafka,后续 forensic export 一并外泄。

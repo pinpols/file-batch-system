@@ -244,9 +244,9 @@ public class HttpTaskExecutionClient
     //   2) outbox 不可用（未启用 / 持久化失败）→ **不再** 把异常抛回 listener。
     //      之前抛 RuntimeException → AbstractTaskConsumer 识别为 transient → return false → Kafka
     //      不提交 offset → 重投 dispatch 消息 → 同 task 在 finally 块清完 lease 后立即被重新 CLAIM,
-    //      task 业务 body 被双执行（已落库数据被覆盖 / 重做）。
+    //      task 业务 body 被双执行（已写入数据库数据被覆盖 / 重做）。
     //      改为捕获并抑制异常 + ERROR 日志 + worker.report.dropped.total 计数：让 Kafka 正常 ack offset,
-    //      丢失的 REPORT 由 orchestrator lease 过期自动 reclaim 兜底（reclaim 是 lease-timeout 后的
+    //      丢失的 REPORT 由 orchestrator lease 过期自动 reclaim 回退（reclaim 是 lease-timeout 后的
     //      延迟重派,不是即时重派,且 orchestrator 视角看到的是 CLAIM 状态超时,可走它自己的
     //      去重/状态机校验,而不是 Kafka 重投绕过状态机）。
     //   双执行从"必然零延迟"降级为"可能延迟 reclaim",配合 outbox 启用时基本消除。
@@ -333,7 +333,7 @@ public class HttpTaskExecutionClient
         if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
           // R6 P0-7：429 是 orchestrator 端 sliding-window 限流的瞬时拒绝，绝不是终态错误。
           // 之前直接 failReportImmediately 等于把 worker 的 REPORT 数据扔掉，task 在 orchestrator
-          // 视角永远卡 RUNNING — 只能靠 lease 过期 + 重 CLAIM 兜底，rolling 高峰会导致整批 task 丢失处理窗口。
+          // 视角永远卡 RUNNING — 只能靠 lease 过期 + 重 CLAIM 回退，rolling 高峰会导致整批 task 丢失处理窗口。
           // 改为按可重试路径走退避：与 503 / IO 超时一致，让 worker 退避后重投 REPORT。
           state = handleRetryableReportFailure("RATE_LIMITED", "rate limited", state, ex);
           continue;

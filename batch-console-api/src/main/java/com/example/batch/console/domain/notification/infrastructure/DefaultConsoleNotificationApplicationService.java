@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li><b>投递日志</b>：审计用，每次通知分发的结果（成功/失败）都在此记录。
  * </ul>
  *
- * <p>唯一性约束：{@code channelCode} 应用层前置查重（{@code selectByCode != null → CONFLICT}）， 非 DB 唯一索引兜底——并发创建同
+ * <p>唯一性约束：{@code channelCode} 应用层前置查重（{@code selectByCode != null → CONFLICT}）， 非 DB 唯一索引回退——并发创建同
  * code 时存在 TOCTOU 窗口，但通知治理操作并发度低，可接受。
  *
  * <p>自由文本入参（channelName / channelCode 等）统一经 {@link ConsoleTextSanitizer#safeInput} 截断清洗。
