@@ -40,6 +40,15 @@
         <if test="approvalStatus != null and approvalStatus != ''">
             and approval_status = #{approvalStatus}
         </if>
+        <if test="requesterId != null and requesterId != ''">
+            and requester_id = #{requesterId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (approval_no ilike '%' || #{keyword} || '%'
+                 or requester_id ilike '%' || #{keyword} || '%'
+                 or target_type ilike '%' || #{keyword} || '%'
+                 or target_id ilike '%' || #{keyword} || '%')
+        </if>
         order by created_at desc
         <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
@@ -59,6 +68,15 @@
         </if>
         <if test="approvalStatus != null and approvalStatus != ''">
             and approval_status = #{approvalStatus}
+        </if>
+        <if test="requesterId != null and requesterId != ''">
+            and requester_id = #{requesterId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and (approval_no ilike '%' || #{keyword} || '%'
+                 or requester_id ilike '%' || #{keyword} || '%'
+                 or target_type ilike '%' || #{keyword} || '%'
+                 or target_id ilike '%' || #{keyword} || '%')
         </if>
     </select>
 

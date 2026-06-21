@@ -3384,8 +3384,44 @@ paths:
       operationId: queryApprovals
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: approvalNo
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选,按审批单号精确过滤。
+        - name: approvalType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选,按审批类型精确过滤(approvalType enum)。
+        - name: actionType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选,按动作类型精确过滤。
+        - name: approvalStatus
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选,按审批状态精确过滤(approvalStatus enum)。
+        - name: requesterId
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+          description: 可选,按申请人精确过滤(前端 ?requester=me 入口)。
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+          description: 可选,大小写不敏感模糊匹配 approvalNo / requesterId / targetType / targetId 任一。
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
       responses:
