@@ -171,9 +171,50 @@ public class ReceiveStep implements ImportStageStep {
       runtimeRepository.bindFileToPipelineInstance(
           runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
       context.setFileId(String.valueOf(fileId));
+    } else {
+      // ADR-046 文件束:复用 scanner 预建的 file_record(orchestrator 把 partition.source_file_id
+      // 落进 task payload 的 sourceFileId,worker-core 据此设了 FILE_ID,基类已加载 FILE_RECORD)。
+      // 束的 task payload 只带 sourceFileId/templateCode,不带存储坐标——从 file_record 回填
+      // storage_path/bucket/format/charset,PREPROCESS 才能定位并下载文件。
+      // 仅填 payload 中为空的字段,对「payload 自带完整存储信息」的既有 existing-file 流是无副作用的幂等回填。
+      importPayload =
+          enrichFromFileRecord(importPayload, attrs.get(PipelineRuntimeKeys.FILE_RECORD));
     }
     attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     return ImportStageResult.success(stage());
+  }
+
+  /**
+   * 用既有 {@code file_record} 的存储坐标回填 {@link ImportPayload} 中为空的字段。只覆盖空值——payload 已带的字段优先, 保证对既有
+   * existing-file 导入流零影响,仅文件束(payload 不带存储信息)从 file_record 取。
+   */
+  @SuppressWarnings("unchecked")
+  ImportPayload enrichFromFileRecord(ImportPayload payload, Object fileRecordObj) {
+    if (!(fileRecordObj instanceof Map<?, ?> fileRecord) || fileRecord.isEmpty()) {
+      return payload;
+    }
+    Map<String, Object> asMap = (Map<String, Object>) objectMapper.convertValue(payload, Map.class);
+    backfillBlank(asMap, "storagePath", fileRecord.get("storage_path"));
+    backfillBlank(asMap, "storageBucket", fileRecord.get("storage_bucket"));
+    backfillBlank(asMap, "storageType", fileRecord.get("storage_type"));
+    backfillBlank(asMap, "fileFormatType", fileRecord.get("file_format_type"));
+    backfillBlank(asMap, "charset", fileRecord.get("charset"));
+    backfillBlank(asMap, "fileName", fileRecord.get("file_name"));
+    backfillBlank(asMap, "originalFileName", fileRecord.get("original_file_name"));
+    backfillBlank(asMap, "fileCode", fileRecord.get("file_code"));
+    backfillBlank(asMap, "bizType", fileRecord.get("biz_type"));
+    return objectMapper.convertValue(asMap, ImportPayload.class);
+  }
+
+  private static void backfillBlank(Map<String, Object> map, String key, Object value) {
+    if (value == null) {
+      return;
+    }
+    Object current = map.get(key);
+    boolean currentBlank = current == null || (current instanceof String s && !Texts.hasText(s));
+    if (currentBlank) {
+      map.put(key, value);
+    }
   }
 
   private Map<String, Object> resolveTemplateSecurity(String tenantId, String templateCode) {

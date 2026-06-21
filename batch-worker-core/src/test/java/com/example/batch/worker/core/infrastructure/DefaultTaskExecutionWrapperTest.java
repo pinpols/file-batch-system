@@ -253,6 +253,40 @@ class DefaultTaskExecutionWrapperTest {
     wrapper.execute(task);
   }
 
+  /** ADR-046 文件束:task payload 携带 sourceFileId 时落到 FILE_ID,基类适配器据此复用既有 file_record。 */
+  @Test
+  void shouldExposeFileIdFromBundleSourceFileId() {
+    PulledTask task = sampleTask("1006", "t1", "w1");
+    task.setPayload("{\"sourceFileId\":42,\"templateCode\":\"RISK_IMPORT_V2\"}");
+
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              StepExecutionRequest req = invocation.getArgument(0);
+              assertThat(req.context()).containsEntry(PipelineRuntimeKeys.FILE_ID, 42);
+              return StepExecutionResponse.successResponse();
+            });
+
+    wrapper.execute(task);
+  }
+
+  /** 普通(非束)导入 payload 无 sourceFileId,执行上下文不得带 FILE_ID,保证存量导入零影响。 */
+  @Test
+  void shouldNotExposeFileIdForNonBundlePayload() {
+    PulledTask task = sampleTask("1007", "t1", "w1");
+    task.setPayload("{\"templateCode\":\"PLAIN_IMPORT\"}");
+
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              StepExecutionRequest req = invocation.getArgument(0);
+              assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
+              return StepExecutionResponse.successResponse();
+            });
+
+    wrapper.execute(task);
+  }
+
   /**
    * P0-1 核心: adapter 卡住超过 task.timeoutSeconds → wrapper 在限时后强 cancel(true) + 失败上报
    * WORKER_EXECUTION_TIMEOUT, 不让 listener 永久阻塞.
