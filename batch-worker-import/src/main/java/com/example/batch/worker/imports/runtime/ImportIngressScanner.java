@@ -210,6 +210,13 @@ public class ImportIngressScanner {
         metadata.put("expectedRecordCount", manifest.recordCount());
       }
     }
+    // ADR-046 第二刀:批次清单 v2 的 fileMapping 声明了本文件用哪个模板 → 落 metadata
+    // 供 launch(BUNDLE_IMPORT)按组展异构 partition 时读取(目标表从模板推,故只存 templateCode)。
+    if (matchedBatch != null) {
+      matchedBatch
+          .templateCodeFor(fileName)
+          .ifPresent(templateCode -> metadata.put("bundleTemplateCode", templateCode));
+    }
     Long fileId =
         runtimeRepository.createFileRecord(
             FileRecordParam.builder()
