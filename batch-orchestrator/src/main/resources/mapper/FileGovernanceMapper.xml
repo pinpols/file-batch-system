@@ -179,6 +179,7 @@
                tenant_id,
                file_name,
                file_status,
+               biz_date,
                metadata_json,
                metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
                coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') as arrival_state,

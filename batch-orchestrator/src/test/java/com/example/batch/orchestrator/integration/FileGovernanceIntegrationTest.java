@@ -7,6 +7,7 @@ import com.example.batch.common.config.BatchClockConfig;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
+import com.example.batch.orchestrator.infrastructure.file.BundleArrivalLauncher;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
 import com.example.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
@@ -117,6 +118,9 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @Import({
     BatchClockConfig.class,
     FileGovernanceScheduler.class,
+    // ADR-046 2c-2b:FileGovernanceScheduler 现依赖 BundleArrivalLauncher,须一并导入。
+    // 本测的到达组无 bundleJobCode → launchIfBundle 早返回,不触 LaunchService(故无需 mock)。
+    BundleArrivalLauncher.class,
     FileGovernanceRepository.class,
     S3GovernanceStorage.class,
     OrchestratorRedisSupport.class,
