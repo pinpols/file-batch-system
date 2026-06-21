@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * bundleJobCode} 指向作业的类型发一个 {@code BUNDLE_*} launch。
  *
  * <p>束 launch 把组内 N 个文件作为 {@code params.bundleFiles=[{sourceFileId, templateCode?, targetRef?}]} 传给
- * orchestrator,由 {@code DefaultSchedulePlanBuilder} 展成 N 个异构 partition;承重字段按束类型(绑定 profile)校验:导入须
+ * orchestrator,由 {@code DefaultSchedulePlanBuilder} 展成 N 个异构 partition;必填绑定字段按束类型(绑定 profile)校验:导入须
  * sourceFileId+templateCode(目标表从模板推),分发须 sourceFileId+targetRef(下游渠道 channel_code)。本类按 file_record
  * metadata 里出现的键 emit 一个超集(templateCode 取 {@code bundleTemplateCode}、targetRef 取 {@code
  * bundleTargetRef}),具体保留/丢弃交 orchestrator 的 类型化 extract,故本类对绑定 profile 不感知。

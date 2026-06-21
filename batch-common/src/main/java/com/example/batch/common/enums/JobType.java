@@ -27,7 +27,7 @@ public enum JobType implements DictEnum {
   /**
    * ADR-046:文件束聚合(用户单次提交多文件→多表)。launch 按提交 manifest 展成一个 job_instance 下 K 个异构 partition(各绑
    * source_file_id/template_code/target_ref),把控制面 churn 从 O(N) 降到 O(N/K)。归 {@link BatchType#IMPORT}
-   * 桶。第一刀仅登记类型,派发/展开逻辑见后续刀。
+   * 桶。本枚举仅登记类型;派发与展开逻辑见 orchestrator 的束作业处理链。
    */
   BUNDLE_IMPORT("BUNDLE_IMPORT", "文件束聚合任务"),
   /**

@@ -12,7 +12,7 @@ import java.util.Map;
  * targetRef?}}——由触发链查 file_record 后填入。launch 据此把一束展成 N 个异构 partition。{@link
  * BundlePartitionCountResolver} 与 {@link DefaultSchedulePlanBuilder} 共用本解析,保持单一来源。
  *
- * <p><b>承重字段按束类型不同(绑定 profile)</b>:
+ * <p><b>各束类型的必填绑定字段不同(绑定 profile)</b>:
  *
  * <ul>
  *   <li>{@code BUNDLE_IMPORT}:{@code sourceFileId}(源文件)+ {@code templateCode}(导入模板)。
@@ -20,7 +20,7 @@ import java.util.Map;
  *   <li>{@code BUNDLE_DISPATCH}:{@code sourceFileId}(待分发文件)+ {@code targetRef}(下游渠道);分发无模板。
  * </ul>
  *
- * 缺承重字段的项跳过(不静默落一个无绑定 partition)。
+ * 必填绑定字段缺失的项跳过(不静默生成一个无绑定 partition)。
  */
 public final class BundlePlanParams {
 
@@ -32,7 +32,7 @@ public final class BundlePlanParams {
   /** 一束内单个绑定项(文件/模板/目标视类型而定,可部分为空)。 */
   public record BundleFile(Long sourceFileId, String templateCode, String targetRef) {}
 
-  /** 解析 params.bundleFiles。承重字段校验按束类型(绑定 profile)区分;非束类型或承重缺失 → 跳过/空列表(走原同构路径)。 */
+  /** 解析 params.bundleFiles。必填绑定字段校验按束类型(绑定 profile)区分;非束类型或绑定缺失 → 跳过/空列表(走原同构路径)。 */
   @SuppressWarnings("unchecked")
   public static List<BundleFile> extract(Map<String, Object> params, JobType bundleType) {
     List<BundleFile> result = new ArrayList<>();
@@ -59,7 +59,7 @@ public final class BundlePlanParams {
     return result;
   }
 
-  /** 按绑定 profile 校验承重字段是否齐备。 */
+  /** 按绑定 profile 校验必填绑定字段是否齐备。 */
   private static boolean hasRequiredBinding(
       JobType bundleType, Long fileId, String templateCode, String targetRef) {
     return switch (bundleType) {
