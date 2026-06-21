@@ -342,6 +342,8 @@ public class ConsoleOpsQueryService {
     query.setApprovalType(request.getApprovalType());
     query.setActionType(request.getActionType());
     query.setApprovalStatus(request.getApprovalStatus());
+    query.setRequesterId(request.getRequesterId());
+    query.setKeyword(request.getKeyword());
     query.setPageRequest(pageRequest);
     List<ApprovalCommandEntity> rows = opsMappers.approvalCommandMapper.selectByQuery(query);
     long total = opsMappers.approvalCommandMapper.countByQuery(query);
