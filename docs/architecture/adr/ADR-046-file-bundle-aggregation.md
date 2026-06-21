@@ -1,8 +1,8 @@
 # ADR-046 · 文件束聚合 —— 在单文件单元之上加一层批量编排(File Bundle Aggregation)
 
-- **Status**: Proposed
-- **Related**: ADR-040(清单驱动到达组,**分组种子**)、ADR-002(transactional outbox)、ADR-027(资源亲和范围红线,**边界对照**)、`docs/analysis`(吞吐瓶颈实测:瓶颈在控制面消费 + claim/report 争用,非 PG)、PR #465(launch 消费并发 +50%)
-- **Plan**: 本 PR 仅设计文档。**架构级**——引入新的编排聚合单元 + 动 orchestrator 的 claim/report 粒度(orchestrator 是唯一状态主机)。评审拍板下面 §决策 的 4 个开放问题后再分阶段逐 PR 落地,**先定语义再写码**。
+- **Status**: Proposed(**方向已定 2026-06-21**:见 §已决;4 个开放问题已拍板,待实施分阶段逐 PR)
+- **Related**: ADR-040(清单驱动到达组,**分组种子之一**)、ADR-002(transactional outbox)、ADR-027(资源亲和范围红线,**边界对照**)、配置批量导入(`/config/tenant-package` Excel 配置包,**配置模型复用**)、`docs/analysis`(吞吐瓶颈实测:瓶颈在控制面消费 + claim/report 争用,非 PG)、PR #465(launch 消费并发 +50%)
+- **Plan**: 本 PR 仅设计文档。**架构级**——引入新的编排聚合单元 + 动 orchestrator 的 claim/report 粒度(orchestrator 是唯一状态主机)。§已决 已拍板 4 个方向问题 + 配置模型,后续分阶段逐 PR 落地,**先定语义再写码**。
 
 ## 范围边界(实施 PR 必答)
 
@@ -15,7 +15,8 @@
 
 - ✅ 引入「文件束(Bundle)」作为**编排聚合层**:orchestrator 对一束文件做**一次** CLAIM / lease / REPORT / outbox 生命周期,把控制面往返从 O(N) 降到 O(N/K)。
 - ✅ 束内每个文件仍是**独立 file-unit**:各自的幂等键、结果子记录、文件级 checkpoint、各自的 template/目标表/下游。
-- ✅ 复用 ADR-040 到达组作为**分组种子**(到达组本就回答「哪些文件算一组」)。
+- ✅ **配置不 per-表**:一束作业 = **一个** job 定义(`BUNDLE_IMPORT` / `BUNDLE_DISPATCH`),不是 N 个 job;每次提交带 file→template manifest(数据,非配置)。模板 per-表-schema(批量导入、schema 同可复用)。详见 §配置模型。
+- ✅ 分组种子=**用户单次提交的集合**(request-scoped,提交即已知);到达组(ADR-040)是另一条线的种子,正交。
 - ✅ worker 束执行=内部循环 file-unit,**per-file try/catch**,部分失败不退整束。
 
 **❌ 不做(明确边界)**:
@@ -114,6 +115,19 @@ Bundle(父:1 次 CLAIM / lease / REPORT / outbox)        ← orchestrator 只见
 - **两层幂等键**:`bundle_key`(束级,防重复 launch 整束)+ `file_key`(file-unit 级,束内重跑跳过已完成)。
 - **lease**:按束认领,但**心跳要细到 file-unit 进度**(大束跑得久,lease 续租 + checkpoint 要随 file-unit 推进刷新,否则误判 worker 死)。复用 `ActiveTaskLeaseRegistry` 心跳,带束内进度。
 
+## 配置模型(为什么不 per-表配置)
+
+运行时聚合解决「N 个 task 压垮 orch」,但用户的真实痛点还有一层:**要不要手配 N 个 job 定义?** 答案:**不**。
+
+- **job 定义:N → 1**。不为每张表建一个 job,而是**一个束作业定义**(`BUNDLE_IMPORT` / `BUNDLE_DISPATCH`)。它不绑死单张表,而是「按提交清单,把每个文件导到它对应的表/模板」。
+- **每次提交带一个 manifest**(`file → templateCode → 目标表` 的映射,导出侧是 `表 → 文件 → 下游渠道`)——这是**数据,不是配置**:用户提交文件集合时一起给,或按文件名约定/ADR-040 批次清单推导。**不预先建 job**。
+- **模板(template)仍 per-表-schema**:不同表的字段映射/格式/校验本质不同,绕不开(header 自动映射生产级不可靠)。但 ① 复用既有**配置批量导入**(`/config/tenant-package` Excel 配置包)一次导 M 个模板;② **schema 相同的表共用一个模板**(模板参数化目标表名),故 M 往往 < N。
+- **导出/分发侧同构**:一个 `BUNDLE_DISPATCH` 作业 + per-下游 channel(可批量导)+ 提交时 `表→文件→下游` manifest。
+
+**最终配置量** = `1 个束作业 + M 个模板(M≤N,批量导/可复用) + 每次提交一个 manifest(数据)`,**不是 N 个 job + N 处手配**。
+
+> 边界:束作业**只编排**(挑文件→挑模板→派发),不内联业务映射逻辑;映射仍由 template/channel 承载(职责不挪、不膨胀)。
+
 ## 改动点(落地后,非本 PR)
 
 - **batch-orchestrator**:
@@ -125,9 +139,9 @@ Bundle(父:1 次 CLAIM / lease / REPORT / outbox)        ← orchestrator 只见
 
 ## 实施分阶段
 
-1. **Phase 0 — 设计定稿**:本 ADR 评审拍板 §决策 4 个开放问题(A/B 形态、部分失败语义、分组策略、幂等/lease)。
-2. **Phase 1 — 控制面只读批量化(低风险先行)**:不改 worker 模型,先把 launch/claim/report/outbox 的**操作**批量化(bulk insert partition、多行 claim、outbox 批写),验证在低千量级是否已够。这是「杠杆 1」,可能先把压力压下去、推迟 Phase 2。
-3. **Phase 2 — Bundle 聚合层(命中上万才上)**:实现束生命周期 + 异构 partition + worker 束执行 + 监控下钻。仅当 Phase 1 实测仍撞控制面墙时推进。
+1. **Phase 0 — 设计定稿**:✅ 已拍板(见 §已决:A 形态 / PARTIAL_FAILED 独立重试 / request-scoped 分组 + 大小上限 / Phase 1 先行)+ §配置模型(束作业 + manifest,不 per-表配 job)。
+2. **Phase 1 — 控制面操作批量化 + 提交按束分组(低风险先行)**:不改 worker 模型,先把 launch/claim/report/outbox 的**操作**批量化(bulk insert partition、多行 claim、outbox 批写)+ 引入束作业定义(`BUNDLE_IMPORT`)和提交 manifest(运行时仍 N 个 partition,但配置已收成 1 个 job)。验证低千量级是否已够。
+3. **Phase 2 — 真组认领/组上报(本场景大概率要做)**:实现束生命周期 + 异构 partition + worker 束执行(一次领整束)+ 监控下钻。Phase 1 在上万实测仍撞控制面墙时推进——本场景预期会到这。
 4. **Phase 3 — export/dispatch 侧 fan-out 束**:导出多表 → 一束生成 M 文件 + per-file 扇出回执。
 
 ## Consequences
@@ -136,9 +150,13 @@ Bundle(父:1 次 CLAIM / lease / REPORT / outbox)        ← orchestrator 只见
 - **负面/成本**:partition 模型从「同构分片」放宽到「异构 file-unit」增加状态/监控复杂度;部分失败语义 + 两层幂等是新增认知负担;束大小/lease 需调参。
 - **风险红线**:① 不得让束变成共享幂等的「大事务」(破隔离);② 不得丢 file-unit 级观测;③ 改 partition UNIQUE/PK 必核全仓 `ON CONFLICT` 幂等契约。
 
-## 开放问题(评审必答)
+## 已决(2026-06-21 评审拍板)
 
-1. **形态 A(扩展 partition)还是 B(新建 file_bundle 表)?** —— 倾向 A。
-2. **部分失败**:失败 file-unit 是「独立 retry」还是「下束 attempt 跑剩余」?束 `SUCCESS_WITH_FAILURES` 是否需人工确认?
-3. **分组策略**:以到达组为唯一种子,还是再加 (bizDate,jobType) + 大小上限?允许混表吗?
-4. **是否先只做 Phase 1(操作批量化)**、把 Phase 2 留作「实测撞墙才上」的条件触发?(避免过度工程)
+场景锚定:**用户单次动作 = 导入多文件→多表 / 导出多表→多下游;集合在提交时已知**(非零散到达)。基于此:
+
+1. **形态 = A(扩展 `job_partition`),且束建成「一个 job_instance + K 个异构 partition」。** 集合提交即已知 → 一次 launch 建束 + K 个 partition,不等不回填。放宽「job_instance = 单 jobCode 同构分片」假设,新增束作业类型 `BUNDLE_IMPORT` / `BUNDLE_DISPATCH`,其 partition 携带 per-file `source_file_id + template_code + target_ref`(异构);存量普通 job 不动。组认领/组上报发生在**一个 job_instance 内部**(自然),复用 partition 状态机/幂等/监控。**不走 B(新建 file_bundle 表)**——避免与 partition 模型重复造轮子。
+2. **部分失败 = `SUCCESS_WITH_FAILURES` + 失败 partition 独立重试,不退整束。** 复用既有 `PARTIAL_FAILED` + 「retry partition」能力(坏文件=坏 partition,单独重跑、不碰已成功);**不**整束重跑,**不**需人工确认(与现有 partial-failure 一致)。
+3. **分组种子 = 用户单次提交集合(request-scoped),允许混表(本就是设计),加大小上限自动切束。** 不以到达组为种子(到达组留给「零散到达」正交线)。上限 `≤K 个文件 且 ≤X MB/行`,超限自动切多束防撑爆 lease。
+4. **Phase 1 先行,但本场景 Phase 2 大概率要做(非纯条件触发)。** 低千:Phase 1 操作批量化 + 提交/监控按束分组,大概率够;上万:partition claim/report churn 仍顶,上 Phase 2 真组认领。顺序不变(先 Phase 1 拿低风险缓解),但 Phase 2 必要性比「实测才上」更高。
+
+> 配置层结论见 §配置模型:1 束作业 + M 模板(批量导/可复用)+ manifest,不 per-表配 job。
