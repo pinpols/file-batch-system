@@ -81,6 +81,7 @@ public class FileGovernanceController {
         ArrivalGroupGovernanceCommand.builder()
             .tenantId(request.tenantId())
             .fileGroupCode(fileGroupCode)
+            .bizDate(request.bizDate())
             .action(request.action())
             .operatorId(request.operatorId())
             .traceId(request.traceId())
@@ -124,6 +125,7 @@ public class FileGovernanceController {
 
   public record ArrivalGroupOperationRequest(
       String tenantId,
+      String bizDate,
       String action,
       String operatorId,
       String traceId,

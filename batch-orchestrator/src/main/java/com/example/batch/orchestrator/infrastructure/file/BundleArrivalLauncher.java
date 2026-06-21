@@ -28,9 +28,9 @@ import org.springframework.stereotype.Component;
  * <p>导出束(manifest-only):导出无输入数据文件,由 scanner 把导出清单本身登记为一条自完整 trigger 记录,其 {@code
  * metadata.bundleExportTemplates} 携带导出模板列表;本类据此一个声明展成 N 项 {@code {templateCode}} (无 sourceFileId)。
  *
- * <p><b>边界与安全</b>:仅对带 {@code bundleJobCode} 的组发(普通到达组 per-file 默认不变);异常隔离(launch 失败只 ERROR 日志,不阻断
- * governance sweep);幂等靠确定性 {@code requestId}(同组同 bizDate → 同 requestId → {@code trigger_request}
- * UNIQUE 兜重复发射 + 下轮 sweep 跳过 TRIGGERED 组)。
+ * <p><b>边界与安全</b>:仅对带 {@code bundleJobCode} 的组发(普通到达组 per-file 默认不变);launch 失败向上抛,由到达组调度保持
+ * retryable,避免先标记 TRIGGERED 后丢触发;幂等靠确定性 {@code requestId}(同组同 bizDate → 同 requestId → {@code
+ * trigger_request} UNIQUE 兜重复发射)。
  *
  * <p>抽成独立 {@link Component} 而非内联进 {@code FileGovernanceScheduler}:可单测(mock LaunchService) + 经
  * {@link ObjectProvider} 懒取避免与 LaunchService 的依赖环。
@@ -53,98 +53,190 @@ public class BundleArrivalLauncher {
     this.launchServiceProvider = launchServiceProvider;
   }
 
+  public enum LaunchOutcome {
+    NOT_BUNDLE,
+    LAUNCHED
+  }
+
   /** 到达组凑齐时调用;非束组(无 bundleJobCode)直接返回,不发 launch。 */
-  public void launchIfBundle(
+  public LaunchOutcome launchIfBundle(
       String tenantId, String fileGroupCode, List<Map<String, Object>> groupFiles) {
-    try {
-      if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
-        return;
-      }
-      String bundleJobCode = null;
-      LocalDate bizDate = null;
-      List<Map<String, Object>> bundleFiles = new ArrayList<>();
-      for (Map<String, Object> file : groupFiles) {
-        Map<String, Object> meta = parseMetadata(file.get("metadata_json"));
-        String jobCode = text(meta.get(META_BUNDLE_JOB_CODE));
-        String templateCode = text(meta.get(META_BUNDLE_TEMPLATE_CODE));
-        String targetRef = text(meta.get(META_BUNDLE_TARGET_REF));
-        Long fileId = toLong(file.get("id"));
-        if (bundleJobCode == null && jobCode != null) {
-          bundleJobCode = jobCode;
-        }
-        if (bizDate == null) {
-          bizDate = toLocalDate(file.get("biz_date"));
-        }
-        // 导出束(manifest-only):一条 trigger 记录的 bundleExportTemplates 列表 → 每个模板展一项
-        // {templateCode}(导出无源文件,不带 sourceFileId)。
-        List<String> exportTemplates = textList(meta.get(META_BUNDLE_EXPORT_TEMPLATES));
-        if (!exportTemplates.isEmpty()) {
-          for (String tpl : exportTemplates) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("templateCode", tpl);
-            bundleFiles.add(entry);
-          }
-          continue;
-        }
-        // 导入/分发束:每个到达文件 emit 一个超集绑定(有文件 + 至少一个绑定键),
-        // 具体保留哪些字段交 orchestrator 的类型化 BundlePlanParams.extract 按束类型裁定。
-        if (fileId != null && (templateCode != null || targetRef != null)) {
-          Map<String, Object> entry = new LinkedHashMap<>();
-          entry.put("sourceFileId", fileId);
-          if (templateCode != null) {
-            entry.put("templateCode", templateCode);
-          }
-          if (targetRef != null) {
-            entry.put("targetRef", targetRef);
-          }
-          bundleFiles.add(entry);
-        }
-      }
+    if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
+      return LaunchOutcome.NOT_BUNDLE;
+    }
+    BundleLaunchCandidate candidate = collectCandidate(tenantId, fileGroupCode, groupFiles);
+    if (candidate.bundleJobCode() == null) {
+      return LaunchOutcome.NOT_BUNDLE; // 普通到达组,不是文件束
+    }
+    validateCandidate(tenantId, fileGroupCode, candidate);
+    launchCandidate(tenantId, fileGroupCode, candidate);
+    return LaunchOutcome.LAUNCHED;
+  }
 
-      if (bundleJobCode == null) {
-        return; // 普通到达组,不是文件束
+  private BundleLaunchCandidate collectCandidate(
+      String tenantId, String fileGroupCode, List<Map<String, Object>> groupFiles) {
+    String bundleJobCode = null;
+    LocalDate bizDate = null;
+    List<Map<String, Object>> bundleFiles = new ArrayList<>();
+    boolean bindingWithoutJobCode = false;
+    boolean jobCodedMemberWithoutBinding = false;
+    for (Map<String, Object> file : groupFiles) {
+      Map<String, Object> meta = parseMetadata(file.get("metadata_json"));
+      String jobCode = text(meta.get(META_BUNDLE_JOB_CODE));
+      String templateCode = text(meta.get(META_BUNDLE_TEMPLATE_CODE));
+      String targetRef = text(meta.get(META_BUNDLE_TARGET_REF));
+      List<String> exportTemplates = textList(meta.get(META_BUNDLE_EXPORT_TEMPLATES));
+      bundleJobCode = mergeJobCode(tenantId, fileGroupCode, bundleJobCode, jobCode);
+      bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.get("biz_date")));
+      if (jobCode == null
+          && (!exportTemplates.isEmpty() || templateCode != null || targetRef != null)) {
+        bindingWithoutJobCode = true;
       }
-      if (bundleFiles.isEmpty()) {
-        log.warn(
-            "bundle arrival group has bundleJobCode but no usable file(file + 模板/渠道 绑定缺):"
-                + " tenantId={}, fileGroupCode={}, jobCode={}",
-            tenantId,
-            fileGroupCode,
-            bundleJobCode);
-        return;
+      boolean emittedBinding =
+          appendBundleBindings(
+              bundleFiles, toLong(file.get("id")), templateCode, targetRef, exportTemplates);
+      if (jobCode != null && !emittedBinding) {
+        jobCodedMemberWithoutBinding = true;
       }
+    }
+    return new BundleLaunchCandidate(
+        bundleJobCode, bizDate, bundleFiles, bindingWithoutJobCode, jobCodedMemberWithoutBinding);
+  }
 
-      // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 兜底)
-      String requestId = "bundle-arrival-" + tenantId + "-" + fileGroupCode + "-" + bizDate;
-      LaunchRequest request =
-          LaunchRequest.builder()
-              .tenantId(tenantId)
-              .jobCode(bundleJobCode)
-              .bizDate(bizDate)
-              .triggerType(TriggerType.EVENT)
-              .requestId(requestId)
-              .traceId(IdGenerator.newTraceId())
-              .params(Map.of("bundleFiles", bundleFiles))
-              .build();
-      launchServiceProvider.getObject().launch(request);
-      log.info(
-          "bundle arrival launched: tenantId={}, fileGroupCode={}, jobCode={}, fileCount={},"
-              + " bizDate={}, requestId={}",
-          tenantId,
-          fileGroupCode,
-          bundleJobCode,
-          bundleFiles.size(),
-          bizDate,
-          requestId);
-    } catch (Exception ex) {
-      // 异常隔离:束 launch 失败不阻断到达组治理 sweep
-      log.error(
-          "bundle arrival launch failed (governance sweep 继续): tenantId={}, fileGroupCode={}",
-          tenantId,
-          fileGroupCode,
-          ex);
+  private static String mergeJobCode(
+      String tenantId, String fileGroupCode, String existingJobCode, String jobCode) {
+    if (jobCode == null) {
+      return existingJobCode;
+    }
+    if (existingJobCode == null) {
+      return jobCode;
+    }
+    if (!existingJobCode.equals(jobCode)) {
+      throw new IllegalStateException(
+          "bundle arrival group mixes bundleJobCode: tenantId="
+              + tenantId
+              + ", fileGroupCode="
+              + fileGroupCode);
+    }
+    return existingJobCode;
+  }
+
+  private static LocalDate mergeBizDate(
+      String tenantId, String fileGroupCode, LocalDate existingBizDate, LocalDate fileBizDate) {
+    if (fileBizDate == null) {
+      return existingBizDate;
+    }
+    if (existingBizDate == null) {
+      return fileBizDate;
+    }
+    if (!existingBizDate.equals(fileBizDate)) {
+      throw new IllegalStateException(
+          "bundle arrival group mixes bizDate: tenantId="
+              + tenantId
+              + ", fileGroupCode="
+              + fileGroupCode);
+    }
+    return existingBizDate;
+  }
+
+  private static boolean appendBundleBindings(
+      List<Map<String, Object>> bundleFiles,
+      Long fileId,
+      String templateCode,
+      String targetRef,
+      List<String> exportTemplates) {
+    if (!exportTemplates.isEmpty()) {
+      for (String tpl : exportTemplates) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("templateCode", tpl);
+        bundleFiles.add(entry);
+      }
+      return true;
+    }
+    if (fileId == null || (templateCode == null && targetRef == null)) {
+      return false;
+    }
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("sourceFileId", fileId);
+    if (templateCode != null) {
+      entry.put("templateCode", templateCode);
+    }
+    if (targetRef != null) {
+      entry.put("targetRef", targetRef);
+    }
+    bundleFiles.add(entry);
+    return true;
+  }
+
+  private void validateCandidate(
+      String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
+    if (candidate.bindingWithoutJobCode()) {
+      throw new IllegalStateException(
+          "bundle arrival group has binding without bundleJobCode: tenantId="
+              + tenantId
+              + ", fileGroupCode="
+              + fileGroupCode);
+    }
+    if (candidate.jobCodedMemberWithoutBinding()) {
+      throw new IllegalStateException(
+          "bundle arrival group has bundle member without usable binding: tenantId="
+              + tenantId
+              + ", fileGroupCode="
+              + fileGroupCode
+              + ", jobCode="
+              + candidate.bundleJobCode());
+    }
+    if (candidate.bizDate() == null) {
+      throw new IllegalStateException(
+          "bundle arrival group missing bizDate: tenantId="
+              + tenantId
+              + ", fileGroupCode="
+              + fileGroupCode);
+    }
+    if (candidate.bundleFiles().isEmpty()) {
+      throw new IllegalStateException(
+          "bundle arrival group has bundleJobCode but no usable bundle binding: tenantId="
+              + tenantId
+              + ", fileGroupCode="
+              + fileGroupCode
+              + ", jobCode="
+              + candidate.bundleJobCode());
     }
   }
+
+  private void launchCandidate(
+      String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
+    // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 兜底)
+    String requestId =
+        "bundle-arrival-" + tenantId + "-" + fileGroupCode + "-" + candidate.bizDate();
+    LaunchRequest request =
+        LaunchRequest.builder()
+            .tenantId(tenantId)
+            .jobCode(candidate.bundleJobCode())
+            .bizDate(candidate.bizDate())
+            .triggerType(TriggerType.EVENT)
+            .requestId(requestId)
+            .traceId(IdGenerator.newTraceId())
+            .params(Map.of("bundleFiles", candidate.bundleFiles()))
+            .build();
+    launchServiceProvider.getObject().launch(request);
+    log.info(
+        "bundle arrival launched: tenantId={}, fileGroupCode={}, jobCode={}, fileCount={},"
+            + " bizDate={}, requestId={}",
+        tenantId,
+        fileGroupCode,
+        candidate.bundleJobCode(),
+        candidate.bundleFiles().size(),
+        candidate.bizDate(),
+        requestId);
+  }
+
+  private record BundleLaunchCandidate(
+      String bundleJobCode,
+      LocalDate bizDate,
+      List<Map<String, Object>> bundleFiles,
+      boolean bindingWithoutJobCode,
+      boolean jobCodedMemberWithoutBinding) {}
 
   @SuppressWarnings("unchecked")
   private static Map<String, Object> parseMetadata(Object metadataJson) {

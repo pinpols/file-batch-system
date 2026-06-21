@@ -493,14 +493,8 @@ public class FileGovernanceScheduler {
                 new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
         return new ArrivalGroupDecision(STATUS_TIMEOUT);
       }
-      updateGroupState(
-          new ArrivalGroupUpdateContext(
-              key,
-              new ArrivalGroupUpdateState(
-                  STATUS_TRIGGERED, "TIMEOUT_OVERRIDE_" + timeoutAction, now),
-              new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
-      bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
-      return new ArrivalGroupDecision(STATUS_TRIGGERED);
+      return triggerArrivalGroup(
+          key, groupFiles, requiredFiles, missingFiles, "TIMEOUT_OVERRIDE_" + timeoutAction, now);
     }
     if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
       if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
@@ -513,13 +507,8 @@ public class FileGovernanceScheduler {
         return new ArrivalGroupDecision("WAITING_ARRIVAL");
       }
       if (triggerOnComplete) {
-        updateGroupState(
-            new ArrivalGroupUpdateContext(
-                key,
-                new ArrivalGroupUpdateState(STATUS_TRIGGERED, "ALL_FILES_ARRIVED", now),
-                new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
-        bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
-        return new ArrivalGroupDecision(STATUS_TRIGGERED);
+        return triggerArrivalGroup(
+            key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
       }
       updateGroupState(
           new ArrivalGroupUpdateContext(
@@ -548,6 +537,33 @@ public class FileGovernanceScheduler {
             new ArrivalGroupUpdateState("WAITING_ARRIVAL", "WAITING_REQUIRED_FILES", now),
             new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
     return new ArrivalGroupDecision("WAITING_ARRIVAL");
+  }
+
+  private ArrivalGroupDecision triggerArrivalGroup(
+      ArrivalGroupKey key,
+      List<Map<String, Object>> groupFiles,
+      Set<String> requiredFiles,
+      Set<String> missingFiles,
+      String reason,
+      Instant now) {
+    try {
+      bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
+    } catch (RuntimeException exception) {
+      log.error(
+          "file arrival group bundle launch failed, keep group retryable: tenantId={},"
+              + " fileGroupCode={}, reason={}",
+          key.tenantId(),
+          key.fileGroupCode(),
+          reason,
+          exception);
+      return new ArrivalGroupDecision("WAITING_ARRIVAL");
+    }
+    updateGroupState(
+        new ArrivalGroupUpdateContext(
+            key,
+            new ArrivalGroupUpdateState(STATUS_TRIGGERED, reason, now),
+            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+    return new ArrivalGroupDecision(STATUS_TRIGGERED);
   }
 
   private void updateGroupState(ArrivalGroupUpdateContext context) {
@@ -726,10 +742,13 @@ public class FileGovernanceScheduler {
 
   private record ArrivalGroupKey(
       String tenantId,
+      String bizDate,
       String fileGroupCode,
       String waitFileGroupMode,
       String requiredFileSet,
       String arrivalTimeoutAction) {
+
+    private static final String MISSING_BIZ_DATE = "__MISSING_BIZ_DATE__";
 
     static ArrivalGroupKey from(Map<String, Object> candidate) {
       if (candidate == null) {
@@ -745,6 +764,7 @@ public class FileGovernanceScheduler {
       }
       return new ArrivalGroupKey(
           tenantId,
+          defaultString(textValue(candidate.get("biz_date")), MISSING_BIZ_DATE),
           fileGroupCode,
           defaultString(textValue(candidate.get("wait_file_group_mode")), "ALL_OF"),
           defaultString(textValue(candidate.get("required_file_set")), ""),
@@ -769,6 +789,7 @@ public class FileGovernanceScheduler {
         return false;
       }
       return Objects.equals(tenantId, that.tenantId)
+          && Objects.equals(bizDate, that.bizDate)
           && Objects.equals(fileGroupCode, that.fileGroupCode)
           && Objects.equals(waitFileGroupMode, that.waitFileGroupMode)
           && Objects.equals(requiredFileSet, that.requiredFileSet)
@@ -778,7 +799,12 @@ public class FileGovernanceScheduler {
     @Override
     public int hashCode() {
       return Objects.hash(
-          tenantId, fileGroupCode, waitFileGroupMode, requiredFileSet, arrivalTimeoutAction);
+          tenantId,
+          bizDate,
+          fileGroupCode,
+          waitFileGroupMode,
+          requiredFileSet,
+          arrivalTimeoutAction);
     }
   }
 

@@ -82,6 +82,10 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     boolean bundleJob = bundleType != null && bundleType.isBundle();
     List<BundlePlanParams.BundleFile> bundleFiles =
         bundleJob ? BundlePlanParams.extract(planParams, bundleType) : List.of();
+    if (bundleJob && bundleFiles.isEmpty()) {
+      throw new IllegalStateException(
+          "ADR-046 bundleFiles required for " + bundleType + " and must contain usable bindings");
+    }
     if (bundleJob && !bundleFiles.isEmpty() && bundleFiles.size() != partitionCount) {
       // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
       // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢绑定项。
