@@ -40,6 +40,15 @@ public class JobPartitionEntity implements Stateful {
   /** ADR-026 dry-run 演练标记；从父 job_instance.dry_run 透传。 */
   private Boolean dryRun;
 
+  /** ADR-046 per-file 绑定:束内本 partition 绑定的源文件 id（第一刀仅声明，第二刀 launch 展开时写入）。 */
+  private Long sourceFileId;
+
+  /** ADR-046 per-file 绑定:本 partition 用的文件模板 code（异构束内各 partition 可不同）。 */
+  private String templateCode;
+
+  /** ADR-046 per-file 绑定:目标引用（导入=目标表 / 导出=源表查询 / 分发=下游渠道）。 */
+  private String targetRef;
+
   @Override
   public String getStatus() {
     return partitionStatus;

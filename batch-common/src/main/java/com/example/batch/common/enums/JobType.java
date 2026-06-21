@@ -22,7 +22,13 @@ public enum JobType implements DictEnum {
   DISPATCH("DISPATCH", "分发任务"),
   WORKFLOW("WORKFLOW", "工作流任务"),
   /** ADR-029:原子任务(Task SPI:shell/sql/stored-proc/http),由专用 batch-worker-atomic 执行。 */
-  ATOMIC("ATOMIC", "原子任务");
+  ATOMIC("ATOMIC", "原子任务"),
+  /**
+   * ADR-046:文件束聚合(用户单次提交多文件→多表)。launch 按提交 manifest 展成一个 job_instance 下 K 个异构 partition(各绑
+   * source_file_id/template_code/target_ref),把控制面 churn 从 O(N) 降到 O(N/K)。归 {@link BatchType#IMPORT}
+   * 桶。第一刀仅登记类型,派发/展开逻辑见后续刀。
+   */
+  BUNDLE_IMPORT("BUNDLE_IMPORT", "文件束聚合任务");
 
   private final String code;
   private final String label;
@@ -38,6 +44,8 @@ public enum JobType implements DictEnum {
       case WORKFLOW -> BatchType.WORKFLOW;
       // ATOMIC(原子任务)无独立 BatchType,归 GENERAL carryover 桶(BatchType 仅作指标/分类投影)。
       case ATOMIC -> BatchType.GENERAL;
+      // BUNDLE_IMPORT(文件束):一束多文件导入,投影到 IMPORT 桶。
+      case BUNDLE_IMPORT -> BatchType.IMPORT;
     };
   }
 }

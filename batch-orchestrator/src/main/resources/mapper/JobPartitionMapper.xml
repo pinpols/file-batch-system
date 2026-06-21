@@ -28,6 +28,9 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
         <result column="dry_run" property="dryRun"/>
+        <result column="source_file_id" property="sourceFileId"/>
+        <result column="template_code" property="templateCode"/>
+        <result column="target_ref" property="targetRef"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="JobPartitionResultMap">
