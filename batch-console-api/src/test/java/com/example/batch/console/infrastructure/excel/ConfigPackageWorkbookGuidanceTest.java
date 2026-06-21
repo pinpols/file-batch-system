@@ -61,6 +61,44 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
+  void bundleExampleSheetExistsWithThreeBundleTypesAndManifestExamples() throws Exception {
+    try (XSSFWorkbook wb = buildTemplate()) {
+      Sheet sheet = wb.getSheet(ConfigPackageExcelWorkbookWriter.SHEET_NAME_BUNDLE);
+      assertThat(sheet).as("文件束示例 sheet 必须存在").isNotNull();
+      Row header = sheet.getRow(1);
+      List<String> headerValues = new ArrayList<>();
+      for (int c = 0; c < ConfigPackageExcelWorkbookWriter.BUNDLE_HEADERS.length; c++) {
+        headerValues.add(header.getCell(c).getStringCellValue());
+      }
+      assertThat(headerValues).containsExactly(ConfigPackageExcelWorkbookWriter.BUNDLE_HEADERS);
+      assertThat(ConfigPackageExcelWorkbookWriter.BUNDLE_ROWS).hasSize(3);
+      List<String> jobTypes = new ArrayList<>();
+      List<String> manifestExamples = new ArrayList<>();
+      for (int r = 0; r < 3; r++) {
+        Row row = sheet.getRow(2 + r);
+        jobTypes.add(row.getCell(0).getStringCellValue());
+        manifestExamples.add(row.getCell(4).getStringCellValue());
+      }
+      assertThat(jobTypes).containsExactly("BUNDLE_IMPORT", "BUNDLE_EXPORT", "BUNDLE_DISPATCH");
+      // job_type 必须都是合法 JobType enum code(束类型新增/改名而示例未同步即挂)。
+      Set<String> jobCodes = DictEnum.codes(JobType.class);
+      assertThat(jobTypes).allMatch(jobCodes::contains);
+      // 每行的 manifest 示例必须是真实非空 .batch.json v2(含 schemaVersion + jobCode),不是占位。
+      assertThat(manifestExamples)
+          .allSatisfy(
+              m ->
+                  assertThat(m)
+                      .contains("batch-manifest-v2")
+                      .contains("jobCode")
+                      .contains("fileMapping"));
+      // 导出束清单不含 requiredFiles(manifest-only 触发);导入/分发含。
+      assertThat(manifestExamples.get(1)).doesNotContain("requiredFiles");
+      assertThat(manifestExamples.get(0)).contains("requiredFiles");
+      assertThat(manifestExamples.get(2)).contains("requiredFiles");
+    }
+  }
+
+  @Test
   void dependencySheetExistsWithHeadersAndCoreRows() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
       Sheet sheet = wb.getSheet(ConfigPackageExcelWorkbookWriter.SHEET_NAME_DEPENDENCY);
