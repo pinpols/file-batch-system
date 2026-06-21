@@ -21,6 +21,7 @@ public class AlertEventEntity {
   private String status;
   private Integer escalationTier;
   private Instant escalatedAt;
+  private Integer escalationNotifiedTier;
   private Instant createdAt;
   private Instant updatedAt;
 }
