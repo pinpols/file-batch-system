@@ -16,6 +16,9 @@
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
         <result column="dry_run" property="dryRun"/>
+        <result column="source_file_id" property="sourceFileId"/>
+        <result column="template_code" property="templateCode"/>
+        <result column="target_ref" property="targetRef"/>
     </resultMap>
 
     <sql id="filters">
