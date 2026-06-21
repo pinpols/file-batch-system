@@ -62,6 +62,7 @@ class BatchManifestTest {
           "bizDate": "2026-06-21",
           "tenantId": "t1",
           "requiredFiles": ["order.csv", "cust.csv"],
+          "jobCode": "BUNDLE_IMPORT_DAILY",
           "fileMapping": [
             { "fileName": "order.csv", "templateCode": "TPL_ORDER" },
             { "fileName": "cust.csv", "templateCode": "TPL_CUST", "targetTable": "biz.customer" }
@@ -69,6 +70,7 @@ class BatchManifestTest {
         }
         """;
     BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+    assertThat(m.jobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
     assertThat(m.hasFileMapping()).isTrue();
     assertThat(m.fileMapping()).hasSize(2);
     assertThat(m.templateCodeFor("order.csv")).contains("TPL_ORDER");

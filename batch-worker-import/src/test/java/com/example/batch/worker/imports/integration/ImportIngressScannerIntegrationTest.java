@@ -121,6 +121,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
           "bizDate": "2026-05-05",
           "tenantId": "t1",
           "requiredFiles": ["order-it.csv"],
+          "jobCode": "BUNDLE_IMPORT_IT",
           "fileMapping": [ { "fileName": "order-it.csv", "templateCode": "TPL_ORDER" } ]
         }
         """;
@@ -144,7 +145,10 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     // ADR-046:per-file 模板从 v2 manifest 落到 file_record.metadata_json,供 launch 展异构 partition
     assertThat(String.valueOf(row.get("metadata_json")))
         .contains("bundleTemplateCode")
-        .contains("TPL_ORDER");
+        .contains("TPL_ORDER")
+        // 2c-2a:本束该启动的 BUNDLE_IMPORT 作业 code 也落库,供 2c-2b 凑齐发 launch
+        .contains("bundleJobCode")
+        .contains("BUNDLE_IMPORT_IT");
   }
 
   private S3Client s3Client() {
