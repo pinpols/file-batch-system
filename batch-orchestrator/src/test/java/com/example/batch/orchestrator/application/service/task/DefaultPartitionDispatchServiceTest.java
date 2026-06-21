@@ -72,10 +72,13 @@ class DefaultPartitionDispatchServiceTest {
 
     DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
 
+    // P1-1/P1-3 防御:source_file_id/target_ref 落带 bundle 前缀的键,不与泛化 sourceFileId/targetRef 撞;
+    // templateCode 是 payload 真字段保持原名。
     assertThat(payload)
-        .containsEntry("sourceFileId", 42L)
+        .containsEntry("bundleSourceFileId", 42L)
         .containsEntry("templateCode", "RISK_IMPORT_V2")
-        .containsEntry("targetRef", "biz.risk_alert");
+        .containsEntry("bundleTargetRef", "biz.risk_alert")
+        .doesNotContainKeys("sourceFileId", "targetRef");
   }
 
   @Test
@@ -86,7 +89,7 @@ class DefaultPartitionDispatchServiceTest {
 
     DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
 
-    assertThat(payload).doesNotContainKeys("sourceFileId", "templateCode", "targetRef");
+    assertThat(payload).doesNotContainKeys("bundleSourceFileId", "templateCode", "bundleTargetRef");
   }
 
   @Test

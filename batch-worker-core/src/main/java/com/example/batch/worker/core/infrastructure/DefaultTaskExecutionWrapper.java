@@ -319,12 +319,13 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (runMode != null) {
       executionContext.put(PipelineRuntimeKeys.RUN_MODE, runMode);
     }
-    // ADR-046 文件束:束 partition 的 task payload 携带 sourceFileId(指向 ingress scanner 预建的
+    // ADR-046 文件束:束 partition 的 task payload 携带 bundleSourceFileId(指向 ingress scanner 预建的
     // file_record)。落到 FILE_ID,基类适配器据此加载既有 file_record 并绑定 pipeline 实例、ReceiveStep
-    // 复用不再新建。普通(非束)任务 payload 无 sourceFileId,此处 no-op,执行上下文逐字节不变。
-    Object sourceFileId = resolveSourceFileId(payload);
-    if (sourceFileId != null) {
-      executionContext.put(PipelineRuntimeKeys.FILE_ID, sourceFileId);
+    // 复用不再新建。键带 bundle 前缀(P1-1 防御):只有束派发会写,普通任务 payload 里的泛化 sourceFileId
+    // 不会误触发,此处 no-op,执行上下文逐字节不变。
+    Object bundleSourceFileId = resolveBundleSourceFileId(payload);
+    if (bundleSourceFileId != null) {
+      executionContext.put(PipelineRuntimeKeys.FILE_ID, bundleSourceFileId);
     }
     if (task.getHighWaterMarkIn() != null) {
       // INCREMENTAL pipeline 业务读 attributes 拼 SQL 水位条件;FULL/CDC/历史首跑为 null。
@@ -438,20 +439,20 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   @SuppressWarnings("unchecked")
-  private Object resolveSourceFileId(String payload) {
+  private Object resolveBundleSourceFileId(String payload) {
     if (payload == null || payload.isBlank()) {
       return null;
     }
     try {
       Object payloadObject = JsonUtils.fromJson(payload, Object.class);
       if (payloadObject instanceof Map<?, ?> payloadMap) {
-        return ((Map<String, Object>) payloadMap).get("sourceFileId");
+        return ((Map<String, Object>) payloadMap).get("bundleSourceFileId");
       }
     } catch (RuntimeException ignored) {
       SwallowedExceptionLogger.warn(
           DefaultTaskExecutionWrapper.class, "catch:RuntimeException", ignored);
 
-      // payload 非合法 JSON 时不注入 sourceFileId。
+      // payload 非合法 JSON 时不注入 bundleSourceFileId。
     }
     return null;
   }

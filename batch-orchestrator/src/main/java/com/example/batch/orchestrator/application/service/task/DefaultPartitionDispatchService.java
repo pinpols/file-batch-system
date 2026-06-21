@@ -399,21 +399,26 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   /**
    * ADR-046 文件束:partition 携带 source_file_id/template_code/target_ref 绑定时注入 task payload，worker
    * claim 后据此处理指定文件、指定模板、指定目标。普通(非束)partition 这些列为空，payload 与改造前完全一致——纯加法、不影响存量导入。
+   *
+   * <p><b>键命名空间(P1-1/P1-3 防御)</b>:source_file_id / target_ref 落 payload 时用带 {@code bundle} 前缀的键
+   * {@code bundleSourceFileId} / {@code bundleTargetRef},不与业务 payload 里可能出现的泛化 {@code sourceFileId}
+   * /{@code targetRef} 撞——避免非束任务被误注入 FILE_ID(worker-core resolveSourceFileId)或 dispatch
+   * {@code @JsonAlias} 歧义。{@code templateCode} 是 Import/ExportPayload 的真字段,保持原名(束有意复用)。
    */
   static void enrichBundleBinding(Map<String, Object> payload, JobPartitionEntity partition) {
     if (partition == null) {
       return;
     }
-    if (partition.getSourceFileId() != null && !payload.containsKey("sourceFileId")) {
-      payload.put("sourceFileId", partition.getSourceFileId());
+    if (partition.getSourceFileId() != null && !payload.containsKey("bundleSourceFileId")) {
+      payload.put("bundleSourceFileId", partition.getSourceFileId());
     }
     String templateCode = partition.getTemplateCode();
     if (templateCode != null && !templateCode.isBlank() && !payload.containsKey("templateCode")) {
       payload.put("templateCode", templateCode);
     }
     String targetRef = partition.getTargetRef();
-    if (targetRef != null && !targetRef.isBlank() && !payload.containsKey("targetRef")) {
-      payload.put("targetRef", targetRef);
+    if (targetRef != null && !targetRef.isBlank() && !payload.containsKey("bundleTargetRef")) {
+      payload.put("bundleTargetRef", targetRef);
     }
   }
 }
