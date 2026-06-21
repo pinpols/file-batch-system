@@ -38,8 +38,11 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "JOB_C", "2026-06-21");
 
     PendingCatchUpQuery query =
-        new PendingCatchUpQuery(
-            tenantId, null, null, "2026-06-21", null, new PageRequest(1, 10), null);
+        PendingCatchUpQuery.builder()
+            .tenantId(tenantId)
+            .bizDate("2026-06-21")
+            .pageRequest(new PageRequest(1, 10))
+            .build();
 
     List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
     long total = pendingCatchUpMapper.countByQuery(query);
@@ -56,7 +59,10 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "JOB_B", "2026-06-21");
 
     PendingCatchUpQuery query =
-        new PendingCatchUpQuery(tenantId, null, null, null, null, new PageRequest(1, 10), null);
+        PendingCatchUpQuery.builder()
+            .tenantId(tenantId)
+            .pageRequest(new PageRequest(1, 10))
+            .build();
 
     assertThat(pendingCatchUpMapper.selectByQuery(query)).hasSize(2);
     assertThat(pendingCatchUpMapper.countByQuery(query)).isEqualTo(2);
@@ -69,8 +75,11 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "LEDGER_CLOSE", "2026-06-21");
 
     PendingCatchUpQuery query =
-        new PendingCatchUpQuery(
-            tenantId, null, null, null, "payroll", new PageRequest(1, 10), null);
+        PendingCatchUpQuery.builder()
+            .tenantId(tenantId)
+            .keyword("payroll")
+            .pageRequest(new PageRequest(1, 10))
+            .build();
 
     List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);
@@ -85,8 +94,12 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "JOB_B", "2026-06-21");
 
     PendingCatchUpQuery query =
-        new PendingCatchUpQuery(
-            tenantId, "JOB_A", null, "2026-06-21", null, new PageRequest(1, 10), null);
+        PendingCatchUpQuery.builder()
+            .tenantId(tenantId)
+            .jobCode("JOB_A")
+            .bizDate("2026-06-21")
+            .pageRequest(new PageRequest(1, 10))
+            .build();
 
     List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);
