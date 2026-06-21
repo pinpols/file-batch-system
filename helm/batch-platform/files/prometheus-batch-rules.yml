@@ -895,3 +895,63 @@ groups:
           summary: "PostgreSQL backup is stale or missing ({{ $labels.datname }})"
           description: "距上次成功备份已超 26h,或备份新鲜度指标缺失。备份链路(pg_basebackup / pg_dump / WAL 归档)可能已断——这是数据安全底线,立刻排查备份 cron 与归档目标可写性。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#备份新鲜度监控"
+
+  # ── readiness 超时 + DB 锁等待 ───────────────────────────────────
+  # 体检维度8 补漏:这两类此前只有 metric(readiness)或根本没指标(锁等待),无 alert rule。
+  - name: batch.readiness-and-locks
+    rules:
+      - alert: BatchReadinessWindowExceeded
+        # 上游连续 readinessWindow(默认 7200s/2h,WheelSchedulerProperties.readinessWindowSeconds)
+        # 未就绪 → trigger 放弃本 bizDate fire(WAITING_READINESS_TIMEOUT)。timeout counter 已是
+        # "等满窗口才放弃"的硬终态信号,任意非零增长即告警。
+        expr: sum by (group) (increase(batch_trigger_wheel_readiness_timeout_total[15m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger
+        annotations:
+          summary: "上游就绪窗口超时,放弃本批次 group={{ $labels.group }}"
+          description: "trigger 等待上游就绪超过 readinessWindow(默认 2h)仍未就绪,已放弃该 bizDate fire(WAITING_READINESS_TIMEOUT)。下游可能整批漏算,需人工核对上游 job 终态并决定补跑。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md"
+
+      - alert: BatchReadinessDeferredHigh
+        # 持续 defer 但未 timeout:上游慢/卡的提前预警,逼近放弃窗口前介入。
+        expr: sum by (group) (increase(batch_trigger_wheel_readiness_deferred_total[30m])) > 20
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger
+        annotations:
+          summary: "上游就绪 defer 频繁 group={{ $labels.group }}"
+          description: "trigger 持续 defer 重检上游就绪(30m 内 >20 次),上游交付偏慢,有逼近 readinessWindow 放弃的风险,建议排查上游 job 时效。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md"
+
+      - alert: BatchPostgresLockWaitStuck
+        # 真"等锁阻塞"会话数(pg_stat_activity wait_event_type='Lock'),来自自定义 query
+        # docker/observability/postgres-exporter-queries.yaml。该指标仅在挂了 query 的部署(compose)
+        # 存在;未挂的环境此规则不 fire(由下面 LongRunningTransaction 用默认指标兜底)。
+        expr: pg_lock_waits_waiting_sessions > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: database
+        annotations:
+          summary: "Postgres 有会话持续等锁阻塞({{ $value }} 个会话)"
+          description: "有会话被 Lock 阻塞超过 5 分钟未推进(pg_lock_waits_max_wait_seconds 为最长等待)。主链 DB→Outbox 写入对锁敏感,持续等锁会拖垮派发。用 pg_stat_activity(wait_event_type='Lock')定位 blocker PID 并评估处置。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md"
+
+      - alert: BatchPostgresLongRunningTransaction
+        # 长事务≈持锁不放的元凶;用默认 postgres-exporter 指标,各环境通用,作锁等待兜底告警。
+        expr: max by (datname) (pg_stat_activity_max_tx_duration{datname="batch_platform"}) > 300
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: database
+        annotations:
+          summary: "Postgres 长事务 datname={{ $labels.datname }} 已 {{ $value | humanize }}s"
+          description: "存在运行超过 5 分钟的事务,通常持锁不放,会阻塞 outbox/job_instance 写入。请用 pg_stat_activity 定位 PID 并评估 kill。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md"
