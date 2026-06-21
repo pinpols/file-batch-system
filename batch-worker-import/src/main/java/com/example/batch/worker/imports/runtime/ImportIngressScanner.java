@@ -210,13 +210,16 @@ public class ImportIngressScanner {
         metadata.put("expectedRecordCount", manifest.recordCount());
       }
     }
-    // ADR-046 第二刀:批次清单 v2 落 metadata 供束 launch 读取——
-    //   ① fileMapping 声明本文件用哪个模板(目标表从模板推,故只存 templateCode);
-    //   ② jobCode 声明本束凑齐后启动哪个 BUNDLE_IMPORT 作业(2c-2b 到达组凑齐时据此发 launch)。
+    // ADR-046:批次清单 v2 落 metadata 供束 launch 读取——
+    //   ① fileMapping 声明本文件绑定:导入束给 templateCode(目标表从模板推),分发束给 targetRef(下游渠道);
+    //   ② jobCode 声明本束凑齐后启动哪个 BUNDLE_* 作业(到达组凑齐时 BundleArrivalLauncher 据此发 launch)。
     if (matchedBatch != null) {
       matchedBatch
           .templateCodeFor(fileName)
           .ifPresent(templateCode -> metadata.put("bundleTemplateCode", templateCode));
+      matchedBatch
+          .targetRefFor(fileName)
+          .ifPresent(targetRef -> metadata.put("bundleTargetRef", targetRef));
       if (Texts.hasText(matchedBatch.jobCode())) {
         metadata.put("bundleJobCode", matchedBatch.jobCode());
       }
