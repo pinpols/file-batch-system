@@ -42,5 +42,14 @@ public class SchedulePlan {
     private String businessKey;
     private WorkerRouteModel workerRoute;
     private String partitionStatus;
+
+    /** ADR-046 文件束:本 partition 绑定的源文件 id（异构束内各不同;非束作业为 null）。 */
+    private Long sourceFileId;
+
+    /** ADR-046 文件束:本 partition 用的文件模板 code。 */
+    private String templateCode;
+
+    /** ADR-046 文件束:目标引用（导入=目标表 / 导出=源查询 / 分发=下游;可空,默认由模板推）。 */
+    private String targetRef;
   }
 }

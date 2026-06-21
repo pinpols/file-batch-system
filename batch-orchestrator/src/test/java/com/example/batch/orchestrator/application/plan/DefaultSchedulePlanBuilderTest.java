@@ -34,6 +34,7 @@ class DefaultSchedulePlanBuilderTest {
     workerRegistryMapper = mock(WorkerRegistryMapper.class);
     List<PartitionCountResolver> resolvers =
         List.of(
+            new BundlePartitionCountResolver(),
             new ExplicitPartitionCountResolver(),
             new SizeBasedPartitionCountResolver(),
             new RuntimeBasedPartitionCountResolver(),
@@ -232,10 +233,109 @@ class DefaultSchedulePlanBuilderTest {
     assertThat(plan.getPriority()).isEqualTo(8);
   }
 
+  // --- ADR-046 文件束:异构 partition 展开 ---
+
+  @Test
+  void shouldExpandBundleJobIntoHeterogeneousPartitions() {
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(bundleJobDef("DYNAMIC", 5));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    Map<String, Object> params =
+        Map.of(
+            "bundleFiles",
+            List.of(
+                Map.of("sourceFileId", 101, "templateCode", "TPL_ORDER"),
+                Map.of(
+                    "sourceFileId", 102, "templateCode", "TPL_CUST", "targetRef", "biz.customer")));
+    SchedulePlan plan = builder.build(command(params));
+
+    assertThat(plan.getPartitionCount()).isEqualTo(2);
+    assertThat(plan.getPartitions()).hasSize(2);
+    SchedulePlan.PartitionPlan p1 = plan.getPartitions().get(0);
+    assertThat(p1.getSourceFileId()).isEqualTo(101L);
+    assertThat(p1.getTemplateCode()).isEqualTo("TPL_ORDER");
+    assertThat(p1.getTargetRef()).isNull();
+    SchedulePlan.PartitionPlan p2 = plan.getPartitions().get(1);
+    assertThat(p2.getSourceFileId()).isEqualTo(102L);
+    assertThat(p2.getTemplateCode()).isEqualTo("TPL_CUST");
+    assertThat(p2.getTargetRef()).isEqualTo("biz.customer");
+  }
+
+  @Test
+  void shouldFailFastWhenBundleCountMismatchesPartitionCount() {
+    // 束作业配成 NONE 策略 → partitionCount=1,但 bundleFiles 有 2 个 → 配置错,fail-fast 不静默丢文件
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(bundleJobDef("NONE", 5));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    Map<String, Object> params =
+        Map.of(
+            "bundleFiles",
+            List.of(
+                Map.of("sourceFileId", 101, "templateCode", "TPL_A"),
+                Map.of("sourceFileId", 102, "templateCode", "TPL_B")));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.build(command(params)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("bundle partition count mismatch");
+  }
+
+  @Test
+  void shouldNotBindFilesForNonBundleJob() {
+    // 非束作业即便 params 误带 bundleFiles 也不绑定(jobType 不是 BUNDLE_IMPORT)
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(jobDef("STATIC", 5, null));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    Map<String, Object> params =
+        Map.of(
+            "partitionCount",
+            1,
+            "bundleFiles",
+            List.of(Map.of("sourceFileId", 101, "templateCode", "TPL_A")));
+    SchedulePlan plan = builder.build(command(params));
+
+    assertThat(plan.getPartitions().get(0).getSourceFileId()).isNull();
+    assertThat(plan.getPartitions().get(0).getTemplateCode()).isNull();
+  }
+
   // --- helpers ---
 
   private static SchedulePlanCommand command(Map<String, Object> params) {
     return new SchedulePlanCommand("t1", "JOB_001", "2026-01-01", params);
+  }
+
+  private static JobDefinitionEntity bundleJobDef(String shardStrategy, int priority) {
+    return new JobDefinitionEntity(
+        1L,
+        "t1",
+        "JOB_001",
+        null,
+        "BUNDLE_IMPORT",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        shardStrategy,
+        null,
+        null,
+        null,
+        null,
+        null,
+        priority,
+        null,
+        null,
+        true,
+        null,
+        null,
+        null);
   }
 
   private static JobDefinitionEntity jobDef(
