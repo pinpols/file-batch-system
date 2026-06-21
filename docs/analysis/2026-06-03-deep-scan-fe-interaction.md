@@ -33,7 +33,7 @@ batch-console 在通用基础设施上做得相当扎实:
 
 ## 1. 表单 (Form / Validation)
 
-### 1.1 P0 — 整站零脏数据保护
+### 1.1 P0 — 整站零异常数据保护
 **位置**: 全仓所有 `el-dialog` / `el-drawer` (共 30 个 dialog + 38 个 drawer)
 **证据**:
 - `grep -rn "beforeRouteLeave|onBeforeRouteLeave|beforeunload|isDirty" src --include="*.vue" → 0 hit`
@@ -77,7 +77,7 @@ function onCreateDrawerClose(done: () => void) {
 ### 1.3 P1 — `useFormValidate` 推广没做完
 - `grep -c "useFormValidate" → 29 views`
 - `grep -c "formRef.value?.validate" → 11 views`  (剩余的样板)
-- 剩 11 处还是裸调用,包括 `views/login/Login.vue:131`, `JobDefinitionList.vue:1126`, `JobDefinitionWizard.vue` 等核心场景
+- 剩 11 处还是直接调用用,包括 `views/login/Login.vue:131`, `JobDefinitionList.vue:1126`, `JobDefinitionWizard.vue` 等核心场景
 - 建议在 ESLint 加 `no-restricted-syntax` 禁止 `formRef.*.validate(`,强制走 composable
 
 ### 1.4 P1 — 字段默认值散落,无 schema 统一
@@ -247,10 +247,10 @@ function onCreateDrawerClose(done: () => void) {
 ### 6.2 P1 — `useCopy` 桌面 view 几乎没复用
 - 桌面 view 调 `navigator.clipboard.writeText` 直接的有 (`Login.vue:152`),没走 composable,失败时无统一 toast
 - 移动端 (`MJobInstances` 等)正确用 `useCopy`
-- 建议: ESLint 禁止 `navigator.clipboard.writeText` 裸调,强制走 `useCopy`
+- 建议: ESLint 禁止 `navigator.clipboard.writeText` 直接调用,强制走 `useCopy`
 
 ### 6.3 P2 — 粘贴大文本 / 大 JSON 无 size 上限
-- `JsonTextareaInput` 接受任意大小粘贴,粘 20MB JSON 直接卡死浏览器
+- `JsonTextareaInput` 接受任意大小粘贴,粘 20MB JSON 直接长期停滞浏览器
 - 建议: 限制 1MB,超过给"内容过大,请改用文件上传"提示
 
 ---
@@ -346,7 +346,7 @@ window.location.href = `/login?redirect=${here}`
 - 但 grouping 比对的是 `message` 字符串,error toast 用 `h()` 渲染 VNode,**不会合并**(等价于关闭去重) → 网络抖动连续 5 个 5xx 还是会刷 5 个 toast
 
 ### 10.2 P1 — Toast 队列上限不存在
-- EP `ElMessage` 同时叠 10 个会糊一屏,没有 maxCount
+- EP `ElMessage` 同时叠 10 个会堆叠过多,没有 maxCount
 - 建议: 维护一个 ringbuffer,>5 时把最早的 close 掉
 
 ### 10.3 P1 — 通知中心缺失
@@ -479,7 +479,7 @@ done
 
 | ID | 标题 | 严重度 | 影响面 | 工作量 | 建议节奏 |
 |----|------|--------|--------|--------|----------|
-| §1.1 | 整站脏数据保护 | P0 | 全站 30 dialog+38 drawer | M (新 composable + 改用) | Sprint+1 |
+| §1.1 | 整站异常数据保护 | P0 | 全站 30 dialog+38 drawer | M (新 composable + 改用) | Sprint+1 |
 | §1.2 | 校验时机不一致 | P0 | ~40 form | S | Sprint+1 |
 | §2.1 | Dialog autofocus | P0 | 全站 | S (一个 wrapper) | Sprint+1 |
 | §2.2 | Enter 提交 | P0 | 全站 form | S | Sprint+1 |
@@ -509,4 +509,4 @@ done
 
 ## 16. 一句话总结
 
-**底盘很稳,交互层"细节人本"不足**: ProTable / interceptors / DangerConfirm / messagePatch 这类基础设施做得相当成熟,但**用户在表单里填到一半的所有交互场景都没保护**(脏数据/autofocus/Enter/Esc/leave 提示全缺),**列表页 URL 状态机也没真正落地**(useRouteFilters 写了不调用),**CSRF token 缺失** 是安全短板。建议下个迭代集中做"表单可恢复性 + URL 状态机 + CSRF" 这一组主题,投入产出比最高。
+**底盘很稳,交互层"细节人本"不足**: ProTable / interceptors / DangerConfirm / messagePatch 这类基础设施做得相当成熟,但**用户在表单里填到一半的所有交互场景都没保护**(异常数据/autofocus/Enter/Esc/leave 提示全缺),**列表页 URL 状态机也没真正落地**(useRouteFilters 写了不调用),**CSRF token 缺失** 是安全短板。建议下个迭代集中做"表单可恢复性 + URL 状态机 + CSRF" 这一组主题,投入产出比最高。

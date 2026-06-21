@@ -48,7 +48,7 @@
 - **问题**: SELECT 和 INSERT 不在同一事务中，两个请求可同时通过去重检查
 - **后果**: 同一个触发器请求被重复提交，产生重复任务
 
-### C-7. 节假日调整死循环
+### C-7. 节假日调整无限循环
 - **文件**: `CalendarBizDateResolver.java:53-67`
 - **问题**: `previousWorkday()` 无最大迭代限制，若日历全部标记为假日则永不退出
 - **后果**: 调度线程永久挂起，整个触发器模块瘫痪
@@ -65,7 +65,7 @@
 ### H-1. Partition 租约过期与完成的竞态
 - **文件**: `DefaultPartitionLifecycleService.java:85-97`
 - **问题**: Reclaim 调度器读取过期租约后，Worker 恰好完成任务并更新版本号 → CAS 失败 → Partition 卡在 RUNNING
-- **后果**: Partition 既不被回收也不会执行，成为幽灵分区
+- **后果**: Partition 既不被回收也不会执行，成为残留分区
 
 ### H-2. Retry 不校验 Task 终态
 - **文件**: `DefaultRetryGovernanceService.java:164-180`
@@ -176,7 +176,7 @@ Import 和 Export 均无文件/数据大小上限配置，系统完全暴露于 
 1. **C-4** 路径遍历 → 加 `Path.normalize()` + 白名单目录校验
 2. **C-5** OOM → 加 `max.file.size.mb` 配置，ReceiveStep 入口拦截
 3. **C-1/C-3** TOCTOU → 数据库唯一约束 + `INSERT ... ON CONFLICT DO NOTHING`
-4. **C-7** 死循环 → 加 `MAX_ITERATIONS = 365` 防护
+4. **C-7** 无限循环 → 加 `MAX_ITERATIONS = 365` 防护
 
 **P1 — 本迭代修复（影响任务正确性）：**
 5. **C-2/C-8** 状态原子性 → 合并到同一事务，CAS 版本号

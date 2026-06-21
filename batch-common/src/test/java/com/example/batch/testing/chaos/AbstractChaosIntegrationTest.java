@@ -156,7 +156,7 @@ public abstract class AbstractChaosIntegrationTest extends AbstractIntegrationTe
     }
   }
 
-  /** 在 {@code block} 执行期间向目标 proxy 注入分片(每 {@code bytesPerSlice} 字节切一刀,模拟 TCP 拥塞 / MTU 收缩)。 */
+  /** 在 {@code block} 执行期间向目标 proxy 注入分片(每 {@code bytesPerSlice} 字节拆分一次,模拟 TCP 拥塞 / MTU 收缩)。 */
   protected static void withSlice(ProxyTarget target, int bytesPerSlice, ChaosBlock block)
       throws IOException {
     Proxy proxy = resolve(target);

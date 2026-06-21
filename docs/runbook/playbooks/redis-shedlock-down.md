@@ -104,7 +104,7 @@ ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoC
    - 看启动日志,期望:`ShedLock LockProvider auto-configured: type=JDBC (JdbcTemplateLockProvider), autoCreate=false`
    - 等一个调度周期(`OutboxPollScheduler` 默认几百 ms,`BatchDaySettleScheduler` 60s),`select * from batch.shedlock` 应有新行写入
 
-5. **Redis 修好后切回**:把 `provider` 改回 `redis`(或删除该配置项,默认就是 redis)+ 再滚动重启。**切回前必须确认 Redis 健康**,否则又掉进同一个坑。
+5. **Redis 修好后切回**:把 `provider` 改回 `redis`(或删除该配置项,默认就是 redis)+ 再滚动重启。**切回前必须确认 Redis 健康**,否则又掉进同一个问题。
 
 ### 方案 B:短时挂起,等 Redis 自愈(5-10 min)
 

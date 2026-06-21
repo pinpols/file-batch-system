@@ -76,7 +76,7 @@
 | Kafka 消息体完整 schema | `docs/architecture/kafka-topic-plan.md` 已补充 Envelope 规范、重试/死信完整 JSON 示例、序列化兼容策略（inline object + schemaVersion） | ✅ 已完成 |
 | ELK / OpenTelemetry 接入 | OTEL Collector pipeline（Traces→Jaeger，Logs→Loki）；`batch-common` 新增 tracing bridge + OTLP exporter；`batch-defaults.yml` 统一 OTLP 端点 + 结构化 JSON 日志；Docker Compose observability overlay；Helm Collector 模板；Grafana 数据源自动注入 | ✅ 已完成 |
 | `THIRD-PARTY-LICENSES / SBOM` | `docs/compliance/THIRD-PARTY-LICENSES.md`（43 组件，手工编译含许可证分类）；`docs/compliance/sbom.json`（CycloneDX 1.6 格式骨架）；根 `pom.xml` 新增 `compliance` Maven profile（`cyclonedx-maven-plugin 2.9.1` + `license-maven-plugin 2.4.0`），运行 `mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party` 可生成完整机器可读 SBOM | 合规交付物已完成 ✅ |
-| 自动巡检/自愈脚本 | 巡检脚本体系完整落地：`inspect-all.sh`（主入口）、`inspect-db.sh`（Flyway/卡死作业/Outbox/死信/重试积压）、`inspect-workers.sh`（DRAINING 超时/心跳失联/孤儿任务）；自愈脚本：`heal-drain-timeout.sh`、`heal-dead-letters.sh`、`heal-stuck-outbox.sh`（均默认 dry-run，`BATCH_HEAL_DRY_RUN=false` 才执行）；`daily-inspection.md` 更新为脚本化 SOP | 脚本化巡检已完成 ✅ |
+| 自动巡检/自愈脚本 | 巡检脚本体系完整落地：`inspect-all.sh`（主入口）、`inspect-db.sh`（Flyway/长期停滞作业/Outbox/死信/重试积压）、`inspect-workers.sh`（DRAINING 超时/心跳失联/孤儿任务）；自愈脚本：`heal-drain-timeout.sh`、`heal-dead-letters.sh`、`heal-stuck-outbox.sh`（均默认 dry-run，`BATCH_HEAL_DRY_RUN=false` 才执行）；`daily-inspection.md` 更新为脚本化 SOP | 脚本化巡检已完成 ✅ |
 
 ### 已知测试缺陷
 

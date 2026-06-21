@@ -236,7 +236,7 @@ class TaskDispatcher:
 
         - :class:`ParsedDirective` —— ``HeartbeatScheduler`` 解析后回灌的强类型
           视图(**生产路径**)。早先这里只认 ``dict``,对 ``ParsedDirective`` 会
-          ``AttributeError`` 被心跳循环吞掉,导致心跳下发的 FSM 切换 / 并发收敛
+          ``AttributeError`` 被心跳循环捕获并抑制,导致心跳下发的 FSM 切换 / 并发收敛
           **永不生效**(directive 覆盖缺口)。
         - ``dict`` —— 直接传原始 directive 块(测试 / 旧调用方)。
 

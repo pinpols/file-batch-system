@@ -24,7 +24,7 @@ import java.util.stream.Stream;
  * #breakPosition(I, R)}。
  *
  * <p><b>PG 服务端游标(流式读)</b>:{@link #streamRows} 走 JDBC 时须 {@code setAutoCommit(false)} + {@code
- * setFetchSize(N)} 才是真流式,否则 PostgreSQL 默认一次性拉全量结果集撑爆内存。
+ * setFetchSize(N)} 才是真流式,否则 PostgreSQL 默认一次性拉全量结果集超过内存。
  *
  * @param <I> 强类型入参(从 parameters 反序列化)
  * @param <O> 业务结果(序列化进 output;writeOut 自带结果优先,其次 summarize,最后计数器兜底)

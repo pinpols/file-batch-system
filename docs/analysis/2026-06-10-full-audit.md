@@ -3,17 +3,17 @@
 > 基线:工作区 `fix/review-2026-06-09-findings`(HEAD `7e7ada8e7` #441 + 32 个未提交修复文件,审计对象为**工作区最新状态**)。
 > 方法:8 路并行深扫——① 06-09 修复分支核验 ② 架构硬约束 conformance ③ 多租隔离全局对标 ④ 编码规范 R1–R12 ⑤ 异常契约 4xx/5xx ⑥ 并发/事务/Kafka 语义 ⑦ 安全+资源 ⑧ 既往 P0/P1 回归 + 架构负空间。
 > 每条发现均经代码核实,只保留置信度 ≥ 70;已知有意决策(scheduler 单点 / PG 瓶颈 / Kafka 硬依赖 / business 库不走 Flyway / P2 readOnly 不做等)不重复报。
-> 活动定性:②③④为 conformance 扫描(地图内找错路),⑧ Part 2 为架构负空间评审(质疑地图够不够大),两者并做,防"全绿错觉"。
+> 活动定性:②③④为 conformance 扫描(地图内找错路),⑧ Part 2 为架构负空间评审(质疑地图够不够大),两者并做,防"全部通过错觉"。
 
 ---
 
 ## 修复状态(2026-06-10,分支 `fix/audit-2026-06-10`)
 
-本轮已修并验证(编译 + 单测全绿):
+本轮已修并验证(编译 + 单测全部通过):
 
 | 项 | 修法 | 验证 |
 |---|---|---|
-| P0-1 幽灵表 | 三个 RLS 脚本每表加 `to_regclass` 存在性守护 + NOTICE,缺表跳过不整体回滚(未捏造 customer_processed DDL) | RlsPhaseAMigrationCoverageTest |
+| P0-1 不存在的表 | 三个 RLS 脚本每表加 `to_regclass` 存在性守护 + NOTICE,缺表跳过不整体回滚(未捏造 customer_processed DDL) | RlsPhaseAMigrationCoverageTest |
 | P1-1 RLS 探针死代码 | worker-process `BusinessDataSourceConfiguration` 注册 `RlsPolicyHealthIndicator` @Bean(默认开,测试库关) | test-compile |
 | P1-2 守护清单漏表+单向 | 清单补 `process_event_copy`;覆盖测试改**双向**互为子集;runbook/strict 注释同步 | RlsPhaseAMigrationCoverageTest(3) |
 | P1-3 重放 10 处 500 | governance 10 处 `IllegalStateException` → `BizException`(404/409/400)+ i18n key×9;同步修 `isOrphanPartitionReplayFailure` 死信 orphan 判定 | DefaultRetryGovernanceServiceTest(16)/DeadLetterAutoRetryTest(4) |
@@ -42,7 +42,7 @@
 工程质量中上偏好。**架构硬约束 11 条全部合规**(worker 禁写状态表 / CLAIM 前置 / outbox MANDATORY 同事务 / 事件路由三表 / archive 镜像 V160–V169 逐条核验);核心攻击面(4 大 RCE 执行器、全部 mapper `${}`、SSRF、bypass-mode prod 拒绝)防护到位;06-08 评审的 6 项 P0/P1 已闭环 4 项、部分闭环 1 项(PR #439 为主载体);06-09 评审的 12 项修复在工作区**全部落地且修法正确**。
 
 本轮新发现集中在三类:
-1. **守护层本身失效**(最高价值):RLS HealthIndicator 从未注册是死代码、守护清单漏表且校验单向、幽灵表导致全新部署 RLS 脚本整体失败——再次印证"全绿 ≠ 守护在跑"。
+1. **守护层本身失效**(最高价值):RLS HealthIndicator 从未注册是死代码、守护清单漏表且校验单向、不存在的表导致全新部署 RLS 脚本整体失败——再次印证"全部通过 ≠ 守护在跑"。
 2. **老毛病复发**:`DefaultRetryGovernanceService` 重放链路 10 处 `IllegalStateException` → 500(与 2026-06-05 修过的 F1/F2/F3 完全同型,本应 404/409)。
 3. **运维负空间**:备份/PITR 全空白(failover playbook ≠ 备份)、归档治理失效本身无监控。
 
@@ -50,7 +50,7 @@
 
 ## P0 / 部署阻断级
 
-### P0-1 幽灵表 `biz.customer_processed`:全新环境 RLS 脚本整体失败(置信 85)
+### P0-1 不存在的表 `biz.customer_processed`:全新环境 RLS 脚本整体失败(置信 85)
 
 - **位置**:`scripts/db/business/rls-phase-a.sql:82`(及 strict / rollback 脚本)引用 `biz.customer_processed`,但全仓**无任何 DDL 建它**(create_biz_tables.sql / docker init / Flyway / Java 动态建表均无;sim 环境实际有数据,说明是历史手工建的 PROCESS 输出表)。
 - **后果**:全新环境按 README 顺序跑 `create_biz_tables.sql` → `rls-phase-a.sql`,DO 块对不存在的表 `ALTER TABLE` 报错 → **整个 DO 块回滚,所有 biz 表一张都拿不到 RLS policy**(biz 循环无 `IF EXISTS` 守护,只有 process_staging 有)。
@@ -91,7 +91,7 @@
 ### P1-5 `FileGovernanceScheduler.sweepStaleRunningPipelines` 两步 UPDATE 非同事务(置信 85)
 
 - **位置**:`batch-orchestrator/.../file/FileGovernanceScheduler.java:119-150`。
-- 第一步 pipeline 置 FAILED 提交后崩溃,第二步 steps 置 FAILED 未跑;下一轮扫描基于 `pipeline_instance.updated_at`,已 FAILED 的不再命中 → **steps 永久滞留 RUNNING**。连带 metrics 脏数据写 Redis(P2 级连带)。
+- 第一步 pipeline 置 FAILED 提交后崩溃,第二步 steps 置 FAILED 未跑;下一轮扫描基于 `pipeline_instance.updated_at`,已 FAILED 的不再命中 → **steps 永久滞留 RUNNING**。连带 metrics 异常数据写 Redis(P2 级连带)。
 - **修法**:两步并入同一 `@Transactional`,或第二步改按 `pipeline_step.updated_at` 独立扫描。
 
 ### P1-6 `docker-compose.app.yml` 6 处 S3 凭据默认 `minioadmin`(置信 82)
@@ -167,7 +167,7 @@
 
 ## 建议执行顺序
 
-1. **立即**:提交当前 32 文件修复分支 → P0-1 幽灵表 + P1-1/P1-2 RLS 守护三件套(同一 PR 顺手把 runbook/strict 注释修齐)。
+1. **立即**:提交当前 32 文件修复分支 → P0-1 不存在的表 + P1-1/P1-2 RLS 守护三件套(同一 PR 顺手把 runbook/strict 注释修齐)。
 2. **本周**:P1-3 重放链路 10 处异常契约(同型批量修,半天)→ P1-4 @Async 自调用 → P1-5 governance 事务 → P1-6 compose 凭据。
 3. **上生产前**:P1-7 备份/PITR;P1-8 找组织管理员升级或换分支保护方案。
 4. **排期**:P2 清单 + `/convention-audit` 清规范违规 + R5 规则修订 ADR。

@@ -175,7 +175,7 @@ if effective.isEmpty():
 | **顺序可以不一致吗?**(带表头:CSV 带 header / JSON / Excel / XML) | **可以**。按名匹配,文件列序随便排;DB INSERT 列序由 `columnMappings`/`field_mappings` 顺序决定(`orderedInsertColumns`),独立于文件。 |
 | **无表头格式**(headerless CSV / FIXED_WIDTH) | **顺序与列数都必须对齐**——无表头只能**按位置**绑定,位置 schema 取 `field_mappings` 的声明顺序。**已修(2026-06-20)**:`DelimitedFormatParser` 无表头分支改用新 `ParseSupport.positionalHeaders()`——按 `field_mappings[*].name` 顺序绑定,仅当模板无 `field_mappings` 时才回退硬编码 `defaultHeaders()`(向后兼容)。FIXED_WIDTH 本就按 `field_mappings` 的 `target`/`start`/`length` 绑定,无此 gap。 |
 
-> ⚠️ 另一个独立的名字匹配脆点(不在本次默认推断范围、但相关):`from`→文件表头是**精确字符串匹配**(`row.get(m.from())`),大小写/空格不一致会导致"整列变 null"(quickstart §6 已记此坑)。§4.2 的归一化目前只作用于 `name→DB列(to)` 侧;是否对 `from→表头` 侧也做大小写/trim 容错是更敏感的改动(动用户文件数据),列为待评审点而非默认纳入。
+> ⚠️ 另一个独立的名字匹配脆点(不在本次默认推断范围、但相关):`from`→文件表头是**精确字符串匹配**(`row.get(m.from())`),大小写/空格不一致会导致"整列变 null"(quickstart §6 已记此问题)。§4.2 的归一化目前只作用于 `name→DB列(to)` 侧;是否对 `from→表头` 侧也做大小写/trim 容错是更敏感的改动(动用户文件数据),列为待评审点而非默认纳入。
 
 ---
 
@@ -235,7 +235,7 @@ if effective.isEmpty():
 
 ## 10. 配套落地:默认化简(B1/B2/B3)+ 预览期校验加固(已实现)
 
-围绕"减少用户配置负担"与"脏配置早拦截",本支同时落地了以下配套改动(均已实现、带单测)。
+围绕"减少用户配置负担"与"异常配置早拦截",本支同时落地了以下配套改动(均已实现、带单测)。
 
 ### 10.1 默认化简
 
@@ -247,7 +247,7 @@ if effective.isEmpty():
 
 > Channel `auth_type`/`receipt_policy` 的可选化**未做**:无独立 RowParser 默认通路,留空会写 NULL 绕过 DB DEFAULT,单列 follow-up。
 
-### 10.2 预览期校验加固(脏配置不留到运行期)
+### 10.2 预览期校验加固(异常配置不留到运行期)
 
 `ConfigPackageExcelValidator` 新增(上传预览即 fail-fast):
 

@@ -23,10 +23,10 @@ import lombok.experimental.UtilityClass;
  * | NON-PROD  | system/default/admin      | REJECT    | 同上                                |
  * | NON-PROD  | DEV_FIXTURE 白名单         | ALLOW     | ta/tb/tc/default-tenant 团队常用    |
  * | NON-PROD  | e2e-/qa-/dev-/local-/test- | ALLOW     | 鼓励 test prefix,残留可一键 cleanup |
- * | NON-PROD  | 裸 ID(tx / mytest)       | REJECT    | 防残留:无前缀 = 清不掉(只能跑全 wipe) |
+ * | NON-PROD  | 无前缀 ID(tx / mytest)       | REJECT    | 防残留:无前缀 = 清不掉(只能跑全 wipe) |
  * </pre>
  *
- * <p>关键改动:**非 prod 不再放任无前缀创建** —— 之前 `bypass-mode=true` 时跳过校验导致 td/te/tx 等 裸 ID 残留无主,cleanup
+ * <p>关键改动:**非 prod 不再放任无前缀创建** —— 之前 `bypass-mode=true` 时跳过校验导致 td/te/tx 等 无前缀 ID 残留无主,cleanup
  * endpoint(按 prefix-)无法精确清掉。强制 test prefix 后, e2e 全程 cleanup 链路自闭。
  */
 @UtilityClass

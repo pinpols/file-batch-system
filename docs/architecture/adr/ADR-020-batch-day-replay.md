@@ -151,7 +151,7 @@ ADR-018 的 `WAITING_DEPENDENCY` 节点会因为上游 EFFECTIVE 切换被 recon
 | 持久层 | 2 张新表 + archive 镜像；`job_instance` 已经在 ADR-017 阶段加了 `replay_session_id`（如未加，本 ADR 阶段补） |
 | 模块 | console-api 加 BatchDayReplay controller/service；orchestrator 加 dispatcher + reconciler；rerun 路径接 replay_session_id 透传 |
 | 兼容性 | 不依赖 ADR-017 不能开放（强依赖）；旧 RerunRequest 单实例路径不变 |
-| 性能 | session 派发按 batch_size + rate_limit_per_min 限速，避免一次 1000 个 rerun 把 dispatcher 打爆 |
+| 性能 | session 派发按 batch_size + rate_limit_per_min 限速，避免一次 1000 个 rerun 压垮 dispatcher |
 | 观测 | 新 metric: `batch.replay.session.{active,succeeded,failed}` / `batch.replay.entry.{pending,running,terminal}` |
 
 ## 实施分阶段
@@ -199,7 +199,7 @@ ADR-018 的 `WAITING_DEPENDENCY` 节点会因为上游 EFFECTIVE 切换被 recon
 |---|---|---|
 | 1 | 失败 entry 的重试 | **v1 不做 session 内重试**。失败 entry 留 FAILED 终态，运维按需对该 entry 的 `source_instance_id` 走单 instance `RerunRequest`（不挂 session）。v2 再考虑 session 内 retry-failed-entries API；现在做会让"session 进度"语义和"entry 历史"耦合 |
 | 2 | 跨日 replay | **不支持单 session 跨日**。Console 循环创建 N 个单日 session（保持 session 一对一 (tenant, calendarCode, bizDate) 不变量）。前端可加"跨日重放向导"批量提交，但持久层每日仍独立 session |
-| 3 | 并发上限 | `batch.replay.dispatch.parallelism = 10`（默认，可配）；上限 50 防 dispatcher 把 worker 池打爆。同时套 `batch.replay.dispatch.rate-limit-per-min = 60`（默认）做令牌桶节流 |
+| 3 | 并发上限 | `batch.replay.dispatch.parallelism = 10`（默认，可配）；上限 50 防 dispatcher 压垮 worker 池。同时套 `batch.replay.dispatch.rate-limit-per-min = 60`（默认）做令牌桶节流 |
 | 4 | 回滚 | **不特设 rollback API**。误 promote 走"反向 OUTPUTS_ONLY session"把旧版本切回 EFFECTIVE — 走同样的审批 + 审计链；rollback 本身可被审计 / 重放 |
 | 5 | 大批 instance | session 创建按 `batch.replay.session.entry-batch-insert-size = 500` 分块 INSERT；entry 数 > `entry-async-threshold`（默认 5000）时 status=PENDING 派 outbox 事件让 reconciler 异步建剩余 entries。session 在 entry 全建完前 status 暂为 `PENDING_APPROVAL`（PENDING_APPROVAL 期不需要 entry 全建好，approval 时 lazy 校验）|
 

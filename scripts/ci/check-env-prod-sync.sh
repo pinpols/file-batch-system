@@ -2,7 +2,7 @@
 # scripts/ci/check-env-prod-sync.sh
 #
 # V6-OPS-1: 校验 .env.prod 与 .env.example 关键 key 同步,
-# 防止新增配置项漏 prod 部署导致运行时坑(典型例子:KAFKA_TOPICS 缺新 topic 导致 trigger
+# 防止新增配置项漏 prod 部署导致运行时问题(典型例子:KAFKA_TOPICS 缺新 topic 导致 trigger
 # 异步推送失败)。
 #
 # 工作原理:

@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>开关默认关,关闭时只回 {@code triggered=false},等价历史纯轮询。
  *
- * <p>{@link AtomicBoolean} 在途守护让密集通知合并为「至多一次在途扫描」,避免事件风暴打爆扫描器。
+ * <p>{@link AtomicBoolean} 在途守护让密集通知合并为「至多一次在途扫描」,避免事件风暴压垮扫描器。
  */
 @Slf4j
 @RestController

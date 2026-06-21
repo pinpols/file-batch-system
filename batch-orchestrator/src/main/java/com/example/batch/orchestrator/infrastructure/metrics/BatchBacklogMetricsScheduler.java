@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@code batch.outbox.pending.events}：NEW + FAILED 状态的 Outbox 事件总数（积压量）
  *   <li>{@code batch.outbox.publishing.stale.events}：卡在 PUBLISHING 且超时的事件数 （正常情况下 {@code
- *       resetStalePublishing} 清 0；非 0 说明 poll 本身挂了）
+ *       resetStalePublishing} 清 0；非 0 说明 poll 本身异常退出）
  *   <li>{@code batch.outbox.duplicate.event_keys}：近窗口内重复 (tenant_id,event_key) 组数。分区 outbox 放弃全局
  *       UNIQUE 后,此指标必须长期为 0
  *   <li>{@code batch.dead_letter.tasks.pending}：NEW + FAILED 状态的死信数

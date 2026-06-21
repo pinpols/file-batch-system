@@ -59,7 +59,7 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
             .baseUrl("http://127.0.0.1:" + port)
             .responseTimeout(Duration.ofSeconds(30))
             .build();
-    // 测试前清空可能的脏数据,避免计数干扰
+    // 测试前清空可能的异常数据,避免计数干扰
     jdbcTemplate.update(
         "DELETE FROM batch.console_operation_audit WHERE action IN ('alert.close',"
             + " 'apiKey.create')");

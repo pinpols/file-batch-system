@@ -20,7 +20,7 @@
 
 ## 0.1 本地 docker-compose 实测验证记录(2026-04-30)
 
-> 切换默认 `enabled=true` 后,在本地 docker-compose 全栈跑了 smoke test,记录在此供运维参考预期行为与已知坑。
+> 切换默认 `enabled=true` 后,在本地 docker-compose 全栈跑了 smoke test,记录在此供运维参考预期行为与已知问题。
 
 ### 验证清单
 

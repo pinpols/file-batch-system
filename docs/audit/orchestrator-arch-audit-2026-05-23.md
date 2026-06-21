@@ -42,7 +42,7 @@
 
 ## 抽象层次(6 项)
 
-- **[P1]** `batch-orchestrator/.../infrastructure/pipeline/DefaultPipelineExecutor.java:58-62` — `executeStep()` 在 `stepRegistry.find()` 返回 `Optional.empty()` 时静默返回空 `StepResult()`,无日志、无异常。stepCode 拼写错误或 Bean 未注册会被静默吞掉,调用方看到"步骤执行成功但结果全空",极难排查。建议至少在此处打 WARN 日志(`stepCode={} not found in registry`),与配置错误的可观测性要求对齐;严格模式下可直接抛 `BizException`(`STEP_NOT_FOUND`)。
+- **[P1]** `batch-orchestrator/.../infrastructure/pipeline/DefaultPipelineExecutor.java:58-62` — `executeStep()` 在 `stepRegistry.find()` 返回 `Optional.empty()` 时静默返回空 `StepResult()`,无日志、无异常。stepCode 拼写错误或 Bean 未注册会被静默捕获并抑制,调用方看到"步骤执行成功但结果全空",极难排查。建议至少在此处打 WARN 日志(`stepCode={} not found in registry`),与配置错误的可观测性要求对齐;严格模式下可直接抛 `BizException`(`STEP_NOT_FOUND`)。
 
 - **[P1]** `batch-orchestrator/.../application/service/sensor/` — `SensorPolicyRegistry` 与 `SensorPolicy` 接口定义在 `application.service.sensor`(应用层),但 `KafkaOffsetSensorPolicy` 明显依赖 Kafka client(infrastructure concern),与 DDD 分层约定(`application` 不依赖具体 infrastructure)冲突。`FileArrivalSensorPolicy` 同理依赖 MinIO。建议将接口和枚举保留在 `application.service.sensor`,具体策略实现移至 `infrastructure.sensor`,符合 CLAUDE.md §DDD 分层。
 

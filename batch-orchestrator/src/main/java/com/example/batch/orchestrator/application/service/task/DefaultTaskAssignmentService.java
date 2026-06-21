@@ -269,7 +269,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
    * 后实际起跑时刻。差值 = 调度队列等待 + worker 拉取 + CLAIM 往返。SLA 关键路径。
    *
    * <p>tag 受控:tenant_id + task_type(均低基数);**不**带 task_id / job_instance_id(高基数会爆 cardinality)。
-   * createdAt 为 null(历史脏数据)直接跳过,不污染样本。
+   * createdAt 为 null(历史异常数据)直接跳过,不污染样本。
    */
   private void recordLaunchToRunning(JobTaskEntity task, Instant startedAt) {
     if (task.getCreatedAt() == null || startedAt == null) {

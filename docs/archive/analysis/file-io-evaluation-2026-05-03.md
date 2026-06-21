@@ -48,7 +48,7 @@
 | EXPORT Generate (Delimited / FixedWidth / Excel SXSSF) | ✅ 写端流式 + 读端 DB 分页 1000 行 | 已防（500k 行硬闸） | OK |
 | EXPORT Store 上传 MinIO + SHA-256 | ✅ 流式 PUT + 8KB digest buffer | 无 | OK |
 | EXPORT Store 加密 `encrypt(Path,Path)` | ✅ stream-to-stream | 无 | OK |
-| DISPATCH SFTP `ChannelSftp.put(in,...)` | ✅ JSch 流式 | 无 | **D-1 已修**（disconnect 异步超时，避免线程卡死）|
+| DISPATCH SFTP `ChannelSftp.put(in,...)` | ✅ JSch 流式 | 无 | **D-1 已修**（disconnect 异步超时，避免线程长期停滞）|
 | DISPATCH NAS `Files.copy` | ✅ JDK NIO copy 内部 8KB transfer | 无 | OK |
 | DISPATCH OSS multi-part 10MB | ✅ MinIO SDK 自动分片 | 无 | OK |
 | DISPATCH SMTP 落地 temp file → jakarta.mail | ⚠️ `FileDataSource` 整文件（cap 25MB 已防 OOM 但是 IO 翻倍） | 已 cap | OK |

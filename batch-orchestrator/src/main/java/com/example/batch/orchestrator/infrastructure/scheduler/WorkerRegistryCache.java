@@ -157,7 +157,7 @@ public class WorkerRegistryCache {
     return records;
   }
 
-  /** Slim DTO for cache serialization；故意用 fields，避免 JsonbString 反序列化坑。 */
+  /** Slim DTO for cache serialization；故意用 fields，避免 JsonbString 反序列化问题。 */
   @Builder
   public record Entry(
       Long id,

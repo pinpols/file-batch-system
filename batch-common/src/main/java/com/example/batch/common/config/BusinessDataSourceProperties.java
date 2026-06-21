@@ -47,6 +47,6 @@ public class BusinessDataSourceProperties {
   // keepalive 不在此处配:由 HikariPgSessionSupport 对所有 PG 池统一兜底默认 30s(见 PR #454),
   // 业务池经 applyBusiness() 已覆盖,此处再设会形成双源默认、易 drift。
 
-  /** 借出前连接校验超时（ms）。校验慢/卡死时快速判失败重取，避免切换瞬间长时间阻塞在坏连接上。 */
+  /** 借出前连接校验超时（ms）。校验慢/长期停滞时快速判失败重取，避免切换瞬间长时间阻塞在坏连接上。 */
   private long validationTimeoutMs = 3000L;
 }

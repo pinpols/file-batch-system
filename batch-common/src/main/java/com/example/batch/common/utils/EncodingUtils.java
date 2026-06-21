@@ -80,7 +80,7 @@ public final class EncodingUtils {
   private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
   /**
-   * S-1.8：剥离 UTF-8 BOM 前缀。返回一个包装后的流，前 3 个字节是 BOM 就吞掉，否则透传。
+   * S-1.8：剥离 UTF-8 BOM 前缀。返回一个包装后的流，前 3 个字节是 BOM 就捕获并抑制，否则透传。
    *
    * <p>外部导出工具（Windows Excel "CSV UTF-8"、部分文本编辑器）写出 UTF-8 文件时会自动加 BOM；系统内部读取这些文件做 parse 时，若不剥 BOM
    * 会让首字段混入 {@code \uFEFF} 字符，后续 header 匹配 / 数值解析全部失败。{@code PreprocessStep.resolveCharset} 自己

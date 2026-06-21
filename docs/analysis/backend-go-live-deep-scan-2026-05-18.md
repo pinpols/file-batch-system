@@ -464,6 +464,6 @@ DispatchCommand
 ### 6.3 回归验证
 
 - `mvn compile` 全 5 模块绿
-- 测试:`ConsoleAuthControllerTest`(1) / `ConsoleAuthenticationFilterTest`(11) / `DefaultTaskOutcomeServiceTest`(4) / `TriggerOutboxRelayTest`(9) / `TriggerLaunchConsumerTest`(9) / `ConfigDriftGuardTest`(3) 全绿
+- 测试:`ConsoleAuthControllerTest`(1) / `ConsoleAuthenticationFilterTest`(11) / `DefaultTaskOutcomeServiceTest`(4) / `TriggerOutboxRelayTest`(9) / `TriggerLaunchConsumerTest`(9) / `ConfigDriftGuardTest`(3) 全部通过
 - `helm template` 7 个 startupProbe 正确渲染;短密钥(`internalSecret=tooshort`)被 length guard 拒绝 ✓
 - 全量 IT 受 worker-dispatch Testcontainers Kafka 启动超时阻塞(非业务断言),建议稳定 CI 环境重跑

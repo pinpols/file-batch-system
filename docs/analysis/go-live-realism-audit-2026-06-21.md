@@ -100,7 +100,7 @@
 
 主要风险:
 
-- `go-live-readiness.md` 明确 DR/韧性演练是真缺口:整队崩、PITR、PG failover、Kafka 短不可用、DLQ replay 需要 staging 签字。
+- `go-live-readiness.md` 明确 DR/韧性演练是真缺口:全 worker 组崩溃、PITR、PG failover、Kafka 短不可用、DLQ replay 需要 staging 签字。
 - `backup-and-pitr.md` 也明确 Kafka RF=1 时 broker 盘损不能硬保证在途事件 RPO，只能靠 outbox republish/lease 重派兜底。生产必须 broker≥3、RF=3、min ISR 与 acks=all。
 - Process RUNNING cancel / Atomic shell cancel 当前语义偏软取消，不能强杀正在执行的 shell/任务；对高风险长任务要写入运行约束。
 

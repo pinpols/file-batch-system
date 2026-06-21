@@ -11,14 +11,14 @@
 | 功能完整 | 648 单测 + 114 IT + 27 e2e(`*E2eIT`)+ sim 25 阶段(import/export/process/dispatch/trigger/atomic)+ sim-4day | ✅ full-ci-gate 门禁 |
 | **数据一致(承重墙)** | `ConcurrentTaskClaimIntegrationTest`(防双 claim)/ `ConcurrentTaskFinishIntegrationTest`(CAS 防双 finish)/ `OutboxEventToKafkaDispatch`·`OutboxPublish`(outbox 精确一次)/ `SqlConsistencyIntegrationTest` / `JobRetryFlowIntegrationTest` | ✅ IT 覆盖 |
 | 多租隔离 | batch.*:`MultiTenantIsolationIntegrationTest` + `MapperXmlTenantGuardArchTest`(静态扫 mapper);biz.* RLS:`RlsTenantIsolationIntegrationTest`·`RlsStrictModePreflight`·`RlsTenantSession`·`RlsPhaseAMigrationCoverage`;路由:`BusinessMultiShardRouting*` | ✅ IT 覆盖(batch 列 + biz RLS + 分片路由) |
-| 韧性 | `WorkerHeartbeatTimeoutScheduler`·`PartitionLeaseReclaim`·`StaleCompensationCommandReconciler`(lease/超时回收)、sim **stage25 checkpoint-crash 续跑**、3×`*ToxicIT`(混沌注入)、`DeadLetterController`(DLQ) | ✅ 逻辑层覆盖(端到端整队崩见 §2-C) |
+| 韧性 | `WorkerHeartbeatTimeoutScheduler`·`PartitionLeaseReclaim`·`StaleCompensationCommandReconciler`(lease/超时回收)、sim **stage25 checkpoint-crash 续跑**、3×`*ToxicIT`(混沌注入)、`DeadLetterController`(DLQ) | ✅ 逻辑层覆盖(端到端全 worker 组崩溃见 §2-C) |
 | 容量 | load-tests 10 Gatling 场景(JobLaunch / CapacityBaseline / ControlPlaneMixedPressure / WorkerTaskLifecycle / SchedulingBacklog…)+ SLO 旋钮 `slo.write.p95ms` / `slo.read.p99ms` / `slo.maxErrorPct` / `users.peak` | ✅ 工具就绪(需跑到靶点,见 §2-B) |
 | 迁移 | Flyway(platform)+ `ArchiveSchemaDriftCheck`(热表↔archive 镜像 fail-fast)+ 月分区 V172/V173 | ✅ 启动期门禁 |
 
 > **结论**:测试代码覆盖**已很完整**;上线缺的主要是**操作演练 + staging 签字**,不是补单测。下面只列"真缺口"。
 
 ## 1. Phase 0 — 代码冻结门(CI)
-- [ ] `full-ci-gate` 全绿(PMD/Spotless/依赖边界 + 单测 + IT 分片 + **jacoco 覆盖率棘轮**)
+- [ ] `full-ci-gate` 全部通过(PMD/Spotless/依赖边界 + 单测 + IT 分片 + **jacoco 覆盖率棘轮**)
 - [ ] `codeql` + Trivy + 依赖 CVE 扫描:**无新引入高危**(依赖 CVE vs 真引入要分清)
 - [ ] `strict-verify`(本地)+ `verify-biz-shard` 真数据路由通过
 
@@ -35,7 +35,7 @@
 - [ ] 判定:目标量级下 SLO 达标且无积压发散 → 通过;若逼近 20 jobs/s 上限,记录余量并定容量上限/扩展预案
 
 ### C DR / 韧性演练(**真缺口,见`scripts/sim/dr-drill-fleet-crash.sh`**)
-- [ ] **整队崩"精确一次"演练**:跑载荷 → kill 整组 worker → 等 lease/task 超时回收 + 重投 → 重启 worker → 断言**终态精确一次**(无重复 outbox/side-effect、单一 SUCCESS、无 job_instance 复活)。脚本 + 验收 SQL 见下。
+- [ ] **全 worker 组崩溃"精确一次"演练**:跑载荷 → kill 整组 worker → 等 lease/task 超时回收 + 重投 → 重启 worker → 断言**终态精确一次**(无重复 outbox/side-effect、单一 SUCCESS、无 job_instance 复活)。脚本 + 验收 SQL 见下。
 - [ ] **PITR 恢复演练**(RTO<2h / RPO<15min):备份恢复到某时间点 → 断言已提交数据不丢(RPO)+ 恢复总耗时(RTO);流程见 §4。
 - [ ] PG failover(主备切换)+ Kafka 短时不可用降级 + DLQ 重放
 
@@ -66,8 +66,8 @@
 ## 5. Go / No-Go 门
 | 门 | 判据 |
 |---|---|
-| Phase 0 | CI 全绿 + 安全扫描清零 |
-| Phase 1 | A–E 全部签字 + B 的 SLO 达标 + C 的整队崩精确一次通过 |
+| Phase 0 | CI 全部通过 + 安全扫描清零 |
+| Phase 1 | A–E 全部签字 + B 的 SLO 达标 + C 的全 worker 组崩溃精确一次通过 |
 | Phase 2 | 迁移耗时可接受 + 回滚验证通过 + RTO/RPO 达标 |
 | 上线 | 金丝雀/灰度无异常 + 监控基线 + 回滚预案 + 值班就位 |
 

@@ -142,7 +142,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       Integer priority,
       String priorityBand,
       ResourceCheck check) {
-    // V89 DEGRADE_PRIORITY: limiter 在 reasonCode 末尾打 _DEGRADED 标记，这里把决策 priority/band 砍到最低，
+    // V89 DEGRADE_PRIORITY: limiter 在 reasonCode 末尾打 _DEGRADED 标记，这里把决策 priority/band 降到最低，
     // 让 enrichFairnessScore 给出最低分，WaitingPartitionDispatchScheduler 的 fairness 排序自然把它沉到队尾
     boolean degraded = check.reasonCode() != null && check.reasonCode().endsWith("_DEGRADED");
     Integer effectivePriority = degraded ? 1 : priority;

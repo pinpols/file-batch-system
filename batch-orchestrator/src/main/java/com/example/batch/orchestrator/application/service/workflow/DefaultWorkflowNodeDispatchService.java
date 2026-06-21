@@ -276,7 +276,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // R7 log-audit-bug: 当 targetJobCode 在 job_definition 不存在 / 已 disabled 时，
     // SchedulePlanBuilder 仍会返回 plan 但 defaultWorkerType=null（jobDefinition 未命中）；
     // 之前会照常进入 createTask → INSERT job_task → 撞 NOT NULL 抛 PSQLException
-    // → 整个 TriggerLaunchConsumer 死循环重试 → DLQ 跳过。这里 fail-fast 拒绝派发，
+    // → 整个 TriggerLaunchConsumer 无限循环重试 → DLQ 跳过。这里 fail-fast 拒绝派发，
     // 把节点 ready 状态留给重试 / 运维补 job_definition 后再次触发。
     if (plan.getDefaultWorkerType() == null || plan.getDefaultWorkerType().isBlank()) {
       log.error(

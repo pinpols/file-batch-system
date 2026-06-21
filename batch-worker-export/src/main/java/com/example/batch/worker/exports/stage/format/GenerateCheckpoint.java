@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@link #advance} 仅在「还有后继页」(cursor != null)时调:fsync 后记 (byteOffset, nextCursor, 累计行数)。
  *       终页(cursor == null)<b>不</b>记位点,交由 {@code GenerateStep} 的 {@code markCompleted} 收尾, 从而保证存下来的
  *       cursor 永远是一个有效的续跑起点、绝不为 null(否则续跑会从头重写造成重复)。
- *   <li>续跑时:truncate 文件到 {@link #resumeByteOffset()} 砍掉崩溃残尾 → 从 {@link #resumeCursor()} 续拉下一页。
+ *   <li>续跑时:truncate 文件到 {@link #resumeByteOffset()} 截断崩溃残尾 → 从 {@link #resumeCursor()} 续拉下一页。
  *       崩溃窗口最多重做「最后一个已记位点之后的那一页」,因 truncate 先于重写故无重复。
  *   <li>cursor 类型不被 {@link GenerateCursorCodec} 支持时:{@link #advance} 打一次 warn 后<b>停止记位点</b>
  *       (本次降级为不可续跑的全量跑,生成本身不受影响)。

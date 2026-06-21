@@ -1,7 +1,7 @@
 # Compensation 失败清理 runbook
 
 > 针对 v3 A-3.1（DefaultCompensationService 无 saga 反向链）的运维 runbook。
-> 触发场景：补偿执行中途失败，残留幽灵任务 / 分区 / 新 job_instance 需要人工清理。
+> 触发场景：补偿执行中途失败，残留残留任务 / 分区 / 新 job_instance 需要人工清理。
 > 依赖：V63 `compensation_checkpoint` 表已迁移。
 
 ## 何时用

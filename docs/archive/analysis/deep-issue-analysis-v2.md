@@ -283,7 +283,7 @@ password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
 | A-2.3 | assignWorker 返回完整实体（含大 payload） |
 | A-6.3 | KEY_RECORDS 等常量跨模块重复定义 |
 | A-6.4 | Worker stage 缺统一基类 |
-| A-6.5 | 魔法数字散落在配置和代码中 |
+| A-6.5 | 硬编码数字散落在配置和代码中 |
 
 ---
 

@@ -123,7 +123,7 @@ do_cleanup() {
   psql_file batch_business "$ROOT/scripts/local/sql/validate-seed-cleanup-business.sql" -v pattern="$pattern" >/dev/null 2>&1 || true
 }
 
-# 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留垃圾
+# 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留下无效记录
 on_exit() {
   local rc=$?
   do_cleanup "$SWEEP_PATTERN" 2>/dev/null || true

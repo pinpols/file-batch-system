@@ -4,7 +4,7 @@
 # 背景:full-ci-gate / staging-gate 的 e2e 用 `-Dtest=<逗号分隔类名>` +
 # `-Dsurefire.failIfNoSpecifiedTests=false` 跑。后者的作用是「某 shard 上没匹配类时
 # 空跑也算成功」——但它同时把「清单里列了某类、却因路径错位 / 改名 / 编译漏装而没被选中」
-# 的情况一并静默吞掉:该类没跑,CI 仍绿,造成「全量已跑」的假象。
+# 的情况一并静默捕获并抑制:该类没跑,CI 仍绿,造成「全量已跑」的假象。
 #
 # check-e2e-shard-coverage.sh 守的是**静态**侧(清单 ⊇ 仓库实际 *E2eIT,防漏列);
 # 本脚本守的是**运行**侧(本 shard 实际产出的 testsuite report 数 == 清单声明的类数),

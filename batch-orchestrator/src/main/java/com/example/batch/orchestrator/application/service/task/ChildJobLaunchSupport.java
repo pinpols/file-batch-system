@@ -74,7 +74,7 @@ public class ChildJobLaunchSupport {
   /**
    * 跨 workflow 嵌套环检测上溯 parent_instance_id 链的硬上限。环本身在每次拉起前就会被拦截(见 {@link
    * #guardAgainstNestingCycle}),链上不会真正出现"不同 job_code 的环",故上溯必然终止于根;此上限只为给 rerun 长链 /
-   * 异常数据兜底,避免万一脏数据导致无界 DB 读。命中视为异常但 fail-open(放行)——真正的环已在更早层被拦。
+   * 异常数据兜底,避免万一异常数据导致无界 DB 读。命中视为异常但 fail-open(放行)——真正的环已在更早层被拦。
    */
   private static final int MAX_ANCESTOR_WALK = 256;
 
@@ -164,7 +164,7 @@ public class ChildJobLaunchSupport {
       hops++;
     }
     if (hops >= MAX_ANCESTOR_WALK) {
-      // fail-open：真正的环已在更早层被拦,这里只是兜底脏数据,放行但留痕便于排查。
+      // fail-open：真正的环已在更早层被拦,这里只是兜底异常数据,放行但留痕便于排查。
       log.warn(
           "workflow nesting ancestor walk hit cap {} for tenant={} parentInstance={} node={};"
               + " cycle check may be incomplete",

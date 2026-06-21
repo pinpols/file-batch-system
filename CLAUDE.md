@@ -51,7 +51,7 @@
 - Orchestrator 是**唯一**状态主机;Worker **不能直接写** `job_instance` / `workflow_run` / `workflow_node_run`
 - Worker 执行前**必须 CLAIM**
 - `outbox_event` 写入**必须与任务状态同事务**
-- **UNIQUE 约束是 upsert 幂等契约的承重墙**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上(如 `outbox_event(tenant_id,event_key)` / `job_instance(tenant_id,dedup_key,run_attempt)`)。**任何改 UNIQUE 列集的动作**(分区/分片/重建表/迁移)都是语义变更而非运维操作——动手前必须 `grep -r 'on conflict'` 全量核对 + 评审幂等语义。2026-06-10 血泪:分区脚本实跑致 orchestrator outbox 写入全失败回滚,详见 `scripts/db/partition-migration/01-*.sql` 头注释
+- **UNIQUE 约束是 upsert 幂等契约的承重墙**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上(如 `outbox_event(tenant_id,event_key)` / `job_instance(tenant_id,dedup_key,run_attempt)`)。**任何改 UNIQUE 列集的动作**(分区/分片/重建表/迁移)都是语义变更而非运维操作——动手前必须 `grep -r 'on conflict'` 全量核对 + 评审幂等语义。2026-06-10 事故复盘:分区脚本实跑致 orchestrator outbox 写入全失败回滚,详见 `scripts/db/partition-migration/01-*.sql` 头注释
 - Console-api **不能直接 UPDATE/DELETE** `outbox_event`;运维(cleanup / republish)走 `ConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*`
 - **读写分离仅 console-api**;trigger / orchestrator / worker 严禁引入(状态机依赖 read-after-write 强一致),详见 [`docs/runbook/read-replica.md`](docs/runbook/read-replica.md) §六
 - **禁覆盖** `batch-common` AutoConfiguration 基础设施 bean(`taskScheduler` / `lockProvider` 等),用 `ObjectProvider` 注入扩展点
@@ -132,7 +132,7 @@ CI `pr-gate` 拦截漂移。
 | 3 | 依赖注入**只用构造器**(`@RequiredArgsConstructor`);**禁** `@Autowired` field / setter 注入。**两类豁免**:① `@Lazy @Autowired private SelfType self;` AOP 自调用 workaround(全仓 9 处);② `@SpringBootTest` IT 测试(全仓 ~77 处沿用 Spring 测试惯例,新 IT 可继续 `@Autowired private Foo foo;`,不强制改构造器) | 生产代码 `@Autowired private Foo foo;` |
 | 4 | `@Transactional` **只放 Service 公共方法**,不放 Controller / Mapper;**禁** `Propagation.NEVER` 之外的非默认传播 | `@Transactional` 在 Controller |
 | 5 | 业务异常一律 `BizException.of(ResultCode.X, "error.<scope>.<reason>", args...)`,**禁** `new BizException(code, literal)` / `throw new RuntimeException(...)` | 抛裸 `IllegalArgumentException` |
-| 6 | Controller 返回值一律 `CommonResponse<T>`(走 `ResponseFactory.success()`),**禁**裸返 DTO 或自封装 envelope | `return user;` |
+| 6 | Controller 返回值一律 `CommonResponse<T>`(走 `ResponseFactory.success()`),**禁**直接返回 DTO 或自封装 envelope | `return user;` |
 | 7 | 日志**用占位符**,不用字符串拼接;ERROR 级必须带 `traceId` / 业务 ID;循环里不打 INFO | `log.info("user=" + u)` |
 | 8 | `@Builder` 加到普通 class 必须配 `@NoArgsConstructor` + `@AllArgsConstructor`(或 `@Tolerate`)兜底空参,否则破坏 Jackson / MyBatis 反射 | 裸 `@Builder` + 隐式空参 class |
 | 9 | if-chain / switch **≥ 3 分支**必须改 `Map<String, Handler>` 路由表 | 4 个 `else if` 散排 |

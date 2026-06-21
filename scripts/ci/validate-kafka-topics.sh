@@ -7,7 +7,7 @@
 #    严格集群里(disable auto-create)首次发布会丢消息
 # 2) .env.prod 列了 BatchTopics.java 不认识的 topic 名 → 配置漂移,白创建占资源
 # 3) .env.example / .env.local 与 .env.prod KAFKA_TOPICS 不一致 → 跨环境飘移,
-#    开发者修一个忘其他两个,prod 部署时炸
+#    开发者修一个忘其他两个,prod 部署时失败
 # 4) Topic 名违反命名规范 batch.<segment>.<segment>...(纯小写 + 数字 + . + - + _)
 #
 # 例外白名单(目录元数据,不参与 MQ 实流量,不强求 .env.prod 同步):

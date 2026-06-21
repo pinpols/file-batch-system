@@ -4,7 +4,7 @@
 >
 > **本次 v2 专攻 v1 死角**:JVM / GC 调参矩阵 · OOM 触发路径(加密解密 / Excel / JSON unbounded) · 长事务 死锁路径 · Kafka 三角时序 + 分配策略 · Quartz JobStore 集群模式 · ShedLock 实测矩阵 · partition reclaim 数学复核 · exactly-once 边界 · Outbox / DLQ 风暴防御 · 压测基线 SLO · 索引 V160-V165 利用率推断 · Import LOAD `batchUpdate` vs `COPY` 性能差距。
 >
-> 评级与 v1 一致:**P0** 上线即炸 / **P1** 高峰抖动 / **P2** 治理。本次 v2 严格只列 **v1 没扫到** 或 **v1 结论错** 的项;v1 已覆盖的不重述。
+> 评级与 v1 一致:**P0** 上线即失败 / **P1** 高峰抖动 / **P2** 治理。本次 v2 严格只列 **v1 没扫到** 或 **v1 结论错** 的项;v1 已覆盖的不重述。
 
 ---
 
@@ -24,7 +24,7 @@
 | ShedLock 全调度矩阵 | 部分 | 全 40 个 @SchedulerLock 矩阵化复核:`SensorPoll.lockAtLeastFor=PT1S` **偏低**,200ms tick 全 hit 时刷 redis;**v1 误报 BatchDayCutoff 缺 lockAtLeast**(实际为 PT20S) — 撤销 v1 P2-9 |
 | reclaim 数学 | 已校验 | v1 P1-5 已落地 budget=75% × lockAtMost=120s=90s,**与 SKIP LOCKED 配合 ✅**;但 `partition_orphan_sweep` lockAtMost=PT2M 与同名 lockAtMost(2M)的 reclaim 同 name space → 锁名不同实际不冲突(澄清) |
 | Kafka exactly-once | 未扫 | producer `enable.idempotence=true` ✅ 但 **未启 `transactional.id`**;outbox forwarder + consumer ack 走 at-least-once,**业务侧靠 CLAIM 幂等兜底**(不算缺陷,但需文档明示)(P2-15) |
-| Outbox / DLQ 风暴防御 | v1 §7 | DLQ retry 单 tick batchSize=100 ✅ 已有上限;**outbox forwarder 自适应轮询无"突发 5k 事件 push"反向限流** → orchestrator 短时高峰会全速喷 Kafka,触发 producer buffer.memory 默认 32MB 边界(P1-14) |
+| Outbox / DLQ 风暴防御 | v1 §7 | DLQ retry 单 tick batchSize=100 ✅ 已有上限;**outbox forwarder 自适应轮询无"突发 5k 事件 push"反向限流** → orchestrator 短时高峰会全速持续推送 Kafka,触发 producer buffer.memory 默认 32MB 边界(P1-14) |
 | 压测 SLO vs 实测 | v1 §11 备注 | `load-tests/README.md` 已挂 6 类 Gatling 场景 + `pipeline_completion` 端到端 + SLO 阈值(`write.p95=500ms / read.p99=300ms / err<1%`),**但无任何"实测 baseline 数据归档"** → 阈值未证实(P1-15) |
 | 索引 V160-V165 利用率 | v1 未扫 | V160(`job_task_effective_parameters` 列加,无 idx) / V161(无 idx) / V162(无 idx) / V163(无 idx) / V164(`idx_pipeline_progress_tenant_instance` + `idx_pipeline_progress_completed_at`) / V165(`idx_atomic_task_config_tenant_type`) → 近期新增的 3 条 idx **未在 mapper 路径验证 EXPLAIN ANALYZE 是否真被命中**(P2-16) |
 | Import LOAD 性能 | v1 §4.1 | `LoadStep#flushChunk` 走 `plugin.loadChunk` → MyBatis batchUpdate;**PG 无 COPY 路径**;chunk-size=500 + batchUpdate 单事务 PG 实测吞吐 ~5k rows/s,而 `COPY FROM STDIN` ~50k rows/s **10× 差距**(P1-16) |
@@ -85,7 +85,7 @@ private byte[] decryptViaSpool(byte[] rawBytes) {
 }
 ```
 
-- v1 §4.1 "Import / Export 流式与 chunk" 全绿,**漏看了 decrypt 后回 byte[] 的最后一步**。
+- v1 §4.1 "Import / Export 流式与 chunk" 全部通过,**漏看了 decrypt 后回 byte[] 的最后一步**。
 - 加密文件 50MB,解密后 80MB,加上 `rawBytes`(原 50MB,等待 GC) → 瞬时堆 ~130MB,容器 mem-limit=512MB 时已占 25%。
 - 多 worker 并发(max-concurrent-tasks=6)同时跑 → 6 × 100MB = 600MB,超 limit。
 - **修复**: decrypt 后直接返回 `Path` 让下游用 `Files.lines()` / `BufferedReader`,不再 readAllBytes;若调用方必须 byte[],加 `payload.size > 10MB` 上限断言 + metric。
@@ -396,7 +396,7 @@ v1 P2-9 称 "BatchDayCutoffScheduler 缺 lockAtLeast",grep 显示实际为 `lock
 | P1-9 | JVM | docker-compose 写死 `-Xmx512m` 与容器 mem-limit 解耦,无法靠 K8s/compose 改内存边界 |
 | P1-10 | Kafka | session.timeout / heartbeat.interval / partition.assignment.strategy 全默认,rolling update 触发 stop-the-world rebalance |
 | P1-11 | Mem | PreprocessStep.decryptViaSpool 最后 `Files.readAllBytes(decrypted)` 仍 100MB 入堆 |
-| P1-12 | Mem | TaskExecutionReportDto 无 `@Size` 守护,heartbeat_details 理论无界,可炸 Jackson + PG JSONB |
+| P1-12 | Mem | TaskExecutionReportDto 无 `@Size` 守护,heartbeat_details 理论无界,可失败 Jackson + PG JSONB |
 | P1-13 | DB | archive 长事务无 pg_advisory_lock + lock_timeout 守护,与调度 tick 撞期可死锁 |
 | P1-14 | Outbox | producer buffer.memory 默认 32MB,高峰无 backpressure → BufferExhaustedException 风险 |
 | P1-15 | 压测 | Gatling 框架 7 套 + SLO 阈值齐备,但 0 baseline 数据归档,SLO 未证实 |

@@ -45,7 +45,7 @@ batch:
 
 **所有 worker / orchestrator / console 必须挂载同一个 NAS 共享，且 `root` 路径一致**。否则：
 
-- import worker A 写入 `root/ingress/x.csv` 后，分区 worker B 在另一主机读不到 → 任务卡死
+- import worker A 写入 `root/ingress/x.csv` 后，分区 worker B 在另一主机读不到 → 任务长期停滞
 - console-api 走 FS presign 端点回放下载时，若所在主机未挂载同一 NAS，端点找不到对象 → 404
 
 **纯本地盘（无 NAS）约束**：要么单主机部署所有角色，要么强制 `partitionCount=1`（分区数决策处加约束，避免跨主机分发）。

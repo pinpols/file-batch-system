@@ -24,7 +24,7 @@ BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
 | 脚本 | 检查内容 | 跳过环境变量 |
 |---|---|---|
 | `scripts/ops/inspect-observability.sh` | 服务 health、Prometheus 指标、Kafka consumer lag、Redis/Postgres/Kafka/MinIO exporter 指标 | `BATCH_INSPECT_SKIP_OBSERVABILITY=true` |
-| `scripts/ops/inspect-db.sh` | Flyway 历史、告警事件、卡死作业、Outbox 积压、死信积压、重试积压 | `BATCH_INSPECT_SKIP_DB=true` |
+| `scripts/ops/inspect-db.sh` | Flyway 历史、告警事件、长期停滞作业、Outbox 积压、死信积压、重试积压 | `BATCH_INSPECT_SKIP_DB=true` |
 | `scripts/ops/inspect-workers.sh` | DRAINING 超时、心跳失联、孤儿任务 | `BATCH_INSPECT_SKIP_WORKERS=true` |
 
 ## 自愈脚本（发现异常后执行）
@@ -47,7 +47,7 @@ BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
    `GET /api/console/query/alerts?tenantId=<tenant>&limit=50`，查看 `occurrence_count` 是否正常收敛。
 
 4. **数据库**
-   `inspect-db.sh` 已覆盖：Flyway 失败迁移、卡死作业（RUNNING 超 60 分钟）、Outbox 积压（>120s）、死信积压（>50 条）、重试积压（overdue）。
+   `inspect-db.sh` 已覆盖：Flyway 失败迁移、长期停滞作业（RUNNING 超 60 分钟）、Outbox 积压（>120s）、死信积压（>50 条）、重试积压（overdue）。
 
 5. **Worker 排空**
    `inspect-workers.sh` 已覆盖：DRAINING 超时 → 运行 `heal-drain-timeout.sh`。

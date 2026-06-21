@@ -62,16 +62,16 @@ cd ~/Downloads/batch-console
 npm run build   # 产物在 ./dist，包含 sw.js (PWA Service Worker)
 ```
 
-### 2. 拷贝 dist 到独立目录 + 替换 PWA SW 为 kill-switch
+### 2. 拷贝 dist 到独立目录 + 替换 PWA SW 为 emergency switch
 
-**关键**：手机 Safari 如果之前访问过同一 cloudflared 子域名，可能注册了 PWA Service Worker。新部署时旧 SW 会**劫持页面 → 白屏**。用 kill-switch SW 让所有旧 SW 自杀 + 清缓存 + 强刷。
+**关键**：手机 Safari 如果之前访问过同一 cloudflared 子域名，可能注册了 PWA Service Worker。新部署时旧 SW 会**劫持页面 → 白屏**。用 emergency switch SW 让所有旧 SW 自杀 + 清缓存 + 强刷。
 
 ```bash
 rm -rf /tmp/fe-share
 cp -R ~/Downloads/batch-console/dist /tmp/fe-share
 
 cat > /tmp/fe-share/sw.js <<'JS'
-// kill-switch SW：安装即注销 + 清所有缓存 + 强刷所有 client
+// emergency switch SW：安装即注销 + 清所有缓存 + 强刷所有 client
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
@@ -141,7 +141,7 @@ grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /tmp/cf-tunnel.log | head -1
 
 复制 URL 在手机访问。
 
-## 手机端常见踩坑
+## 手机端常见遇到问题
 
 | 现象 | 原因 | 解决 |
 |---|---|---|
@@ -150,7 +150,7 @@ grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /tmp/cf-tunnel.log | head -1
 | **POST 时 501 "Unsupported method"** | 用 python http.server（不支持 POST + 无 /api 代理） | 必须用 nginx 见步骤 3 |
 | **登录 401 但 UI 显示** | console-api 没起 / 起在其它端口 | `lsof -nP -iTCP:18080 -sTCP:LISTEN`；起后端 `bash scripts/local/start-all.sh` |
 | **dev 模式白屏（生产 build 不会）** | Vite HMR wss 端口被隧道挡 | vite.config 加 `hmr: { clientPort: 443, protocol: 'wss' }`，重启 vite dev |
-| **首屏白 1-2 秒后正常** | kill-switch SW 在卸载旧 SW，下拉刷新一次即可 | 正常行为 |
+| **首屏白 1-2 秒后正常** | emergency switch SW 在卸载旧 SW，下拉刷新一次即可 | 正常行为 |
 
 ## 收尾（用完务必关）
 

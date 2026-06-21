@@ -5,7 +5,7 @@
 #   shard-1 = 本脚本拉起的 batch-postgres-biz-shard-1
 #
 # 因 compose network 为 external 且本仓多 worktree 共用同一运行栈(见记忆:worktree env 污染),
-# 这里用 docker run 把 shard-1 直接挂到运行中栈的网络上,避免 compose env/project 解析坑——
+# 这里用 docker run 把 shard-1 直接挂到运行中栈的网络上,避免 compose env/project 解析问题——
 # compose 里的 postgres-biz-shard-1 service 是「生产形态」声明,本脚本是「就地验证」路径。
 #
 # 凭据从 secrets/biz-shards/<key>.env 读(不在仓库 / 不在 placement 表),注入活体测试。

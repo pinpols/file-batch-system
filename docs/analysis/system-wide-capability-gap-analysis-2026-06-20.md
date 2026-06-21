@@ -73,17 +73,17 @@
 
 ## D. 编排状态机（batch-orchestrator）
 
-**运营能力很完整**:DAG(GATEWAY/JOB/TASK/WAIT/FILE_STEP + 补偿 6 类 handler)、资源调度(配额/优先级/分区限流/租户公平/令牌桶限流)、retry+dead-letter(退避+jitter+自动/手动 replay)、卡死检测(租约回收/心跳超时/workflow stuck reconciler)、依赖(跨日 ADR-018 + sensor)、批次日生命周期(OPEN/CUTOFF/SETTLE/CLOSE + replay)、部分失败(PARTIAL_FAILED + 分区重试 + checkpoint)、手动 cancel/terminate/retryPartition。
+**运营能力很完整**:DAG(GATEWAY/JOB/TASK/WAIT/FILE_STEP + 补偿 6 类 handler)、资源调度(配额/优先级/分区限流/租户公平/令牌桶限流)、retry+dead-letter(退避+jitter+自动/手动 replay)、长期停滞检测(租约回收/心跳超时/workflow stuck reconciler)、依赖(跨日 ADR-018 + sensor)、批次日生命周期(OPEN/CUTOFF/SETTLE/CLOSE + replay)、部分失败(PARTIAL_FAILED + 分区重试 + checkpoint)、手动 cancel/terminate/retryPartition。
 
 | 关注点 | 现状 | 备注 |
 |---|---|---|
-| DAG / 补偿 / 资源调度 / retry-DLQ / 卡死检测 / 跨日依赖 / 批次日 / 部分失败 | ✅ | 见上,生产级 |
+| DAG / 补偿 / 资源调度 / retry-DLQ / 长期停滞检测 / 跨日依赖 / 批次日 / 部分失败 | ✅ | 见上,生产级 |
 | **准入控制 / 过载 load-shedding** | 🟡 PARTIAL | 限流是**硬拒绝**,无软节流/排队/降级——结算洪峰下正常请求会被拒(已知控制面瓶颈) |
 | **实例 pause/resume** | 🟡 PARTIAL | 无 PAUSED 态,cancel 是破坏性的;无法"周五停、周一续" |
 | **审批作为 DAG 节点** | 🟡 PARTIAL | 审批是独立 approval_command,**不是** workflow 节点;无法管线中嵌入审批闸 |
 | **SLA 升级阶梯** | 🟡 PARTIAL | 只发单条告警事件,无 1h→2h→4h 分级升级 |
 | **批次日严格串行依赖** | 🟡 PARTIAL | 日 N+1 不等日 N 完成,设计文档自标"缺口";并行跑日有跨日污染风险 |
-| workflow 卡死判定 | 🟡 PARTIAL | 只按 `updated_at` 超时,无 DAG 活性检查(上游全终态但本节点没派发) |
+| workflow 长期停滞判定 | 🟡 PARTIAL | 只按 `updated_at` 超时,无 DAG 活性检查(上游全终态但本节点没派发) |
 
 **编排侧 Top 缺口**:① 准入/过载降级(PARTIAL,洪峰风险)② pause/resume 缺失 ③ 审批未进 DAG ④ SLA 单级告警 ⑤ 批次日串行未强制。
 
@@ -113,11 +113,11 @@
 | **双控(maker-checker)强制** | 🟡 PARTIAL | 审批是**单段** approve/reject,无第二复核人强制;高危操作(数据修正/补跑)缺双控——违结算双控原则 |
 | **人工数据修正 API(带护栏)** | ❌ **MISSING** | console 无受控数据修正端点,只能走 orchestrator internal 或裸改库(危险,且改不可溯到操作人) |
 | **告警升级阶梯** | ❌ MISSING | 只有路由,无 ack 超时→升级→呼叫 on-call 的阶梯 |
-| 卡死/积压可视 | 🟡 PARTIAL | 有 SLA compliance,缺"卡死 >N 小时""队列深度告警"统一端点 |
+| 长期停滞/积压可视 | 🟡 PARTIAL | 有 SLA compliance,缺"长期停滞 >N 小时""队列深度告警"统一端点 |
 | force-complete / 补跑再审批 | 🟡 PARTIAL | 有 cancel/terminate,无结算补跑的"强制置成功+再派发"闸 |
 | forensic 取证 | 🟡 PARTIAL | v0.1 同步 + 小 bizDate 范围,6 个月回溯不支持 |
 
-**控制面 Top 缺口**:① 双控强制(PARTIAL,结算合规)② 人工数据修正受控 API(MISSING)③ 告警升级阶梯(MISSING)④ 卡死/积压统一可视(PARTIAL)。
+**控制面 Top 缺口**:① 双控强制(PARTIAL,结算合规)② 人工数据修正受控 API(MISSING)③ 告警升级阶梯(MISSING)④ 长期停滞/积压统一可视(PARTIAL)。
 
 ## G. 共享运行时（batch-worker-core + batch-common）
 
@@ -137,11 +137,11 @@
 
 ## 全系统综合排序（A–G 汇总）
 
-> 把所有域的缺口放在一起看,**最大、最连贯、价值最高的一簇恰恰是「单 worker 看不到」的——对账完整性闭环**。这正印证了开头的自省:之前锁在 import 到达侧,错过了贯穿 import→process→export→dispatch 的闭环命门。
+> 把所有域的缺口放在一起看,**最大、最连贯、价值最高的一簇恰恰是「单 worker 看不到」的——对账完整性闭环**。这正印证了开头的自省:之前锁在 import 到达侧,错过了贯穿 import→process→export→dispatch 的闭环核心门槛。
 
-### 🔴 第一优先簇:对账完整性闭环(结算命门,跨多 worker)
+### 🔴 第一优先簇:对账完整性闭环(结算核心门槛,跨多 worker)
 
-| # | 缺口 | 域 | 为什么是命门 |
+| # | 缺口 | 域 | 为什么是核心门槛 |
 |---|---|---|---|
 | 1 | **入站头/尾控制记录校验**(trailer 笔数/金额 vs 实际) | A | 行业第一道对账闸,`trailer_template` 列已躺着没实现 |
 | 2 | **端到端控制总额连续性**(逐跳重核 count/amount) | B | process 静默丢 10% 仍 SUCCESS,无跨阶段对账 |
@@ -179,7 +179,7 @@
 
 ## 结论
 
-你的系统在**编排 / 依赖 / 复跑 / 幂等 / 资源调度 / 到达组装 / 投递机制 / 控制面观测**上是**生产级、偏强**。真正的系统级短板集中在**「对账完整性闭环」**——一个贯穿四个 worker、单 worker 视角看不到的命门;这也是为什么它要由"整体视角"才能发现,而不是逐个问 import worker 能问出来的。**下一步最高价值动作:为「控制总额贯穿闸(#1–#5)」立一个 ADR + 分阶段落地。**
+你的系统在**编排 / 依赖 / 复跑 / 幂等 / 资源调度 / 到达组装 / 投递机制 / 控制面观测**上是**生产级、偏强**。真正的系统级短板集中在**「对账完整性闭环」**——一个贯穿四个 worker、单 worker 视角看不到的核心门槛;这也是为什么它要由"整体视角"才能发现,而不是逐个问 import worker 能问出来的。**下一步最高价值动作:为「控制总额贯穿闸(#1–#5)」立一个 ADR + 分阶段落地。**
 
 ---
 

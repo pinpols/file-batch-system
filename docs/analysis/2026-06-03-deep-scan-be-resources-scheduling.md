@@ -10,7 +10,7 @@
 > `WaitingPartitionDispatchScheduler`/`BatchDayWaitingReleaseScheduler`/`HashedWheelTriggerScheduler` 5 个热路径文件,
 > `prometheus-batch-rules.yml`(37 条告警)。
 >
-> 评级:**P0** = 单实例上线即可能炸 / 多实例放大风险;**P1** = 高负载或边角窗口下抖动;**P2** = 治理 / 噪音。
+> 评级:**P0** = 单实例上线即可能失败 / 多实例放大风险;**P1** = 高负载或边角窗口下抖动;**P2** = 治理 / 噪音。
 
 ---
 
@@ -173,7 +173,7 @@ console-api 主从都 16,fail-open 三连击 quarantine 30s。`BATCH_CONSOLE_REP
   - 15s 级: PartitionLeaseReclaimScheduler、WorkerDrainTimeoutScheduler
   - 30s 级: SLA / file-governance ×3 / backlog metrics / DeadLetterAutoRetry / WorkerHeartbeatTimeout / SensorPollScheduler
   - 60s 级: BatchDay×4 / Cron / Timeout / Workflow / Trigger reconcile / FileGovernance archive / cleanup / Cross-day
-- 同一秒上井喷时所有 task 同时唤醒,16 线程不够并发跑,余下走 CallerRunsPolicy → **调度线程被业务任务占住,后续 @Scheduled trigger 延迟**。
+- 同一秒流量突增时所有 task 同时唤醒,16 线程不够并发跑,余下走 CallerRunsPolicy → **调度线程被业务任务占住,后续 @Scheduled trigger 延迟**。
 - **修复**:
   1. `taskScheduler.poolSize` 提升到 24(注释里写"~55 个 bean 共享",但 16 太紧)
   2. 把"重活 archive / metrics scan / file governance reconcile"明确迁到独立 `archiveTaskScheduler`(类似 outboxPoll 独立池的做法)
@@ -221,7 +221,7 @@ console-api 主从都 16,fail-open 三连击 quarantine 30s。`BATCH_CONSOLE_REP
 
 - `job_task.heartbeat_details` JSONB,Worker SDK `progressSnapshot()` 返回 Map → orchestrator 反序列化。
 - **未发现 size cap**(grep `heartbeat_details` 上未见 max 限制)。
-- worker 误传 10MB JSON 可能在 PG / orchestrator 反序列化都炸 (`MapJsonbTypeHandler`)。
+- worker 误传 10MB JSON 可能在 PG / orchestrator 反序列化都失败 (`MapJsonbTypeHandler`)。
 - **修复(P2-8)**: orchestrator REPORT controller 加 request body size cap(spring multipart cap 50MB 太大,REPORT 应 ≤ 1MB),写库前再做 `details.length() < 256KB` 守护。
 - 同样 `workflow_node_run.output` JSONB 缺 size cap → 大输出会拖垮下游 DSL 引用解析。
 
@@ -355,7 +355,7 @@ console-api 主从都 16,fail-open 三连击 quarantine 30s。`BATCH_CONSOLE_REP
 `OutboxPollScheduler`(已读)亮点:
 - 自适应轮询: 有积压 200ms 立即续,无积压 backoff 1.5x 退到 5s 上限
 - ShedLock 分片: shardTotal>1 时各 shard 独立锁,允许多副本并行不同 shard
-- stale PUBLISHING 重置: 每轮开头把超 120s 仍 PUBLISHING 的事件拨回 FAILED(防 Kafka 卡死永久卡 outbox)
+- stale PUBLISHING 重置: 每轮开头把超 120s 仍 PUBLISHING 的事件拨回 FAILED(防 Kafka 长期停滞永久卡 outbox)
 - 熔断联动: `OutboxPublishCircuitBreaker` 失败 3 轮 cooldown 60s
 - 优雅下线 / draining 前置短路
 

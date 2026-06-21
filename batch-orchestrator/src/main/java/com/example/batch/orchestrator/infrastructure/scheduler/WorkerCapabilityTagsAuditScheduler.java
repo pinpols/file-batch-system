@@ -122,7 +122,7 @@ public class WorkerCapabilityTagsAuditScheduler {
 
   /**
    * 严格校验"字符串数组"约定。必须用 {@link JsonNode} 而非 {@code String[].class}——Jackson 默认会把数值 元素静默强转成字符串（{@code
-   * [1,2]} 不会报错），这恰恰就是要审计的"脏数据"。
+   * [1,2]} 不会报错），这恰恰就是要审计的"异常数据"。
    */
   private boolean looksValidStringArray(String raw) {
     if (raw == null || raw.isBlank()) {

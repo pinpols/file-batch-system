@@ -143,7 +143,7 @@ CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNN
 让 `workflow_run` 持有 bizDate 集合，依赖图变成 `(jobCode, bizDate)` 二维节点。
 
 **拒绝原因**：
-1. workflow_run 状态机要从 1 维（节点拓扑）扩到 2 维（节点 × bizDate），状态空间爆炸；
+1. workflow_run 状态机要从 1 维（节点拓扑）扩到 2 维（节点 × bizDate），状态空间爆失败；
 2. 现有 workflow_node_run / partition / task 全部需要双键改造，回归面巨大；
 3. 跨 workflow 的同一 bizDate 仍然要靠 result_version 解耦，最终还是要走 ADR-017 — gather 模型只是把 result_version 的复杂度搬到 workflow_run 里去；
 4. 实现成本 ~30+ 人天，远超 pipe 模型，且**多数业务场景仍可用 pipe 表达**（聚合靠 OPTIONAL + range，调账靠 REQUIRED + offset）。

@@ -155,7 +155,7 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
       //   (b) 抛 DataAccessResourceFailureException（in-flight 连接被 pause 截断，I/O error）
       // 任一发生 → failover 计数器都会 +1（ReadReplicaRoutingDataSource catch 后递增）。
       tolerantReadOnlyAttempt("replica 暂停 → 第 1 次 readOnly");
-      tolerantReadOnlyAttempt("replica 暂停 → 第 2 次 readOnly（被 quarantine 静默吞掉）");
+      tolerantReadOnlyAttempt("replica 暂停 → 第 2 次 readOnly（被 quarantine 静默捕获并抑制）");
       // 第 1 次失败后 quarantine 立即生效，第 2 次不再调 replica → counter 只 +1。
       // 关键证据是「fail-open 触发过 ≥ 1 次」+ 期满后能自动恢复（下方第 4 步断言）。
       assertThat(currentFailoverCount() - failoverBefore)

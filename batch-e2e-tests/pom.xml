@@ -181,7 +181,7 @@
                     -->
                     <!--
                       e2e 单 IT ~5min,根 pom 的 rerunFailingTestsCount=2 在此会让一个 flaky
-                      多耗 10min,撑爆 shard 25min timeout。e2e 不重跑,失败直接看报告根因。
+                      多耗 10min,超过 shard 25min timeout。e2e 不重跑,失败直接看报告根因。
                     -->
                     <rerunFailingTestsCount>0</rerunFailingTestsCount>
                 </configuration>

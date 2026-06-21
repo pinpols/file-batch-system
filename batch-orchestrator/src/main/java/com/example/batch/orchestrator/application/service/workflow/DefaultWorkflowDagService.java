@@ -164,7 +164,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     WorkflowNodeEntity currentNode =
         workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(workflowDefinitionId, nodeCode);
     // A-3.4: currentNode 为 null 说明节点被中途删除，若贸然继续会在 resolveJoinRule
-    // 上 NPE；保守返回 false 避免幽灵节点被派发。
+    // 上 NPE；保守返回 false 避免残留节点被派发。
     if (currentNode == null) {
       log.warn(
           "workflow node definition missing during dispatch readiness check:"

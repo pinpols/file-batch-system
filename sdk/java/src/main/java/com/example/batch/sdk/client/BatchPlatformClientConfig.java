@@ -98,7 +98,7 @@ public class BatchPlatformClientConfig {
    * R3-4:启动期时序 4 规则(hb>=1s / lease>=5s / lease<=hb*3 / http<=hb/2)的严格度开关。
    *
    * <ul>
-   *   <li>{@code true}(默认,保持原行为)— 任一违反 → 抛 {@link IllegalStateException} fail-fast,进程挂掉 让 K8s /
+   *   <li>{@code true}(默认,保持原行为)— 任一违反 → 抛 {@link IllegalStateException} fail-fast,进程异常退出 让 K8s /
    *       systemd 拉起 + 运维介入。生产环境推荐
    *   <li>{@code false} — 违反时 {@code log.warn(...)} 但不抛,client 仍可 build。 适用于运维降级窗口
    *       (例如已知配置稍偏但短期内可接受、避免 K8s 重启循环);<b>临时口子,不建议长期开启</b>
@@ -215,7 +215,7 @@ public class BatchPlatformClientConfig {
 
   /**
    * Lane I:启动期 cross-field 时序校验。任何一条不满足 → 抛 {@link IllegalStateException} fail-fast, 让进程以非 0
-   * 退出码挂掉,由 K8s / systemd 拉起 + 运维介入。
+   * 退出码异常退出,由 K8s / systemd 拉起 + 运维介入。
    *
    * <p>规则(均为务实经验值,运维问题里高频出现的):
    *
@@ -274,7 +274,7 @@ public class BatchPlatformClientConfig {
    * R3-4(Round-2 P0 #4):按 {@link #strictTimingValidation} 决定抛异常 fail-fast 还是 WARN 降级。
    *
    * <ul>
-   *   <li>{@code strictTimingValidation=true}(默认) → 抛 {@link IllegalStateException},进程挂掉
+   *   <li>{@code strictTimingValidation=true}(默认) → 抛 {@link IllegalStateException},进程异常退出
    *   <li>{@code strictTimingValidation=false} → {@code log.warn(...)},client 仍可 build, 供运维降级窗口避免
    *       K8s 重启循环
    * </ul>

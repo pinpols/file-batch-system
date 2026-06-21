@@ -142,7 +142,7 @@ public class JobSlaScheduler {
   /**
    * 升级再触发：首次告警后 instance 仍非终态、sla_alerted_at 早于 {@code now - escalationDelay} 的实例 → 以 ERROR 级再发一条
    * {@code JOB_SLA_VIOLATION_ESCALATED}。alert_event 表按 fingerprint 去重（{@code tenant + alertType +
-   * resourceKey}），重复扫描会 merge 到同一行而非刷屏；本地不写 execution log，避免日志爆炸。
+   * resourceKey}），重复扫描会 merge 到同一行而非刷屏；本地不写 execution log，避免日志爆失败。
    */
   private void scanEscalations(Instant now) {
     long delaySeconds = governance.sla().getEscalationDelaySeconds();

@@ -12,7 +12,7 @@
 
 > 我们的 SDK **架构形态**接近 Conductor,**协议契约严格度**接近 Temporal 但弱很多,**租户隔离**强过两者,**长任务可控性**远不如 Temporal。
 >
-> 真正企业级落地之前,最该补的是 **heartbeat-with-details + cancel push + testkit** 这三件 —— 没这三件,租户跑大批量任务会反复踩坑,且没法在本地复现。
+> 真正企业级落地之前,最该补的是 **heartbeat-with-details + cancel push + testkit** 这三件 —— 没这三件,租户跑大批量任务会反复遇到问题,且没法在本地复现。
 
 ---
 
@@ -84,7 +84,7 @@ Optional<MyCheckpoint> last = Activity.getExecutionContext().getHeartbeatDetails
 
 **我们现在**:heartbeat 只传 workerCode/status/currentLoad,**没任何业务 payload**。retry = 从零开始,这是大批量任务的硬伤。
 
-**建议**:把前面讨论的 `/tasks/{t}/progress` + `/tasks/{t}/checkpoint` 合并成 **"task heartbeat with details"**,跟 lease renewal 同 endpoint。一次调用搞定 lease 续约 + 进度 + checkpoint + 取消感知。
+**建议**:把前面讨论的 `/tasks/{t}/progress` + `/tasks/{t}/checkpoint` 合并成 **"task heartbeat with details"**,跟 lease renewal 同 endpoint。一次调用完成 lease 续约 + 进度 + checkpoint + 取消感知。
 
 ### 4.2 🔴 P0:多种 timeout 语义(只有 lease TTL 不够)
 
@@ -97,7 +97,7 @@ Temporal 4 种 timeout 解决不同问题:
 | `scheduleToClose` | 总耗时(含 retry) | ❌ 没有 |
 | `heartbeat` | 多久没心跳算挂 | ✅ lease TTL ≈ 这个 |
 
-**真实问题**:租户任务卡死跑了 6 小时(每分钟正常 heartbeat),平台**看不出来这是异常**。Temporal 的 `startToClose` 直接 timeout 杀掉。
+**真实问题**:租户任务长期停滞跑了 6 小时(每分钟正常 heartbeat),平台**看不出来这是异常**。Temporal 的 `startToClose` 直接 timeout 杀掉。
 
 **建议**:`workflow_node` 上加 `taskTimeout` 字段,平台超时强制 cancel(发 cancel signal 给 SDK)。
 
@@ -132,7 +132,7 @@ public ImportResult handle(ImportRequest req, TaskContext ctx) { ... }
 // 我们
 SdkTaskResult execute(SdkTaskContext ctx) {
     Object x = ctx.parameters().get("filePath");  // ← String? Long? 谁知道
-    String fp = (String) x;                       // ← 强转,运行时炸
+    String fp = (String) x;                       // ← 强转,运行时失败
 }
 ```
 
@@ -146,7 +146,7 @@ Temporal 给租户的:`TestWorkflowEnvironment` 内嵌完整 server,租户写测
 Zeebe:`ZeebeProcessTest` 同上。
 我们:JDK HttpServer stub —— **只能测 SDK 自己**,租户业务集成 SDK 后没法测"端到端 dispatch → execute → report"。
 
-**结果**:租户接入 SDK 第一周必踩"上线后才发现协议错位"的坑。
+**结果**:租户接入 SDK 第一周必踩"上线后才发现协议错位"的问题。
 
 **建议**:发布 `batch-worker-sdk-testkit` 子模块,提供:
 - `FakeBatchPlatform`(实现完整 `/internal/*` + 内嵌 KafkaServer / EmbeddedKafka)

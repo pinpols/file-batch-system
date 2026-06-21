@@ -149,7 +149,7 @@ class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest
    * <ul>
    *   <li>fire 流程跑完(last_fire_status 非 null)
    *   <li>没有第二行 trigger_request(还是 1 行 — preempt 写的那一行)
-   *   <li>next_fire_time 仍被推进(防卡死)
+   *   <li>next_fire_time 仍被推进(防长期停滞)
    * </ul>
    */
   @Test

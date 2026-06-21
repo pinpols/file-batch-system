@@ -41,7 +41,7 @@ public interface SdkTaskHandler {
 
 1. **无断点**:任务跑到一半进程崩 / lease 被回收 / 被取消,重派后**整个 task 从头重跑**,已处理的数据要么重复、要么靠业务自己去重,代价高且易错。
 2. **提交与进度不一致**:业务数据 commit、进度上报、"我跑到哪了"这三件事各写各的,崩在中间会出现"业务提交了但进度没更新"或反之,重跑判断失真。
-3. **取消不安全**:`cancel` 只能让 handler 自己感知(ADR Phase 4 的 `CancellationSignal`),但没有约定"停在哪个安全点",容易停在半个批次中间留下脏数据。
+3. **取消不安全**:`cancel` 只能让 handler 自己感知(ADR Phase 4 的 `CancellationSignal`),但没有约定"停在哪个安全点",容易停在半个批次中间留下异常数据。
 
 此外,ADR-036 五模板里没有"**可分片**"形状 —— 一个大文件 / 大结果集只能单线程顺序跑,无法在 worker 内并行,也无法分片各自续跑。
 
@@ -119,7 +119,7 @@ ctx.commit(breakPosition):
    if (ctx.isCancelled()) throw new SdkTaskStoppedException(breakPosition);
 ```
 
-约定:**业务代码不得吞掉 `SdkTaskStoppedException`**(吞了就停不下来);模板的 `final execute` 统一捕获并落 cancelled 终态。取消总是停在两个批次之间的边界,不会留半个批次的脏数据。
+约定:**业务代码不得捕获并抑制 `SdkTaskStoppedException`**(吞了就停不下来);模板的 `final execute` 统一捕获并落 cancelled 终态。取消总是停在两个批次之间的边界,不会留半个批次的异常数据。
 
 ### 决策四:可分片流式模板 `SdkAbstractParallelStreamHandler`
 
@@ -179,6 +179,6 @@ SdkAbstractTaskHandler                           ← 共同基类:template 序 +
 
 **收益**:长跑任务可断点续跑(崩溃 / 重派不重复、不丢)、提交与进度强一致、取消停在安全点、大数据量可在 worker 内分片并行流式。
 
-**成本**:断点持久化的正确性(同事务)落在租户实现上,需要文档 + review 把关;`commit` 语义比"一把梭 execute"复杂,Atomic 类任务不必引入。
+**成本**:断点持久化的正确性(同事务)落在租户实现上,需要文档 + review 把关;`commit` 语义比"一次性执行 execute"复杂,Atomic 类任务不必引入。
 
 **不破坏**:协议层 `SdkTaskHandler` 不动;现有五模板不强制改;平台编排边界(ADR-035 §7)不变。

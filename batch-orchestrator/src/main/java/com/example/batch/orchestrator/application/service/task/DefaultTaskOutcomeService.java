@@ -690,7 +690,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                   ctx.task().getTaskPayload(),
                   ctx.jobInstance().getTraceId());
       // P2-6：只在真正派发产生分区时把下游加入 activeNodes；否则 workflow_run.current_node_code 会写入
-      // 幽灵节点（dispatchNode 因 readiness/已激活/cross-day 等返回 0 但 isActiveNode 偶尔仍命中并发线程
+      // 残留节点（dispatchNode 因 readiness/已激活/cross-day 等返回 0 但 isActiveNode 偶尔仍命中并发线程
       // 刚插入的 RUNNING 行），导致 workflow 永远到不了终态。
       if (dispatched > 0 && isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
         ctx.activeNodes().add(nextNode.nodeCode());
@@ -796,7 +796,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       return null;
     } catch (RuntimeException unexpected) {
       // R2-P2-6 子项:宽 catch + warn 把代码缺陷(NPE/ClassCastException 等 map navigation 错误)
-      // 掩盖成"数据问题",return null 后父 workflow node 永远等不到完成信号 → 卡死。
+      // 掩盖成"数据问题",return null 后父 workflow node 永远等不到完成信号 → 长期停滞。
       // 升级到 ERROR + 完整 stack,**并抛出**让上游事务回滚 / 调度重试,而非让父任务永久挂起。
       log.error(
           "extractParentVirtualTaskId failed unexpectedly (likely code defect, not bad data):"

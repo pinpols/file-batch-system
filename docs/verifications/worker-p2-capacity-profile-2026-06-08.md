@@ -143,11 +143,11 @@ Index Scan using idx_trigger_outbox_event_pending_order on trigger_outbox_event
 
 稳定窗口本身通过：没有新增卡住实例，没有新增 CREATED/NO_TASK，Kafka backlog 后的主链路保持终态收敛。
 
-但这不是“干净环境全绿”，本轮稳定性检查同时暴露了几类历史残留风险：
+但这不是“干净环境全部通过”，本轮稳定性检查同时暴露了几类历史残留风险：
 
 1. `worker-process` 重启后消费到旧 Kafka dispatch 消息，曾把历史 PG 断链场景的 task `21946` 重新处理为 SUCCESS，但对应 instance `30319` 仍是 FAILED。这说明 terminal instance/task 的重复消费保护仍要加强：worker 执行前应拒绝 terminal instance 下的旧消息，或 orchestrator claim/report 侧做更硬的幂等保护。
 2. `orchestrator.log` 仍每分钟出现旧 file_record 无 checksum 数据触发的 `uk_file_record_no_checksum` DuplicateKey WARN。该问题会污染稳定性日志，应补历史数据 cleanup 或让调度器对重复记录做幂等跳过。
-3. `worker-import.log` 仍有历史 import 配置脏数据触发的反序列化 WARN；`worker-atomic.log` 仍有历史 atomic timeout 任务反复失败重试。后续压测前需要清理旧 task/request 或隔离测试 RUN_ID，避免把历史毒消息误判为本轮失败。
+3. `worker-import.log` 仍有历史 import 配置异常数据触发的反序列化 WARN；`worker-atomic.log` 仍有历史 atomic timeout 任务反复失败重试。后续压测前需要清理旧 task/request 或隔离测试 RUN_ID，避免把历史毒消息误判为本轮失败。
 4. 本地 `restart.sh` 启动 trigger/process 在 Codex exec 生命周期下未能持久驻留，已改用 `screen` 后台方式补齐本轮稳定性检查；这是本地运行方式问题，不计入业务链路结论。
 
 ## 剩余风险

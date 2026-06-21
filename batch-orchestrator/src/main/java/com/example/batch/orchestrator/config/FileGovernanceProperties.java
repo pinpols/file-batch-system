@@ -46,9 +46,9 @@ public class FileGovernanceProperties {
     private long processingDelayThresholdSeconds = 900L;
 
     /**
-     * 处理延迟"zombie"上限阈值（秒）。超过该值的 stale pipeline 视为 zombie（卡死/进程崩溃后未恢复/测试数据 残留），从延迟告警查询中排除,避免每 30s 反复
-     * WARN 同一条早就 dead 的 pipeline 持续刷屏。zombie 应由独立的 dead-letter / sweep job 处理(置为 FAILED 终态)。默认 7 天
-     * = 604800 秒。
+     * 处理延迟"zombie"上限阈值（秒）。超过该值的 stale pipeline 视为 zombie（长期停滞/进程崩溃后未恢复/测试数据 残留），从延迟告警查询中排除,避免每 30s
+     * 反复 WARN 同一条早就 dead 的 pipeline 持续刷屏。zombie 应由独立的 dead-letter / sweep job 处理(置为 FAILED 终态)。默认 7
+     * 天 = 604800 秒。
      */
     private long processingDelayMaxAgeSeconds = 604800L;
 
@@ -58,7 +58,7 @@ public class FileGovernanceProperties {
      */
     private long staleRunningFailSeconds = 43200L;
 
-    /** 单次 stale sweep 最多处理多少条，避免一次更新过多历史脏数据。 */
+    /** 单次 stale sweep 最多处理多少条，避免一次更新过多历史异常数据。 */
     private int staleSweepBatchSize = 100;
 
     /** 单次扫描采样数，平衡精度与开销。 */

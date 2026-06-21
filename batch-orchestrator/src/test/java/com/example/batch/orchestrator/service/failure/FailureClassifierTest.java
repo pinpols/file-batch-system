@@ -69,7 +69,7 @@ class FailureClassifierTest {
 
   @Test
   void shouldClassifyDataIntegrityViolationAsDataQuality_notInfrastructure() {
-    // 脏数据(唯一键 / FK / not-null 违反)→ DATA_QUALITY(不可重试),
+    // 异常数据(唯一键 / FK / not-null 违反)→ DATA_QUALITY(不可重试),
     // 不能被泛 DataAccessException catch-all 误判为 INFRASTRUCTURE 而无限重试。
     assertThat(classifier.classify(null, new DataIntegrityViolationException("duplicate key")))
         .isEqualTo(FailureClass.DATA_QUALITY);

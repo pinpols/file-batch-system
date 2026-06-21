@@ -70,7 +70,7 @@
 | `PlatformHttpExceptionTest` | 异常按 status 分类:401/403=Auth / 409=Conflict / 5xx=Server / 4xx=Client / IOException 子类 | — | 🔴 缺失 | Python `exceptions.py` 实现了 4 类异常分类 + `parse_error_body`,但 **没有对此模块的独立单测**(只在 `test_retry.py` / `test_http_client.py` 端到端见到)。**本 PR 补 `tests/test_exceptions.py`**。 |
 | `ThrottledLoggerTest` | 节流日志(同 key 滑窗去重) | — | ⚪ N/A | Python 无 ThrottledLogger 模块,沿用 stdlib `logging`。 |
 | `SdkRetryableHandlerTest` | `@RetryOn` 注解 / 业务 fail.error 匹配重试 / 模板模式 | — | ⚪ N/A | Python 设计上**用** `batch_worker_sdk.retry.with_retry` **显式装饰**,无注解 AOP;`tests/test_retry.py` 已覆盖通用重试语义。 |
-| `HeartbeatSchedulerDynamicIntervalTest` | hint 重排 / clamp / null 不重排 / 幂等 / heartbeat 异常吞掉 | `tests/test_heartbeat_scheduler.py` + `tests/scheduler/test_heartbeat_hint_clamp.py` | ✅ | |
+| `HeartbeatSchedulerDynamicIntervalTest` | hint 重排 / clamp / null 不重排 / 幂等 / heartbeat 异常捕获并抑制 | `tests/test_heartbeat_scheduler.py` + `tests/scheduler/test_heartbeat_hint_clamp.py` | ✅ | |
 | `HeartbeatSchedulerTest` | tick 调用 heartbeat / fixedDelay / close 幂等 / 失败不挂 | `tests/test_heartbeat_scheduler.py` | ✅ | |
 | `LeaseRenewalSchedulerFixedDelayTest` | 必须 fixedDelay 不 fixedRate | — | ⚪ N/A | Python 走 `asyncio.sleep + while not stop` loop,无 JDK ScheduledExecutorService 的 rate vs delay 之分;`tests/test_lease_renewal_scheduler.py::test_start_and_stop_run_cleanly` 已覆盖语义。 |
 | `LeaseRenewalSchedulerTest` | renew 全 in-flight / 单失败不阻塞 / 404 / 410 / cancelRequested | `tests/test_lease_renewal_scheduler.py` | ✅ | |

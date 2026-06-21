@@ -59,7 +59,7 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
     WorkerRouteModel workerRouteModel = resolveWorkerRoute(context, definition, stepDefinition);
     Optional<Step> step = stepRegistry.find(stepDefinition.getStepCode());
     if (step.isEmpty()) {
-      // 静默吞掉会让"步骤执行成功但结果全空"难以排查;补告警日志暴露配置错误
+      // 静默捕获并抑制会让"步骤执行成功但结果全空"难以排查;补告警日志暴露配置错误
       log.warn(
           "stepCode={} not found in registry: tenantId={}, jobCode={}",
           stepDefinition.getStepCode(),

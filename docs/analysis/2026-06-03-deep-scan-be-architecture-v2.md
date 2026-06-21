@@ -99,7 +99,7 @@
 
 - **根因**:console-api 沉淀时按"我界面需要的字段"裁剪;orchestrator 按"我状态机需要的字段"全量。无 ArchTest 强制"同表同一行类型"。
 - **实际后果**:
-  - `JobInstanceEntity` 漂移最危险 — console 侧若调写路径(目前 mapper XML 0 INSERT,无写,仅查),回填到 DTO 时 15 字段直接丢失;一旦后续给 console 加 admin 写权限就直接踩坑。
+  - `JobInstanceEntity` 漂移最危险 — console 侧若调写路径(目前 mapper XML 0 INSERT,无写,仅查),回填到 DTO 时 15 字段直接丢失;一旦后续给 console 加 admin 写权限就直接遇到问题。
   - `WorkflowDefinitionEntity` console 多的 `description` 在 orch 写时被 UPDATE 语句覆盖为 null(P0-A 后果)。
 - **建议**:① 立 ArchTest:同名 entity 在两个以上模块 → 必须在 batch-common 单一定义,各模块用同一份;② 若必须模块隔离 — 命名加前缀(`OrchestratorWorkflowDefinitionEntity` / `ConsoleWorkflowDefinitionRow`)+ 注释强制双向 diff guard;③ 13 个 entity 全表必须出 audit:写路径决议表 + 字段镜像决议表。
 

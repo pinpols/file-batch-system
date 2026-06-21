@@ -87,7 +87,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         .expectBody(String.class)
         .value(body -> assertThat(body).contains("VALIDATION_ERROR"));
 
-    // 守护:脏 jobCode 不能入库
+    // 守护:非法 jobCode 不能入库
     Long cnt =
         jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM batch.job_definition WHERE job_code = ?", Long.class, "q q q");

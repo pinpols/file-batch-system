@@ -57,7 +57,7 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 @SuppressWarnings("PMD.ExcessiveParameterList")
 public class DefaultDryRunPlanService implements DryRunPlanService {
 
-  /** L3 endpoint reachability HEAD timeout — 短超时避免 dry-run 卡死。 */
+  /** L3 endpoint reachability HEAD timeout — 短超时避免 dry-run 长期停滞。 */
   private static final Duration HTTP_PROBE_TIMEOUT = Duration.ofSeconds(5);
 
   private static final String SCOPE_JOB = "job";

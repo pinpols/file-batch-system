@@ -77,7 +77,7 @@ SPRING_PROFILES_ACTIVE=local
 
 ### C. 📋 tenant_id 加列迁移 — 你做 Flyway,以下是 spec + 配套 Java
 
-**先厘清:这不是"裸奔无隔离"的正确性 bug。** 三张表是**经父表 FK 间接租户隔离**的子表,CLAUDE.md "所有业务表必带 tenant_id" 的绝对表述,这三张很可能正是隐含的"经父表 scope"例外:
+**先厘清:这不是"缺少鉴权保护无隔离"的正确性 bug。** 三张表是**经父表 FK 间接租户隔离**的子表,CLAUDE.md "所有业务表必带 tenant_id" 的绝对表述,这三张很可能正是隐含的"经父表 scope"例外:
 
 | 子表(无 tenant_id) | 建表 | 父表(有 tenant_id) | 关联列 |
 |---|---|---|---|

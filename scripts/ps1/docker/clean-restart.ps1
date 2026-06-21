@@ -9,7 +9,7 @@
     2) docker compose build --no-cache   清缓存全量重建应用镜像
     3) docker compose up -d --wait        重新拉起依赖 + 应用并等待健康
 
-  适用：构建缓存疑似脏、删改类/资源残留、需要全新空库、怀疑"幽灵 bug"。
+  适用：构建缓存疑似脏、删改类/资源残留、需要全新空库、怀疑"缓存或残留状态问题"。
 
   ⚠️ 危险：步骤 1 的 down -v 会删除 Postgres / MinIO / Kafka / Redis 等数据卷，
      所有持久化数据丢失，不可恢复。默认需输入 yes 二次确认。

@@ -63,7 +63,7 @@ batch.storage.s3:
   auto-create-bucket: false
 ```
 
-## 常见坑
+## 常见问题
 
 1. **region 必填**:AWS/OSS/COS 缺 region 会 SigV4 签名失败(`SignatureDoesNotMatch` / `AuthorizationHeaderMalformed`)。
 2. **建桶权限**:托管云务必 `auto-create-bucket: false` + bucket 预建,否则启动期撞 `AccessDenied`。

@@ -69,7 +69,7 @@ public class ActiveTaskLeaseRegistry {
    * <p>典型用法：{@code WorkerTaskLeaseRenewer} 注册回调以清理 {@code consecutiveFailures}，
    * 防止任务自然完成后的失败计数器永驻进程。
    *
-   * <p>listener 应保持轻量且不抛异常；异常会被吞掉并记 warn，避免破坏其它订阅者的回调链。
+   * <p>listener 应保持轻量且不抛异常；异常会被捕获并抑制并记 warn，避免破坏其它订阅者的回调链。
    */
   public void registerRemovalListener(Consumer<String> listener) {
     if (listener != null) {

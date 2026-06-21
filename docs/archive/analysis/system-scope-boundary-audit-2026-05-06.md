@@ -128,7 +128,7 @@ ADR-021 / Worker SqlTransform 边界:
 
 | 项 | 处理 |
 |---|---|
-| **路径收敛** | 把通用 `/chat` 拆成具体能力 endpoint：`/api/console/ai/explain-failure`（解释某 job_instance 为什么挂了）/ `/api/console/ai/recommend-cron`（给个 cron 建议）。每个 endpoint 各自的 system prompt / scope 单独审 |
+| **路径收敛** | 把通用 `/chat` 拆成具体能力 endpoint：`/api/console/ai/explain-failure`（解释某 job_instance 为什么异常退出）/ `/api/console/ai/recommend-cron`（给个 cron 建议）。每个 endpoint 各自的 system prompt / scope 单独审 |
 | **写入 ADR** | 起个 ADR-028 或单独章节："AI 是辅助分析，不是 ops agent；永远不直接调任何写接口；任何"建议"都要 ops 通过 console 显式执行才生效" |
 | **forensic 联动** | ai_audit_log 中"ops 是否照执行"的关联 trace 要写到 ADR-022 forensic export bundle 范围 |
 

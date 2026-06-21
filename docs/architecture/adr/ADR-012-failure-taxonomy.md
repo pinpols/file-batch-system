@@ -18,13 +18,13 @@
 
 ## 背景
 
-当前 `job_instance` 的失败终态只有一个 `FAILED`，错误信息散落在 `error_key / error_args / error_message` 三个字符串列。失败响应一刀切：retry policy 由 `job_definition.retry_policy ∈ {NONE, FIXED, EXPONENTIAL}` 全局决定，不区分根因。
+当前 `job_instance` 的失败终态只有一个 `FAILED`，错误信息散落在 `error_key / error_args / error_message` 三个字符串列。失败响应按统一策略处理：retry policy 由 `job_definition.retry_policy ∈ {NONE, FIXED, EXPONENTIAL}` 全局决定，不区分根因。
 
 真实场景四类失败响应完全不同：
 
 | 失败类 | 真因 | 正确响应 |
 |---|---|---|
-| **INFRASTRUCTURE** | DB 挂了 / Kafka 抖动 / Worker 网络 | SRE 自动重试，业务方零感知 |
+| **INFRASTRUCTURE** | DB 异常退出 / Kafka 抖动 / Worker 网络 | SRE 自动重试，业务方零感知 |
 | **DATA_QUALITY** | 行级校验失败 / 上游数据缺字段 | 业务方介入修数，不要重试 |
 | **BUSINESS_RULE** | 余额不足 / 审批拒绝 / 配额超限 | 跳到下一笔，不算 job 级失败 |
 | **CONFIG** | cron 错 / SQL 写错 / 资源不存在 | ops 修配置后人工 RERUN |
@@ -154,7 +154,7 @@ NULL = 用 §响应派发 默认表。
 | 1 | TIMEOUT 二次分类怎么做 | 不在 v1 实现自动二次分类。timeout 默认 UNKNOWN + 触发 ops review；后续可加 `TimeoutContextHint` 在 worker 侧上报"timeout 期间最后一次操作类型"用于二次分类 |
 | 2 | 是否暴露 `errorClassHint` 给 console 用户手填 | **不做**。class 由代码 / 异常 / classifier 决定，用户填会污染审计；ops 真要重新分类走"reclassify approval"独立 API（v2） |
 | 3 | 跨 ADR 一致性 | ADR-021 的 DQ check 失败必须返 DATA_QUALITY；ADR-018 跨日依赖等待映射到 UPSTREAM_DELAY 而非 FAILED |
-| 4 | metric 基数 | failure_class 7 枚举 × tenant × jobCode 基数可控；不加 errorKey 维度（基数爆炸） |
+| 4 | metric 基数 | failure_class 7 枚举 × tenant × jobCode 基数可控；不加 errorKey 维度（基数爆失败） |
 
 ### 不会做
 

@@ -1,7 +1,7 @@
 # Spike: ADR-038 P3 Export GENERATE 文件恢复方案对比
 
 - **Status**: ✅ **已落地（2026-06-05）** —— 采用**单文件 + 字节位点截断**方案（详见下方「落地说明」），非本 spike 原推荐的 Option A（chunk 分片 + STORE 拼接）。
-- **落地说明**: 本 spike 原推荐 Option A（每页写 `chunk-N` 文件、STORE 阶段按格式拼接）。落地时改走更轻的**单文件法**:GENERATE 仍写单文件,每页 `flush + FileDescriptor.sync()` 后把 `<byteOffset>@<typed-cursor>` 记进位点;续跑时 `FileChannel.truncate(byteOffset)` 砍掉崩溃残尾 + 从 cursor 续写;STORE **完全不改**。两者崩溃安全性等价(都靠 fsync 边界 durability + 续跑前先 truncate,不会重复/丢行),但单文件法省掉了整套 concat 机器与 4 套 per-format 拼接逻辑(数据完整性风险点大减),且与 `WorkerCheckpointProperties` javadoc 既有的「Export 续 cursor」描述一致。Excel 不可 append/truncate → 全量重跑兜底(同 Option C);cursor 类型不可序列化(如 UUID)→ 降级全量跑 + WARN。实现见 `batch-worker-export` 的 `GenerateCheckpoint` / `GenerateCursorCodec` / `ResumableExportFile` + `GenerateStep`;运维见 [runbook](../runbook/platform-worker-checkpoint-howto.md) §Export GENERATE 续跑。
+- **落地说明**: 本 spike 原推荐 Option A（每页写 `chunk-N` 文件、STORE 阶段按格式拼接）。落地时改走更轻的**单文件法**:GENERATE 仍写单文件,每页 `flush + FileDescriptor.sync()` 后把 `<byteOffset>@<typed-cursor>` 记进位点;续跑时 `FileChannel.truncate(byteOffset)` 排除崩溃残尾 + 从 cursor 续写;STORE **完全不改**。两者崩溃安全性等价(都靠 fsync 边界 durability + 续跑前先 truncate,不会重复/丢行),但单文件法省掉了整套 concat 机器与 4 套 per-format 拼接逻辑(数据完整性风险点大减),且与 `WorkerCheckpointProperties` javadoc 既有的「Export 续 cursor」描述一致。Excel 不可 append/truncate → 全量重跑兜底(同 Option C);cursor 类型不可序列化(如 UUID)→ 降级全量跑 + WARN。实现见 `batch-worker-export` 的 `GenerateCheckpoint` / `GenerateCursorCodec` / `ResumableExportFile` + `GenerateStep`;运维见 [runbook](../runbook/platform-worker-checkpoint-howto.md) §Export GENERATE 续跑。
 - **原 Status**: Spike（方案对比 + 推荐落地草案，纯文档不动代码）
 - **Related**: [ADR-038 Platform Worker Checkpoint & Resume](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)
 - **Runbook**: [platform-worker-checkpoint-howto](../runbook/platform-worker-checkpoint-howto.md)
@@ -27,7 +27,7 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 - Delimited / FixedWidth：可能停在某一行中段，最后一行 truncate；
 - Excel：单 workbook 二进制结构，崩溃前未 `workbook.write()` 整个文件作废。
 
-**单靠"位点回到 cursor-XYZ 续写"无法恢复**——位点合法，文件物理上已经错位/损坏。续跑要么把错位文件交给下游 STORE（用户拿到坏文件），要么直接整段重做（当前 P3 砍掉后的行为，不解决用户痛点）。
+**单靠"位点回到 cursor-XYZ 续写"无法恢复**——位点合法，文件物理上已经错位/损坏。续跑要么把错位文件交给下游 STORE（用户拿到坏文件），要么直接整段重做（当前 P3 排除后的行为，不解决用户痛点）。
 
 本 spike 比较三个方案，决定 P3 上线前先做哪条路径。
 
@@ -92,7 +92,7 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 - byte offset 维护要随每 chunk fsync 推进，跨 OS（mac / Linux）的 fsync 语义要测；
 - 单点失败：一次 offset 推进 bug → 整文件污染 → 续跑无法检测（与 A 的"chunk 文件存在/缺失"二元状态相比信噪比差很多）。
 
-#### C. 全 STORE 重做（当前 P3 砍掉后的行为）
+#### C. 全 STORE 重做（当前 P3 排除后的行为）
 
 **实现量**：~80 LOC，只优化 plugin cursor 查询缓存（位点不写文件，崩了 cursor=null 重头分页）。
 
@@ -219,4 +219,4 @@ File finalLocal = concatChunks(pipelineInstanceId, format);
 - **作者**：Round-3 #12 spike
 - **结论**：推荐 A 方案；B 因 Excel + offset 脆弱性否决；C 仅作 Excel 兜底
 - **影响范围**：`batch-worker-export` 内部 GENERATE / STORE 边界，不影响 plugin SDK、不影响 console、不影响 STORE 对外 `.part → copy` 契约
-- **回滚策略**：A 方案的 chunk 目录可空可存在，feature flag `export.recovery.chunked=false` 时退化为单文件（即 P3 砍掉前行为），无 schema 风险
+- **回滚策略**：A 方案的 chunk 目录可空可存在，feature flag `export.recovery.chunked=false` 时退化为单文件（即 P3 排除前行为），无 schema 风险

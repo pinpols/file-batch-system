@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DR 演练:worker 整队崩 → lease/task 超时回收 + 重投 → 重启 → 断言「精确一次」
+# DR 演练:worker 全 worker 组崩溃 → lease/task 超时回收 + 重投 → 重启 → 断言「精确一次」
 # ----------------------------------------------------------------------------
 # 上线就绪检查表 docs/runbook/go-live-readiness.md §2-C 的可执行件。
 #
 # 验证的承重墙:整组 worker 在飞时全崩,平台靠 lease/task 超时回收 + Kafka 重投
 # 让任务在另一副本重跑;终态必须「精确一次」——不得出现重复终态、重复 outbox、
-# job_instance 复活或卡死。逻辑层已有 IT 覆盖(ConcurrentTaskFinish / Outbox*
+# job_instance 复活或长期停滞。逻辑层已有 IT 覆盖(ConcurrentTaskFinish / Outbox*
 # / WorkerHeartbeatTimeoutScheduler);本演练在生产同构 staging 上端到端实证。
 #
 # 前置:sim/staging 栈已起(02-start-sim.sh),已有载荷在飞(05-load.sh 等)。
@@ -14,7 +14,7 @@
 #   PG_CONTAINER=sim-postgres POSTGRES_USER=batch PG_PLATFORM_DB=batch_platform \
 #   WORKER_CONTAINERS="worker-import worker-export worker-process" \
 #   SETTLE_TIMEOUT_S=180 ./scripts/sim/dr-drill-fleet-crash.sh
-# 退出码:0=精确一次通过;1=断言失败(发现重复/复活/卡死);2=前置/环境错误。
+# 退出码:0=精确一次通过;1=断言失败(发现重复/复活/长期停滞);2=前置/环境错误。
 # ============================================================================
 set -euo pipefail
 
@@ -44,7 +44,7 @@ if [ "${INFLIGHT_BEFORE:-0}" -lt 1 ]; then
   exit 2
 fi
 
-# ---- 2) 整队崩:kill 所有 worker 容器(SIGKILL,模拟硬崩非优雅停)---------
+# ---- 2) 全 worker 组崩溃:kill 所有 worker 容器(SIGKILL,模拟硬崩非优雅停)---------
 # 自动清理:本演练唯一的残留是「被 kill 的 worker」。装 EXIT trap,确保无论脚本
 # 正常退出、断言失败 exit、还是 Ctrl-C/出错中断,都把被本脚本 kill 的 worker 拉回
 # running——不留 killed 容器残留。(基础设施栈 PG/Kafka/MinIO 不是本脚本起的,不动。)
@@ -58,7 +58,7 @@ restart_killed_workers() {
 }
 trap restart_killed_workers EXIT
 
-log "整队崩:kill $WORKER_CONTAINERS"
+log "全 worker 组崩溃:kill $WORKER_CONTAINERS"
 for c in $WORKER_CONTAINERS; do
   if docker kill "$c" >/dev/null 2>&1; then
     KILLED="$KILLED $c"
@@ -86,7 +86,7 @@ while :; do
     "select count(*) from batch.job_task where task_status in ('RUNNING','READY');")"
   [ "${pending:-1}" -eq 0 ] && { log "已沉降"; break; }
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "❌ 超时未沉降:仍有 ${pending} 个 job_task 卡在 RUNNING/READY(疑似卡死/未重投)" >&2
+    echo "❌ 超时未沉降:仍有 ${pending} 个 job_task 卡在 RUNNING/READY(疑似长期停滞/未重投)" >&2
     exit 1
   fi
   sleep "$POLL_S"
@@ -116,7 +116,7 @@ else log "✅ 无重复 outbox_event(UNIQUE(tenant_id,event_key) 承重)"; fi
 stuck="$(psql_platform \
   "select count(*) from batch.job_task where task_status in ('RUNNING','READY');")"
 if [ "${stuck:-0}" -ne 0 ]; then
-  echo "❌ 仍有 ${stuck} 个 job_task 未达终态(复活/卡死)" >&2; fail=1
+  echo "❌ 仍有 ${stuck} 个 job_task 未达终态(复活/长期停滞)" >&2; fail=1
 else log "✅ 所有 job_task 已达终态"; fi
 
 # 终态分布(给运维看,非门禁)
@@ -125,7 +125,7 @@ psql_platform "select task_status, count(*) from batch.job_task
                group by task_status order by 2 desc;" | sed 's/|/ = /'
 
 if [ "$fail" -ne 0 ]; then
-  echo "❌ DR 整队崩演练:精确一次断言失败" >&2
+  echo "❌ DR 全 worker 组崩溃演练:精确一次断言失败" >&2
   exit 1
 fi
-log "✅ DR 整队崩演练通过:整队崩 → 回收重投 → 重跑,终态精确一次"
+log "✅ DR 全 worker 组崩溃演练通过:全 worker 组崩溃 → 回收重投 → 重跑,终态精确一次"

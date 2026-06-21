@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ADR-sim 4day · P0 清空脏数据(保留所有 config)
+# ADR-sim 4day · P0 清空异常数据(保留所有 config)
 # - 平台库 batch.* 运行时表:显式 allowlist + CASCADE(config 永远是 FK 父表,不会被截断)
 # - 业务库 batch_business 的 biz.* 数据表
 # - MinIO batch-dev/ 全清后重建 outbound prefix

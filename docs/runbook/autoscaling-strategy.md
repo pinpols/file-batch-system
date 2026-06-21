@@ -122,7 +122,7 @@ batch:
       --from-literal=connection='host=postgresql port=5432 user=batch_user password=<pwd> dbname=batch_business sslmode=disable'
     ```
 
-  - 守护：模板里 `hpa` / `keda` 渲染都带 `sharding.mode=dynamic` 前置判断，static 下不会创建（避免扩容炸分片）
+  - 守护：模板里 `hpa` / `keda` 渲染都带 `sharding.mode=dynamic` 前置判断，static 下不会创建（避免扩容失败分片）
 
 ### 保留 STATIC 为默认的理由
 
@@ -146,7 +146,7 @@ batch:
 ### A. 静态分片（当前方案）
 - 扩缩容走 helm upgrade，分钟级响应
 - 心智模型简单，审计友好
-- 代价：平时需要冗余副本避免峰值打爆
+- 代价：平时需要冗余副本避免峰值压垮服务
 
 ### B. Consumer Group 风格
 Pod 启动时向中央协调者（etcd / Redis）注册：「我活着，分配一片给我」。协调者根据活跃 Pod 数动态 rebalance。

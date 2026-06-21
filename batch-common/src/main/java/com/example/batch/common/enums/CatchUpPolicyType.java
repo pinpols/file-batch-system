@@ -16,7 +16,7 @@ public enum CatchUpPolicyType implements DictEnum {
   private final String code;
   private final String label;
 
-  /** 空白回落到 NONE；未知 code 抛异常，避免配置错误被静默吞掉（M-10）。 */
+  /** 空白回落到 NONE；未知 code 抛异常，避免配置错误被静默捕获并抑制（M-10）。 */
   public static CatchUpPolicyType fromCode(String code) {
     if (code == null || code.isBlank()) {
       return NONE;

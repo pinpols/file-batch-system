@@ -370,7 +370,7 @@ public class BatchDayReplayService {
     // ADR-017 形如 job:{jobCode}:{bizDate}。R2-P1-5：之前 fallback 返回 "UNKNOWN"，
     // BatchDayReplayTerminalReconciler 按 (sessionId, tenantId, jobCode) 匹配不到任何 entry
     // → session 永远卡 RUNNING、inFlight 永不减。改为 fail-fast：解析失败立即拒绝创建 replay entry，
-    // 让运维显式修 business_key 而不是产生卡死的 session。
+    // 让运维显式修 business_key 而不是产生长期停滞的 session。
     if (!Texts.hasText(businessKey)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

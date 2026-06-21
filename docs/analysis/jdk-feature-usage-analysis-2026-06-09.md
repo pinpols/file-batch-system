@@ -184,7 +184,7 @@
 
 ### 是否应该启用
 
-建议不要全系统一刀切启用。更合理的是 **console-api 先做灰度试点**：
+建议不要全系统不加区分启用。更合理的是 **console-api 先做灰度试点**：
 
 - console-api 是 HTTP/SSE I/O 型服务，更符合虚拟线程收益场景。
 - orchestrator、worker 有大量显式线程池、Kafka listener、任务池、背压、lease renew、数据库事务和文件处理，直接切换风险更高。

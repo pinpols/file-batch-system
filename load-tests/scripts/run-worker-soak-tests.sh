@@ -13,7 +13,7 @@
 #   - 持续 SOAK_HOURS 小时(默认 24,可覆盖)
 #   - 持续 SOAK_RPS RPS(默认 200,可覆盖)
 #   - 4 类 worker 混合流量:IMPORT 30% / EXPORT 20% / DISPATCH 30% / WORKFLOW 20%
-#   - 启动 start-soak.sh 注入 JFR 启动参数 + clock offset(跨日 hack)
+#   - 启动 start-soak.sh 注入 JFR 启动参数 + clock offset(跨日时间偏移)
 #   - 后台 monitor-soak.sh 周期 jcmd heap_dump + 健康检查 + 5 项退出条件评估
 #   - 收尾 analyze-soak.sh:jfr summary + jq → markdown 报告(6 维度)
 #
@@ -44,7 +44,7 @@ PCT_EXPORT="${PCT_EXPORT:-20}"
 PCT_DISPATCH="${PCT_DISPATCH:-30}"
 PCT_WORKFLOW="${PCT_WORKFLOW:-20}"
 
-# 跨日 hack:启动 JVM clock offset(BatchDateTimeSupport 当前未支持该属性,
+# 跨日时间偏移:启动 JVM clock offset(BatchDateTimeSupport 当前未支持该属性,
 # 启动脚本仅尝试注入 -Dbatch.testing.clock-offset;真正生效需后续在 Clock bean
 # 上实现注入。详见 docs/plans/r3-3-soak-tests.md TODO 段)。
 CLOCK_OFFSET="${CLOCK_OFFSET:-+12h}"

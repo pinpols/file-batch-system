@@ -187,7 +187,7 @@ S1  20  ███   (20 修)
 
 ### 架构完整性
 ```
-修复前  L3.5（UNIQUE+NULL bypass / CAS 链不全 / 多处幽灵泄漏）
+修复前  L3.5（UNIQUE+NULL bypass / CAS 链不全 / 多处残留泄漏）
 修复后  L4.3（partial unique + 双 CAS + ArchUnit 守护 + ADR-025 校验）
 距 L5   形式化验证 / Chaos eng / SLO / 分布式测试（6-12m）
 ```

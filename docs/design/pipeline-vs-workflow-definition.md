@@ -105,7 +105,7 @@ Workflow (workflow_definition)
   │       ├─ 是 → Pipeline + Job(job_type=IMPORT/EXPORT/...)
   │       └─ 否 → 9 阶段不够，需要分支 / 跨 Pipeline → Workflow + 多个 FILE_STEP 节点
   │
-  └─ 否 → 单一 Job 能搞定？
+  └─ 否 → 单一 Job 能完成？
           ├─ 是 → Job(job_type=GENERAL) + handler 跑代码
           └─ 否 → 多 Job 组合 / 需要审批 / 需要分支 → Workflow + 多个 TASK 节点
 ```

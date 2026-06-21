@@ -88,5 +88,5 @@
 3. 用真实对象存储跑 export：至少 8/16/32 分片、multipart、跨租户并发、对象校验和。
 4. 做 PG 参数矩阵：重启 PG 后分别测 `work_mem`、`maintenance_work_mem`、checkpoint/WAL 参数，记录中位数而不是单次值。
 5. 如果上线目标包含 1w/10w 全成功，调大配额、trigger/orchestrator consumer 并发、tenant fair-share 后重跑；当前 10w 本机画像已经证明默认 local profile 不通过。
-6. 清理或隔离历史 import/process 脏数据，避免 worker 启动后自动消费旧任务造成误报。
+6. 清理或隔离历史 import/process 异常数据，避免 worker 启动后自动消费旧任务造成误报。
 7. lease renew 可观测性和熔断语义已修正：业务拒绝续租不打开 `orch likely unreachable` 熔断；worker 本地增加 completing 状态，让任务处理完成、report 前的租约仍参与 drain，但不再进入 renew snapshot；409/404/renewed=false 与 5xx/timeout/连接失败已按业务拒绝和 transport failure 分开。

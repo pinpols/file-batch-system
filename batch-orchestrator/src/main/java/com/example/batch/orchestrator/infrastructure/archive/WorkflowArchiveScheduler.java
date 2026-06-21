@@ -16,10 +16,10 @@ import org.springframework.stereotype.Component;
  * workflow_node_run。
  *
  * <p>单 tick 处理 {@code batchSize}（默认 5000）条上限，命中上限时立即再来一次直到清干净， 由本调度器内的循环负责（带 ShedLock 内最多 5
- * 次防止异常情况死循环）。
+ * 次防止异常情况无限循环）。
  *
  * <p>{@code @ConditionalOnProperty} 默认启用；运维侧不想让 orchestrator 自动跑可设 {@code
- * batch.workflow.archive.enabled=false}（仍可用 SQL 脚本 cleanup-workflow-runs.sql 手工补刀）。
+ * batch.workflow.archive.enabled=false}（仍可用 SQL 脚本 cleanup-workflow-runs.sql 手工补充清理）。
  */
 @Slf4j
 @Component
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkflowArchiveScheduler {
 
-  /** 单次 tick 最多连刷多少批：防止异常输入下死循环。 */
+  /** 单次 tick 最多连刷多少批：防止异常输入下无限循环。 */
   private static final int MAX_BATCHES_PER_TICK = 5;
 
   private final WorkflowArchiveService workflowArchiveService;

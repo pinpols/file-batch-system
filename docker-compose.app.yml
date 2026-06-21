@@ -50,7 +50,7 @@ services:
       LOGGING_FILE_NAME: /app/logs/batch-console-api.log
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       # logback-spring.xml prod profile 的 FRONTEND_FILE 硬编码写 /logs/frontend.log;
-      # K8s 那边 helm 挂了 emptyDir,docker-compose 这里要对齐。
+      # K8s 那边 helm 异常退出 emptyDir,docker-compose 这里要对齐。
       # 注:容器进程现在需要可写 /logs(若开启 read-only rootfs 须额外配)。
       BATCH_S3_ENDPOINT: ${BATCH_S3_ENDPOINT:-http://minio:9000}
       BATCH_S3_ACCESS_KEY: ${BATCH_S3_ACCESS_KEY:-minioadmin}

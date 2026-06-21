@@ -37,9 +37,9 @@
 
 ### P2 级（13 条 — 体验糙）
 
-IME 中文输入误触 · 右键菜单高度魔法数字 · rAF 防御性 null check · props mutate 违反单向数据流 · FILE_STEP/JOB 缺必填校验 · GATEWAY retry 未 disable · 硬编码中文 toast · duplicateNodeCell 漏检查 · FQN 违规 · 其它
+IME 中文输入误触 · 右键菜单高度硬编码数字 · rAF 防御性 null check · props mutate 违反单向数据流 · FILE_STEP/JOB 缺必填校验 · GATEWAY retry 未 disable · 硬编码中文 toast · duplicateNodeCell 漏检查 · FQN 违规 · 其它
 
-## 决策：砍 X6，全 mermaid.js
+## 决策：移除 X6，全 mermaid.js
 
 ### 三个核心判断
 
@@ -171,15 +171,15 @@ export function fetchWorkflowMermaidDiagram(id: string) {
 
 ### 沉没成本 ≠ 理由
 
-X6 designer 的 1284 行在 git 历史里永远存着。如果将来真需要拖拽编辑，`git revert` 一下就回来。**现在砍是正确的，因为 ROI 是负的**。
+X6 designer 的 1284 行在 git 历史里永远存着。如果将来真需要拖拽编辑，`git revert` 一下就回来。**当前移除是正确的，因为 ROI 是负的**。
 
 ## 教训
 
 1. **不是所有 UI 都该是拖拽的** — 配置管理更适合 Excel / JSON in git + PR review，图编辑器只适合高频创意工作
 2. **图表库选型** — X6 适合实时流图（EDA / 网络拓扑），不适合"偶尔查看"的流程图
-3. **多人并行**（这次的坑） — workflow 模块高流动性时，主动让路比碰撞更安全
+3. **多人并行**（这次的问题） — workflow 模块高流动性时，主动让路比碰撞更安全
 4. **前后端一致性** — mermaid 能贯穿（markdown/preview/viewer），减少格式转换
 
 ---
 
-**时间线**：2026-05-15 下午 2-4 小时，4 回合（2 后端、2 前端），36 bug → 砍、校验强化、新渲染器、路由联通。
+**时间线**：2026-05-15 下午 2-4 小时，4 回合（2 后端、2 前端），36 bug → 移除高成本方案、校验强化、新渲染器、路由联通。

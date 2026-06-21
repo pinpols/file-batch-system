@@ -4,8 +4,8 @@ name: sdk-release-validation
 # 多语言 BYO SDK 发布校验工作流(release validation)
 #
 # 交付链定位:per-PR 的 sdk-contract-parity.yml 守「源码层契约不漂移」;本 wf 守
-# 「**打包出来的发布产物**真能装、真能用」——SDK 源码全绿但 npm/pip/cargo 包装不上
-# (缺 build 步、入口写错、依赖漏声明)是发布常见坑,只有装"打出来的包"才能挖出。
+# 「**打包出来的发布产物**真能装、真能用」——SDK 源码全部通过但 npm/pip/cargo 包装不上
+# (缺 build 步、入口写错、依赖漏声明)是发布常见问题,只有装"打出来的包"才能挖出。
 #
 # 阶段:
 #   1. gate           — 复跑 5 语言 conformance(contract job 必须绿)+ openapi
@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # 阶段 1a:5 语言 conformance gate(复跑 contract job 逻辑,必须全绿才放行)
+  # 阶段 1a:5 语言 conformance gate(复跑 contract job 逻辑,必须全部通过才放行)
   # ===========================================================================
   conformance-gate:
     name: conformance gate (${{ matrix.lang }})

@@ -253,7 +253,7 @@ public final class ImportPreprocessPipeline {
     }
   }
 
-  /** 解 tar:取 entryName 指定条目,缺省首个普通文件;复用 boundedReadAll 防炸弹。 */
+  /** 解 tar:取 entryName 指定条目,缺省首个普通文件;复用 boundedReadAll 防失败弹。 */
   private static byte[] untar(byte[] input, Map<String, Object> step, ImportPayload payload) {
     String entryName = stringProp(step, "entryName");
     if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
@@ -280,7 +280,7 @@ public final class ImportPreprocessPipeline {
         "IMPORT_PREPROCESS_UNTAR_EMPTY", "tar archive has no usable entry");
   }
 
-  // ── 解压尺寸闸（防 zip bomb / 压缩炸弹）────────────────────────────────
+  // ── 解压尺寸闸（防 zip bomb / 压缩失败弹）────────────────────────────────
   // 解压后字节同时受两个上限制约，取最小值：
   //   1) 绝对上限 MAX_DECOMPRESS_BYTES（默认 256 MiB，防单文件过大拖死堆）
   //   2) 相对输入的膨胀倍数 MAX_DECOMPRESS_RATIO（默认 50x，典型文本压缩 3-10x，50x 就是异常）

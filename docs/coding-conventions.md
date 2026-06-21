@@ -1058,7 +1058,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 - 方法体内存在非显而易见的分支决策（如 half-open 探针放行、bizDate=null 跳过语义）
 - 有顺序约束的多步操作（如"先 deactivate 再 insert"保证单活版本）
-- 魔法常量或限制值的来源（如 `MAX_PROBE_CHANNEL_BATCH = 1000` 防 DB 扫描）
+- 隐式常量或限制值的来源（如 `MAX_PROBE_CHANNEL_BATCH = 1000` 防 DB 扫描）
 - 与线格式、协议字节序相关的编解码逻辑
 
 辅助方法（名称已自解释的 `toXxx` / `resolveXxx` / `buildXxx` / `parseXxx`）不需要注释。

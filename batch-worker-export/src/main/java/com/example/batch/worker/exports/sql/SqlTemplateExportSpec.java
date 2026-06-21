@@ -60,7 +60,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     cursorColumn = JdbcMappedSqlValidator.requireIdentifier(cursorColumn, "cursorColumn");
 
     // 早校验：包装层 SQL 会附加 `ORDER BY base."<cursorColumn>" ASC`，base 是用户 SQL 的 CTE。
-    // 如果用户 SELECT 里没出这列，运行期才会炸 PostgreSQL `bad SQL grammar`，debug 成本极高。
+    // 如果用户 SELECT 里没出这列，运行期才会失败 PostgreSQL `bad SQL grammar`，debug 成本极高。
     // 这里用词界正则做廉价启发式检测：拦住「忘 SELECT id」的主流坏配置，同时允许显式换 cursorColumn。
     String trimmedSql = detailSql.trim();
     if (!mentionsIdentifier(trimmedSql, cursorColumn)) {

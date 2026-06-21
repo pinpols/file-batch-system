@@ -113,7 +113,7 @@ public class AuditAspect {
   }
 
   /**
-   * 用 PROPAGATION_REQUIRES_NEW 新开事务写 FAILED 审计,避免被业务事务回滚带走。 失败本身吞掉(warn) — 业务异常已在 catch 外被
+   * 用 PROPAGATION_REQUIRES_NEW 新开事务写 FAILED 审计,避免被业务事务回滚带走。 失败本身捕获并抑制(warn) — 业务异常已在 catch 外被
    * rethrow,审计写不写都不影响业务路径。
    */
   private void recordInNewTransaction(

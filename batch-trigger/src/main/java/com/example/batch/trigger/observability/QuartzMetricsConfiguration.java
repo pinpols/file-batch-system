@@ -57,7 +57,7 @@ public class QuartzMetricsConfiguration {
 
   /**
    * 统计当前 Scheduler 已注册 Job 总数。Prometheus scrape 时调用，{@link SchedulerException} 时返回 -1（Grafana
-   * 把负值标为不可用，避免脏数据）。
+   * 把负值标为不可用，避免异常数据）。
    */
   private static double countAllJobs(Scheduler scheduler) {
     try {

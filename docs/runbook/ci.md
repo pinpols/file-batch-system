@@ -193,7 +193,7 @@ make db-reset-flyway    # 清空 Flyway 历史
 
 ```bash
 make ops-inspect        # 全量巡检
-make ops-heal-stuck     # 修复卡死 outbox
+make ops-heal-stuck     # 修复长期停滞 outbox
 make ops-heal-dead      # 修复死信队列
 make ops-heal-drain     # 修复 drain 超时
 make ops-heal-retry     # 修复待重试任务
@@ -243,7 +243,7 @@ make ops-compensate     # 触发补偿
 
 ## flaky 治理
 
-surefire / failsafe 配置 `rerunFailingTestsCount=2`(pom.xml ~224 行):首次 fail 后再跑 2 次,任一过即标 **flaky-but-pass**,不污染主分支绿。问题是:这些飘的用例若没人盯,会在主干上越堆越多,直到某次同时炸 3 次彻底翻红。
+surefire / failsafe 配置 `rerunFailingTestsCount=2`(pom.xml ~224 行):首次 fail 后再跑 2 次,任一过即标 **flaky-but-pass**,不污染主分支绿。问题是:这些飘的用例若没人盯,会在主干上越堆越多,直到某次同时失败 3 次彻底翻红。
 
 ### 监控脚本
 
@@ -267,7 +267,7 @@ bash scripts/ci/collect-flaky.sh -- --json build/flaky.json --warn-threshold 3
 1. **每周一巡**:翻最近一周 `full-ci-gate` 的 step summary(或下载 surefire-reports artifact 跑 `collect-flaky.sh`),记录 flaky 用例 Top N。
 2. **建治理 issue**:同一用例连续 ≥ 2 周出现 → 开 issue 派给原作者 / 模块 owner,标 `flaky-test` label。
 3. **修不动就隔离**:确认无法稳定的,改成 `@Disabled("flaky — see #<issue>")` 暂时下线,避免长期遮蔽真问题。**禁**直接删测试 —— 必须先有 issue 跟踪原因。
-4. **结构性原因**:flaky 集中在某模块(如 testcontainers Kafka / Redis 等待时序),走 `AbstractIntegrationTest` 调容器超时 / Awaitility 等待,而不是每个测试自己拍脑袋 sleep。
+4. **结构性原因**:flaky 集中在某模块(如 testcontainers Kafka / Redis 等待时序),走 `AbstractIntegrationTest` 调容器超时 / Awaitility 等待,而不是每个测试自己固定 sleep。
 
 ### 为什么不阻断 build
 

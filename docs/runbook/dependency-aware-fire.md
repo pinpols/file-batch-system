@@ -33,7 +33,7 @@
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `job_definition.depends_on_job_code` | NULL | 上游 job code;非空才启用本触发器的依赖闸 |
-| `batch.trigger.readiness-gate.enabled` | `true` | 全局 kill-switch;设 `false` 时一律放行(等价关闭依赖感知,应急用) |
+| `batch.trigger.readiness-gate.enabled` | `true` | 全局 emergency switch;设 `false` 时一律放行(等价关闭依赖感知,应急用) |
 | `batch.trigger.wheel.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口;超窗放弃本 bizDate(`WAITING_READINESS_TIMEOUT` + ERROR/metric) |
 | `batch.trigger.wheel.readiness-recheck-interval-seconds` | `30` | 未就绪时的重检间隔;须 `<` `misfire-threshold-seconds`(默认 60)防重检被误判 misfire |
 

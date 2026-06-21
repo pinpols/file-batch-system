@@ -138,7 +138,7 @@ class SdkIdempotentHandler:
         if result.success:
             self._store.record(key, SdkIdempotencyEntity.of_result(result), self._ttl_millis)
         else:
-            # 失败不记录,且释放占位 —— 否则重派会被自己的 in-flight 占位卡死。
+            # 失败不记录,且释放占位 —— 否则重派会被自己的 in-flight 占位长期停滞。
             self._store.release(key)
         return result
 
