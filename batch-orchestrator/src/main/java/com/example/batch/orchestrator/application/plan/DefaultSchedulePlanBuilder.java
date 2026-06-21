@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.plan;
 
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
@@ -74,20 +75,22 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
             ? 1
             : plan.getPartitionCount();
 
-    // ADR-046 文件束:BUNDLE_IMPORT 作业「一文件一 partition」,各 partition 绑各自源文件/模板(异构)。
-    boolean bundleJob =
-        jobDefinition != null && JobType.BUNDLE_IMPORT.code().equals(jobDefinition.jobType());
+    // ADR-046 文件束:束作业(IMPORT/EXPORT/DISPATCH)「一项一 partition」,各 partition 绑各自
+    // 源文件/模板/目标(异构,绑定 profile 按类型不同)。
+    JobType bundleType =
+        jobDefinition == null ? null : DictEnum.fromCode(JobType.class, jobDefinition.jobType());
+    boolean bundleJob = bundleType != null && bundleType.isBundle();
     List<BundlePlanParams.BundleFile> bundleFiles =
-        bundleJob ? BundlePlanParams.extract(planParams) : List.of();
+        bundleJob ? BundlePlanParams.extract(planParams, bundleType) : List.of();
     if (bundleJob && !bundleFiles.isEmpty() && bundleFiles.size() != partitionCount) {
       // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
-      // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢文件。
+      // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢绑定项。
       throw new IllegalStateException(
-          "ADR-046 bundle partition count mismatch: files="
+          "ADR-046 bundle partition count mismatch: items="
               + bundleFiles.size()
               + " partitions="
               + partitionCount
-              + " (BUNDLE_IMPORT 须 shardStrategy=DYNAMIC 且 bundleFiles 数 ≤ 256)");
+              + " (bundle 须 shardStrategy=DYNAMIC 且 bundleFiles 数 ≤ 256)");
     }
 
     for (int partitionNo = 1; partitionNo <= partitionCount; partitionNo++) {

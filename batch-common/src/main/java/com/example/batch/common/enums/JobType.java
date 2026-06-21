@@ -1,5 +1,6 @@
 package com.example.batch.common.enums;
 
+import java.util.Set;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -28,10 +29,43 @@ public enum JobType implements DictEnum {
    * source_file_id/template_code/target_ref),把控制面 churn 从 O(N) 降到 O(N/K)。归 {@link BatchType#IMPORT}
    * 桶。第一刀仅登记类型,派发/展开逻辑见后续刀。
    */
-  BUNDLE_IMPORT("BUNDLE_IMPORT", "文件束聚合任务");
+  BUNDLE_IMPORT("BUNDLE_IMPORT", "文件束聚合任务"),
+  /**
+   * ADR-046 Phase3:文件束导出(用户单次导出多表→多文件)。每 partition 绑一个导出 {@code template_code}(源表/查询), 归 {@link
+   * BatchType#EXPORT} 桶。绑定经 {@code job_partition.template_code}(导出无源文件,{@code source_file_id} 为空)。
+   */
+  BUNDLE_EXPORT("BUNDLE_EXPORT", "文件束导出任务"),
+  /**
+   * ADR-046 Phase3:文件束分发(用户单次把多文件分发到多下游)。每 partition 绑一个 {@code source_file_id}(待分发文件)+ {@code
+   * target_ref}(下游渠道 channel_code),归 {@link BatchType#DISPATCH} 桶。分发无导出模板({@code template_code}
+   * 为空)。
+   */
+  BUNDLE_DISPATCH("BUNDLE_DISPATCH", "文件束分发任务");
 
   private final String code;
   private final String label;
+
+  /** ADR-046 文件束作业类型集合(IMPORT/EXPORT/DISPATCH);束语义共享同一展开骨架,绑定 profile 各异。 */
+  private static final Set<JobType> BUNDLE_TYPES =
+      Set.of(BUNDLE_IMPORT, BUNDLE_EXPORT, BUNDLE_DISPATCH);
+
+  /** 是否文件束作业(展成 K 个异构 partition 的束骨架)。 */
+  public boolean isBundle() {
+    return BUNDLE_TYPES.contains(this);
+  }
+
+  /** 按 job_type code(DB 字面量)判定是否文件束作业;未知 / null → false。 */
+  public static boolean isBundleCode(String code) {
+    if (code == null) {
+      return false;
+    }
+    for (JobType type : BUNDLE_TYPES) {
+      if (type.code.equals(code)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /** 投影到公共业务类型字典 {@link BatchType}。每个枚举值必须有非空映射。 */
   public BatchType batchType() {
@@ -46,6 +80,10 @@ public enum JobType implements DictEnum {
       case ATOMIC -> BatchType.GENERAL;
       // BUNDLE_IMPORT(文件束):一束多文件导入,投影到 IMPORT 桶。
       case BUNDLE_IMPORT -> BatchType.IMPORT;
+      // BUNDLE_EXPORT(文件束导出):一束多表导出,投影到 EXPORT 桶。
+      case BUNDLE_EXPORT -> BatchType.EXPORT;
+      // BUNDLE_DISPATCH(文件束分发):一束多文件分发,投影到 DISPATCH 桶。
+      case BUNDLE_DISPATCH -> BatchType.DISPATCH;
     };
   }
 }

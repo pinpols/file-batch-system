@@ -263,6 +263,51 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  void shouldExpandExportBundleByTemplateWithoutSourceFile() {
+    // BUNDLE_EXPORT:导出无源文件,各 partition 绑导出模板(=源表/查询),sourceFileId 为空。
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_EXPORT"));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    Map<String, Object> params =
+        Map.of(
+            "bundleFiles",
+            List.of(
+                Map.of("templateCode", "EXP_RISK"),
+                Map.of("templateCode", "EXP_TRADE", "targetRef", "sftp-a")));
+    SchedulePlan plan = builder.build(command(params));
+
+    assertThat(plan.getPartitions()).hasSize(2);
+    assertThat(plan.getPartitions().get(0).getSourceFileId()).isNull();
+    assertThat(plan.getPartitions().get(0).getTemplateCode()).isEqualTo("EXP_RISK");
+    assertThat(plan.getPartitions().get(1).getTemplateCode()).isEqualTo("EXP_TRADE");
+    assertThat(plan.getPartitions().get(1).getTargetRef()).isEqualTo("sftp-a");
+  }
+
+  @Test
+  void shouldExpandDispatchBundleByFileAndChannelWithoutTemplate() {
+    // BUNDLE_DISPATCH:分发无模板,各 partition 绑待分发文件 + 下游渠道(targetRef)。
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_DISPATCH"));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    Map<String, Object> params =
+        Map.of(
+            "bundleFiles",
+            List.of(
+                Map.of("sourceFileId", 501, "targetRef", "CH_SFTP"),
+                Map.of("sourceFileId", 502, "targetRef", "CH_OSS")));
+    SchedulePlan plan = builder.build(command(params));
+
+    assertThat(plan.getPartitions()).hasSize(2);
+    assertThat(plan.getPartitions().get(0).getSourceFileId()).isEqualTo(501L);
+    assertThat(plan.getPartitions().get(0).getTargetRef()).isEqualTo("CH_SFTP");
+    assertThat(plan.getPartitions().get(0).getTemplateCode()).isNull();
+    assertThat(plan.getPartitions().get(1).getSourceFileId()).isEqualTo(502L);
+    assertThat(plan.getPartitions().get(1).getTargetRef()).isEqualTo("CH_OSS");
+  }
+
+  @Test
   void shouldFailFastWhenBundleCountMismatchesPartitionCount() {
     // 束作业配成 NONE 策略 → partitionCount=1,但 bundleFiles 有 2 个 → 配置错,fail-fast 不静默丢文件
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
@@ -307,12 +352,17 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   private static JobDefinitionEntity bundleJobDef(String shardStrategy, int priority) {
+    return bundleJobDef(shardStrategy, priority, "BUNDLE_IMPORT");
+  }
+
+  private static JobDefinitionEntity bundleJobDef(
+      String shardStrategy, int priority, String jobType) {
     return new JobDefinitionEntity(
         1L,
         "t1",
         "JOB_001",
         null,
-        "BUNDLE_IMPORT",
+        jobType,
         null,
         null,
         null,
