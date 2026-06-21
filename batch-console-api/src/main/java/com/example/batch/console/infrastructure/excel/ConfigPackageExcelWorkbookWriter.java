@@ -339,6 +339,7 @@ public class ConfigPackageExcelWorkbookWriter {
       createReadmeSheet(wb, locale);
       createDependencyGuideSheet(wb);
       createFourWorkerExampleSheet(wb);
+      createBundleExampleSheet(wb);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -371,6 +372,7 @@ public class ConfigPackageExcelWorkbookWriter {
       createReadmeSheet(wb, locale);
       createDependencyGuideSheet(wb);
       createFourWorkerExampleSheet(wb);
+      createBundleExampleSheet(wb);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -527,6 +529,7 @@ public class ConfigPackageExcelWorkbookWriter {
 
   static final String SHEET_NAME_DEPENDENCY = "依赖说明";
   static final String SHEET_NAME_FOUR_WORKER = "四类Worker示例";
+  static final String SHEET_NAME_BUNDLE = "文件束示例";
 
   /** 「依赖说明」sheet 表头。取自 9+2 设计文档 §依赖说明 Sheet 结构。 只读说明 sheet，不参与上传解析与 apply。 */
   static final String[] DEPENDENCY_HEADERS = {
@@ -756,6 +759,72 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private void createFourWorkerExampleSheet(Workbook wb) {
     createReadOnlyTableSheet(wb, SHEET_NAME_FOUR_WORKER, FOUR_WORKER_HEADERS, FOUR_WORKER_ROWS);
+  }
+
+  /** 「文件束示例」sheet 表头(ADR-046):束作业一次配置、每次提交投一份 .batch.json 清单声明本批。 */
+  static final String[] BUNDLE_HEADERS = {
+    "job_type",
+    "worker_type",
+    "shard_strategy",
+    "config_sheets",
+    "submit_manifest_example",
+    "demo_description"
+  };
+
+  // ADR-046 提交清单(.batch.json v2)完整可抄片段:导入/分发投数据文件 + 清单;导出仅投清单(无数据文件、无 requiredFiles)。
+  private static final String BUNDLE_IMPORT_MANIFEST =
+      "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"daily-import\","
+          + "\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_IMPORT_DAILY\","
+          + "\"requiredFiles\":[\"order.csv\",\"customer.csv\"],\"fileMapping\":["
+          + "{\"fileName\":\"order.csv\",\"templateCode\":\"TPL_ORDER\"},"
+          + "{\"fileName\":\"customer.csv\",\"templateCode\":\"TPL_CUST\"}]}";
+  private static final String BUNDLE_DISPATCH_MANIFEST =
+      "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"eod-dispatch\","
+          + "\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_DISPATCH_EOD\","
+          + "\"requiredFiles\":[\"risk.csv\",\"trade.csv\"],\"fileMapping\":["
+          + "{\"fileName\":\"risk.csv\",\"targetRef\":\"CH_SFTP_A\"},"
+          + "{\"fileName\":\"trade.csv\",\"targetRef\":\"CH_OSS_B\"}]}";
+  private static final String BUNDLE_EXPORT_MANIFEST =
+      "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"eod-export\","
+          + "\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_EXPORT_EOD\","
+          + "\"fileMapping\":["
+          + "{\"fileName\":\"risk_out\",\"templateCode\":\"EXP_RISK\"},"
+          + "{\"fileName\":\"trade_out\",\"templateCode\":\"EXP_TRADE\"}]}";
+
+  /**
+   * 「文件束示例」内置 3 行(BUNDLE_IMPORT/EXPORT/DISPATCH 各一份)。束 = 一次配作业(job sheet,job_type=BUNDLE_*、
+   * shard_strategy=DYNAMIC)+ 各表模板/各下游渠道(file_template/file_channel sheet);每次提交投一份 .batch.json v2
+   * 清单声明「这批哪些文件→哪个模板/渠道」(清单是数据非配置,不进配置包)。只读说明 sheet,不参与上传解析。
+   */
+  static final List<String[]> BUNDLE_ROWS =
+      List.of(
+          new String[] {
+            "BUNDLE_IMPORT",
+            "IMPORT",
+            "DYNAMIC",
+            "job + file_template(每表一模板);清单 requiredFiles 列出数据文件",
+            BUNDLE_IMPORT_MANIFEST,
+            "一次导入多文件→多表;把数据文件 + 此清单投到 ingress,凑齐自动展 N 个导入分区"
+          },
+          new String[] {
+            "BUNDLE_EXPORT",
+            "EXPORT",
+            "DYNAMIC",
+            "job + file_template(每表一导出模板);清单无 requiredFiles(导出无输入文件)",
+            BUNDLE_EXPORT_MANIFEST,
+            "一次导出多表→多文件;仅投此清单(无数据文件),清单本身即触发,展 N 个导出分区"
+          },
+          new String[] {
+            "BUNDLE_DISPATCH",
+            "DISPATCH",
+            "DYNAMIC",
+            "job + file_channel(每下游一渠道);清单 fileMapping.targetRef 指 channel_code",
+            BUNDLE_DISPATCH_MANIFEST,
+            "一次把多文件分发到多下游;把待分发文件 + 此清单投到 ingress,展 N 个分发分区"
+          });
+
+  private void createBundleExampleSheet(Workbook wb) {
+    createReadOnlyTableSheet(wb, SHEET_NAME_BUNDLE, BUNDLE_HEADERS, BUNDLE_ROWS);
   }
 
   /** 通用只读说明表 sheet 渲染：顶部提示行 + 表头 + 数据行；冻结首两行、表头样式、自动列宽。 */
