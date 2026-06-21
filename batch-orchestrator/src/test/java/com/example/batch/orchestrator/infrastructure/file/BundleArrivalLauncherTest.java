@@ -78,6 +78,37 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
+  void launchesDispatchBundleWithTargetRefChannelBinding() {
+    // ADR-046 Phase3:分发束——文件到达带 bundleTargetRef(下游渠道),emit {sourceFileId, targetRef}
+    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new LaunchResponse("INST-2", "trace-2"));
+    List<Map<String, Object>> groupFiles =
+        List.of(
+            file(
+                201, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_SFTP\"}"),
+            file(
+                202, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_OSS\"}"));
+
+    launcher.launchIfBundle("t1", "dispatch-eod", groupFiles);
+
+    ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(launchService).launch(captor.capture());
+    LaunchRequest req = captor.getValue();
+    Assertions.assertThat(req.jobCode()).isEqualTo("BUNDLE_DISPATCH_EOD");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> bundleFiles =
+        (List<Map<String, Object>>) req.params().get("bundleFiles");
+    Assertions.assertThat(bundleFiles).hasSize(2);
+    Assertions.assertThat(bundleFiles.get(0))
+        .containsEntry("sourceFileId", 201L)
+        .containsEntry("targetRef", "CH_SFTP")
+        .doesNotContainKey("templateCode");
+    Assertions.assertThat(bundleFiles.get(1))
+        .containsEntry("sourceFileId", 202L)
+        .containsEntry("targetRef", "CH_OSS");
+  }
+
+  @Test
   void skipsNonBundleGroup() {
     // 普通到达组:metadata 无 bundleJobCode → 不发 launch
     List<Map<String, Object>> groupFiles =
