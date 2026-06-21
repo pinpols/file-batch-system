@@ -549,6 +549,10 @@ public class FileGovernanceScheduler {
     try {
       bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
     } catch (RuntimeException exception) {
+      // P1-2:束 launch 失败 → 保持组 retryable(不丢触发)。但永久畸形组(混 jobCode/bizDate)会每轮
+      // sweep 重试,只 ERROR 日志运维不可见 → 加 counter 供告警(瞬时故障可恢复,永久故障靠该 metric
+      // 触达人工修数据;不引终态以免误丢「迟到文件可修复」的组)。
+      meterRegistry.counter("batch.file.arrival.bundle.launch.failed").increment();
       log.error(
           "file arrival group bundle launch failed, keep group retryable: tenantId={},"
               + " fileGroupCode={}, reason={}",

@@ -15,8 +15,8 @@ class DispatchPayloadBundleAliasTest {
 
   @Test
   void bundleGenericKeysMapIntoFileIdAndChannelCode() throws Exception {
-    // 束派发注入的是通用列名 sourceFileId(数字)+ targetRef(下游渠道)
-    String json = "{\"sourceFileId\":42,\"targetRef\":\"CH_SFTP\"}";
+    // 束派发注入的是带 bundle 前缀的键 bundleSourceFileId(数字)+ bundleTargetRef(下游渠道)
+    String json = "{\"bundleSourceFileId\":42,\"bundleTargetRef\":\"CH_SFTP\"}";
 
     DispatchPayload payload = objectMapper.readValue(json, DispatchPayload.class);
 
@@ -33,5 +33,16 @@ class DispatchPayloadBundleAliasTest {
 
     assertThat(payload.fileId()).isEqualTo("99");
     assertThat(payload.channelCode()).isEqualTo("CH_OSS");
+  }
+
+  @Test
+  void plainSourceFileIdKeyDoesNotHijackFileId() throws Exception {
+    // P1-3 防御:别名是带前缀的 bundleSourceFileId,泛化 sourceFileId 不再是别名,不会覆盖真 fileId。
+    String json = "{\"fileId\":\"77\",\"sourceFileId\":1,\"targetRef\":\"X\"}";
+
+    DispatchPayload payload = objectMapper.readValue(json, DispatchPayload.class);
+
+    assertThat(payload.fileId()).isEqualTo("77");
+    assertThat(payload.channelCode()).isNull();
   }
 }
