@@ -58,6 +58,24 @@ class ConsoleInstanceControllerTest {
   }
 
   @Test
+  void pauseShouldUsePauseAction() throws Exception {
+    when(proxy.instanceAction(3L, "ta", "pause")).thenReturn(Map.of("status", "PAUSED"));
+    mockMvc
+        .perform(post("/api/console/instances/3/pause").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).instanceAction(3L, "ta", "pause");
+  }
+
+  @Test
+  void resumeShouldUseResumeAction() throws Exception {
+    when(proxy.instanceAction(3L, "ta", "resume")).thenReturn(Map.of("status", "RUNNING"));
+    mockMvc
+        .perform(post("/api/console/instances/3/resume").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).instanceAction(3L, "ta", "resume");
+  }
+
+  @Test
   void cancelPartitionAndRetryPartitionShouldRouteToPartitionAction() throws Exception {
     when(proxy.partitionAction(5L, "ta", "cancel")).thenReturn(Map.of("status", "ok"));
     when(proxy.partitionAction(5L, "ta", "retry")).thenReturn(Map.of("status", "ok"));

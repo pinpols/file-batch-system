@@ -49,6 +49,28 @@ public class ConsoleInstanceController {
         orchestratorProxyService.instanceAction(id, tenantId, "terminate"));
   }
 
+  @PostMapping("/{id}/pause")
+  @AuditAction(
+      action = "instance.pause",
+      aggregateType = "job_instance",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
+  public CommonResponse<Map<String, Object>> pause(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "pause"));
+  }
+
+  @PostMapping("/{id}/resume")
+  @AuditAction(
+      action = "instance.resume",
+      aggregateType = "job_instance",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
+  public CommonResponse<Map<String, Object>> resume(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "resume"));
+  }
+
   @PostMapping("/partitions/{id}/cancel")
   @AuditAction(
       action = "partition.cancel",
