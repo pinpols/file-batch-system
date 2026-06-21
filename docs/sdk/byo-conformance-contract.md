@@ -12,7 +12,7 @@
 1. **常量**锚在 [`docs/api/sdk-shared-constants.yaml`](../api/sdk-shared-constants.yaml)(各语言 **consume,禁 re-author**)。
 2. **行为**锚在 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) 每个 fixture 的 `then.expect`**结构化字段**(各语言断言同一组离散字段,不解读 prose)。
 
-## 1. 三条强制约束(不满足 = 不合规)
+## 1. 四条强制约束(不满足 = 不合规)
 
 ### 1.1 常量必须从 `sdk-shared-constants.yaml` 生成,禁手写
 
@@ -34,6 +34,28 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 - 把其目录加进 `.github/workflows/sdk-contract-parity.yml` 的 `paths:` 触发器;
 - 增加一个 `<lang>-contract` job 跑该语言的 runner + parity 测试;
 - 接入 `parity-report` 的 N 语言 pass-set 对账。
+
+### 1.4 必须通过 live transport 接通门禁
+
+Fixture / mock 只能证明决策核不漂移,不能证明生产 transport 可用。每种正式 SDK 必须接入
+`sdk-live-transport` 门禁,至少覆盖:
+
+- 真实 Kafka broker 派单消费、手动 offset 提交 / 不提交语义;
+- 真实 HTTP control-plane 调用,至少 `claim → report` 能打到 fake orchestrator;
+- worker identity / tenant / idempotency / partitionInvocationId 等 header/body 红线在真实 transport 上不漂移。
+
+当前执行入口:
+
+```bash
+KAFKA_BOOTSTRAP=localhost:19092 bash scripts/ci/run-sdk-live-transport-gate.sh
+```
+
+Java 使用 `FakeBatchPlatform`(EmbeddedKafka + JDK HttpServer)跑完整
+`client.start → dispatch → handler → report`;Python 使用 live Kafka + aiohttp
+`FakeBatchPlatform` 跑 `dispatch → claim → execute → report`;TypeScript / Go / Rust 在同一
+gate 内同时硬跑 live Kafka adapter 与本语言 lifecycle / HTTP transport 测试,至少覆盖
+accept / drop / reject、claim、report、Idempotency-Key、租户 header/body。新增语言不得只接
+fixture/mock。
 
 ## 2. `then.expect` 字段语义(runner 断言映射表)
 
@@ -121,6 +143,7 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 - [ ] 常量 codegen / loader 从 `sdk-shared-constants.yaml` 取值 + parity 测试
 - [ ] contract runner 跑全部 fixtures 的 `then.expect`,100% 覆盖
 - [ ] `sdk-contract-parity.yml`:加 `paths` + `<lang>-contract` job + 接入 parity-report
+- [ ] `sdk-live-transport`:接入真实 Kafka/HTTP fake 接通测试;不能只靠 fixture/mock
 - [ ] BYO guide §4 补该语言的"已知问题"
 
 ## 5. 引用
