@@ -402,7 +402,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
    *
    * <p><b>键命名空间(P1-1/P1-3 防御)</b>:source_file_id / target_ref 落 payload 时用带 {@code bundle} 前缀的键
    * {@code bundleSourceFileId} / {@code bundleTargetRef},不与业务 payload 里可能出现的泛化 {@code sourceFileId}
-   * /{@code targetRef} 撞——避免非束任务被误注入 FILE_ID(worker-core resolveSourceFileId)或 dispatch
+   * /{@code targetRef} 冲突——避免非束任务被误注入 FILE_ID(worker-core resolveSourceFileId)或 dispatch
    * {@code @JsonAlias} 歧义。{@code templateCode} 是 Import/ExportPayload 的真字段,保持原名(束有意复用)。
    */
   static void enrichBundleBinding(Map<String, Object> payload, JobPartitionEntity partition) {
