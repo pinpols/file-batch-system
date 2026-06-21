@@ -1,6 +1,6 @@
 # ADR-039 · 凭据字段 envRef 风格 —— 替代关键字扫描的根治方案
 
-- **Status**: Proposed
+- **Status**: Accepted（P1 已落地 2026-06-21:`CredentialEnvResolver` + HttpTaskExecutor basic/bearer 接入 + fail-fast；P2 `${ENV:-default}` / P3 `${secret:...}` vault / schema `x-credential` 三层标注 / FE 改造仍待做）
 - **Date**: 2026-06-02
 - **Related**: ADR-035(SDK 凭据章节 §鉴权 / Kafka SASL)/ ADR-025(workflow 静态校验) / PR #40(FE `SensitiveFieldAlert`) / Issue #242(BE `SensitiveDataValidator`) / Issue #237(taskType descriptor 凭据声明) / Round-2 §4 P0
 - **Supersedes(部分)**:`SensitiveFieldAlert` / `SensitiveDataValidator` 基于关键字(`token` / `password` / `secret` / `key`)的子串匹配判定逻辑

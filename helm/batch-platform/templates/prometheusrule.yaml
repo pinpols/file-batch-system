@@ -1,0 +1,31 @@
+{{/*
+  Prometheus 告警规则下发 (k8s / prometheus-operator 场景)。
+
+  问题:docker/observability/prometheus-batch-rules.yml 里 70+ 条告警规则只在
+  docker-compose 路径生效;helm 此前只有 servicemonitor.yaml(纯 scrape),k8s 部署
+  根本不下发这些规则 —— 规则写得再好也不会触发。本模板补这个缺口。
+
+  规则内容来自 chart-local 副本 files/prometheus-batch-rules.yml,它与 canonical
+  docker/observability/prometheus-batch-rules.yml **字节一致**,由
+  scripts/ci/check-helm-prometheusrule-sync.sh 守护防漂移(改 canonical 忘了同步
+  chart 副本 → CI 红)。
+
+  需要前置:集群已安装 prometheus-operator (CRD: monitoring.coreos.com/v1),且其
+  Prometheus CR 的 ruleSelector 能匹配本资源的 labels。values.yaml
+  prometheusRule.enabled=true 才渲染。
+*/}}
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "batch-platform.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "batch-platform.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: alerting
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+{{ .Files.Get "files/prometheus-batch-rules.yml" | indent 2 }}
+{{- end }}

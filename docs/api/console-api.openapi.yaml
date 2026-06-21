@@ -3361,15 +3361,30 @@ paths:
       operationId: queryAlerts
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/AcknowledgedFilter'
-        - $ref: '#/components/parameters/StartDateFilter'
-        - $ref: '#/components/parameters/EndDateFilter'
+        - name: severity
+          in: query
+          required: false
+          schema: { type: string, maxLength: 16 }
+          description: 可选,按严重级别精确过滤(severity enum)。
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, maxLength: 32 }
+          description: 可选,按告警状态精确过滤(alertStatus enum:OPEN/ACKED/SUPPRESSED/CLOSED)。
+        - name: alertType
+          in: query
+          required: false
+          schema: { type: string, maxLength: 64 }
+          description: 可选,按告警类型精确过滤。
         - name: traceId
           in: query
           required: false
           schema: { type: string, maxLength: 128 }
+          description: 可选,按 traceId 精确过滤。
+        - $ref: '#/components/parameters/StartDateFilter'
+        - $ref: '#/components/parameters/EndDateFilter'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Alert list
@@ -4981,6 +4996,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
+  /api/console/instances/{id}/pause:
+    post:
+      tags: [Instances]
+      summary: Pause a RUNNING job instance (ADR-044, reversible)
+      operationId: pauseJobInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/instances/{id}/resume:
+    post:
+      tags: [Instances]
+      summary: Resume a PAUSED job instance (ADR-044)
+      operationId: resumeJobInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
 
   # ─── P0: Trigger management ───────────────────────────────────────────────────
   /api/console/ops/triggers:
@@ -5386,7 +5455,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/ResourceQueueCreateRequest'
       responses:
         '200':
           description: Created resource queue id
@@ -5414,7 +5483,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/ResourceQueueUpdateRequest'
       responses:
         '200':
           description: Success
@@ -5501,7 +5570,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/BatchWindowCreateRequest'
       responses:
         '200':
           description: Created batch window id
@@ -5529,7 +5598,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/BatchWindowUpdateRequest'
       responses:
         '200':
           description: Success
@@ -5616,7 +5685,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/CalendarSaveRequest'
       responses:
         '200':
           description: Created calendar id
@@ -5644,7 +5713,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/CalendarSaveRequest'
       responses:
         '200':
           description: Success
@@ -6298,7 +6367,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/QuotaPolicySaveRequest'
       responses:
         '200':
           description: Created quota policy id
@@ -6326,7 +6395,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/QuotaPolicySaveRequest'
       responses:
         '200':
           description: Success
@@ -6749,6 +6818,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-runs/{id}/pause:
+    post:
+      tags: [WorkflowRuns]
+      summary: Pause a RUNNING workflow run (ADR-044, halts DAG advance)
+      operationId: pauseWorkflowRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-runs/{id}/resume:
+    post:
+      tags: [WorkflowRuns]
+      summary: Resume a PAUSED workflow run (ADR-044)
+      operationId: resumeWorkflowRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
   /api/console/workflow-runs/{id}/skip-node:
     post:
       tags: [WorkflowRuns]
@@ -7049,7 +7172,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/FileChannelCreateRequest'
       responses:
         '200':
           description: Created file channel id
@@ -7102,7 +7225,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/FileChannelUpdateRequest'
       responses:
         '200':
           description: Success
@@ -7190,7 +7313,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/FileTemplateCreateRequest'
       responses:
         '200':
           description: Created file template id
@@ -7243,7 +7366,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/FileTemplateUpdateRequest'
       responses:
         '200':
           description: Success
@@ -11291,6 +11414,476 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, bizType, fileName, fileStatus, bizDate, traceId, createdAt, updatedAt]
+    ResourceQueueCreateRequest:
+      type: object
+      description: 创建资源队列。与 BE Java DTO `ResourceQueueCreateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        queueCode:
+          type: string
+          maxLength: 128
+        queueName:
+          type: string
+          maxLength: 256
+        queueType:
+          type: string
+          maxLength: 32
+        maxRunningJobs:
+          type: integer
+          format: int32
+        maxRunningPartitions:
+          type: integer
+          format: int32
+        maxQps:
+          type: integer
+          format: int32
+        workerGroup:
+          type: string
+          maxLength: 128
+        resourceTag:
+          type: string
+          maxLength: 64
+        priorityPolicy:
+          type: string
+          maxLength: 32
+        fairShareWeight:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+          maxLength: 512
+    ResourceQueueUpdateRequest:
+      type: object
+      description: 更新资源队列(字段可选,缺省视为不修改)。与 BE Java DTO `ResourceQueueUpdateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        queueName:
+          type: string
+          maxLength: 256
+        queueType:
+          type: string
+          maxLength: 32
+        maxRunningJobs:
+          type: integer
+          format: int32
+        maxRunningPartitions:
+          type: integer
+          format: int32
+        maxQps:
+          type: integer
+          format: int32
+        workerGroup:
+          type: string
+          maxLength: 128
+        resourceTag:
+          type: string
+          maxLength: 64
+        priorityPolicy:
+          type: string
+          maxLength: 32
+        fairShareWeight:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+          maxLength: 512
+    BatchWindowCreateRequest:
+      type: object
+      description: 创建批次窗口。与 BE Java DTO `BatchWindowCreateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        windowCode:
+          type: string
+        windowName:
+          type: string
+          maxLength: 256
+        timezone:
+          type: string
+          maxLength: 64
+        startTime:
+          type: string
+        endTime:
+          type: string
+        endStrategy:
+          type: string
+          maxLength: 32
+        outOfWindowAction:
+          type: string
+          maxLength: 32
+        allowCrossDay:
+          type: boolean
+        enabled:
+          type: boolean
+        description:
+          type: string
+          maxLength: 512
+    BatchWindowUpdateRequest:
+      type: object
+      description: 更新批次窗口(字段可选)。与 BE Java DTO `BatchWindowUpdateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        windowName:
+          type: string
+          maxLength: 256
+        timezone:
+          type: string
+          maxLength: 64
+        startTime:
+          type: string
+        endTime:
+          type: string
+        endStrategy:
+          type: string
+          maxLength: 32
+        outOfWindowAction:
+          type: string
+          maxLength: 32
+        allowCrossDay:
+          type: boolean
+        enabled:
+          type: boolean
+        description:
+          type: string
+          maxLength: 512
+    CalendarSaveRequest:
+      type: object
+      description: 创建/更新业务日历。与 BE Java DTO `CalendarSaveRequest` 对齐(create 与 update 同体)。
+      properties:
+        tenantId:
+          type: string
+        calendarCode:
+          type: string
+        calendarName:
+          type: string
+          maxLength: 256
+        timezone:
+          type: string
+          maxLength: 64
+        holidayRollRule:
+          type: string
+        catchUpPolicy:
+          type: string
+        catchUpMaxDays:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+    QuotaPolicySaveRequest:
+      type: object
+      description: 创建/更新租户配额策略。与 BE Java DTO `QuotaPolicySaveRequest` 对齐(create 与 update 同体)。
+      properties:
+        tenantId:
+          type: string
+        policyCode:
+          type: string
+        maxRunningJobsPerTenant:
+          type: integer
+          format: int32
+        maxPartitionsPerTenant:
+          type: integer
+          format: int32
+        maxQpsPerTenant:
+          type: integer
+          format: int32
+        fairShareWeight:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+          maxLength: 512
+    FileTemplateCreateRequest:
+      type: object
+      description: 创建文件模板。与 BE Java DTO `FileTemplateCreateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        templateCode:
+          type: string
+        templateName:
+          type: string
+          maxLength: 256
+        templateType:
+          type: string
+          maxLength: 32
+        bizType:
+          type: string
+          maxLength: 64
+        fileFormatType:
+          type: string
+          maxLength: 32
+        charset:
+          type: string
+          maxLength: 32
+        targetCharset:
+          type: string
+          maxLength: 32
+        withBom:
+          type: boolean
+        lineSeparator:
+          type: string
+          maxLength: 16
+        delimiter:
+          type: string
+          maxLength: 8
+        quoteChar:
+          type: string
+          maxLength: 8
+        escapeChar:
+          type: string
+          maxLength: 8
+        recordLength:
+          type: integer
+          format: int32
+        headerRows:
+          type: integer
+          format: int32
+        footerRows:
+          type: integer
+          format: int32
+        headerTemplateJson:
+          type: string
+        trailerTemplateJson:
+          type: string
+        checksumType:
+          type: string
+          maxLength: 32
+        compressType:
+          type: string
+          maxLength: 32
+        encryptType:
+          type: string
+          maxLength: 32
+        namingRule:
+          type: string
+          maxLength: 512
+        fieldMappingsJson:
+          type: string
+        validationRuleSetJson:
+          type: string
+        defaultQueryCode:
+          type: string
+          maxLength: 128
+        defaultQuerySql:
+          type: string
+        queryParamSchemaJson:
+          type: string
+        streamingEnabled:
+          type: boolean
+        pageSize:
+          type: integer
+          format: int32
+        fetchSize:
+          type: integer
+          format: int32
+        chunkSize:
+          type: integer
+          format: int32
+        previewMaskingEnabled:
+          type: boolean
+        errorLineMaskingEnabled:
+          type: boolean
+        logMaskingEnabled:
+          type: boolean
+        contentEncryptionEnabled:
+          type: boolean
+        encryptionKeyRef:
+          type: string
+          maxLength: 256
+        downloadRequiresApproval:
+          type: boolean
+        maskingRuleSet:
+          type: string
+        enabled:
+          type: boolean
+        version:
+          type: integer
+          format: int32
+        description:
+          type: string
+          maxLength: 512
+    FileTemplateUpdateRequest:
+      type: object
+      description: 更新文件模板(字段可选)。与 BE Java DTO `FileTemplateUpdateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        templateName:
+          type: string
+          maxLength: 256
+        templateType:
+          type: string
+          maxLength: 32
+        bizType:
+          type: string
+          maxLength: 64
+        fileFormatType:
+          type: string
+          maxLength: 32
+        charset:
+          type: string
+          maxLength: 32
+        targetCharset:
+          type: string
+          maxLength: 32
+        withBom:
+          type: boolean
+        lineSeparator:
+          type: string
+          maxLength: 16
+        delimiter:
+          type: string
+          maxLength: 8
+        quoteChar:
+          type: string
+          maxLength: 8
+        escapeChar:
+          type: string
+          maxLength: 8
+        recordLength:
+          type: integer
+          format: int32
+        headerRows:
+          type: integer
+          format: int32
+        footerRows:
+          type: integer
+          format: int32
+        headerTemplateJson:
+          type: string
+        trailerTemplateJson:
+          type: string
+        checksumType:
+          type: string
+          maxLength: 32
+        compressType:
+          type: string
+          maxLength: 32
+        encryptType:
+          type: string
+          maxLength: 32
+        namingRule:
+          type: string
+          maxLength: 512
+        fieldMappingsJson:
+          type: string
+        validationRuleSetJson:
+          type: string
+        defaultQueryCode:
+          type: string
+          maxLength: 128
+        defaultQuerySql:
+          type: string
+        queryParamSchemaJson:
+          type: string
+        streamingEnabled:
+          type: boolean
+        pageSize:
+          type: integer
+          format: int32
+        fetchSize:
+          type: integer
+          format: int32
+        chunkSize:
+          type: integer
+          format: int32
+        previewMaskingEnabled:
+          type: boolean
+        errorLineMaskingEnabled:
+          type: boolean
+        logMaskingEnabled:
+          type: boolean
+        contentEncryptionEnabled:
+          type: boolean
+        encryptionKeyRef:
+          type: string
+          maxLength: 256
+        downloadRequiresApproval:
+          type: boolean
+        maskingRuleSet:
+          type: string
+        enabled:
+          type: boolean
+        version:
+          type: integer
+          format: int32
+        description:
+          type: string
+          maxLength: 512
+        loadTargetRef:
+          type: string
+          maxLength: 128
+        exportDataRef:
+          type: string
+          maxLength: 128
+    FileChannelCreateRequest:
+      type: object
+      description: 创建文件渠道。与 BE Java DTO `FileChannelCreateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        channelCode:
+          type: string
+        channelName:
+          type: string
+          maxLength: 256
+        channelType:
+          type: string
+          maxLength: 32
+        targetEndpoint:
+          type: string
+          maxLength: 512
+        authType:
+          type: string
+          maxLength: 32
+        configJson:
+          type: string
+        receiptPolicy:
+          type: string
+          maxLength: 32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+    FileChannelUpdateRequest:
+      type: object
+      description: 更新文件渠道(字段可选)。与 BE Java DTO `FileChannelUpdateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        channelName:
+          type: string
+          maxLength: 256
+        channelType:
+          type: string
+          maxLength: 32
+        targetEndpoint:
+          type: string
+          maxLength: 512
+        authType:
+          type: string
+          maxLength: 32
+        configJson:
+          type: string
+        receiptPolicy:
+          type: string
+          maxLength: 32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+
     JobDefinitionCreateRequest:
       type: object
       description: 创建作业定义。与 BE Java DTO `JobDefinitionCreateRequest` 对齐。

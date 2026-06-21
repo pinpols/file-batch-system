@@ -94,7 +94,7 @@ public final class Guard {
       case NOT_IMPLEMENTED -> "error.common.not_implemented_detail";
       case SERVICE_UNAVAILABLE -> "error.common.service_unavailable_detail";
       case SYSTEM_ERROR -> "error.common.system_error_detail";
-      case INVALID_ARGUMENT -> "error.common.invalid_argument_detail";
+      case INVALID_ARGUMENT, CREDENTIAL_REF_UNRESOLVED -> "error.common.invalid_argument_detail";
       case VALIDATION_ERROR -> "error.common.validation_failed_detail";
       case MISSING_IDEMPOTENCY_KEY -> "error.common.missing_idempotency_key_detail";
       case SUCCESS -> "error.common.success_detail";

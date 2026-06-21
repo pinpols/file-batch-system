@@ -21,4 +21,12 @@ public class AlertEventQueryRequest extends PageQueryRequest {
 
   @Size(max = 128, message = "traceId too long (max 128)")
   private String traceId;
+
+  /** 时间范围起(ISO date 或 datetime),按 last_seen_at 过滤。 */
+  @Size(max = 32, message = "startDate too long (max 32)")
+  private String startDate;
+
+  /** 时间范围止(ISO date 或 datetime),按 last_seen_at 过滤。 */
+  @Size(max = 32, message = "endDate too long (max 32)")
+  private String endDate;
 }

@@ -49,6 +49,9 @@
 | 040 | [ADR-040-batch-manifest-driven-arrival-group.md](./ADR-040-batch-manifest-driven-arrival-group.md) | 清单驱动的动态到达组:上游批次清单(`batch-manifest-v1`,默认 `.batch.json`)声明当天预期文件,scanner 据此组装动态到达组（Accepted,协议 + 时序 + 分阶段） |
 | 041 | [ADR-041-control-total-continuity-gate.md](./ADR-041-control-total-continuity-gate.md)   | 控制总额贯穿闸:trailer/header 控制记录(笔数 / 金额)端到端对账,文件传输完整性 gate（Phase0 设计 + Phase1.1-1.5 已落,**默认全部关闭**） |
 | 042 | [ADR-042-admission-bounded-queue-backpressure.md](./ADR-042-admission-bounded-queue-backpressure.md) | 超容准入默认由硬拒翻为有界队列 + 背压:`default-exceeded-strategy` 默认 `QUEUE_DEFER`(设回 `REJECT` 恢复旧硬拒)（Accepted,已落地） |
+| 043 | [ADR-043-dependency-aware-fire.md](./ADR-043-dependency-aware-fire.md) | 依赖感知 fire:trigger `doFire` 前插上游就绪闸,触发器声明 `dependsOn`,上游未就绪则 defer/不丢批（Accepted） |
+| 044 | [ADR-044-instance-pause-resume.md](./ADR-044-instance-pause-resume.md) | 实例/工作流 pause/resume:新增 `PAUSED` 状态(非终态可暂停、终态不可进),派发前检查即时生效 + 批次日严格串行（Accepted） |
+| 045 | [ADR-045-console-ai-ops-assistant.md](./ADR-045-console-ai-ops-assistant.md) | 控制台 AI 运维助手定位:只读问答(指路 + 取数)、默认关、不裁定业务对错/不写状态/不进主链、可无损下沉移除（Accepted） |
 
 ### 优先级 + 范围边界纪律
 

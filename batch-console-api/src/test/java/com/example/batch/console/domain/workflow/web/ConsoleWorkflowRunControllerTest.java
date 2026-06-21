@@ -58,6 +58,24 @@ class ConsoleWorkflowRunControllerTest {
   }
 
   @Test
+  void pauseShouldDelegate() throws Exception {
+    when(proxy.workflowRunAction(3L, "ta", "pause")).thenReturn(Map.of("status", "PAUSED"));
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/pause").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).workflowRunAction(3L, "ta", "pause");
+  }
+
+  @Test
+  void resumeShouldDelegate() throws Exception {
+    when(proxy.workflowRunAction(3L, "ta", "resume")).thenReturn(Map.of("status", "RUNNING"));
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/resume").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).workflowRunAction(3L, "ta", "resume");
+  }
+
+  @Test
   void skipNodeShouldPassNodeCode() throws Exception {
     when(proxy.workflowRunSkipNode(3L, "ta", "NODE_A")).thenReturn(Map.of("status", "skipped"));
     mockMvc

@@ -47,6 +47,12 @@
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}
         </if>
+        <if test="fromTime != null">
+            and last_seen_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and last_seen_at &lt;= #{toTime}
+        </if>
         <if test="cursorId != null">
             and id &lt; #{cursorId}
         </if>
@@ -77,6 +83,12 @@
         </if>
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}
+        </if>
+        <if test="fromTime != null">
+            and last_seen_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and last_seen_at &lt;= #{toTime}
         </if>
     </select>
 

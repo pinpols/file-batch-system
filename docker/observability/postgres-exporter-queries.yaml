@@ -1,0 +1,19 @@
+# postgres-exporter 自定义 query —— 补默认 collector 缺的"锁等待"指标。
+# 默认 postgres-exporter 只有 pg_locks_count(已持有的锁,非 waiting)与
+# pg_stat_activity_max_tx_duration(长事务)。真正"被 Lock 阻塞的会话/最长等锁时长"
+# 要靠下面这条 query(pg_stat_activity wait_event_type='Lock')。
+# 经 PG_EXPORTER_EXTEND_QUERY_PATH 挂载;产出 pg_lock_waits_waiting_sessions /
+# pg_lock_waits_max_wait_seconds,被 prometheus-batch-rules.yml 的 BatchPostgresLockWaitStuck 消费。
+pg_lock_waits:
+  query: >
+    SELECT count(*) AS waiting_sessions,
+           COALESCE(max(extract(epoch FROM (now() - query_start))), 0) AS max_wait_seconds
+    FROM pg_stat_activity
+    WHERE wait_event_type = 'Lock' AND state = 'active'
+  metrics:
+    - waiting_sessions:
+        usage: GAUGE
+        description: "Sessions currently blocked waiting on a lock"
+    - max_wait_seconds:
+        usage: GAUGE
+        description: "Longest current lock-wait duration in seconds"
