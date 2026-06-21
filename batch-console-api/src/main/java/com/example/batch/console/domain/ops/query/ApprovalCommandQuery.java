@@ -11,5 +11,7 @@ public class ApprovalCommandQuery {
   private String approvalType;
   private String actionType;
   private String approvalStatus;
+  private String requesterId;
+  private String keyword;
   private PageRequest pageRequest;
 }
