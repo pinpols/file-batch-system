@@ -3361,15 +3361,30 @@ paths:
       operationId: queryAlerts
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/AcknowledgedFilter'
-        - $ref: '#/components/parameters/StartDateFilter'
-        - $ref: '#/components/parameters/EndDateFilter'
+        - name: severity
+          in: query
+          required: false
+          schema: { type: string, maxLength: 16 }
+          description: 可选,按严重级别精确过滤(severity enum)。
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, maxLength: 32 }
+          description: 可选,按告警状态精确过滤(alertStatus enum:OPEN/ACKED/SUPPRESSED/CLOSED)。
+        - name: alertType
+          in: query
+          required: false
+          schema: { type: string, maxLength: 64 }
+          description: 可选,按告警类型精确过滤。
         - name: traceId
           in: query
           required: false
           schema: { type: string, maxLength: 128 }
+          description: 可选,按 traceId 精确过滤。
+        - $ref: '#/components/parameters/StartDateFilter'
+        - $ref: '#/components/parameters/EndDateFilter'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Alert list
