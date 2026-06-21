@@ -1,6 +1,7 @@
 package com.example.batch.worker.atomic.http;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.security.CredentialEnvResolver;
 import com.example.batch.common.security.SensitiveDataValidator;
 import com.example.batch.common.spi.task.BatchTaskExecutor;
 import com.example.batch.common.spi.task.ResourceKind;
@@ -435,14 +436,16 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       }
       case "basic" -> {
         String user = Objects.toString(auth.get("username"), "");
-        String pass = Objects.toString(auth.get("password"), "");
+        // ADR-039 P1:password 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
+        String pass = CredentialEnvResolver.resolve(Objects.toString(auth.get("password"), ""));
         String token =
             Base64.getEncoder()
                 .encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
         headers.put("Authorization", "Basic " + token);
       }
       case "bearer" -> {
-        String token = Objects.toString(auth.get("token"), "");
+        // ADR-039 P1:token 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
+        String token = CredentialEnvResolver.resolve(Objects.toString(auth.get("token"), ""));
         if (token.isEmpty()) {
           throw new HttpValidationException("auth.token required for bearer");
         }

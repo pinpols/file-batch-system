@@ -25,6 +25,9 @@ public enum ResultCode implements DictEnum {
   NOT_IMPLEMENTED("NOT_IMPLEMENTED", "未实现", "not implemented", 501),
   // R-4.1 · 依赖组件短暂不可用（如 Redis 抖动）；表达"稍后重试安全"语义
   SERVICE_UNAVAILABLE("SERVICE_UNAVAILABLE", "依赖组件暂不可用", "dependency temporarily unavailable", 503),
+  // ADR-039 · 凭据 envRef(${ENV_NAME})在部署环境未定义,fail-fast 不静默回落明文
+  CREDENTIAL_REF_UNRESOLVED(
+      "CREDENTIAL_REF_UNRESOLVED", "凭据引用无法解析", "credential reference unresolved", 400),
   SYSTEM_ERROR("SYSTEM_ERROR", "系统错误", "system error", 500);
 
   private final String code;

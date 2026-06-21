@@ -4,6 +4,19 @@
 >
 > 配套:`docs/runbook/multi-tenant-rls.md` §3 是设计依据,本文档是**翻转操作手册**(给 on-call 用)。
 
+## 0. 现状与决策存档(2026-06-21「华而不实」体检维度6)
+
+体检维度6 指出 biz RLS「DB 级返 0 行」的保证在**生产默认态/多节点态下并不成立**,据此明确以下现状与决策(本次**不翻默认**):
+
+| 维度 | 现状 | 含义 |
+|---|---|---|
+| **默认模式** | `transition`(GUC `app.tenant_id` 未设 → 放行全表) | 默认部署下 RLS 不是硬拦截;隔离实际靠应用层 mapper 列过滤 + 分片路由 |
+| **strict** | 非默认,需显式翻(本手册) | 翻了才有「DB 级强制 + 可证明」 |
+| **console-api** | **完全不调 RLS session**(`applyIfPresent` 只在 worker/orchestrator 数据面) | console 读 biz 不受 RLS 保护,只靠 `ConsoleTenantGuard` + 列过滤 |
+| **Citus 多节点** | RLS **实测坏**(GUC 跨节点不传播,返 0 行/写报错),仅单节点验过 | strict 默认开 = 等于绑定单机部署;多节点要先解 GUC 传播 |
+
+**决策(2026-06-21)**:**保持 transition 默认,不单机盲翻 strict**。理由:① 翻 strict 在多节点 Citus 上会坏,翻默认等于悄悄绑定单机;② console-api 未接 RLS,即便翻了 strict 这层也不在 RLS 覆盖内;③ 应用层(mapper 强制 `tenant_id` + 分片路由 + `requireTenant`)当前已守住跨租。**这层 DB 级保证要在真多节点环境验证 GUC 传播 + 给 console-api 接上 RLS session 之后,再按 §1 触发条件评估翻转**——属维度6 的环境验证项,非代码层能单方面完成。
+
 ## 1. 决策 — 是否要现在翻
 
 **默认不翻**(transition 已提供 80% 价值)。下列情况之一才考虑翻:
