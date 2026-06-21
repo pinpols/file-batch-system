@@ -13,14 +13,17 @@
 --   partition 创建逻辑、claim/report、job_task.task_type。
 -- =========================================================
 
--- 1) job_type CHECK 放宽(DROP IF EXISTS → 装新 CHECK)。
--- 用 NOT VALID 避免 squawk(constraint-missing-not-valid)告警 + 避免加约束时的全表扫描阻塞写:
--- 本次是“单向扩值”(新集合 ⊇ 旧集合),存量行必然满足,无需 VALIDATE 回扫;NOT VALID 已对新写入强制。
+-- 1) job_type CHECK 放宽(DROP IF EXISTS → ADD NOT VALID → 立即 VALIDATE)。
+-- 两步走是本仓硬约定:
+--   * squawk(constraint-missing-not-valid)要求 ADD 带 NOT VALID(避免加约束时全表扫描阻塞写);
+--   * NotValidConstraintGuard 启动期 fail-fast 不容 convalidated=false 的悬挂约束 → 必须同迁移补 VALIDATE。
+-- 本次是单向扩值(新集合 ⊇ 旧),存量行必然满足,VALIDATE 瞬时通过(job_definition 是小配置表)。
 ALTER TABLE batch.job_definition DROP CONSTRAINT IF EXISTS ck_job_definition_job_type;
 ALTER TABLE batch.job_definition
     ADD CONSTRAINT ck_job_definition_job_type
         CHECK (job_type IN ('GENERAL', 'IMPORT', 'EXPORT', 'PROCESS', 'DISPATCH',
                             'WORKFLOW', 'ATOMIC', 'BUNDLE_IMPORT')) NOT VALID;
+ALTER TABLE batch.job_definition VALIDATE CONSTRAINT ck_job_definition_job_type;
 
 -- 2) job_partition per-file 绑定列(热表)
 ALTER TABLE batch.job_partition
