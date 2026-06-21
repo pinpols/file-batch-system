@@ -4202,8 +4202,40 @@ paths:
       operationId: queryCatchUpApprovals
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: jobCode
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+          description: 可选,按 Job 编码精确过滤。
+        - name: requestId
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+          description: 可选,按调度请求 ID 精确过滤。
+        - name: bizDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: 可选,按业务日期(ISO yyyy-MM-dd)精确过滤。
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+          description: 可选,大小写不敏感模糊匹配 requestId / jobCode / traceId 任一。
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: cursor 分页 token(ADR-031),非空时走 cursor 模式。
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
       responses:

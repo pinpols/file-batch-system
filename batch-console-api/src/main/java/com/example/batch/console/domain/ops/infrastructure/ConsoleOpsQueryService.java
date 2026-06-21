@@ -257,6 +257,8 @@ public class ConsoleOpsQueryService {
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getJobCode(),
             request.getRequestId(),
+            request.getBizDate(),
+            request.getKeyword(),
             pageRequest,
             decodeCursorId(request.getCursor()));
     List<PendingCatchUpEntity> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
