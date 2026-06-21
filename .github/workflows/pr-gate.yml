@@ -210,6 +210,13 @@ jobs:
         # load-tests 是独立 reactor,版本手工同步(CLAUDE.md 点名高危点)。
         run: bash scripts/ci/check-version-alignment.sh
 
+      - name: Helm PrometheusRule sync (告警规则 chart 副本 ↔ canonical)
+        shell: bash
+        # helm/batch-platform/files/prometheus-batch-rules.yml 是 docker/observability 下
+        # canonical 告警规则的 chart 副本(经 templates/prometheusrule.yaml 下发到 k8s)。
+        # 改 canonical 忘同步 chart 副本 → k8s 与 docker 告警漂移(新关键告警生产没下发)。
+        run: bash scripts/ci/check-helm-prometheusrule-sync.sh
+
       - name: OpenAPI breaking-change (oasdiff)
         shell: bash
         # 比 base 的 openapi,删端点/删必填/改类型等 ERR 级破坏即 fail。

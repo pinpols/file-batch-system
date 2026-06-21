@@ -141,6 +141,10 @@ services:
     restart: unless-stopped
     environment:
       DATA_SOURCE_NAME: "postgresql://${BATCH_PLATFORM_DB_USERNAME:-batch_user}:${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}@postgres-primary:5432/${BATCH_PLATFORM_DB_NAME:-batch_platform}?sslmode=disable"
+      # 挂自定义 query 暴露锁等待指标(pg_lock_waits_*),供 BatchPostgresLockWaitStuck 告警。
+      PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
+    volumes:
+      - ./docker/observability/postgres-exporter-queries.yaml:/etc/postgres_exporter/queries.yaml:ro
     networks:
       - batch-network
     depends_on:

@@ -685,3 +685,14 @@ serviceMonitor:
   scrapeTimeout: 10s
   # /actuator/prometheus path（Spring Boot Micrometer 默认）。
   path: /actuator/prometheus
+
+# ── Prometheus 告警规则 (PrometheusRule) ────────────
+# 把 docker/observability/prometheus-batch-rules.yml 的 70+ 条告警规则下发到 k8s。
+# 需要集群安装 prometheus-operator (CRD: monitoring.coreos.com/v1)。enabled=false 时
+# templates/prometheusrule.yaml 跳过渲染（plain Prometheus 走 docker 路径的 rule_files）。
+# 启用方式：helm install/upgrade 加 --set prometheusRule.enabled=true。
+prometheusRule:
+  enabled: false
+  # 与 prometheus-operator 的 Prometheus CR `ruleSelector` 匹配；
+  # 一般用 `release: prometheus` 标签，按本集群 operator 部署调整。
+  labels: {}
