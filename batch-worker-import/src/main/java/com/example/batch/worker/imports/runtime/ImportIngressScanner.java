@@ -88,6 +88,9 @@ public class ImportIngressScanner {
     for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
       tryRegister(entry.getValue(), currentObjects, batchManifests);
     }
+    // ADR-046 Phase3:manifest-only 导出束——导出无输入数据文件,清单本身即触发,
+    // 把声明导出模板集的清单登记为一条自完整到达组 trigger 记录(幂等),由 BundleArrivalLauncher 据此发 BUNDLE_EXPORT。
+    registerManifestOnlyExports(snapshots);
     observedObjects.keySet().removeIf(existing -> !currentObjects.contains(existing));
   }
 
@@ -112,6 +115,107 @@ public class ImportIngressScanner {
       }
     }
     return result;
+  }
+
+  /**
+   * ADR-046 Phase3:把「manifest-only 导出束」清单登记为自完整到达组 trigger 记录。导出无输入数据文件,清单本身就是触发: 一条 trigger 记录的
+   * metadata 携带 {@code bundleJobCode} + {@code bundleExportTemplates}(导出模板列表),其 arrival 组 {@code
+   * requiredFileSet} = 自身文件名 → 组凑齐立即触发,{@code BundleArrivalLauncher} 一个声明展成 N 个导出
+   * partition。幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过(不重复发射)。
+   */
+  private void registerManifestOnlyExports(Map<String, ObjectSnapshot> snapshots) {
+    if (!scannerProperties.isBatchManifestEnabled()
+        || !scannerProperties.getArrival().isEnabled()) {
+      return;
+    }
+    String suffix = scannerProperties.getBatchManifestSuffix();
+    for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
+      ObjectSnapshot snapshot = entry.getValue();
+      if (!entry.getKey().endsWith(suffix) || !isStable(snapshot)) {
+        continue;
+      }
+      BatchManifest manifest = readBatchManifest(entry.getKey());
+      if (manifest == null
+          || !manifest.isManifestOnlyExport()
+          || !Texts.hasText(manifest.fileGroupCode())) {
+        continue;
+      }
+      registerExportTrigger(snapshot, manifest);
+    }
+  }
+
+  private void registerExportTrigger(ObjectSnapshot snapshot, BatchManifest manifest) {
+    String resolvedTenant = resolveTenantFromObjectName(snapshot.objectName());
+    if (!Texts.hasText(resolvedTenant)) {
+      resolvedTenant =
+          Texts.hasText(manifest.tenantId()) ? manifest.tenantId() : workerConfiguration.tenantId();
+    }
+    if (!Texts.hasText(resolvedTenant)) {
+      return;
+    }
+    // 幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过 → 同一导出清单只发射一次
+    if (runtimeRepository.existsFileRecordByStoragePath(
+        resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName())) {
+      return;
+    }
+    LocalDate bizDate = parseManifestBizDate(manifest.bizDate());
+    if (bizDate == null) {
+      bizDate = resolveScannerBizDate(snapshot.objectName());
+    }
+    if (bizDate == null) {
+      return;
+    }
+    String fileName = baseName(snapshot.objectName());
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("scanner", "objectStore-export-trigger");
+    metadata.put("detectedAt", BatchDateTimeSupport.utcNow().toString());
+    metadata.put("bundleJobCode", manifest.jobCode());
+    metadata.put("bundleExportTemplates", manifest.exportTemplateCodes());
+    // 自完整到达组:requiredFileSet = 本 trigger 记录自身文件名 → 组(大小 1)立即凑齐触发
+    putArrivalMetadata(metadata, manifest.fileGroupCode(), fileName);
+    runtimeRepository.createFileRecord(
+        FileRecordParam.builder()
+            .tenantId(resolvedTenant)
+            .fileCode(null)
+            .bizType(scannerProperties.getDefaultBizType())
+            .fileCategory("EXPORT_TRIGGER")
+            .fileName(fileName)
+            .originalFileName(fileName)
+            .fileFormatType(resolveFileFormatType(fileName))
+            .charset(StandardCharsets.UTF_8.name())
+            .fileSizeBytes(snapshot.size())
+            .checksumType("NONE")
+            .checksumValue(null)
+            .storageType("S3")
+            .storagePath(snapshot.objectName())
+            .storageBucket(s3StorageProperties.getBucket())
+            .fileVersion(null)
+            .bizDate(bizDate)
+            .sourceType(scannerProperties.getSourceType())
+            .sourceRef(snapshot.objectName())
+            .fileStatus("RECEIVED")
+            .traceId("export-trigger-" + sanitizeTrace(fileName))
+            .metadata(metadata)
+            .build());
+    log.info(
+        "export bundle trigger registered: tenant={}, group={}, jobCode={}, templateCount={},"
+            + " bizDate={}",
+        resolvedTenant,
+        manifest.fileGroupCode(),
+        manifest.jobCode(),
+        manifest.exportTemplateCodes().size(),
+        bizDate);
+  }
+
+  private LocalDate parseManifestBizDate(String bizDate) {
+    if (!Texts.hasText(bizDate)) {
+      return null;
+    }
+    try {
+      return LocalDate.parse(bizDate.trim());
+    } catch (RuntimeException ignored) {
+      return null;
+    }
   }
 
   /**

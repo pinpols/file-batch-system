@@ -109,6 +109,35 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
+  void launchesExportBundleFromManifestTemplateList() {
+    // ADR-046 Phase3:导出束 manifest-only——一条 trigger 记录的 bundleExportTemplates 列表展成 N 项
+    // {templateCode}(无 sourceFileId)。
+    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new LaunchResponse("INST-3", "trace-3"));
+    List<Map<String, Object>> groupFiles =
+        List.of(
+            file(
+                301,
+                "{\"bundleJobCode\":\"BUNDLE_EXPORT_EOD\","
+                    + "\"bundleExportTemplates\":[\"EXP_RISK\",\"EXP_TRADE\"]}"));
+
+    launcher.launchIfBundle("t1", "export-eod", groupFiles);
+
+    ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(launchService).launch(captor.capture());
+    LaunchRequest req = captor.getValue();
+    Assertions.assertThat(req.jobCode()).isEqualTo("BUNDLE_EXPORT_EOD");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> bundleFiles =
+        (List<Map<String, Object>>) req.params().get("bundleFiles");
+    Assertions.assertThat(bundleFiles).hasSize(2);
+    Assertions.assertThat(bundleFiles.get(0))
+        .containsEntry("templateCode", "EXP_RISK")
+        .doesNotContainKey("sourceFileId");
+    Assertions.assertThat(bundleFiles.get(1)).containsEntry("templateCode", "EXP_TRADE");
+  }
+
+  @Test
   void skipsNonBundleGroup() {
     // 普通到达组:metadata 无 bundleJobCode → 不发 launch
     List<Map<String, Object>> groupFiles =
