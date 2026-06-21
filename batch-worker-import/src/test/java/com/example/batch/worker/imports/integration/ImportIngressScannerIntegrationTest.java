@@ -151,6 +151,61 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         .contains("BUNDLE_IMPORT_IT");
   }
 
+  @Test
+  void shouldBackfillBundleMetadataWhenDataArrivesBeforeManifest() throws Exception {
+    String bucket = s3Bucket();
+    String suffix = String.valueOf(System.nanoTime());
+    String dataFileName = "order-late-manifest-it-" + suffix + ".csv";
+    String dataObject = "ingress/" + dataFileName;
+    String manifestObject = "ingress/bundle-late-manifest-it-" + suffix + ".batch.json";
+    S3Client client = s3Client();
+
+    byte[] content = "id,name\n3,Carol\n".getBytes(StandardCharsets.UTF_8);
+    client.putObject(
+        PutObjectRequest.builder().bucket(bucket).key(dataObject).contentType("text/csv").build(),
+        RequestBody.fromBytes(content));
+
+    scanner.scan();
+    Map<String, Object> before =
+        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+    assertThat(before).isNotEmpty();
+    assertThat(String.valueOf(before.get("metadata_json"))).doesNotContain("bundleJobCode");
+
+    String manifestJson =
+        """
+        {
+          "schemaVersion": "batch-manifest-v2",
+          "fileGroupCode": "bundle-late-it-group",
+          "bizDate": "2026-05-05",
+          "tenantId": "t1",
+          "requiredFiles": ["%s"],
+          "jobCode": "BUNDLE_IMPORT_LATE_IT",
+          "fileMapping": [
+            { "fileName": "%s", "templateCode": "TPL_ORDER_LATE" }
+          ]
+        }
+        """
+            .formatted(dataFileName, dataFileName);
+    client.putObject(
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(manifestObject)
+            .contentType("application/json")
+            .build(),
+        RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
+
+    scanner.scan();
+
+    Map<String, Object> after =
+        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+    assertThat(String.valueOf(after.get("metadata_json")))
+        .contains("requiredFileSet")
+        .contains("bundleTemplateCode")
+        .contains("TPL_ORDER_LATE")
+        .contains("bundleJobCode")
+        .contains("BUNDLE_IMPORT_LATE_IT");
+  }
+
   private S3Client s3Client() {
     return S3Client.builder()
         .endpointOverride(URI.create(s3Endpoint()))

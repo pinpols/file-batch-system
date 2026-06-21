@@ -509,6 +509,45 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  void shouldThrowStateConflict_whenArrivalGroupSpansBizDatesWithoutBizDate() {
+    ArrivalGroupGovernanceCommand cmd = arrivalCmd("TRIGGER_NOW");
+    when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
+        .thenReturn(
+            List.of(
+                fileMap(11L, Map.of("biz_date", "2026-06-21")),
+                fileMap(12L, Map.of("biz_date", "2026-06-20"))));
+
+    assertThatThrownBy(() -> service.operateArrivalGroup(cmd))
+        .isInstanceOf(BizException.class)
+        .extracting(e -> ((BizException) e).getCode())
+        .isEqualTo(ResultCode.STATE_CONFLICT);
+    verify(fileGovernanceRepository, never()).updateFileMetadata(anyString(), anyLong(), any());
+  }
+
+  @Test
+  void shouldScopeArrivalGroupOperationByBizDateWhenProvided() {
+    ArrivalGroupGovernanceCommand cmd =
+        ArrivalGroupGovernanceCommand.builder()
+            .tenantId("t1")
+            .fileGroupCode("grp")
+            .bizDate("2026-06-21")
+            .action("TRIGGER_NOW")
+            .operatorId("op")
+            .traceId("tr")
+            .reason("r")
+            .build();
+    when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp", "2026-06-21"))
+        .thenReturn(List.of(fileMap(11L, Map.of("biz_date", "2026-06-21"))));
+
+    String state = service.operateArrivalGroup(cmd);
+
+    assertThat(state).isEqualTo("TRIGGERED");
+    verify(fileGovernanceRepository).selectArrivalGroupFiles("t1", "grp", "2026-06-21");
+    verify(fileGovernanceRepository, never()).selectArrivalGroupFiles("t1", "grp");
+    verify(fileGovernanceRepository).updateFileMetadata(eq("t1"), eq(11L), any());
+  }
+
+  @Test
   void shouldReturnTriggered_whenEmptyRunAllowed() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("EMPTY_RUN");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))

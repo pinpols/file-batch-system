@@ -204,11 +204,16 @@ public class FileGovernanceRepository {
   }
 
   public List<Map<String, Object>> selectArrivalGroupFiles(String tenantId, String fileGroupCode) {
+    return selectArrivalGroupFiles(tenantId, fileGroupCode, null);
+  }
+
+  public List<Map<String, Object>> selectArrivalGroupFiles(
+      String tenantId, String fileGroupCode, String bizDate) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(fileGroupCode)) {
       return List.of();
     }
     return fileGovernanceMapper.selectArrivalGroupFiles(
-        params(KEY_TENANT_ID, tenantId, "fileGroupCode", fileGroupCode));
+        params(KEY_TENANT_ID, tenantId, "fileGroupCode", fileGroupCode, "bizDate", bizDate));
   }
 
   public long countArrivalDelayViolations(String tenantId, long thresholdSeconds) {

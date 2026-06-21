@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -143,24 +143,27 @@ class BundleArrivalLauncherTest {
     List<Map<String, Object>> groupFiles =
         List.of(file(1, "{\"scanner\":\"objectStore-import\",\"fileGroupCode\":\"plain\"}"));
 
-    launcher.launchIfBundle("t1", "plain", groupFiles);
+    Assertions.assertThat(launcher.launchIfBundle("t1", "plain", groupFiles))
+        .isEqualTo(BundleArrivalLauncher.LaunchOutcome.NOT_BUNDLE);
 
     verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
   }
 
   @Test
-  void skipsWhenBundleJobCodePresentButNoUsableFileBinding() {
-    // 有 bundleJobCode 但所有文件都缺 templateCode → 不发(不展空束)
+  void failsWhenBundleJobCodePresentButNoUsableFileBinding() {
+    // 有 bundleJobCode 但所有文件都缺 binding → fail-fast,由到达组调度保持 retryable
     List<Map<String, Object>> groupFiles =
         List.of(file(1, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\"}"));
 
-    launcher.launchIfBundle("t1", "g", groupFiles);
+    assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("without usable binding");
 
     verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
   }
 
   @Test
-  void isolatesLaunchExceptionWithoutPropagating() {
+  void propagatesLaunchExceptionSoArrivalGroupCanRetry() {
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenThrow(new RuntimeException("launch boom"));
     List<Map<String, Object>> groupFiles =
@@ -169,8 +172,37 @@ class BundleArrivalLauncherTest {
                 101,
                 "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
 
-    // 异常隔离:不向上抛,governance sweep 继续
-    assertThatCode(() -> launcher.launchIfBundle("t1", "g", groupFiles)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("launch boom");
+  }
+
+  @Test
+  void rejectsMixedBundleJobCodeInSameArrivalGroup() {
+    List<Map<String, Object>> groupFiles =
+        List.of(
+            file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_A\",\"bundleTemplateCode\":\"TPL_A\"}"),
+            file(102, "{\"bundleJobCode\":\"BUNDLE_IMPORT_B\",\"bundleTemplateCode\":\"TPL_B\"}"));
+
+    assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("mixes bundleJobCode");
+    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void rejectsBindingWithoutBundleJobCodeWhenGroupIsBundle() {
+    List<Map<String, Object>> groupFiles =
+        List.of(
+            file(
+                101,
+                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_A\"}"),
+            file(102, "{\"bundleTemplateCode\":\"TPL_B\"}"));
+
+    assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("binding without bundleJobCode");
+    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
   }
 
   @Test

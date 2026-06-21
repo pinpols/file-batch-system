@@ -327,6 +327,19 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  void shouldFailFastWhenBundleJobHasNoUsableBinding() {
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(bundleJobDef("DYNAMIC", 5));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    Map<String, Object> params = Map.of("bundleFiles", List.of(Map.of("sourceFileId", 101)));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.build(command(params)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("bundleFiles required");
+  }
+
+  @Test
   void shouldNotBindFilesForNonBundleJob() {
     // 非束作业即便 params 误带 bundleFiles 也不绑定(jobType 不是 BUNDLE_IMPORT)
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))

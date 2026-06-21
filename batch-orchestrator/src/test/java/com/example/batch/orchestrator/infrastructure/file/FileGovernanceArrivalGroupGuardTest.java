@@ -36,6 +36,7 @@ class FileGovernanceArrivalGroupGuardTest {
 
   private FileGovernanceRepository repository;
   private FileGovernanceProperties properties;
+  private BundleArrivalLauncher bundleArrivalLauncher;
   private FileGovernanceScheduler scheduler;
 
   @BeforeEach
@@ -47,6 +48,7 @@ class FileGovernanceArrivalGroupGuardTest {
     when(properties.getArrival().isTriggerOnComplete()).thenReturn(true);
     when(properties.getArrival().getDefaultTimeoutAction()).thenReturn("MANUAL_CONFIRM");
 
+    bundleArrivalLauncher = mock(BundleArrivalLauncher.class);
     scheduler =
         new FileGovernanceScheduler(
             repository,
@@ -54,7 +56,7 @@ class FileGovernanceArrivalGroupGuardTest {
             properties,
             mock(FileGovernanceMetricsCacheService.class),
             new SimpleMeterRegistry(),
-            mock(BundleArrivalLauncher.class));
+            bundleArrivalLauncher);
   }
 
   @Test
@@ -137,6 +139,53 @@ class FileGovernanceArrivalGroupGuardTest {
     assertThat(captor.getValue().get("arrivalState")).isEqualTo("TRIGGERED");
   }
 
+  @Test
+  void shouldKeepBundleGroupRetryableWhenLaunchFails() {
+    Map<String, Object> file =
+        baseFile(5500L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    file.put("required_file_set", "ready.csv");
+    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(bundleArrivalLauncher.launchIfBundle(eq("default-tenant"), eq("test-group"), any()))
+        .thenThrow(new IllegalStateException("launch failed"));
+
+    scheduler.manageFileArrivalGroups();
+
+    verify(repository, never()).updateFileMetadata(anyString(), anyLong(), any());
+    verify(repository, never()).appendAudit(any());
+  }
+
+  @Test
+  void shouldPartitionSameArrivalGroupCodeByBizDate() {
+    Map<String, Object> today =
+        baseFile(5600L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    today.put("biz_date", "2026-06-21");
+    today.put("required_file_set", "ready.csv");
+    Map<String, Object> yesterday =
+        baseFile(5601L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    yesterday.put("biz_date", "2026-06-20");
+    yesterday.put("required_file_set", "ready.csv");
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(List.of(today, yesterday));
+
+    scheduler.manageFileArrivalGroups();
+
+    verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5600L), any());
+    verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5601L), any());
+  }
+
+  @Test
+  void shouldStillTriggerArrivalGroupWhenBizDateMissing() {
+    Map<String, Object> file =
+        baseFile(5700L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    file.remove("biz_date");
+    file.put("required_file_set", "ready.csv");
+    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+
+    scheduler.manageFileArrivalGroups();
+
+    verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5700L), any());
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static Map<String, Object> baseFile(
@@ -144,6 +193,7 @@ class FileGovernanceArrivalGroupGuardTest {
     Map<String, Object> file = new LinkedHashMap<>();
     file.put("id", id);
     file.put("tenant_id", "default-tenant");
+    file.put("biz_date", "2026-06-21");
     file.put("file_name", fileName);
     file.put("file_status", "RECEIVED");
     file.put("file_group_code", "test-group");

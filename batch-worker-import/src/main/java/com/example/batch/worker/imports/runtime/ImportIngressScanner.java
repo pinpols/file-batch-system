@@ -318,15 +318,7 @@ public class ImportIngressScanner {
     //   ① fileMapping 声明本文件绑定:导入束给 templateCode(目标表从模板推),分发束给 targetRef(下游渠道);
     //   ② jobCode 声明本束凑齐后启动哪个 BUNDLE_* 作业(到达组凑齐时 BundleArrivalLauncher 据此发 launch)。
     if (matchedBatch != null) {
-      matchedBatch
-          .templateCodeFor(fileName)
-          .ifPresent(templateCode -> metadata.put("bundleTemplateCode", templateCode));
-      matchedBatch
-          .targetRefFor(fileName)
-          .ifPresent(targetRef -> metadata.put("bundleTargetRef", targetRef));
-      if (Texts.hasText(matchedBatch.jobCode())) {
-        metadata.put("bundleJobCode", matchedBatch.jobCode());
-      }
+      putBundleMetadata(metadata, matchedBatch, fileName);
     }
     Long fileId =
         runtimeRepository.createFileRecord(
@@ -618,16 +610,23 @@ public class ImportIngressScanner {
     Map<String, Object> record =
         runtimeRepository.loadFileRecordByStoragePath(
             tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
-    if (record == null || record.isEmpty() || hasRequiredFileSet(record)) {
+    if (record == null || record.isEmpty()) {
       return;
     }
     Long fileId = runtimeRepository.toLong(record.get("id"));
     if (fileId == null) {
       return;
     }
+    Map<String, Object> existingMetadata = parseRecordMetadata(record);
     Map<String, Object> metadata = new LinkedHashMap<>();
-    putArrivalMetadata(
-        metadata, matched.fileGroupCode(), String.join(",", matched.requiredFiles()));
+    if (!hasRequiredFileSet(existingMetadata)) {
+      putArrivalMetadata(
+          metadata, matched.fileGroupCode(), String.join(",", matched.requiredFiles()));
+    }
+    putMissingBundleMetadata(metadata, matched, baseName(snapshot.objectName()), existingMetadata);
+    if (metadata.isEmpty()) {
+      return;
+    }
     runtimeRepository.updateFileMetadata(fileId, metadata);
     log.info(
         "batch manifest backfilled arrival group for registered file: tenantId={}, fileId={},"
@@ -637,19 +636,87 @@ public class ImportIngressScanner {
         matched.fileGroupCode());
   }
 
+  /** ADR-046:把 batch-manifest v2 的 per-file 束绑定落到 file_record metadata。 */
+  private void putBundleMetadata(
+      Map<String, Object> metadata, BatchManifest matchedBatch, String fileName) {
+    putBundleMetadata(metadata, matchedBatch, fileName, Map.of(), false);
+  }
+
+  private void putMissingBundleMetadata(
+      Map<String, Object> metadata,
+      BatchManifest matchedBatch,
+      String fileName,
+      Map<String, Object> existingMetadata) {
+    putBundleMetadata(metadata, matchedBatch, fileName, existingMetadata, true);
+  }
+
+  private void putBundleMetadata(
+      Map<String, Object> metadata,
+      BatchManifest matchedBatch,
+      String fileName,
+      Map<String, Object> existingMetadata,
+      boolean onlyMissingOrChanged) {
+    if (matchedBatch == null) {
+      return;
+    }
+    matchedBatch
+        .templateCodeFor(fileName)
+        .ifPresent(
+            templateCode ->
+                putMetadataValue(
+                    metadata,
+                    existingMetadata,
+                    "bundleTemplateCode",
+                    templateCode,
+                    onlyMissingOrChanged));
+    matchedBatch
+        .targetRefFor(fileName)
+        .ifPresent(
+            targetRef ->
+                putMetadataValue(
+                    metadata,
+                    existingMetadata,
+                    "bundleTargetRef",
+                    targetRef,
+                    onlyMissingOrChanged));
+    if (Texts.hasText(matchedBatch.jobCode())) {
+      putMetadataValue(
+          metadata,
+          existingMetadata,
+          "bundleJobCode",
+          matchedBatch.jobCode(),
+          onlyMissingOrChanged);
+    }
+  }
+
+  private void putMetadataValue(
+      Map<String, Object> metadata,
+      Map<String, Object> existingMetadata,
+      String key,
+      String value,
+      boolean onlyMissingOrChanged) {
+    if (!onlyMissingOrChanged || !Objects.equals(existingMetadata.get(key), value)) {
+      metadata.put(key, value);
+    }
+  }
+
   /** 已登记记录的 metadata_json 是否已含非空 requiredFileSet(回填幂等判据)。 */
-  private boolean hasRequiredFileSet(Map<String, Object> record) {
+  private boolean hasRequiredFileSet(Map<String, Object> metadata) {
+    Object value = metadata.get("requiredFileSet");
+    return value != null && Texts.hasText(String.valueOf(value));
+  }
+
+  private Map<String, Object> parseRecordMetadata(Map<String, Object> record) {
     Object metadataJson = record.get("metadata_json");
     if (metadataJson == null) {
-      return false;
+      return Map.of();
     }
     try {
-      Map<String, Object> meta =
+      Map<String, Object> parsed =
           objectMapper.readValue(String.valueOf(metadataJson), new TypeReference<>() {});
-      Object value = meta.get("requiredFileSet");
-      return value != null && Texts.hasText(String.valueOf(value));
+      return parsed == null ? Map.of() : parsed;
     } catch (Exception ex) {
-      return false;
+      return Map.of();
     }
   }
 
