@@ -14,9 +14,13 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DispatchPayload(
-    String fileId,
+    // ADR-046 文件束分发:束 partition 的通用绑定列经 dispatch 派发塞进 payload 为 sourceFileId /
+    // targetRef(见 DefaultPartitionDispatchService.enrichBundleBinding)。分发载荷历史字段名是
+    // fileId / channelCode,这里用 @JsonAlias 把束的通用键直接映射进来,无需在 PrepareDispatchStep
+    // 加分支——普通分发任务仍用原字段名,不受影响(同名优先,别名兜底)。
+    @JsonAlias("sourceFileId") String fileId,
     String fileCode,
-    String channelCode,
+    @JsonAlias("targetRef") String channelCode,
     String dispatchTarget,
     String externalRequestId,
     String receiptCode,
