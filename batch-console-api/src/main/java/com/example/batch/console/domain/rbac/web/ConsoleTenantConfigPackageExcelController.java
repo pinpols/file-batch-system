@@ -6,6 +6,7 @@ import com.example.batch.console.application.config.ConsoleTenantConfigPackageEx
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.config.TenantConfigPackageExcelApplyRequest;
+import com.example.batch.console.web.request.config.TenantConfigPackageExcelPatchRequest;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelApplyResponse;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
@@ -97,6 +98,22 @@ public class ConsoleTenantConfigPackageExcelController {
   public CommonResponse<TenantConfigPackageExcelPreviewResponse> preview(
       @PathVariable String uploadToken) {
     return responseFactory.success(applicationService.preview(uploadToken));
+  }
+
+  /**
+   * 预览出错行内联编辑:把改动的单元格回写到上传会话并重校验,返回新预览,免去“下 Excel→改→重传”。 不落库——仍需走 {@code /apply}。
+   *
+   * @param uploadToken 与预览阶段相同
+   * @param request 定位 (sheetName, rowNo) + 改动单元格 values
+   */
+  @PostMapping("/preview/{uploadToken}/patch")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  public CommonResponse<TenantConfigPackageExcelPreviewResponse> patchPreviewRow(
+      @PathVariable String uploadToken,
+      @Valid @RequestBody TenantConfigPackageExcelPatchRequest request) {
+    return responseFactory.success(
+        applicationService.patchRow(
+            uploadToken, request.getSheetName(), request.getRowNo(), request.getValues()));
   }
 
   /**

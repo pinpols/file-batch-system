@@ -9086,6 +9086,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelPreview'
+  /api/console/config/tenant-package/excel/preview/{uploadToken}/patch:
+    post:
+      tags: [Config]
+      summary: Inline-edit an error row of the previewed tenant config package, then re-validate
+      description: >
+        把预览出错行被改动的单元格回写到上传会话并重校验,返回新预览,免去"下 Excel→改→重传"。不落库,仍需 apply。
+      operationId: patchTenantConfigPackageExcelPreviewRow
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConfigPackageExcelPatchRequest'
+      responses:
+        '200':
+          description: Re-validated preview after patching the row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelPreview'
   /api/console/config/tenant-package/excel/preview/{uploadToken}/workbook:
     get:
       tags: [Config]
@@ -14782,7 +14808,47 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TenantConfigPackageIssueDto'
+        errorRows:
+          type: array
+          description: 按 (sheet, rowNo) 聚合的出错行明细(整行单元格值 + 该行所有问题),供前端内联编辑。
+          items:
+            $ref: '#/components/schemas/TenantConfigPackageErrorRowDto'
       required: [uploadToken, fileName, totalRows, validRows, invalidRows, sheets, issues]
+    TenantConfigPackageErrorRowDto:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        rowNo:
+          type: integer
+          format: int32
+        values:
+          type: object
+          additionalProperties:
+            type: string
+          description: 该行整行单元格值(列键→值),迭代顺序 = 该 sheet 列顺序。
+        messages:
+          type: array
+          items:
+            type: string
+      required: [sheetName, rowNo, values, messages]
+    TenantConfigPackageExcelPatchRequest:
+      type: object
+      properties:
+        sheetName:
+          type: string
+          description: sheet 名(后端 validator SHEET 常量,如 job_definition / file_channel_config)。
+        rowNo:
+          type: integer
+          format: int32
+          minimum: 2
+          description: 行号(与预览返回一致;数据行从 2 起,1 为表头)。
+        values:
+          type: object
+          additionalProperties:
+            type: string
+          description: 改动的单元格:列键→新值。仅合并该行已有的列键,未知键忽略。
+      required: [sheetName, rowNo]
     TenantConfigPackageSheetStats:
       type: object
       properties:

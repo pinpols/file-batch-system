@@ -50,6 +50,7 @@ import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser
 import com.example.batch.console.infrastructure.excel.ResourceQueueExcelRowParser;
 import com.example.batch.console.infrastructure.excel.ResourceQueueExcelRowParser.QueueRow;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
+import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.ConsoleSingleSheetExcelImportSupport;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
@@ -59,6 +60,7 @@ import com.example.batch.console.support.web.UploadFileGuard;
 import com.example.batch.console.web.request.config.TenantConfigPackageExcelApplyRequest;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelApplyResponse;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
+import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse.ErrorRowDto;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse.IssueDto;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse.SheetStats;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
@@ -289,7 +291,33 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   public TenantConfigPackageExcelPreviewResponse preview(String uploadToken) {
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
-    return toPreviewResponse(uploadToken, session.fileName(), result);
+    return toPreviewResponse(uploadToken, session, result);
+  }
+
+  /**
+   * 内联编辑回写:把出错行被改动的单元格合并进 session 对应行（{@code rowNo - 2} = 列表下标），再重校验并返回新预览。 不落库——仍走原 apply
+   * 闸门（invalid > 0 拒绝）。会话仍按 token 持有,30 分钟 TTL。
+   */
+  @Override
+  public TenantConfigPackageExcelPreviewResponse patchRow(
+      String uploadToken, String sheetName, int rowNo, Map<String, String> values) {
+    PackageExcelSession session = loadSession(uploadToken);
+    List<Map<String, String>> rows = sheetRowsByName(session).get(sheetName);
+    Guard.require(rows != null, "unknown sheet: " + sheetName);
+    int idx = rowNo - 2;
+    Guard.require(idx >= 0 && idx < rows.size(), "row out of range: " + rowNo);
+    Map<String, String> target = rows.get(idx);
+    if (values != null) {
+      // 只合并该行已有的列键,挡掉前端传错列名凭空塞键;value 走与解析期一致的 normalize(trim)
+      values.forEach(
+          (k, v) -> {
+            if (target.containsKey(k)) {
+              target.put(k, v == null ? "" : v.trim());
+            }
+          });
+    }
+    PackageValidationResult result = validator().validate(session);
+    return toPreviewResponse(uploadToken, session, result);
   }
 
   @Override
@@ -809,7 +837,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private TenantConfigPackageExcelPreviewResponse toPreviewResponse(
-      String uploadToken, String fileName, PackageValidationResult result) {
+      String uploadToken, PackageExcelSession session, PackageValidationResult result) {
     List<SheetStats> sheets =
         List.of(
             toSheetStats(result.resourceQueues()),
@@ -830,7 +858,60 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     int total = sheets.stream().mapToInt(SheetStats::totalRows).sum();
     int valid = sheets.stream().mapToInt(SheetStats::validRows).sum();
     return new TenantConfigPackageExcelPreviewResponse(
-        uploadToken, fileName, total, valid, total - valid, sheets, issues);
+        uploadToken,
+        session.fileName(),
+        total,
+        valid,
+        total - valid,
+        sheets,
+        issues,
+        toErrorRows(session, result));
+  }
+
+  /** 按 (sheet, rowNo) 聚合出错行 + 该行整行单元格值,供前端内联编辑。保持 issue 出现顺序。 */
+  private List<ErrorRowDto> toErrorRows(
+      PackageExcelSession session, PackageValidationResult result) {
+    Map<String, List<Map<String, String>>> rowsBySheet = sheetRowsByName(session);
+    Map<String, ErrorRowAccumulator> grouped = new LinkedHashMap<>();
+    for (WorkbookIssue issue : result.allIssues()) {
+      String key = issue.sheetName() + "#" + issue.rowNo();
+      grouped
+          .computeIfAbsent(
+              key,
+              k -> new ErrorRowAccumulator(issue.sheetName(), issue.rowNo(), new ArrayList<>()))
+          .messages()
+          .add(issue.message());
+    }
+    List<ErrorRowDto> out = new ArrayList<>(grouped.size());
+    for (ErrorRowAccumulator acc : grouped.values()) {
+      Map<String, String> values = Map.of();
+      List<Map<String, String>> rows = rowsBySheet.get(acc.sheetName());
+      int idx = acc.rowNo() - 2;
+      if (rows != null && idx >= 0 && idx < rows.size()) {
+        values = new LinkedHashMap<>(rows.get(idx));
+      }
+      out.add(new ErrorRowDto(acc.sheetName(), acc.rowNo(), values, List.copyOf(acc.messages())));
+    }
+    return out;
+  }
+
+  private record ErrorRowAccumulator(String sheetName, int rowNo, List<String> messages) {}
+
+  /** sheet 名(validator SHEET 常量)→ session 对应行列表。内联编辑 patch 与出错行回填共用。 */
+  private Map<String, List<Map<String, String>>> sheetRowsByName(PackageExcelSession session) {
+    Map<String, List<Map<String, String>>> m = new LinkedHashMap<>();
+    m.put(RESOURCE_QUEUE_SHEET, session.resourceQueueRows());
+    m.put(BUSINESS_CALENDAR_SHEET, session.businessCalendarRows());
+    m.put(BATCH_WINDOW_SHEET, session.batchWindowRows());
+    m.put(JOB_SHEET, session.jobRows());
+    m.put(CHANNEL_SHEET, session.fileChannelRows());
+    m.put(FILE_TEMPLATE_SHEET, session.fileTemplateRows());
+    m.put(PIPELINE_SHEET, session.pipelineRows());
+    m.put(STEP_SHEET, session.pipelineStepRows());
+    m.put(WF_DEF_SHEET, session.workflowDefinitionRows());
+    m.put(WF_NODE_SHEET, session.workflowNodeRows());
+    m.put(WF_EDGE_SHEET, session.workflowEdgeRows());
+    return m;
   }
 
   private SheetStats toSheetStats(SheetResult r) {
