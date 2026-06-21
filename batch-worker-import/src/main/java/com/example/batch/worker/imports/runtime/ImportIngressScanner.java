@@ -210,12 +210,16 @@ public class ImportIngressScanner {
         metadata.put("expectedRecordCount", manifest.recordCount());
       }
     }
-    // ADR-046 第二刀:批次清单 v2 的 fileMapping 声明了本文件用哪个模板 → 落 metadata
-    // 供 launch(BUNDLE_IMPORT)按组展异构 partition 时读取(目标表从模板推,故只存 templateCode)。
+    // ADR-046 第二刀:批次清单 v2 落 metadata 供束 launch 读取——
+    //   ① fileMapping 声明本文件用哪个模板(目标表从模板推,故只存 templateCode);
+    //   ② jobCode 声明本束凑齐后启动哪个 BUNDLE_IMPORT 作业(2c-2b 到达组凑齐时据此发 launch)。
     if (matchedBatch != null) {
       matchedBatch
           .templateCodeFor(fileName)
           .ifPresent(templateCode -> metadata.put("bundleTemplateCode", templateCode));
+      if (Texts.hasText(matchedBatch.jobCode())) {
+        metadata.put("bundleJobCode", matchedBatch.jobCode());
+      }
     }
     Long fileId =
         runtimeRepository.createFileRecord(
