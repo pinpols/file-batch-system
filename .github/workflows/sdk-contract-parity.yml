@@ -156,7 +156,7 @@ jobs:
       # Live broker behavior is hard-gated by sdk-live-transport below; this job
       # keeps a cheap compile check close to the Rust contract suite.
       - name: Install librdkafka build deps
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev libssl-dev
       - name: Compile-check Kafka adapter (--features kafka)
         working-directory: sdk/rust
         run: cargo check --features kafka
@@ -195,7 +195,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
 
       - name: Install native build deps
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev netcat-openbsd
+        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev libssl-dev netcat-openbsd
 
       - name: Start Redpanda Kafka broker
         run: |
