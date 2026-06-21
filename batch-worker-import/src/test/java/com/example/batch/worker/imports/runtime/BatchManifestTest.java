@@ -78,6 +78,36 @@ class BatchManifestTest {
     assertThat(m.fileMapping().get(1).targetTable()).isEqualTo("biz.customer");
     // 未在映射里的文件 → empty
     assertThat(m.templateCodeFor("missing.csv")).isEmpty();
+    // 导入束清单无 targetRef
+    assertThat(m.targetRefFor("order.csv")).isEmpty();
+  }
+
+  @Test
+  @DisplayName("v2 分发束清单解析 fileMapping:逐文件下游渠道 targetRef")
+  void parsesV2DispatchFileMapping() throws Exception {
+    String json =
+        """
+        {
+          "schemaVersion": "batch-manifest-v2",
+          "fileGroupCode": "dispatch-eod",
+          "bizDate": "2026-06-21",
+          "tenantId": "t1",
+          "requiredFiles": ["risk.csv", "trade.csv"],
+          "jobCode": "BUNDLE_DISPATCH_EOD",
+          "fileMapping": [
+            { "fileName": "risk.csv", "targetRef": "CH_SFTP" },
+            { "fileName": "trade.csv", "targetRef": "CH_OSS" }
+          ]
+        }
+        """;
+    BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
+    assertThat(m.jobCode()).isEqualTo("BUNDLE_DISPATCH_EOD");
+    assertThat(m.hasFileMapping()).isTrue();
+    assertThat(m.targetRefFor("risk.csv")).contains("CH_SFTP");
+    assertThat(m.targetRefFor("trade.csv")).contains("CH_OSS");
+    // 分发束清单无 templateCode
+    assertThat(m.templateCodeFor("risk.csv")).isEmpty();
+    assertThat(m.targetRefFor("missing.csv")).isEmpty();
   }
 
   @Test
