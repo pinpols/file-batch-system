@@ -125,87 +125,54 @@ public class ConfigPackageExcelWorkbookWriter {
   // ── 真实非空示例片段（提取自 batch-e2e-tests import/export-template-config-seed.sql，
   //    与 worker 实际解析逻辑一致；精简但结构完整、可直接改）。
   //    import 与 export 两套 field_mappings / query_param_schema 结构不同，分别给。
+  //    片段文案与 3 张只读说明 sheet 已外置到 classpath 资源 /config-package-guidance.json，
+  //    由 ConfigPackageGuidanceContent 加载；此处常量名保留不变（测试与 FILL_EXAMPLE_OVERRIDE 仍引用）。
+
+  private static final ConfigPackageGuidanceContent GUIDANCE = ConfigPackageGuidanceContent.load();
 
   /**
    * import 的 field_mappings：source/targetColumn/type/required/maxLength/format（非极简 source/target）。
    */
   private static final String EXAMPLE_IMPORT_FIELD_MAPPINGS =
-      "[{\"name\":\"customerNo\",\"targetColumn\":\"customer_no\",\"type\":\"STRING\","
-          + "\"required\":true,\"maxLength\":32},"
-          + "{\"name\":\"openDate\",\"targetColumn\":\"open_date\",\"type\":\"DATE\","
-          + "\"required\":true,\"format\":\"yyyy-MM-dd\"}]"
-          + "\n怎么填: name=文件里的列名; targetColumn=入库的表列名(与 name 同名时可不填,"
-          + "系统按大小写/下划线自动归一,如 customerNo→customer_no);"
-          + "type 取 STRING/DATE/DECIMAL 等; required/maxLength/format 是质量校验项;"
-          + "想校验但不入库的列加 \"persist\":false。";
+      GUIDANCE.fragment("importFieldMappings");
 
   /** export 的 field_mappings：sourceColumn/header/format（numberFormat 走 format 如 #,##0.00）。 */
   private static final String EXAMPLE_EXPORT_FIELD_MAPPINGS =
-      "[{\"name\":\"customerNo\",\"sourceColumn\":\"customer_no\",\"type\":\"STRING\","
-          + "\"header\":\"customerNo\"},"
-          + "{\"name\":\"creditLimit\",\"sourceColumn\":\"credit_limit\",\"type\":\"DECIMAL\","
-          + "\"header\":\"creditLimit\",\"format\":\"#,##0.00\"}]"
-          + "\n怎么填: name=逻辑名; sourceColumn=取数 SQL 的结果列名; header=导出文件的表头文字;"
-          + "DECIMAL/DATE 可用 format 控制格式(如 #,##0.00、yyyy-MM-dd)。";
+      GUIDANCE.fragment("exportFieldMappings");
 
   /**
    * import 的
    * query_param_schema.jdbcMappedImport：schema/table/columnMappings/conflictColumns/systemBindings。
    */
   private static final String EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA =
-      "{\"jdbcMappedImport\":{\"schema\":\"biz\",\"table\":\"customer_account\","
-          + "\"tenantColumn\":\"tenant_id\","
-          + "\"columnMappings\":[{\"from\":\"phone\",\"to\":\"mobile_no\"}],"
-          + "\"conflictColumns\":[\"customer_no\"],"
-          + "\"standardAuditBindings\":true}}"
-          + "\n怎么填: schema/table=落库的库.表; tenantColumn=租户列(一般 tenant_id);"
-          + "columnMappings 只写名字对不上的列(如 phone→mobile_no),其余与 field_mappings 同名列自动推断"
-          + "(大小写/下划线兼容);conflictColumns 是重跑幂等键,系统会自动补 tenant_id;"
-          + "standardAuditBindings=true 一键写入标准审计列(source_file_name/batch_no/trace_id/created_by/"
-          + "updated_by),不想用就改写 systemBindings 显式声明。";
+      GUIDANCE.fragment("importQueryParamSchema");
 
   /**
    * export 的 query_param_schema：JSON Schema 参数声明，或 sqlTemplateExport.cursorColumn /
    * jdbcMappedExport。
    */
   private static final String EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA =
-      "{\"type\":\"object\",\"properties\":{\"tenantId\":{\"type\":\"string\",\"required\":true},"
-          + "\"status\":{\"type\":\"string\",\"required\":false}}}"
-          + " // 游标分页用 {\"sqlTemplateExport\":{\"cursorColumn\":\"id\"}}";
+      GUIDANCE.fragment("exportQueryParamSchema");
 
   /** export 的 default_query_sql：命名参数 :tenantId/:batchNo，单条安全 SELECT。 */
-  private static final String EXAMPLE_EXPORT_QUERY_SQL =
-      "SELECT customer_no, customer_name, status FROM biz.customer_account WHERE tenant_id ="
-          + " :tenantId AND (:status IS NULL OR status = :status)\n"
-          + "怎么填: 单条 SELECT(禁 UPDATE/DELETE/SELECT *); 命名参数用 :tenantId/:status(运行时绑定,别写 ? 占位符); 必须按"
-          + " tenant_id = :tenantId 过滤本租户; SELECT 列名需与 field_mappings.sourceColumn 对齐。";
+  private static final String EXAMPLE_EXPORT_QUERY_SQL = GUIDANCE.fragment("exportQuerySql");
 
   /** validation_rule_set（import）：maxErrorRate/stopOnFirstError/duplicateKeyCheck。 */
   private static final String EXAMPLE_IMPORT_VALIDATION_RULE_SET =
-      "{\"maxErrorRate\":0.05,\"stopOnFirstError\":false,"
-          + "\"duplicateKeyCheck\":{\"enabled\":true,\"keys\":[\"customerNo\"]}}"
-          + "\n怎么填: maxErrorRate=坏行率阈值(0.05=5%,超过则整批失败); stopOnFirstError=遇首个坏行即停;"
-          + "duplicateKeyCheck.keys 取 field_mappings.name(批内重复键检测)。";
+      GUIDANCE.fragment("importValidationRuleSet");
 
   /** 渠道 config_json：endpoint + auth + credentials（DISPATCH 用）。 */
-  private static final String EXAMPLE_CHANNEL_CONFIG_JSON =
-      "{\"endpoint\":\"sftp://sftp.example.com:22/inbound\",\"auth\":{\"type\":\"PASSWORD\","
-          + "\"username\":\"batch_user\"},\"credentials\":{\"passwordRef\":\"kms://channel/sftp_inbound\"}}";
+  private static final String EXAMPLE_CHANNEL_CONFIG_JSON = GUIDANCE.fragment("channelConfigJson");
 
   /** job default_params：IMPORT/EXPORT 用 templateCode 引用 file_template_config。 */
-  private static final String EXAMPLE_JOB_DEFAULT_PARAMS =
-      "{\"templateCode\":\"TPL_IMPORT_CUSTOMER\",\"bizDate\":\"${bizDate}\"}";
+  private static final String EXAMPLE_JOB_DEFAULT_PARAMS = GUIDANCE.fragment("jobDefaultParams");
 
   /** PROCESS 步骤 step_params：targetSchema/targetTable/sql/columnMappings。 */
-  private static final String EXAMPLE_PROCESS_STEP_PARAMS =
-      "{\"targetSchema\":\"biz\",\"targetTable\":\"customer_summary\","
-          + "\"sql\":\"SELECT customer_no, count(*) AS cnt FROM biz.customer_account "
-          + "WHERE tenant_id = :tenantId GROUP BY customer_no\","
-          + "\"columnMappings\":[{\"from\":\"customer_no\",\"to\":\"customer_no\"}]}";
+  private static final String EXAMPLE_PROCESS_STEP_PARAMS = GUIDANCE.fragment("processStepParams");
 
   /** DISPATCH 步骤 step_params：channelCode 指向 file_channel_config.channel_code。 */
   private static final String EXAMPLE_DISPATCH_STEP_PARAMS =
-      "{\"channelCode\":\"sftp_inbound\",\"fileChannelCode\":\"sftp_inbound\"}";
+      GUIDANCE.fragment("dispatchStepParams");
 
   private static final Set<String> FILE_TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
   private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
@@ -532,222 +499,22 @@ public class ConfigPackageExcelWorkbookWriter {
   static final String SHEET_NAME_BUNDLE = "文件束示例";
 
   /** 「依赖说明」sheet 表头。取自 9+2 设计文档 §依赖说明 Sheet 结构。 只读说明 sheet，不参与上传解析与 apply。 */
-  static final String[] DEPENDENCY_HEADERS = {
-    "source_sheet",
-    "source_field",
-    "target_sheet",
-    "target_key",
-    "db_fallback",
-    "required_when",
-    "说明",
-    "示例"
-  };
+  static final String[] DEPENDENCY_HEADERS = GUIDANCE.sheet("dependency").headers();
 
   /**
    * 「依赖说明」内置依赖行（job→template/channel/queue 引用关系 + DB fallback 规则）。 取自 9+2 设计文档 §依赖说明 Sheet
    * 建议内置依赖行表，与跨 sheet 校验规则 1:1。
    */
-  static final List<String[]> DEPENDENCY_ROWS =
-      List.of(
-          new String[] {
-            "job_definition",
-            "queue_code",
-            "resource_queue",
-            "queue_code",
-            GUIDE_TRUE,
-            "queue_code 非空",
-            "作业绑定的资源队列必须存在",
-            "import-queue -> resource_queue.queue_code"
-          },
-          new String[] {
-            "job_definition",
-            "calendar_code",
-            "business_calendar",
-            "calendar_code",
-            GUIDE_TRUE,
-            "calendar_code 非空",
-            "作业绑定的业务日历必须存在",
-            "default-calendar -> business_calendar.calendar_code"
-          },
-          new String[] {
-            "job_definition",
-            "window_code",
-            "batch_window",
-            "window_code",
-            GUIDE_TRUE,
-            "window_code 非空",
-            "作业绑定的批次窗口必须存在",
-            "always-open -> batch_window.window_code"
-          },
-          new String[] {
-            "job_definition",
-            "default_params.templateCode",
-            "file_template_config",
-            "template_code + version",
-            GUIDE_TRUE,
-            "templateCode 非空",
-            "默认参数引用的文件模板必须存在",
-            "TPL_IMPORT_CUSTOMER -> file_template_config.template_code"
-          },
-          new String[] {
-            "pipeline_definition",
-            "job_code",
-            "job_definition",
-            "job_code",
-            GUIDE_TRUE,
-            "总是",
-            "流水线必须挂在已定义的作业上",
-            "JOB_IMPORT_CUSTOMER -> job_definition.job_code"
-          },
-          new String[] {
-            "pipeline_step_definition",
-            "job_code + version",
-            "pipeline_definition",
-            "job_code + version",
-            "FALSE",
-            "总是",
-            "步骤必须属于本包内的流水线（不允许 DB fallback）",
-            "JOB_IMPORT_CUSTOMER/1 -> pipeline_definition"
-          },
-          new String[] {
-            "pipeline_step_definition",
-            "step_params.templateCode",
-            "file_template_config",
-            "template_code + version",
-            GUIDE_TRUE,
-            "templateCode 非空",
-            "步骤引用的文件模板必须存在",
-            "TPL_IMPORT_CUSTOMER -> file_template_config.template_code"
-          },
-          new String[] {
-            "pipeline_step_definition",
-            "step_params.channelCode / fileChannelCode",
-            "file_channel_config",
-            "channel_code",
-            GUIDE_TRUE,
-            "channelCode 非空",
-            "派发步骤引用的通道必须存在",
-            "sftp_inbound -> file_channel_config.channel_code"
-          },
-          new String[] {
-            "workflow_node",
-            "workflow_code + workflow_version",
-            "workflow_definition",
-            "workflow_code + version",
-            "FALSE",
-            "总是",
-            "节点必须属于本包内的工作流（不允许 DB fallback）",
-            "WF_SETTLEMENT/1 -> workflow_definition"
-          },
-          new String[] {
-            "workflow_node",
-            "related_job_code",
-            "job_definition",
-            "job_code",
-            GUIDE_TRUE,
-            "related_job_code 非空",
-            "节点引用的作业必须存在",
-            "JOB_IMPORT_CUSTOMER -> job_definition.job_code"
-          },
-          new String[] {
-            "workflow_node",
-            "related_pipeline_code",
-            "pipeline_definition",
-            "job_code",
-            GUIDE_TRUE,
-            "related_pipeline_code 非空",
-            "FILE_STEP 节点引用的流水线必须存在",
-            "JOB_IMPORT_CUSTOMER -> pipeline_definition.job_code"
-          },
-          new String[] {
-            "workflow_node",
-            "window_code",
-            "batch_window",
-            "window_code",
-            GUIDE_TRUE,
-            "window_code 非空",
-            "节点绑定的批次窗口必须存在",
-            "always-open -> batch_window.window_code"
-          },
-          new String[] {
-            "workflow_edge",
-            "workflow_code + workflow_version",
-            "workflow_definition",
-            "workflow_code + version",
-            "FALSE",
-            "总是",
-            "边必须属于本包内的工作流（不允许 DB fallback）",
-            "WF_SETTLEMENT/1 -> workflow_definition"
-          },
-          new String[] {
-            "workflow_edge", "from_node_code / to_node_code", "workflow_node", "node_code",
-            "FALSE", "总是", "边两端节点必须在本包内（不允许 DB fallback）", "NODE_IMPORT -> workflow_node.node_code"
-          });
+  static final List<String[]> DEPENDENCY_ROWS = GUIDANCE.sheet("dependency").rows();
 
   /** 「四类Worker示例」sheet 表头。取自 9+2 设计文档 §四类Worker示例 Sheet 建议列。 */
-  static final String[] FOUR_WORKER_HEADERS = {
-    "worker_type",
-    "job_type",
-    "pipeline_type",
-    "stage_chain",
-    "required_sheets",
-    "template_requirement",
-    "channel_requirement",
-    "key_params",
-    "demo_description"
-  };
+  static final String[] FOUR_WORKER_HEADERS = GUIDANCE.sheet("fourWorker").headers();
 
   /**
    * 「四类Worker示例」内置 4 行（IMPORT/EXPORT/PROCESS/DISPATCH 各一份填好的整行配置范例）。 key_params 列值取自 e2e fixture /
    * import-suite；stage_chain 与 STAGE_CODE_DROPDOWN 收窄集合一致。 只读说明 sheet，不参与导入解析。
    */
-  static final List<String[]> FOUR_WORKER_ROWS =
-      List.of(
-          new String[] {
-            GUIDE_IMPORT,
-            GUIDE_IMPORT,
-            GUIDE_IMPORT,
-            "RECEIVE -> PREPROCESS -> PARSE -> VALIDATE -> LOAD -> FEEDBACK",
-            "job_definition, file_template_config, pipeline_definition, pipeline_step_definition",
-            "query_param_schema.jdbcMappedImport 配 schema/table/columnMappings/conflictColumns",
-            "可选，取决于 RECEIVE 来源",
-            "default_params.templateCode=TPL_IMPORT_CUSTOMER；query_param_schema="
-                + EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA,
-            "文件导入到业务表（biz.customer_account）"
-          },
-          new String[] {
-            "EXPORT",
-            "EXPORT",
-            "EXPORT",
-            "PREPARE -> GENERATE -> STORE -> REGISTER -> COMPLETE",
-            "job_definition, file_template_config, pipeline_definition, pipeline_step_definition",
-            "default_query_sql 或 query_param_schema.jdbcMappedExport",
-            "STORE 可依赖对象存储；派发另配 DISPATCH",
-            "default_query_sql=" + EXAMPLE_EXPORT_QUERY_SQL + "；field_mappings 见字段说明",
-            "查询业务表生成文件（CSV/Excel/JSON）"
-          },
-          new String[] {
-            "PROCESS",
-            "PROCESS",
-            "PROCESS",
-            "PREPARE -> COMPUTE -> VALIDATE -> COMMIT -> FEEDBACK",
-            "job_definition, pipeline_definition, pipeline_step_definition",
-            "通常不需要文件模板",
-            "不需要",
-            "step_params=" + EXAMPLE_PROCESS_STEP_PARAMS,
-            "SQL transform / 加工落表"
-          },
-          new String[] {
-            "DISPATCH",
-            "DISPATCH",
-            "DISPATCH",
-            "PREPARE -> DISPATCH -> ACK -> RETRY -> COMPENSATE -> COMPLETE",
-            "job_definition, file_channel_config, pipeline_definition, pipeline_step_definition",
-            "通常不需要文件模板；派发导出文件时引用 export 产物",
-            "必须，channelCode 指向 file_channel_config.channel_code",
-            "step_params=" + EXAMPLE_DISPATCH_STEP_PARAMS + "；channel config_json 见字段说明",
-            "推送文件或消息到外部系统（SFTP/API）"
-          });
+  static final List<String[]> FOUR_WORKER_ROWS = GUIDANCE.sheet("fourWorker").rows();
 
   /** 只读说明 sheet（依赖说明 / 四类Worker示例）顶部统一提示行。 */
   private static final String READONLY_SHEET_HINT =
@@ -762,66 +529,17 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   /** 「文件束示例」sheet 表头(ADR-046):束作业一次配置、每次提交投一份 .batch.json 清单声明本批。 */
-  static final String[] BUNDLE_HEADERS = {
-    "job_type",
-    "worker_type",
-    "shard_strategy",
-    "config_sheets",
-    "submit_manifest_example",
-    "demo_description"
-  };
-
-  // ADR-046 提交清单(.batch.json v2)完整可抄片段:导入/分发投数据文件 + 清单;导出仅投清单(无数据文件、无 requiredFiles)。
-  private static final String BUNDLE_IMPORT_MANIFEST =
-      "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"daily-import\","
-          + "\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_IMPORT_DAILY\","
-          + "\"requiredFiles\":[\"order.csv\",\"customer.csv\"],\"fileMapping\":["
-          + "{\"fileName\":\"order.csv\",\"templateCode\":\"TPL_ORDER\"},"
-          + "{\"fileName\":\"customer.csv\",\"templateCode\":\"TPL_CUST\"}]}";
-  private static final String BUNDLE_DISPATCH_MANIFEST =
-      "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"eod-dispatch\","
-          + "\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_DISPATCH_EOD\","
-          + "\"requiredFiles\":[\"risk.csv\",\"trade.csv\"],\"fileMapping\":["
-          + "{\"fileName\":\"risk.csv\",\"targetRef\":\"CH_SFTP_A\"},"
-          + "{\"fileName\":\"trade.csv\",\"targetRef\":\"CH_OSS_B\"}]}";
-  private static final String BUNDLE_EXPORT_MANIFEST =
-      "{\"schemaVersion\":\"batch-manifest-v2\",\"fileGroupCode\":\"eod-export\","
-          + "\"bizDate\":\"2026-06-21\",\"tenantId\":\"t1\",\"jobCode\":\"BUNDLE_EXPORT_EOD\","
-          + "\"fileMapping\":["
-          + "{\"fileName\":\"risk_out\",\"templateCode\":\"EXP_RISK\"},"
-          + "{\"fileName\":\"trade_out\",\"templateCode\":\"EXP_TRADE\"}]}";
+  static final String[] BUNDLE_HEADERS = GUIDANCE.sheet("bundle").headers();
 
   /**
    * 「文件束示例」内置 3 行(BUNDLE_IMPORT/EXPORT/DISPATCH 各一份)。束 = 一次配作业(job sheet,job_type=BUNDLE_*、
    * shard_strategy=DYNAMIC)+ 各表模板/各下游渠道(file_template/file_channel sheet);每次提交投一份 .batch.json v2
    * 清单声明「这批哪些文件→哪个模板/渠道」(清单是数据非配置,不进配置包)。只读说明 sheet,不参与上传解析。
+   *
+   * <p>ADR-046 提交清单(.batch.json v2)完整可抄片段已随行内容外置到 /config-package-guidance.json: 导入/分发投数据文件 +
+   * 清单;导出仅投清单(无数据文件、无 requiredFiles)。
    */
-  static final List<String[]> BUNDLE_ROWS =
-      List.of(
-          new String[] {
-            "BUNDLE_IMPORT",
-            "IMPORT",
-            "DYNAMIC",
-            "job + file_template(每表一模板);清单 requiredFiles 列出数据文件",
-            BUNDLE_IMPORT_MANIFEST,
-            "一次导入多文件→多表;把数据文件 + 此清单投到 ingress,凑齐自动展 N 个导入分区"
-          },
-          new String[] {
-            "BUNDLE_EXPORT",
-            "EXPORT",
-            "DYNAMIC",
-            "job + file_template(每表一导出模板);清单无 requiredFiles(导出无输入文件)",
-            BUNDLE_EXPORT_MANIFEST,
-            "一次导出多表→多文件;仅投此清单(无数据文件),清单本身即触发,展 N 个导出分区"
-          },
-          new String[] {
-            "BUNDLE_DISPATCH",
-            "DISPATCH",
-            "DYNAMIC",
-            "job + file_channel(每下游一渠道);清单 fileMapping.targetRef 指 channel_code",
-            BUNDLE_DISPATCH_MANIFEST,
-            "一次把多文件分发到多下游;把待分发文件 + 此清单投到 ingress,展 N 个分发分区"
-          });
+  static final List<String[]> BUNDLE_ROWS = GUIDANCE.sheet("bundle").rows();
 
   private void createBundleExampleSheet(Workbook wb) {
     createReadOnlyTableSheet(wb, SHEET_NAME_BUNDLE, BUNDLE_HEADERS, BUNDLE_ROWS);
