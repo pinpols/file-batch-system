@@ -31,21 +31,30 @@ class LeaseRenewalSchedulerTest {
           .kafkaGroupId("g")
           .build();
 
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static ArgumentCaptor<Map<String, Object>> mapCaptor() {
+    return ArgumentCaptor.forClass((Class) Map.class);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> objectMap(Object value) {
+    return (Map<String, Object>) value;
+  }
+
   @Test
   void tickRenewsEveryInFlightTask() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L, 20L, 30L));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
     verify(http).renew(eq(10L), any());
     verify(http).renew(eq(20L), any());
     verify(http).renew(eq(30L), any());
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http, times(3)).renew(anyLong(), body.capture());
     assertThat(body.getValue()).containsEntry("workerId", "w-1").containsEntry("tenantId", "tx");
   }
@@ -57,12 +66,11 @@ class LeaseRenewalSchedulerTest {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(42L));
     when(dispatcher.partitionInvocation(42L)).thenReturn("inv-77");
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
-    s.tick();
-
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).renew(eq(42L), body.capture());
     assertThat(body.getValue()).containsEntry("partitionInvocationId", "inv-77");
   }
@@ -72,9 +80,9 @@ class LeaseRenewalSchedulerTest {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of());
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
     verify(http, never()).renew(anyLong(), any());
   }
@@ -85,9 +93,9 @@ class LeaseRenewalSchedulerTest {
     when(http.renew(eq(10L), any())).thenThrow(new IOException("404 expired"));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L, 20L));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick(); // 不应抛
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick(); // 不应抛
+    }
 
     verify(http).renew(eq(20L), any()); // 20 还是被尝试
   }
@@ -98,9 +106,9 @@ class LeaseRenewalSchedulerTest {
     when(http.renew(eq(10L), any())).thenReturn(Map.of("cancelRequested", true));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
     verify(dispatcher).markCancelled(10L, "platform-cancel");
   }
@@ -111,9 +119,9 @@ class LeaseRenewalSchedulerTest {
     when(http.renew(eq(10L), any())).thenReturn(Map.of("cancelRequested", false));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
     verify(dispatcher, never()).markCancelled(anyLong(), any());
   }
@@ -124,9 +132,9 @@ class LeaseRenewalSchedulerTest {
     when(http.renew(eq(10L), any())).thenThrow(new PlatformHttpException(410, "gone"));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
     verify(dispatcher).markCancelled(10L, "lease-revoked");
   }
@@ -138,9 +146,9 @@ class LeaseRenewalSchedulerTest {
     when(http.renew(eq(10L), any())).thenThrow(new PlatformHttpException(404, "not found"));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
     verify(dispatcher).markCancelled(10L, "lease-revoked");
   }
@@ -151,15 +159,13 @@ class LeaseRenewalSchedulerTest {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
     when(dispatcher.progressSnapshot(10L)).thenReturn(Map.of("processed", 5, "total", 100));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
-    s.tick();
-
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).renew(eq(10L), body.capture());
-    @SuppressWarnings("unchecked")
-    Map<String, Object> details = (Map<String, Object>) body.getValue().get("details");
+    Map<String, Object> details = objectMap(body.getValue().get("details"));
     assertThat(details).containsEntry("processed", 5).containsEntry("total", 100);
   }
 
@@ -169,12 +175,11 @@ class LeaseRenewalSchedulerTest {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
     when(dispatcher.progressSnapshot(10L)).thenReturn(null);
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
-    s.tick();
-
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).renew(eq(10L), body.capture());
     assertThat(body.getValue()).doesNotContainKey("details").containsEntry("workerId", "w-1");
   }
@@ -185,9 +190,9 @@ class LeaseRenewalSchedulerTest {
     when(http.renew(eq(10L), any())).thenThrow(new PlatformHttpException(500, "boom"));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
-
-    s.tick();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
     verify(dispatcher, never()).markCancelled(anyLong(), any());
   }

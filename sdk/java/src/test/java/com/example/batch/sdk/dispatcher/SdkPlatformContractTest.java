@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.sdk.client.BatchPlatformClient;
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.task.SdkTaskContext;
@@ -21,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 
@@ -92,22 +90,7 @@ class SdkPlatformContractTest {
 
   @Test
   void registerBodyMatchesWorkerHeartbeatDtoSchema() throws IOException {
-    AtomicReference<Map<String, Object>> seenBody = new AtomicReference<>();
-    PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.register(any()))
-        .thenAnswer(
-            inv -> {
-              seenBody.set(inv.getArgument(0));
-              return Map.of();
-            });
-    // 直接拼 register body 调:必须跟 BatchPlatformClient.start 里逻辑一致(此处简化模拟)
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg)
-            .register(new NoopHandler("echo"))
-            .register(new NoopHandler("sleep"))
-            .build();
-    // 用反射不优雅,直接验:client.start() 会调 register;mock 不抛即可走完
-    // 这里换法:直接 build register body 字段集校验 — start() 全链路要 mock 太多,改 schema test
+    // 直接 build register body 字段集校验 — start() 全链路要 mock 太多,改 schema test
     Map<String, Object> simulated = new HashMap<>();
     simulated.put("tenantId", "tx");
     simulated.put("workerCode", "w-1");

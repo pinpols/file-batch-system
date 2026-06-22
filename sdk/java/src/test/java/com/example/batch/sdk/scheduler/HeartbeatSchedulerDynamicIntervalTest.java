@@ -58,15 +58,17 @@ class HeartbeatSchedulerDynamicIntervalTest {
     when(http.heartbeat(any(), any())).thenReturn(respWithHint(null));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     ScheduledExecutorService exec = mock(ScheduledExecutorService.class);
-    HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
-    s.start();
+    try (HeartbeatScheduler s =
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec)) {
+      s.start();
 
-    s.tick();
+      s.tick();
 
-    // 只有 start() 那一次 schedule,tick 不再重排
-    verify(exec, times(1)).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any());
-    assertThat(s.currentIntervalMs()).isEqualTo(10_000L);
+      // 只有 start() 那一次 schedule,tick 不再重排
+      verify(exec, times(1))
+          .scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any());
+      assertThat(s.currentIntervalMs()).isEqualTo(10_000L);
+    }
   }
 
   @Test
@@ -82,17 +84,18 @@ class HeartbeatSchedulerDynamicIntervalTest {
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture)
         .thenAnswer(inv -> secondFuture);
-    HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
-    s.start();
+    try (HeartbeatScheduler s =
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec)) {
+      s.start();
 
-    s.tick();
+      s.tick();
 
-    verify(firstFuture).cancel(false);
-    verify(exec)
-        .scheduleWithFixedDelay(
-            any(Runnable.class), eq(20_000L), eq(20_000L), eq(TimeUnit.MILLISECONDS));
-    assertThat(s.currentIntervalMs()).isEqualTo(20_000L);
+      verify(firstFuture).cancel(false);
+      verify(exec)
+          .scheduleWithFixedDelay(
+              any(Runnable.class), eq(20_000L), eq(20_000L), eq(TimeUnit.MILLISECONDS));
+      assertThat(s.currentIntervalMs()).isEqualTo(20_000L);
+    }
   }
 
   @Test
@@ -106,16 +109,17 @@ class HeartbeatSchedulerDynamicIntervalTest {
     ScheduledFuture<?> firstFuture = mock(ScheduledFuture.class);
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture);
-    HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
-    s.start();
+    try (HeartbeatScheduler s =
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec)) {
+      s.start();
 
-    s.tick();
+      s.tick();
 
-    verify(exec)
-        .scheduleWithFixedDelay(
-            any(Runnable.class), eq(1_000L), eq(1_000L), eq(TimeUnit.MILLISECONDS));
-    assertThat(s.currentIntervalMs()).isEqualTo(1_000L);
+      verify(exec)
+          .scheduleWithFixedDelay(
+              any(Runnable.class), eq(1_000L), eq(1_000L), eq(TimeUnit.MILLISECONDS));
+      assertThat(s.currentIntervalMs()).isEqualTo(1_000L);
+    }
   }
 
   @Test
@@ -129,16 +133,17 @@ class HeartbeatSchedulerDynamicIntervalTest {
     ScheduledFuture<?> firstFuture = mock(ScheduledFuture.class);
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture);
-    HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
-    s.start();
+    try (HeartbeatScheduler s =
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec)) {
+      s.start();
 
-    s.tick();
+      s.tick();
 
-    verify(exec)
-        .scheduleWithFixedDelay(
-            any(Runnable.class), eq(100_000L), eq(100_000L), eq(TimeUnit.MILLISECONDS));
-    assertThat(s.currentIntervalMs()).isEqualTo(100_000L);
+      verify(exec)
+          .scheduleWithFixedDelay(
+              any(Runnable.class), eq(100_000L), eq(100_000L), eq(TimeUnit.MILLISECONDS));
+      assertThat(s.currentIntervalMs()).isEqualTo(100_000L);
+    }
   }
 
   @Test
@@ -153,16 +158,18 @@ class HeartbeatSchedulerDynamicIntervalTest {
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture)
         .thenAnswer(inv -> secondFuture);
-    HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
-    s.start();
+    try (HeartbeatScheduler s =
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec)) {
+      s.start();
 
-    s.tick(); // 第一次 hint=20s,触发重排
-    s.tick(); // 第二次相同,不应再 cancel/reschedule
+      s.tick(); // 第一次 hint=20s,触发重排
+      s.tick(); // 第二次相同,不应再 cancel/reschedule
 
-    verify(firstFuture, times(1)).cancel(false);
-    verify(exec, times(2)).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any());
-    verify(secondFuture, never()).cancel(false);
+      verify(firstFuture, times(1)).cancel(false);
+      verify(exec, times(2))
+          .scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any());
+      verify(secondFuture, never()).cancel(false);
+    }
   }
 
   @Test
@@ -195,15 +202,17 @@ class HeartbeatSchedulerDynamicIntervalTest {
     ScheduledFuture<?> firstFuture = mock(ScheduledFuture.class);
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture);
-    HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
-    s.start();
+    try (HeartbeatScheduler s =
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec)) {
+      s.start();
 
-    s.tick(); // 不应抛,且不重排
+      s.tick(); // 不应抛,且不重排
 
-    verify(http, atLeastOnce()).heartbeat(any(), any());
-    verify(firstFuture, never()).cancel(false);
-    verify(exec, times(1)).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any());
-    assertThat(s.currentIntervalMs()).isEqualTo(10_000L);
+      verify(http, atLeastOnce()).heartbeat(any(), any());
+      verify(firstFuture, never()).cancel(false);
+      verify(exec, times(1))
+          .scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any());
+      assertThat(s.currentIntervalMs()).isEqualTo(10_000L);
+    }
   }
 }

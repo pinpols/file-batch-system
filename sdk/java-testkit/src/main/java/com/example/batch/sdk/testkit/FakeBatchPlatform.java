@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -331,11 +331,10 @@ public final class FakeBatchPlatform implements AutoCloseable {
             + "; did you call client.start() before dispatch()?");
   }
 
-  @SuppressWarnings("deprecation") // listConsumerGroups() 在新版 kafka-clients 标记待删除;testkit 兼容当前版本即可
   private boolean hasAssignedConsumer(Admin admin) {
     try {
-      Collection<ConsumerGroupListing> groups = admin.listConsumerGroups().all().get();
-      List<String> ids = groups.stream().map(ConsumerGroupListing::groupId).toList();
+      Collection<GroupListing> groups = admin.listGroups().all().get();
+      List<String> ids = groups.stream().map(GroupListing::groupId).toList();
       if (ids.isEmpty()) {
         return false;
       }
