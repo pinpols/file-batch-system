@@ -28,7 +28,7 @@ export MINIO_BUCKET="${MINIO_BUCKET:-batch-dev}"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 python3 - <<'PY'
-import json, os, subprocess, time, urllib.request
+import json, os, subprocess, sys, time, urllib.request
 
 BASE   = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -131,12 +131,16 @@ def launch(tenant, job, params):
         return False, str(e)[:80]
 
 tot = ok = 0
+errors = []
 def run(label, tenant, job, params):
     global tot, ok
     tot += 1
     good, err = launch(tenant, job, params)
     ok += 1 if good else 0
+    if not good:
+        errors.append(f"{label} {tenant}/{job} launch failed: {err}")
     print(f"  [{label:8s}] {tenant}/{job:24s} {'✓' if good else '✗ '+err}")
+    return good
 
 print(f"==> sim load:tenants={TENANTS} rows/import={ROWS} bizDate={BIZ} batchNo={BATCH}")
 if not ONLY:
@@ -190,11 +194,22 @@ for t in TENANTS:
             status = wait_dispatch_done(t, fid, channel)
             if status:
                 print(f"             └─ dispatch record {channel}: {status}")
+                if status == "FAILED":
+                    errors.append(f"DISPATCH {t}/{job} channel={channel} failed for fileId={fid}")
+            else:
+                errors.append(f"DISPATCH {t}/{job} channel={channel} did not create a terminal dispatch record")
         else:
-            print(f"  [DISPATCH] {t}/{job}: 跳过(无 OUTPUT/GENERATED file_record 可派发)")
+            msg = f"DISPATCH {t}/{job} missing OUTPUT/GENERATED file_record for batchNo={BATCH}"
+            errors.append(msg)
+            print(f"  [DISPATCH] {t}/{job}: ✗ {msg}")
     for job in WORKFLOWS.get(t, []):
         run("WORKFLOW", t, job, {"batchNo": BATCH})
 
 print(f"\n==> 完成:total={tot} succ={ok}")
 print("提示:worker 真正写 MinIO/biz.* 需 60~120s,建议 sleep 120 后跑 06-verify.sh")
+if errors:
+    print("\n==> 失败明细:", file=sys.stderr)
+    for err in errors:
+        print(f"  - {err}", file=sys.stderr)
+    sys.exit(1)
 PY
