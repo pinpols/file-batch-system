@@ -280,7 +280,7 @@ wheels = [
 ]
 
 [[package]]
-name = "batch-worker-sdk-python"
+name = "batch-worker-sdk"
 source = { editable = "." }
 dependencies = [
     { name = "aiokafka" },

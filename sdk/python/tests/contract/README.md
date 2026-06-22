@@ -12,22 +12,15 @@ byte-for-byte at the wire level.
 `docs/api/sdk-contract-fixtures/`, registers one pytest parameter per
 file, and asserts the SDK's behavior against the fixture.
 
-## Phase 0 status
+## Status: enforcing (2026-06-22)
 
-**Stub.** The runner loads fixtures and marks every case `xfail` with
-reason `"P0 stub: SDK runtime not implemented yet"`. This proves:
-
-1. The fixture directory is reachable from the SDK CI runner.
-2. The count we report matches the count Lane N publishes.
-3. Each fixture gets a dedicated pytest node ID so P1+ can flip
-   them green one by one with no test-discovery changes.
+**Hard.** The runner feeds each fixture's input through the real Python
+decision core and asserts the output against `expected` byte-for-byte.
+Every fixture is a real assertion — no `xfail`. A mismatch fails the
+`python contract + shared-constants parity` job. `pyproject.toml` sets
+`xfail_strict = true`, so any leftover `xfail` marker that actually
+passes (xpass) is also treated as a failure → no silent staleness.
 
 If Lane N has not landed the fixtures yet, the runner gracefully
-reports `0 fixtures discovered` and the entire job stays green — we do
-not block Phase 0 on Lane N's merge order.
-
-## Phase 1+ promotion
-
-When `WorkerClient` / `HandlerContext` exist, replace the body of
-`run_fixture()` with the real "feed the SDK this input, snapshot the
-output, diff against `expected`" logic and drop the `xfail` marker.
+reports `0 fixtures discovered` and the job stays green — discovery is
+decoupled from Lane N's merge order.

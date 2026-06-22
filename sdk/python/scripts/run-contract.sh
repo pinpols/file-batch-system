@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# 运行 SDK 契约 fixture 测试套件。
+# 运行 SDK 契约 fixture 测试套件(硬校验)。
 #
-# Phase 0：调用桩 runner，从 docs/api/sdk-contract-fixtures/ 发现 fixture
-#   并将其全部标记为 xfail。
+# 从 docs/api/sdk-contract-fixtures/ 发现 fixture,对 python 决策核做真实断言。
+# 已转硬(2026-06-22):任一 fixture 不符 → 真实失败。pyproject 设 xfail_strict=true,
+# 残留 xfail 标记若实际通过(xpass)也判失败,杜绝静默回归。
 #
-# Phase 1+：入口相同，内部是真实断言。
-#
-# 退出码与 pytest 一致：0 = 通过（允许 xfail），非 0 = 真实失败。
+# 退出码与 pytest 一致:0 = 全过,非 0 = 失败。
 
 set -euo pipefail
 
@@ -15,5 +14,5 @@ SDK_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${SDK_DIR}"
 
-echo "[contract] running pytest on tests/contract/ (Phase 0 stub: all xfail)"
+echo "[contract] running pytest on tests/contract/ (enforcing)"
 exec python -m pytest tests/contract/ -v -rxX --tb=short "$@"

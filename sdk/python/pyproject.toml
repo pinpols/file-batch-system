@@ -90,6 +90,9 @@ minversion = "8.0"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
+# xfail 标记的测试若实际通过(xpass)→ 判失败。python 契约已全绿转硬,不再容忍残留
+# xfail 静默掩盖回归(2026-06-22 对齐)。
+xfail_strict = true
 markers = [
     "contract: contract-fixture-driven tests (docs/api/sdk-contract-fixtures/)",
 ]
