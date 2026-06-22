@@ -49,8 +49,32 @@ class AdminTestDataCleanupRepositoryTest {
         .containsEntry("workflow_node", 1)
         .containsEntry("workflow_edge", 1)
         .containsEntry("workflow_definition", 1)
-        .containsEntry("job_definition", 1);
-    verify(jdbc, atLeast(14)).update(anyString(), any(MapSqlParameterSource.class));
+        .containsEntry("job_definition", 1)
+        .containsEntry("file_channel_config", 1)
+        .containsEntry("file_template_config", 1)
+        // 新增:三张此前漏清的独立配置表
+        .containsEntry("api_key", 1)
+        .containsEntry("alert_routing_config", 1)
+        .containsEntry("tenant_quota_policy", 1);
+    verify(jdbc, atLeast(17)).update(anyString(), any(MapSqlParameterSource.class));
+  }
+
+  @Test
+  void shouldDeleteThreePreviouslyMissedConfigTablesByPrefix() {
+    repository.cleanupByPrefix("e2e");
+
+    verify(jdbc)
+        .update(
+            contains("DELETE FROM batch.api_key WHERE key_name LIKE :p"),
+            any(MapSqlParameterSource.class));
+    verify(jdbc)
+        .update(
+            contains("DELETE FROM batch.alert_routing_config WHERE route_code LIKE :p"),
+            any(MapSqlParameterSource.class));
+    verify(jdbc)
+        .update(
+            contains("DELETE FROM batch.tenant_quota_policy WHERE policy_code LIKE :p"),
+            any(MapSqlParameterSource.class));
   }
 
   @Test
