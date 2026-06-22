@@ -43,13 +43,18 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 
 > 用本地真 orchestrator 实测(非 fixture)。Go 用样例 worker 跑到 **execute** 绿。
 
-| 语言 | register | dispatch+claim | execute | report | terminal | 备注 |
-|---|---|---|---|---|---|---|
-| Go | ✅ | ✅ | ✅ | ✅ | ✅ | **全链路本地实测绿**(#655 + #2/#3/#4 全修) |
-| Python | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | 待跑(脚本就绪);需照搬 #2/#3/#4 |
-| TypeScript | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | #1 已修(#655);#2/#3/#4 待改 |
-| Java | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | 样例 jar,待接入脚本 |
-| Rust | — | — | — | — | — | 样例 register 仍 illustrative stub;需先接 reqwest 真 transport |
+| 语言 | 样例是否接 kafka 消费 | register | full chain | 备注 |
+|---|---|---|---|---|
+| Go | ✅ 已接(kafka adapter) | ✅ | ✅ **terminal SUCCESS** | #655 + #2/#3/#4 全修,本地实测绿(参照实现) |
+| Python | ❌ scheduler-only(无 kafka_factory) | ✅ | 🔲 | #4 已修 + #3 本就 OK;**full chain 需先给样例接 aiokafka 消费 + node-direct pattern(#2)** |
+| TypeScript | ✅ 已接(kafkajs adapter) | ✅(#655) | 🔲 | 已接消费,最接近;需 #2 pattern + 核 #3/#4 后跑脚本 |
+| Java | ✅ 已接(SDK consumer) | ✅(#655) | 🔲 | **默认 pattern 是 tenant-first(`batch.task.dispatch.tenant-a.*`)= #2**;需改 node-direct + 核 #4 |
+| Rust | ❌ illustrative stub | — | — | 需先把样例接到 reqwest 真 transport |
+
+> **#2 是平台级通病**:`batch.task.dispatch.<tenant>.*`(tenant-first)这个错方案 5 语言一致沿用
+> (java-spring `application.yml` 默认值即 `batch.task.dispatch.tenant-a.*`),Go 只是把它写死了。
+> 正确方案是 node-direct(`...<workerType>.node.<workerCode>`,对齐内建 worker)。Java/Python/TS
+> 的 pattern 可配,改默认值即可;Go 已改成自动派生。
 
 ## 这套本地全链路挖出的"SDK ↔ 真 orchestrator"漂移(fixture 触不到)
 
@@ -61,7 +66,7 @@ SDK 的 wire 契约此前只对 fixture / fake stub 验过,从没对真 orchestr
 | 1 | register | Go/TS 不发 `workerGroup` → `worker_registry.worker_group` NOT NULL 违约 → 注册 500 | **已修(#655)** |
 | 2 | 消费 topic | SDK 订阅 `batch.task.dispatch.<tenant>.*`(tenant-first),orchestrator 派发 `...<workerType>.node.<workerCode>`(base-first)→ 收不到任何任务 | **Go 已修**(本 PR,对齐内建 worker `AbstractTaskConsumer.topicPattern()` 的 node-direct);TS/Python/Rust 待改 |
 | 3 | 派单报文解码 | orchestrator 发 `taskId` 是 JSON number(BIGINT),Go 结构体期望 string → decode 失败 | **Go 已修**(本 PR,tolerant number/string);其余语言待核 |
-| 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **Go 已修**(本 PR);其余语言待核 |
+| 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **Go + Python 已修**;TS/Java 待核 |
 
 **结论**:Go SDK **全链路本地实测绿**(#655 + #2/#3/#4 全修,register→…→terminal SUCCESS)。
 要"对外可提供",把 #2/#3/#4 在 **TS/Python/Java/Rust** 照搬修齐并各跑本地全链路至 terminal 绿
