@@ -81,6 +81,11 @@ jobs:
             echo "BATCH_PLATFORM_DB_PASSWORD=batch_pass_123"
             echo "BATCH_BUSINESS_DB_PASSWORD=batch_pass_123"
             echo "BATCH_INTERNAL_SECRET=ci-e2e-internal-secret-0123456789abcdef"
+            # 容器**不能**用 local profile:application-local.yml 硬编码 localhost:15432
+            # (host 地址),容器内连不上 DB。换成非 local profile(无 application-docker.yml
+            # → 只走 application.yml + batch-defaults 的 env 驱动 URL,compose 已把这些 env
+            # 默认成容器网络地址 postgres-primary/kafka/minio)。
+            echo "SPRING_PROFILES_ACTIVE=docker"
           } >> .env.local
 
       - name: Use Maven Central for image build (CI runners)
@@ -91,22 +96,22 @@ jobs:
         # 无 <?xml?> 声明的最简 settings(根元素前的空白无害,避免 heredoc 缩进破坏声明)。
         run: echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"></settings>' > docker/settings.xml
 
-      - name: Boot postgres + apply Flyway migrations (apps run with flyway disabled)
-        # compose 里 app 服务一律 SPRING_FLYWAY_ENABLED=false、无 migrator service、
-        # postgres init 只建库/schema 不含表 → 必须先单起 PG 手动迁移平台 schema,
-        # 再起 app;否则 orchestrator 启动 / worker 注册时 batch.* 表不存在。
-        run: |
-          bash scripts/docker/up-apps.sh postgres-primary
-          for _ in $(seq 1 40); do
-            docker exec batch-postgres-primary pg_isready -U batch_user -d batch_platform >/dev/null 2>&1 && break
-            sleep 3
-          done
-          bash scripts/local/apply-pending-flyway-migrations.sh
+      - name: Boot orchestrator (owns Flyway; migrates platform schema on start)
+        # orchestrator 自带 Flyway(compose 未对它 disable),启动即迁移 batch.* 全 schema。
+        # trigger 的 Flyway 是 disabled,依赖 orchestrator 先迁好,故 orchestrator 先起、
+        # 等它 healthy(= 迁移完成)再起 trigger。compose build 在 runner 上构建镜像(较慢)。
+        run: bash scripts/docker/up-apps.sh orchestrator
 
-      - name: Boot orchestrator + trigger (proven up-apps.sh)
-        # 只起 orchestrator + trigger(+ 经 depends_on 带起 kafka/minio/valkey),不起全套
-        # 内建 worker,缩短启动。compose build 在 runner 上构建镜像(较慢)。
-        run: bash scripts/docker/up-apps.sh orchestrator trigger
+      - name: Wait for orchestrator health (schema migrated)
+        run: |
+          for _ in $(seq 1 100); do
+            curl -fsS http://localhost:18082/actuator/health 2>/dev/null | grep -q '"status":"UP"' && { echo "orchestrator UP"; break; }
+            sleep 5
+          done
+          curl -fsS http://localhost:18082/actuator/health | grep -q '"status":"UP"' || { echo "orchestrator not UP"; docker logs batch-orchestrator --tail 120 || true; exit 1; }
+
+      - name: Boot trigger (schema ready)
+        run: bash scripts/docker/up-apps.sh trigger
 
       - name: Wait for orchestrator + trigger health
         run: |
