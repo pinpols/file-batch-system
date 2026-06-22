@@ -252,6 +252,40 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- 纯 IDE 元数据(m2e / vscode-java):告诉 IDE 怎么映射 maven-jar-plugin:test-jar。
+                     不加时 IDE 报 "Plugin execution not covered by lifecycle"(警告级,命令行 mvn
+                     完全正常)。execute + runOnIncremental=false:full build 产出 test-jar 供依赖
+                     batch-common:tests 的模块在 IDE 里解析,增量构建跳过。Maven 永不解析此 plugin。 -->
+                <plugin>
+                    <groupId>org.eclipse.m2e</groupId>
+                    <artifactId>lifecycle-mapping</artifactId>
+                    <version>1.0.0</version>
+                    <configuration>
+                        <lifecycleMappingMetadata>
+                            <pluginExecutions>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>org.apache.maven.plugins</groupId>
+                                        <artifactId>maven-jar-plugin</artifactId>
+                                        <versionRange>[0,)</versionRange>
+                                        <goals>
+                                            <goal>test-jar</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <execute>
+                                            <runOnIncremental>false</runOnIncremental>
+                                        </execute>
+                                    </action>
+                                </pluginExecution>
+                            </pluginExecutions>
+                        </lifecycleMappingMetadata>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
