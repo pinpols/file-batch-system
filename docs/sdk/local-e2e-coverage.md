@@ -46,7 +46,7 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 | 语言 | 样例是否接 kafka 消费 | register | full chain | 备注 |
 |---|---|---|---|---|
 | Go | ✅ 已接(kafka adapter) | ✅ | ✅ **terminal SUCCESS** | #655 + #2/#3/#4 全修,本地实测绿(参照实现) |
-| Python | ❌ scheduler-only(无 kafka_factory) | ✅ | 🔲 | #4 已修 + #3 本就 OK;**full chain 需先给样例接 aiokafka 消费 + node-direct pattern(#2)** |
+| Python | ✅ 已接(auto-build) | ✅ | ⚠ wire 全绿 | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名全修;**wire 链路 register→dispatch→claim→execute→report 全绿**;terminal 卡 #5(handler 路由键) |
 | TypeScript | ✅ 已接(kafkajs adapter) | ✅(#655) | 🔲 | 已接消费,最接近;需 #2 pattern + 核 #3/#4 后跑脚本 |
 | Java | ✅ 已接(SDK consumer) | ✅(#655) | 🔲 | **默认 pattern 是 tenant-first(`batch.task.dispatch.tenant-a.*`)= #2**;需改 node-direct + 核 #4 |
 | Rust | ❌ illustrative stub | — | — | 需先把样例接到 reqwest 真 transport |
@@ -68,7 +68,19 @@ SDK 的 wire 契约此前只对 fixture / fake stub 验过,从没对真 orchestr
 | 3 | 派单报文解码 | orchestrator 发 `taskId` 是 JSON number(BIGINT),Go 结构体期望 string → decode 失败 | **Go 已修**(本 PR,tolerant number/string);其余语言待核 |
 | 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **Go + Python 已修**;TS/Java 待核 |
 
-**结论**:Go SDK **全链路本地实测绿**(#655 + #2/#3/#4 全修,register→…→terminal SUCCESS)。
+### #5 handler 路由键(wire 之外,新发现)
+
+Go 样例用**单个 catch-all handler**(`NewWorker(..., handler)`),与 workerType 无关 → terminal 绿。
+Python(及 Java)用 **handler map**,dispatcher 按 `msg.workerType` 路由。但 ATOMIC 任务的
+`workerType="ATOMIC"`(job_type 投影),样例 handler 注册名却是任务级 `'sample-echo'` →
+`no SdkTaskHandler for workerType='ATOMIC'` → 报失败 → job FAILED。
+
+这是 **handler 路由键语义**问题(ATOMIC 应按 `taskType` 参数路由,像内建 atomic worker 那样,
+而非按 workerType;或样例 handler 应注册成与 dispatch 路由键一致),**独立于 wire 层**。修法需定
+SDK 路由契约(route by workerType vs taskType),属独立项。Go 因单 handler 模型规避了它。
+
+**结论**:Go SDK **全链路本地实测绿**(#655 + #2/#3/#4 全修,register→…→terminal SUCCESS);
+Python **wire 链路全绿**(#2/#3/#4 + 样例依赖名修齐),terminal 仅卡 #5 handler 路由键。
 要"对外可提供",把 #2/#3/#4 在 **TS/Python/Java/Rust** 照搬修齐并各跑本地全链路至 terminal 绿
 即可——这是一个独立的「SDK wire 契约重校」专项,本地全链路脚本(`sdk-e2e-local.sh <lang>`)
 就是它的验收工具,Go 是已跑通的参照实现。
