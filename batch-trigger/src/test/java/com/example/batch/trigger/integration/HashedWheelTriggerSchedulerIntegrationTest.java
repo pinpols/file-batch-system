@@ -2,12 +2,16 @@ package com.example.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
+import com.example.batch.trigger.infrastructure.readiness.UpstreamReadinessChecker;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.wheel.HashedWheelTriggerScheduler;
@@ -20,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +48,8 @@ import org.springframework.transaction.annotation.Transactional;
     properties = {
       "batch.trigger.scheduler-impl=wheel",
       "batch.trigger.wheel.sliding-window-scan-interval-seconds=2",
-      "batch.trigger.wheel.tick-millis=50"
+      "batch.trigger.wheel.tick-millis=50",
+      "batch.trigger.wheel.readiness-recheck-interval-seconds=5"
     })
 @Transactional(propagation = Propagation.NEVER)
 class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest {
@@ -52,6 +58,7 @@ class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest
   @Autowired private TriggerRuntimeStateMapper stateMapper;
   @Autowired private TriggerRequestMapper requestMapper;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @MockitoBean private UpstreamReadinessChecker upstreamReadinessChecker;
 
   private long jobDefId;
   private String tenantId;
@@ -200,6 +207,40 @@ class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest
             Integer.class,
             preemptDedupKey);
     assertThat(countAfter).isEqualTo(1);
+  }
+
+  @Test
+  void upstreamNotReadyDefersWithoutCreatingTriggerRequest() {
+    jdbcTemplate.update(
+        "update batch.job_definition set depends_on_job_code = ? where id = ?",
+        "UPSTREAM_JOB",
+        jobDefId);
+    when(upstreamReadinessChecker.isReady(eq(tenantId), eq("UPSTREAM_JOB"), any()))
+        .thenReturn(false);
+    Instant fireSoon = BatchDateTimeSupport.utcNow().plusMillis(300);
+    insertState(fireSoon);
+
+    wheelScheduler.scanAndSchedule(Duration.ofSeconds(30));
+
+    await()
+        .atMost(Duration.ofSeconds(8))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(
+            () -> {
+              TriggerRuntimeStateEntity state = stateMapper.selectByJobDefinitionId(jobDefId);
+              assertThat(state.getLastFireStatus()).isEqualTo("WAITING_READINESS");
+              assertThat(state.getReadinessDeferredSince()).isNotNull();
+              assertThat(state.getNextFireTime()).isAfter(BatchDateTimeSupport.utcNow());
+              assertThat(state.getScheduledFireMarker()).isNull();
+            });
+
+    Integer requestCount =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.trigger_request where tenant_id = ? and job_code = ?",
+            Integer.class,
+            tenantId,
+            jobCode);
+    assertThat(requestCount).isZero();
   }
 
   // ── helpers ─────────────────────────────────────────────

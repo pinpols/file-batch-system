@@ -5,6 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.utils.EncodingUtils;
+import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -23,6 +24,7 @@ import com.example.batch.worker.imports.stage.format.JsonFormatParser;
 import com.example.batch.worker.imports.stage.format.ParseSupport;
 import com.example.batch.worker.imports.stage.format.XmlFormatParser;
 import com.example.batch.worker.imports.stage.support.ImportStageSupport;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -339,8 +341,24 @@ public class ParseStep implements ImportStageStep {
         templateMap.forEach((key, value) -> result.put(String.valueOf(key), value));
         return result;
       }
+      String jsonText = jsonText(raw);
+      if (Texts.hasText(jsonText)) {
+        try {
+          return support.objectMapper().readValue(jsonText, new TypeReference<>() {});
+        } catch (Exception ignored) {
+          SwallowedExceptionLogger.warn(ParseStep.class, "catch:Exception", ignored);
+          return Map.of();
+        }
+      }
     }
     return Map.of();
+  }
+
+  private String jsonText(Object raw) {
+    if (raw instanceof String text) {
+      return text;
+    }
+    return PostgresqlJsonbTexts.tryExtract(raw);
   }
 
   private long parsePayloads(

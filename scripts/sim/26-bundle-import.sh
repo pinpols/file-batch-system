@@ -49,8 +49,10 @@ import os
 import subprocess
 import sys
 import time
+import urllib.request
 
 BIZ = os.environ["BIZ_DATE"]
+BATCH = os.environ.get("BATCH_NO", "")
 RUN = str(int(time.time() * 1000) % 100000000)
 MINIO_CONTAINER = os.environ["MINIO_CONTAINER"]
 BUCKET = os.environ["BATCH_S3_BUCKET"]
@@ -59,6 +61,8 @@ SK = os.environ["BATCH_S3_SECRET_KEY"]
 JOB_CODE = "TA_BUNDLE_IMPORT"
 TEMPLATE = "TA_IMPORT_CUSTOMER_TPL"
 GROUP = f"bundle-import-{RUN}"
+TRIGGER_BASE = os.environ["TRIGGER_BASE"]
+INTERNAL_SECRET = os.environ["INTERNAL_SECRET"]
 
 CSV_HEADER = "customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status\n"
 
@@ -74,6 +78,105 @@ def psql(db, sql, tuples=True):
         args += ["-t", "-A"]
     args += ["-c", sql]
     return sh(args)
+
+
+def launch(job_code, params):
+    request_id = f"sim-bundle-{job_code.lower()}-{RUN}-{int(time.time() * 1000) % 100000}"
+    body = {
+        "tenantId": "ta",
+        "jobCode": job_code,
+        "triggerType": "EVENT",
+        "bizDate": BIZ,
+        "requestId": request_id,
+        "params": params,
+    }
+    req = urllib.request.Request(
+        f"{TRIGGER_BASE}/api/triggers/launch",
+        data=json.dumps(body).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "X-Tenant-Id": "ta",
+            "X-Internal-Secret": INTERNAL_SECRET,
+            "Idempotency-Key": request_id,
+            "X-Request-Id": request_id,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        payload = resp.read().decode()
+        if resp.status >= 300:
+            raise RuntimeError(f"launch {job_code} failed: HTTP {resp.status} {payload}")
+    return request_id
+
+
+def wait_instance(job_code, after_id=0, timeout=180):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = psql(os.environ["PG_PLATFORM_DB"],
+                 "select id from batch.job_instance where tenant_id='ta' and job_code='%s'"
+                 " and id > %d order by id desc limit 1" % (job_code, after_id))
+        val = r.stdout.strip()
+        if val:
+            return int(val)
+        time.sleep(5)
+    return None
+
+
+def read_partitions(instance_id):
+    r = psql(os.environ["PG_PLATFORM_DB"],
+             "select partition_no, coalesce(source_file_id::text,''),"
+             " coalesce(template_code,''), coalesce(target_ref,'')"
+             " from batch.job_partition where tenant_id='ta' and job_instance_id=%d"
+             " order by partition_no" % instance_id)
+    return [ln.split("|") for ln in r.stdout.strip().splitlines() if ln]
+
+
+def wait_partitions_terminal(instance_id, timeout=180):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = psql(os.environ["PG_PLATFORM_DB"],
+                 "select count(*) filter (where partition_status in ('SUCCESS','SUCCEEDED')),"
+                 " count(*) filter (where partition_status like '%FAIL%'), count(*)"
+                 " from batch.job_partition where tenant_id='ta' and job_instance_id=%d" % instance_id)
+        ok, failed, total = (r.stdout.strip().split("|") + ["0", "0", "0"])[:3]
+        if int(total) > 0 and int(ok) + int(failed) >= int(total):
+            return int(ok), int(failed), int(total)
+        time.sleep(5)
+    return None
+
+
+def insert_generated_file(file_code):
+    path = f"/tmp/{file_code}-{RUN}.json"
+    r = psql(os.environ["PG_PLATFORM_DB"],
+             """
+             insert into batch.file_record (
+               tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
+               file_ext, file_format_type, charset, mime_type, file_size_bytes, checksum_type,
+               storage_type, storage_path, source_type, file_status, biz_date, trace_id
+             ) values (
+               'ta', '%s', 'OUTPUT', 'OUTPUT', '%s.json', '%s.json',
+               'json', 'JSON', 'UTF-8', 'application/json', 32, 'NONE',
+               'LOCAL', '%s', 'SYSTEM', 'GENERATED', date '%s', 'sim-bundle-dispatch'
+             ) returning id
+             """ % (file_code, file_code, file_code, path, BIZ))
+    return int(r.stdout.strip())
+
+
+def seed_export_rows():
+    psql(os.environ["PG_BUSINESS_DB"],
+         """
+         insert into biz.customer_account (
+           tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no,
+           email, status, source_file_name, source_batch_no, source_trace_id, created_by, updated_by
+         ) values
+           ('ta', 'EXP-BUNDLE-%s-1', 'Bundle Export 1', 'ENTERPRISE', 'BNDLEXP1',
+            '13910000001', 'bundle-exp1@example.com', 'ACTIVE', 'bundle', '%s', 'sim', 'sim', 'sim'),
+           ('ta', 'EXP-BUNDLE-%s-2', 'Bundle Export 2', 'ENTERPRISE', 'BNDLEXP2',
+            '13910000002', 'bundle-exp2@example.com', 'ACTIVE', 'bundle', '%s', 'sim', 'sim', 'sim')
+         on conflict (tenant_id, customer_no) do update
+         set customer_name = excluded.customer_name,
+             status = excluded.status,
+             updated_by = excluded.updated_by
+         """ % (RUN, BATCH or RUN, RUN, BATCH or RUN))
 
 
 def csv_rows(prefix, n):
@@ -174,14 +277,72 @@ while time.time() < deadline:
 if final is None:
     print("⚠️ partition 未在限时内达终态(worker 可能未执行——本机 JDK25 worker hang 即此现象)。"
           "编排侧(launch+分区展开+绑定)已验证通过。")
-    sys.exit(0)
+else:
+    ok, failed, total = final
+    print(f"  partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
+    rows = psql(os.environ["PG_BUSINESS_DB"],
+                "select count(*) from biz.customer_account where customer_no like 'BNDL%'").stdout.strip()
+    print(f"  biz.customer_account BNDL* 行数:{rows}")
+    assert failed == 0, f"有 {failed} 个分区失败"
+    assert ok == total, "并非全部分区成功"
+    print("✅ PASS:文件束导入全链(scanner→到达组→launch→展2分区→worker导入)通过")
 
-ok, failed, total = final
-print(f"  partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
-rows = psql(os.environ["PG_BUSINESS_DB"],
-            "select count(*) from biz.customer_account where customer_no like 'BNDL%'").stdout.strip()
-print(f"  biz.customer_account BNDL* 行数:{rows}")
-assert failed == 0, f"有 {failed} 个分区失败"
-assert ok == total, "并非全部分区成功"
-print("✅ PASS:文件束导入全链(scanner→到达组→launch→展2分区→worker导入)通过")
+# 5) BUNDLE_EXPORT:通过 trigger API 直接发束 launch,验证真实 launch 展开 export 绑定。
+print("==> 验证 BUNDLE_EXPORT launch→partition 绑定")
+seed_export_rows()
+before = int(psql(os.environ["PG_PLATFORM_DB"],
+                  "select coalesce(max(id),0) from batch.job_instance where tenant_id='ta'").stdout.strip())
+launch("TA_BUNDLE_EXPORT", {
+    "batchNo": BATCH or RUN,
+    "bizDate": BIZ,
+    "bizType": "TA_EXPORT_REPORT",
+    "bundleFiles": [
+        {"templateCode": "TA_EXPORT_REPORT_TPL"},
+        {"templateCode": "TA_EXPORT_REPORT_JSON_TPL"},
+    ],
+})
+export_instance = wait_instance("TA_BUNDLE_EXPORT", before)
+if export_instance is None:
+    print("❌ FAIL:超时未见 TA_BUNDLE_EXPORT job_instance")
+    sys.exit(1)
+export_parts = read_partitions(export_instance)
+print(f"  export partitions: {export_parts}")
+assert len(export_parts) == 2, f"BUNDLE_EXPORT 期望 2 个 partition,实得 {len(export_parts)}"
+assert [p[2] for p in export_parts] == ["TA_EXPORT_REPORT_TPL", "TA_EXPORT_REPORT_JSON_TPL"]
+print("  ✓ BUNDLE_EXPORT 展开 2 个 template 绑定 partition")
+export_final = wait_partitions_terminal(export_instance, timeout=120)
+if export_final is not None:
+    ok, failed, total = export_final
+    print(f"  export partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
+
+# 6) BUNDLE_DISPATCH:预置两个输出 file_record,通过束 targetRef 路由到本地渠道。
+print("==> 验证 BUNDLE_DISPATCH launch→partition 绑定")
+file1 = insert_generated_file(f"bundle-dispatch-a-{RUN}")
+file2 = insert_generated_file(f"bundle-dispatch-b-{RUN}")
+before = int(psql(os.environ["PG_PLATFORM_DB"],
+                  "select coalesce(max(id),0) from batch.job_instance where tenant_id='ta'").stdout.strip())
+launch("TA_BUNDLE_DISPATCH", {
+    "receiptCode": f"R-BUNDLE-{RUN}",
+    "ackRequired": False,
+    "forceRetry": False,
+    "bundleFiles": [
+        {"sourceFileId": file1, "targetRef": "ta_bundle_local"},
+        {"sourceFileId": file2, "targetRef": "ta_bundle_local"},
+    ],
+})
+dispatch_instance = wait_instance("TA_BUNDLE_DISPATCH", before)
+if dispatch_instance is None:
+    print("❌ FAIL:超时未见 TA_BUNDLE_DISPATCH job_instance")
+    sys.exit(1)
+dispatch_parts = read_partitions(dispatch_instance)
+print(f"  dispatch partitions: {dispatch_parts}")
+assert len(dispatch_parts) == 2, f"BUNDLE_DISPATCH 期望 2 个 partition,实得 {len(dispatch_parts)}"
+assert [int(p[1]) for p in dispatch_parts] == [file1, file2]
+assert [p[3] for p in dispatch_parts] == ["ta_bundle_local", "ta_bundle_local"]
+print("  ✓ BUNDLE_DISPATCH 展开 2 个 source_file_id + target_ref 绑定 partition")
+dispatch_final = wait_partitions_terminal(dispatch_instance, timeout=120)
+if dispatch_final is not None:
+    ok, failed, total = dispatch_final
+    print(f"  dispatch partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
+print("✅ PASS:文件束导入/导出/分发 sim 编排覆盖通过")
 PY
