@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# run-handler-tests.sh — 5 类 worker handler(batteries)单测 × Java + Python SDK
+# sdk-handler-tests.sh — 5 类 worker handler(batteries)单测 × Java + Python SDK
 #
 # 测的是各 SDK **内建/抽象 handler** 对 5 类 worker 的支持:
 #   import · export · process · dispatch · atomic
@@ -10,9 +10,9 @@
 # scripts/local/sdk-e2e-local.sh 覆盖,见 docs/sdk/local-e2e-coverage.md)。
 #
 # 用法:
-#   bash sdk/scripts/run-handler-tests.sh            # java + python 都跑
-#   bash sdk/scripts/run-handler-tests.sh java       # 只跑 Java
-#   bash sdk/scripts/run-handler-tests.sh python     # 只跑 Python
+#   bash scripts/local/sdk-handler-tests.sh            # java + python 都跑
+#   bash scripts/local/sdk-handler-tests.sh java       # 只跑 Java
+#   bash scripts/local/sdk-handler-tests.sh python     # 只跑 Python
 #
 # 环境变量(均有默认,可覆盖):
 #   JAVA_HOME        Java 25 home(缺省自动探测 /usr/libexec/java_home -v 25)
@@ -28,9 +28,9 @@
 set -uo pipefail
 
 LANG_SEL="${1:-all}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SDK_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${SDK_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # scripts/local
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"                # 仓库根
+SDK_DIR="${ROOT_DIR}/sdk"
 
 # ── env 提取(可覆盖)────────────────────────────────────────────────────────
 : "${MVN:=mvn}"

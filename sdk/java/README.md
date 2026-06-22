@@ -35,7 +35,7 @@ public class MyImportHandler implements SdkTaskHandler {
 ## 环境 / 构建
 
 - JDK：随平台根 pom(`<java.version>`,当前 JDK 25);运行兼容性见 `core/README.md`。
-- 5 类 worker handler batteries 单测:`bash sdk/scripts/run-handler-tests.sh java`。
+- 5 类 worker handler batteries 单测:`bash scripts/local/sdk-handler-tests.sh java`。
 - 真链路本地验证:`bash scripts/local/sdk-e2e-local.sh java`。
 
 ## 样例

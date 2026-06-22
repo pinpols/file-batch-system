@@ -55,7 +55,7 @@ Java / Python SDK 自带 5 类 worker 的内建/抽象 handler:
 
 | 范围 | 入口 | 说明 |
 |---|---|---|
-| 5 类 handler batteries 单测(Java + Python) | `bash sdk/scripts/run-handler-tests.sh [java\|python\|all]` | 环境变量可覆盖;对 stale skip 显式告警 |
+| 5 类 handler batteries 单测(Java + Python) | `bash scripts/local/sdk-handler-tests.sh [java\|python\|all]` | 环境变量可覆盖;对 stale skip 显式告警 |
 | 跨语言契约 fixture(决策核) | 各语言 test(`go test ./...` / `npm test` / `cargo test` / `pytest tests/contract` / Java surefire) | 同一份 [`docs/api/sdk-contract-fixtures/`](../docs/api/sdk-contract-fixtures/) 跨 5 语言跑,防漂移 |
 | 真 orchestrator 本地全链路 | `bash scripts/local/sdk-e2e-local.sh <go\|python\|typescript\|java\|rust>` | 真栈起后逐阶段断言 register→dispatch→claim→execute→report→terminal,见 [`docs/sdk/local-e2e-coverage.md`](../docs/sdk/local-e2e-coverage.md) |
 | 租户写 handler 单测 | testkit `FakeBatchPlatform` / `@BatchWorkerTest`(Java 见 [`java/testkit/`](java/testkit/),Python `batch_worker_sdk.testkit`) | in-process 平台 fake,不连真栈 |
