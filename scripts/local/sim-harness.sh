@@ -152,9 +152,9 @@ reset() {
     DECLARE r record;
     BEGIN
       FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='batch'
-        AND tablename ~ '^(job_instance|job_execution|pipeline_instance|pipeline_step_run|workflow_run|workflow_node_run|outbox_event|event_outbox_retry|trigger_outbox_event|file_record|compensation_command|dead_letter)'
+        AND tablename ~ '^(job_instance|job_execution|pipeline_instance|pipeline_step_run|pipeline_progress|workflow_run|workflow_node_run|outbox_event|event_outbox_retry|trigger_outbox_event|file_record|file_error_record|compensation_command|dead_letter)'
       LOOP EXECUTE format('TRUNCATE TABLE batch.%I CASCADE', r.tablename); END LOOP;
-    END \$reset\$;" >/dev/null && ok "平台运行态已清(保留定义/配置/租户/用户/系统表)" || warn "平台运行态部分清理跳过"
+    END \$reset\$;" >/dev/null && ok "平台运行态已清(保留定义/配置/租户/用户/系统表)" || { c_red "  ✗ 平台运行态清理失败"; return 1; }
   c_grn "== reset 完成 =="
 }
 

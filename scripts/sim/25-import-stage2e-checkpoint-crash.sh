@@ -46,8 +46,8 @@ else
   echo "==> skip restart; expecting existing worker-import has batch.worker.checkpoint.enabled=true"
 fi
 
-export EXPECTED_ROWS="${EXPECTED_ROWS:-20000}"
-export CHECKPOINT_MIN_MARKER="${CHECKPOINT_MIN_MARKER:-50}"
+export EXPECTED_ROWS="${EXPECTED_ROWS:-5000}"
+export CHECKPOINT_MIN_MARKER="${CHECKPOINT_MIN_MARKER:-10}"
 export WORKER_IMPORT_PORT="${WORKER_IMPORT_PORT:-18083}"
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2e-checkpoint-crash.log"
@@ -70,6 +70,7 @@ MINIO_CONTAINER = os.environ.get("MINIO_CONTAINER", "batch-minio")
 MINIO_BUCKET = os.environ["BATCH_S3_BUCKET"]
 MINIO_ACCESS_KEY = os.environ["BATCH_S3_ACCESS_KEY"]
 MINIO_SECRET_KEY = os.environ["BATCH_S3_SECRET_KEY"]
+print(f"  [config] expectedRows={EXPECTED_ROWS} minMarker={MIN_MARKER}", flush=True)
 
 def sh(args, check=False):
     return subprocess.run(args, check=check, capture_output=True, text=True)
@@ -167,6 +168,7 @@ def state_row(rid):
         "left join batch.job_task t on t.job_partition_id=p.id "
         "left join batch.pipeline_instance pi on pi.related_job_instance_id=i.id "
         "left join batch.pipeline_progress pp on pp.pipeline_instance_id=pi.id and pp.stage='LOAD' "
+        " and pp.updated_at >= tr.created_at "
         "left join batch.trigger_outbox_event oe on oe.tenant_id=tr.tenant_id "
         " and oe.request_id=tr.request_id "
         f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
@@ -204,10 +206,12 @@ def wait_for_checkpoint(rid):
                 raise RuntimeError(f"trigger outbox failed before launch: {row['raw']}")
             if row["instance_status"] in ("SUCCESS", "FAILED", "PARTIAL_FAILED"):
                 raise RuntimeError(f"task reached terminal before kill: {row['raw']}")
+            if row["completed"] or row["marker"] >= EXPECTED_ROWS:
+                raise RuntimeError(f"checkpoint injection window missed; load already completed: {row['raw']}")
             if row["marker"] >= MIN_MARKER:
                 print(f"  [checkpoint-before-kill] {row['raw']}", flush=True)
                 return row
-        time.sleep(0.2)
+        time.sleep(0.05)
     raise TimeoutError(f"checkpoint marker not reached; last={last}")
 
 def kill_worker_import():
