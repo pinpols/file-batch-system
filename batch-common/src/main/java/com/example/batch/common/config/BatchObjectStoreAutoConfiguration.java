@@ -1,14 +1,19 @@
 package com.example.batch.common.config;
 
+import com.example.batch.common.health.ObjectStoreStartupCheck;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.storage.EncryptingObjectStore;
 import com.example.batch.common.storage.FilesystemObjectStore;
+import com.example.batch.common.storage.MeteredObjectStore;
 import com.example.batch.common.storage.S3ObjectStore;
 import com.example.batch.common.utils.Texts;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -77,20 +82,48 @@ public class BatchObjectStoreAutoConfiguration {
       BatchSecurityProperties securityProperties,
       ObjectStoreEncryptionProperties encryptionProperties,
       ObjectProvider<BatchObjectCryptoService> cryptoProvider,
-      ObjectProvider<BatchKmsProperties> kmsPropertiesProvider) {
+      ObjectProvider<BatchKmsProperties> kmsPropertiesProvider,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     BatchObjectCryptoService crypto = cryptoProvider.getIfAvailable();
     BatchKmsProperties kmsProperties = kmsPropertiesProvider.getIfAvailable();
+    BatchObjectStore store;
     if (!encryptionProperties.isDecoratorEnabled()
         || securityProperties.isBypassMode()
         || crypto == null) {
-      return raw;
+      store = raw;
+    } else {
+      String defaultKeyRef = kmsProperties == null ? null : kmsProperties.getDefaultKeyRef();
+      store =
+          new EncryptingObjectStore(
+              raw,
+              crypto,
+              securityProperties,
+              defaultKeyRef,
+              encryptionProperties.getMaxInMemoryEncryptBytes());
     }
-    String defaultKeyRef = kmsProperties == null ? null : kmsProperties.getDefaultKeyRef();
-    return new EncryptingObjectStore(
-        raw,
-        crypto,
-        securityProperties,
-        defaultKeyRef,
-        encryptionProperties.getMaxInMemoryEncryptBytes());
+    // 指标装饰挂最外层：有 MeterRegistry 即包裹（actuator 起则有），缺失则无声跳过，零回归。
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    return registry == null ? store : new MeteredObjectStore(store, registry);
+  }
+
+  /**
+   * 对象存储启动冒烟自检（{@code batch.storage.startup-check.enabled=true}，默认开）。
+   *
+   * <p>启动期对配置 bucket 真做一遍 put→exists→statSize→get→list→delete 探针，任一步不符即 fail-fast 让 boot 失败。
+   * 把「换了对象存储后端跑起来才发现不兼容 / endpoint 错 / bucket 无权限 / path-style 或 checksum 没配对」从运行时惊吓变成启动期失败。
+   *
+   * <p>{@link ConditionalOnBean} 守门：只有真存在 {@link BatchObjectStore} bean 的上下文才挂——很多 worker / 测试上下文
+   * 根本不装配对象存储（无 S3Client / 后端未配），这些上下文不应被本自检牵连失败。bean 在 {@link #objectStore} 之后声明， 保证条件求值时能看到它。s3 /
+   * filesystem 后端同样适用(后者校验 NAS 挂载可写)。
+   */
+  @Bean
+  @ConditionalOnBean(BatchObjectStore.class)
+  @ConditionalOnProperty(
+      name = "batch.storage.startup-check.enabled",
+      havingValue = "true",
+      matchIfMissing = true)
+  public ApplicationRunner objectStoreStartupCheck(
+      BatchObjectStore objectStore, S3StorageProperties properties) {
+    return new ObjectStoreStartupCheck(objectStore, properties.getBucket());
   }
 }
