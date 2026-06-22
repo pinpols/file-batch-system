@@ -235,7 +235,8 @@ async def test_handler_success_is_executed_and_reported(httpx_mock: HTTPXMock) -
     body = _report_body(report_reqs)
     assert body["success"] is True
     assert body["outputs"] == {"rows": 3}
-    assert body["resultSummary"] == "done"
+    # resultSummary 是平台 jsonb 列 → 发 {code,message} JSON 对象(非裸串)。
+    assert json.loads(body["resultSummary"]) == {"code": "SUCCESS", "message": "done"}
 
 
 async def test_v2_workertype_routes_to_handler(httpx_mock: HTTPXMock) -> None:
@@ -276,7 +277,8 @@ async def test_handler_failure_result_reports_failure(httpx_mock: HTTPXMock) -> 
     body = _report_body(report_reqs)
     assert body["success"] is False
     assert body["errorCode"] == "MY_ERR"
-    assert body["resultSummary"] == "boom"
+    # jsonb 列:{code,message} JSON 对象。
+    assert json.loads(body["resultSummary"]) == {"code": "MY_ERR", "message": "boom"}
 
 
 async def test_handler_exception_reports_failure_not_leaks(httpx_mock: HTTPXMock) -> None:

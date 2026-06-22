@@ -288,8 +288,25 @@ class BatchPlatformClient:
         厂时仅运行 HTTP heartbeat + 租约续约的 scheduler-only 模式。
         """
         if self._kafka_factory is None:
+            # 配了 kafka_bootstrap → 自动建内置 aiokafka 消费器(对齐 Go 样例「有 broker
+            # 即消费」),无需调用方显式注入工厂。否则回退 scheduler-only。
+            if getattr(self._config, "kafka_bootstrap", None):
+                # 延迟 import(本文件刻意不在顶层 import _kafka):只有真要建消费器时才拉入
+                # kafka 机制,保持 scheduler-only 部署的最小依赖面。
+                from batch_worker_sdk.internal._kafka import (  # noqa: PLC0415
+                    KafkaTaskConsumer,
+                )
+
+                logger.info(
+                    "auto-building KafkaTaskConsumer from config "
+                    "(kafka_bootstrap=%s, pattern=%s)",
+                    self._config.kafka_bootstrap,
+                    self._config.kafka_topic_pattern,
+                )
+                auto: _KafkaConsumerLike = KafkaTaskConsumer(self._config, dispatcher)  # type: ignore[arg-type]
+                return auto
             logger.info(
-                "no kafka_factory supplied; running scheduler-only "
+                "no kafka_factory and no kafka_bootstrap; running scheduler-only "
                 "(HTTP heartbeat + lease renew still active)"
             )
             return None

@@ -10,10 +10,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 dependencies = [
-    # Locally develop against the sibling SDK source — `pip install -e .`
-    # in this directory after editable-installing batch-worker-sdk picks
-    # up live changes. PyPI release will bump to "batch-worker-sdk>=0.5".
-    "batch-worker-sdk",
+    # Locally develop against the sibling SDK source — editable-install the SDK first
+    # (`pip install -e sdk/python`), then `pip install -e .` here picks up live changes.
+    # Distribution name is batch-worker-sdk-python (see sdk/python/pyproject.toml [project].name);
+    # depending on the bare "batch-worker-sdk" fails with "No matching distribution found".
+    "batch-worker-sdk-python",
 ]
 
 [tool.hatch.build.targets.wheel]

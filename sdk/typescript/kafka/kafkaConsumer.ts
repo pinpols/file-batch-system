@@ -67,15 +67,16 @@ export interface KafkaConsumerConfig {
 }
 
 /**
- * Build the per-tenant wildcard subscription regex for
- * `batch.task.dispatch.<tenant>.*`. The trailing `.*` matches one channel
- * segment (e.g. `http`, `sql`); we anchor and escape the tenant so a tenant
- * named `a.b` cannot widen the match.
+ * Build the node-direct subscription regex for
+ * `batch.task.dispatch.<workerType>.node.<workerCode>` — the topic the platform
+ * dispatches THIS worker's tasks to (base-first, aligned with built-in workers'
+ * AbstractTaskConsumer.topicPattern()). The old tenant-first
+ * `batch.task.dispatch.<tenant>.*` is never published to; cross-tenant safety is
+ * enforced by the per-message tenant self-check (§1.9), not the topic name.
  */
-export function dispatchTopicRegex(tenantId: string): RegExp {
-  const safe = tenantId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // anchored: batch.task.dispatch.<tenant>.<one-or-more-non-dot-or-anything>
-  return new RegExp(`^batch\\.task\\.dispatch\\.${safe}\\.[^.]+$`);
+export function dispatchTopicRegex(workerCode: string): RegExp {
+  const safe = workerCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^batch\\.task\\.dispatch\\..+\\.node\\.${safe}$`);
 }
 
 /** Consumer group id per byo-sdk-guide §1.2: g-sdk-<tenantId>-<workerCode>. */
@@ -105,7 +106,7 @@ export class KafkaConsumerAdapter implements Consumer {
   constructor(config: KafkaConsumerConfig, logger: Logger = consoleLogger) {
     this.#config = config;
     this.#logger = logger;
-    this.#topicRegex = config.topicRegex ?? dispatchTopicRegex(config.tenantId);
+    this.#topicRegex = config.topicRegex ?? dispatchTopicRegex(config.workerCode);
     this.#groupId =
       config.groupId ?? consumerGroupId(config.tenantId, config.workerCode);
 
