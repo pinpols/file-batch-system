@@ -83,6 +83,14 @@ jobs:
             echo "BATCH_INTERNAL_SECRET=ci-e2e-internal-secret-0123456789abcdef"
           } >> .env.local
 
+      - name: Use Maven Central for image build (CI runners)
+        # Dockerfile.app COPY docker/settings.xml 强制 aliyun mirror(为团队 China dev
+        # 环境避开其 18081 代理下的 Central 不稳);但 GitHub US runner 打 aliyun 反而
+        # 频繁 502 / 慢。CI 里覆盖成无 mirror 的默认 settings,走 Maven Central(GH→Central
+        # 稳定且有缓存)。仅改本次 checkout 工作副本,不影响仓库提交的 dev 默认。
+        # 无 <?xml?> 声明的最简 settings(根元素前的空白无害,避免 heredoc 缩进破坏声明)。
+        run: echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"></settings>' > docker/settings.xml
+
       - name: Boot postgres + apply Flyway migrations (apps run with flyway disabled)
         # compose 里 app 服务一律 SPRING_FLYWAY_ENABLED=false、无 migrator service、
         # postgres init 只建库/schema 不含表 → 必须先单起 PG 手动迁移平台 schema,
