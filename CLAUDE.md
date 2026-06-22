@@ -21,23 +21,9 @@
 
 ## 分支用途
 
-**唯一常驻活分支 = `main`**;其余都是短命 `feature/<topic>`、`fix/<topic>` → PR → main 后即清理。
-**`citus` 已于 2026-06-14 冻结为只读参考**(见下),不再是活跃轨道。
+**唯一常驻分支 = `main`**;其余都是短命 `feature/<topic>`、`fix/<topic>` → PR(squash)→ main 后即清理。
 
-| 分支 | 是什么 | 含什么 |
-|---|---|---|
-| **`main`** | 唯一真相源、单机 PG 默认、**双栈-capable** | 全部应用代码 **+ 全部部署**(`docker-compose*.yml` / `docker/` / `helm/` / `deploy/` / k8s 清单 / `.env.example`)。Citus 能力靠配置开关(默认关) |
-| **`citus`(❄️ 冻结·只读参考)** | 时间点验证过的 Citus POC,**非活跃轨道** | 复合 PK 迁移、`scripts/db/citus/01-distribute.sql`、Citus 拓扑、FOR UPDATE 租户路由;快照 tag **`citus-poc-2026-06-14`**;draft PR #459(**永不合 main**) |
-
-**❄️ citus 冻结约束(2026-06-14 决策)**:
-
-- **停止 `main → citus` 同步**,citus 上**不再开发**。它降级为"只读参考 + 薄保险"。判据见 `docs/analysis/`:瓶颈在控制面非 PG(PG 写有 10-15× 余量);Citus 解决的是未来才有的多租峰值流量写墙;biz 分区先于 biz 分片;真要上有 Azure 托管 Citus 路径 B。
-- **整支 `citus → main`:❌ 永不**(架构承诺,一直如此)。
-- **耐久学习资产在 docs + 脚本,不在活分支**:`docs/backlog/citus-introduction-plan` / `docs/analysis/citus-w8-runtime-findings` / `docs/runbook/citus-deployment`(§1b 扩展边界)/ `docs/design/partition-idempotency-decision` / `scripts/db/citus/01-distribute.sql`。
-- **解冻流程**(真撞 PG 写墙、且确认自托管而非托管 Citus 时):从 tag 起分支 → 重新审计累积 main delta 的 Citus 正确性(新 `FOR UPDATE`/跨分片 join / 新表分片键)→ 重跑 `01-distribute` → 重跑 sim 验证。**切过去≠能直接跑。**
-- **main 保持 Citus-friendly 的前瞻规则仍生效**(见 §多租隔离「新表 PK 前瞻」:新多租大表一律复合 PK),把最严重的漂移堵在源头,降低将来解冻成本。
-
-> 历史(冻结前):citus 曾是 main 的并排活跃轨道,靠 `scripts/local/sync-from-main.sh` 定期单向同步;"citus 上发现的通用/双栈代码 → 抽 `feature/<topic>` off main → PR" 的回流规则曾适用。冻结后这些不再发生。
+> Citus(分布式)轨道已于 2026-06-22 弃用并清除:控制面而非 PG 是瓶颈(PG 写有 10-15× 余量),Citus 解决的是未来才有的多租峰值写墙,YAGNI。`citus` 分支已删,只读快照 tag **`citus-poc-2026-06-14`** 保留作历史归档(`forbid-citus` 守护、citus 文档/同步脚本均已移除)。**复合 PK 前瞻规则保留**(见 §多租隔离「新表 PK 前瞻」)——它对**月分区**(已落地 V172/V173)同样有效,与 Citus 解耦。
 
 
 ## 构建
@@ -74,9 +60,7 @@
 
 守护:`MultiTenantIsolationIntegrationTest`(batch-orchestrator)+ 各模块 `MapperXmlTenantGuardArchTest`(静态扫描 mapper XML,禁可空 `<if tenantId>` 守护)。
 
-> ⚠️ 引入 Citus(分布式)时,第 ② 类豁免**失效**——distributed table 要求 PK + 每个 UNIQUE 都含分片键(tenant_id),这类子表须补 `tenant_id` 列。这是 Citus 需求驱动,非当前缺口。详见 `docs/backlog/citus-introduction-plan-2026-06-06.md`。
-
-**新表 PK 前瞻(2026-06-10 起)**:新建的**多租大表**(预期行数会随租户/时间增长的业务/运行态表)PK 一律设计成复合 `PRIMARY KEY (tenant_id, id)`(或含分区键),**不要单列 `id` PK**——存量 23 张表的单列 PK 已是 Citus 评估实测的最大迁移阻塞(复合化重构估 12-20 周),新表别再加重。小字典/配置/系统表不受此约束。
+**新表 PK 前瞻(2026-06-10 起)**:新建的**多租大表**(预期行数会随租户/时间增长的业务/运行态表)PK 一律设计成复合 `PRIMARY KEY (tenant_id, id)`(或含分区键),**不要单列 `id` PK**——复合 PK 是**月分区**(已落地 V172/V173)的前置要求(分区表的 UNIQUE/PK 必须含分区键),单列 PK 表后续要分区时改造代价大(存量 23 张表评估复合化重构估 12-20 周)。小字典/配置/系统表不受此约束。
 
 ## 异步事件路由
 
