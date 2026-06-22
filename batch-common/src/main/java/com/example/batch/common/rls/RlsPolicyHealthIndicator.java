@@ -43,11 +43,6 @@ public class RlsPolicyHealthIndicator implements HealthIndicator {
   public static final List<String> ACCEPTED_POLICY_NAMES =
       List.of("tenant_isolation_transition", "tenant_isolation_strict");
 
-  /**
-   * @deprecated 改用 {@link #ACCEPTED_POLICY_NAMES}。保留是为了 PR #155 引用兼容。
-   */
-  @Deprecated public static final String EXPECTED_POLICY_NAME = "tenant_isolation_transition";
-
   private final DataSource businessDataSource;
 
   public RlsPolicyHealthIndicator(DataSource businessDataSource) {
