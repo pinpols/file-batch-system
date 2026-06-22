@@ -55,8 +55,20 @@ class AdminTestDataCleanupRepositoryTest {
         // 新增:三张此前漏清的独立配置表
         .containsEntry("api_key", 1)
         .containsEntry("alert_routing_config", 1)
-        .containsEntry("tenant_quota_policy", 1);
-    verify(jdbc, atLeast(17)).update(anyString(), any(MapSqlParameterSource.class));
+        .containsEntry("tenant_quota_policy", 1)
+        // 新增:审批表(不随 job_instance 级联,漏清会留 stale 待审批 → 点通过 not-found)
+        .containsEntry("approval_command", 1);
+    verify(jdbc, atLeast(18)).update(anyString(), any(MapSqlParameterSource.class));
+  }
+
+  @Test
+  void shouldDeleteJobInstanceApprovalsByPrefix() {
+    repository.cleanupByPrefix("e2e");
+
+    verify(jdbc)
+        .update(
+            contains("DELETE FROM batch.approval_command WHERE target_type = 'JOB_INSTANCE'"),
+            any(MapSqlParameterSource.class));
   }
 
   @Test
