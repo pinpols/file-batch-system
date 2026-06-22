@@ -22,6 +22,7 @@ public final class E2eScenarioFixture {
     private final TriggerType triggerType;
     private String retryPolicy = "NONE";
     private int retryMaxCount = 0;
+    private String shardStrategy = "NONE";
 
     public LaunchPreparationSpec(
         JdbcTemplate jdbc,
@@ -43,6 +44,11 @@ public final class E2eScenarioFixture {
 
     public LaunchPreparationSpec retryMaxCount(int retryMaxCount) {
       this.retryMaxCount = retryMaxCount;
+      return this;
+    }
+
+    public LaunchPreparationSpec shardStrategy(String shardStrategy) {
+      this.shardStrategy = shardStrategy;
       return this;
     }
 
@@ -73,6 +79,10 @@ public final class E2eScenarioFixture {
     private int retryMaxCount() {
       return retryMaxCount;
     }
+
+    private String shardStrategy() {
+      return shardStrategy;
+    }
   }
 
   /**
@@ -87,6 +97,13 @@ public final class E2eScenarioFixture {
       TriggerType triggerType) {
     return prepareLaunchWithoutPreSeededWorker(
         new LaunchPreparationSpec(jdbc, tenantId, jobType, workerGroup, triggerType));
+  }
+
+  public static LaunchSeed prepareBundleLaunchWithoutPreSeededWorker(
+      JdbcTemplate jdbc, String tenantId, String bundleJobType, String workerGroup) {
+    return prepareLaunchWithoutPreSeededWorker(
+        new LaunchPreparationSpec(jdbc, tenantId, bundleJobType, workerGroup, TriggerType.EVENT)
+            .shardStrategy("DYNAMIC"));
   }
 
   /**
@@ -108,7 +125,7 @@ public final class E2eScenarioFixture {
                 priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
                 retry_policy, retry_max_count, timeout_seconds, enabled, version
             ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
-                5, 'e2e-q', ?, 'API', false, 'NONE',
+                5, 'e2e-q', ?, 'API', false, ?,
                 ?, ?, 0, true, 1)
             """,
             spec.tenantId(),
@@ -117,6 +134,7 @@ public final class E2eScenarioFixture {
             spec.jobType(),
             "E2E",
             CodeNormalizer.toUpperOrNull(spec.workerGroup()),
+            spec.shardStrategy(),
             spec.retryPolicy(),
             spec.retryMaxCount());
 

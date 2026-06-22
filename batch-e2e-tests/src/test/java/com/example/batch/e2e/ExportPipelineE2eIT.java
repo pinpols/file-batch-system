@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
@@ -69,31 +70,7 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
   @Test
   void exportJobRunsThroughKafkaClaimAndReportsSuccess() {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId =
-        businessJdbc.queryForObject(
-            """
-            insert into biz.settlement_batch (
-                tenant_id, batch_no, biz_date, accounting_period, batch_status,
-                total_record_count, total_amount, currency
-            ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
-            returning id
-            """,
-            Long.class,
-            TENANT,
-            BATCH_NO);
-    assertThat(batchId).isNotNull();
-
-    businessJdbc.update(
-        """
-        insert into biz.settlement_detail (
-            tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
-            gross_amount, fee_amount, net_amount, currency, settlement_status
-        ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
-        """,
-        TENANT,
-        batchId,
-        "E2E-SET-001",
-        "C-E2E-1");
+    seedSettlementData(businessJdbc, BATCH_NO, "E2E-SET-001", "C-E2E-1");
 
     LaunchSeed seed =
         E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
@@ -143,5 +120,97 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
             TENANT,
             BATCH_NO);
     assertThat(total).isNotNull();
+  }
+
+  @Test
+  void bundleExportExpandsAndEachPartitionRunsThroughWorker() {
+    String batchNo = "E2E-BUNDLE-EXPORT-" + System.nanoTime();
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+    seedSettlementData(businessJdbc, batchNo, "E2E-BND-SET-001", "C-E2E-BND-1");
+
+    LaunchSeed seed =
+        E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
+            jdbcTemplate, TENANT, "BUNDLE_EXPORT", "export");
+
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("batchNo", batchNo);
+    params.put("bizDate", "2026-01-15");
+    params.put("bizType", "SETTLEMENT");
+    params.put(
+        "bundleFiles",
+        List.of(
+            Map.of("templateCode", "EXP-SETTLEMENT-JSON"),
+            Map.of("templateCode", "EXP-SETTLEMENT-CSV")));
+
+    launchService.launch(
+        new LaunchRequest(
+            TENANT,
+            seed.jobCode(),
+            LocalDate.of(2026, 1, 15),
+            TriggerType.EVENT,
+            seed.requestId(),
+            "e2e-tr-bundle-export",
+            params));
+
+    e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+    await()
+        .atMost(Duration.ofSeconds(180))
+        .pollInterval(Duration.ofMillis(250))
+        .untilAsserted(
+            () -> {
+              Integer successfulTasks =
+                  jdbcTemplate.queryForObject(
+                      """
+                      select count(*)::int from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ? and t.task_status = 'SUCCESS'
+                      """,
+                      Integer.class,
+                      TENANT,
+                      seed.dedupKey());
+              assertThat(successfulTasks).isEqualTo(2);
+            });
+
+    Integer generatedFiles =
+        jdbcTemplate.queryForObject(
+            """
+            select count(*)::int from batch.file_record
+            where tenant_id = ? and source_ref = ? and file_status = 'GENERATED'
+              and metadata_json->>'templateCode' in ('EXP-SETTLEMENT-JSON','EXP-SETTLEMENT-CSV')
+            """,
+            Integer.class,
+            TENANT,
+            batchNo);
+    assertThat(generatedFiles).isEqualTo(2);
+  }
+
+  private void seedSettlementData(
+      JdbcTemplate businessJdbc, String batchNo, String settlementNo, String customerNo) {
+    Long batchId =
+        businessJdbc.queryForObject(
+            """
+            insert into biz.settlement_batch (
+                tenant_id, batch_no, biz_date, accounting_period, batch_status,
+                total_record_count, total_amount, currency
+            ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
+            returning id
+            """,
+            Long.class,
+            TENANT,
+            batchNo);
+    assertThat(batchId).isNotNull();
+
+    businessJdbc.update(
+        """
+        insert into biz.settlement_detail (
+            tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
+            gross_amount, fee_amount, net_amount, currency, settlement_status
+        ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
+        """,
+        TENANT,
+        batchId,
+        settlementNo,
+        customerNo);
   }
 }
