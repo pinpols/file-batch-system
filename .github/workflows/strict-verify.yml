@@ -25,13 +25,8 @@ on:
         options:
           - dry-run
           - live
-  push:
-    branches-ignore:
-      - main
-    paths:
-      - 'scripts/local/strict-verify.sh'
-      - 'scripts/ci/run-full-regression.sh'
-      - '.github/workflows/strict-verify.yml'
+  # PR 驱动:去掉 feature-branch 的 push 触发(2026-06-22 CI 优化),与 pr-gate 一致,
+  # 消除 push + pull_request 对 strict-verify-dry-run 的双跑。live 仍仅 workflow_dispatch。
   pull_request:
     branches: [main]
     paths:

@@ -75,23 +75,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev]
       - name: pytest (excluding contract/)
-        # contract/ is exercised by the dedicated contract-stub job below
+        # tests/contract 由 sdk-contract-parity 的 "python contract stub + parity stub"
+        # 统一跑(跨语言契约对账的权威处),此处不重复(2026-06-22 CI 去重)。
         run: pytest -v --ignore=tests/contract
-
-  contract-stub:
-    name: contract stub (xfail until P1+)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: sdk/python/pyproject.toml
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .[dev]
-      - name: Run contract runner
-        run: bash scripts/run-contract.sh

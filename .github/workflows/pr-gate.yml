@@ -17,29 +17,11 @@ name: pr-gate
 
 on:
   workflow_dispatch:
-  push:
-    branches-ignore:
-      - main          # main push 由 full-ci-gate 接管
-    paths-ignore:
-      - 'docs/runbook/**'
-      - 'docs/analysis/**'
-      - 'docs/architecture/**'
-      - 'docs/design/**'
-      - 'docs/backlog/**'
-      - 'docs/review/**'
-      - 'docs/changelog.md'
-      - '*.md'
-      - 'LICENSE'
-      - 'NOTICE'
-      - '.gitignore'
-      - '.editorconfig'
-      - '.claude/**'
-      # workflow yml 改动由 workflow-lint / codeql / actionlint / zizmor 独立 workflow 覆盖,
-      # 不需要 pr-gate 重跑 maven。
-      - '.github/workflows/**'
-      - '.github/actions/**'
-      - '.github/CODEOWNERS'
-      - '.github/zizmor.yml'
+  # PR 驱动:去掉 feature-branch 的 push 触发(2026-06-22 CI 优化)。
+  # 此前 push + pull_request 双跑同一套 pr-gate(concurrency group 不同不互相取消),
+  # 每个 PR 把 static/unit/security 跑两遍。分支保护只认 PR-context run,push run 纯浪费。
+  # 现在:PR(pull_request)+ 合并队列(merge_group)覆盖所有门禁场景;main push 由
+  # full-ci-gate 接管;想在开 PR 前跑 CI 就开 draft PR。docs-only 跳过由下方 changes job 处理。
   pull_request:
     branches:
       - main
