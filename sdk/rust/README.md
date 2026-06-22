@@ -22,7 +22,7 @@ src/
   client/reqwest_transport.rs              real blocking control-plane client — feature-gated `http`
   kafka.rs                                 real Kafka consumer adapter — feature-gated `kafka`
 tests/
-  conformance.rs                           drives the contract fixtures' then.expect
+  contract.rs                              drives the contract fixtures' then.expect
   constants_parity.rs                      asserts constants == sdk-shared-constants.yaml
   runtime.rs                               runtime engine integration tests
 ```

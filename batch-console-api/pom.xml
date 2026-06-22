@@ -186,7 +186,7 @@
             <scope>test</scope>
         </dependency>
         <!-- SDK 运行时可见性 drift-guard:测试态解析 docs/api/sdk-shared-constants.yaml 与
-             SdkPlatformConstants 镜像对账(对齐 sdk/java SharedConstantsParityTest)。
+             SdkPlatformConstants 镜像对账(对齐 sdk/java/core SharedConstantsParityTest)。
              test scope only,不进 console-api 运行时 jar。Spring Boot parent 管版本。 -->
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>

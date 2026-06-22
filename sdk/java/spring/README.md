@@ -2,7 +2,7 @@
 
 ADR-035 租户自托管 Worker SDK 的可选 Spring Boot 适配层。
 
-只有 Spring Boot 租户 worker 需要依赖本模块。非 Spring 租户应直接依赖 [`batch-worker-sdk`](../batch-worker-sdk/);
+只有 Spring Boot 租户 worker 需要依赖本模块。非 Spring 租户应直接依赖 [`batch-worker-sdk`](../core/);
 core SDK 继续保持 Spring-free。
 
 ## 接入只需 3 步(零 wiring 代码)
@@ -74,7 +74,7 @@ starter 会自动创建:
 
 ## 配置项
 
-完整字段表见 [`batch-worker-sdk/README.md#配置项一览`](../batch-worker-sdk/README.md);starter 把 `batch.worker-sdk.*` 经 `@ConfigurationProperties` 自动绑定到 `BatchPlatformClientConfig`,字段名 kebab-case ↔ Java camelCase 转换。常用片段:
+完整字段表见 [`batch-worker-sdk/README.md#配置项一览`](../core/README.md);starter 把 `batch.worker-sdk.*` 经 `@ConfigurationProperties` 自动绑定到 `BatchPlatformClientConfig`,字段名 kebab-case ↔ Java camelCase 转换。常用片段:
 
 ```yaml
 batch:
@@ -104,7 +104,7 @@ v1 只面向仓库当前基线 Spring Boot 4.x。Boot 3.x 兼容性不承诺;如
 
 ## 文档索引
 
-- [`batch-worker-sdk/README.md`](../batch-worker-sdk/README.md) —— core SDK 完整 API + 配置项 + 安全约束
+- [`batch-worker-sdk/README.md`](../core/README.md) —— core SDK 完整 API + 配置项 + 安全约束
 - [`examples/sample-tenant-worker-spring/`](../examples/sample-tenant-worker-spring/) —— 最小示范
 - [`examples/batch-worker-sdk-template/`](../examples/batch-worker-sdk-template/) —— 生产 fork 起点(Dockerfile + run.sh + CI)
 - [`docs/sdk/quickstart.md`](../docs/sdk/quickstart.md) —— 5 分钟起跑(starter 路径)

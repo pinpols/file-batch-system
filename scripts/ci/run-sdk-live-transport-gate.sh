@@ -32,7 +32,7 @@ if sys.version_info < (3, 12):
 PY
 
 echo "[sdk-live] Java testkit"
-(cd "$ROOT" && mvn -B -pl sdk/java-testkit -am \
+(cd "$ROOT" && mvn -B -pl sdk/java/testkit -am \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dtest=FakeBatchPlatformSelfTest \
   test)
