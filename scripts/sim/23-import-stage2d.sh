@@ -29,6 +29,8 @@ command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 echo "==> apply bootstrap(XML import runtime config)"
 docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2d-reset-errors.sql >/dev/null
 
 START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
 export START_TS
