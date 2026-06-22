@@ -8,6 +8,7 @@ import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.time.Duration;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +44,7 @@ public final class SampleTenantWorker {
                 System.getenv().getOrDefault(
                     "BATCH_TOPIC_PATTERN",
                     "batch\\.task\\.dispatch\\..+\\.node\\."
-                        + java.util.regex.Pattern.quote(requireEnv("BATCH_WORKER_CODE"))))
+                        + Pattern.quote(requireEnv("BATCH_WORKER_CODE"))))
             .kafkaGroupId(
                 System.getenv().getOrDefault(
                     "BATCH_KAFKA_GROUP", requireEnv("BATCH_TENANT_ID") + "-sample-workers"))

@@ -308,7 +308,7 @@ job_instance.expected_       ──┘                ↓
 当前仓库已经存在两种相关形态：
 
 1. Orchestrator 侧的 [`ExecutionContext`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/domain/pipeline/ExecutionContext.java)
-2. Worker core 侧的 [`ExecutionContext`](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/com/example/batch/worker/core/support/ExecutionContext.java)
+2. Worker core 侧的 [`ExecutionContext`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/com/example/batch/worker/core/support/ExecutionContext.java)
 3. 旧名 `PipelineContext` 仅保留为兼容语义和历史检索词，仓库里不再新增该类型
 
 它们的共同点是：
@@ -322,7 +322,7 @@ job_instance.expected_       ──┘                ↓
 
 兼容层说明：
 - 当前仍保留少量 `pipelineCode` 兼容入口，这是刻意保留的兼容层，不视为漏改
-- 典型落点见 [`ExecutionContext.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[`PipelineDefinitionModel.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java)、[`AbstractPipelineStepExecutionAdapter.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
+- 典型落点见 [`ExecutionContext.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[`PipelineDefinitionModel.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java)、[`AbstractPipelineStepExecutionAdapter.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/com/example/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
 
 ### 5.3 统一上下文的推荐结构
 
@@ -374,9 +374,9 @@ job_instance.expected_       ──┘                ↓
 
 ### 5.6 代码对照
 
-- [`PipelineRuntimeKeys.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/com/example/batch/worker/core/infrastructure/PipelineRuntimeKeys.java)
-- [`AbstractPipelineStepExecutionAdapter.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
-- [`AbstractStageExecutor.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractStageExecutor.java)
+- [`PipelineRuntimeKeys.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/com/example/batch/worker/core/infrastructure/PipelineRuntimeKeys.java)
+- [`AbstractPipelineStepExecutionAdapter.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/com/example/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
+- [`AbstractStageExecutor.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/com/example/batch/worker/core/support/AbstractStageExecutor.java)
 
 ---
 
