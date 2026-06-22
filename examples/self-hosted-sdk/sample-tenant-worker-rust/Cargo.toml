@@ -11,7 +11,11 @@ name = "sample-tenant-worker-rust"
 path = "src/main.rs"
 
 [dependencies]
-# The Rust BYO SDK, pulled from the sibling reference crate. The `kafka` feature
-# enables the real rdkafka consumer adapter (src/kafka.rs); without it the SDK
-# stays std-only and zero-dependency.
-batch-worker-sdk = { path = "../../sdk/rust", features = ["kafka"] }
+# The Rust BYO SDK, pulled from the sibling reference crate. `kafka` enables the
+# real rdkafka consumer adapter (src/kafka.rs); `http` enables the real blocking
+# control-plane transport (ReqwestTransport) so this sample actually connects
+# (register → claim → execute → report) against a live orchestrator.
+batch-worker-sdk = { path = "../../../sdk/rust", features = ["kafka", "http"] }
+# JSON building for the claim / report bodies (escaping-safe). Available because
+# the SDK already pulls serde_json transitively under kafka/http.
+serde_json = "1"

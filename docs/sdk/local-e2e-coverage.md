@@ -49,27 +49,9 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 | Python | ✅ 已接(auto-build) | ✅ | ✅ **terminal SUCCESS** | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名 + #5(补 base-ATOMIC handler)全修,本地实测绿 |
 | TypeScript | ✅ 已接(kafkajs adapter) | ✅ | ✅ **terminal SUCCESS** | #2(node-direct regex)+#4(report-json)+样例 import 路径(off-by-one)+harness 装 SDK kafkajs +样例 transport 补 tenantId/workerCode(claim 404 根因:HttpTransport 缺这俩→claim body tenantId=undefined→selectById(null)→404)全修,本地实测绿 |
 | Java | ✅ 已接(SDK consumer) | ✅(#655) | ✅ **terminal SUCCESS** | #2(样例默认 pattern 改 node-direct)+#4(TaskDispatcher report resultSummary 发 {code,message} JSON 对象,生产路径是 Map 非 ReportRequest record——record 是 conformance 漂移)+#5(已有 AtomicBaseEchoHandler)全修,本地实测绿;样例非 Spring Boot fat-jar(maven-jar-plugin+lib/ classpath),启动不卡嵌套 loader |
-| Rust | ⚠ 部件齐但未集成 | — | 🔲 本地不可验 | 详见下方「Rust 现状」 |
+| Rust | ✅ 已接(rdkafka + reqwest) | ✅ | ✅ **terminal SUCCESS** | 样例从 illustrative stub 改造成真连:启用 `http` feature 用真 `ReqwestTransport` + 真调 `Worker::start()` 注册 + `HandlerBridge` 写出 claim→execute→report 回路;#2(`kafka.rs` `topic_regex` 改 node-direct,改对应 2 单测 + broker 集成测 topic)+ #4(report resultSummary 发 {code,message} JSON 对象)+ 样例 SDK path off-by-one(`../../`→`../../../`,同 Go/TS 同款坑)全修。本机实测绿(`cargo` 在 `~/.cargo/bin` 此前没上 PATH;`cmake` 经 `brew install`;CDN 封锁已解,crate 可拉) |
 
-### Rust 现状(为何还没到全链路)
-
-Rust 与其余 4 语言的差距**不是** #2/#4 小补丁,而是两件实打实的事:
-
-1. **本机无 Rust 工具链**:无 `cargo`、无 `cmake`(rdkafka 编译硬依赖 cmake),本地连编译都做不了
-   → Rust 全链路**只能 CI 验**(CI 装 cmake+cargo)。
-2. **样例是 illustrative stub,SDK 缺集成 dispatcher**:
-   - 样例 `main.rs` 用的是**桩** `HttpTransport`(register/claim/report/renew 全 `unimplemented!()`),
-     且**故意不调** `worker.start()`(调了就 panic);`HandlerBridge` 只 execute + 决定 offset,**没有
-     claim→execute→report 回路**(源码注释明说"the real worker reports here … rides the reqwest adapter")。
-   - SDK **部件其实齐了**:`ReqwestTransport`(575 行,reqwest::blocking,6 个控制面方法全实现)、真
-     Kafka consumer(rdkafka)、lifecycle FSM(register/heartbeat/lease/stop)——但 **没有把"消费派单→
-     claim→执行 handler→report"串起来的 dispatcher**(consumer.rs `run_pipeline` 只做 schema-reject/
-     tenant-check/backpressure 决定 offset;lifecycle.rs 不碰 claim/report)。其余 4 语言都有这个集成 dispatcher。
-
-⇒ 要 Rust 到全链路 = **一块真集成活**:样例改用 `ReqwestTransport` + 真调 `start()` + 写出
-claim→execute→report 回路(参照 Go 样例的 worker loop),并加 CI lane(装 cmake)跑本地全链路脚本的
-等价断言。`#2`(node-direct topic)也一并在那块活里改(`kafka.rs` `topic_regex` 现仍是 tenant-first)。
-本会话因无本机工具链 + 这块集成活未做,Rust **暂不动代码**(避免落地编不过/没验过的改动),作为独立后续。
+> **Rust 历史"本地编不了"已破**:`cargo`/`rustc` 1.96 一直装着只是没在 PATH(`~/.cargo/bin`);`cmake`(rdkafka 硬依赖)`brew install cmake` 即得;曾经的 crate CDN 封锁现已解除。⇒ Rust 现可本地全链路实测,不再只能 CI 验。
 
 > **#2 是平台级通病**:`batch.task.dispatch.<tenant>.*`(tenant-first)这个错方案 5 语言一致沿用
 > (java-spring `application.yml` 默认值即 `batch.task.dispatch.tenant-a.*`),Go 只是把它写死了。
@@ -84,9 +66,9 @@ SDK 的 wire 契约此前只对 fixture / fake stub 验过,从没对真 orchestr
 | # | 层 | 现象 | 状态 |
 |---|---|---|---|
 | 1 | register | Go/TS 不发 `workerGroup` → `worker_registry.worker_group` NOT NULL 违约 → 注册 500 | **已修(#655)** |
-| 2 | 消费 topic | SDK 订阅 `batch.task.dispatch.<tenant>.*`(tenant-first),orchestrator 派发 `...<workerType>.node.<workerCode>`(base-first)→ 收不到任何任务 | **Go/Python/TS/Java 已修**(node-direct,对齐内建 worker `AbstractTaskConsumer.topicPattern()`);Rust 待改(随其集成活一起) |
+| 2 | 消费 topic | SDK 订阅 `batch.task.dispatch.<tenant>.*`(tenant-first),orchestrator 派发 `...<workerType>.node.<workerCode>`(base-first)→ 收不到任何任务 | **五语言全已修**(node-direct,对齐内建 worker `AbstractTaskConsumer.topicPattern()`) |
 | 3 | 派单报文解码 | orchestrator 发 `taskId` 是 JSON number(BIGINT),Go 结构体期望 string → decode 失败 | **Go 已修**(本 PR,tolerant number/string);其余语言待核 |
-| 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **Go/Python/TS/Java 已修**(注意 Java 生产路径是 dispatcher 的 Map,非 conformance 的 `ReportRequest` record);Rust 待做(其生产 report 路径尚不存在,见下方「Rust 现状」) |
+| 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **五语言全已修**(注意 Java 生产路径是 dispatcher 的 Map、Rust 是样例 `HandlerBridge` 的 report body,均非 conformance 的请求构建器——那是 fixture 驱动的决策核,按 fixture 原样回显) |
 
 ### #5 handler 路由键(wire 之外,新发现)
 

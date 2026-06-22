@@ -107,6 +107,18 @@ sdk_e2e_start_worker() {
         && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" BATCH_KAFKA="localhost:${KAFKA_HOST_PORT}" \
            java -jar target/sample-tenant-worker-1.0.0-SNAPSHOT.jar ) >>"$logf" 2>&1 & echo $! ;;
+    rust)
+      # cargo at ~/.cargo/bin (not always on PATH); cmake on PATH for rdkafka build.
+      # 先 build(冷编 rdkafka 经 cmake 较慢,避免吃掉 register 超时),再跑编好的二进制。
+      # Rust 样例环境变量:KAFKA_BOOTSTRAP(同 Go/TS)。
+      local cargo_path="$HOME/.cargo/bin"
+      local rdir="$root/examples/self-hosted-sdk/sample-tenant-worker-rust"
+      PATH="$cargo_path:/usr/local/bin:$PATH" cargo build --manifest-path "$rdir/Cargo.toml" >>"$logf" 2>&1
+      ( cd "$rdir" \
+        && PATH="$cargo_path:/usr/local/bin:$PATH" \
+           BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
+           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}" \
+           ./target/debug/sample-tenant-worker-rust ) >>"$logf" 2>&1 & echo $! ;;
     *) sdk_e2e_fail "unsupported lang '$lang'"; return 2 ;;
   esac
 }
