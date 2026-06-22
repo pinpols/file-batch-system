@@ -273,8 +273,6 @@ jobs:
   # Lane Q is done and we expect symmetric pass sets, remove `|| true`.
   parity-report:
     name: parity report (log-only)
-    needs: changes
-    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs:
       [
@@ -285,6 +283,7 @@ jobs:
         rust-contract,
         sdk-live-transport,
       ]
+    # log-only 聚合器:always() 以便任一 contract job 失败/跳过时仍汇总。不套 sdk gate。
     if: always()
     steps:
       - uses: actions/checkout@v4
