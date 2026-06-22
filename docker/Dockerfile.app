@@ -26,12 +26,13 @@ COPY batch-common/pom.xml batch-common/pom.xml
 COPY batch-console-api/pom.xml batch-console-api/pom.xml
 COPY batch-orchestrator/pom.xml batch-orchestrator/pom.xml
 COPY batch-trigger/pom.xml batch-trigger/pom.xml
-COPY batch-worker-core/pom.xml batch-worker-core/pom.xml
-COPY batch-worker-import/pom.xml batch-worker-import/pom.xml
-COPY batch-worker-export/pom.xml batch-worker-export/pom.xml
-COPY batch-worker-process/pom.xml batch-worker-process/pom.xml
-COPY batch-worker-dispatch/pom.xml batch-worker-dispatch/pom.xml
-COPY batch-worker-atomic/pom.xml batch-worker-atomic/pom.xml
+COPY batch-worker/pom.xml batch-worker/pom.xml
+COPY batch-worker/core/pom.xml batch-worker/core/pom.xml
+COPY batch-worker/import/pom.xml batch-worker/import/pom.xml
+COPY batch-worker/export/pom.xml batch-worker/export/pom.xml
+COPY batch-worker/process/pom.xml batch-worker/process/pom.xml
+COPY batch-worker/dispatch/pom.xml batch-worker/dispatch/pom.xml
+COPY batch-worker/atomic/pom.xml batch-worker/atomic/pom.xml
 COPY sdk/java/core/pom.xml sdk/java/core/pom.xml
 COPY sdk/java/spring/pom.xml sdk/java/spring/pom.xml
 COPY sdk/java/testkit/pom.xml sdk/java/testkit/pom.xml
@@ -53,6 +54,7 @@ RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
 FROM eclipse-temurin:25-jre-jammy
 
 ARG MODULE
+ARG MODULE_DIR=${MODULE}
 
 ENV BATCH_TIMEZONE_DEFAULT_ZONE="Asia/Shanghai" \
     TZ="Asia/Shanghai" \
@@ -74,8 +76,8 @@ RUN groupadd --system --gid 1000 batch \
     && useradd --system --uid 1000 --gid batch --home-dir /app --shell /sbin/nologin batch
 
 # 从共享 builder 复制本 module target(过滤 sources/javadoc/original)。
-# 不写 `COPY --from=builder /workspace/${MODULE}/target/${MODULE}-*.jar /app/app.jar`:glob 命中多个时 docker COPY 失败
-COPY --from=builder /workspace/${MODULE}/target/ /tmp/build/
+# 不写 `COPY --from=builder /workspace/${MODULE_DIR}/target/${MODULE}-*.jar /app/app.jar`:glob 命中多个时 docker COPY 失败
+COPY --from=builder /workspace/${MODULE_DIR}/target/ /tmp/build/
 RUN set -eux; \
     jar=""; \
     for f in /tmp/build/"${MODULE}"-*.jar; do \

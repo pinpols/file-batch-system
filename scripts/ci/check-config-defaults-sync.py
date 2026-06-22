@@ -103,11 +103,11 @@ def main() -> int:
         ROOT / "batch-orchestrator/src/main/resources/application.yml",
         ROOT / "batch-trigger/src/main/resources/application.yml",
         ROOT / "batch-console-api/src/main/resources/application.yml",
-        ROOT / "batch-worker-core/src/main/resources/application.yml",
-        ROOT / "batch-worker-import/src/main/resources/application.yml",
-        ROOT / "batch-worker-export/src/main/resources/application.yml",
-        ROOT / "batch-worker-dispatch/src/main/resources/application.yml",
-        ROOT / "batch-worker-atomic/src/main/resources/application.yml",
+        ROOT / "batch-worker/core/src/main/resources/application.yml",
+        ROOT / "batch-worker/import/src/main/resources/application.yml",
+        ROOT / "batch-worker/export/src/main/resources/application.yml",
+        ROOT / "batch-worker/dispatch/src/main/resources/application.yml",
+        ROOT / "batch-worker/atomic/src/main/resources/application.yml",
     ]
     yml_defaults = merge(*(scan_yml(p, SPRING_PLACEHOLDER) for p in yml_files))
 

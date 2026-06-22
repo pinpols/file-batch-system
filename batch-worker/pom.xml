@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.example.batch</groupId>
+        <artifactId>batch-platform</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <!-- worker 模块聚合器(纯 aggregator + 各 worker 的 parent)。仅做目录分组与 parent 链:
+         worker → batch-worker → batch-platform,继承透传全部 dependencyManagement/properties。
+         各 worker 的 artifactId 不变(batch-worker-core/import/...),依赖坐标零改;仅目录从
+         根迁到 batch-worker/ 下(对齐 sdk/java/{core,spring,testkit} 的嵌套范式)。 -->
+    <artifactId>batch-worker</artifactId>
+    <packaging>pom</packaging>
+    <name>batch-worker (aggregator)</name>
+
+    <modules>
+        <module>core</module>
+        <module>import</module>
+        <module>export</module>
+        <module>process</module>
+        <module>dispatch</module>
+        <module>atomic</module>
+    </modules>
+</project>
