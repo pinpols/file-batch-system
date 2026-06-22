@@ -110,7 +110,7 @@ scripts/
 ├── db/        DB 工具(migration check / schema dump)
 ├── dev/       本地开发(start-stack / reset)
 ├── docker/    Docker compose 辅助
-├── local/     本地特定(sync-main.sh / pre-push-sdk-checks.sh / be-acceptance.sh)
+├── local/     本地特定(pre-push-sdk-checks.sh / be-acceptance.sh / sdk-handler-tests.sh)
 ├── ops/       运维(prod 巡检 / 一次性脚本)
 └── tools/     杂项工具
 ```
