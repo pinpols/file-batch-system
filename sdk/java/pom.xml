@@ -24,6 +24,33 @@
     <name>batch-worker-sdk</name>
     <description>Tenant self-hosted worker SDK (ADR-035 Phase 1)</description>
 
+    <!--
+      发布元数据(Maven Central 强制要求 url / licenses / scm / developers)。
+      ⚠ 占位:首次发布前须改成真实值。groupId 继承父 pom 的 `com.example.batch`,
+      Central **不接受** example 命名空间——发布前须把根 pom <groupId> 改成自有
+      且已在 Central 验证的命名空间(如 io.yourorg)。详见 docs/sdk/RELEASING.md。
+    -->
+    <url>https://github.com/your-org/file-batch-system</url>
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>your-org</id>
+            <name>Your Org SDK Team</name>
+            <email>sdk@your-org.example</email>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/your-org/file-batch-system.git</connection>
+        <developerConnection>scm:git:git@github.com:your-org/file-batch-system.git</developerConnection>
+        <url>https://github.com/your-org/file-batch-system</url>
+    </scm>
+
     <dependencies>
         <!-- 仅 jackson(JSON 序列化)+ kafka-client(派单消费)+ slf4j-api(日志门面)
              httpclient 用 JDK 11+ 内建 java.net.http.HttpClient,无需引第三方 -->
@@ -86,4 +113,112 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <!--
+      ============================================================================
+      release 发布 profile(scaffold;默认构建不激活,仅 `mvn -Prelease ... deploy`)
+      ============================================================================
+      把 batch-worker-sdk 发布到 Maven Central(Sonatype Central Portal)所需的全套
+      插件;默认 CI / 本地构建**完全不受影响**(无 `-Prelease` 时这些插件不绑定)。
+
+      首次真发布前的前置(见 docs/sdk/RELEASING.md §Java):
+        1. 把根 pom <groupId> 从 com.example.batch 改成自有且已在 Central 验证的
+           命名空间(Central 拒绝 example.* / com.example.*)。
+        2. 配置 GPG 签名密钥(发布机/CI 导入私钥),passphrase 经
+           MAVEN_GPG_PASSPHRASE 注入(workflow 已接 secrets)。
+        3. Central Portal token 经 ~/.m2/settings.xml server[id=central] 注入
+           (CI 用 setup-java 的 server-username/password = secrets.MAVEN_USERNAME/PASSWORD)。
+        4. 把上面 <url>/<scm>/<developers> 占位改成真实值。
+
+      flatten 覆盖:根 pom 用 resolveCiFriendliesOnly(只解析 ${revision},保留父
+      pom 引用)。Central 要求发布物的 pom 自包含(父 pom 不在 Central 解析不到),
+      故本 profile 把 flattenMode 覆写为 ossrh —— 产出去父化、含 Central 必填元数据、
+      剥掉 test 依赖的独立 pom。
+    -->
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <!-- 覆写根 pom 的 flatten 执行:ossrh 模式产出 Central 合规独立 pom。 -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>flatten-maven-plugin</artifactId>
+                        <configuration>
+                            <flattenMode>ossrh</flattenMode>
+                        </configuration>
+                    </plugin>
+                    <!-- 源码 jar(Central 必需)。版本由 spring-boot 父 pom 管理。 -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- javadoc jar(Central 必需)。 -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <configuration>
+                            <!-- Central 只要求附带 javadoc jar,不要求零警告。JDK 25 doclint
+                                 严格(缺 @param/@return 等会报),这里关 doclint + 不因
+                                 warning/error 挂构建,保证发布 jar 能产出。 -->
+                            <doclint>none</doclint>
+                            <failOnError>false</failOnError>
+                            <failOnWarnings>false</failOnWarnings>
+                            <quiet>true</quiet>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- GPG 签名(Central 必需);passphrase 经 env MAVEN_GPG_PASSPHRASE。 -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Sonatype Central Portal 发布插件。autoPublish=false:上传后留
+                         Central 控制台人工确认,避免误发不可撤。serverId=central 对应
+                         settings.xml 的 server 凭据(CI 由 setup-java 注入)。 -->
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.7.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                            <waitUntil>validated</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
