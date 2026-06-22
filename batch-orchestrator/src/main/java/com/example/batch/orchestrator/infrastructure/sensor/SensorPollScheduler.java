@@ -9,12 +9,12 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
-import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -49,12 +49,7 @@ public class SensorPollScheduler {
   // CLAUDE.md §Java编码细则 #3 豁免①: self-invocation AOP workaround。fetchDue / probeOne 的
   // @Transactional(REQUIRES_NEW) 只有经 Spring 代理调用才生效;同类内直接调用不走 AOP,
   // SELECT ... FOR UPDATE SKIP LOCKED 的行锁事务边界会形同虚设(锁随即释放,失去单节点隔离)。
-  private SensorPollScheduler self = this;
-
-  @Resource(name = "sensorPollScheduler")
-  void setSelf(@Lazy SensorPollScheduler self) {
-    this.self = self;
-  }
+  @Lazy @Autowired private SensorPollScheduler self;
 
   @Scheduled(fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
   @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")

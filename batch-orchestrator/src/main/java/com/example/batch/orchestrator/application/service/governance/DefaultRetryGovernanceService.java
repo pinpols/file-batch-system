@@ -36,7 +36,6 @@ import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
-import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,6 +45,7 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -75,14 +75,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
   /**
    * 自动重放调度必须经代理调用 {@link #replayDeadLetter}，否则同类自调用会跳过 {@code REQUIRES_NEW}， Outbox 写入（{@code
-   * MANDATORY}）无事务。纯单测无容器时退化为 {@code this}.
+   * MANDATORY}）无事务。纯单测无容器时可为 null，退化为 {@code this}.
    */
-  private DefaultRetryGovernanceService replayTransactionalSelf = this;
-
-  @Resource(name = "defaultRetryGovernanceService")
-  void setReplayTransactionalSelf(@Lazy DefaultRetryGovernanceService replayTransactionalSelf) {
-    this.replayTransactionalSelf = replayTransactionalSelf;
-  }
+  @Lazy @Autowired private DefaultRetryGovernanceService replayTransactionalSelf;
 
   /**
    * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff

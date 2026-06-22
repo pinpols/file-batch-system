@@ -2,7 +2,6 @@ package com.example.batch.orchestrator.auth;
 
 import com.example.batch.common.security.ApiKeyHasher;
 import com.example.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
-import jakarta.annotation.Resource;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -10,6 +9,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -47,12 +47,7 @@ public class ApiKeyVerifier {
    * {@code @Async}, 必须经 Spring 代理调用才异步。原先 {@code this.touchAsync()} 是同类自调用,绕过代理 → @Async 失效 → DB 写
    * + PBKDF2(50-200ms CPU)在请求线程同步执行,峰值流量会耗尽 Tomcat 线程池。改走 {@code self.xxx()}。
    */
-  private ApiKeyVerifier self = this;
-
-  @Resource(name = "apiKeyVerifier")
-  void setSelf(@Lazy ApiKeyVerifier self) {
-    this.self = self;
-  }
+  @Lazy @Autowired private ApiKeyVerifier self;
 
   /**
    * @param rawKey 客户端传来的 X-Batch-Api-Key 原文

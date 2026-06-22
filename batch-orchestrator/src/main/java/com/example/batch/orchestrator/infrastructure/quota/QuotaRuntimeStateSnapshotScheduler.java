@@ -11,12 +11,12 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
 import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
-import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
@@ -49,12 +49,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
   private final QuotaProperties quotaProperties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  private QuotaRuntimeStateSnapshotScheduler self = this;
-
-  @Resource(name = "quotaRuntimeStateSnapshotScheduler")
-  void setSelf(@Lazy QuotaRuntimeStateSnapshotScheduler self) {
-    this.self = self;
-  }
+  @Lazy @Autowired private QuotaRuntimeStateSnapshotScheduler self;
 
   @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
   @SchedulerLock(name = "quota_runtime_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")

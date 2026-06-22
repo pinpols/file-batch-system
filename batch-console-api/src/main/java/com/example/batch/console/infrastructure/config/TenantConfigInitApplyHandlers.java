@@ -44,7 +44,6 @@ import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse.ItemStats;
 import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse.ItemStatsAccumulator;
-import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -55,6 +54,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -77,7 +77,7 @@ public class TenantConfigInitApplyHandlers {
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_ID = "id";
 
-  private TenantConfigInitApplyHandlers self = this;
+  @Lazy @Autowired private TenantConfigInitApplyHandlers self;
 
   private final JobDefinitionMapper jobDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -94,11 +94,6 @@ public class TenantConfigInitApplyHandlers {
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final PlatformTransactionManager transactionManager;
-
-  @Resource(name = "tenantConfigInitApplyHandlers")
-  void setSelf(@Lazy TenantConfigInitApplyHandlers self) {
-    this.self = self;
-  }
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
   record ApplyContext(String tenantId, InitMode mode, String operator, boolean dryRun) {}

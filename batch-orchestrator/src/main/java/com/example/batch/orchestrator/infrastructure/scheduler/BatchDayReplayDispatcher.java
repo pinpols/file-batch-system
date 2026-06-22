@@ -10,12 +10,12 @@ import com.example.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import com.example.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
-import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -69,12 +69,7 @@ public class BatchDayReplayDispatcher {
    * #dispatchSession} 直接 {@code dispatchEntry(...)} 同类调用,Spring AOP 不织入,REQUIRES_NEW 退化。 注入
    * {@code @Lazy self} 走代理,真正激活独立短事务,避免单条失败回滚整批。 见 CLAUDE.md Java 编码细则 #3 豁免清单。
    */
-  private BatchDayReplayDispatcher self = this;
-
-  @Resource(name = "batchDayReplayDispatcher")
-  void setSelf(@Lazy BatchDayReplayDispatcher self) {
-    this.self = self;
-  }
+  @Lazy @Autowired private BatchDayReplayDispatcher self;
 
   @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
   @SchedulerLock(
