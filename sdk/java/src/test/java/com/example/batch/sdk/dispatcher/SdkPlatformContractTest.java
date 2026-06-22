@@ -175,22 +175,4 @@ class SdkPlatformContractTest {
             42L, "tx", "job-1", "tt", "ti-1", Map.of(), Map.of("traceId", "abc")));
     return reports;
   }
-
-  private static final class NoopHandler implements SdkTaskHandler {
-    private final String type;
-
-    NoopHandler(String type) {
-      this.type = type;
-    }
-
-    @Override
-    public String taskType() {
-      return type;
-    }
-
-    @Override
-    public SdkTaskResult execute(SdkTaskContext ctx) {
-      return SdkTaskResult.ok();
-    }
-  }
 }
