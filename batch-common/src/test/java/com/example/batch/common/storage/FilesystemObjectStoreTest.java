@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,6 +40,23 @@ class FilesystemObjectStoreTest {
     }
     assertThat(store.exists(BUCKET, "dir/a.txt")).isTrue();
     assertThat(store.statSize(BUCKET, "dir/a.txt")).isEqualTo(payload.length);
+  }
+
+  @Test
+  void deleteManyShouldRemoveAllViaDefaultLoop(@TempDir Path root) {
+    FilesystemObjectStore store = newStore(root);
+    byte[] p = "x".getBytes(StandardCharsets.UTF_8);
+    for (String k : new String[] {"d/a.txt", "d/b.txt", "d/c.txt"}) {
+      store.put(BUCKET, k, new ByteArrayInputStream(p), p.length, "text/plain");
+    }
+    // 文件系统后端不支持直传 PUT 预签名
+    assertThat(store.supportsPresignPut()).isFalse();
+
+    store.deleteMany(BUCKET, List.of("d/a.txt", "d/b.txt", "d/c.txt", "d/missing.txt"));
+
+    assertThat(store.exists(BUCKET, "d/a.txt")).isFalse();
+    assertThat(store.exists(BUCKET, "d/b.txt")).isFalse();
+    assertThat(store.exists(BUCKET, "d/c.txt")).isFalse();
   }
 
   @Test

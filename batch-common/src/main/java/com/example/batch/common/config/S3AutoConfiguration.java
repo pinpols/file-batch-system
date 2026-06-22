@@ -13,10 +13,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.util.StringUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
 import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
 import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.retries.api.RetryStrategy;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
@@ -52,7 +55,30 @@ public class S3AutoConfiguration {
             .httpClientBuilder(http)
             .region(
                 StringUtils.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
+    RetryStrategy retryStrategy = buildRetryStrategy(p);
+    if (retryStrategy != null) {
+      b.overrideConfiguration(
+          ClientOverrideConfiguration.builder().retryStrategy(retryStrategy).build());
+    }
     return b.build();
+  }
+
+  /**
+   * 按配置构造重试策略;{@code maxAttempts<=0 且非 adaptive} 时返回 null(走 SDK 默认,不覆盖)。adaptive=自适应限流退避,
+   * 否则标准指数退避;{@code maxAttempts>0} 时覆盖最大尝试次数。
+   */
+  private static RetryStrategy buildRetryStrategy(S3StorageProperties p) {
+    if (p.getMaxAttempts() <= 0 && !p.isAdaptiveRetry()) {
+      return null;
+    }
+    RetryStrategy base =
+        p.isAdaptiveRetry()
+            ? AwsRetryStrategy.adaptiveRetryStrategy()
+            : AwsRetryStrategy.standardRetryStrategy();
+    if (p.getMaxAttempts() > 0) {
+      return base.toBuilder().maxAttempts(p.getMaxAttempts()).build();
+    }
+    return base;
   }
 
   @Bean
