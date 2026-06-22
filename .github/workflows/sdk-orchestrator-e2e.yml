@@ -52,6 +52,7 @@ jobs:
       BATCH_PLATFORM_DB_PASSWORD: batch_pass_123
       POSTGRES_PORT: '15432'
       KAFKA_HOST_PORT: '19092'
+      KAFKA_CONTAINER: batch-kafka
       TENANT: default-tenant
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +72,16 @@ jobs:
           python-version: '3.12'
 
       - name: Prepare env file
-        run: cp .env.example .env.local
+        # .env.example 故意不含 3 个 :? required 密钥(BATCH_PLATFORM/BUSINESS_DB_PASSWORD、
+        # BATCH_INTERNAL_SECRET);compose 解析全量 service(含 worker-export)时即便只起
+        # orchestrator+trigger 也要这些插值齐全,否则 boot 直接挂。CI 用 dev 占位补齐。
+        run: |
+          cp .env.example .env.local
+          {
+            echo "BATCH_PLATFORM_DB_PASSWORD=batch_pass_123"
+            echo "BATCH_BUSINESS_DB_PASSWORD=batch_pass_123"
+            echo "BATCH_INTERNAL_SECRET=ci-e2e-internal-secret-0123456789abcdef"
+          } >> .env.local
 
       - name: Boot infra + orchestrator + trigger (proven up-apps.sh)
         # 只起 orchestrator + trigger(+ 经 depends_on 带起 postgres/kafka/minio/valkey),
