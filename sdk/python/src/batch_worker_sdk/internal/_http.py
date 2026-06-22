@@ -109,8 +109,16 @@ class PlatformHttpClient:
         return await self._post_json("/internal/workers/register", body)
 
     async def heartbeat(self, worker_code: str, body: dict[str, Any]) -> dict[str, Any]:
-        """POST /internal/workers/{code}/heartbeat —— 返回平台 directive。"""
-        return await self._post_json(f"/internal/workers/{worker_code}/heartbeat", body)
+        """POST /internal/workers/{code}/heartbeat —— 返回平台 directive。
+
+        §C no-backoff 豁免:heartbeat 单次失败**不**走 register/claim/report 的指数
+        退避序列(``max_attempts=1``)——跳过本 tick,等下一个调度 tick 再试。心跳是
+        周期性的,内部退避只会拖慢节奏、放大抖动。对齐 fixture 25 与决策核
+        classify_heartbeat_renew_error。
+        """
+        return await self._post_json(
+            f"/internal/workers/{worker_code}/heartbeat", body, max_attempts=1
+        )
 
     async def deactivate(self, worker_code: str, body: dict[str, Any]) -> None:
         """POST /internal/workers/{code}/deactivate —— 优雅下线。"""
@@ -180,8 +188,12 @@ class PlatformHttpClient:
         )
 
     async def renew(self, task_id: int, body: dict[str, Any]) -> dict[str, Any]:
-        """POST /internal/tasks/{id}/renew —— body 对应 TaskClaimRequest 字段。"""
-        return await self._post_json(f"/internal/tasks/{task_id}/renew", body)
+        """POST /internal/tasks/{id}/renew —— body 对应 TaskClaimRequest 字段。
+
+        与 heartbeat 同走 §C no-backoff 豁免(``max_attempts=1``):续约单次失败不退避,
+        等下一个续约 tick 再试,避免内部退避拖过 lease TTL。见 fixture 25 / wire-protocol §C。
+        """
+        return await self._post_json(f"/internal/tasks/{task_id}/renew", body, max_attempts=1)
 
     # ─── 内部实现 ────────────────────────────────────────────────────
 
@@ -201,15 +213,18 @@ class PlatformHttpClient:
         body: dict[str, Any] | None,
         *,
         idempotency_key: str | None = None,
+        max_attempts: int | None = None,
     ) -> httpx.Response:
         headers = self._headers(idempotency_key)
 
         async def factory() -> httpx.Response:
             return await self._client.post(path, json=body or {}, headers=headers)
 
+        # max_attempts=None → 默认重试预算;heartbeat/renew 传 1 走 §C no-backoff 豁免。
+        attempts = max_attempts if max_attempts is not None else self.config.retry_max_attempts
         return await with_retry(
             factory,
-            max_attempts=self.config.retry_max_attempts,
+            max_attempts=attempts,
             base_delay_s=self.config.retry_base_delay.total_seconds(),
             counter=self._counter,
         )
@@ -220,8 +235,11 @@ class PlatformHttpClient:
         body: dict[str, Any] | None,
         *,
         idempotency_key: str | None = None,
+        max_attempts: int | None = None,
     ) -> dict[str, Any]:
-        resp = await self._post_json_raw(path, body, idempotency_key=idempotency_key)
+        resp = await self._post_json_raw(
+            path, body, idempotency_key=idempotency_key, max_attempts=max_attempts
+        )
         return _decode_body(resp)
 
 
