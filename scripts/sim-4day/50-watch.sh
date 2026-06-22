@@ -4,9 +4,18 @@
 #        bash 50-watch.sh --loop     # 每 20s 刷新(Ctrl-C 退)
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=scripts/lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
 SQL_DIR="$HERE/sql"
-PQF(){ docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tA -f /dev/stdin 2>/dev/null; }
-BQF(){ docker exec -i batch-postgres-primary psql -U batch_user -d batch_business -tA -f /dev/stdin 2>/dev/null; }
+SIM4DAY_LOG_DIR="${SIM4DAY_LOG_DIR:-$(log_run_dir "$ROOT" sim-4day sim-4day-watch)}"
+log_link_dir "$ROOT" sim-4day "$SIM4DAY_LOG_DIR"
+MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
+MC_ALIAS="${MC_ALIAS:-local}"
+PQF(){ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tA -f /dev/stdin 2>/dev/null; }
+BQF(){ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" -tA -f /dev/stdin 2>/dev/null; }
 
 dash() {
   echo "================ SIM 4day 仪表盘  $(date '+%F %T') ================"
@@ -20,7 +29,7 @@ dash() {
   BQF < "$SQL_DIR/watch-business-counts.sql" \
     | awk -F'|' '{printf "   %-18s %s\n",$1,$2}'
   echo "── 导出文件(MinIO outbound)"
-  echo -n "   "; docker exec batch-minio mc ls --recursive local/batch-dev/outbound/ 2>/dev/null | grep -ivE '\.keep' | wc -l | tr -d ' ';
+  echo -n "   "; docker exec "$MINIO_CONTAINER" mc ls --recursive "$MC_ALIAS/$BATCH_S3_BUCKET/outbound/" 2>/dev/null | grep -ivE '\.keep' | wc -l | tr -d ' ';
   echo "── outbox 积压 / dead_letter"
   PQF < "$SQL_DIR/watch-outbox-deadletter.sql" | sed 's/^/   /'
   echo "── 最近失败(top5)"
@@ -31,5 +40,9 @@ dash() {
 if [ "${1:-}" = "--loop" ]; then
   while true; do clear; dash; sleep 20; done
 else
-  dash
+  if [[ "${SIM4DAY_CAPTURED:-0}" == "1" ]]; then
+    dash
+  else
+    dash | tee "$SIM4DAY_LOG_DIR/watch-$(date +%Y%m%d-%H%M%S).log"
+  fi
 fi

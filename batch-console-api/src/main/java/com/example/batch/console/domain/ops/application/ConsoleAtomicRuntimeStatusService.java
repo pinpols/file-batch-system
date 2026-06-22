@@ -38,7 +38,6 @@ public class ConsoleAtomicRuntimeStatusService {
         SVC,
         OP,
         () -> {
-          @SuppressWarnings("unchecked")
           Map<String, Object> raw =
               atomicClient
                   .build()

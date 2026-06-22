@@ -32,15 +32,19 @@
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT_DIR"
+cd "$ROOT_DIR" || exit 1
+# shellcheck source=../lib/logging.sh
+source "$ROOT_DIR/scripts/lib/logging.sh"
+# shellcheck source=../lib/process.sh
+source "$ROOT_DIR/scripts/lib/process.sh"
 
 # FE_DIR:默认走 sibling 仓相对路径(本仓和 batch-console 平级)。
 # 别人 clone 仓库到不同位置 / Linux 上跑,环境变量 export FE_DIR=/path 覆盖。
 FE_DIR="${FE_DIR:-$ROOT_DIR/../batch-console}"
 CONSOLE_PORT="${CONSOLE_PORT:-18080}"
 FE_PORT="${FE_PORT:-5173}"
-LOG_DIR="$ROOT_DIR/logs/be-acceptance"
-mkdir -p "$LOG_DIR" "$ROOT_DIR/docs/backlog"
+DOCKER_CONTAINER_NAME_PATTERN="${DOCKER_CONTAINER_NAME_PATTERN:-batch-(postgres|kafka|valkey|minio)}"
+mkdir -p "$ROOT_DIR/docs/backlog"
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' DIM='\033[2m' RST='\033[0m'
 RUN_STEPS=()   # 实际要跑的步骤号(1-based)
@@ -150,6 +154,9 @@ if (( ${#SKIP_STEPS[@]} > 0 )); then
   RUN_STEPS=("${TMP[@]}")
 fi
 
+LOG_DIR="$(log_run_dir "$ROOT_DIR" be-acceptance be-acceptance)"
+log_link_dir "$ROOT_DIR" be-acceptance "$LOG_DIR"
+
 # ── 工具函数 ────────────────────────────────────────────────
 SEQ_PASS=0 SEQ_FAIL=0
 # 各 step 起止时间(便于 monitor 看进度;长 step 后续可补 heartbeat)。
@@ -210,7 +217,7 @@ cleanup_stale_runs() {
     if [[ -n "$orphans" ]]; then
       local cnt; cnt=$(printf '%s\n' "$orphans" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
       note "清掉 $cnt 个孤儿 testcontainer(保留 reuse 容器)"
-      printf '%s\n' "$orphans" | /usr/bin/xargs -r docker rm -f >/dev/null 2>&1 || true
+      printf '%s\n' "$orphans" | /usr/bin/xargs docker rm -f >/dev/null 2>&1 || true
     fi
   fi
 
@@ -248,7 +255,7 @@ cleanup_stale_runs() {
 step_0_precheck() {
   hdr 0 "$(step_name 0)"
   cleanup_stale_runs
-  local docker_cnt; docker_cnt=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "batch-postgres|batch-kafka|batch-valkey|batch-minio" | wc -l | tr -d ' ')
+  local docker_cnt; docker_cnt=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "$DOCKER_CONTAINER_NAME_PATTERN" | wc -l | tr -d ' ')
   [[ "$docker_cnt" -ge 4 ]] && ok "docker 容器 $docker_cnt 个运行" || ng "docker 容器 $docker_cnt < 4(可能影响 IT/E2E)"
   local free_gb; free_gb=$(df -g "$ROOT_DIR" 2>/dev/null | tail -1 | awk '{print $4}')
   [[ -z "$free_gb" ]] && free_gb="?"
@@ -274,21 +281,21 @@ step_1_build_restart() {
   # (2026-05-24 那次 stale 暴露问题靠 CI 抓住,本地 acceptance 不重复 CI 职责)。
   # restart.sh 从 target/ 直接拷 console.jar 到 build/runtime-jars/,不走 m2,所以 package 足够。
   # -pl batch-e2e-tests -am 反向拉齐所有上游依赖(等价于 batch-console-api + 全 worker 模块 + orchestrator + trigger + common)。
-  if ! mvn package -DskipTests -pl batch-e2e-tests -am -q > "$LOG_DIR/step1-mvn.log" 2>&1; then
-    ng "mvn package 失败(看 $LOG_DIR/step1-mvn.log)"
+  if ! mvn package -DskipTests -pl batch-e2e-tests -am -q > "$LOG_DIR/01-build-maven.log" 2>&1; then
+    ng "mvn package 失败(看 $LOG_DIR/01-build-maven.log)"
     return 1
   fi
   local jar; jar=$(find batch-console-api/target -name "*-exec.jar" | head -1)
   if [[ -z "$jar" ]]; then
-    ng "exec jar 不存在(看 $LOG_DIR/step1-mvn.log)"
+    ng "exec jar 不存在(看 $LOG_DIR/01-build-maven.log)"
     return 1
   fi
   cp "$jar" build/runtime-jars/console.jar
-  bash scripts/local/restart.sh console > "$LOG_DIR/step1-restart.log" 2>&1
+  bash scripts/local/restart.sh console > "$LOG_DIR/01-restart-console.log" 2>&1
   local deadline=$(( $(date +%s) + 180 ))
   until curl -sf --max-time 5 --connect-timeout 2 "http://localhost:$CONSOLE_PORT/actuator/health" -o /dev/null; do
     if (( $(date +%s) > deadline )); then
-      ng "BE 起不来 180s timeout(看 $LOG_DIR/step1-restart.log)"
+      ng "BE 起不来 180s timeout(看 $LOG_DIR/01-restart-console.log)"
       return 1
     fi
     sleep 2
@@ -296,40 +303,40 @@ step_1_build_restart() {
   ok "BE UP"
   note "等 3 min 看日志稳态..."
   sleep 180
-  local err; err=$(grep -E "ERROR|FATAL" logs/app/console.log 2>/dev/null | grep -v "SwallowedExceptionLogger\|catch:" | wc -l | tr -d ' ')
-  [[ "$err" == "0" ]] && ok "3 min 日志 0 ERROR" || ng "$err 条 ERROR(看 logs/app/console.log)"
+  local err; err=$(grep -E "ERROR|FATAL" logs/current/app/console.log 2>/dev/null | grep -v "SwallowedExceptionLogger\|catch:" | wc -l | tr -d ' ')
+  [[ "$err" == "0" ]] && ok "3 min 日志 0 ERROR" || ng "$err 条 ERROR(看 logs/current/app/console.log)"
 }
 
 step_2_unit() {
   hdr 2 "$(step_name 2)"
-  bash scripts/local/run-tests.sh --unit --skip-build > "$LOG_DIR/step2-unit.log" 2>&1
-  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step2-unit.log" | tail -1)
-  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step2-unit.log" | tail -1)
-  [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/test-unit-failed.log)"
+  bash scripts/local/run-tests.sh --unit --skip-build > "$LOG_DIR/02-test-unit.log" 2>&1
+  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/02-test-unit.log" | tail -1)
+  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/02-test-unit.log" | tail -1)
+  [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/01-test-unit-failed.log)"
 }
 
 step_3_it() {
   hdr 3 "$(step_name 3)"
-  bash scripts/local/run-tests.sh --it --skip-build > "$LOG_DIR/step3-it.log" 2>&1
-  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step3-it.log" | tail -1)
-  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step3-it.log" | tail -1)
-  [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/test-integration-failed.log)"
+  bash scripts/local/run-tests.sh --it --skip-build > "$LOG_DIR/03-test-integration.log" 2>&1
+  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/03-test-integration.log" | tail -1)
+  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/03-test-integration.log" | tail -1)
+  [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/02-test-integration-failed.log)"
 }
 
 step_4_e2e() {
   hdr 4 "$(step_name 4)"
-  bash scripts/local/run-tests.sh --e2e --skip-build > "$LOG_DIR/step4-e2e.log" 2>&1
-  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step4-e2e.log" | tail -1)
-  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step4-e2e.log" | tail -1)
-  [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/test-e2e-failed.log)"
+  bash scripts/local/run-tests.sh --e2e --skip-build > "$LOG_DIR/04-test-e2e.log" 2>&1
+  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/04-test-e2e.log" | tail -1)
+  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/04-test-e2e.log" | tail -1)
+  [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/03-test-e2e-failed.log)"
 }
 
 step_5_strict() {
   hdr 5 "$(step_name 5)"
-  bash scripts/local/strict-verify.sh > "$LOG_DIR/step5-strict.log" 2>&1
+  bash scripts/local/strict-verify.sh > "$LOG_DIR/05-strict-verify.log" 2>&1
   local rc=$?
-  local last; last=$(tail -1 "$LOG_DIR/step5-strict.log")
-  [[ "$rc" == "0" ]] && ok "$last" || ng "$last(看 $LOG_DIR/step5-strict.log)"
+  local last; last=$(tail -1 "$LOG_DIR/05-strict-verify.log")
+  [[ "$rc" == "0" ]] && ok "$last" || ng "$last(看 $LOG_DIR/05-strict-verify.log)"
 }
 
 step_6_scan() {
@@ -353,9 +360,9 @@ step_7_fe() {
     ng "$FE_DIR 不存在"
     return 1
   fi
-  cd "$FE_DIR"
-  npm run build:fast > "$LOG_DIR/step7-fe-build.log" 2>&1
-  lsof -i :$FE_PORT -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print $2}' | xargs -r kill 2>/dev/null
+  cd "$FE_DIR" || return 1
+  npm run build:fast > "$LOG_DIR/07-fe-build.log" 2>&1
+  process_kill_listeners "$FE_PORT" TERM
   sleep 1
   nohup npx vite preview > /tmp/vite-preview.log 2>&1 & disown
   sleep 3
@@ -379,7 +386,7 @@ step_7_fe() {
   else
     note "tunnel 未启动(cloudflared 进程不存在,跳过)"
   fi
-  cd "$ROOT_DIR"
+  cd "$ROOT_DIR" || return 1
 }
 
 step_8_summary() {
@@ -523,7 +530,7 @@ if (( PARALLEL == 1 )); then
   PIDS=()
   for n in 2 3; do
     should_run "$n" || continue
-    (run_step "$n" > "$LOG_DIR/step${n}-parallel.log" 2>&1) &
+    (run_step "$n" > "$LOG_DIR/$(printf '%02d' "$n")-parallel.log" 2>&1) &
     PIDS+=($!)
     printf "${DIM}   并行启 step %d(pid=$!)${RST}\n" "$n"
   done
@@ -535,9 +542,10 @@ if (( PARALLEL == 1 )); then
   fi
   # 汇报 2+3 输出
   for n in 2 3; do
-    [[ -f "$LOG_DIR/step${n}-parallel.log" ]] || continue
+    parallel_log="$LOG_DIR/$(printf '%02d' "$n")-parallel.log"
+    [[ -f "$parallel_log" ]] || continue
     printf '\n%b── step %d 输出 ──%b\n' "${BLUE}" "$n" "${RST}"
-    cat "$LOG_DIR/step${n}-parallel.log"
+    cat "$parallel_log"
   done
   # 串行跑 4(E2E),避免和 IT race
   if should_run 4; then

@@ -210,7 +210,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration combine.children="merge">
+                        <configuration>
                             <groups>smoke | critical</groups>
                         </configuration>
                     </plugin>
@@ -237,7 +237,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration combine.children="merge">
+                        <configuration>
                             <forkCount>2</forkCount>
                             <reuseForks>false</reuseForks>
                             <!-- 每个 fork JVM 分别启动 testcontainers(PG×2 + Kafka + MinIO + Redis)
@@ -261,7 +261,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration combine.children="merge">
+                        <configuration>
                             <includes combine.children="merge">
                                 <include>**/*E2eIT.java</include>
                             </includes>

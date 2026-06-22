@@ -22,17 +22,17 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> apply bootstrap + stage3b fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage3b-export-fixtures.sql >/dev/null
 
 echo "==> seed export partition source rows"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_business \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" \
   -f /dev/stdin < docs/test-data/sim-stage3b-export-source.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3b.log"
@@ -46,7 +46,7 @@ START_TS = os.environ["START_TS"].strip()
 
 def psql(db, sql, tuples=False):
     args = [
-        "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
+        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
         "-d", db, "-P", "pager=off"
     ]
     if tuples:
@@ -90,7 +90,7 @@ with urllib.request.urlopen(req, timeout=30) as resp:
 deadline = time.time() + 180
 instance_id = None
 while time.time() < deadline:
-    out = psql("batch_platform", (
+    out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
         "select i.id || '|' || i.instance_status "
         "from batch.trigger_request tr "
         "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -120,8 +120,8 @@ task_sql = (
     "order by p.partition_no,t.id"
 )
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", task_sql
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", task_sql
 ], check=False)
 
 print("\n-- file_records --", flush=True)
@@ -133,8 +133,8 @@ file_sql = (
     "order by file_name"
 )
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", file_sql
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", file_sql
 ], check=False)
 
 check_sql = (
@@ -151,7 +151,7 @@ check_sql = (
     ") select success_tasks, file_count, tagged_files, exported_rows "
     "from tasks cross join files"
 )
-out = psql("batch_platform", check_sql, tuples=True)
+out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), check_sql, tuples=True)
 summary = (out.stdout or "").strip()
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "4|4|4|40":

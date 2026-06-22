@@ -26,11 +26,6 @@ import org.yaml.snakeyaml.Yaml;
  */
 class PipelineWorkerAtomicIsolationOptInArchTest {
 
-  /** 4 个 pipeline worker 模块名(顺序仅作 stable iteration,无业务含义)。 */
-  private static final String[] PIPELINE_WORKER_MODULES = {
-    "batch-worker-import", "batch-worker-export", "batch-worker-process", "batch-worker-dispatch"
-  };
-
   /** 期望 key 路径:batch.worker.atomic.isolation-check.enabled。 */
   private static final String[] EXPECTED_KEY_PATH = {
     "batch", "worker", "atomic", "isolation-check", "enabled"

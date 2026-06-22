@@ -44,6 +44,8 @@ done
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=scripts/lib/process.sh
+source "$ROOT/scripts/lib/process.sh"
 
 CONSOLE_PORT="${CONSOLE_PORT:-$CONSOLE_API_PORT}"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
@@ -251,7 +253,7 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
   [[ -f "$CONSOLE_JAR" ]] || { skip "skip 真实切换" "$CONSOLE_JAR 不存在"; CONSOLE_JAR=""; }
   if [[ -n "$CONSOLE_JAR" ]]; then
     _restart_with() {
-      lsof -i :"$CONSOLE_PORT" -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print $2}' | xargs -r kill 2>/dev/null
+      process_kill_listeners "$CONSOLE_PORT" TERM
       sleep 2
       # 用 "$@" 保留 env value 边界(value 含空格如 "strict-verify blocked" 不会被拆成 2 参)
       env "$@" SPRING_PROFILES_ACTIVE=local nohup java -jar "$CONSOLE_JAR" > /tmp/console-strict.log 2>&1 &
@@ -281,7 +283,7 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
       || fail "readOnly 模式异常" "get=$get_code post=$post_code(期望 GET 非 503,POST 503)"
 
     # 恢复
-    lsof -i :"$CONSOLE_PORT" -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print $2}' | xargs -r kill 2>/dev/null
+    process_kill_listeners "$CONSOLE_PORT" TERM
     sleep 2
     bash scripts/local/restart.sh console > /tmp/restart-normal.log 2>&1
     deadline=$(( $(date +%s) + 180 ))

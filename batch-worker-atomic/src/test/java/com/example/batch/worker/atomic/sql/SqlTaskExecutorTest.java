@@ -1,6 +1,7 @@
 package com.example.batch.worker.atomic.sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -250,7 +251,7 @@ class SqlTaskExecutorTest {
       assertThat(r.success()).isTrue();
       assertThat(r.output()).containsEntry("statementCount", 1);
       assertThat(r.output()).containsEntry("lastResultRows", 1);
-      assertThat(r.output().get("lastResultSet")).asList().hasSize(1);
+      assertThat(r.output().get("lastResultSet")).asInstanceOf(LIST).hasSize(1);
 
       verify(stmt).setQueryTimeout(30); // default 30s
     }

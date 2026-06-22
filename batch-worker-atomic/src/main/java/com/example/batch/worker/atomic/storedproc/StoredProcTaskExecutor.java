@@ -270,30 +270,26 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         requested, props.getDataSourceBeanName(), props.getAllowedDataSourceBeans());
   }
 
-  @SuppressWarnings("unchecked")
   private static List<Object> parseInParams(Object raw) {
     if (raw == null) {
       return List.of();
     }
-    if (raw instanceof List<?>) {
-      @SuppressWarnings("unchecked")
-      List<Object> typed = (List<Object>) raw;
-      return List.copyOf(typed);
+    if (raw instanceof List<?> list) {
+      return List.copyOf(list);
     }
     throw new StoredProcValidationException("parameters.inParams must be a list");
   }
 
-  @SuppressWarnings("unchecked")
   private List<String> parseOutTypes(Object raw) {
     if (raw == null) {
       return List.of();
     }
-    if (!(raw instanceof List<?>)) {
+    if (!(raw instanceof List<?> list)) {
       throw new StoredProcValidationException(
           "parameters.outParams must be a list of SQL type names");
     }
     List<String> out = new ArrayList<>();
-    for (Object o : (List<?>) raw) {
+    for (Object o : list) {
       if (o == null) {
         throw new StoredProcValidationException("outParams contains null");
       }

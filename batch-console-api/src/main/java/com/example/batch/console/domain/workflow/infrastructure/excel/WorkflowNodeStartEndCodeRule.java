@@ -3,7 +3,6 @@ package com.example.batch.console.domain.workflow.infrastructure.excel;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -182,16 +181,6 @@ public final class WorkflowNodeStartEndCodeRule {
     @Override
     public int hashCode() {
       return tenantId.hashCode() * 31 + workflowCode.hashCode();
-    }
-
-    Map<String, Object> debug() {
-      Map<String, Object> m = new HashMap<>();
-      m.put("tenantId", tenantId);
-      m.put("workflowCode", workflowCode);
-      m.put("workflowVersion", workflowVersion);
-      m.put("startCount", startCount);
-      m.put("endCount", endCount);
-      return m;
     }
   }
 }

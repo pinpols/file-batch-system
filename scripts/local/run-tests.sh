@@ -33,32 +33,11 @@ SKIP_BUILD=false
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=../lib/logging.sh
+source "$ROOT_DIR/scripts/lib/logging.sh"
 
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}"
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
-
-LOG_DIR="$ROOT_DIR/logs/test"
-mkdir -p "$LOG_DIR"
-
-LOG_UNIT="$LOG_DIR/test-unit.log"
-LOG_IT="$LOG_DIR/test-integration.log"
-LOG_E2E="$LOG_DIR/test-e2e.log"
-LOG_DEFAULT="$LOG_DIR/test-default.log"
-LOG_ALL_UNIT_IT="$LOG_DIR/test-all-unit-integration.log"
-LOG_ALL_E2E="$LOG_DIR/test-all-e2e.log"
-
-LOG_UNIT_PASSED="$LOG_DIR/test-unit-passed.log"
-LOG_UNIT_FAILED="$LOG_DIR/test-unit-failed.log"
-LOG_IT_PASSED="$LOG_DIR/test-integration-passed.log"
-LOG_IT_FAILED="$LOG_DIR/test-integration-failed.log"
-LOG_E2E_PASSED="$LOG_DIR/test-e2e-passed.log"
-LOG_E2E_FAILED="$LOG_DIR/test-e2e-failed.log"
-LOG_DEFAULT_PASSED="$LOG_DIR/test-default-passed.log"
-LOG_DEFAULT_FAILED="$LOG_DIR/test-default-failed.log"
-LOG_ALL_UNIT_IT_PASSED="$LOG_DIR/test-all-unit-integration-passed.log"
-LOG_ALL_UNIT_IT_FAILED="$LOG_DIR/test-all-unit-integration-failed.log"
-LOG_ALL_E2E_PASSED="$LOG_DIR/test-all-e2e-passed.log"
-LOG_ALL_E2E_FAILED="$LOG_DIR/test-all-e2e-failed.log"
 
 TEST_RESULT_LINES=()
 TEST_FAILED=0
@@ -139,6 +118,29 @@ else
   MAVEN_THREADS="${MAVEN_THREADS:-1}"
 fi
 
+LOG_DIR="$(log_run_dir "$ROOT_DIR" tests "$MODE")"
+log_link_dir "$ROOT_DIR" test "$LOG_DIR"
+
+LOG_UNIT="$LOG_DIR/01-test-unit.log"
+LOG_IT="$LOG_DIR/02-test-integration.log"
+LOG_E2E="$LOG_DIR/03-test-e2e.log"
+LOG_DEFAULT="$LOG_DIR/01-test-default.log"
+LOG_ALL_UNIT_IT="$LOG_DIR/01-test-all-unit-integration.log"
+LOG_ALL_E2E="$LOG_DIR/02-test-all-e2e.log"
+
+LOG_UNIT_PASSED="$LOG_DIR/01-test-unit-passed.log"
+LOG_UNIT_FAILED="$LOG_DIR/01-test-unit-failed.log"
+LOG_IT_PASSED="$LOG_DIR/02-test-integration-passed.log"
+LOG_IT_FAILED="$LOG_DIR/02-test-integration-failed.log"
+LOG_E2E_PASSED="$LOG_DIR/03-test-e2e-passed.log"
+LOG_E2E_FAILED="$LOG_DIR/03-test-e2e-failed.log"
+LOG_DEFAULT_PASSED="$LOG_DIR/01-test-default-passed.log"
+LOG_DEFAULT_FAILED="$LOG_DIR/01-test-default-failed.log"
+LOG_ALL_UNIT_IT_PASSED="$LOG_DIR/01-test-all-unit-integration-passed.log"
+LOG_ALL_UNIT_IT_FAILED="$LOG_DIR/01-test-all-unit-integration-failed.log"
+LOG_ALL_E2E_PASSED="$LOG_DIR/02-test-all-e2e-passed.log"
+LOG_ALL_E2E_FAILED="$LOG_DIR/02-test-all-e2e-failed.log"
+
 banner() {
   printf '\n%s\n' "$(printf '=%.0s' {1..64})"
   printf '== %s\n' "$1"
@@ -160,7 +162,7 @@ cleanup_orphan_testcontainers() {
     local n
     n=$(printf '%s\n' "$orphans" | wc -l | tr -d ' ')
     printf '  清理 %d 个孤儿 testcontainer\n' "$n"
-    printf '%s\n' "$orphans" | xargs -r docker rm -f >/dev/null 2>&1 || true
+    printf '%s\n' "$orphans" | xargs docker rm -f >/dev/null 2>&1 || true
   fi
 }
 

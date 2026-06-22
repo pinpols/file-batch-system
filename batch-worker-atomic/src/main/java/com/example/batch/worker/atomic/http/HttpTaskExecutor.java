@@ -259,11 +259,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           "method " + method + " not in allowedMethods=" + props.getAllowedMethods());
     }
 
-    @SuppressWarnings("unchecked")
     Map<String, String> headers =
-        params.get(PARAM_HEADERS) instanceof Map<?, ?> m
-            ? toStringMap((Map<?, ?>) m, "headers")
-            : Map.of();
+        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m, "headers") : Map.of();
 
     String body = params.get(PARAM_BODY) instanceof String s ? s : null;
 
@@ -394,7 +391,6 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     return value.matches(regex.toString());
   }
 
-  @SuppressWarnings("unchecked")
   private Set<Integer> parseExpectStatus(Object raw) {
     if (raw == null) {
       return Set.of();

@@ -31,7 +31,6 @@ public record HeartbeatDirective(
    * 从心跳响应 JSON(已被 {@code PlatformHttpClient} 反序列化为 Map)解析指令。 老平台回包为空 Map / 缺字段时一律降级为
    * NORMAL、不暂停(向后兼容)。
    */
-  @SuppressWarnings("unchecked")
   public static HeartbeatDirective fromResponse(Map<String, Object> resp) {
     if (resp == null || resp.isEmpty()) {
       return new HeartbeatDirective(STATUS_NORMAL, null, false, List.of(), null);

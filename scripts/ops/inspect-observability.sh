@@ -6,7 +6,8 @@
 # 2) 检查关键 Prometheus 指标、Redis/Postgres/Kafka/MinIO exporter 指标和 Kafka consumer lag。
 # =========================================================
 # 使用方法：
-#   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:18080,http://localhost:18081,http://localhost:18082 \
+#   source scripts/lib/env-common.sh
+#   BATCH_OBSERVABILITY_BASE_URLS="$CONSOLE_BASE_URL,$TRIGGER_BASE_URL,$ORCHESTRATOR_BASE_URL" \
 #   BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
 #     bash scripts/ops/inspect-observability.sh
 

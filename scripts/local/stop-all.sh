@@ -11,8 +11,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PID_FILE="$ROOT/logs/start-all.pids"
-APP_LOG_DIR="$ROOT/logs/app"
+# shellcheck source=../lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
+# shellcheck source=../lib/process.sh
+source "$ROOT/scripts/lib/process.sh"
+PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
+APP_LOG_DIR="$(log_current_dir "$ROOT" app app)"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
@@ -277,7 +281,7 @@ _check_port_residual() {
     local name="${names[$i]}"
     local port="${ports[$i]}"
     local pid
-    pid=$(lsof -ti tcp:"$port" 2>/dev/null | head -1 || true)
+    pid="$(process_listen_pids "$port" | head -1)"
     if [[ -n "$pid" ]]; then
       residuals+=("  ✗ ${name} 端口 ${port} 仍被 pid=${pid} 占用")
     fi
@@ -288,7 +292,7 @@ _check_port_residual() {
     for msg in "${residuals[@]+"${residuals[@]}"}"; do
       echo "$msg" >&2
     done
-    echo "  可执行: lsof -ti tcp:<port> | xargs kill -9" >&2
+    echo "  可执行: source scripts/lib/process.sh; process_listen_pids <port>" >&2
   else
     echo "  端口检查通过，所有应用端口已释放。"
   fi

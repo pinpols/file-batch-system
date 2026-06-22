@@ -25,9 +25,7 @@ class RedisShardAssignmentProviderTest {
 
   @Mock private StringRedisTemplate redis;
 
-  @SuppressWarnings("unchecked")
-  @Mock
-  private ZSetOperations<String, String> zset;
+  @Mock private ZSetOperations<String, String> zset;
 
   private RedisShardAssignmentProvider provider(String memberId) {
     when(redis.opsForZSet()).thenReturn(zset);

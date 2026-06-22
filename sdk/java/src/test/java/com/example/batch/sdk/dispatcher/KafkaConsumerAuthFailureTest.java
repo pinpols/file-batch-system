@@ -57,20 +57,20 @@ class KafkaConsumerAuthFailureTest {
     when(consumer.assignment()).thenReturn(Set.of());
     when(consumer.poll(any())).thenThrow(new SaslAuthenticationException("bad creds"));
 
-    KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      // 执行并断言:run() 抛 BatchSdkClientException(stage=KAFKA_AUTH),SASL fail-fast
+      assertThatThrownBy(kafka::run)
+          .isInstanceOf(BatchSdkClientException.class)
+          .hasMessageContaining("SASL auth failed")
+          .hasCauseInstanceOf(SaslAuthenticationException.class)
+          .extracting(t -> ((BatchSdkClientException) t).stage())
+          .isEqualTo(BatchSdkClientException.Stage.KAFKA_AUTH);
 
-    // 执行并断言:run() 抛 BatchSdkClientException(stage=KAFKA_AUTH),SASL fail-fast
-    assertThatThrownBy(kafka::run)
-        .isInstanceOf(BatchSdkClientException.class)
-        .hasMessageContaining("SASL auth failed")
-        .hasCauseInstanceOf(SaslAuthenticationException.class)
-        .extracting(t -> ((BatchSdkClientException) t).stage())
-        .isEqualTo(BatchSdkClientException.Stage.KAFKA_AUTH);
-
-    assertThat(kafka.isFatalAuthFailure()).isTrue();
-    assertThat(kafka.isRunning()).isFalse();
-    // crashed 不该被置 —— auth 失败是确定性的 fatal,不归入"非预期 Throwable"
-    assertThat(kafka.hasCrashed()).isFalse();
+      assertThat(kafka.isFatalAuthFailure()).isTrue();
+      assertThat(kafka.isRunning()).isFalse();
+      // crashed 不该被置 —— auth 失败是确定性的 fatal,不归入"非预期 Throwable"
+      assertThat(kafka.hasCrashed()).isFalse();
+    }
   }
 }

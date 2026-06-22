@@ -17,7 +17,6 @@ import com.example.batch.common.storage.ObjectListing;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Collection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -66,7 +65,7 @@ class ObjectStoreStartupCheckTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("get");
     // 失败路径也要清理探针。
-    verify(store).deleteMany(anyString(), any(Collection.class));
+    verify(store).deleteMany(anyString(), any());
   }
 
   @Test
@@ -80,7 +79,7 @@ class ObjectStoreStartupCheckTest {
     assertThatThrownBy(() -> check.run(null))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("statSize");
-    verify(store).deleteMany(anyString(), any(Collection.class));
+    verify(store).deleteMany(anyString(), any());
   }
 
   @Test
@@ -115,9 +114,7 @@ class ObjectStoreStartupCheckTest {
     BatchObjectStore store = mock(BatchObjectStore.class);
     when(store.exists(anyString(), anyString())).thenReturn(true);
     when(store.statSize(anyString(), anyString())).thenReturn(1L);
-    doThrow(new RuntimeException("cleanup boom"))
-        .when(store)
-        .deleteMany(anyString(), any(Collection.class));
+    doThrow(new RuntimeException("cleanup boom")).when(store).deleteMany(anyString(), any());
 
     ObjectStoreStartupCheck check = new ObjectStoreStartupCheck(store, BUCKET);
 

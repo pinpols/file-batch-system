@@ -23,7 +23,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 
 // LENIENT:每个 @Test 内部 stub `redisTemplate.opsForList()`,但 append() 走
 // executePipelined 不读 opsForList,strict 模式会报 UnnecessaryStubbing。
-@SuppressWarnings("unchecked")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ConsoleRealtimeReplayStoreTest {

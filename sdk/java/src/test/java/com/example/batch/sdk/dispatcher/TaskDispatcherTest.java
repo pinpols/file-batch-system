@@ -50,6 +50,16 @@ class TaskDispatcherTest {
         42L, "tx", "job-1", taskType, "ti-9", Map.of("p", 1), Map.of("traceId", "abc"));
   }
 
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static ArgumentCaptor<Map<String, Object>> mapCaptor() {
+    return ArgumentCaptor.forClass((Class) Map.class);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> objectMap(Object value) {
+    return (Map<String, Object>) value;
+  }
+
   // ─── 正常路径 ────────────────────────────────────────────────────────────────
 
   @Test
@@ -79,13 +89,12 @@ class TaskDispatcherTest {
     assertThat(seenCtx.get().parameters()).containsEntry("p", 1);
 
     verify(http).claim(eq(42L), anyString(), any());
-    ArgumentCaptor<Map<String, Object>> reportBody = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> reportBody = mapCaptor();
     verify(http).report(eq(42L), anyString(), reportBody.capture());
     assertThat(reportBody.getValue())
         .containsEntry("success", true)
         .containsEntry("message", "done");
-    assertThat((Map<String, Object>) reportBody.getValue().get("outputs"))
-        .containsEntry("rows", 100);
+    assertThat(objectMap(reportBody.getValue().get("outputs"))).containsEntry("rows", 100);
     assertThat(reportBody.getValue())
         .containsEntry("taskId", 42L)
         .containsEntry("tenantId", "tx")
@@ -93,7 +102,6 @@ class TaskDispatcherTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   void partitionInvocationThreadedToClaimAndReport() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     SdkTaskHandler handler =
@@ -122,11 +130,11 @@ class TaskDispatcherTest {
             Map.of("traceId", "abc", "partitionInvocationId", "inv-77"));
     dispatcher.processInWorkerThread(partitioned);
 
-    ArgumentCaptor<Map<String, Object>> claimBody = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> claimBody = mapCaptor();
     verify(http).claim(eq(42L), anyString(), claimBody.capture());
     assertThat(claimBody.getValue()).containsEntry("partitionInvocationId", "inv-77");
 
-    ArgumentCaptor<Map<String, Object>> reportBody = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> reportBody = mapCaptor();
     verify(http).report(eq(42L), anyString(), reportBody.capture());
     assertThat(reportBody.getValue()).containsEntry("partitionInvocationId", "inv-77");
 
@@ -155,7 +163,7 @@ class TaskDispatcherTest {
 
     dispatcher.processInWorkerThread(msg("tt"));
 
-    ArgumentCaptor<Map<String, Object>> reportBody = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> reportBody = mapCaptor();
     verify(http).report(eq(42L), anyString(), reportBody.capture());
     assertThat(reportBody.getValue())
         .containsEntry("success", false)
@@ -183,7 +191,7 @@ class TaskDispatcherTest {
 
     dispatcher.processInWorkerThread(msg("tt"));
 
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).report(eq(42L), anyString(), body.capture());
     assertThat(body.getValue())
         .containsEntry("success", false)
@@ -200,9 +208,9 @@ class TaskDispatcherTest {
     dispatcher.processInWorkerThread(msg("unknown_type"));
 
     verify(http, never()).claim(anyLong(), anyString(), any());
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).report(eq(42L), anyString(), body.capture());
-    assertThat((String) body.getValue().get("message"))
+    assertThat(String.valueOf(body.getValue().get("message")))
         .contains("no handler registered for taskType=unknown_type");
   }
 

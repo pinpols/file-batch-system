@@ -13,15 +13,15 @@ canary:
 
   # service mesh / ingress provider — 决定 flagger 用什么 CRD 切流量。
   # 可选:istio / linkerd / contour / nginx / gloo / appmesh / kuma / traefik
-  # TODO ops:根据集群实际 mesh 填写
+  # ops 接入:根据集群实际 mesh 填写
   provider: nginx
 
   # Prometheus 地址(flagger 拉取 metric 用)。
-  # TODO ops:替换成集群内真实 prometheus svc DNS
+  # ops 接入:替换成集群内真实 prometheus svc DNS
   prometheusUrl: http://prometheus-server.monitoring.svc:9090
 
   # Slack 通知 webhook(canary 进度 / rollback 推送)。
-  # TODO ops:secret 注入,values 里不要存明文
+  # ops 接入:secret 注入,values 里不要存明文
   # slackUrl: ""
 
 # console-api 在 Canary 模式下的覆盖
@@ -40,7 +40,7 @@ consoleApi:
 serviceMonitor:
   enabled: true
 
-# ── TODO ops 接入清单 ────────────────────────────────────────────────────────
+# ── ops 接入清单 ────────────────────────────────────────────────────────────
 # 1. 集群预装 flagger:helm install flagger flagger/flagger -n flagger-system
 # 2. 集群预装 prometheus-operator(或现成 prometheus 实例)
 # 3. 选 mesh provider(本文件默认 nginx ingress,改 istio 需要额外注入 sidecar)

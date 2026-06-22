@@ -8,10 +8,17 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=scripts/lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
 BD="${1:?need bizDate YYYY-MM-DD}"; shift || true
 ROWS="${ROWS:-${1:-300}}"; [[ "${1:-}" =~ ^[0-9]+$ ]] && shift || true
 TENANTS=("$@"); [ ${#TENANTS[@]} -eq 0 ] && TENANTS=(ta tb tc t04 t05 t06 t07 t08 t09 t10)
 BDC="${BD//-/}"   # yyyymmdd
+SIM4DAY_LOG_DIR="${SIM4DAY_LOG_DIR:-$(log_run_dir "$ROOT" sim-4day "sim-4day-day-$BDC")}"
+log_link_dir "$ROOT" sim-4day "$SIM4DAY_LOG_DIR"
+if [[ "${SIM4DAY_CAPTURED:-0}" != "1" ]]; then
+  exec > >(tee -a "$SIM4DAY_LOG_DIR/day-${BDC}.log") 2>&1
+fi
 TRG="${TRIGGER_BASE_URL}"
 SECRET="${BATCH_INTERNAL_SECRET}"
 
@@ -37,7 +44,7 @@ import_content() { # 参数:tenant tpl header rowgen
 # DISPATCH 需绑定一个已生成文件 + 渠道:取该租户最新 GENERATED 文件分发(自然形成 export→dispatch 链)。
 dispatch_latest() { # 参数:tenant job channelCode
   local t="$1" job="$2" ch="$3" fid
-  fid=$(docker exec -i batch-postgres-primary psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
+  fid=$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
     "select id from batch.file_record where tenant_id='$t' and file_status='GENERATED' order by id desc limit 1" 2>/dev/null)
   if [ -n "$fid" ]; then launch "$t" "$job" "$BD" "{\"fileId\":$fid,\"channelCode\":\"$ch\"}"; else printf '_'; return 0; fi
 }

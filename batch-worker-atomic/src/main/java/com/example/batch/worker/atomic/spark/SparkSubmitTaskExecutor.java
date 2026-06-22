@@ -57,7 +57,7 @@ import org.springframework.stereotype.Component;
  *   <li>{@code timeoutSeconds}(optional, Long):覆盖默认超时
  * </ul>
  *
- * <p><b>TODO(启用前按真实集群补全)</b>:
+ * <p><b>启用前按真实集群补全</b>:
  *
  * <ol>
  *   <li>cluster 模式:**当前 fail-fast 拒绝**(driver 在远端,spark-submit 提交完即 exit=0=已提交非已完成,会静默假成功)。
@@ -179,7 +179,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
   public void cancel(String taskInstanceId) {
     Process p = running.get(taskInstanceId);
     if (p != null) {
-      // client 模式:driver 即本子进程,destroy 即取消。cluster 模式见类注释 TODO(需 spark-submit --kill)。
+      // client 模式:driver 即本子进程,destroy 即取消。cluster 模式需 spark-submit --kill,见类注释。
       p.destroyForcibly();
       log.info("spark executor cancel requested: taskInstanceId={}", taskInstanceId);
     }
@@ -201,7 +201,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     String deployMode = optionalString(params.get(PARAM_DEPLOY_MODE), props.getDefaultDeployMode());
     if ("cluster".equalsIgnoreCase(deployMode)) {
       // #3:cluster 模式 driver 在远端,spark-submit 提交完即 exit=0(=已提交,非已完成)。
-      // 远端终态轮询未实现前直接拒绝,**不让 cluster 静默假成功**。需要时按类注释 TODO 接状态轮询后再放开。
+      // 远端终态轮询未实现前直接拒绝,**不让 cluster 静默假成功**。需要时按类注释接状态轮询后再放开。
       throw new SparkValidationException(
           "deployMode=cluster 暂不支持(远端 driver 终态轮询未实现,会误判'已提交'为成功);"
               + "请用 client 模式,或接入 YARN/K8s/REST 状态轮询后再启用");
@@ -264,7 +264,6 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private Map<String, String> parseConf(Object raw) {
     if (raw == null) {
       return Map.of();
@@ -373,7 +372,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
         if (!inv.outputPath.isBlank()) {
           output.put("outputUri", inv.outputPath);
           // 可选:防"Spark 退 0 但没写出"。仅对本地 FS 路径(无 scheme)校验 _SUCCESS 标记;
-          // 远端(s3a:// / hdfs://)本执行器够不着,需下游消费步骤自行核验(见类注释 TODO)。
+          // 远端(s3a:// / hdfs://)本执行器够不着,需下游消费步骤按类注释自行核验。
           if (props.isVerifyLocalSuccessMarker() && isLocalPath(inv.outputPath)) {
             Path marker = Paths.get(inv.outputPath, "_SUCCESS");
             if (!Files.exists(marker)) {

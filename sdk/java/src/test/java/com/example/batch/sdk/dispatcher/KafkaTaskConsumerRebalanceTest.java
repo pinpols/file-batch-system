@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +36,7 @@ class KafkaTaskConsumerRebalanceTest {
   @AfterEach
   void tearDown() {
     if (dispatcher != null) dispatcher.stop();
+    if (mockConsumer != null) mockConsumer.close();
   }
 
   private TaskDispatcher newDispatcher() {
@@ -46,57 +46,60 @@ class KafkaTaskConsumerRebalanceTest {
   @Test
   void onPartitionsAssignedRestoresPauseWhenBackpressureActive() {
     dispatcher = newDispatcher();
-    mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper());
+    mockConsumer = new MockConsumer<>("latest");
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
 
-    // 准备 — 模拟 backpressure 已激活(consumer 内部 paused=true,新 partition 进来要 re-pause)
-    setPaused(kafka, true);
-    TopicPartition tp0 = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    TopicPartition tp1 = new TopicPartition("batch.task.dispatch.tx.t1", 0);
+      // 准备 — 模拟 backpressure 已激活(consumer 内部 paused=true,新 partition 进来要 re-pause)
+      setPaused(kafka, true);
+      TopicPartition tp0 = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+      TopicPartition tp1 = new TopicPartition("batch.task.dispatch.tx.t1", 0);
 
-    // 执行 — 模拟 Kafka rebalance 给出新 partition
-    KafkaTaskConsumer.PauseAwareRebalanceListener listener =
-        kafka.new PauseAwareRebalanceListener();
-    mockConsumer.assign(List.of(tp0, tp1));
-    listener.onPartitionsAssigned(List.of(tp0, tp1));
+      // 执行 — 模拟 Kafka rebalance 给出新 partition
+      KafkaTaskConsumer.PauseAwareRebalanceListener listener =
+          kafka.new PauseAwareRebalanceListener();
+      mockConsumer.assign(List.of(tp0, tp1));
+      listener.onPartitionsAssigned(List.of(tp0, tp1));
 
-    // 断言 — 新 partition 应该被 pause
-    assertThat(mockConsumer.paused()).containsExactlyInAnyOrder(tp0, tp1);
+      // 断言 — 新 partition 应该被 pause
+      assertThat(mockConsumer.paused()).containsExactlyInAnyOrder(tp0, tp1);
+    }
   }
 
   @Test
   void onPartitionsAssignedDoesNotPauseWhenNoBackpressure() {
     dispatcher = newDispatcher();
-    mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper());
+    mockConsumer = new MockConsumer<>("latest");
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
 
-    // 正常路径:paused=false 时不应 pause 新 partition
-    TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    mockConsumer.assign(List.of(tp));
+      // 正常路径:paused=false 时不应 pause 新 partition
+      TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+      mockConsumer.assign(List.of(tp));
 
-    KafkaTaskConsumer.PauseAwareRebalanceListener listener =
-        kafka.new PauseAwareRebalanceListener();
-    listener.onPartitionsAssigned(List.of(tp));
+      KafkaTaskConsumer.PauseAwareRebalanceListener listener =
+          kafka.new PauseAwareRebalanceListener();
+      listener.onPartitionsAssigned(List.of(tp));
 
-    assertThat(mockConsumer.paused()).isEmpty();
+      assertThat(mockConsumer.paused()).isEmpty();
+    }
   }
 
   @Test
   void onPartitionsAssignedEmptyListIsNoop() {
     dispatcher = newDispatcher();
-    mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper());
+    mockConsumer = new MockConsumer<>("latest");
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper())) {
 
-    setPaused(kafka, true);
+      setPaused(kafka, true);
 
-    KafkaTaskConsumer.PauseAwareRebalanceListener listener =
-        kafka.new PauseAwareRebalanceListener();
-    listener.onPartitionsAssigned(List.of());
+      KafkaTaskConsumer.PauseAwareRebalanceListener listener =
+          kafka.new PauseAwareRebalanceListener();
+      listener.onPartitionsAssigned(List.of());
 
-    assertThat(mockConsumer.paused()).isEmpty();
+      assertThat(mockConsumer.paused()).isEmpty();
+    }
   }
 
   private static void setPaused(KafkaTaskConsumer kafka, boolean v) {
