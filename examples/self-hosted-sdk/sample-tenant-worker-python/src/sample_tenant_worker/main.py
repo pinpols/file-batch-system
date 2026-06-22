@@ -42,6 +42,20 @@ async def sleep(ctx: SdkTaskContext) -> SdkTaskResult:
     return SdkTaskResult.success_with({"slept": millis})
 
 
+@batch_task("ATOMIC")
+async def atomic_base_echo(ctx: SdkTaskContext) -> SdkTaskResult:
+    """平台真实派单的路由键 = ``job_definition.job_type`` 投影的 base workerType(如
+    ``ATOMIC``),dispatcher 按 ``workerType`` 路由。故注册一个 base-workerType=``ATOMIC``
+    的 echo handler,直接承接平台 ATOMIC 派单(对齐 Java ``AtomicBaseEchoHandler``)。
+
+    ``sample-echo`` / ``sample-sleep`` 是自定义 taskType,仅 catalog / FakeBatchPlatform
+    演示用;平台真实 dispatch 不会以它们为 workerType。"""
+    return SdkTaskResult.success_with(
+        {"echo": dict(ctx.parameters)},
+        f"atomic-base echoed taskId={ctx.task_id}",
+    )
+
+
 async def main() -> None:
     """把 handler 接入平台 client 并运行到关停。
 

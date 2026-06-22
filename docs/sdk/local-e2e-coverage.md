@@ -46,7 +46,7 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 | 语言 | 样例是否接 kafka 消费 | register | full chain | 备注 |
 |---|---|---|---|---|
 | Go | ✅ 已接(kafka adapter) | ✅ | ✅ **terminal SUCCESS** | #655 + #2/#3/#4 全修,本地实测绿(参照实现) |
-| Python | ✅ 已接(auto-build) | ✅ | ⚠ wire 全绿 | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名全修;**wire 链路 register→dispatch→claim→execute→report 全绿**;terminal 卡 #5(handler 路由键) |
+| Python | ✅ 已接(auto-build) | ✅ | ✅ **terminal SUCCESS** | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名 + #5(补 base-ATOMIC handler)全修,本地实测绿 |
 | TypeScript | ✅ 已接(kafkajs adapter) | ✅(#655) | 🔲 | 已接消费,最接近;需 #2 pattern + 核 #3/#4 后跑脚本 |
 | Java | ✅ 已接(SDK consumer) | ✅(#655) | 🔲 | **默认 pattern 是 tenant-first(`batch.task.dispatch.tenant-a.*`)= #2**;需改 node-direct + 核 #4 |
 | Rust | ❌ illustrative stub | — | — | 需先把样例接到 reqwest 真 transport |
@@ -75,12 +75,17 @@ Python(及 Java)用 **handler map**,dispatcher 按 `msg.workerType` 路由。但
 `workerType="ATOMIC"`(job_type 投影),样例 handler 注册名却是任务级 `'sample-echo'` →
 `no SdkTaskHandler for workerType='ATOMIC'` → 报失败 → job FAILED。
 
-这是 **handler 路由键语义**问题(ATOMIC 应按 `taskType` 参数路由,像内建 atomic worker 那样,
-而非按 workerType;或样例 handler 应注册成与 dispatch 路由键一致),**独立于 wire 层**。修法需定
-SDK 路由契约(route by workerType vs taskType),属独立项。Go 因单 handler 模型规避了它。
+**正确契约(Java 样例注释为权威)**:平台真实派单的路由键 = `job_definition.job_type` 投影的
+base workerType(如 `ATOMIC`),dispatcher 按 `workerType` 路由。所以 keyed-handler 的 SDK 样例
+必须注册一个 **base-workerType handler**(Java 有 `AtomicBaseEchoHandler` 注册在 `"ATOMIC"`)。
+`sample-echo` 等自定义 taskType 仅 catalog/FakeBatchPlatform 演示,平台真实 dispatch 不以它们为
+workerType。**修法不是改 dispatcher 路由**,而是给样例补 base-workerType handler。
+- Python 样例已补 `@batch_task("ATOMIC")`(本 PR)→ terminal 绿。
+- Go 单 handler 模型本就 workerType 无关,规避了它。
 
-**结论**:Go SDK **全链路本地实测绿**(#655 + #2/#3/#4 全修,register→…→terminal SUCCESS);
-Python **wire 链路全绿**(#2/#3/#4 + 样例依赖名修齐),terminal 仅卡 #5 handler 路由键。
+**结论**:Go + Python SDK **均全链路本地实测绿**(register→dispatch→claim→execute→report→
+terminal SUCCESS)。TS/Java 同法可达:#2 pattern(node-direct)+ #4 report-json + #5 base-workerType
+handler(Java 已有;TS 待补)。
 要"对外可提供",把 #2/#3/#4 在 **TS/Python/Java/Rust** 照搬修齐并各跑本地全链路至 terminal 绿
 即可——这是一个独立的「SDK wire 契约重校」专项,本地全链路脚本(`sdk-e2e-local.sh <lang>`)
 就是它的验收工具,Go 是已跑通的参照实现。
