@@ -542,9 +542,7 @@ class TaskDispatcher:
             # result_summary 是平台 jsonb 列(#{resultSummary}::jsonb),必须是合法 JSON,
             # 不能是裸人读串(否则 invalid input syntax for type json → report 500)。发
             # {code,message} JSON 对象,对齐内建 worker DefaultTaskExecutionWrapper 的契约。
-            body["resultSummary"] = json.dumps(
-                {"code": "SUCCESS", "message": result.message or ""}
-            )
+            body["resultSummary"] = json.dumps({"code": "SUCCESS", "message": result.message or ""})
         self._attach_report_meta(body, msg)
         try:
             await self._http.report(task_id, _new_idempotency_key(), body)
