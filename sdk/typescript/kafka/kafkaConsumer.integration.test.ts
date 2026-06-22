@@ -60,7 +60,8 @@ test(
     const TENANT = "acme";
     const suffix = `it${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
     const channel = `http-${suffix}`;
-    const topic = `batch.task.dispatch.${TENANT}.${channel}`;
+    // node-direct topic batch.task.dispatch.<workerType>.node.<workerCode>(w-it)。
+    const topic = `batch.task.dispatch.${channel}.node.w-it`;
     const groupId = `${consumerGroupId(TENANT, "w-it")}-${suffix}`;
 
     const kafka = new Kafka({
@@ -89,7 +90,7 @@ test(
 
     // sanity: the adapter targets exactly this tenant's wildcard + group
     assert.equal(adapter.groupId, groupId);
-    assert.equal(adapter.topicRegex.source, dispatchTopicRegex(TENANT).source);
+    assert.equal(adapter.topicRegex.source, dispatchTopicRegex("w-it").source);
     assert.ok(adapter.topicRegex.test(topic), "regex should match the topic");
 
     const pipeline = new MessagePipeline({

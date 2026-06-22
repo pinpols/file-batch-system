@@ -47,7 +47,7 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 |---|---|---|---|---|
 | Go | ✅ 已接(kafka adapter) | ✅ | ✅ **terminal SUCCESS** | #655 + #2/#3/#4 全修,本地实测绿(参照实现) |
 | Python | ✅ 已接(auto-build) | ✅ | ✅ **terminal SUCCESS** | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名 + #5(补 base-ATOMIC handler)全修,本地实测绿 |
-| TypeScript | ✅ 已接(kafkajs adapter) | ✅(#655) | 🔲 | 已接消费,最接近;需 #2 pattern + 核 #3/#4 后跑脚本 |
+| TypeScript | ✅ 已接(kafkajs adapter) | ✅ | ⚠ register→dispatch→decode 绿 | #2(node-direct regex)+#4(report-json)+样例 import 路径(off-by-one)+harness 装 SDK kafkajs 全修;claim 仍 404(task READY 已 pre-assign 给本 worker,但 orchestrator claim 报 selectById null,待 request 级追踪) |
 | Java | ✅ 已接(SDK consumer) | ✅(#655) | 🔲 | **默认 pattern 是 tenant-first(`batch.task.dispatch.tenant-a.*`)= #2**;需改 node-direct + 核 #4 |
 | Rust | ❌ illustrative stub | — | — | 需先把样例接到 reqwest 真 transport |
 
