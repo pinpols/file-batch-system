@@ -34,8 +34,11 @@ class PipelineWorkerAtomicIsolationOptInArchTest {
   /** 定位 worker 模块根:e2e 模块同级目录(父目录下的 sibling)。 */
   private static Path workerApplicationYml(String module) {
     // e2e 测试 cwd = batch-e2e-tests/,父目录是 reactor 根。
+    // #672:6 worker 模块嵌套到 batch-worker/<name>;入参仍用 artifactId 风格名
+    // (batch-worker-import),这里映射成嵌套目录路径(batch-worker/import)。
     Path projectRoot = Paths.get("").toAbsolutePath().getParent();
-    return projectRoot.resolve(module).resolve("src/main/resources/application.yml");
+    String relPath = module.replaceFirst("^batch-worker-", "batch-worker/");
+    return projectRoot.resolve(relPath).resolve("src/main/resources/application.yml");
   }
 
   @Test
