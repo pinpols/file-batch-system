@@ -12,6 +12,9 @@ Patches applied to ta/tb/tc-tenant-config-package-test.xlsx:
      - workflow_edge wired START -> first JOB node, last JOB node -> END
   4. job_definition.execution_mode required by current Console package validator.
      Add column when absent and fill FULL for every job row.
+  5. file_template_config JSON/SQL preview hardening:
+     - field_mappings entries must carry name.
+     - export default_query_sql must list columns explicitly.
 """
 from __future__ import annotations
 
@@ -25,7 +28,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SUITE_DIR = ROOT / "docs/test-data/test-full-coverage-import-suite"
 TARGETS = ["ta-tenant-config-package-test.xlsx",
            "tb-tenant-config-package-test.xlsx",
-           "tc-tenant-config-package-test.xlsx"]
+           "tc-tenant-config-package-test.xlsx",
+           "default-tenant-config-package-test.xlsx"]
 
 LINUX_5FIELD_RE = re.compile(r"^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$")
 
@@ -41,6 +45,86 @@ SFTP_KEY_MAP = {
     "remotePath": "sftp_remote_path",
     "sftpRemotePath": "sftp_remote_path",
     "remote_path": "sftp_remote_path",
+}
+
+TEMPLATE_MAPPINGS: dict[str, list[dict[str, object]]] = {
+    "TA_IMPORT_CUSTOMER_TPL": [
+        {"name": "customer_no", "targetColumn": "customer_no", "type": "STRING", "required": True},
+        {"name": "customer_name", "targetColumn": "customer_name", "type": "STRING", "required": True},
+        {"name": "customer_type", "targetColumn": "customer_type", "type": "STRING", "required": True},
+        {"name": "certificate_no", "targetColumn": "certificate_no", "type": "STRING"},
+        {"name": "mobile_no", "targetColumn": "mobile_no", "type": "STRING"},
+        {"name": "email", "targetColumn": "email", "type": "STRING"},
+        {"name": "status", "targetColumn": "status", "type": "STRING", "required": True},
+    ],
+    "TA_IMPORT_ORDER_TPL": [
+        {"name": "customer_no", "targetColumn": "customer_no", "type": "STRING", "required": True},
+        {"name": "customer_name", "targetColumn": "customer_name", "type": "STRING", "required": True},
+        {"name": "customer_type", "targetColumn": "customer_type", "type": "STRING", "required": True},
+        {"name": "certificate_no", "targetColumn": "certificate_no", "type": "STRING"},
+        {"name": "mobile_no", "targetColumn": "mobile_no", "type": "STRING"},
+        {"name": "email", "targetColumn": "email", "type": "STRING"},
+        {"name": "status", "targetColumn": "status", "type": "STRING", "required": True},
+    ],
+    "TB_IMPORT_TRANSACTION_TPL": [
+        {"name": "txn_no", "targetColumn": "txn_no", "type": "STRING", "required": True},
+        {"name": "account_no", "targetColumn": "account_no", "type": "STRING", "required": True},
+        {"name": "txn_type", "targetColumn": "txn_type", "type": "STRING", "required": True},
+        {"name": "amount", "targetColumn": "amount", "type": "DECIMAL", "required": True},
+        {"name": "currency_code", "targetColumn": "currency_code", "type": "STRING", "required": True},
+        {"name": "txn_date", "targetColumn": "txn_date", "type": "DATE", "required": True, "format": "yyyy-MM-dd"},
+        {"name": "remark", "targetColumn": "remark", "type": "STRING"},
+    ],
+    "TC_IMPORT_RISK_SCORE_TPL": [
+        {"name": "entity_id", "targetColumn": "entity_id", "type": "STRING", "required": True},
+        {"name": "entity_type", "targetColumn": "entity_type", "type": "STRING", "required": True},
+        {"name": "score_value", "targetColumn": "score_value", "type": "INTEGER", "required": True},
+        {"name": "score_band", "targetColumn": "score_band", "type": "STRING", "required": True},
+        {"name": "score_date", "targetColumn": "score_date", "type": "DATE", "required": True, "format": "yyyy-MM-dd"},
+    ],
+    "TA_EXPORT_REPORT_TPL": [
+        {"name": "id", "sourceColumn": "id", "header": "ID"},
+        {"name": "tenant_id", "sourceColumn": "tenant_id", "header": "Tenant"},
+        {"name": "customer_no", "sourceColumn": "customer_no", "header": "Customer No"},
+        {"name": "customer_name", "sourceColumn": "customer_name", "header": "Customer Name"},
+        {"name": "customer_type", "sourceColumn": "customer_type", "header": "Customer Type"},
+        {"name": "certificate_no", "sourceColumn": "certificate_no", "header": "Certificate No"},
+        {"name": "mobile_no", "sourceColumn": "mobile_no", "header": "Mobile"},
+        {"name": "email", "sourceColumn": "email", "header": "Email"},
+        {"name": "status", "sourceColumn": "status", "header": "Status"},
+    ],
+    "TB_EXPORT_STATEMENT_TPL": [
+        {"name": "id", "sourceColumn": "id", "header": "ID"},
+        {"name": "tenant_id", "sourceColumn": "tenant_id", "header": "Tenant"},
+        {"name": "txn_no", "sourceColumn": "txn_no", "header": "Txn No"},
+        {"name": "account_no", "sourceColumn": "account_no", "header": "Account No"},
+        {"name": "txn_type", "sourceColumn": "txn_type", "header": "Txn Type"},
+        {"name": "amount", "sourceColumn": "amount", "header": "Amount", "type": "DECIMAL"},
+        {"name": "currency_code", "sourceColumn": "currency_code", "header": "Currency"},
+        {"name": "txn_date", "sourceColumn": "txn_date", "header": "Txn Date", "type": "DATE", "format": "yyyy-MM-dd"},
+        {"name": "remark", "sourceColumn": "remark", "header": "Remark"},
+    ],
+    "TC_EXPORT_RISK_ALERT_TPL": [
+        {"name": "id", "sourceColumn": "id", "header": "ID"},
+        {"name": "tenant_id", "sourceColumn": "tenant_id", "header": "Tenant"},
+        {"name": "entity_id", "sourceColumn": "entity_id", "header": "Entity ID"},
+        {"name": "entity_type", "sourceColumn": "entity_type", "header": "Entity Type"},
+        {"name": "score_value", "sourceColumn": "score_value", "header": "Score"},
+        {"name": "score_band", "sourceColumn": "score_band", "header": "Band"},
+        {"name": "score_date", "sourceColumn": "score_date", "header": "Score Date", "type": "DATE", "format": "yyyy-MM-dd"},
+    ],
+}
+
+EXPORT_SQL: dict[str, str] = {
+    "TA_EXPORT_REPORT_TPL":
+        "SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status "
+        "FROM biz.customer_account WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)",
+    "TB_EXPORT_STATEMENT_TPL":
+        "SELECT id, tenant_id, txn_no, account_no, txn_type, amount, currency_code, txn_date, remark "
+        "FROM biz.transaction WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)",
+    "TC_EXPORT_RISK_ALERT_TPL":
+        "SELECT id, tenant_id, entity_id, entity_type, score_value, score_band, score_date "
+        "FROM biz.risk_score WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)",
 }
 
 
@@ -75,8 +159,11 @@ def patch_schedule_expr(ws) -> int:
     if "schedule_expr" not in headers:
         return 0
     col = headers.index("schedule_expr") + 1
+    type_col = headers.index("schedule_type") + 1 if "schedule_type" in headers else None
     fixed = 0
     for row in ws.iter_rows(min_row=2):
+        if type_col is not None and (row[type_col - 1].value or "").strip().upper() != "CRON":
+            continue
         cell = row[col - 1]
         new = linux5_to_quartz6(cell.value)
         if new is not None:
@@ -135,6 +222,73 @@ def patch_channel_config_json(ws) -> int:
             row[cj_col - 1].value = json.dumps(new_obj, ensure_ascii=False)
             fixed += 1
     return fixed
+
+
+def patch_file_template_config(ws) -> int:
+    headers = [c.value for c in ws[1]]
+    required = {"template_code", "template_type", "field_mappings", "default_query_sql"}
+    if not required.issubset(set(headers)):
+        return 0
+    idx = {h: i for i, h in enumerate(headers)}
+    fixed = 0
+    for row in ws.iter_rows(min_row=2):
+        template_code = row[idx["template_code"]].value
+        template_type = (row[idx["template_type"]].value or "").strip().upper()
+        if not template_code:
+            continue
+
+        mappings = TEMPLATE_MAPPINGS.get(template_code)
+        if mappings is not None:
+            rendered = json.dumps(mappings, ensure_ascii=False, separators=(",", ":"))
+            cell = row[idx["field_mappings"]]
+            if cell.value != rendered:
+                cell.value = rendered
+                fixed += 1
+        else:
+            cell = row[idx["field_mappings"]]
+            patched = ensure_mapping_names(cell.value, template_type)
+            if patched is not None and patched != cell.value:
+                cell.value = patched
+                fixed += 1
+
+        sql = EXPORT_SQL.get(template_code)
+        if sql is not None:
+            cell = row[idx["default_query_sql"]]
+            if cell.value != sql:
+                cell.value = sql
+                fixed += 1
+    return fixed
+
+
+def ensure_mapping_names(raw: object, template_type: str) -> str | None:
+    if raw in (None, ""):
+        return None
+    try:
+        mappings = json.loads(str(raw))
+    except Exception:
+        return None
+    if not isinstance(mappings, list):
+        return None
+    changed = False
+    for mapping in mappings:
+        if not isinstance(mapping, dict):
+            continue
+        name = str(mapping.get("name") or "").strip()
+        if name:
+            continue
+        candidate = (
+            mapping.get("source")
+            or mapping.get("targetColumn")
+            or mapping.get("sourceColumn")
+            or mapping.get("target")
+        )
+        if candidate in (None, ""):
+            continue
+        mapping["name"] = str(candidate)
+        if template_type == "EXPORT" and "sourceColumn" not in mapping:
+            mapping["sourceColumn"] = str(candidate)
+        changed = True
+    return json.dumps(mappings, ensure_ascii=False, separators=(",", ":")) if changed else None
 
 
 def ensure_workflow_boundary_nodes(wb) -> tuple[int, int]:
@@ -299,6 +453,8 @@ def process(path: Path) -> dict:
         result["execution_mode_fixed"] = ensure_execution_mode(ws)
     if "file_channel_config" in wb.sheetnames:
         result["sftp_keys_renamed"] = patch_channel_config_json(wb["file_channel_config"])
+    if "file_template_config" in wb.sheetnames:
+        result["file_template_config_fixed"] = patch_file_template_config(wb["file_template_config"])
     nodes_touched, edges_added = ensure_workflow_boundary_nodes(wb)
     result["workflow_nodes_touched"] = nodes_touched
     result["workflow_edges_added"] = edges_added
@@ -315,12 +471,14 @@ def verify(path: Path) -> dict:
         ws = wb["job_definition"]
         headers = [c.value for c in ws[1]]
         col = headers.index("schedule_expr")
+        type_col = headers.index("schedule_type") if "schedule_type" in headers else -1
         em_col = headers.index("execution_mode") if "execution_mode" in headers else -1
         bad = []
         missing_execution_mode = 0
         for row in ws.iter_rows(min_row=2, values_only=True):
             v = row[col]
-            if v is None or str(v).strip() == "":
+            schedule_type = str(row[type_col] or "").strip().upper() if type_col >= 0 else "CRON"
+            if schedule_type != "CRON" or v is None or str(v).strip() == "":
                 pass
             else:
                 n = len(str(v).split())
@@ -345,6 +503,29 @@ def verify(path: Path) -> dict:
             if any(k in obj for k in ("host", "port", "username", "password", "remotePath")):
                 bad += 1
         out["sftp_legacy_keys_left"] = bad
+    if "file_template_config" in wb.sheetnames:
+        ws = wb["file_template_config"]
+        headers = [c.value for c in ws[1]]
+        fm = headers.index("field_mappings")
+        sql = headers.index("default_query_sql")
+        missing_name = 0
+        select_star = 0
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            raw = row[fm]
+            if raw not in (None, ""):
+                try:
+                    mappings = json.loads(str(raw))
+                except Exception:
+                    mappings = []
+                if isinstance(mappings, list):
+                    for mapping in mappings:
+                        if isinstance(mapping, dict) and not str(mapping.get("name") or "").strip():
+                            missing_name += 1
+            query = str(row[sql] or "")
+            if re.search(r"(?is)\bselect\s+\*", query):
+                select_star += 1
+        out["field_mapping_missing_name_count"] = missing_name
+        out["export_select_star_count"] = select_star
     if "workflow_node" in wb.sheetnames:
         ws = wb["workflow_node"]
         headers = [c.value for c in ws[1]]

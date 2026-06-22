@@ -187,7 +187,7 @@ prereq() {
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     bash scripts/sim/03-import-tenants.sh ) >/tmp/harness-import.log 2>&1 \
     && ok "租户配置导入" \
-    || c_red "  ✗ 03-import 失败(常见:xlsx fixture 缺列 watermark_field;见 /tmp/harness-import.log)"
+    || { c_red "  ✗ 03-import 失败(见 /tmp/harness-import.log)"; return 1; }
   c_grn "== prereq 完成 =="
 }
 
@@ -235,6 +235,7 @@ sim() {
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     restart_import default   # 基线 worker:checkpoint=false(17 REPLACE 需要) + no skip
     local sum=/tmp/harness-sim-summary.txt; : > "$sum"
+    local sim_failed=0
     for s in $(ls scripts/sim/[0-2][0-9]-*.sh | sort); do
       local n; n=$(basename "$s")
       case "$n" in 00-*|01-*|02-*|03-*) continue;; esac
@@ -252,11 +253,19 @@ sim() {
         25-*) restart_import checkpoint ;;  # checkpoint=true
       esac
       echo ">>> $n $(date +%T)" | tee -a "$sum"
-      if bash "$s" >"/tmp/harness-$n.log" 2>&1; then echo "PASS $n" | tee -a "$sum"; else echo "FAIL $n (exit $?)" | tee -a "$sum"; tail -6 "/tmp/harness-$n.log" | sed 's/^/   /' | tee -a "$sum"; fi
+      if bash "$s" >"/tmp/harness-$n.log" 2>&1; then
+        echo "PASS $n" | tee -a "$sum"
+      else
+        local rc=$?
+        sim_failed=1
+        echo "FAIL $n (exit $rc)" | tee -a "$sum"
+        tail -6 "/tmp/harness-$n.log" | sed 's/^/   /' | tee -a "$sum"
+      fi
       case "$n" in 23-*|25-*) restart_import default ;; esac   # 恢复基线
       case "$n" in *load*|*stage*) sleep 20;; esac
     done
-    echo "== sim 完成 ==" | tee -a "$sum" )
+    echo "== sim 完成 ==" | tee -a "$sum"
+    exit "$sim_failed" )
 }
 
 # ---------------------------------------------------------

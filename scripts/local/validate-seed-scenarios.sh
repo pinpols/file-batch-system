@@ -529,7 +529,44 @@ if [[ "$STRICT" == "1" ]]; then
   assert_fire "EXPORT 严格 ($STRICT_TENANT_ID, settlement)" "$STRICT_TENANT_ID" "export_settlement_job" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
-  assert_fire "WORKFLOW PIPELINE 严格 ($STRICT_TENANT_ID)" "$STRICT_TENANT_ID" "wf_probe_pipeline" \
+  PROBE_WF_JOB="${PROBE_TAG}-wf-pipeline"
+  psql_q "INSERT INTO batch.workflow_definition
+      (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
+    VALUES
+      ('$STRICT_TENANT_ID', '$PROBE_WF_JOB', 'seedval pipeline workflow', 'PIPELINE', 1, true, 'strict seed workflow probe', '$PROBE_TAG', '$PROBE_TAG', now(), now())
+    ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING" >/dev/null
+  psql_q "INSERT INTO batch.workflow_node
+      (tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order,
+       retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
+    SELECT wd.tenant_id, wd.id, v.node_code, v.node_name, v.node_type, v.related_job_code, v.node_order,
+           'NONE', 0, 0, true, v.node_params::jsonb, now(), now()
+    FROM batch.workflow_definition wd,
+      (VALUES
+        ('START', 'Start', 'START', NULL::text, 0, '{\"entry\":true}'),
+        ('EXPORT_STEP', 'Export Step', 'TASK', 'export_settlement_job', 1, '{\"step\":\"export\"}'),
+        ('END', 'End', 'END', NULL::text, 2, '{\"entry\":false}')
+      ) AS v(node_code, node_name, node_type, related_job_code, node_order, node_params)
+    WHERE wd.tenant_id = '$STRICT_TENANT_ID' AND wd.workflow_code = '$PROBE_WF_JOB' AND wd.version = 1
+    ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING" >/dev/null
+  psql_q "INSERT INTO batch.workflow_edge
+      (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+    SELECT wd.tenant_id, wd.id, v.from_node_code, v.to_node_code, v.edge_type, true, now(), now()
+    FROM batch.workflow_definition wd,
+      (VALUES
+        ('START', 'EXPORT_STEP', 'ALWAYS'),
+        ('EXPORT_STEP', 'END', 'ALWAYS')
+      ) AS v(from_node_code, to_node_code, edge_type)
+    WHERE wd.tenant_id = '$STRICT_TENANT_ID' AND wd.workflow_code = '$PROBE_WF_JOB' AND wd.version = 1
+    ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING" >/dev/null
+  psql_q "INSERT INTO batch.job_definition (
+      tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
+      queue_code, worker_group, window_code, priority, enabled, created_by, updated_by, created_at, updated_at
+    ) VALUES (
+      '$STRICT_TENANT_ID', '$PROBE_WF_JOB', 'seedval pipeline workflow', 'WORKFLOW', 'MANUAL', 'Asia/Shanghai', 'SCHEDULED',
+      'export_queue', 'EXPORT', 'always_open', 5, true, '$PROBE_TAG', '$PROBE_TAG', now(), now()
+    ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true, updated_by='$PROBE_TAG', updated_at=now()" >/dev/null
+
+  assert_fire "WORKFLOW PIPELINE 严格 ($STRICT_TENANT_ID)" "$STRICT_TENANT_ID" "$PROBE_WF_JOB" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_WF_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
   # ===== DISPATCH 严格 =====
