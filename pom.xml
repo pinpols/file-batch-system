@@ -6,10 +6,8 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <!-- R7 OSS 扫描：4.0.3 命中 8 个 CVE（3 个 CRITICAL，含 CVE-2026-40974 Cassandra
-             SSL hostname verify / CVE-2026-40976 默认 web 安全失效 / CVE-2026-40971
-             RabbitMQ SSL hostname verify）。4.0.6 修复全部 8 项。 -->
-        <version>4.0.6</version>
+        <!-- R7 OSS 扫描：4.0.3 命中 8 个 CVE；4.1.0 包含 4.0.7 patch 修复并进入 4.1 release train。 -->
+        <version>4.1.0</version>
         <relativePath/>
     </parent>
 
@@ -85,21 +83,18 @@
              tar 无标准库支持。版本对齐 POI 5.4.0 传递的 commons-compress,避免双版本漂移。 -->
         <commons-compress.version>1.27.1</commons-compress.version>
         <!-- R7 安全扫描 2026-05-16: trivy fs 命中 11 个 HIGH CVE 组件。下列 version 覆盖
-             Spring Boot 4.0.6 默认传递依赖，强制升到安全 patch 版本。
+             Spring Boot 默认传递依赖，强制升到已验证的安全 patch 版本。
              - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
              - netty 4.2.13.Final → 4.2.15.Final (2026-06-10): CVE-2026-44249 IPv6 subnet filter
                bypass (netty-handler) + CVE-2026-44894 QUIC token handler (netty-codec-classes-quic)
              - bcprov-jdk18on 1.81 → 1.84: CVE-2026-5598 私钥泄漏 (非常量时间比较)
-             - postgresql 42.7.10 → 42.7.11: CVE-2026-42198
-             - spring-kafka 4.0.5 → 4.0.6 (2026-06-14): CVE-2026-41731 trusted-package 过宽反序列化 (HIGH)
-             SpringBoot 升级到 4.0.7+ 时这些可能不再需要，届时 review 移除。 -->
+             - postgresql 42.7.10 → 42.7.11: CVE-2026-42198。 -->
         <netty.version>4.2.15.Final</netty.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <postgresql.version>42.7.11</postgresql.version>
-        <spring-kafka.version>4.0.6</spring-kafka.version>
 
         <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
-             2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4.0.6 + JDK25 是否能跑。
+             2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4 + JDK25 是否能跑。
              结论见 docs/spike/resilience4j-sb4-compat.md。 -->
         <resilience4j.version>2.3.0</resilience4j.version>
     </properties>
@@ -474,7 +469,7 @@
                                                 <value>COVEREDRATIO</value>
                                                 <!-- 起步基线（2026-04-26）：25% LINE 覆盖率
                                                      当前实测：trigger 44% / orchestrator 30% / console-api 全跑约 30-40%。
-                                                     TODO（maturity-assessment §6 P0）：6 个月内逐步提到 40%，1 年内到 60%；
+                                                     覆盖率成熟度目标（maturity-assessment §6 P0）：6 个月内逐步提到 40%，1 年内到 60%；
                                                      每提一档前先看 maturity-assessment.md 复评数据。
                                                      CI 调用：scripts/ci/run-full-regression.sh 的 "Coverage gate" 步骤。 -->
                                                 <minimum>0.25</minimum>
