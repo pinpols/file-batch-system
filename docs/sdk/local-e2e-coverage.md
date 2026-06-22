@@ -41,7 +41,7 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 
 ## 当前状态(per language / per stage)
 
-> 用本地真 orchestrator 实测(非 fixture)。Go 用样例 worker 跑到 **execute** 绿。
+> 用本地真 orchestrator 实测(非 fixture)。五语言样例 worker **全跑到 terminal SUCCESS**。
 
 | 语言 | 样例是否接 kafka 消费 | register | full chain | 备注 |
 |---|---|---|---|---|
@@ -85,9 +85,11 @@ workerType。**修法不是改 dispatcher 路由**,而是给样例补 base-worke
 - Python 样例已补 `@batch_task("ATOMIC")`(本 PR)→ terminal 绿。
 - Go 单 handler 模型本就 workerType 无关,规避了它。
 
-**结论**:Go + Python SDK **均全链路本地实测绿**(register→dispatch→claim→execute→report→
-terminal SUCCESS)。TS/Java 同法可达:#2 pattern(node-direct)+ #4 report-json + #5 base-workerType
-handler(Java 已有;TS 待补)。
-要"对外可提供",把 #2/#3/#4 在 **TS/Python/Java/Rust** 照搬修齐并各跑本地全链路至 terminal 绿
-即可——这是一个独立的「SDK wire 契约重校」专项,本地全链路脚本(`sdk-e2e-local.sh <lang>`)
-就是它的验收工具,Go 是已跑通的参照实现。
+**结论**:**五语言 SDK(Go / Python / TypeScript / Java / Rust)均全链路本地实测绿**
+(register→dispatch→claim→execute→report→terminal SUCCESS),对真 orchestrator 跑通。
+keyed-handler 的 SDK(Python/Java)补了 base-workerType handler;单 handler 模型(Go/TS)与
+workerType 无关天然规避;Rust 样例由 illustrative stub 改造成真连(`ReqwestTransport` +
+`start()` + claim→execute→report 回路)。
+「SDK wire 契约重校」专项至此收口:#1(workerGroup)/#2(node-direct topic)/#3(taskId 解码)/
+#4(report resultSummary JSON)五语言全修齐。本地全链路脚本(`sdk-e2e-local.sh <lang>`,lang ∈
+{go,python,typescript,java,rust})是它的验收工具。
