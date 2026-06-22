@@ -17,6 +17,6 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 )
 
-replace github.com/pinpols/file-batch-system/batch-worker-sdk-go => ../../sdk/go
+replace github.com/pinpols/file-batch-system/batch-worker-sdk-go => ../../../sdk/go
 
-replace github.com/pinpols/file-batch-system/batch-worker-sdk-go/kafka => ../../sdk/go/kafka
+replace github.com/pinpols/file-batch-system/batch-worker-sdk-go/kafka => ../../../sdk/go/kafka
