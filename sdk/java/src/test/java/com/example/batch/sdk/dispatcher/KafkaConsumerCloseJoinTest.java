@@ -100,23 +100,24 @@ class KafkaConsumerCloseJoinTest {
         .poll(any());
     doNothing().when(consumer).wakeup(); // 故意不联动让 poll 抛 — 测 join 超时
 
-    KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
-    runner = new Thread(kafka, "test-kafka-stuck");
-    runner.setDaemon(true);
-    runner.start();
-    Thread.sleep(150); // 让 poll loop 进入 sleep
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      runner = new Thread(kafka, "test-kafka-stuck");
+      runner.setDaemon(true);
+      runner.start();
+      Thread.sleep(150); // 让 poll loop 进入 sleep
 
-    long t0 = System.nanoTime();
-    kafka.close(Duration.ofMillis(500));
-    long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+      long t0 = System.nanoTime();
+      kafka.close(Duration.ofMillis(500));
+      long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
 
-    assertThat(elapsedMs)
-        .as("close should return close to 500ms join timeout, not block on stuck poll")
-        .isLessThan(1_200L);
-    verify(consumer, atLeastOnce()).wakeup();
-    assertThat(warnMessages())
-        .anySatisfy(m -> assertThat(m).contains("did not exit within").contains("500"));
+      assertThat(elapsedMs)
+          .as("close should return close to 500ms join timeout, not block on stuck poll")
+          .isLessThan(1_200L);
+      verify(consumer, atLeastOnce()).wakeup();
+      assertThat(warnMessages())
+          .anySatisfy(m -> assertThat(m).contains("did not exit within").contains("500"));
+    }
   }
 
   /** close(Duration) 在 poll 线程已退出时立刻返回,不打 WARN。 */
@@ -146,21 +147,22 @@ class KafkaConsumerCloseJoinTest {
         .when(consumer)
         .wakeup();
 
-    KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
-    runner = new Thread(kafka, "test-kafka-clean");
-    runner.setDaemon(true);
-    runner.start();
-    Thread.sleep(100);
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      runner = new Thread(kafka, "test-kafka-clean");
+      runner.setDaemon(true);
+      runner.start();
+      Thread.sleep(100);
 
-    long t0 = System.nanoTime();
-    kafka.close(Duration.ofMillis(1_000));
-    long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+      long t0 = System.nanoTime();
+      kafka.close(Duration.ofMillis(1_000));
+      long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
 
-    assertThat(elapsedMs).as("clean exit should return quickly").isLessThan(800L);
-    runner.join(1_000);
-    assertThat(runner.isAlive()).isFalse();
-    assertThat(warnMessages()).noneSatisfy(m -> assertThat(m).contains("did not exit within"));
+      assertThat(elapsedMs).as("clean exit should return quickly").isLessThan(800L);
+      runner.join(1_000);
+      assertThat(runner.isAlive()).isFalse();
+      assertThat(warnMessages()).noneSatisfy(m -> assertThat(m).contains("did not exit within"));
+    }
   }
 
   /** 二次调用 close() 幂等,不重复 wakeup / 不阻塞。 */
@@ -170,11 +172,12 @@ class KafkaConsumerCloseJoinTest {
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
     when(consumer.assignment()).thenReturn(Set.of());
-    KafkaTaskConsumer kafka =
-        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
-    // 不启动 run 线程 — close 也应直接返回
-    kafka.close(Duration.ofMillis(100));
-    kafka.close(Duration.ofMillis(100));
-    assertThat(kafka.isRunning()).isFalse();
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      // 不启动 run 线程 — close 也应直接返回
+      kafka.close(Duration.ofMillis(100));
+      kafka.close(Duration.ofMillis(100));
+      assertThat(kafka.isRunning()).isFalse();
+    }
   }
 }

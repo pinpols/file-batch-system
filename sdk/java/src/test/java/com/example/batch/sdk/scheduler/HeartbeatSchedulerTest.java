@@ -37,17 +37,21 @@ class HeartbeatSchedulerTest {
           .maxConcurrentTasks(4)
           .build();
 
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static ArgumentCaptor<Map<String, Object>> mapCaptor() {
+    return ArgumentCaptor.forClass((Class) Map.class);
+  }
+
   @Test
   void tickPostsHeartbeatWithDispatcherStats() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightCount()).thenReturn(2);
-    HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher);
+    try (HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
-    s.tick();
-
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).heartbeat(eq("w-1"), body.capture());
     assertThat(body.getValue())
         .containsEntry("tenantId", "tx")
@@ -67,12 +71,11 @@ class HeartbeatSchedulerTest {
     WorkerIdentity identity =
         new WorkerIdentity(
             "sdk-self-hosted", "host-a", "10.0.0.1", "12345", List.of("echo", "sleep"), "build-9");
-    HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher, identity);
+    try (HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher, identity)) {
+      s.tick();
+    }
 
-    s.tick();
-
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).heartbeat(eq("w-1"), body.capture());
     assertThat(body.getValue())
         .containsEntry("workerGroup", "sdk-self-hosted")
@@ -88,12 +91,11 @@ class HeartbeatSchedulerTest {
     // 向后兼容老调用方:identity 传 null 时仅发原有 5 字段,不抛 NPE。
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher);
+    try (HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher)) {
+      s.tick();
+    }
 
-    s.tick();
-
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).heartbeat(eq("w-1"), body.capture());
     assertThat(body.getValue())
         .doesNotContainKeys(
@@ -105,10 +107,10 @@ class HeartbeatSchedulerTest {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.heartbeat(anyString(), any())).thenThrow(new IOException("503"));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher);
-
-    s.tick(); // 不应抛
-    s.tick();
+    try (HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher)) {
+      s.tick(); // 不应抛
+      s.tick();
+    }
 
     verify(http, atLeastOnce()).heartbeat(anyString(), any());
   }
@@ -117,9 +119,10 @@ class HeartbeatSchedulerTest {
   void closeIsIdempotent() {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher);
-    s.close();
-    s.close(); // 不应抛
+    try (HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher)) {
+      s.close();
+      s.close(); // 不应抛
+    }
   }
 
   @Test
@@ -130,9 +133,9 @@ class HeartbeatSchedulerTest {
     ScheduledExecutorService exec = mock(ScheduledExecutorService.class);
     BatchPlatformClientConfig fastCfg =
         cfg.toBuilder().heartbeatInterval(Duration.ofMillis(123)).build();
-    HeartbeatScheduler s = new HeartbeatScheduler(fastCfg, http, dispatcher, null, exec);
-
-    s.start();
+    try (HeartbeatScheduler s = new HeartbeatScheduler(fastCfg, http, dispatcher, null, exec)) {
+      s.start();
+    }
 
     verify(exec)
         .scheduleWithFixedDelay(any(Runnable.class), eq(123L), eq(123L), eq(TimeUnit.MILLISECONDS));

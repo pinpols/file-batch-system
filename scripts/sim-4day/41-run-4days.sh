@@ -6,19 +6,33 @@
 set -uo pipefail
 START="${1:-2026-06-06}"; BASE="${2:-300}"; WAIT="${WAIT:-150}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+# shellcheck source=scripts/lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
+SIM4DAY_LOG_DIR="${SIM4DAY_LOG_DIR:-$(log_run_dir "$ROOT" sim-4day "sim-4day-4days-${START//-/}")}"
+log_link_dir "$ROOT" sim-4day "$SIM4DAY_LOG_DIR"
+exec > >(tee -a "$SIM4DAY_LOG_DIR/00-run-4days.log") 2>&1
 nextday(){ python3 -c "import datetime as d;print((d.date.fromisoformat('$1')+d.timedelta(days=$2)).isoformat())"; }
 
 echo "########## 4 天批量调度 起=$START 基准行=$BASE 每日间隔=${WAIT}s ##########"
+echo "########## 日志目录: $SIM4DAY_LOG_DIR ##########"
 # Day0 先投大文件一次(演示大文件摄取)
 echo "==> Day0 预热:投放大文件到 MinIO ingress"
-ROWS_BIG=${ROWS_BIG:-800000} bash "$HERE/30-gen-bigfiles.sh" "${START//-/}" || true
+ROWS_BIG=${ROWS_BIG:-800000} bash "$HERE/30-gen-bigfiles.sh" "${START//-/}" \
+  > "$SIM4DAY_LOG_DIR/01-day0-bigfiles.log" 2>&1 || true
 
 for d in 0 1 2 3; do
   BD=$(nextday "$START" "$d")
   ROWS=$(( BASE * (d+1) ))   # 逐日递增:300/600/900/1200
   echo; echo "########## ===== DAY $d  bizDate=$BD  rows/import=$ROWS ===== ##########"
-  ROWS="$ROWS" bash "$HERE/40-run-day.sh" "$BD"
+  day_log="$SIM4DAY_LOG_DIR/$(printf '%02d' $((d + 2)))-day${d}-${BD}.log"
+  SIM4DAY_LOG_DIR="$SIM4DAY_LOG_DIR" SIM4DAY_CAPTURED=1 ROWS="$ROWS" bash "$HERE/40-run-day.sh" "$BD" \
+    > "$day_log" 2>&1
+  echo "==> DAY $d 触发日志: $day_log"
   echo "==> 等 ${WAIT}s 让 worker 跑完当天…"; sleep "$WAIT"
-  bash "$HERE/50-watch.sh" || true
+  watch_log="$SIM4DAY_LOG_DIR/$(printf '%02d' $((d + 2)))-day${d}-${BD}-watch.log"
+  SIM4DAY_LOG_DIR="$SIM4DAY_LOG_DIR" SIM4DAY_CAPTURED=1 bash "$HERE/50-watch.sh" \
+    > "$watch_log" 2>&1 || true
+  echo "==> DAY $d 观测快照: $watch_log"
 done
 echo "########## 4 天驱动结束。用 bash 50-watch.sh --loop 持续观测 ##########"

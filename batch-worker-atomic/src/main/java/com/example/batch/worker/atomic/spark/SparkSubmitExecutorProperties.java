@@ -14,7 +14,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * {@link #appResourceAllowlist} / {@link #allowedConfKeyPrefixes} 这两道安全白名单。
  *
  * <p>定位:本执行器只「提交并跟踪」一个 Spark 作业(spark-submit 子进程 / client 模式),**不管理 Spark 集群** (资源/扩缩容是外部基础设施,见
- * ADR-027)。cluster 模式的 driver 在远端,取消 / 状态轮询需另接(见执行器 TODO)。
+ * ADR-027)。cluster 模式的 driver 在远端,取消 / 状态轮询需另接(见执行器限制说明)。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.executors.spark-submit")
@@ -32,7 +32,7 @@ public class SparkSubmitExecutorProperties {
   /** 默认 --master(参数未指定时用);为空则要求参数必须给 master。 */
   private String defaultMaster = "";
 
-  /** 默认 --deploy-mode(client / cluster)。client 模式 driver 在本子进程,可取消;cluster 模式见执行器 TODO。 */
+  /** 默认 --deploy-mode(client / cluster)。client 模式 driver 在本子进程,可取消;cluster 模式见执行器限制说明。 */
   private String defaultDeployMode = "client";
 
   /** 用户未配 timeoutSeconds 时的回退超时。 */

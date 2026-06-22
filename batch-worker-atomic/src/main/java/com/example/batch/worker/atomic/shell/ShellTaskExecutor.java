@@ -225,14 +225,13 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     return new ShellInvocation(command, args, timeout, env);
   }
 
-  @SuppressWarnings("unchecked")
   private static List<String> parseArgs(Object raw) {
     if (raw == null) {
       return List.of();
     }
-    if (raw instanceof List<?>) {
+    if (raw instanceof List<?> list) {
       List<String> out = new ArrayList<>();
-      for (Object o : (List<?>) raw) {
+      for (Object o : list) {
         if (o == null) {
           throw new ShellValidationException("args contains null element");
         }
@@ -243,16 +242,15 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     throw new ShellValidationException("parameters.args must be a list of strings");
   }
 
-  @SuppressWarnings("unchecked")
   private Map<String, String> parseEnv(Object raw) {
     if (raw == null) {
       return Map.of();
     }
-    if (!(raw instanceof Map<?, ?>)) {
+    if (!(raw instanceof Map<?, ?> map)) {
       throw new ShellValidationException("parameters.env must be a map of string→string");
     }
     Map<String, String> out = new LinkedHashMap<>();
-    for (Map.Entry<?, ?> e : ((Map<?, ?>) raw).entrySet()) {
+    for (Map.Entry<?, ?> e : map.entrySet()) {
       String k = String.valueOf(e.getKey());
       if (!props.getAllowedEnvKeys().contains(k)) {
         throw new ShellValidationException(

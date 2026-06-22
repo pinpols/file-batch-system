@@ -248,7 +248,7 @@ class LoadStepTest {
   void shouldBuildLoadContext_withImportPayloadFields() throws Exception {
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);
-    ImportPayload payload = mock();
+    ImportPayload payload = mockPayload();
     when(payload.batchNo()).thenReturn("BATCH-42");
     when(payload.bizType()).thenReturn("CUST");
     when(payload.templateCode()).thenReturn("T1");
@@ -283,9 +283,8 @@ class LoadStepTest {
 
   // ── helpers ──
 
-  private <T> T mock() {
-    return org.mockito.Mockito.mock(
-        (Class<T>) (Class<?>) com.example.batch.worker.imports.domain.ImportPayload.class);
+  private ImportPayload mockPayload() {
+    return org.mockito.Mockito.mock(ImportPayload.class);
   }
 
   private ImportJobContext baseContext() {

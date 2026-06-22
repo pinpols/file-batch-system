@@ -24,9 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.web.client.HttpServerErrorException;
@@ -53,7 +55,7 @@ import org.springframework.web.client.ResourceAccessException;
  * </ul>
  */
 @Slf4j
-public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
+public abstract class AbstractTaskConsumer implements WorkerLoadProvider, ApplicationContextAware {
 
   /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
   protected abstract AbstractWorkerLoop workerLoop();
@@ -103,9 +105,6 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
-  // CLAUDE.md §Java #3 豁免:本类是 abstract,5 个 @Component 子类均通过 super(3 参) 调用现有 ctor,
-  // 改 ctor 会破坏所有子类签名(不在本批清单内);optional 字段注入仅在父类生效,功能等价。
-  @Autowired(required = false)
   private WorkerKafkaSubscribeProperties subscribeProperties;
 
   private volatile Semaphore semaphore;
@@ -117,6 +116,12 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     this.meterRegistryProvider = meterRegistryProvider;
     this.maxConcurrentTasks = maxConcurrentTasks;
+  }
+
+  @Override
+  public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+    this.subscribeProperties =
+        applicationContext.getBeanProvider(WorkerKafkaSubscribeProperties.class).getIfAvailable();
   }
 
   /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */

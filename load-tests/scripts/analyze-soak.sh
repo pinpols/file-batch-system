@@ -124,7 +124,7 @@ echo "==> analyze-soak: 生成 $REPORT"
   echo '```'
   echo
   echo "> 跨日时间偏移 依赖 \`-Dbatch.testing.clock-offset\`;当前 BatchDateTimeSupport 未读该属性。"
-  echo "> 真正生效需在 Clock bean 上实现 offset 注入,见 plan TODO。"
+  echo "> 真正生效需在 Clock bean 上实现 offset 注入,见 docs/plans/r3-3-soak-tests.md 的阻塞说明。"
   echo
 
   # === 退出条件触发 ===

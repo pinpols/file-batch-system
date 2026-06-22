@@ -218,11 +218,6 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return new SqlInvocation(statements, ds, timeoutSec, autoCommit, allSelect);
   }
 
-  private static String stringParam(Map<String, Object> p, String key, String fallback) {
-    Object v = p.get(key);
-    return v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : fallback;
-  }
-
   /**
    * 解析最终要用的 dataSource bean 名,并对 param {@code dataSourceBean} 覆盖做白名单校验。
    *

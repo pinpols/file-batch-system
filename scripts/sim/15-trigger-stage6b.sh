@@ -22,12 +22,12 @@ export STORM_COUNT="${STORM_COUNT:-30}"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> preflight trigger stage6 job"
-if [[ "$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select count(*) from batch.job_definition where tenant_id='ta' and job_code='TA_PROCESS_STAGE4_EMPTY_SUCCESS' and enabled=true")" != "1" ]]; then
+if [[ "$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select count(*) from batch.job_definition where tenant_id='ta' and job_code='TA_PROCESS_STAGE4_EMPTY_SUCCESS' and enabled=true")" != "1" ]]; then
   echo "❌ missing TA_PROCESS_STAGE4_EMPTY_SUCCESS fixture; run scripts/sim/10-process-stage4.sh once or apply its fixture" >&2
   exit 1
 fi
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6b.log"
@@ -73,7 +73,7 @@ def launch(request_id, batch_key):
             raise RuntimeError(f"launch failed: {request_id}")
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-P", "pager=off"]
+    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -111,8 +111,8 @@ dedup_sql = (
     f"from batch.trigger_request where tenant_id='ta' and request_id='{dedup_id}'"
 )
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", dedup_sql
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", dedup_sql
 ], check=False)
 
 print("\n-- storm_status --", flush=True)
@@ -123,8 +123,8 @@ storm_sql = (
     "group by instance_status order by instance_status"
 )
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", storm_sql
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", storm_sql
 ], check=False)
 
 dedup_out = psql(dedup_sql.replace(" as trigger_rows", "").replace(" as instances", ""), tuples=True)

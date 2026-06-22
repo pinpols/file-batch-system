@@ -68,11 +68,11 @@ services:
       MANAGEMENT_SERVER_PORT: 18080
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/current/docker:/app/logs
       # logback-spring.xml prod profile 的 FRONTEND_FILE 硬编码写 /logs/frontend.log;
       # K8s 那边 helm 异常退出 emptyDir,docker-compose 这里要对齐,否则容器启动 logback 报
       # "Failed to create parent directories for [/logs/frontend.log]" 直接 crash。
-      - batch-app-logs:/logs
+      - ./logs/current/docker:/logs
     ports:
       - "${CONSOLE_API_PORT:-18080}:18080"
     networks:
@@ -135,7 +135,7 @@ services:
     ports:
       - "${TRIGGER_PORT:-18081}:18081"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/current/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -190,7 +190,7 @@ services:
     ports:
       - "${ORCHESTRATOR_PORT:-18082}:18082"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/current/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -248,7 +248,7 @@ services:
     ports:
       - "${WORKER_IMPORT_PORT:-18083}:18083"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/current/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -308,7 +308,7 @@ services:
     ports:
       - "${WORKER_EXPORT_PORT:-18084}:18084"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/current/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -368,7 +368,7 @@ services:
     ports:
       - "${WORKER_PROCESS_PORT:-18086}:18086"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/current/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -428,7 +428,7 @@ services:
     ports:
       - "${WORKER_DISPATCH_PORT:-18085}:18085"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/current/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -488,7 +488,7 @@ services:
     ports:
       - "${WORKER_ATOMIC_PORT:-18087}:18087"
     volumes:
-      - ./logs/docker:/app/logs
+      - ./logs/current/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -512,11 +512,3 @@ services:
 networks:
   batch-network:
     name: ${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network
-
-# 应用日志命名卷:替代原 `./logs/docker` bind 挂载。
-# CI 部署从 runner 工作区(非 Docker Desktop 共享路径)跑 up 时,bind 挂载的宿主机目录
-# 容器内不可写 → console-api 写 /logs/frontend.log 直接 crash。命名卷由 docker 管理、
-# 容器可写、与宿主机工作区路径无关(取日志用 docker logs / docker cp / 挂载该卷)。
-volumes:
-  batch-app-logs:
-    name: ${COMPOSE_PROJECT_NAME:-batch-platform}_app-logs

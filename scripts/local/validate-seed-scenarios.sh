@@ -31,8 +31,8 @@
 #
 # 前置: 需先加载 multi-tenant-seed 才覆盖 ta/tb/tc 场景:
 #   docker cp batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql \
-#     batch-postgres-primary:/tmp/ && docker exec batch-postgres-primary \
-#     psql -U batch_user -d batch_platform -f /tmp/multi-tenant-seed.sql
+#     "$PG_CONTAINER":/tmp/ && docker exec "$PG_CONTAINER" \
+#     psql -U "$PG_USER" -d "$PG_DB" -f /tmp/multi-tenant-seed.sql
 #
 # 环境变量:
 #   TRIGGER_PORT / ORCH_PORT / CONSOLE_PORT  服务端口(默认 18081/18082/18080)

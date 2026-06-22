@@ -18,13 +18,17 @@
 # 说明：
 #   - 按依赖顺序重启：orchestrator 必须在 trigger/console/worker 之前就绪
 #   - 若 orchestrator 在重启列表中，等它 UP 后再启动其他服务
-#   - 每次重启会覆盖对应模块日志（logs/app/<module>.log）
+#   - 每次重启会覆盖对应模块当前日志（logs/current/app/<module>.log，兼容 logs/app/<module>.log）
 # =============================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=../lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
+# shellcheck source=../lib/process.sh
+source "$ROOT/scripts/lib/process.sh"
 cd "$ROOT"
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
@@ -38,10 +42,10 @@ export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
 export LANG="$BATCH_LOCALE"
 export LC_ALL="$BATCH_LOCALE"
 
-LOG_DIR="$ROOT/logs/app"
+LOG_DIR="$(log_current_dir "$ROOT" app app)"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 CDS_DIR="$ROOT/build/cds"
-PID_FILE="$ROOT/logs/start-all.pids"
+PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
 mkdir -p "$LOG_DIR" "$CDS_DIR"
 
 # 与 start-all.sh 保持一致的本地 dev 启动加速参数（说明见 start-all.sh）
@@ -153,9 +157,9 @@ stop_module() {
   local port
   port="$(port_for "$name")"
   local pids
-  # 只停监听进程。纯 `lsof -ti tcp:$port` 还会返回连到该端口的客户端，
+  # 只停监听进程。纯端口连接扫描还可能返回连到该端口的客户端，
   # 重启时可能误杀依赖此服务的 worker。
-  pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  pids="$(process_listen_pids "$port")"
   if [ -n "$pids" ]; then
     echo "  停止 ${name}（端口 ${port}，pid=${pids}）"
     # shellcheck disable=SC2086
@@ -207,7 +211,7 @@ start_module() {
     -jar "$jar" --spring.profiles.active=local \
     >"$LOG_DIR/$name.log" 2>&1 &
   local pid=$!
-  echo "  已启动 $name pid=$pid → logs/app/$name.log"
+  echo "  已启动 $name pid=$pid → logs/current/app/$name.log（兼容 logs/app/$name.log）"
 
   # 更新 PID 文件（若存在）
   if [ -f "$PID_FILE" ]; then
@@ -233,7 +237,7 @@ wait_orchestrator() {
       return 0
     fi
   done
-  echo "ERROR: orchestrator 在超时时间内未就绪，请检查 logs/app/orchestrator.log" >&2
+  echo "ERROR: orchestrator 在超时时间内未就绪，请检查 logs/current/app/orchestrator.log" >&2
   exit 1
 }
 

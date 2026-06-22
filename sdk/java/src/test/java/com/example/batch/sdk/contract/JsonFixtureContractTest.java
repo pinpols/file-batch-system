@@ -409,7 +409,7 @@ class JsonFixtureContractTest {
     assertThat(paths).as("openapi paths").isNotNull();
 
     String methodLower = method.toLowerCase(Locale.ROOT);
-    Iterator<Map.Entry<String, JsonNode>> it = paths.fields();
+    Iterator<Map.Entry<String, JsonNode>> it = paths.properties().iterator();
     boolean matched = false;
     String matchedTemplate = null;
     while (it.hasNext()) {

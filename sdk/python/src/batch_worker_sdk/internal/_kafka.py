@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # 探针窗口,使 fail-fast 在探针感知前发生,让 BatchPlatformClient.start()
 # 把 PlatformError 透出给调用方 / 容器启动脚本,触发显式的"凭据错"信
 # 号而不是 OOM 风格的探针重启循环。
-# TODO(ADR-035): 后续可暴露为 BatchPlatformClientConfig 字段,允许租户
+# ADR-035 后续扩展:可暴露为 BatchPlatformClientConfig 字段,允许租户
 # 按部署环境调优;当前 hardcode 保守值,优先填上 fail-fast 缺口。
 KAFKA_START_TIMEOUT_S: float = 10.0
 

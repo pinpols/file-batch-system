@@ -13,7 +13,8 @@
 
 ## 日志位置
 
-- 应用容器的文件日志会落到 `./logs/docker/*.log`
+- 应用容器的文件日志会落到 `./logs/current/docker/*.log`
+- 兼容路径 `./logs/docker` 会指向 `./logs/current/docker`
 - 你仍然可以用 `docker compose logs -f <service>` 看容器标准输出
 
 ## 使用建议

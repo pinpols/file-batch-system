@@ -60,8 +60,8 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
   /**
    * 瞬时 DB 并发失败(死锁 / 锁获取超时,如并发 task-outcome 推进同一 job 多分区时的行锁竞争)→ 503 可重试, 而非落到 {@code Exception} 回退的
    * 500「unexpected exception」(语义=服务端 bug + 刷 ERROR 噪声)。 report / launch 等入口幂等(idempotency key + 状态机
-   * CAS),调用方(worker SDK §C)按 5xx 退避重投即收敛。 {@link TransientDataAccessException} 覆盖
-   * DeadlockLoserDataAccessException / CannotAcquireLockException / QueryTimeoutException 等一族瞬时错。
+   * CAS),调用方(worker SDK §C)按 5xx 退避重投即收敛。 {@link TransientDataAccessException}
+   * 覆盖死锁、锁获取失败、查询超时等一族瞬时错。
    */
   @ExceptionHandler(TransientDataAccessException.class)
   public ResponseEntity<CommonResponse<Void>> handleTransientDataAccess(

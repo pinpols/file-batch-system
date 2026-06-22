@@ -46,7 +46,7 @@ public class SqlTransformComputeSqlValidator {
   public String validateUserCheckSelect(String raw) {
     String sql = validate(raw, false);
     Statement statement = parse(sql);
-    List<String> tableNames = new TablesNamesFinder().getTableList(statement);
+    List<String> tableNames = List.copyOf(new TablesNamesFinder<Void>().getTables(statement));
     for (String tableName : tableNames) {
       if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase())) {
         throw BizException.of(
@@ -266,7 +266,7 @@ public class SqlTransformComputeSqlValidator {
   }
 
   private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
-    List<String> tableNames = new TablesNamesFinder().getTableList(statement);
+    List<String> tableNames = List.copyOf(new TablesNamesFinder<Void>().getTables(statement));
     for (String name : tableNames) {
       int dot = name.indexOf('.');
       if (dot <= 0) {

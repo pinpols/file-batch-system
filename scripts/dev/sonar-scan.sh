@@ -35,6 +35,8 @@ SONAR_ADMIN_PASS="admin"
 PROJECT_KEY="file-batch-system"
 PROJECT_NAME="File Batch System"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/process.sh
+source "${PROJECT_ROOT}/scripts/lib/process.sh"
 SCAN_TS="$(date +%Y-%m-%d_%H-%M-%S)"
 OUT_DIR="${PROJECT_ROOT}/reports/sonar/${SCAN_TS}"
 TOKEN_NAME="batch-scan-$(date +%s)"
@@ -68,7 +70,7 @@ elif docker ps -a --filter "name=${SONAR_CONTAINER}" --format '{{.Names}}' | gre
   docker start "$SONAR_CONTAINER"
 else
   # 检查端口是否被占用
-  if lsof -iTCP:"$SONAR_PORT" -sTCP:LISTEN &>/dev/null; then
+  if process_port_is_listening "$SONAR_PORT"; then
     error "Port ${SONAR_PORT} already in use. Set SONAR_PORT=<other> to override."
     exit 1
   fi
@@ -174,12 +176,27 @@ curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
 info "Step 5/5 — Exporting reports to reports/sonar/${SCAN_TS}/..."
 mkdir -p "$OUT_DIR"
 
-python3 - <<PYEOF
-import json, urllib.request, base64, csv, io, sys
+SONAR_PORT="$SONAR_PORT" \
+SONAR_ADMIN_USER="$SONAR_ADMIN_USER" \
+SONAR_ADMIN_PASS="$SONAR_ADMIN_PASS" \
+SONAR_URL="$SONAR_URL" \
+PROJECT_KEY="$PROJECT_KEY" \
+OUT_DIR="$OUT_DIR" \
+python3 - <<'PYEOF'
+import base64
+import csv
+import json
+import os
+import urllib.request
 from datetime import datetime
 
-BASE = "http://localhost:${SONAR_PORT}"
-AUTH = base64.b64encode(b"${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}").decode()
+BASE = f"http://localhost:{os.environ['SONAR_PORT']}"
+AUTH = base64.b64encode(
+    f"{os.environ['SONAR_ADMIN_USER']}:{os.environ['SONAR_ADMIN_PASS']}".encode()
+).decode()
+PROJECT_KEY = os.environ["PROJECT_KEY"]
+OUT_DIR = os.environ["OUT_DIR"]
+SONAR_URL = os.environ["SONAR_URL"]
 
 def get(path):
     req = urllib.request.Request(BASE + path)
@@ -190,14 +207,14 @@ def get(path):
 all_issues = []
 page = 1
 while True:
-    data = get(f"/api/issues/search?componentKeys=${PROJECT_KEY}&ps=500&p={page}&s=SEVERITY&asc=false")
+    data = get(f"/api/issues/search?componentKeys={PROJECT_KEY}&ps=500&p={page}&s=SEVERITY&asc=false")
     all_issues += data["issues"]
     if len(all_issues) >= data["total"]:
         break
     page += 1
 
 # ── CSV ──────────────────────────────────────────────────────────────────────
-csv_path = "${OUT_DIR}/sonar-report.csv"
+csv_path = f"{OUT_DIR}/sonar-report.csv"
 with open(csv_path, "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
     w.writerow(["severity", "type", "component", "line", "rule", "message", "status", "effort"])
@@ -209,7 +226,7 @@ with open(csv_path, "w", newline="", encoding="utf-8") as f:
         ])
 
 # ── 汇总指标 ─────────────────────────────────────────────────────────────────
-metrics = get("/api/measures/component?component=${PROJECT_KEY}"
+metrics = get(f"/api/measures/component?component={PROJECT_KEY}"
     "&metricKeys=bugs,vulnerabilities,code_smells,security_hotspots,"
     "coverage,duplicated_lines_density,ncloc,sqale_index,"
     "reliability_rating,security_rating,sqale_rating")
@@ -226,11 +243,11 @@ SEVS = ["BLOCKER","CRITICAL","MAJOR","MINOR","INFO"]
 RATING = {"1.0":"A","2.0":"B","3.0":"C","4.0":"D","5.0":"E"}
 
 # ── Markdown 报告 ─────────────────────────────────────────────────────────────
-md_path = "${OUT_DIR}/sonar-report.md"
+md_path = f"{OUT_DIR}/sonar-report.md"
 now = datetime.now().strftime("%Y-%m-%d %H:%M")
 with open(md_path, "w", encoding="utf-8") as f:
     f.write(f"# SonarQube Scan Report — File Batch System\n\n")
-    f.write(f"扫描时间：{now}   |   SonarQube: ${SONAR_URL}/dashboard?id=${PROJECT_KEY}\n\n")
+    f.write(f"扫描时间：{now}   |   SonarQube: {SONAR_URL}/dashboard?id={PROJECT_KEY}\n\n")
     f.write("## 整体指标\n\n")
     f.write("| 指标 | 数值 | 评级 |\n|---|---|---|\n")
     f.write(f"| 代码行数（NCLOC） | {m.get('ncloc','?')} | — |\n")

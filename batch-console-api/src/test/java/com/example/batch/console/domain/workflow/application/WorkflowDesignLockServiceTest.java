@@ -96,7 +96,8 @@ class WorkflowDesignLockServiceTest {
   @DisplayName("renew:持锁人续期(Lua 返回 1) → expiresAt 推到 now + 5min")
   void shouldRenew_whenOwner() {
     // renew 走 RENEW_SCRIPT(GET+校验+SET 原子),owner 命中返回 1
-    when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any()))
+    when(redisTemplate.execute(
+            org.mockito.ArgumentMatchers.<RedisScript<Long>>any(), anyList(), any(), any(), any()))
         .thenReturn(1L);
 
     LockHolder holder = service.renew(TENANT, DEF_ID, USER_ALICE);
@@ -108,7 +109,9 @@ class WorkflowDesignLockServiceTest {
   @Test
   @DisplayName("release:持锁人释放(Lua 返回 1) → 不抛异常")
   void shouldRelease_whenOwner() {
-    when(redisTemplate.execute(any(RedisScript.class), anyList(), any())).thenReturn(1L);
+    when(redisTemplate.execute(
+            org.mockito.ArgumentMatchers.<RedisScript<Long>>any(), anyList(), any()))
+        .thenReturn(1L);
 
     service.release(TENANT, DEF_ID, USER_ALICE);
   }
@@ -116,7 +119,9 @@ class WorkflowDesignLockServiceTest {
   @Test
   @DisplayName("release:非持锁人(Lua 返回 -1) → FORBIDDEN")
   void shouldThrowForbidden_whenReleaseByNonOwner() {
-    when(redisTemplate.execute(any(RedisScript.class), anyList(), any())).thenReturn(-1L);
+    when(redisTemplate.execute(
+            org.mockito.ArgumentMatchers.<RedisScript<Long>>any(), anyList(), any()))
+        .thenReturn(-1L);
     // FORBIDDEN 错误消息读当前持锁人(best-effort)
     when(valueOps.get(EXPECTED_KEY)).thenReturn(serialize(USER_BOB, fixedNow.plusSeconds(60)));
 
@@ -128,7 +133,8 @@ class WorkflowDesignLockServiceTest {
   @Test
   @DisplayName("renew:锁已过期(Lua 返回 0) → CONFLICT,让前端重新 acquire")
   void shouldThrowConflict_whenRenewExpired() {
-    when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any()))
+    when(redisTemplate.execute(
+            org.mockito.ArgumentMatchers.<RedisScript<Long>>any(), anyList(), any(), any(), any()))
         .thenReturn(0L);
 
     assertThatThrownBy(() -> service.renew(TENANT, DEF_ID, USER_ALICE))
