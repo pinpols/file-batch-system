@@ -74,11 +74,15 @@ jobs:
           # PR base 判 diff;非 PR 事件(merge_group / push)无 base,filter 视为 changed=true
           # (即 code=true / docs-only=false),保证安全 — 回退跑 unit。
           #
-          # `code` = 平台 Java 源 + schema + 构建/CI 配置。只有命中才跑 3 个 unit-it。
+          # `code` = 平台 Java 源 + schema + 构建配置。只有命中才跑 3 个 unit-it。
           # **故意排除**(纯改这些 → docs-only=true → 跳 3 类测试,只保 static-checks + security):
           #   - sdk/**            → 走专用 sdk-contract-parity.yml / sdk-python.yml(path-triggered)
           #   - scripts/**        → sh/sql/py 脚本;其安全由 static-checks(DB 脚本 lint 等)兜
-          #   - docs/** / *.md    → push 事件已 paths-ignore;PR 不在 code filter 内
+          #   - docs/** / *.md    → 不在 code filter 内
+          #   - .github/workflows/** / .github/actions/**(2026-06-22 移除)
+          #       → workflow/composite-action 的 YAML + shellcheck 由专用 workflow-lint
+          #         (actionlint + zizmor)校验,跑 java unit 无意义。此前误含 → 纯 CI PR
+          #         会触发全套 java unit。移除后回归「按需」:改 workflow 不再跑 maven。
           # db/migration/** 保留:Flyway 平台 schema,IT 跑在其上,语义回归只有 IT 逮得到。
           filters: |
             code:
@@ -86,8 +90,6 @@ jobs:
               - 'db/migration/**'
               - 'pom.xml'
               - '**/pom.xml'
-              - '.github/workflows/**'
-              - '.github/actions/**'
 
   # ===========================================================================
   # Job 1: static-checks — yml/dict/openapi/PMD/Spotless 等静态校验
