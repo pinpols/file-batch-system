@@ -81,11 +81,12 @@ jobs:
             echo "BATCH_PLATFORM_DB_PASSWORD=batch_pass_123"
             echo "BATCH_BUSINESS_DB_PASSWORD=batch_pass_123"
             echo "BATCH_INTERNAL_SECRET=ci-e2e-internal-secret-0123456789abcdef"
-            # 容器**不能**用 local profile:application-local.yml 硬编码 localhost:15432
-            # (host 地址),容器内连不上 DB。换成非 local profile(无 application-docker.yml
-            # → 只走 application.yml + batch-defaults 的 env 驱动 URL,compose 已把这些 env
-            # 默认成容器网络地址 postgres-primary/kafka/minio)。
-            echo "SPRING_PROFILES_ACTIVE=docker"
+            # 容器用 ci profile(BatchProfileSupport.NON_PROD_PROFILES 之一 → 不触发
+            # 强密钥 fail-fast;且无 application-ci.yml → 只走 application.yml + batch-defaults
+            # 的 env 驱动 URL,compose 已把这些 env 默认成容器地址 postgres-primary/kafka/minio)。
+            # ⚠ 不能用 local(application-local.yml 硬编码 localhost:15432 + bypass-mode=true,
+            # 容器连不上 DB 且会绕过鉴权);不能用未知名如 docker(fail-secure 当 prod → 强密钥拒启)。
+            echo "SPRING_PROFILES_ACTIVE=ci"
           } >> .env.local
 
       - name: Use Maven Central for image build (CI runners)
