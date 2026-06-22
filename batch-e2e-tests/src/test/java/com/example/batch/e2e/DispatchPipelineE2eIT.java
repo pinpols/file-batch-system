@@ -16,6 +16,7 @@ import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -66,49 +67,9 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
 
   @Test
   void dispatchJobRunsThroughKafkaClaimAndReportsSuccess() {
-    jdbcTemplate.update(
-        """
-        insert into batch.file_channel_config (
-            tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
-            config_json, receipt_policy, timeout_seconds, enabled
-        )
-        select
-            ?, ?, ?, 'LOCAL', null, 'NONE',
-            jsonb_build_object(
-                'target_endpoint', '/tmp/batch-e2e-dispatch-out',
-                'receipt_policy', 'NONE',
-                'channel_type', 'LOCAL',
-                'channel_code', 'e2e_local_dispatch'
-            ),
-            'NONE', 10, true
-        where not exists (
-            select 1 from batch.file_channel_config
-            where tenant_id = ? and channel_code = ?
-        )
-        """,
-        TENANT,
-        "e2e_local_dispatch",
-        "E2E local dispatch",
-        TENANT,
-        "e2e_local_dispatch");
-
+    upsertLocalChannel("e2e_local_dispatch");
     String path = "/tmp/e2e-dispatch-" + System.nanoTime() + ".json";
-    Long fileId =
-        jdbcTemplate.queryForObject(
-            """
-            insert into batch.file_record (
-                tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
-                file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
-                storage_path, source_type, file_status, biz_date, trace_id
-            ) values (
-                ?, 'e2e-dis', 'OUTPUT', 'OUTPUT', 'e2e.json', 'e2e.json', 'json',
-                'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
-                ?, 'SYSTEM', 'GENERATED', date '2026-01-15', 'e2e-dis-trace'
-            ) returning id
-            """,
-            Long.class,
-            TENANT,
-            path);
+    Long fileId = insertGeneratedFile("e2e-dis", "e2e.json", path, "e2e-dis-trace");
     assertThat(fileId).isNotNull();
 
     LaunchSeed seed =
@@ -164,5 +125,143 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         .expectedMinAuditCount(1)
         .build()
         .verify();
+  }
+
+  @Test
+  void bundleDispatchExpandsAndEachPartitionRunsThroughWorker() {
+    upsertLocalChannel("e2e_local_dispatch");
+    Long fileOne =
+        insertGeneratedFile(
+            "e2e-bundle-dis-1",
+            "e2e-bundle-1.json",
+            "/tmp/e2e-bundle-dispatch-" + System.nanoTime() + "-1.json",
+            "e2e-bundle-dis-trace-1");
+    Long fileTwo =
+        insertGeneratedFile(
+            "e2e-bundle-dis-2",
+            "e2e-bundle-2.json",
+            "/tmp/e2e-bundle-dispatch-" + System.nanoTime() + "-2.json",
+            "e2e-bundle-dis-trace-2");
+
+    LaunchSeed seed =
+        E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
+            jdbcTemplate, TENANT, "BUNDLE_DISPATCH", "dispatch");
+
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("receiptCode", "R-E2E-BUNDLE-DISPATCH");
+    params.put("ackRequired", false);
+    params.put("forceRetry", false);
+    params.put(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", fileOne, "targetRef", "e2e_local_dispatch"),
+            Map.of("sourceFileId", fileTwo, "targetRef", "e2e_local_dispatch")));
+
+    launchService.launch(
+        new LaunchRequest(
+            TENANT,
+            seed.jobCode(),
+            LocalDate.of(2026, 1, 15),
+            TriggerType.EVENT,
+            seed.requestId(),
+            "e2e-tr-bundle-dispatch",
+            params));
+
+    e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+    await()
+        .atMost(Duration.ofSeconds(180))
+        .pollInterval(Duration.ofMillis(250))
+        .untilAsserted(
+            () -> {
+              Integer successfulTasks =
+                  jdbcTemplate.queryForObject(
+                      """
+                      select count(*)::int from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ? and t.task_status = 'SUCCESS'
+                      """,
+                      Integer.class,
+                      TENANT,
+                      seed.dedupKey());
+              assertThat(successfulTasks).isEqualTo(2);
+            });
+
+    Integer dispatchedFiles =
+        jdbcTemplate.queryForObject(
+            """
+            select count(*)::int from batch.file_record
+            where tenant_id = ? and id in (?, ?) and file_status = 'DISPATCHED'
+            """,
+            Integer.class,
+            TENANT,
+            fileOne,
+            fileTwo);
+    assertThat(dispatchedFiles).isEqualTo(2);
+
+    Integer receipts =
+        jdbcTemplate.queryForObject(
+            """
+            select count(*)::int from batch.file_dispatch_record
+            where tenant_id = ? and file_id in (?, ?) and channel_code = ?
+            """,
+            Integer.class,
+            TENANT,
+            fileOne,
+            fileTwo,
+            "e2e_local_dispatch");
+    assertThat(receipts).isEqualTo(2);
+  }
+
+  private void upsertLocalChannel(String channelCode) {
+    jdbcTemplate.update(
+        """
+        insert into batch.file_channel_config (
+            tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+            config_json, receipt_policy, timeout_seconds, enabled
+        )
+        select
+            ?, ?, ?, 'LOCAL', null, 'NONE',
+            jsonb_build_object(
+                'target_endpoint', '/tmp/batch-e2e-dispatch-out',
+                'receipt_policy', 'NONE',
+                'channel_type', 'LOCAL',
+                'channel_code', ?
+            ),
+            'NONE', 10, true
+        where not exists (
+            select 1 from batch.file_channel_config
+            where tenant_id = ? and channel_code = ?
+        )
+        """,
+        TENANT,
+        channelCode,
+        "E2E local dispatch",
+        channelCode,
+        TENANT,
+        channelCode);
+  }
+
+  private Long insertGeneratedFile(
+      String fileCode, String fileName, String storagePath, String traceId) {
+    return jdbcTemplate.queryForObject(
+        """
+        insert into batch.file_record (
+            tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
+            file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
+            storage_path, source_type, file_status, biz_date, trace_id
+        ) values (
+            ?, ?, 'OUTPUT', 'OUTPUT', ?, ?, 'json',
+            'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
+            ?, 'SYSTEM', 'GENERATED', date '2026-01-15', ?
+        ) returning id
+        """,
+        Long.class,
+        TENANT,
+        fileCode,
+        fileName,
+        fileName,
+        storagePath,
+        traceId);
   }
 }
