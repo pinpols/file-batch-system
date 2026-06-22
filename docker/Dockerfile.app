@@ -32,9 +32,9 @@ COPY batch-worker-export/pom.xml batch-worker-export/pom.xml
 COPY batch-worker-process/pom.xml batch-worker-process/pom.xml
 COPY batch-worker-dispatch/pom.xml batch-worker-dispatch/pom.xml
 COPY batch-worker-atomic/pom.xml batch-worker-atomic/pom.xml
-COPY batch-worker-sdk/pom.xml batch-worker-sdk/pom.xml
-COPY batch-worker-sdk-spring-boot-starter/pom.xml batch-worker-sdk-spring-boot-starter/pom.xml
-COPY batch-worker-sdk-testkit/pom.xml batch-worker-sdk-testkit/pom.xml
+COPY sdk/java/pom.xml sdk/java/pom.xml
+COPY sdk/java-spring/pom.xml sdk/java-spring/pom.xml
+COPY sdk/java-testkit/pom.xml sdk/java-testkit/pom.xml
 COPY batch-e2e-tests/pom.xml batch-e2e-tests/pom.xml
 
 # m2 cache mount(id 命名以便跨 compose build 复用同一份;Portainer/手动 build 都行)
