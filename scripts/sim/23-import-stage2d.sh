@@ -27,12 +27,12 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> apply bootstrap(XML import runtime config)"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2d-reset-errors.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2d.log"
@@ -51,8 +51,8 @@ START_TS = os.environ["START_TS"].strip()
 
 def psql(db, sql, tuples=False):
     args = [
-        "docker", "exec", "batch-postgres-primary", "psql",
-        "-U", "batch_user", "-d", db, "-P", "pager=off",
+        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql",
+        "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db, "-P", "pager=off",
     ]
     if tuples:
         args += ["-t", "-A"]
@@ -111,7 +111,7 @@ def launch(label, content, batch_no):
 def wait_for(rid, expected):
     deadline = time.time() + 180
     while time.time() < deadline:
-        out = psql("batch_platform", (
+        out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
             "select coalesce(i.instance_status,'') || '|' || coalesce(t.task_status,'') || '|' || coalesce(t.error_code,'') "
             "from batch.trigger_request tr "
             "left join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -186,8 +186,8 @@ over_status = wait_for(rid_over, "FAILED")
 
 print("\n-- job_status --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
     "select tr.request_id,i.id,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -197,8 +197,8 @@ subprocess.run([
 
 print("\n-- file_records --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
     "select fr.id,fr.file_status,fr.metadata_json->>'badRecordCount' as bad_records,"
     "fr.metadata_json->>'skippedCount' as skipped,fr.metadata_json->>'validatedCount' as validated,"
     "fr.metadata_json->>'loadedCount' as loaded,fr.metadata_json->>'skipThresholdExceeded' as threshold_exceeded "
@@ -211,8 +211,8 @@ subprocess.run([
 
 print("\n-- error_records --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
     "select tr.request_id,er.record_no,er.error_code,er.error_stage,er.is_skipped,er.skip_action "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -222,15 +222,15 @@ subprocess.run([
     f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,er.record_no,er.id"
 ], check=False)
 
-loaded_ok = (psql("batch_business", (
+loaded_ok = (psql(os.environ.get("BUSINESS_DB", "batch_business"), (
     "select count(*) from biz.customer_account "
     "where tenant_id='ta' and customer_no='S2DSKIPOK001'"
 ), tuples=True).stdout or "").strip()
-loaded_bad = (psql("batch_business", (
+loaded_bad = (psql(os.environ.get("BUSINESS_DB", "batch_business"), (
     "select count(*) from biz.customer_account "
     "where tenant_id='ta' and customer_no in ('S2DSKIPBAD001','S2DSKIPEXBAD001','S2DSKIPEXBAD002','S2DSKIPEXOK001')"
 ), tuples=True).stdout or "").strip()
-error_summary = (psql("batch_platform", (
+error_summary = (psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
     "select count(*) filter (where tr.request_id='" + rid_under + "' and er.is_skipped) || '|' || "
     "count(*) filter (where tr.request_id='" + rid_over + "' and er.is_skipped) "
     "from batch.trigger_request tr "

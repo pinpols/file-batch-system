@@ -41,7 +41,7 @@ with open(PARAMS_FILE, "r", encoding="utf-8") as fh:
 def psql(sql, tuples=False):
     args = ["docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PLATFORM_DB, "-P", "pager=off"]
     if tuples:
-        args += ["-t", "-A"]
+        args += ["-t", "-A", "-F", "\x1f"]
     args += ["-c", sql]
     return subprocess.run(args, check=False, capture_output=True, text=True)
 
@@ -160,21 +160,21 @@ status_sql = (
     "order by tr.request_id,t.id"
 )
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", status_sql
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", status_sql
 ], check=False)
 
 out = psql(
     "select "
-    f"(select i.instance_status from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id where tr.request_id='{rid_http}') || '|' || "
-    f"(select i.instance_status || ':' || coalesce(t.error_code,'') || ':' || coalesce(t.failure_class,'') from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id join batch.job_task t on t.job_instance_id=i.id where tr.request_id='{rid_timeout}' order by t.id desc limit 1) || '|' || "
+    f"(select i.instance_status from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id where tr.request_id='{rid_http}'), "
+    f"(select i.instance_status || ':' || coalesce(t.error_code,'') || ':' || coalesce(t.failure_class,'') from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id join batch.job_task t on t.job_instance_id=i.id where tr.request_id='{rid_timeout}' order by t.id desc limit 1), "
     f"(select i.instance_status || ':' || t.task_status || ':' || t.cancel_requested::text from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id join batch.job_task t on t.job_instance_id=i.id where tr.request_id='{rid_cancel}' order by t.id desc limit 1)",
     tuples=True,
 )
 summary = (out.stdout or "").strip()
-print(f"\n-- assertion_summary --\n{summary}|cancelHttp={cancel_http}", flush=True)
+print(f"\n-- assertion_summary --\n{summary.replace(chr(31), '|')}|cancelHttp={cancel_http}", flush=True)
 
-parts = summary.split("|")
+parts = summary.split("\x1f")
 if len(parts) != 3:
     print("❌ Atomic Stage5c malformed summary", flush=True)
     sys.exit(1)

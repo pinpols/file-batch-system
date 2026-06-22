@@ -4,19 +4,24 @@
 #     体积可观(默认 customer 80万行≈70MB / transaction 150万行≈120MB / risk 50万行≈30MB)。
 # 用法: bash 30-gen-bigfiles.sh [bizDate YYYYMMDD]
 set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 BDC="${1:-$(date +%Y%m%d)}"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-MC(){ docker exec -i batch-minio mc "$@"; }
-docker exec batch-minio mc alias set local http://localhost:9000 minioadmin minioadmin123 >/dev/null 2>&1 || true
+MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
+MC_ALIAS="${MC_ALIAS:-local}"
+MC(){ docker exec -i "$MINIO_CONTAINER" mc "$@"; }
+docker exec "$MINIO_CONTAINER" mc alias set "$MC_ALIAS" http://localhost:9000 "$BATCH_S3_ACCESS_KEY" "$BATCH_S3_SECRET_KEY" >/dev/null 2>&1 || true
 
 gen_put(){ # tenant fname header rows rowfmt
   local t="$1" f="$2" header="$3" rows="$4" fmt="$5"
   echo "==> 生成 $f ($rows 行)…"
   { echo "$header"; awk "BEGIN{for(i=1;i<=$rows;i++) printf \"$fmt\n\", i,i,i,i,i}"; } > "$TMP/$f"
   local sz; sz=$(du -h "$TMP/$f" | cut -f1)
-  docker cp "$TMP/$f" batch-minio:/tmp/"$f" >/dev/null 2>&1
-  docker exec batch-minio mc cp /tmp/"$f" "local/batch-dev/ingress/$t/$f" >/dev/null 2>&1
-  docker exec batch-minio rm -f /tmp/"$f" >/dev/null 2>&1
+  docker cp "$TMP/$f" "$MINIO_CONTAINER":/tmp/"$f" >/dev/null 2>&1
+  docker exec "$MINIO_CONTAINER" mc cp /tmp/"$f" "$MC_ALIAS/$BATCH_S3_BUCKET/ingress/$t/$f" >/dev/null 2>&1
+  docker exec "$MINIO_CONTAINER" rm -f /tmp/"$f" >/dev/null 2>&1
   echo "    ✓ ingress/$t/$f  ($sz)"
   rm -f "$TMP/$f"
 }
@@ -26,4 +31,4 @@ gen_put ta "ta-customer-BIG-${BDC}.csv" "customer_no,customer_name,customer_type
 gen_put tb "tb-transaction-BIG-${BDC}.csv" "txn_no,account_no,txn_type,amount,currency_code,txn_date,remark" "$BIGT" "TB-BIG-%010d,ACC%012d,DEPOSIT,%d.00,CNY,big-%d-%d"
 gen_put tc "tc-risk-BIG-${BDC}.csv" "entity_id,entity_type,score_value,score_band,score_date,model_version" "$BIGR" "TC-BIG-%08d,CUSTOMER,%d,HIGH,2026-06-06,v%d-%d-%d"
 echo "==> 大文件已投放。等扫描器(~30-90s)后 file_record 会登记为 RECEIVED(大体积对象)。"
-echo "    查看: docker exec batch-minio mc ls --recursive local/batch-dev/ingress/ | grep BIG"
+echo "    查看: docker exec $MINIO_CONTAINER mc ls --recursive $MC_ALIAS/$BATCH_S3_BUCKET/ingress/ | grep BIG"

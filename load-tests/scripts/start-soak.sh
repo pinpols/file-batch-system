@@ -8,7 +8,7 @@
 #   3) 跨日时间偏移:-Dbatch.testing.clock-offset=${CLOCK_OFFSET}
 #       注意:BatchDateTimeSupport 当前使用注入的 Clock bean,不读该属性。
 #       本脚本仍透传该 -D,等后续 Clock bean 实现 offset 支持后无需改脚本。
-#       详见 plan TODO 段。
+#       详见 docs/plans/r3-3-soak-tests.md 的阻塞说明。
 #
 # 用法:
 #   SOAK_RUN_ID=soak-... CLOCK_OFFSET=+12h bash load-tests/scripts/start-soak.sh
