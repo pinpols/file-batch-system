@@ -4,7 +4,7 @@
 -- 见 docs/plans/multi-tenant-isolation-plan-2026-05-31.md §Phase A
 -- 见 docs/runbook/multi-tenant-rls.md
 --
--- 目标:在 biz.* 10 张表上加 PostgreSQL RLS,DB 层强制 `tenant_id` 过滤,
+-- 目标:在 biz.* 9 张表上加 PostgreSQL RLS,DB 层强制 `tenant_id` 过滤,
 --      杜绝「应用 SQL bug → 跨租户数据泄露」。
 --
 -- 部署位置:batch_business 库(同 scripts/db/business/create_biz_tables.sql)。
@@ -79,7 +79,6 @@ DECLARE
   t TEXT;
   tables TEXT[] := ARRAY[
     'biz.customer_account',
-    'biz.customer_processed',
     'biz.process_account_summary',
     'biz.process_event_copy',
     'biz.process_order_event',

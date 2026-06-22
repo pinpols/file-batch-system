@@ -26,7 +26,6 @@ DECLARE
   t TEXT;
   tables TEXT[] := ARRAY[
     'biz.customer_account',
-    'biz.customer_processed',
     'biz.process_account_summary',
     'biz.process_event_copy',
     'biz.process_order_event',
@@ -73,5 +72,4 @@ END $$;
 -- 验证
 -- SELECT schemaname, tablename, policyname FROM pg_policies
 --   WHERE schemaname IN ('biz','batch') AND policyname='tenant_isolation_strict';
--- 期望:10 张 biz 表(含 process_event_copy)+ 1 张 batch.process_staging
---   注:customer_processed 若环境未建则按存在性守护跳过,期望张数相应减 1。
+-- 期望:9 张 biz 表(含 process_event_copy)+ 1 张 batch.process_staging
