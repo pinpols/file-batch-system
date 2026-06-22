@@ -142,7 +142,10 @@ class SdkPlatformContractTest {
     Map<String, Object> body = reports.get(0);
     assertThat(body.get("success")).isEqualTo(false);
     assertThat(body).containsEntry("errorCode", "IllegalStateException");
-    assertThat(body).containsEntry("resultSummary", "boom");
+    // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是裸串(否则平台解析 500)
+    assertThat(body.get("resultSummary").toString())
+        .contains("\"code\":\"IllegalStateException\"")
+        .contains("\"message\":\"boom\"");
   }
 
   // ─── 公用 helpers ────────────────────────────────────────────────────────

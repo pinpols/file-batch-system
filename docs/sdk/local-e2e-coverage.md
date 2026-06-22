@@ -48,7 +48,7 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 | Go | ✅ 已接(kafka adapter) | ✅ | ✅ **terminal SUCCESS** | #655 + #2/#3/#4 全修,本地实测绿(参照实现) |
 | Python | ✅ 已接(auto-build) | ✅ | ✅ **terminal SUCCESS** | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名 + #5(补 base-ATOMIC handler)全修,本地实测绿 |
 | TypeScript | ✅ 已接(kafkajs adapter) | ✅ | ✅ **terminal SUCCESS** | #2(node-direct regex)+#4(report-json)+样例 import 路径(off-by-one)+harness 装 SDK kafkajs +样例 transport 补 tenantId/workerCode(claim 404 根因:HttpTransport 缺这俩→claim body tenantId=undefined→selectById(null)→404)全修,本地实测绿 |
-| Java | ✅ 已接(SDK consumer) | ✅(#655) | 🔲 | **默认 pattern 是 tenant-first(`batch.task.dispatch.tenant-a.*`)= #2**;需改 node-direct + 核 #4 |
+| Java | ✅ 已接(SDK consumer) | ✅(#655) | ✅ **terminal SUCCESS** | #2(样例默认 pattern 改 node-direct)+#4(TaskDispatcher report resultSummary 发 {code,message} JSON 对象,生产路径是 Map 非 ReportRequest record——record 是 conformance 漂移)+#5(已有 AtomicBaseEchoHandler)全修,本地实测绿;样例非 Spring Boot fat-jar(maven-jar-plugin+lib/ classpath),启动不卡嵌套 loader |
 | Rust | ❌ illustrative stub | — | — | 需先把样例接到 reqwest 真 transport |
 
 > **#2 是平台级通病**:`batch.task.dispatch.<tenant>.*`(tenant-first)这个错方案 5 语言一致沿用
