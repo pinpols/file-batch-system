@@ -8,39 +8,29 @@ name: sdk-contract-parity
 # docs/sdk/byo-conformance-contract.md. Every new-language SDK MUST:
 #   (a) consume docs/api/sdk-shared-constants.yaml (no re-authored literals),
 #   (b) pass every fixture's machine-assertable `then.expect` block,
-#   (c) add its `<lang>-contract` job + path here.
-# The per-language jobs below get added as each SDK lands; the `paths:` entries
-# for sdk/{go,typescript,rust} are pre-wired so their first PR
-# triggers this workflow.
+#   (c) add its `<lang>-contract` job (gated on the `changes` job) here.
 #
-# Triggered ONLY by SDK, fixture or shared-constants/contract changes — unrelated
-# PRs do not pay the Maven cold-start cost. Matches the pr-gate paths-ignore for
-# `.github/workflows/**` so a workflow-only PR still runs this file via the
-# workflow-lint pipeline rather than re-triggering Maven.
+# 触发:总是触发(去 on.paths),由 `changes` job(dorny/paths-filter)探测 sdk 相关
+# 变更 → 各 contract job `needs: changes` 条件执行。无关 PR 上各 job skip(skip=success),
+# 不付 Maven/toolchain 冷启动成本,但 required check 仍上报状态(不会卡住无关 PR)。
+# 文档/README(!sdk/**/*.md)不算 sdk 变更。
+#
+# Ruleset required(2026-06-22):validate-fixtures + {java,python,go,rust,typescript}
+# contract 已设为阻塞门禁。sdk-live-transport(真 kafka,偶发 flake)与 parity-report
+# 保持非必需信号。
 
 on:
+  # 2026-06-22:契约检查升为 ruleset required(阻塞合并)。required check 必须在
+  # **每个** PR 上都上报状态,否则不碰 sdk 的 PR 会因「检查从未上报」被永久卡住。
+  # 故去掉 on.paths(改为总触发),由下方 `changes` job 用 dorny/paths-filter 探测
+  # sdk 相关变更 → 各 job `needs: changes` 条件执行:无关变更时 skip(skip=success,
+  # 满足 required),sdk 变更时真跑。镜像 pr-gate 的同款机制。
   pull_request:
     branches:
       - main
-    paths:
-      - 'sdk/java/**'
-      - 'batch-common/src/main/java/com/example/batch/common/enums/**'
-      - 'batch-common/src/main/java/com/example/batch/common/security/**'
-      - 'sdk/python/**'
-      # BYO SDKs (pre-wired; per-language contract jobs added when each lands)
-      - 'sdk/go/**'
-      - 'sdk/typescript/**'
-      - 'sdk/rust/**'
-      # 文档/README 改动不触发跨语言契约 + 真 kafka live transport(2026-06-22)。
-      # 必须放在上面 sdk/<lang>/** 正向之后:GitHub paths 取「最后匹配的模式」,
-      # sdk/java/README.md 命中 sdk/java/** 后再被本条 ! 否决 → 不触发。docs/api/**
-      # 在本条之后,不受影响。
-      - '!sdk/**/*.md'
-      - 'docs/api/sdk-contract-fixtures/**'
-      - 'docs/api/sdk-shared-constants.yaml'
-      - 'docs/api/orchestrator-internal.openapi.yaml'
-      - 'docs/sdk/byo-conformance-contract.md'
-      - '.github/workflows/sdk-contract-parity.yml'
+  merge_group:
+    types:
+      - checks_requested
   workflow_dispatch:
 
 permissions:
@@ -51,8 +41,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Job 0:探测 sdk 相关变更。PR 事件按 base diff 判定;非 PR 事件(merge_group /
+  # workflow_dispatch)无 base,filter 返回 true → 回退全跑(安全)。
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      sdk: ${{ steps.filter.outputs.sdk }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Detect sdk changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # 文档/README 不算 sdk 变更(!sdk/**/*.md 置于 sdk/** 之后取最后匹配)。
+          filters: |
+            sdk:
+              - 'sdk/**'
+              - '!sdk/**/*.md'
+              - 'batch-common/src/main/java/com/example/batch/common/enums/**'
+              - 'batch-common/src/main/java/com/example/batch/common/security/**'
+              - 'docs/api/sdk-contract-fixtures/**'
+              - 'docs/api/sdk-shared-constants.yaml'
+              - 'docs/api/orchestrator-internal.openapi.yaml'
+              - 'docs/sdk/byo-conformance-contract.md'
+              - '.github/workflows/sdk-contract-parity.yml'
+
   validate-fixtures:
     name: validate fixtures (JSON Schema)
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +91,8 @@ jobs:
 
   java-contract:
     name: java contract + shared-constants parity
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +112,8 @@ jobs:
 
   python-contract:
     name: python contract + shared-constants parity
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -112,6 +140,8 @@ jobs:
   # docs/sdk/byo-conformance-contract.md §1.3.
   typescript-contract:
     name: typescript contract (decision core + conformance)
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -126,6 +156,8 @@ jobs:
 
   go-contract:
     name: go contract (decision core + conformance)
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -142,6 +174,8 @@ jobs:
 
   rust-contract:
     name: rust contract (decision core + conformance)
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -168,6 +202,8 @@ jobs:
 
   sdk-live-transport:
     name: sdk live transport (Kafka + HTTP fake)
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -237,6 +273,8 @@ jobs:
   # Lane Q is done and we expect symmetric pass sets, remove `|| true`.
   parity-report:
     name: parity report (log-only)
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs:
       [
