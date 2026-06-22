@@ -1,7 +1,7 @@
 # batch-worker-sdk (Python)
 
 **file-batch-system** worker 协议的 Python SDK —— Java 版
-[`batch-worker-sdk/`](../batch-worker-sdk/) 的 async-only 对等实现。
+[`batch-worker-sdk/`](../java/core/) 的 async-only 对等实现。
 
 > **状态(2026-06-03)**: Phase 0-5 全部交付。Public API 稳定(`BatchPlatformClient` / `@batch_task` / `FakeBatchPlatform`),12 个跨 SDK 契约 fixture 全过(Lane P drift guard);PyPI 待 1.0 发布。可用于内测与 staging 跑通,生产使用前请确认契约 fixture 对自家场景已覆盖。
 
@@ -141,11 +141,11 @@ endpoint、相同的 Kafka topic、相同的 payload 结构。各自 API 风格
 
 | 关注点 | Java | Python(目标) |
 | --- | --- | --- |
-| 模块 | [`batch-worker-sdk/`](../batch-worker-sdk/) | `sdk-python/` |
+| 模块 | [`batch-worker-sdk/`](../java/core/) | `sdk-python/` |
 | 入口类 | `WorkerClient` | `WorkerClient` |
 | Handler 签名 | `void handle(HandlerContext ctx)` | `async def handle(ctx: HandlerContext) -> None` |
-| Spring Boot 集成 | [`batch-worker-sdk-spring-boot-starter`](../batch-worker-sdk-spring-boot-starter/) | (无;用 FastAPI / 原生 async) |
-| Testkit | [`batch-worker-sdk-testkit`](../batch-worker-sdk-testkit/) | TBD (Phase 4) |
+| Spring Boot 集成 | [`batch-worker-sdk-spring-boot-starter`](../java/spring/) | (无;用 FastAPI / 原生 async) |
+| Testkit | [`batch-worker-sdk-testkit`](../java/testkit/) | TBD (Phase 4) |
 
 ### 公共 API 表面 ↔ Java SDK (P0.5)
 
@@ -246,7 +246,7 @@ async with FakeBatchPlatform() as fp:
     assert fp.get_reports()[0]["success"] is True
 ```
 
-对标 Java 的 [`batch-worker-sdk-testkit`](../batch-worker-sdk-testkit/)
+对标 Java 的 [`batch-worker-sdk-testkit`](../java/testkit/)
 (`FakeBatchPlatform` + `@BatchWorkerTest`)。提供的辅助:
 `FakeBatchPlatform`、`make_test_context`、`make_test_config`、
 `RecordingHandler`。通过 `pip install batch-worker-sdk[testkit]`

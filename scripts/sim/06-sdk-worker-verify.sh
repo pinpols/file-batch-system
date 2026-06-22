@@ -107,7 +107,7 @@ RAW_KEY=$(echo "$created" | grep -oE '"rawKey":"[^"]+"' | head -1 | sed 's/"rawK
 note "3. sample-tenant-worker jar"
 if [[ -f "$JAR" ]]; then ok "jar 已存在($(basename "$JAR"))"; else
   info "jar 缺失,构建中(mvn install)..."
-  (cd "$REPO_ROOT" && mvn -q -pl sdk/java -am install -DskipTests && \
+  (cd "$REPO_ROOT" && mvn -q -pl sdk/java/core -am install -DskipTests && \
      mvn -q install -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml -DskipTests) \
     && ok "构建完成" || { bad "构建失败"; exit 1; }
 fi

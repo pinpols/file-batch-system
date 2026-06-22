@@ -114,8 +114,8 @@ case "$LANG_ID" in
     ;;
   java)
     echo "==> building batch-worker-sdk(+testkit) to local m2"
-    # SDK 模块在根 reactor 按路径注册(<module>sdk/java</module>),-pl 用路径不是 artifactId
-    ( cd "$ROOT" && mvn -q -pl sdk/java,sdk/java-testkit -am install -DskipTests ) \
+    # SDK 模块在根 reactor 按路径注册(<module>sdk/java/core</module>),-pl 用路径不是 artifactId
+    ( cd "$ROOT" && mvn -q -pl sdk/java/core,sdk/java/testkit -am install -DskipTests ) \
       || { echo "FAIL: mvn install batch-worker-sdk failed"; dump_diagnostics; exit 1; }
     echo "==> packaging java sample worker"
     ( cd examples/self-hosted-sdk/sample-tenant-worker-java && mvn -q package -DskipTests ) \
