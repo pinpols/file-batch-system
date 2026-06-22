@@ -52,6 +52,7 @@ class RlsStrictModePreflightIntegrationTest {
   private static JdbcTemplate JDBC;
   private static TransactionTemplate TX;
 
+  @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() {
     POSTGRES =

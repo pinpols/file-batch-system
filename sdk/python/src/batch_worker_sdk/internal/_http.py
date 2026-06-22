@@ -24,7 +24,7 @@ SDK 仅支持 async(详见 ``sdk-python/README.md`` Roadmap)。
 - POST /internal/workers/{code}/warmup
 - GET  /internal/workers/{code}/claimed-tasks
 - POST /internal/tasks/{id}/cancel
-- POST /internal/tasks/leases/renew-batch  (TODO 性能优化,见 P1-6)
+- POST /internal/tasks/leases/renew-batch  (性能优化候选,见 P1-6)
 
 写操作(``claim`` / ``report``)接受 ``idempotency_key`` 参数并通过
 ``Idempotency-Key`` 请求头透传 —— 行为与 Java client 一致。

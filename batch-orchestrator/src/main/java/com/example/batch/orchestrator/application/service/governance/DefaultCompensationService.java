@@ -70,7 +70,12 @@ public class DefaultCompensationService implements CompensationService {
   private final ObjectProvider<LaunchService> launchServiceProvider;
   private final TaskExecutionService taskExecutionService;
 
-  @Lazy @Autowired private DefaultCompensationService self;
+  private DefaultCompensationService self = this;
+
+  @Autowired
+  void setSelf(@Lazy DefaultCompensationService self) {
+    this.self = self;
+  }
 
   /** 路由表：compensationType → handler。构造时一次性构建；O(1) 查找。 */
   private final Map<String, CompensationHandler> handlersByType =

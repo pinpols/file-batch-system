@@ -47,7 +47,12 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
   private final PipelineStageProgressCache pipelineStageProgressCache;
 
-  @Lazy @Autowired private DefaultWorkerRegistryService self;
+  private DefaultWorkerRegistryService self = this;
+
+  @Autowired
+  void setSelf(@Lazy DefaultWorkerRegistryService self) {
+    this.self = self;
+  }
 
   @Override
   @Transactional

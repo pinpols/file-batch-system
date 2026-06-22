@@ -77,7 +77,7 @@ public class TenantConfigInitApplyHandlers {
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_ID = "id";
 
-  @Lazy @Autowired private TenantConfigInitApplyHandlers self;
+  private TenantConfigInitApplyHandlers self = this;
 
   private final JobDefinitionMapper jobDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -94,6 +94,11 @@ public class TenantConfigInitApplyHandlers {
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final PlatformTransactionManager transactionManager;
+
+  @Autowired
+  void setSelf(@Lazy TenantConfigInitApplyHandlers self) {
+    this.self = self;
+  }
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
   record ApplyContext(String tenantId, InitMode mode, String operator, boolean dryRun) {}

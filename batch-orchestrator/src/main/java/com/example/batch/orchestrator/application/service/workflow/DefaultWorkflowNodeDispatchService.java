@@ -81,7 +81,12 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   // ADR-018 跨批量日依赖解析；NULL（无依赖）跳过；REQUIRED 缺失 → WAITING_DEPENDENCY；解析失败 → FAILED
   private final CrossDayDependencyResolver crossDayDependencyResolver;
 
-  @Lazy @Autowired private DefaultWorkflowNodeDispatchService self;
+  private DefaultWorkflowNodeDispatchService self = this;
+
+  @Autowired
+  void setSelf(@Lazy DefaultWorkflowNodeDispatchService self) {
+    this.self = self;
+  }
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code

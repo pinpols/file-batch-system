@@ -44,7 +44,12 @@ public class TaskDispatchOutboxService {
   private final JobTaskMapper jobTaskMapper;
   private final BizDateArithmetic bizDateArithmetic;
 
-  @Lazy @Autowired private TaskDispatchOutboxService self;
+  private TaskDispatchOutboxService self = this;
+
+  @Autowired
+  void setSelf(@Lazy TaskDispatchOutboxService self) {
+    this.self = self;
+  }
 
   /**
    * 写入一条“任务派发事件”到 outbox。

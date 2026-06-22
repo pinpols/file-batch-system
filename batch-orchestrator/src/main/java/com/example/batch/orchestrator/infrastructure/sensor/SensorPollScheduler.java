@@ -49,7 +49,12 @@ public class SensorPollScheduler {
   // CLAUDE.md §Java编码细则 #3 豁免①: self-invocation AOP workaround。fetchDue / probeOne 的
   // @Transactional(REQUIRES_NEW) 只有经 Spring 代理调用才生效;同类内直接调用不走 AOP,
   // SELECT ... FOR UPDATE SKIP LOCKED 的行锁事务边界会形同虚设(锁随即释放,失去单节点隔离)。
-  @Lazy @Autowired private SensorPollScheduler self;
+  private SensorPollScheduler self = this;
+
+  @Autowired
+  void setSelf(@Lazy SensorPollScheduler self) {
+    this.self = self;
+  }
 
   @Scheduled(fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
   @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")

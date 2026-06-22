@@ -45,7 +45,8 @@ class ConsoleClusterDiagnosticServiceTest {
 
   private static ConsoleQueryCacheService passThroughCache() {
     ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
-    when(cache.getOrLoad(anyString(), any(), any(TypeReference.class), any()))
+    when(cache.<Object>getOrLoad(
+            anyString(), any(), org.mockito.ArgumentMatchers.<TypeReference<Object>>any(), any()))
         .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
     return cache;
   }

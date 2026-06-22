@@ -69,7 +69,12 @@ public class BatchDayReplayDispatcher {
    * #dispatchSession} 直接 {@code dispatchEntry(...)} 同类调用,Spring AOP 不织入,REQUIRES_NEW 退化。 注入
    * {@code @Lazy self} 走代理,真正激活独立短事务,避免单条失败回滚整批。 见 CLAUDE.md Java 编码细则 #3 豁免清单。
    */
-  @Lazy @Autowired private BatchDayReplayDispatcher self;
+  private BatchDayReplayDispatcher self = this;
+
+  @Autowired
+  void setSelf(@Lazy BatchDayReplayDispatcher self) {
+    this.self = self;
+  }
 
   @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
   @SchedulerLock(

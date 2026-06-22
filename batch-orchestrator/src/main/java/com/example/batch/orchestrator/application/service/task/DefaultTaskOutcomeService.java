@@ -99,7 +99,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
-  @Lazy @Autowired private DefaultTaskOutcomeService self;
+  private DefaultTaskOutcomeService self = this;
+
+  @Autowired
+  void setSelf(@Lazy DefaultTaskOutcomeService self) {
+    this.self = self;
+  }
 
   @Component
   public record DefaultTaskOutcomeCollaborators(

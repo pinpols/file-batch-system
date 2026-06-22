@@ -60,12 +60,17 @@ class OpenLineageEmitterTest {
     assertThat(ev.get("producer")).isNotNull();
     assertThat(ev).containsKey("schemaURL");
 
-    Map<String, Object> job = (Map<String, Object>) ev.get("job");
+    Map<?, ?> job = objectMap(ev.get("job"));
     assertThat(job.get("namespace")).isEqualTo("file-batch-system");
     assertThat(job.get("name")).isEqualTo("workflow.t1.def7");
 
-    Map<String, Object> runNode = (Map<String, Object>) ev.get("run");
+    Map<?, ?> runNode = objectMap(ev.get("run"));
     assertThat(runNode.get("runId")).isEqualTo(OpenLineageEmitter.deterministicRunId(42L));
+  }
+
+  private static Map<?, ?> objectMap(Object value) {
+    assertThat(value).isInstanceOf(Map.class);
+    return (Map<?, ?>) value;
   }
 
   @Test

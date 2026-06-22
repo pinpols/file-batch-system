@@ -24,6 +24,7 @@ import org.testcontainers.utility.DockerImageName;
 class JdbcMappedImportCompensatorIntegrationTest {
 
   @Container
+  @SuppressWarnings("resource")
   private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
           .withDatabaseName("batch_business")

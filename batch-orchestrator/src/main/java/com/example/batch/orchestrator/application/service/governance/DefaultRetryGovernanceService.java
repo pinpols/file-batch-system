@@ -75,9 +75,14 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
   /**
    * 自动重放调度必须经代理调用 {@link #replayDeadLetter}，否则同类自调用会跳过 {@code REQUIRES_NEW}， Outbox 写入（{@code
-   * MANDATORY}）无事务。纯单测无容器时可为 null，退化为 {@code this}.
+   * MANDATORY}）无事务。纯单测无容器时退化为 {@code this}.
    */
-  @Lazy @Autowired private DefaultRetryGovernanceService replayTransactionalSelf;
+  private DefaultRetryGovernanceService replayTransactionalSelf = this;
+
+  @Autowired
+  void setReplayTransactionalSelf(@Lazy DefaultRetryGovernanceService replayTransactionalSelf) {
+    this.replayTransactionalSelf = replayTransactionalSelf;
+  }
 
   /**
    * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff

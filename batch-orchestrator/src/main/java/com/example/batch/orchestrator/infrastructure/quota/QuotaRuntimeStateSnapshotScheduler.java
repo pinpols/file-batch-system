@@ -49,7 +49,12 @@ public class QuotaRuntimeStateSnapshotScheduler {
   private final QuotaProperties quotaProperties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Lazy @Autowired private QuotaRuntimeStateSnapshotScheduler self;
+  private QuotaRuntimeStateSnapshotScheduler self = this;
+
+  @Autowired
+  void setSelf(@Lazy QuotaRuntimeStateSnapshotScheduler self) {
+    this.self = self;
+  }
 
   @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
   @SchedulerLock(name = "quota_runtime_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")

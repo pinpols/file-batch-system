@@ -122,7 +122,7 @@ public class ConsoleAiKnowledgeBase {
   }
 
   private List<Document> loadAndSplit() {
-    TokenTextSplitter splitter = new TokenTextSplitter();
+    TokenTextSplitter splitter = TokenTextSplitter.builder().build();
     List<Document> documents = new ArrayList<>();
     for (String location : properties.getRag().getLocations()) {
       for (Resource resource : resolve(location)) {

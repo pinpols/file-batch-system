@@ -4,7 +4,9 @@ import com.example.batch.common.validation.ValidTenantId;
 import com.example.batch.console.web.query.PageQueryRequest;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
+@EqualsAndHashCode(callSuper = false)
 @Data
 public class AlertEventQueryRequest extends PageQueryRequest {
 

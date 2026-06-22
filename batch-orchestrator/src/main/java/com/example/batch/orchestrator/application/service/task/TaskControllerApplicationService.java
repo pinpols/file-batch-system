@@ -26,7 +26,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.CannotAcquireLockException;
-import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -67,11 +66,7 @@ public class TaskControllerApplicationService {
   }
 
   @Retryable(
-      retryFor = {
-        DeadlockLoserDataAccessException.class,
-        CannotAcquireLockException.class,
-        TransientDataAccessException.class
-      },
+      retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
       maxAttempts = 5,
       // Citus 上同 instance 的并发 report 会撞分布式死锁(FOR UPDATE 锁多分区行,加锁顺序非确定)。
       // 原 3 次/50ms→100ms 窗口太窄,等长退避还会让两个 report 同步重投再撞。改 5 次 + random jitter

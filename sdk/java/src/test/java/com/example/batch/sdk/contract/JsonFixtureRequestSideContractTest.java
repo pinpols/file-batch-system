@@ -175,7 +175,7 @@ class JsonFixtureRequestSideContractTest {
 
   /** Deep-subset assertion: every key/value in `subset` present and equal in `actual`. */
   private static void assertDeepIncludes(String name, JsonNode actual, JsonNode subset) {
-    Iterator<Map.Entry<String, JsonNode>> it = subset.fields();
+    Iterator<Map.Entry<String, JsonNode>> it = subset.properties().iterator();
     while (it.hasNext()) {
       Map.Entry<String, JsonNode> e = it.next();
       JsonNode got = actual.get(e.getKey());

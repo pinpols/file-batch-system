@@ -9,16 +9,15 @@ import java.security.Security;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.martijndwars.webpush.Notification;
-import nl.martijndwars.webpush.PushService;
-// web-push 5.1.1 内部用 Apache HttpClient 4 异步客户端;同步 send() 阻塞等待返回 HttpResponse。
-import org.apache.http.HttpResponse;
+import nl.martijndwars.webpush.PushAsyncService;
+import org.asynchttpclient.Response;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -48,8 +47,8 @@ public class ConsolePushSender {
 
   /**
    * P1(2026-05-23 audit):单次 push 投递的最大等待秒数。web-push 5.1.x 同步 send() 阻塞由底层 Apache HttpClient 4
-   * 决定,默认无显式上限,慢 endpoint 可占住整个 {@code pushTaskExecutor} 工作线程。 这里用 {@code sendAsync().get(3s)}
-   * 显式封顶;超时只 warn + 跳过本次,不立即清理 sub。 升级 web-push 6.x 后切换到 reactive 流式 API。
+   * 决定,默认无显式上限,慢 endpoint 可占住整个 {@code pushTaskExecutor} 工作线程。 这里用 async send + get(3s) 显式封顶;超时只
+   * warn + 跳过本次,不立即清理 sub。
    */
   private static final long SEND_TIMEOUT_SECONDS = 3L;
 
@@ -57,7 +56,7 @@ public class ConsolePushSender {
   private final ConsolePushSubscriptionMapper repository;
   private final ObjectMapper objectMapper;
 
-  private volatile PushService pushService;
+  private volatile PushAsyncService pushService;
 
   /** 单条推送 payload。{@code tag} 用于通知折叠;{@code url} 是点击后导航的 PWA 路由。 */
   public record PushPayload(String title, String body, String tag, String url) {}
@@ -72,7 +71,7 @@ public class ConsolePushSender {
         && properties.getPrivateKey() != null) {
       try {
         this.pushService =
-            new PushService(properties.getPublicKey(), properties.getPrivateKey())
+            new PushAsyncService(properties.getPublicKey(), properties.getPrivateKey())
                 .setSubject(properties.getSubject());
         log.info("[push] ConsolePushSender initialized, subject={}", properties.getSubject());
       } catch (Exception e) {
@@ -133,11 +132,10 @@ public class ConsolePushSender {
               body,
               properties.getTtlSeconds());
 
-      // sendOne 已在 pushTaskExecutor,但 web-push 5.1.x 同步 send() 没有显式超时,
-      // 极端慢 endpoint 会占住整个 @Async 线程。改 sendAsync().get(3s) 封顶等待。
-      Future<HttpResponse> future = pushService.sendAsync(notification);
-      HttpResponse resp = future.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-      int code = resp.getStatusLine().getStatusCode();
+      // sendOne 已在 pushTaskExecutor,但发送仍要封顶等待,避免慢 endpoint 占住线程。
+      CompletableFuture<Response> future = pushService.send(notification);
+      Response resp = future.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      int code = resp.getStatusCode();
       if (code >= 200 && code < 300) {
         repository.touchLastPushedAt(sub.getId(), Instant.now());
       } else if (code == 404 || code == 410) {

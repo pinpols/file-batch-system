@@ -103,9 +103,6 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
-  // CLAUDE.md §Java #3 豁免:本类是 abstract,5 个 @Component 子类均通过 super(3 参) 调用现有 ctor,
-  // 改 ctor 会破坏所有子类签名(不在本批清单内);optional 字段注入仅在父类生效,功能等价。
-  @Autowired(required = false)
   private WorkerKafkaSubscribeProperties subscribeProperties;
 
   private volatile Semaphore semaphore;
@@ -117,6 +114,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     this.meterRegistryProvider = meterRegistryProvider;
     this.maxConcurrentTasks = maxConcurrentTasks;
+  }
+
+  @Autowired(required = false)
+  void setSubscribeProperties(WorkerKafkaSubscribeProperties subscribeProperties) {
+    this.subscribeProperties = subscribeProperties;
   }
 
   /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */

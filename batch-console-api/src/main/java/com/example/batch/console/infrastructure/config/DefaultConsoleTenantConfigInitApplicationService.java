@@ -44,7 +44,12 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
   private final TenantConfigInitApplyHandlers applyHandlers;
 
-  @Lazy @Autowired private DefaultConsoleTenantConfigInitApplicationService self;
+  private DefaultConsoleTenantConfigInitApplicationService self = this;
+
+  @Autowired
+  void setSelf(@Lazy DefaultConsoleTenantConfigInitApplicationService self) {
+    this.self = self;
+  }
 
   @Override
   public TenantConfigBatchInitResponse batchInit(

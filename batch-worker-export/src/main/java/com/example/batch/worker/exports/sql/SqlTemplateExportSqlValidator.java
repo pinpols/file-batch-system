@@ -188,7 +188,7 @@ public class SqlTemplateExportSqlValidator {
    * 格式）；无前缀的表名一律拒绝，以防止绕过白名单访问系统内部表。
    */
   private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
-    List<String> tableNames = new TablesNamesFinder().getTableList(statement);
+    List<String> tableNames = List.copyOf(new TablesNamesFinder<Void>().getTables(statement));
     for (String name : tableNames) {
       int dot = name.indexOf('.');
       if (dot <= 0) {
