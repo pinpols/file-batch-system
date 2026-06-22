@@ -131,3 +131,37 @@ git push origin main
   required check 未跑完即可合 — 配合 paths-filter 跳 unit 的 docs PR)。
 - R3-2 #262 引入的 e2e-smoke 在 staging-gate.yml 已有等价覆盖,本次移除不丢测试矩阵。
 - R3-3 #264 引入的本地 `strict-verify.sh` 是开发者 PR 前的回退入口。
+
+## 增补(2026-06-22)— 消除 PR 双跑 + python 契约去重
+
+C 方案上线后复盘发现仍有两类纯浪费,本次收掉(PR `chore/ci-optimize`):
+
+### 1. pr-gate / strict-verify 的 push + pull_request 双跑
+
+现象:feature 分支同时挂 `push`(`branches-ignore: main`)和 `pull_request` 两个触发,
+两个 run 的 concurrency group 不同(`push`→`github.ref`,PR→`pull_request.number`),
+互不取消 → 每个 PR 把整套 pr-gate(`static-checks` / `unit-it-*` / `security`)**跑两遍**。
+分支保护只认 PR-context run,push run 纯浪费。
+
+改动:去掉两个 workflow 的 **feature-branch `push` 触发**,改为 PR 驱动:
+
+- `pr-gate.yml`:`pull_request` + `merge_group`(合并队列入口)覆盖所有门禁场景;
+  `main` push 仍由 `full-ci-gate` 接管;开 PR 前想跑 CI 用 **draft PR**。
+- `strict-verify.yml`:同样去 `push`;`strict-verify-live` 仍仅 `workflow_dispatch`。
+
+效果:每个 PR 的 pr-gate 算力 **≈ 减半**。**未动任何 required check 名**,ruleset 不失配。
+
+### 2. python 契约测试去重
+
+`tests/contract` 此前在两处跑:`sdk-python.yml` 的 `contract-stub` job 和
+`sdk-contract-parity.yml` 的「python contract stub + parity stub」(后者是跨语言契约
+对账权威处,且为超集 = contract + shared-constants parity)。删掉 `sdk-python.yml`
+的 `contract-stub`,`tests/contract` 只由 parity 统一跑。`sdk-python.yml` 保留
+`lint`(ruff + mypy)+ `test`(pytest smoke,`--ignore=tests/contract`)。
+
+### 不动的(经核查 by-design)
+
+- **各语言 SDK 的 kafka transport 层级差异**:零依赖核心 + 可选 Kafka 适配器
+  (TS `optionalDependencies` / Rust `kafka` feature 默认关 / Go 独立嵌套 module),
+  统一放置会破坏零依赖核心。
+- `full-ci-gate`(main post-merge 回退)、`staging-gate`(nightly regression):C 方案保留。
