@@ -298,8 +298,7 @@ class BatchPlatformClient:
                 )
 
                 logger.info(
-                    "auto-building KafkaTaskConsumer from config "
-                    "(kafka_bootstrap=%s, pattern=%s)",
+                    "auto-building KafkaTaskConsumer from config (kafka_bootstrap=%s, pattern=%s)",
                     self._config.kafka_bootstrap,
                     self._config.kafka_topic_pattern,
                 )
