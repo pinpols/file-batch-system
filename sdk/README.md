@@ -69,7 +69,6 @@ sdk/
   go/          Go SDK(decision core + runtime + conformance)
   typescript/  TypeScript SDK(@batch/worker-sdk)
   rust/        Rust SDK(decision core + runtime,http/kafka feature 可选)
-  scripts/     SDK 测试脚本(run-handler-tests.sh)
 ```
 
 样例工程在 [`examples/self-hosted-sdk/`](../examples/self-hosted-sdk/);文档在 [`docs/sdk/`](../docs/sdk/)。

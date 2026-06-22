@@ -151,6 +151,21 @@ maven_module_for() {
   esac
 }
 
+# ── Maven 模块目录路径(用于 -pl / target)─────────────────────
+# 6 worker 已迁到 batch-worker/ 下,目录路径 ≠ artifactId(对齐 build-apps.sh DIRS)。
+maven_dir_for() {
+  case "$1" in
+    orchestrator)    echo "batch-orchestrator" ;;
+    trigger)         echo "batch-trigger" ;;
+    console)         echo "batch-console-api" ;;
+    worker-import)   echo "batch-worker/import" ;;
+    worker-export)   echo "batch-worker/export" ;;
+    worker-process)  echo "batch-worker/process" ;;
+    worker-dispatch) echo "batch-worker/dispatch" ;;
+    worker-atomic)   echo "batch-worker/atomic" ;;
+  esac
+}
+
 # ── 停止：kill 端口上的进程 ───────────────────────────────────
 stop_module() {
   local name="$1"
@@ -174,6 +189,8 @@ build_module() {
   local name="$1"
   local mod
   mod="$(maven_module_for "$name")"
+  local dir
+  dir="$(maven_dir_for "$name")"
   echo "  构建 $mod ..."
   _MVND_BIN="${HOME}/.local/bin/mvnd"
   if [[ -x "$_MVND_BIN" ]]; then
@@ -182,11 +199,11 @@ build_module() {
   else
     _MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
   fi
-  find "$mod/target" -maxdepth 1 -name "${mod}-*-exec.jar" -delete 2>/dev/null || true
-  "$_MVN" -pl "$mod" -am clean package -DskipTests -q
-  jar="$(find "$mod/target" -maxdepth 1 -name "${mod}-*-exec.jar" 2>/dev/null | head -1 || true)"
+  find "$dir/target" -maxdepth 1 -name "${mod}-*-exec.jar" -delete 2>/dev/null || true
+  "$_MVN" -pl "$dir" -am clean package -DskipTests -q
+  jar="$(find "$dir/target" -maxdepth 1 -name "${mod}-*-exec.jar" 2>/dev/null | head -1 || true)"
   if [[ -z "$jar" || ! -f "$jar" ]]; then
-    echo "ERROR: 未找到可执行 exec jar: $mod/target/${mod}-*-exec.jar" >&2
+    echo "ERROR: 未找到可执行 exec jar: $dir/target/${mod}-*-exec.jar" >&2
     exit 1
   fi
   _bytes="$(wc -c <"$jar" | awk '{print $1}')"
