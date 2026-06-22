@@ -31,6 +31,7 @@ clientErrorFailFastThreshold    client_error_fail_fast_threshold
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
@@ -192,11 +193,31 @@ class BatchPlatformClientConfig(BaseModel):
         opt_str = {
             "api_key": "API_KEY",
             "build_id": "BUILD_ID",
+            # Kafka 消费配置:有 bootstrap 即可自动接入消费(client 自动建 KafkaTaskConsumer)。
+            "kafka_bootstrap": "KAFKA_BOOTSTRAP",
+            "kafka_group_id": "KAFKA_GROUP_ID",
+            "kafka_topic_pattern": "KAFKA_TOPIC_PATTERN",
+            "kafka_security_protocol": "KAFKA_SECURITY_PROTOCOL",
+            "kafka_sasl_mechanism": "KAFKA_SASL_MECHANISM",
+            "kafka_sasl_username": "KAFKA_SASL_USERNAME",
+            "kafka_sasl_password": "KAFKA_SASL_PASSWORD",
         }
         for field, env_key in opt_str.items():
             v = getter(prefix + env_key)
             if v is not None and v.strip():
                 kwargs[field] = v.strip()
+
+        # node-direct 派单 topic 默认(对齐内建 worker AbstractTaskConsumer / Go SDK):
+        # 未显式配 pattern 时,订阅本 worker 的 node-direct topic
+        # batch.task.dispatch.<workerType>.node.<workerCode>(workerType 无关,见
+        # docs/sdk/local-e2e-coverage.md)。**不能**用 tenant-first 的 <tenant>.*
+        # (orchestrator 不往那派)。group 默认 g-sdk-<tenant>-<workerCode>。
+        if kwargs.get("kafka_bootstrap") and not kwargs.get("kafka_topic_pattern"):
+            kwargs["kafka_topic_pattern"] = (
+                r"batch\.task\.dispatch\..+\.node\." + re.escape(worker_code)
+            )
+        if kwargs.get("kafka_bootstrap") and not kwargs.get("kafka_group_id"):
+            kwargs["kafka_group_id"] = f"g-sdk-{tenant_id}-{worker_code}"
 
         opt_int = {
             "max_concurrent_tasks": "MAX_CONCURRENT_TASKS",
