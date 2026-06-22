@@ -21,6 +21,11 @@ import pytest
 
 from batch_worker_sdk.handler._decorator import _clear_registered_handlers
 
+# Load the optional testkit pytest plugin so the shared `fake_platform` fixture
+# is available across the suite (and self-tested). Tenants opt in the same way in
+# their own conftest.py: pytest_plugins = ["batch_worker_sdk.testkit.pytest_plugin"].
+pytest_plugins = ["batch_worker_sdk.testkit.pytest_plugin"]
+
 
 @pytest.fixture(autouse=True)
 def _reset_handler_registry() -> Iterator[None]:
