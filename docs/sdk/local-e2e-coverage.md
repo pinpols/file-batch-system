@@ -41,15 +41,17 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 
 ## 当前状态(per language / per stage)
 
-> 用本地真 orchestrator 实测(非 fixture)。Go 用样例 worker 跑到 **execute** 绿。
+> 用本地真 orchestrator 实测(非 fixture)。五语言样例 worker **全跑到 terminal SUCCESS**。
 
 | 语言 | 样例是否接 kafka 消费 | register | full chain | 备注 |
 |---|---|---|---|---|
 | Go | ✅ 已接(kafka adapter) | ✅ | ✅ **terminal SUCCESS** | #655 + #2/#3/#4 全修,本地实测绿(参照实现) |
 | Python | ✅ 已接(auto-build) | ✅ | ✅ **terminal SUCCESS** | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名 + #5(补 base-ATOMIC handler)全修,本地实测绿 |
-| TypeScript | ✅ 已接(kafkajs adapter) | ✅ | ⚠ register→dispatch→decode 绿 | #2(node-direct regex)+#4(report-json)+样例 import 路径(off-by-one)+harness 装 SDK kafkajs 全修;claim 仍 404(task READY 已 pre-assign 给本 worker,但 orchestrator claim 报 selectById null,待 request 级追踪) |
-| Java | ✅ 已接(SDK consumer) | ✅(#655) | 🔲 | **默认 pattern 是 tenant-first(`batch.task.dispatch.tenant-a.*`)= #2**;需改 node-direct + 核 #4 |
-| Rust | ❌ illustrative stub | — | — | 需先把样例接到 reqwest 真 transport |
+| TypeScript | ✅ 已接(kafkajs adapter) | ✅ | ✅ **terminal SUCCESS** | #2(node-direct regex)+#4(report-json)+样例 import 路径(off-by-one)+harness 装 SDK kafkajs +样例 transport 补 tenantId/workerCode(claim 404 根因:HttpTransport 缺这俩→claim body tenantId=undefined→selectById(null)→404)全修,本地实测绿 |
+| Java | ✅ 已接(SDK consumer) | ✅(#655) | ✅ **terminal SUCCESS** | #2(样例默认 pattern 改 node-direct)+#4(TaskDispatcher report resultSummary 发 {code,message} JSON 对象,生产路径是 Map 非 ReportRequest record——record 是 conformance 漂移)+#5(已有 AtomicBaseEchoHandler)全修,本地实测绿;样例非 Spring Boot fat-jar(maven-jar-plugin+lib/ classpath),启动不卡嵌套 loader |
+| Rust | ✅ 已接(rdkafka + reqwest) | ✅ | ✅ **terminal SUCCESS** | 样例从 illustrative stub 改造成真连:启用 `http` feature 用真 `ReqwestTransport` + 真调 `Worker::start()` 注册 + `HandlerBridge` 写出 claim→execute→report 回路;#2(`kafka.rs` `topic_regex` 改 node-direct,改对应 2 单测 + broker 集成测 topic)+ #4(report resultSummary 发 {code,message} JSON 对象)+ 样例 SDK path off-by-one(`../../`→`../../../`,同 Go/TS 同款坑)全修。本机实测绿(`cargo` 在 `~/.cargo/bin` 此前没上 PATH;`cmake` 经 `brew install`;CDN 封锁已解,crate 可拉) |
+
+> **Rust 历史"本地编不了"已破**:`cargo`/`rustc` 1.96 一直装着只是没在 PATH(`~/.cargo/bin`);`cmake`(rdkafka 硬依赖)`brew install cmake` 即得;曾经的 crate CDN 封锁现已解除。⇒ Rust 现可本地全链路实测,不再只能 CI 验。
 
 > **#2 是平台级通病**:`batch.task.dispatch.<tenant>.*`(tenant-first)这个错方案 5 语言一致沿用
 > (java-spring `application.yml` 默认值即 `batch.task.dispatch.tenant-a.*`),Go 只是把它写死了。
@@ -64,9 +66,9 @@ SDK 的 wire 契约此前只对 fixture / fake stub 验过,从没对真 orchestr
 | # | 层 | 现象 | 状态 |
 |---|---|---|---|
 | 1 | register | Go/TS 不发 `workerGroup` → `worker_registry.worker_group` NOT NULL 违约 → 注册 500 | **已修(#655)** |
-| 2 | 消费 topic | SDK 订阅 `batch.task.dispatch.<tenant>.*`(tenant-first),orchestrator 派发 `...<workerType>.node.<workerCode>`(base-first)→ 收不到任何任务 | **Go 已修**(本 PR,对齐内建 worker `AbstractTaskConsumer.topicPattern()` 的 node-direct);TS/Python/Rust 待改 |
+| 2 | 消费 topic | SDK 订阅 `batch.task.dispatch.<tenant>.*`(tenant-first),orchestrator 派发 `...<workerType>.node.<workerCode>`(base-first)→ 收不到任何任务 | **五语言全已修**(node-direct,对齐内建 worker `AbstractTaskConsumer.topicPattern()`) |
 | 3 | 派单报文解码 | orchestrator 发 `taskId` 是 JSON number(BIGINT),Go 结构体期望 string → decode 失败 | **Go 已修**(本 PR,tolerant number/string);其余语言待核 |
-| 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **Go + Python 已修**;TS/Java 待核 |
+| 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **五语言全已修**(注意 Java 生产路径是 dispatcher 的 Map、Rust 是样例 `HandlerBridge` 的 report body,均非 conformance 的请求构建器——那是 fixture 驱动的决策核,按 fixture 原样回显) |
 
 ### #5 handler 路由键(wire 之外,新发现)
 
@@ -83,9 +85,11 @@ workerType。**修法不是改 dispatcher 路由**,而是给样例补 base-worke
 - Python 样例已补 `@batch_task("ATOMIC")`(本 PR)→ terminal 绿。
 - Go 单 handler 模型本就 workerType 无关,规避了它。
 
-**结论**:Go + Python SDK **均全链路本地实测绿**(register→dispatch→claim→execute→report→
-terminal SUCCESS)。TS/Java 同法可达:#2 pattern(node-direct)+ #4 report-json + #5 base-workerType
-handler(Java 已有;TS 待补)。
-要"对外可提供",把 #2/#3/#4 在 **TS/Python/Java/Rust** 照搬修齐并各跑本地全链路至 terminal 绿
-即可——这是一个独立的「SDK wire 契约重校」专项,本地全链路脚本(`sdk-e2e-local.sh <lang>`)
-就是它的验收工具,Go 是已跑通的参照实现。
+**结论**:**五语言 SDK(Go / Python / TypeScript / Java / Rust)均全链路本地实测绿**
+(register→dispatch→claim→execute→report→terminal SUCCESS),对真 orchestrator 跑通。
+keyed-handler 的 SDK(Python/Java)补了 base-workerType handler;单 handler 模型(Go/TS)与
+workerType 无关天然规避;Rust 样例由 illustrative stub 改造成真连(`ReqwestTransport` +
+`start()` + claim→execute→report 回路)。
+「SDK wire 契约重校」专项至此收口:#1(workerGroup)/#2(node-direct topic)/#3(taskId 解码)/
+#4(report resultSummary JSON)五语言全修齐。本地全链路脚本(`sdk-e2e-local.sh <lang>`,lang ∈
+{go,python,typescript,java,rust})是它的验收工具。

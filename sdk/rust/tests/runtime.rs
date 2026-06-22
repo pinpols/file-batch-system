@@ -159,7 +159,7 @@ impl TaskHandler for LoopHandler {
 
 #[test]
 fn handler_cancellation() {
-    let mut ctx = TaskContext::new("t1", "tenant-a", "loop");
+    let ctx = TaskContext::new("t1", "tenant-a", "loop");
     ctx.cancellation.cancel();
     let result = LoopHandler.execute(&ctx);
     assert_eq!(result.error_code, "CANCELLED");

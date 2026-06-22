@@ -13,15 +13,14 @@
 //!   4. drive the worker lifecycle (`Worker` FSM start → run → graceful stop)
 //!      with a `request_stop()` SIGTERM hook.
 //!
-//! ## ⚠️ Illustrative — does not connect yet
+//! ## Connects for real
 //!
-//! The SDK's control-plane HTTP transport ([`HttpTransport`]) is a **documented
-//! stub**: std ships no HTTP client and the SDK is zero-dependency, so the real
-//! register/heartbeat/claim/report/renew calls land with the future **reqwest**
-//! adapter. Every call site that depends on that path is commented inline. The
-//! Kafka adapter *is* real (rdkafka behind the `kafka` feature); this binary is
-//! shaped to run, and is compiled by CI / once the reqwest adapter lands. See
-//! `README.md`.
+//! Both adapters are real: the Kafka consumer (rdkafka, `kafka` feature) and the
+//! control-plane transport ([`ReqwestTransport`], `http` feature). The worker
+//! registers via [`Worker::start`], then for each accepted dispatch message the
+//! [`HandlerBridge`] runs the full **claim → execute → report** lifecycle
+//! against the live orchestrator (the same chain the Go/Python/TS/Java samples
+//! drive). Build needs `cmake` (rdkafka). See `README.md`.
 
 use std::collections::BTreeMap;
 use std::env;
@@ -34,8 +33,9 @@ use batch_worker_sdk::client::handler::{
     NoopProgressReporter, TaskContext, TaskHandler, TaskResult,
 };
 use batch_worker_sdk::client::lifecycle::Worker;
+use batch_worker_sdk::client::reqwest_transport::{ReqwestConfig, ReqwestTransport};
 use batch_worker_sdk::client::sensitive::SensitiveValidator;
-use batch_worker_sdk::client::transport::HttpTransport;
+use batch_worker_sdk::client::transport::{classify_response, Transport, TransportOutcome};
 use batch_worker_sdk::kafka::{
     DispatchMessage, KafkaConsumerConfig, KafkaTaskConsumer, MessageHandler,
 };
@@ -84,11 +84,29 @@ fn main() {
         sasl_password: cfg.sasl_password.clone(),
     };
 
+    // ── (2b) Real control-plane transport (reqwest, `http` feature). ───────
+    // Shared (cheap clone — reqwest's client is internally Arc'd) between the
+    // lifecycle Worker (register/deactivate) and the per-message bridge
+    // (claim/report). tenant id + api key travel as headers, never in payloads.
+    let mut reqwest_cfg = ReqwestConfig::new(cfg.base_url.clone(), cfg.tenant_id.clone());
+    if !cfg.api_key.is_empty() {
+        reqwest_cfg = reqwest_cfg.with_api_key(cfg.api_key.clone());
+    }
+    let transport = match ReqwestTransport::new(reqwest_cfg) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("[sample-worker] FATAL building transport: {e}");
+            process::exit(1);
+        }
+    };
+
     // ── (3) Business handler (the SPI a tenant implements) + the bridge that
-    // turns each accepted dispatch message into a `TaskContext` and invokes it. ─
+    // runs the claim → execute → report lifecycle per accepted dispatch message. ─
     let bridge = HandlerBridge {
         handler: EchoHandler,
+        transport: transport.clone(),
         tenant_id: cfg.tenant_id.clone(),
+        worker_code: cfg.worker_code.clone(),
     };
 
     let mut consumer = match KafkaTaskConsumer::new(kafka_cfg, bridge) {
@@ -99,13 +117,7 @@ fn main() {
         }
     };
 
-    // ── (4) Worker lifecycle FSM (§1.5/§1.6). ──────────────────────────────
-    // NOTE: `HttpTransport` is the documented stub — its register/heartbeat/…
-    // methods are `unimplemented!()` until the reqwest adapter lands. So in this
-    // illustrative build we DO NOT call `worker.start()` (it would panic in the
-    // stub's `register`). The wiring below shows exactly where the real call
-    // goes; uncomment once a real `Transport` (reqwest) is supplied here.
-    let transport = HttpTransport::new(&cfg.base_url);
+    // ── (4) Worker lifecycle FSM (§1.5/§1.6) over the real transport. ──────
     let mut worker = Worker::new(&cfg.worker_code, transport);
 
     // (4a) SIGTERM hook. std has no portable async-signal-safe handler, so the
@@ -118,18 +130,24 @@ fn main() {
     let stop_flag: Arc<AtomicBool> = worker.stop_flag();
     install_sigterm_hook(Arc::clone(&stop_flag));
 
-    // (4b) Register with the control plane. ILLUSTRATIVE: guarded out because
-    // the stub panics. With a real transport this is the FSM's NORMAL entry.
-    //
-    //     match worker.start("{}", /* idempotent = */ false) {
-    //         Ok(decision) => log(&format!("registered: {decision:?}")),
-    //         Err(outcome) => {
-    //             eprintln!("[sample-worker] FATAL register failed: {outcome:?}");
-    //             process::exit(1);
-    //         }
-    //     }
-    let _ = &mut worker; // silence "unused mut" until start()/stop() are live.
-    log("worker FSM constructed (register deferred to the reqwest adapter)");
+    // (4b) Register with the control plane (FSM NORMAL entry). The register body
+    // carries the fields the platform requires: tenantId / workerCode / a
+    // non-null workerGroup (bug #1) / status. `protocolVersion` is defaulted by
+    // the transport. apiKey lives in the header, never the body.
+    let register_body = serde_json::json!({
+        "tenantId": cfg.tenant_id,
+        "workerCode": cfg.worker_code,
+        "workerGroup": "sdk-self-hosted",
+        "status": "RUNNING",
+    })
+    .to_string();
+    match worker.start(&register_body, /* idempotent = */ false) {
+        Ok(decision) => log(&format!("registered: {decision:?}")),
+        Err(outcome) => {
+            eprintln!("[sample-worker] FATAL register failed: {outcome:?}");
+            process::exit(1);
+        }
+    }
 
     // ── (5) Run loop: poll Kafka until the stop flag flips. ────────────────
     // `in_flight` would be incremented/decremented around real task execution;
@@ -152,12 +170,8 @@ fn main() {
     }
 
     // ── (6) Graceful stop (§1.6: drain → shut executor → deactivate). ──────
-    // ILLUSTRATIVE: `stop()` calls the stub's `deactivate` (panics) until the
-    // reqwest adapter lands. With a real transport:
-    //
-    //     let report = worker.stop(30_000);
-    //     log(&format!("stopped cleanly: {:?}", report.steps));
-    log("poll loop exited; graceful stop deferred to the reqwest adapter");
+    let report = worker.stop(30_000);
+    log(&format!("stopped cleanly: {:?}", report.steps));
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -211,45 +225,92 @@ impl TaskHandler for EchoHandler {
 /// record is re-read (the Java `RETRY_LATER` path).
 struct HandlerBridge<H: TaskHandler> {
     handler: H,
+    transport: ReqwestTransport,
     tenant_id: String,
+    worker_code: String,
 }
 
 impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
     fn on_accepted(&mut self, msg: &DispatchMessage) -> Result<(), String> {
-        // Build the per-task context from the decoded dispatch payload. The
-        // `parameters` map would, in the real worker, come from the claim
-        // response snapshot; here we surface the raw `extra` JSON keys so the
-        // echo handler has something to echo.
-        let ctx = TaskContext {
-            task_id: msg.task_id.clone(),
-            tenant_id: if msg.tenant_id.is_empty() {
-                self.tenant_id.clone()
-            } else {
-                msg.tenant_id.clone()
-            },
-            task_type: msg.task_type.clone(),
-            trace_id: String::new(),
-            parameters: extract_params(msg),
-            cancellation: Default::default(),
-            progress: Box::new(NoopProgressReporter),
-        };
+        let task_id = msg.task_id_str();
 
+        // ── 1. CLAIM — take ownership (TaskClaimRequest: tenantId/workerId). A
+        // non-success claim withholds the offset (Err) so the record is re-read,
+        // matching the Java RETRY_LATER path.
+        let claim_body = build_body(&[
+            ("tenantId", json_str(&self.tenant_id)),
+            ("workerId", json_str(&self.worker_code)),
+        ], &msg.partition_invocation_id);
+        let claim_resp = self.transport.claim(&task_id, &claim_body);
+        match classify_response(&claim_resp, 0) {
+            TransportOutcome::Success | TransportOutcome::IdempotentSuccess => {}
+            other => return Err(format!("claim not successful for task {task_id}: {other:?}")),
+        }
+
+        // ── 2. EXECUTE the business handler. (TaskContext has a private field,
+        // so build it via the constructor + builders, not a struct literal.)
+        let tenant = if msg.tenant_id.is_empty() {
+            self.tenant_id.clone()
+        } else {
+            msg.tenant_id.clone()
+        };
+        let mut ctx = TaskContext::new(&task_id, &tenant, &msg.task_type)
+            .with_partition_invocation_id(msg.partition_invocation_id.clone());
+        ctx.parameters = extract_params(msg);
+        ctx.progress = Box::new(NoopProgressReporter);
         let result = self.handler.execute(&ctx);
+        let success = result.is_success();
         log(&format!(
-            "task {} -> errorCode={} summary={:?}",
-            ctx.task_id, result.error_code, result.result_summary
+            "task {task_id} -> errorCode={} summary={:?}",
+            result.error_code, result.result_summary
         ));
 
-        // The real worker reports `result` to the control plane here (POST
-        // /internal/tasks/{id}/report) before returning Ok to commit the offset.
-        // That call rides the reqwest adapter; for now a successful handler run
-        // commits the offset, a non-success result withholds it for re-read.
-        if result.is_success() {
-            Ok(())
-        } else {
-            Err(result.error_code)
+        // ── 3. REPORT. `result_summary` is a platform JSONB column
+        // (`#{resultSummary}::jsonb`): it must be VALID JSON, not a bare string
+        // (else "invalid input syntax for type json" → report 500). Serialize to
+        // a {code,message} object, aligned with the built-in worker contract (#4).
+        let result_summary = serde_json::json!({
+            "code": result.error_code,
+            "message": result.result_summary,
+        })
+        .to_string();
+        let mut fields = vec![
+            ("taskId", serde_json::Value::from(msg.task_id)),
+            ("tenantId", json_str(&self.tenant_id)),
+            ("workerId", json_str(&self.worker_code)),
+            ("success", serde_json::Value::from(success)),
+            ("outputs", serde_json::to_value(&result.outputs).unwrap_or(serde_json::Value::Null)),
+            ("resultSummary", json_str(&result_summary)),
+        ];
+        if !success {
+            fields.push(("errorCode", json_str(&result.error_code)));
+        }
+        let report_body = build_body(&fields, &msg.partition_invocation_id);
+        let report_resp = self.transport.report(&task_id, &report_body);
+        match classify_response(&report_resp, 0) {
+            TransportOutcome::Success | TransportOutcome::IdempotentSuccess => Ok(()),
+            other => Err(format!("report not successful for task {task_id}: {other:?}")),
         }
     }
+}
+
+/// A JSON string value.
+fn json_str(s: &str) -> serde_json::Value {
+    serde_json::Value::from(s)
+}
+
+/// Build a compact JSON object body from ordered (key, value) pairs, appending
+/// `partitionInvocationId` only when present (mirrors the other SDKs' NON_NULL
+/// omission so a non-partition task never sends a null token).
+fn build_body(fields: &[(&str, serde_json::Value)], pinv: &Option<String>) -> String {
+    let mut map = serde_json::Map::new();
+    for (k, v) in fields {
+        map.insert((*k).to_string(), v.clone());
+    }
+    if let Some(id) = pinv {
+        map.insert("partitionInvocationId".to_string(), json_str(id));
+    }
+    serde_json::Value::Object(map).to_string()
 }
 
 /// Flatten the dispatch's raw `extra` JSON into the string→string parameter map

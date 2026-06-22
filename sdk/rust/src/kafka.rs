@@ -79,16 +79,22 @@ pub struct KafkaConsumerConfig {
 }
 
 impl KafkaConsumerConfig {
-    /// The per-tenant wildcard topic subscription (§1.2):
-    /// `batch.task.dispatch.<tenant>.*`, expressed as an rdkafka/librdkafka
-    /// regex (a leading `^` makes librdkafka treat the pattern as a regex).
+    /// The node-direct topic subscription (§1.2), aligned with the built-in
+    /// workers' `AbstractTaskConsumer.topicPattern()`:
+    /// `batch.task.dispatch.<workerType>.node.<workerCode>` (base-first),
+    /// expressed as an rdkafka/librdkafka regex (a leading `^` makes librdkafka
+    /// treat the pattern as a regex).
     ///
-    /// `.` is escaped so it matches a literal dot; the trailing `.*` matches any
-    /// suffix (e.g. a task-type or shard segment).
+    /// The OLD tenant-first `batch.task.dispatch.<tenant>.*` is never published
+    /// to by the platform (#2) → a worker subscribing there receives nothing.
+    /// Cross-tenant safety is enforced by the per-message tenant self-check
+    /// (§1.9), not the topic name. `.` is escaped to match a literal dot; the
+    /// `.*` matches the `<workerType>` segment (import/export/process/dispatch/
+    /// atomic) so this one subscription is workerType-agnostic.
     pub fn topic_regex(&self) -> String {
         format!(
-            "^batch\\.task\\.dispatch\\.{}\\..*",
-            regex_escape(&self.tenant_id)
+            "^batch\\.task\\.dispatch\\..*\\.node\\.{}",
+            regex_escape(&self.worker_code)
         )
     }
 
@@ -462,9 +468,11 @@ mod tests {
     // ── Pure config tests (no broker) ─────────────────────────────────────
 
     #[test]
-    fn topic_regex_is_per_tenant_wildcard() {
+    fn topic_regex_is_node_direct_per_worker() {
         let c = test_config("localhost:9092".to_string());
-        assert_eq!(c.topic_regex(), r"^batch\.task\.dispatch\.tenant-a\..*");
+        // node-direct: batch.task.dispatch.<workerType>.node.<workerCode>, the
+        // `.*` covering any base workerType (workerType-agnostic, #2).
+        assert_eq!(c.topic_regex(), r"^batch\.task\.dispatch\..*\.node\.worker-1");
     }
 
     #[test]
@@ -496,11 +504,12 @@ mod tests {
     }
 
     #[test]
-    fn tenant_id_is_regex_escaped() {
+    fn worker_code_is_regex_escaped() {
         let mut c = test_config("localhost:9092".to_string());
-        c.tenant_id = "t.e+nant".to_string();
-        // dots and '+' must be escaped so the subscription matches literally.
-        assert_eq!(c.topic_regex(), r"^batch\.task\.dispatch\.t\.e\+nant\..*");
+        c.worker_code = "w.o+rker".to_string();
+        // dots and '+' in the worker code must be escaped so the node-direct
+        // subscription matches literally.
+        assert_eq!(c.topic_regex(), r"^batch\.task\.dispatch\..*\.node\.w\.o\+rker");
     }
 
     #[test]
@@ -584,10 +593,9 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         );
-        let topic = format!(
-            "batch.task.dispatch.{}.import-{}",
-            cfg.tenant_id, cfg.worker_code
-        );
+        // node-direct topic the worker's subscription regex matches (#2):
+        // batch.task.dispatch.<workerType>.node.<workerCode>.
+        let topic = format!("batch.task.dispatch.import.node.{}", cfg.worker_code);
 
         let admin: AdminClient<DefaultClientContext> = ClientConfig::new()
             .set("bootstrap.servers", &bootstrap)

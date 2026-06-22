@@ -36,10 +36,14 @@ public final class SampleTenantWorker {
             .tenantId(requireEnv("BATCH_TENANT_ID"))
             .workerCode(requireEnv("BATCH_WORKER_CODE"))
             .kafkaBootstrap(requireEnv("BATCH_KAFKA"))
+            // node-direct topic pattern,对齐内建 worker AbstractTaskConsumer.topicPattern():
+            // batch.task.dispatch.<workerType>.node.<workerCode>(base-first)。旧的 tenant-first
+            // batch.task.dispatch.<tenant>.* 平台从不发布(#2),会收不到任何任务。
             .kafkaTopicPattern(
                 System.getenv().getOrDefault(
                     "BATCH_TOPIC_PATTERN",
-                    "batch.task.dispatch." + requireEnv("BATCH_TENANT_ID") + ".*"))
+                    "batch\\.task\\.dispatch\\..+\\.node\\."
+                        + java.util.regex.Pattern.quote(requireEnv("BATCH_WORKER_CODE"))))
             .kafkaGroupId(
                 System.getenv().getOrDefault(
                     "BATCH_KAFKA_GROUP", requireEnv("BATCH_TENANT_ID") + "-sample-workers"))

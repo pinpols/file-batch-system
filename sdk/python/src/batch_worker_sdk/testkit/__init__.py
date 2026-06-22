@@ -6,7 +6,7 @@
 Java                                              Python
 ================================================  =====================================
 ``FakeBatchPlatform``(内嵌 Kafka + HTTP)         :class:`FakeBatchPlatform`(aiohttp + asyncio.Queue)
-``@BatchWorkerTest`` JUnit5 extension             :func:`fake_platform` pytest fixture
+``@BatchWorkerTest`` JUnit5 extension             ``fake_platform`` fixture(opt-in :mod:`batch_worker_sdk.testkit.pytest_plugin`)
 ``RecordedReport``                                ``dict``(见 :meth:`FakeBatchPlatform.get_reports`)
 ``TaskDispatchMessageBuilder``                    :func:`make_test_context` + 普通 dict
 ================================================  =====================================

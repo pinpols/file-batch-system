@@ -96,6 +96,29 @@ sdk_e2e_start_worker() {
         && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}" \
            node --experimental-strip-types src/main.ts ) >"$logf" 2>&1 & echo $! ;;
+    java)
+      # 先 install SDK 到本地 m2(样例硬依赖 batch-worker-sdk:1.1.0-SNAPSHOT),再 package 样例。
+      # 样例用 maven-jar-plugin + copy-dependencies(lib/ classpath),非 Spring Boot 嵌套 fat-jar,
+      # 启动不走嵌套 jar loader,本机可靠。Java 样例环境变量名是 BATCH_KAFKA(非 KAFKA_BOOTSTRAP)。
+      mvn -q -f "$root/pom.xml" -pl sdk/java/core -am install -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
+      local jdir="$root/examples/self-hosted-sdk/sample-tenant-worker-java"
+      mvn -q -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
+      ( cd "$jdir" \
+        && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
+           BATCH_WORKER_CODE="$wc" BATCH_KAFKA="localhost:${KAFKA_HOST_PORT}" \
+           java -jar target/sample-tenant-worker-1.0.0-SNAPSHOT.jar ) >>"$logf" 2>&1 & echo $! ;;
+    rust)
+      # cargo at ~/.cargo/bin (not always on PATH); cmake on PATH for rdkafka build.
+      # 先 build(冷编 rdkafka 经 cmake 较慢,避免吃掉 register 超时),再跑编好的二进制。
+      # Rust 样例环境变量:KAFKA_BOOTSTRAP(同 Go/TS)。
+      local cargo_path="$HOME/.cargo/bin"
+      local rdir="$root/examples/self-hosted-sdk/sample-tenant-worker-rust"
+      PATH="$cargo_path:/usr/local/bin:$PATH" cargo build --manifest-path "$rdir/Cargo.toml" >>"$logf" 2>&1
+      ( cd "$rdir" \
+        && PATH="$cargo_path:/usr/local/bin:$PATH" \
+           BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
+           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}" \
+           ./target/debug/sample-tenant-worker-rust ) >>"$logf" 2>&1 & echo $! ;;
     *) sdk_e2e_fail "unsupported lang '$lang'"; return 2 ;;
   esac
 }

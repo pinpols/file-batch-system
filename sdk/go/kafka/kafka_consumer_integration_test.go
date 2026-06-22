@@ -32,8 +32,10 @@ func TestKafkaConsumer_Integration(t *testing.T) {
 	const tenant = "acme"
 	// Unique suffix so concurrent / repeated runs don't collide.
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
-	topic := fmt.Sprintf("batch.task.dispatch.%s.http-%s", tenant, suffix)
 	workerCode := "w-" + suffix
+	// node-direct topic the consumer discovers by suffix (.node.<workerCode>):
+	// batch.task.dispatch.<workerType>.node.<workerCode> (#2; was tenant-first).
+	topic := fmt.Sprintf("batch.task.dispatch.http.node.%s", workerCode)
 
 	brokers := strings.Split(bootstrap, ",")
 
