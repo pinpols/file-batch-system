@@ -151,6 +151,8 @@ C 方案上线后复盘发现仍有两类纯浪费,本次收掉(PR `chore/ci-opt
 
 效果:每个 PR 的 pr-gate 算力 **≈ 减半**。**未动任何 required check 名**,ruleset 不失配。
 
+补充:同时从 `changes` job 的 `code` 过滤器移除 `.github/workflows/**` 与 `.github/actions/**`——这两类由专用 `workflow-lint`(actionlint + zizmor)校验,此前误含导致纯 CI/workflow PR 触发全套 java unit。移除后改 workflow 不再跑 maven,回归「按需」。
+
 ### 2. python 契约测试去重
 
 `tests/contract` 此前在两处跑:`sdk-python.yml` 的 `contract-stub` job 和
