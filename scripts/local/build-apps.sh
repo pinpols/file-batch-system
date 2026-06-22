@@ -42,9 +42,12 @@ fi
 # -Dflatten.skip=true：local 不 install/deploy，跳过 flatten 插件
 MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch batch-worker-atomic)
 NAMES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic)
+# DIRS：模块目录路径(与 MODULES 同序)。worker 模块迁到 batch-worker/ 下后,目录路径 ≠ artifactId,
+# 故路径用 DIRS、jar 名仍用 MODULES(${module}-*-exec.jar 取的是 artifactId 不变)。
+DIRS=(batch-orchestrator batch-trigger batch-console-api batch-worker/import batch-worker/export batch-worker/process batch-worker/dispatch batch-worker/atomic)
 
-for module in "${MODULES[@]}"; do
-  find "$ROOT/$module/target" -maxdepth 1 -name "${module}-*-exec.jar" -delete 2>/dev/null || true
+for i in "${!MODULES[@]}"; do
+  find "$ROOT/${DIRS[$i]}/target" -maxdepth 1 -name "${MODULES[$i]}-*-exec.jar" -delete 2>/dev/null || true
 done
 
 "$MVN" -q -DskipTests \
@@ -52,17 +55,18 @@ done
   -Dlicense.skip=true \
   -Dmaven.javadoc.skip=true \
   -Dflatten.skip=true \
-  -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic,batch-console-api \
+  -pl batch-trigger,batch-orchestrator,batch-worker/import,batch-worker/export,batch-worker/process,batch-worker/dispatch,batch-worker/atomic,batch-console-api \
   -am ${_CLEAN_GOAL} package -T 2C
 
 echo "==> 复制可执行 jar 到 build/runtime-jars/..."
 for i in "${!MODULES[@]}"; do
   module="${MODULES[$i]}"
   name="${NAMES[$i]}"
-  jar="$(find "$ROOT/$module/target" -maxdepth 1 -name "${module}-*-exec.jar" 2>/dev/null \
+  dir="${DIRS[$i]}"
+  jar="$(find "$ROOT/$dir/target" -maxdepth 1 -name "${module}-*-exec.jar" 2>/dev/null \
           | grep -Ev 'sources|javadoc' | head -1 || true)"
   if [[ -z "$jar" || ! -f "$jar" ]]; then
-    echo "ERROR: 未找到可执行 exec jar: $module/target/${module}-*-exec.jar" >&2
+    echo "ERROR: 未找到可执行 exec jar: $dir/target/${module}-*-exec.jar" >&2
     exit 1
   fi
   _bytes="$(wc -c <"$jar" | awk '{print $1}')"

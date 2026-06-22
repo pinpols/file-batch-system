@@ -9,12 +9,13 @@ batch-platform
 ├── batch-common           ← 公共基础库（含 batch-defaults.yml 共享配置基线）
 ├── batch-trigger
 ├── batch-orchestrator
-├── batch-worker-core
-├── batch-worker-import
-├── batch-worker-export
-├── batch-worker-process
-├── batch-worker-dispatch
-├── batch-worker-atomic
+├── batch-worker           ← worker 模块聚合器（aggregator + 各 worker 的 parent；artifactId 不变）
+│   ├── core               （artifactId 仍为 batch-worker-core，下同）
+│   ├── import
+│   ├── export
+│   ├── process
+│   ├── dispatch
+│   └── atomic
 ├── batch-console-api
 └── batch-e2e-tests        ← 端到端验收测试模块（独立 Maven 模块，非前端）
 ```
@@ -1498,12 +1499,13 @@ batch-platform
 ├── batch-common           ← 公共库 + 共享配置基线（batch-defaults.yml）
 ├── batch-trigger
 ├── batch-orchestrator
-├── batch-worker-core
-├── batch-worker-import
-├── batch-worker-export
-├── batch-worker-process
-├── batch-worker-dispatch
-├── batch-worker-atomic
+├── batch-worker           ← worker 聚合器（aggregator + parent；子目录 core/import/... artifactId 不变）
+│   ├── core
+│   ├── import
+│   ├── export
+│   ├── process
+│   ├── dispatch
+│   └── atomic
 ├── batch-console-api
 └── batch-e2e-tests        ← 端到端验收测试（E2E，独立模块）
 ```

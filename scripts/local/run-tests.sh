@@ -49,12 +49,12 @@ declare -a CORE_TEST_MODULES=(
   batch-common
   batch-trigger
   batch-orchestrator
-  batch-worker-core
-  batch-worker-import
-  batch-worker-export
-  batch-worker-process
-  batch-worker-dispatch
-  batch-worker-atomic
+  batch-worker/core
+  batch-worker/import
+  batch-worker/export
+  batch-worker/process
+  batch-worker/dispatch
+  batch-worker/atomic
   batch-console-api
 )
 

@@ -5,12 +5,12 @@
 
     <parent>
         <groupId>com.example.batch</groupId>
-        <artifactId>batch-platform</artifactId>
+        <artifactId>batch-worker</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>batch-worker-dispatch</artifactId>
-    <name>batch-worker-dispatch</name>
+    <artifactId>batch-worker-import</artifactId>
+    <name>batch-worker-import</name>
 
     <dependencies>
         <dependency>
@@ -42,12 +42,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -60,9 +60,7 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
         </dependency>
-        <!-- Spring Boot 4: Flyway 自动配置在 starter 中；勿再声明 flyway-core:test（会从 exec jar 中拿掉 Flyway）。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-flyway</artifactId>
@@ -80,25 +78,22 @@
             <artifactId>apache-client</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp-jvm</artifactId>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
         </dependency>
+        <!-- commons-compress:ImportPreprocessPipeline 的 UNTAR / UNTAR_GZ 步骤解包 tar 容器。
+             JDK 自带 GZIP/ZIP,tar 无标准库;版本经 parent dependencyManagement 收敛。 -->
         <dependency>
-            <groupId>com.github.mwiede</groupId>
-            <artifactId>jsch</artifactId>
-            <version>0.2.26</version>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
         </dependency>
+        <!-- Univocity CSV parser: 业界性能/边界 case 覆盖最扎实的 CSV 解析库，替换 DelimitedFormatParser
+             手写的 tokenizer。零运行时依赖（自包含 ~500KB），API 流式。 -->
         <dependency>
-            <groupId>org.eclipse.angus</groupId>
-            <artifactId>angus-mail</artifactId>
+            <groupId>com.univocity</groupId>
+            <artifactId>univocity-parsers</artifactId>
+            <version>2.9.1</version>
         </dependency>
-        <dependency>
-            <groupId>com.icegreen</groupId>
-            <artifactId>greenmail</artifactId>
-            <version>2.1.8</version>
-            <scope>test</scope>
-        </dependency>
-
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -130,8 +125,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.redis</groupId>
-            <artifactId>testcontainers-redis</artifactId>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -142,7 +137,7 @@
                 <directory>src/test/resources</directory>
             </testResource>
             <testResource>
-                <directory>${project.basedir}/../db/migration</directory>
+                <directory>${project.basedir}/../../db/migration</directory>
                 <targetPath>db/migration</targetPath>
                 <includes>
                     <include>V*.sql</include>

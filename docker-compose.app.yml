@@ -202,6 +202,7 @@ services:
       dockerfile: docker/Dockerfile.app
       args:
         MODULE: batch-worker-import
+        MODULE_DIR: batch-worker/import
     container_name: batch-worker-import
     restart: unless-stopped
     environment:
@@ -260,6 +261,7 @@ services:
       dockerfile: docker/Dockerfile.app
       args:
         MODULE: batch-worker-export
+        MODULE_DIR: batch-worker/export
     container_name: batch-worker-export
     restart: unless-stopped
     environment:
@@ -318,6 +320,7 @@ services:
       dockerfile: docker/Dockerfile.app
       args:
         MODULE: batch-worker-process
+        MODULE_DIR: batch-worker/process
     container_name: batch-worker-process
     restart: unless-stopped
     environment:
@@ -376,6 +379,7 @@ services:
       dockerfile: docker/Dockerfile.app
       args:
         MODULE: batch-worker-dispatch
+        MODULE_DIR: batch-worker/dispatch
     container_name: batch-worker-dispatch
     restart: unless-stopped
     environment:

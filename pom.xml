@@ -23,12 +23,7 @@
         <module>batch-common</module>
         <module>batch-trigger</module>
         <module>batch-orchestrator</module>
-        <module>batch-worker-core</module>
-        <module>batch-worker-import</module>
-        <module>batch-worker-export</module>
-        <module>batch-worker-process</module>
-        <module>batch-worker-dispatch</module>
-        <module>batch-worker-atomic</module>
+        <module>batch-worker</module>
         <module>sdk/java/core</module>
         <module>sdk/java/spring</module>
         <module>sdk/java/testkit</module>

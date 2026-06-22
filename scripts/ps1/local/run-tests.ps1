@@ -29,9 +29,9 @@ elseif ($BuildOnly) { $mode = "build-only" }
 $logDir = Join-Path $root "logs\test"
 Ensure-Directory $logDir
 $coreModules = @(
-  "batch-common", "batch-trigger", "batch-orchestrator", "batch-worker-core",
-  "batch-worker-import", "batch-worker-export", "batch-worker-process",
-  "batch-worker-dispatch", "batch-worker-atomic", "batch-console-api"
+  "batch-common", "batch-trigger", "batch-orchestrator", "batch-worker/core",
+  "batch-worker/import", "batch-worker/export", "batch-worker/process",
+  "batch-worker/dispatch", "batch-worker/atomic", "batch-console-api"
 )
 $failed = 0
 $passed = 0

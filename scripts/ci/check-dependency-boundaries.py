@@ -84,12 +84,12 @@ def main() -> int:
         "batch-console-api",
         "batch-orchestrator",
         "batch-trigger",
-        "batch-worker-core",
-        "batch-worker-import",
-        "batch-worker-export",
-        "batch-worker-process",
-        "batch-worker-dispatch",
-        "batch-worker-atomic",
+        "batch-worker/core",
+        "batch-worker/import",
+        "batch-worker/export",
+        "batch-worker/process",
+        "batch-worker/dispatch",
+        "batch-worker/atomic",
     }
     for module in sorted(non_data_jdbc_modules):
         deps = runtime_dependencies(module)
