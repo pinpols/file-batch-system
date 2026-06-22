@@ -16,10 +16,10 @@ import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
 import com.example.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
+import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +49,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
   private DefaultWorkerRegistryService self = this;
 
-  @Autowired
+  @Resource(name = "orchestratorWorkerRegistryService")
   void setSelf(@Lazy DefaultWorkerRegistryService self) {
     this.self = self;
   }

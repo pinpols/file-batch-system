@@ -8,11 +8,11 @@ import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest
 import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse;
 import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse.ItemStats;
 import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,7 +46,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
   private DefaultConsoleTenantConfigInitApplicationService self = this;
 
-  @Autowired
+  @Resource(name = "defaultConsoleTenantConfigInitApplicationService")
   void setSelf(@Lazy DefaultConsoleTenantConfigInitApplicationService self) {
     this.self = self;
   }

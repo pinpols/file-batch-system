@@ -10,12 +10,12 @@ import com.example.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import com.example.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
+import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -71,7 +71,7 @@ public class BatchDayReplayDispatcher {
    */
   private BatchDayReplayDispatcher self = this;
 
-  @Autowired
+  @Resource(name = "batchDayReplayDispatcher")
   void setSelf(@Lazy BatchDayReplayDispatcher self) {
     this.self = self;
   }

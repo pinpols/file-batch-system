@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.auth;
 
 import com.example.batch.common.security.ApiKeyHasher;
 import com.example.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
+import jakarta.annotation.Resource;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -9,7 +10,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -49,7 +49,7 @@ public class ApiKeyVerifier {
    */
   private ApiKeyVerifier self = this;
 
-  @Autowired
+  @Resource(name = "apiKeyVerifier")
   void setSelf(@Lazy ApiKeyVerifier self) {
     this.self = self;
   }

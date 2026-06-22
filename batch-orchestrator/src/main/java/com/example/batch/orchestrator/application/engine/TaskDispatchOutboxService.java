@@ -15,11 +15,11 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import jakarta.annotation.Resource;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -46,7 +46,7 @@ public class TaskDispatchOutboxService {
 
   private TaskDispatchOutboxService self = this;
 
-  @Autowired
+  @Resource(name = "taskDispatchOutboxService")
   void setSelf(@Lazy TaskDispatchOutboxService self) {
     this.self = self;
   }

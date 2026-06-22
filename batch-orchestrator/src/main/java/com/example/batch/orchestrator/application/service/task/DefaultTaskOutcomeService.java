@@ -44,6 +44,7 @@ import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -55,7 +56,6 @@ import java.util.Set;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
@@ -101,7 +101,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   private DefaultTaskOutcomeService self = this;
 
-  @Autowired
+  @Resource(name = "defaultTaskOutcomeService")
   void setSelf(@Lazy DefaultTaskOutcomeService self) {
     this.self = self;
   }

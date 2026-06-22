@@ -36,6 +36,7 @@ import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
+import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,7 +46,6 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -79,7 +79,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
    */
   private DefaultRetryGovernanceService replayTransactionalSelf = this;
 
-  @Autowired
+  @Resource(name = "defaultRetryGovernanceService")
   void setReplayTransactionalSelf(@Lazy DefaultRetryGovernanceService replayTransactionalSelf) {
     this.replayTransactionalSelf = replayTransactionalSelf;
   }

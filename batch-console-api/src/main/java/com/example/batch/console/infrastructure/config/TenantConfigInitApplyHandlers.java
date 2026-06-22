@@ -44,6 +44,7 @@ import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse.ItemStats;
 import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse.ItemStatsAccumulator;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +55,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -95,7 +95,7 @@ public class TenantConfigInitApplyHandlers {
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final PlatformTransactionManager transactionManager;
 
-  @Autowired
+  @Resource(name = "tenantConfigInitApplyHandlers")
   void setSelf(@Lazy TenantConfigInitApplyHandlers self) {
     this.self = self;
   }

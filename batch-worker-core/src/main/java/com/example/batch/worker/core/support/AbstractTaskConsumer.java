@@ -24,9 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.web.client.HttpServerErrorException;
@@ -53,7 +55,7 @@ import org.springframework.web.client.ResourceAccessException;
  * </ul>
  */
 @Slf4j
-public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
+public abstract class AbstractTaskConsumer implements WorkerLoadProvider, ApplicationContextAware {
 
   /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
   protected abstract AbstractWorkerLoop workerLoop();
@@ -116,9 +118,10 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
     this.maxConcurrentTasks = maxConcurrentTasks;
   }
 
-  @Autowired(required = false)
-  void setSubscribeProperties(WorkerKafkaSubscribeProperties subscribeProperties) {
-    this.subscribeProperties = subscribeProperties;
+  @Override
+  public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+    this.subscribeProperties =
+        applicationContext.getBeanProvider(WorkerKafkaSubscribeProperties.class).getIfAvailable();
   }
 
   /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */

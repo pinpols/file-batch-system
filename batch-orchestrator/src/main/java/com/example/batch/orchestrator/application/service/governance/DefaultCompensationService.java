@@ -27,6 +27,7 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.service.LaunchService;
+import jakarta.annotation.Resource;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -34,7 +35,6 @@ import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -72,7 +72,7 @@ public class DefaultCompensationService implements CompensationService {
 
   private DefaultCompensationService self = this;
 
-  @Autowired
+  @Resource(name = "defaultCompensationService")
   void setSelf(@Lazy DefaultCompensationService self) {
     this.self = self;
   }
