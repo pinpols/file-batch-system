@@ -83,9 +83,21 @@ jobs:
             echo "BATCH_INTERNAL_SECRET=ci-e2e-internal-secret-0123456789abcdef"
           } >> .env.local
 
-      - name: Boot infra + orchestrator + trigger (proven up-apps.sh)
-        # 只起 orchestrator + trigger(+ 经 depends_on 带起 postgres/kafka/minio/valkey),
-        # 不起全套内建 worker,缩短启动。compose build 在 runner 上构建镜像(较慢)。
+      - name: Boot postgres + apply Flyway migrations (apps run with flyway disabled)
+        # compose 里 app 服务一律 SPRING_FLYWAY_ENABLED=false、无 migrator service、
+        # postgres init 只建库/schema 不含表 → 必须先单起 PG 手动迁移平台 schema,
+        # 再起 app;否则 orchestrator 启动 / worker 注册时 batch.* 表不存在。
+        run: |
+          bash scripts/docker/up-apps.sh postgres-primary
+          for _ in $(seq 1 40); do
+            docker exec batch-postgres-primary pg_isready -U batch_user -d batch_platform >/dev/null 2>&1 && break
+            sleep 3
+          done
+          bash scripts/local/apply-pending-flyway-migrations.sh
+
+      - name: Boot orchestrator + trigger (proven up-apps.sh)
+        # 只起 orchestrator + trigger(+ 经 depends_on 带起 kafka/minio/valkey),不起全套
+        # 内建 worker,缩短启动。compose build 在 runner 上构建镜像(较慢)。
         run: bash scripts/docker/up-apps.sh orchestrator trigger
 
       - name: Wait for orchestrator + trigger health
