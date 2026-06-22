@@ -7,6 +7,7 @@ CREATE TEMP TABLE seed_cleanup_pipeline_instance_ids(id BIGINT PRIMARY KEY) ON C
 CREATE TEMP TABLE seed_cleanup_file_record_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
 CREATE TEMP TABLE seed_cleanup_outbox_event_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
 CREATE TEMP TABLE seed_cleanup_job_definition_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
+CREATE TEMP TABLE seed_cleanup_workflow_definition_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
 
 INSERT INTO seed_cleanup_job_instance_ids(id)
 SELECT DISTINCT id
@@ -50,6 +51,13 @@ WHERE source_ref IN (
    OR file_code LIKE :'pattern'
 ON CONFLICT DO NOTHING;
 
+INSERT INTO seed_cleanup_file_record_ids(id)
+SELECT file_id
+FROM batch.pipeline_instance
+WHERE id IN (SELECT id FROM seed_cleanup_pipeline_instance_ids)
+  AND file_id IS NOT NULL
+ON CONFLICT DO NOTHING;
+
 INSERT INTO seed_cleanup_outbox_event_ids(id)
 SELECT id
 FROM batch.outbox_event
@@ -68,6 +76,12 @@ FROM batch.job_definition
 WHERE job_code LIKE :'pattern'
 ON CONFLICT DO NOTHING;
 
+INSERT INTO seed_cleanup_workflow_definition_ids(id)
+SELECT id
+FROM batch.workflow_definition
+WHERE workflow_code LIKE :'pattern'
+ON CONFLICT DO NOTHING;
+
 DELETE FROM batch.pipeline_step_run
 WHERE pipeline_instance_id IN (SELECT id FROM seed_cleanup_pipeline_instance_ids);
 
@@ -78,11 +92,11 @@ DELETE FROM batch.file_dispatch_record
 WHERE pipeline_instance_id IN (SELECT id FROM seed_cleanup_pipeline_instance_ids)
    OR file_id IN (SELECT id FROM seed_cleanup_file_record_ids);
 
-DELETE FROM batch.file_record
-WHERE id IN (SELECT id FROM seed_cleanup_file_record_ids);
-
 DELETE FROM batch.pipeline_instance
 WHERE id IN (SELECT id FROM seed_cleanup_pipeline_instance_ids);
+
+DELETE FROM batch.file_record
+WHERE id IN (SELECT id FROM seed_cleanup_file_record_ids);
 
 DELETE FROM batch.workflow_node_run
 WHERE workflow_run_id IN (
@@ -137,7 +151,14 @@ DELETE FROM batch.trigger_runtime_state
 WHERE job_definition_id IN (SELECT id FROM seed_cleanup_job_definition_ids);
 
 DELETE FROM batch.workflow_node
-WHERE node_code = 'SEEDVAL_PROBE';
+WHERE node_code = 'SEEDVAL_PROBE'
+   OR workflow_definition_id IN (SELECT id FROM seed_cleanup_workflow_definition_ids);
+
+DELETE FROM batch.workflow_edge
+WHERE workflow_definition_id IN (SELECT id FROM seed_cleanup_workflow_definition_ids);
+
+DELETE FROM batch.workflow_definition
+WHERE id IN (SELECT id FROM seed_cleanup_workflow_definition_ids);
 
 DELETE FROM batch.pipeline_step_definition
 WHERE pipeline_definition_id IN (

@@ -51,14 +51,21 @@ import_one() {
 
   echo "── tenant $tenant"
   # 1) upload
-  local upload_resp
+  local upload_resp upload_body upload_code
+  upload_body="$(mktemp -t sim-tenant-upload.XXXXXX)"
   local upload_key="sim-${tenant}-tenant-package-upload-$(date +%s%N)"
-  upload_resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
+  upload_code=$(curl -sS --max-time 90 --connect-timeout 5 -o "$upload_body" -w "%{http_code}" -X POST \
     -H "X-Tenant-Id: $tenant" "${CURL_AUTH_ARGS[@]}" \
     -H "Idempotency-Key: $upload_key" \
     -H "X-Request-Id: $upload_key" \
     -F "file=@${file}" \
-    "$CONSOLE_BASE/api/console/config/tenant-package/excel/upload?tenantId=$tenant" 2>&1)
+    "$CONSOLE_BASE/api/console/config/tenant-package/excel/upload?tenantId=$tenant" 2>&1 || true)
+  upload_resp="$(cat "$upload_body" 2>/dev/null || true)"
+  rm -f "$upload_body"
+  if [[ ! "$upload_code" =~ ^2 ]]; then
+    echo "  ✗ upload 失败 HTTP=$upload_code: $upload_resp" >&2
+    return 1
+  fi
   local token
   token=$(echo "$upload_resp" | python3 -c "import json,sys; print(json.load(sys.stdin).get('data',{}).get('uploadToken',''))" 2>/dev/null)
   if [[ -z "$token" ]]; then
@@ -68,21 +75,29 @@ import_one() {
   echo "  ✓ upload token=$token"
 
   # 2) apply
-  local apply_resp
+  local apply_resp apply_body apply_code
+  apply_body="$(mktemp -t sim-tenant-apply.XXXXXX)"
   local apply_key="sim-${tenant}-tenant-package-apply-$(date +%s%N)"
-  apply_resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
+  apply_code=$(curl -sS --max-time 180 --connect-timeout 5 -o "$apply_body" -w "%{http_code}" -X POST \
     -H "X-Tenant-Id: $tenant" "${CURL_AUTH_ARGS[@]}" \
     -H "Idempotency-Key: $apply_key" \
     -H "X-Request-Id: $apply_key" \
     -H "Content-Type: application/json" \
     -d '{}' \
-    "$CONSOLE_BASE/api/console/config/tenant-package/excel/apply/$token" 2>&1)
+    "$CONSOLE_BASE/api/console/config/tenant-package/excel/apply/$token" 2>&1 || true)
+  apply_resp="$(cat "$apply_body" 2>/dev/null || true)"
+  rm -f "$apply_body"
+  if [[ ! "$apply_code" =~ ^2 ]]; then
+    echo "  ✗ apply 失败 HTTP=$apply_code: $apply_resp" >&2
+    return 1
+  fi
   local code
   code=$(echo "$apply_resp" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null)
   if [[ "$code" == "SUCCESS" || "$code" == "OK" ]]; then
     echo "  ✓ apply OK"
   else
-    echo "  ⚠ apply resp: $apply_resp" >&2
+    echo "  ✗ apply 失败: $apply_resp" >&2
+    return 1
   fi
 }
 
