@@ -12,9 +12,10 @@ license = { text = "Apache-2.0" }
 dependencies = [
     # Locally develop against the sibling SDK source — editable-install the SDK first
     # (`pip install -e sdk/python`), then `pip install -e .` here picks up live changes.
-    # Distribution name is batch-worker-sdk-python (see sdk/python/pyproject.toml [project].name);
-    # depending on the bare "batch-worker-sdk" fails with "No matching distribution found".
-    "batch-worker-sdk-python",
+    # Distribution name is "batch-worker-sdk" (see sdk/python/pyproject.toml [project].name
+    # and README `pip install batch-worker-sdk`); depending on "batch-worker-sdk-python"
+    # fails with "No matching distribution found".
+    "batch-worker-sdk",
 ]
 
 [tool.hatch.build.targets.wheel]
