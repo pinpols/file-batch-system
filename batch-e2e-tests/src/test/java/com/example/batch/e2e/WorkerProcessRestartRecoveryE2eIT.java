@@ -461,7 +461,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   private Path locateWorkerExecJar() throws IOException, InterruptedException {
-    Path workerTargetDir = projectRoot().resolve("batch-worker-dispatch/target");
+    Path workerTargetDir = projectRoot().resolve("batch-worker/dispatch/target");
     Path execJar = findLatestExecJar(workerTargetDir);
     if (execJar != null) {
       return execJar;
@@ -482,7 +482,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             "mvn",
             "-q",
             "-pl",
-            "batch-worker-dispatch",
+            "batch-worker/dispatch",
             "-am",
             "-DskipTests",
             "package",
@@ -523,7 +523,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     while (current != null) {
       if (Files.isRegularFile(current.resolve("pom.xml"))
           && Files.isRegularFile(current.resolve("batch-orchestrator/pom.xml"))
-          && Files.isRegularFile(current.resolve("batch-worker-dispatch/pom.xml"))) {
+          && Files.isRegularFile(current.resolve("batch-worker/dispatch/pom.xml"))) {
         return current;
       }
       current = current.getParent();
