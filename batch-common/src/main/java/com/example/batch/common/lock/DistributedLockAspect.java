@@ -25,10 +25,14 @@ import org.springframework.expression.spel.support.StandardEvaluationContext;
  * AutoConfiguration 提供(JDBC 默认 / Redis 可覆盖)。
  *
  * <p>SpEL key 求值参考 AuditAspect 同款实现(ParameterNameDiscoverer + StandardEvaluationContext)。
+ *
+ * <p>本切面是 {@link DistributedLock} 的配套机制;该注解目前是预留未采纳能力(见其 Javadoc),故对 deprecation
+ * 告警显式抑制——切面合法实现注解的运行时行为,不是误用。
  */
 @Slf4j
 @Aspect
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation") // implements the reserved-but-unadopted @DistributedLock machinery
 public class DistributedLockAspect {
 
   private final LockingTaskExecutor lockingTaskExecutor;
