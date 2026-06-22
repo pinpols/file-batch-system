@@ -69,6 +69,15 @@ public class AdminTestDataCleanupRepository {
                 + jobInstanceSubquery
                 + ")",
             new MapSqlParameterSource("p", like)));
+    // approval_command 的 target_id 存的是业务键(JOB_INSTANCE 审批存 job_code,如 e2e-job-xxx),
+    // 不随 job_instance 删除而级联(无 FK,target_id 是字符串)。漏清会留下指向已删实例的
+    // 待审批,点"通过"报 job instance not found。按同一 prefix 清 JOB_INSTANCE 审批。
+    result.put(
+        "approval_command",
+        jdbc.update(
+            "DELETE FROM batch.approval_command WHERE target_type = 'JOB_INSTANCE'"
+                + " AND target_id LIKE :p ESCAPE '\\'",
+            new MapSqlParameterSource("p", like)));
     result.put(
         "pipeline_instance",
         jdbc.update(
@@ -249,6 +258,10 @@ public class AdminTestDataCleanupRepository {
     result.put(
         "job_instance",
         jdbc.update("DELETE FROM batch.job_instance WHERE tenant_id IN (:ids)", params));
+    // 审批按租户清(同 prefix 段理由:approval_command 不随 job_instance 级联,漏清留 stale 待审批)
+    result.put(
+        "approval_command",
+        jdbc.update("DELETE FROM batch.approval_command WHERE tenant_id IN (:ids)", params));
 
     result.put(
         "file_error_record",
