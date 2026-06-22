@@ -112,8 +112,23 @@ case "$LANG_ID" in
          python -m sample_tenant_worker ) > "$WORKER_LOG" 2>&1 &
     WPID=$!
     ;;
+  java)
+    echo "==> building batch-worker-sdk(+testkit) to local m2"
+    # SDK 模块在根 reactor 按路径注册(<module>sdk/java</module>),-pl 用路径不是 artifactId
+    ( cd "$ROOT" && mvn -q -pl sdk/java,sdk/java-testkit -am install -DskipTests ) \
+      || { echo "FAIL: mvn install batch-worker-sdk failed"; dump_diagnostics; exit 1; }
+    echo "==> packaging java sample worker"
+    ( cd examples/self-hosted-sdk/sample-tenant-worker-java && mvn -q package -DskipTests ) \
+      || { echo "FAIL: mvn package java sample worker failed"; dump_diagnostics; exit 1; }
+    JAR="$(ls examples/self-hosted-sdk/sample-tenant-worker-java/target/sample-tenant-worker-*.jar | head -1)"
+    # 注:jar manifest 的 Class-Path=lib/ 相对 jar 自身位置解析(maven-dependency-plugin 已拷到 target/lib)
+    ( BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$RAW_KEY" BATCH_TENANT_ID="$TENANT" \
+      BATCH_WORKER_CODE="$WORKER_CODE" BATCH_KAFKA="$KAFKA_BOOTSTRAP" \
+      java -jar "$JAR" ) > "$WORKER_LOG" 2>&1 &
+    WPID=$!
+    ;;
   *)
-    echo "FAIL: unsupported lang '${LANG_ID}' (go|python)"; exit 2 ;;
+    echo "FAIL: unsupported lang '${LANG_ID}' (go|python|java)"; exit 2 ;;
 esac
 
 # ── 4. 阶段 A 硬断言:worker 注册 + 心跳落 worker_registry ─────────────────
