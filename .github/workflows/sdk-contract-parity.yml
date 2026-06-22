@@ -85,7 +85,7 @@ jobs:
             test
 
   python-contract:
-    name: python contract stub (xfail) + parity stub
+    name: python contract + shared-constants parity
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -102,9 +102,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
-      - name: Run contract runner (xfail tolerated)
+      - name: Run contract runner
         run: pytest tests/contract -v
-      - name: Run shared-constants parity stub
+      - name: Run shared-constants parity
         run: pytest tests/test_shared_constants_parity.py -v
 
   # --- BYO SDKs (Go / TypeScript / Rust): each runs its own conformance runner
