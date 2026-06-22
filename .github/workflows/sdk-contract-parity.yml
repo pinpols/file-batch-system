@@ -31,6 +31,11 @@ on:
       - 'sdk/go/**'
       - 'sdk/typescript/**'
       - 'sdk/rust/**'
+      # 文档/README 改动不触发跨语言契约 + 真 kafka live transport(2026-06-22)。
+      # 必须放在上面 sdk/<lang>/** 正向之后:GitHub paths 取「最后匹配的模式」,
+      # sdk/java/README.md 命中 sdk/java/** 后再被本条 ! 否决 → 不触发。docs/api/**
+      # 在本条之后,不受影响。
+      - '!sdk/**/*.md'
       - 'docs/api/sdk-contract-fixtures/**'
       - 'docs/api/sdk-shared-constants.yaml'
       - 'docs/api/orchestrator-internal.openapi.yaml'
