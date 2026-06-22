@@ -13,12 +13,12 @@ paths = [
     '''(.*/)?build/.*''',
     # 本地开发 profile RSA 私钥,生产由 Helm Secret 注入覆盖
     '''batch-console-api/src/main/resources/application-local\.yml''',
-    # 测试 fixture
-    '''batch-worker-import/src/test/resources/fixtures/test-rsa-private-pkcs8\.pem''',
+    # 测试 fixture(batch-worker[-/]import 同时覆盖嵌套前 batch-worker-import/ 旧路径与嵌套后 batch-worker/import/ 新路径)
+    '''batch-worker[-/]import/src/test/resources/fixtures/test-rsa-private-pkcs8\.pem''',
     # 文档示例
     '''docs/runbook/realtime-sse-verification\.md''',
     # 测试代码:PEM header/footer 字面量(用于 strip 解析,非真私钥)
-    '''batch-worker-import/src/test/java/com/example/batch/worker/imports/preprocess/ImportPreprocessPipelineRsaTest\.java''',
+    '''batch-worker[-/]import/src/test/java/com/example/batch/worker/imports/preprocess/ImportPreprocessPipelineRsaTest\.java''',
     # 测试代码:JWT 测试 fixture STRONG_SECRET 字面量(非真实凭据,shallow-clone CI 误判 generic-api-key)
     '''batch-console-api/src/test/java/com/example/batch/console/domain/rbac/support/ConsoleJwtServiceTest\.java''',
     # 测试代码:FilesystemObjectStore/EncryptingObjectStore/Console FS presign 端点的 HMAC fixture
