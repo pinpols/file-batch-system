@@ -29,7 +29,7 @@ public class ConsoleSdkCatalogService {
    * <ul>
    *   <li>java {@code com.example.batch:batch-worker-sdk} ← pom {@code ${revision}} = 仓库
    *       1.1.0-SNAPSHOT(未发布)
-   *   <li>python {@code batch-worker-sdk-python} ← {@code _version.py} 0.5.0a0(pre-release)
+   *   <li>python {@code batch-worker-sdk} ← {@code _version.py} 0.5.0a0(pre-release)
    *   <li>typescript {@code @batch/worker-sdk} ← package.json 1.1.0
    *   <li>rust {@code batch-worker-sdk} ← Cargo.toml 1.1.0
    *   <li>go {@code github.com/pinpols/file-batch-system/batch-worker-sdk-go} ← 无 tag(仓库版)
@@ -49,7 +49,7 @@ public class ConsoleSdkCatalogService {
               CONFORMANCE_PER_PR_PARITY),
           new SdkLanguage(
               "python",
-              "batch-worker-sdk-python",
+              "batch-worker-sdk",
               "0.5.0a0",
               "pip install batch-worker-sdk",
               CONFORMANCE_PER_PR_PARITY),

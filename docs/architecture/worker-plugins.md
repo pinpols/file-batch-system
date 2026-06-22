@@ -65,7 +65,7 @@
 
 ## 与设计说明书 §9.3 / §9.4 的对应关系
 
-设计文档中的阶段命名与本仓库 **import / export Worker** 的 Step 一一对应（实现类在 `batch-worker-import` / `batch-worker-export` 的 `stage` 包下）。
+设计文档中的阶段命名与本仓库 **import / export Worker** 的 Step 一一对应（实现类在 `batch-worker/import` / `batch-worker/export` 的 `stage` 包下）。
 
 ### 导入（§9.3 文件导入链路）
 
