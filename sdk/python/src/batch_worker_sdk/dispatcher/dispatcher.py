@@ -35,6 +35,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import uuid
@@ -538,8 +539,12 @@ class TaskDispatcher:
         if result is not None:
             if result.output:
                 body["outputs"] = dict(result.output)
-            if result.message:
-                body["resultSummary"] = result.message
+            # result_summary 是平台 jsonb 列(#{resultSummary}::jsonb),必须是合法 JSON,
+            # 不能是裸人读串(否则 invalid input syntax for type json → report 500)。发
+            # {code,message} JSON 对象,对齐内建 worker DefaultTaskExecutionWrapper 的契约。
+            body["resultSummary"] = json.dumps(
+                {"code": "SUCCESS", "message": result.message or ""}
+            )
         self._attach_report_meta(body, msg)
         try:
             await self._http.report(task_id, _new_idempotency_key(), body)
@@ -571,7 +576,8 @@ class TaskDispatcher:
             "workerId": self._config.worker_code,
             "success": False,
             "message": reason,
-            "resultSummary": reason,
+            # jsonb 列:发 {code,message} JSON 对象(见 success 路径同理)。
+            "resultSummary": json.dumps({"code": error_code, "message": reason}),
             "errorCode": error_code,
         }
         if outputs:

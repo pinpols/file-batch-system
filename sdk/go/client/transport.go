@@ -58,6 +58,18 @@ type ReportRequest struct {
 // the openapi-required identity + success fields. partitionInvocationID is the
 // value cached at claim (empty for non-partition tasks).
 func NewReportRequest(taskID, tenantID, workerID, partitionInvocationID string, result TaskResult) ReportRequest {
+	code := "SUCCESS"
+	if !result.IsSuccess() {
+		code = string(result.ErrorCode)
+	}
+	// result_summary is a JSONB column on the platform (`#{resultSummary}::jsonb`), so it
+	// must be VALID JSON — a bare human string ("echoed 0 param(s)") fails with
+	// "invalid input syntax for type json" and the report 500s. Mirror the built-in
+	// worker contract: a {"code","message"} JSON object (DefaultTaskExecutionWrapper).
+	summaryJSON, err := json.Marshal(map[string]string{"code": code, "message": result.ResultSummary})
+	if err != nil {
+		summaryJSON = []byte(`{"code":"SUCCESS","message":""}`)
+	}
 	return ReportRequest{
 		TaskID:                taskID,
 		TenantID:              tenantID,
@@ -65,7 +77,7 @@ func NewReportRequest(taskID, tenantID, workerID, partitionInvocationID string, 
 		Success:               result.IsSuccess(),
 		ErrorCode:             result.ErrorCode,
 		Outputs:               result.Outputs,
-		ResultSummary:         result.ResultSummary,
+		ResultSummary:         string(summaryJSON),
 		PartitionInvocationID: partitionInvocationID,
 	}
 }

@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
@@ -40,10 +41,17 @@ func (m *TaskDispatchMessage) UnmarshalJSON(data []byte) error {
 	aux := struct {
 		*alias
 		TaskType string `json:"taskType"`
+		// taskId is a BIGINT on the platform, so the orchestrator emits it as a JSON
+		// number (e.g. 4515), but the SDK carries it as a string (URL path segment for
+		// claim/report). Capture it raw and normalize, tolerating both number and the
+		// quoted-string form the contract fixtures historically used. Without this the
+		// real dispatch payload fails to decode ("cannot unmarshal number into string").
+		TaskID json.RawMessage `json:"taskId"`
 	}{alias: (*alias)(m)}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+	m.TaskID = strings.Trim(strings.TrimSpace(string(aux.TaskID)), `"`)
 	if m.WorkerType == "" && aux.TaskType != "" {
 		m.WorkerType = aux.TaskType
 	}

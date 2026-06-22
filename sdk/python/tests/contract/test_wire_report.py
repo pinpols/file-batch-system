@@ -162,7 +162,11 @@ async def test_report_failure_body_uses_result_summary_not_error_message(
 
     body = json.loads(httpx_mock.get_request().content)
     assert body["success"] is False
-    assert body["resultSummary"] == "no handler for type=demo"
+    # resultSummary 是平台 jsonb 列 → {code,message} JSON 对象(非裸串)。
+    assert json.loads(body["resultSummary"]) == {
+        "code": "SdkDispatchError",
+        "message": "no handler for type=demo",
+    }
     assert body["errorCode"] == "SdkDispatchError"
     # 已废字段必须不出现
     assert "errorMessage" not in body

@@ -24,12 +24,12 @@ import {
   type TaskHandler,
   type TaskContext,
   type TaskResult,
-} from "../../../sdk/typescript/src/index.ts";
+} from "../../../../sdk/typescript/src/index.ts";
 import {
   KafkaConsumerAdapter,
   type KafkaConsumerConfig,
   type KafkaSaslConfig,
-} from "../../../sdk/typescript/kafka/kafkaConsumer.ts";
+} from "../../../../sdk/typescript/kafka/kafkaConsumer.ts";
 
 const logger = consoleLogger;
 

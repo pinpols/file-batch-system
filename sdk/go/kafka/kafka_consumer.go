@@ -76,10 +76,30 @@ type Config struct {
 	Logger *log.Logger
 }
 
-// topicPrefix returns the wildcard prefix batch.task.dispatch.<tenant>. that a
-// topic must start with to belong to this tenant.
-func (c Config) topicPrefix() string {
-	return "batch.task.dispatch." + c.TenantID + "."
+// dispatchTopicBase is the common prefix of every platform dispatch topic.
+const dispatchTopicBase = "batch.task.dispatch."
+
+// directDispatchSuffix returns the ".node.<workerCode>" suffix that the platform
+// appends when it directs a task at THIS specific worker (sticky / group-gated
+// routing for SDK self-hosted workers, ADR-035 §2). The orchestrator publishes
+// SDK-bound tasks to `batch.task.dispatch.<workerType>.node.<workerCode>` — the
+// canonical scheme used by built-in workers' AbstractTaskConsumer.topicPattern()
+// (base-first), NOT the old `batch.task.dispatch.<tenant>.*` (tenant-first) which
+// the orchestrator never publishes to. Cross-tenant safety is still enforced by
+// the pipeline tenant self-check (§1.9) on each decoded message.
+func (c Config) directDispatchSuffix() string {
+	return ".node." + c.WorkerCode
+}
+
+// matchesDirectDispatch reports whether a broker topic is THIS worker's
+// node-direct dispatch topic: batch.task.dispatch.<workerType>.node.<workerCode>.
+// It is intentionally <workerType>-agnostic — an SDK self-hosted worker may serve
+// any task type, and the platform dispatches each to its own base (import / export
+// / process / dispatch / atomic) then appends `.node.<workerCode>`. Matching only
+// the base prefix + node suffix means one subscription covers every task type.
+func matchesDirectDispatch(topicName, workerCode string) bool {
+	return strings.HasPrefix(topicName, dispatchTopicBase) &&
+		strings.HasSuffix(topicName, ".node."+workerCode)
 }
 
 // groupID returns the per-worker consumer group g-sdk-<tenantId>-<workerCode>.
@@ -167,7 +187,7 @@ func NewConsumer(cfg Config) (*Consumer, error) {
 	}
 	if len(topics) == 0 {
 		cancel()
-		return nil, fmt.Errorf("kafka: no topics match prefix %q (create the dispatch topic first)", cfg.topicPrefix())
+		return nil, fmt.Errorf("kafka: no topics match suffix %q (the node-direct dispatch topic batch.task.dispatch.<workerType>.node.<workerCode> must exist; the orchestrator creates it on first dispatch, or pre-create it)", cfg.directDispatchSuffix())
 	}
 	c.topics = topics
 	c.reader = c.newReader(topics)
@@ -224,13 +244,12 @@ func (c *Consumer) discoverTopics() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kafka: metadata request: %w", err)
 	}
-	prefix := c.cfg.topicPrefix()
 	var matched []string
 	for _, t := range resp.Topics {
 		if t.Error != nil {
 			continue
 		}
-		if strings.HasPrefix(t.Name, prefix) {
+		if matchesDirectDispatch(t.Name, c.cfg.WorkerCode) {
 			matched = append(matched, t.Name)
 		}
 	}

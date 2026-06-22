@@ -361,10 +361,21 @@ export class HttpTransport implements Transport {
     idempotencyKey: string,
   ): Promise<void> {
     // TaskExecutionReportDto requires [taskId, tenantId, workerId, success].
+    // result_summary is a platform JSONB column (`#{resultSummary}::jsonb`): it must be
+    // VALID JSON, not a bare human string (else "invalid input syntax for type json" →
+    // report 500). Serialize to a {code,message} object (aligned with the built-in worker
+    // DefaultTaskExecutionWrapper contract).
+    const code = body.errorCode ?? (body.success ? "SUCCESS" : "FAILED");
+    const wireBody = {
+      tenantId: this.#tenantId,
+      workerId: this.#workerCode,
+      ...body,
+      resultSummary: JSON.stringify({ code, message: body.resultSummary ?? "" }),
+    };
     await this.#call(
       "report",
       `/internal/tasks/${encodeURIComponent(taskId)}/report`,
-      { tenantId: this.#tenantId, workerId: this.#workerCode, ...body },
+      wireBody,
       { "idempotency-key": idempotencyKey },
       true,
     );
