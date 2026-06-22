@@ -57,9 +57,9 @@ if TYPE_CHECKING:
 
 def _directive_fields(
     directive: ParsedDirective | dict[str, Any],
-) -> tuple[str | None, int | None]:
+) -> tuple[str | None, int | None, list[str]]:
     """从 directive(``ParsedDirective`` 强类型 **或** 原始 ``dict``)抽取
-    ``(runtimeState, desiredMaxConcurrent)``。
+    ``(runtimeState, desiredMaxConcurrent, pausedTaskTypes)``。
 
     鸭子类型分派,避免 dispatcher → scheduler 的运行时 import:``dict`` 走
     ``.get``;``ParsedDirective`` 走属性。``ParsedDirective.platform_status`` 是
@@ -70,11 +70,13 @@ def _directive_fields(
         state = str(raw_state) if raw_state is not None else None
         desired_raw = directive.get("desiredMaxConcurrent")
         desired = int(desired_raw) if isinstance(desired_raw, int) else None
-        return state, desired
+        paused_raw = directive.get("pausedTaskTypes")
+        paused = [str(t) for t in paused_raw] if isinstance(paused_raw, list) else []
+        return state, desired, paused
     # ParsedDirective(或任何带这些属性的对象)。
     status = directive.platform_status
     state = status.value if status is not None else None
-    return state, directive.desired_max_concurrent
+    return state, directive.desired_max_concurrent, list(directive.paused_task_types or [])
 
 
 def _new_idempotency_key() -> str:
@@ -179,6 +181,9 @@ class TaskDispatcher:
         # 平台动态压并发(wire-protocol §2.1 desiredMaxConcurrent):None 表示沿用
         # 本地配置 max_concurrent_tasks;>0 时收敛到平台建议值(取 min,不抬高)。
         self._effective_max_concurrent: int | None = None
+        # 平台下发的暂停任务类型集合(wire-protocol §2.1 pausedTaskTypes):on_message
+        # 收到 workerType ∈ 此集合的消息 → drop 且不提交 offset,平台 unpause 后重投。
+        self._paused_task_types: set[str] = set()
 
     # ─── 对外可观察状态 ───────────────────────────────────────────────
 
@@ -246,10 +251,10 @@ class TaskDispatcher:
            PAUSED/DRAINING 会让 ``accepts_new_tasks()`` 返回 False,驱动 Kafka
            pause;DEGRADED/NORMAL 继续接单(DEGRADED 不 pause)。
         2. ``desiredMaxConcurrent`` → 收敛 ``effective_max_concurrent``(只下压)。
-
-        其余字段(``pausedTaskTypes`` per-message drop 等)仍属后续扩展。
+        3. ``pausedTaskTypes`` → 落 ``_paused_task_types``,``on_message`` 据此对命中
+           workerType 的消息做 per-message drop(不提交 offset,平台 unpause 后重投)。
         """
-        state_raw, desired = _directive_fields(directive)
+        state_raw, desired, paused = _directive_fields(directive)
         if state_raw is not None:
             try:
                 self._runtime_state = WorkerRuntimeState(state_raw)
@@ -261,6 +266,8 @@ class TaskDispatcher:
         elif desired is not None:
             # 显式下发 0 / 负值:视为「撤销收敛」,回落本地配置。
             self._effective_max_concurrent = None
+        # pausedTaskTypes:全量替换(每次 directive 携带当前完整暂停集合)。
+        self._paused_task_types = set(paused)
 
     # ─── 取消信号 ────────────────────────────────────────────────────
 
@@ -325,6 +332,19 @@ class TaskDispatcher:
                 msg.get("taskId"),
             )
             return DispatchDisposition.RETRY_LATER
+
+        # pausedTaskTypes per-message drop(wire-protocol §2.1):workerType 命中平台
+        # 暂停集合 → drop 且不提交 offset(RETRY_LATER),平台 unpause 后重投。对齐
+        # 决策核 decidePausedTaskType。早于 schema/tenant 校验:暂停期连解析都不必。
+        if self._paused_task_types:
+            worker_type = msg.get("workerType")
+            if isinstance(worker_type, str) and worker_type in self._paused_task_types:
+                logger.info(
+                    "workerType=%s paused, dropping taskId=%s without commit (redelivered on unpause)",
+                    worker_type,
+                    msg.get("taskId"),
+                )
+                return DispatchDisposition.RETRY_LATER
 
         # schemaVersion 校验:缺字段 / 空白按 v1 解析(对齐 Java + fixture 16),
         # 仅未知大版本(如 v3)才拒;且拒时不提交 offset(§A),避免老 SDK 按错
