@@ -22,6 +22,9 @@ allowed_file() {
     scripts/ci/check-sql-config-boundaries.sh) return 0 ;;
     # 守护脚本:故意内联 SQL/DDL 关键词(on conflict / DROP TABLE 等)作检测模式,非真实执行。
     scripts/ci/check-db-scripts-safety.sh) return 0 ;;
+    # SDK×真 orchestrator e2e 驱动:内联 SQL 为 seed 一把 API key(参数化 INSERT)+
+    # 只读断言探针(worker_registry / job_instance),与 sim/ops 探针脚本同类。
+    scripts/ci/run-sdk-orchestrator-e2e.sh) return 0 ;;
     load-tests/scripts/cleanup-worker-load-data.sh) return 0 ;;
     load-tests/scripts/prepare-worker-load-data.sh) return 0 ;;
     load-tests/scripts/run-control-plane-worker-benchmark.sh) return 0 ;;
