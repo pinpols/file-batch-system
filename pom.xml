@@ -29,9 +29,9 @@
         <module>batch-worker-process</module>
         <module>batch-worker-dispatch</module>
         <module>batch-worker-atomic</module>
-        <module>sdk/java</module>
-        <module>sdk/java-spring</module>
-        <module>sdk/java-testkit</module>
+        <module>sdk/java/core</module>
+        <module>sdk/java/spring</module>
+        <module>sdk/java/testkit</module>
         <module>batch-console-api</module>
         <module>batch-e2e-tests</module>
     </modules>

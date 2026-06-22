@@ -4,7 +4,7 @@
 
 跑在租户自己机房 / Kubernetes / VM 上的 worker 进程,经 HTTP `/internal/*` + Kafka `batch.task.dispatch.<tenant>.*` 跟平台通信。**数据 0 出域**,平台只当调度面。
 
-> Python 对等实现见 [`batch-worker-sdk-python/`](../batch-worker-sdk-python/);Spring Boot 自动装配见 [`batch-worker-sdk-spring-boot-starter/`](../batch-worker-sdk-spring-boot-starter/);测试 fake 见 [`batch-worker-sdk-testkit/`](../batch-worker-sdk-testkit/)。
+> Python 对等实现见 [`batch-worker-sdk-python/`](../../python/);Spring Boot 自动装配见 [`batch-worker-sdk-spring-boot-starter/`](../spring/);测试 fake 见 [`batch-worker-sdk-testkit/`](../testkit/)。
 
 ## 形态
 
