@@ -73,7 +73,7 @@ jobs:
       - name: Java contract + shared-constants parity
         if: matrix.lang == 'java'
         run: |
-          mvn -B -pl sdk/java -am \
+          mvn -B -pl sdk/java/core -am \
             -DskipITs \
             -Dsurefire.failIfNoSpecifiedTests=false \
             -Dtest='JsonFixtureContractTest,JsonFixtureRequestSideContractTest,SharedConstantsParityTest' \
@@ -274,17 +274,17 @@ jobs:
           cache: maven
       - name: Package + install batch-worker-sdk to local m2
         # -am 拉父 reactor 依赖;装到 ~/.m2 供下面的独立消费工程引用。
-        run: mvn -B -pl sdk/java -am -DskipTests install
+        run: mvn -B -pl sdk/java/core -am -DskipTests install
       - name: Validate -Prelease packaging (sources + javadoc + ossrh flatten, no sign)
         # 非 gated:每次 release-validation 都验"发布 profile 真能产出 Central 合规产物"
         # (源码 jar / javadoc jar / 去父化独立 pom)。-Dgpg.skip 跳过签名(无密钥),
         # 签名本身在 gated 的 publish-maven job 真发时才需要。
         run: |
-          mvn -B -pl sdk/java -am -DskipTests -Prelease -Dgpg.skip=true package
-          test -n "$(ls sdk/java/target/*-sources.jar 2>/dev/null)" || { echo "missing sources jar"; exit 1; }
-          test -n "$(ls sdk/java/target/*-javadoc.jar 2>/dev/null)" || { echo "missing javadoc jar"; exit 1; }
-          test -f sdk/java/.flattened-pom.xml || { echo "missing flattened pom"; exit 1; }
-          ! grep -q '<parent>' sdk/java/.flattened-pom.xml || { echo "ossrh flatten must strip parent"; exit 1; }
+          mvn -B -pl sdk/java/core -am -DskipTests -Prelease -Dgpg.skip=true package
+          test -n "$(ls sdk/java/core/target/*-sources.jar 2>/dev/null)" || { echo "missing sources jar"; exit 1; }
+          test -n "$(ls sdk/java/core/target/*-javadoc.jar 2>/dev/null)" || { echo "missing javadoc jar"; exit 1; }
+          test -f sdk/java/core/.flattened-pom.xml || { echo "missing flattened pom"; exit 1; }
+          ! grep -q '<parent>' sdk/java/core/.flattened-pom.xml || { echo "ossrh flatten must strip parent"; exit 1; }
           echo "SMOKE OK: -Prelease produced Central-compliant artifacts (sources+javadoc+self-contained pom)"
       - name: Smoke consumer project(独立 pom 引依赖 + 编译最小 handler)
         shell: bash
@@ -533,11 +533,11 @@ jobs:
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         # batch-worker-sdk 是 reactor 子模块;-pl 单发它,-am 带上父依赖。
-        # -Prelease 激活 sdk/java/pom.xml 的发布 profile(ossrh flatten + sources +
+        # -Prelease 激活 sdk/java/core/pom.xml 的发布 profile(ossrh flatten + sources +
         # javadoc + gpg 签名 + central-publishing-maven-plugin,autoPublish=false 留
         # Central 控制台人工确认)。前置(改 groupId / 配 GPG+token / 改占位元数据)
         # 见 docs/sdk/RELEASING.md §Java。
-        run: mvn -B -pl sdk/java -am -DskipTests -Prelease deploy
+        run: mvn -B -pl sdk/java/core -am -DskipTests -Prelease deploy
 
   publish-go:
     name: publish Go (tag-based, informational)

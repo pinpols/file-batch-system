@@ -17,7 +17,7 @@ node --test --experimental-strip-types 'tests/**/*.test.ts'
 ```
 
 This runs:
-- **`tests/conformance.test.ts`** — loads the `docs/api/sdk-contract-fixtures/[0-9]*.json` fixtures, routes each to the right decision function from the shape of its `when` block (never from `then.expect`), and asserts every field present in `then.expect` deep-equals the computed result. Also asserts all fixtures are covered.
+- **`tests/contract.test.ts`** — loads the `docs/api/sdk-contract-fixtures/[0-9]*.json` fixtures, routes each to the right decision function from the shape of its `when` block (never from `then.expect`), and asserts every field present in `then.expect` deep-equals the computed result. Also asserts all fixtures are covered.
 - **`tests/shared-constants-parity.test.ts`** — parses `docs/api/sdk-shared-constants.yaml` with a tiny hand-rolled list parser (no YAML dependency) and asserts each constant array in `src/constants.ts` deep-equals the YAML source of truth (§1.1 drift guard).
 
 ## Layout

@@ -1,4 +1,4 @@
-package conformance
+package contract
 
 import (
 	"encoding/json"

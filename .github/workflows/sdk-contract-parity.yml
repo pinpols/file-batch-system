@@ -73,7 +73,7 @@ jobs:
           cache: maven
       - name: Run JsonFixtureContractTest + request-side + SharedConstantsParityTest
         run: |
-          mvn -B -pl sdk/java -am \
+          mvn -B -pl sdk/java/core -am \
             -DskipITs \
             -Dsurefire.failIfNoSpecifiedTests=false \
             -Dtest='JsonFixtureContractTest,JsonFixtureRequestSideContractTest,SharedConstantsParityTest' \
