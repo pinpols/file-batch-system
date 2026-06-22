@@ -377,24 +377,7 @@ public class TaskDispatcher {
     // REPORT — body 对齐 TaskExecutionReportDto(taskId/tenantId/workerId/success/message/outputs/...)
     String idemReport = BatchPlatformClient.newIdempotencyKey();
     try {
-      Map<String, Object> body = new HashMap<>();
-      body.put("taskId", msg.taskId());
-      body.put("tenantId", msg.tenantId());
-      body.put("workerId", config.getWorkerCode());
-      putPartitionInvocation(body, msg); // 平台 R3-P0-5 late-report CAS 防覆盖守卫依赖该字段
-      body.put("success", result.success());
-      body.put("message", result.message());
-      body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
-      // result_summary 是 JSONB:发 {code,message} 对象,裸串会 invalid input syntax for type json → 500
-      String code;
-      if (result.error() != null) {
-        code = result.error().getClass().getSimpleName();
-        body.put("errorCode", code);
-      } else {
-        code = result.success() ? "SUCCESS" : "FAILED";
-      }
-      body.put("resultSummary", resultSummaryJson(code, result.message()));
-      reportWithRetry(msg.taskId(), idemReport, body);
+      reportWithRetry(msg.taskId(), idemReport, successReportBody(msg, result));
       resetClientErrorStreak();
     } catch (PlatformHttpException httpEx) {
       // REPORT 失败:orchestrator 会因 lease 超时自动 retry 派单。非鉴权 4xx 计入连续错误,持续则 fail-fast(P7-2)。
@@ -726,6 +709,30 @@ public class TaskDispatcher {
     } catch (Exception ex) {
       log.error("reportFailure failed for taskId={}: {}", msg.taskId(), ex.getMessage());
     }
+  }
+
+  /**
+   * 组装成功/业务失败的 report body(对齐 TaskExecutionReportDto)。result_summary 是 JSONB:发 {@code
+   * {code,message}} 对象,裸串会触发 invalid input syntax for type json → 500。
+   */
+  private Map<String, Object> successReportBody(TaskDispatchMessage msg, SdkTaskResult result) {
+    Map<String, Object> body = new HashMap<>();
+    body.put("taskId", msg.taskId());
+    body.put("tenantId", msg.tenantId());
+    body.put("workerId", config.getWorkerCode());
+    putPartitionInvocation(body, msg); // 平台 R3-P0-5 late-report CAS 防覆盖守卫依赖该字段
+    body.put("success", result.success());
+    body.put("message", result.message());
+    body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
+    String code;
+    if (result.error() != null) {
+      code = result.error().getClass().getSimpleName();
+      body.put("errorCode", code);
+    } else {
+      code = result.success() ? "SUCCESS" : "FAILED";
+    }
+    body.put("resultSummary", resultSummaryJson(code, result.message()));
+    return body;
   }
 
   /**
