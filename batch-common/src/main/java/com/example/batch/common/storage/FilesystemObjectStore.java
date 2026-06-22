@@ -109,12 +109,13 @@ public class FilesystemObjectStore implements BatchObjectStore {
   public void copy(String bucket, String srcKey, String dstKey) {
     Path src = resolveKey(bucket, srcKey);
     Path dst = resolveKey(bucket, dstKey);
+    Path temp = null;
     try {
       if (!Files.exists(src)) {
         throw new NoSuchFileException(src.toString());
       }
       Files.createDirectories(dst.getParent());
-      Path temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
+      temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
       Files.copy(src, temp, StandardCopyOption.COPY_ATTRIBUTES);
       try {
         Files.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
@@ -125,11 +126,10 @@ public class FilesystemObjectStore implements BatchObjectStore {
             bucket,
             dstKey);
         Files.move(temp, dst, StandardCopyOption.REPLACE_EXISTING);
-      } catch (IOException moveEx) {
-        Files.deleteIfExists(temp);
-        throw moveEx;
       }
     } catch (IOException | UncheckedIOException ex) {
+      // 任何失败(copy 或 move 阶段)都清理临时文件,避免残留 .tmp 文件泄漏。
+      cleanupTemp(temp);
       throw mapException("copy", bucket, srcKey, ex);
     }
   }

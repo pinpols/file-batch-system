@@ -5,6 +5,7 @@ import com.example.batch.common.utils.S3BucketSupport;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,12 +18,15 @@ import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
+import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.S3Object;
@@ -30,6 +34,7 @@ import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 /**
  * 基于 AWS SDK for Java v2 的 S3 实现。覆盖 S3 协议全系（MinIO / AWS S3 / 阿里 OSS / 腾讯 COS / GCS），靠 endpoint +
@@ -40,6 +45,9 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 public class S3ObjectStore implements BatchObjectStore {
 
   private static final String COMPONENT_NAME = "s3-object-store";
+
+  /** S3 DeleteObjects 单批上限(协议规定 ≤1000)。 */
+  private static final int MAX_BATCH_DELETE = 1000;
 
   private final S3Client s3Client;
   private final S3Presigner presigner;
@@ -92,6 +100,48 @@ public class S3ObjectStore implements BatchObjectStore {
       s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     } catch (Exception ex) {
       throw mapException("delete", bucket, key, ex);
+    }
+  }
+
+  /** S3 服务端批删({@code DeleteObjects},每批 ≤1000)。不支持该 API 的 S3 兼容后端回退逐个删。 */
+  @Override
+  public void deleteMany(String bucket, Collection<String> keys) {
+    if (keys == null || keys.isEmpty()) {
+      return;
+    }
+    List<String> deduped = keys.stream().filter(k -> k != null && !k.isBlank()).distinct().toList();
+    for (int i = 0; i < deduped.size(); i += MAX_BATCH_DELETE) {
+      List<String> chunk = deduped.subList(i, Math.min(i + MAX_BATCH_DELETE, deduped.size()));
+      try {
+        s3Client.deleteObjects(
+            DeleteObjectsRequest.builder()
+                .bucket(bucket)
+                .delete(
+                    Delete.builder()
+                        .objects(
+                            chunk.stream()
+                                .map(k -> ObjectIdentifier.builder().key(k).build())
+                                .toList())
+                        .quiet(true)
+                        .build())
+                .build());
+      } catch (S3Exception ex) {
+        // 部分 S3 兼容后端(个别 SeaweedFS/RustFS 版本)不实现 DeleteObjects(501/NotImplemented):
+        // 退化为逐个删,保证可移植。其它错误(权限等)仍按映射抛出。
+        String code = ex.awsErrorDetails() == null ? "" : ex.awsErrorDetails().errorCode();
+        if (ex.statusCode() == 501 || "NotImplemented".equals(code)) {
+          log.warn(
+              "s3 backend does not support batch DeleteObjects, falling back to per-key delete:"
+                  + " bucket={}, count={}",
+              bucket,
+              chunk.size());
+          chunk.forEach(k -> delete(bucket, k));
+        } else {
+          throw mapException("deleteMany", bucket, chunk.isEmpty() ? null : chunk.get(0), ex);
+        }
+      } catch (Exception ex) {
+        throw mapException("deleteMany", bucket, chunk.isEmpty() ? null : chunk.get(0), ex);
+      }
     }
   }
 
@@ -182,6 +232,29 @@ public class S3ObjectStore implements BatchObjectStore {
       return presigner.presignGetObject(req).url().toString();
     } catch (Exception ex) {
       throw mapException("presign", bucket, key, ex);
+    }
+  }
+
+  @Override
+  public boolean supportsPresignPut() {
+    return true;
+  }
+
+  @Override
+  public String presignPut(String bucket, String key, Duration ttl, String contentType) {
+    try {
+      PutObjectRequest.Builder put = PutObjectRequest.builder().bucket(bucket).key(key);
+      if (contentType != null && !contentType.isBlank()) {
+        put.contentType(contentType);
+      }
+      PutObjectPresignRequest req =
+          PutObjectPresignRequest.builder()
+              .signatureDuration(ttl)
+              .putObjectRequest(put.build())
+              .build();
+      return presigner.presignPutObject(req).url().toString();
+    } catch (Exception ex) {
+      throw mapException("presignPut", bucket, key, ex);
     }
   }
 
