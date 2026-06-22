@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.Collection;
 
 /**
  * 加密装饰层（Phase 2 §5）。叠在生产实现（{@link S3ObjectStore} / {@link FilesystemObjectStore}）之上：
@@ -97,6 +98,11 @@ public class EncryptingObjectStore implements BatchObjectStore {
   }
 
   @Override
+  public void deleteMany(String bucket, Collection<String> keys) {
+    delegate.deleteMany(bucket, keys);
+  }
+
+  @Override
   public InputStream get(String bucket, String key) {
     InputStream raw = delegate.get(bucket, key);
     if (securityProperties.isBypassMode()) {
@@ -150,5 +156,24 @@ public class EncryptingObjectStore implements BatchObjectStore {
   @Override
   public String presign(String bucket, String key, Duration ttl) {
     return delegate.presign(bucket, key, ttl);
+  }
+
+  /**
+   * ⚠ 加密装饰层<b>不支持</b> PUT 预签名直传:presign 直传会绕过本层加密、把<b>明文</b>写进存储,破坏「落库即密文」约束。 加密对象的上传必须走服务端 {@link
+   * #put}(此处加密后再交 delegate)。
+   */
+  @Override
+  public boolean supportsPresignPut() {
+    return false;
+  }
+
+  @Override
+  public String presignPut(String bucket, String key, Duration ttl, String contentType) {
+    throw new UnsupportedOperationException(
+        "presignPut is disabled on encrypted object store (would bypass encryption and store"
+            + " plaintext): bucket="
+            + bucket
+            + ", key="
+            + key);
   }
 }

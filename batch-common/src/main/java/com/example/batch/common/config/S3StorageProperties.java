@@ -47,4 +47,13 @@ public class S3StorageProperties {
 
   /** multipart 单 part 大小。S3 要求非最后 part 至少 5MiB，默认 16MiB。 */
   private int multipartPartSizeBytes = 16 * 1024 * 1024;
+
+  /** 客户端最大尝试次数(含首次)。{@code <=0} 表示不覆盖、走 AWS SDK 默认(standard 模式 3 次)。批量洪峰下可调高扛瞬时 503/限流。 */
+  private int maxAttempts = 0;
+
+  /**
+   * 是否用自适应重试模式(client-side rate limiting,遇限流主动退避)。批处理高并发打对象存储时建议开;默认 false(走标准 指数退避)。仅在 {@link
+   * #maxAttempts} {@code >0} 或本项为 true 时才覆盖 SDK 默认重试策略。
+   */
+  private boolean adaptiveRetry = false;
 }

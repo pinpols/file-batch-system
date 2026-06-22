@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -92,6 +93,38 @@ class S3ObjectStoreTest {
 
     store.delete(bucket, key);
     assertThat(store.exists(bucket, key)).isFalse();
+  }
+
+  @Test
+  void shouldBatchDeleteMany() {
+    String prefix = "store/batchdelete/";
+    for (int i = 0; i < 5; i++) {
+      byte[] body = ("d" + i).getBytes(StandardCharsets.UTF_8);
+      store.put(
+          bucket, prefix + "k" + i, new ByteArrayInputStream(body), body.length, "text/plain");
+    }
+    List<String> keys =
+        List.of(prefix + "k0", prefix + "k1", prefix + "k2", prefix + "k3", prefix + "k4");
+
+    store.deleteMany(bucket, keys);
+
+    for (String k : keys) {
+      assertThat(store.exists(bucket, k)).isFalse();
+    }
+    // 空/null 是 no-op,不报错
+    store.deleteMany(bucket, List.of());
+    store.deleteMany(bucket, null);
+  }
+
+  @Test
+  void shouldGenerateGetAndPutPresignUrls() {
+    String key = "store/presign.txt";
+    assertThat(store.supportsPresignPut()).isTrue();
+    String getUrl = store.presign(bucket, key, Duration.ofMinutes(5));
+    String putUrl = store.presignPut(bucket, key, Duration.ofMinutes(5), "text/plain");
+    assertThat(getUrl).startsWith("http").contains(bucket);
+    assertThat(putUrl).startsWith("http").contains(bucket);
+    assertThat(putUrl).isNotEqualTo(getUrl);
   }
 
   @Test

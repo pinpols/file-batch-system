@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -61,6 +62,36 @@ class EncryptingObjectStoreTest {
     try (InputStream in = store.get(BUCKET, "enc.bin")) {
       assertThat(in.readAllBytes()).isEqualTo(plaintext);
     }
+  }
+
+  @Test
+  void shouldBlockPresignPutToAvoidPlaintextBypass(@TempDir Path root) {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    EncryptingObjectStore store =
+        new EncryptingObjectStore(newRaw(root), newCrypto(security), security, KEY_REF);
+    // 加密层不支持 PUT 预签名(直传会绕过加密写明文)
+    assertThat(store.supportsPresignPut()).isFalse();
+    assertThatThrownBy(() -> store.presignPut(BUCKET, "x.bin", Duration.ofMinutes(1), "text/plain"))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessageContaining("bypass encryption");
+  }
+
+  @Test
+  void deleteManyShouldDelegate(@TempDir Path root) {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    FilesystemObjectStore raw = newRaw(root);
+    EncryptingObjectStore store =
+        new EncryptingObjectStore(raw, newCrypto(security), security, KEY_REF);
+    byte[] p = "z".getBytes(StandardCharsets.UTF_8);
+    store.put(BUCKET, "a.bin", new ByteArrayInputStream(p), p.length, "x");
+    store.put(BUCKET, "b.bin", new ByteArrayInputStream(p), p.length, "x");
+
+    store.deleteMany(BUCKET, List.of("a.bin", "b.bin"));
+
+    assertThat(raw.exists(BUCKET, "a.bin")).isFalse();
+    assertThat(raw.exists(BUCKET, "b.bin")).isFalse();
   }
 
   @Test
