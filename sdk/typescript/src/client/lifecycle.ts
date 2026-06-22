@@ -243,6 +243,11 @@ export class WorkerLifecycle {
     const regBody = this.#cfg.registerBody ?? {
       tenantId: this.#cfg.tenantId,
       workerCode: this.#cfg.workerCode,
+      // ADR-035 §2: SDK self-hosted workers register under the fixed "sdk-self-hosted"
+      // group. The platform requires it (worker_registry.worker_group is NOT NULL) and
+      // selects SDK workers by it; omitting it makes register fail with HTTP 500. The
+      // decision-core (decide.ts) already encodes this value; the default body lacked it.
+      workerGroup: "sdk-self-hosted",
       status: "RUNNING",
       heartbeatAt: new Date().toISOString(),
       // #536 register-time protocol-version gate: advertise the SDK's current

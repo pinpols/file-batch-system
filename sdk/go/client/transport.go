@@ -82,8 +82,13 @@ type RenewResult struct {
 // (byo-sdk-guide §1.1). Attributes carries arbitrary capability tags; it is
 // scanned by SensitiveValidator before send.
 type RegisterRequest struct {
-	WorkerCode     string         `json:"workerCode"`
-	TenantID       string         `json:"tenantId"`
+	WorkerCode string `json:"workerCode"`
+	TenantID   string `json:"tenantId"`
+	// WorkerGroup is fixed to "sdk-self-hosted" for SDK self-hosted workers (ADR-035 §2):
+	// the platform requires it (worker_registry.worker_group is NOT NULL) and selects SDK
+	// workers by this group. Omitting it makes register fail with HTTP 500. The decision-core
+	// (protocol/request.go) already encodes this value; the transport struct was missing it.
+	WorkerGroup    string         `json:"workerGroup"`
 	BuildID        string         `json:"buildId"`
 	SDKVersion     string         `json:"sdkVersion"`
 	CapabilityTags []string       `json:"capabilityTags,omitempty"`
