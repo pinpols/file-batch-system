@@ -13,9 +13,9 @@ name: sdk-orchestrator-e2e
 #     ⇒ 直接覆盖审计点名的"真鉴权/注册/心跳从未测,只有 fake stub"。
 #   B best-effort:触发 launch + 轮询 job_instance,首跑摸排派单链路(只记录不硬挂)。
 #
-# **非阻塞**:本 wf **不**进分支保护 required checks。触发 = nightly cron + 手动 +
-# 改 sdk/examples 路径的 PR(给 SDK 改动一个真栈 smoke 信号,但 flaky 不卡合并)。
-# e2e 真栈本就不适合当每-PR 硬门禁(~数分钟启动 + 偶发 flaky)。
+# **非阻塞**:本 wf **不**进分支保护 required checks。v1 触发 = nightly cron + 手动
+# (workflow_dispatch);PR-path 触发待首跑校准后再加。e2e 真栈本就不适合当每-PR
+# 硬门禁(~数分钟启动 + 偶发 flaky)。
 #
 # ⚠ 首跑摸排:全栈无法在开发机本地起(已知 mac JDK25 fat-jar loader 卡死 + 需整套
 # docker);本 wf 基于已验证的 up-apps.sh 启动 + load-system-test-data.sh 播种构建,
@@ -27,13 +27,9 @@ on:
   schedule:
     - cron: '0 18 * * *'   # 每日 02:00 Asia/Shanghai(UTC 18:00)
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'sdk/**'
-      - 'examples/self-hosted-sdk/**'
-      - 'scripts/ci/run-sdk-orchestrator-e2e.sh'
-      - '.github/workflows/sdk-orchestrator-e2e.yml'
+  # 注:v1 仅 schedule + 手动。pull_request(改 sdk/examples 路径)触发待首次
+  # workflow_dispatch 跑通、阶段 B 派单路由校准后再加(否则每个 SDK PR 都会看到一
+  # 条尚未校准的红 e2e check)。本 lane 始终**非阻塞**(不进分支保护 required checks)。
 
 permissions:
   contents: read
