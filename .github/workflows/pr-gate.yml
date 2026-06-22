@@ -251,7 +251,7 @@ jobs:
         # -am 编译上游;-DskipITs=true 跳 failsafe IT;跳 PMD/Spotless(在 static-checks job)
         # IT 由 full-ci-gate(main push 后)+ staging-gate(nightly)回退
         run: |
-          mvn test -pl batch-orchestrator,batch-worker-core,sdk/java/core,sdk/java/spring,sdk/java/testkit -am \
+          mvn test -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -286,7 +286,7 @@ jobs:
       - name: Run unit tests (common + trigger + worker-process + worker-dispatch)
         shell: bash
         run: |
-          mvn test -pl batch-common,batch-trigger,batch-worker-process,batch-worker-dispatch -am \
+          mvn test -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -321,7 +321,7 @@ jobs:
       - name: Run unit tests (worker-import + worker-export + worker-atomic + console-api)
         shell: bash
         run: |
-          mvn test -pl batch-worker-import,batch-worker-export,batch-worker-atomic,batch-console-api -am \
+          mvn test -pl batch-worker/import,batch-worker/export,batch-worker/atomic,batch-console-api -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 

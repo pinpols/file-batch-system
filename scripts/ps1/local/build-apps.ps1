@@ -26,7 +26,7 @@ $mvnArgs = @(
   "-Dmaven.javadoc.skip=true",
   "-Dflatten.skip=true",
   "-pl",
-  "batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic,batch-console-api",
+  "batch-trigger,batch-orchestrator,batch-worker/import,batch-worker/export,batch-worker/process,batch-worker/dispatch,batch-worker/atomic,batch-console-api",
   "-am"
 ) + $cleanGoal + @("package", "-T", "2C")
 & $mvn @mvnArgs
@@ -35,11 +35,13 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "==> 复制可执行 jar 到 build/runtime-jars/..."
 $modules = @("batch-orchestrator", "batch-trigger", "batch-console-api", "batch-worker-import", "batch-worker-export", "batch-worker-process", "batch-worker-dispatch", "batch-worker-atomic")
 $names = @("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-atomic")
+# worker 模块迁到 batch-worker/ 下:目录路径 ≠ artifactId,故 target 路径用 $dir、jar 名仍用 $module。
+$dirs = @("batch-orchestrator", "batch-trigger", "batch-console-api", "batch-worker/import", "batch-worker/export", "batch-worker/process", "batch-worker/dispatch", "batch-worker/atomic")
 
 for ($i = 0; $i -lt $modules.Count; $i++) {
   $module = $modules[$i]
   $name = $names[$i]
-  $target = Join-Path $root "$module\target"
+  $target = Join-Path $root "$($dirs[$i])\target"
   $jar = Get-ChildItem $target -Filter "$module-*-exec.jar" -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notmatch "sources|javadoc" } |
     Select-Object -First 1
