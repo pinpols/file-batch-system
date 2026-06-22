@@ -26,7 +26,7 @@ file-batch-system/
 ├── db/migration/                           Flyway PostgreSQL migrations(V160+)
 ├── archive/migration/                      冷表 archive.* schema migrations
 ├── docs/                                   全文档体系(见下)
-├── scripts/                                工程脚本(ci/db/dev/docker/local/ops/ps1/tools)
+├── scripts/                                工程脚本(ci/db/dev/docker/local/ops/tools)
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
 ├── docker/                                 Docker Compose / Dockerfile
 ├── .github/workflows/                      CI(pr-gate / strict-verify / sdk-publish 等)
@@ -112,7 +112,6 @@ scripts/
 ├── docker/    Docker compose 辅助
 ├── local/     本地特定(sync-main.sh / pre-push-sdk-checks.sh / be-acceptance.sh)
 ├── ops/       运维(prod 巡检 / 一次性脚本)
-├── ps1/       PowerShell 等价物(Windows)
 └── tools/     杂项工具
 ```
 
