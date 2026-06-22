@@ -99,24 +99,14 @@ _DIRECTIVE_APPLY_FIXTURES: set[str] = {
 
 # 其它仍 pending 的。
 #
-# 25-heartbeat-503-no-backoff:**Python 后续项**。各决策核(TS/Go/Rust)用纯函数
-# classify_heartbeat_renew_error 表达 §C 豁免(heartbeat/renew 单次失败不走指数
-# 退避,跳过本 tick 等下一 tick)。但 Python 的 PlatformHttpClient.heartbeat 复用
-# 通用 with_retry,对所有 5xx 一视同仁做指数退避——要让 503 走单次豁免必须改
-# 生产 retry 路径(给 heartbeat/renew 单独 no-backoff 分支),属独立 wire 行为
-# 变更、超出本 conformance 增量范围,故 Python 侧暂 xfail(strict),标后续。
-#
-# 28-kafka-paused-task-type-drop:**Python 后续项**。决策核(TS/Go/Rust)用
-# decide_paused_task_type 在收到消息时按 pausedTaskTypes 丢弃。Python SDK 已能
-# 从心跳 directive 解析 pausedTaskTypes(scheduler/_directive.py),但 dispatcher
-# 的 apply_platform_directive 当前只落 runtimeState,**未**在 on_message 里按
-# pausedTaskTypes 做 per-message drop。补这条 drop 是 dispatcher 行为变更,留作
-# 后续(届时直接驱动 on_message 断言不 claim 即可转硬)。
-# 详见 docs/sdk/byo-conformance-contract.md §2.1 后续清单。
-_DEFERRED_FIXTURES: set[str] = {
-    "25-heartbeat-503-no-backoff",
-    "28-kafka-paused-task-type-drop",
-}
+# Lane Q 收尾(2026-06-22):25/28 两条曾经 deferred 的 fixture 已转硬实现 ——
+# 25-heartbeat-503-no-backoff:_http.py 给 heartbeat/renew 走 max_attempts=1 的
+#   §C no-backoff 豁免(单次失败即 TransientError(attempts=1),不指数退避);
+# 28-kafka-paused-task-type-drop:dispatcher.on_message 按 pausedTaskTypes 做
+#   per-message drop(不 claim、不提交 offset),对齐决策核 decidePausedTaskType。
+# 集合保留为空,便于将来新增 deferred 项时复用同一分流位。
+# 详见 docs/sdk/byo-conformance-contract.md §2.1。
+_DEFERRED_FIXTURES: set[str] = set()
 
 # 响应侧分类硬断言 lane(2026-06-16 转硬):驱动**真实** PlatformHttpClient 打到
 # pytest_httpx,断言 §B/§C 的分类(typed exception + 累计 4xx fail-fast 阈值),
@@ -125,6 +115,7 @@ _RESPONSE_SIDE_FIXTURES: set[str] = {
     "21-claim-4xx-client-error-no-failfast",
     "22-renew-404-not-found-give-up",
     "23-claim-4xx-fifth-fail-fast",
+    "25-heartbeat-503-no-backoff",
 }
 
 # 请求侧硬断言 lane(2026-06-16 增量 2/3 转硬):Python 不再 skip 请求侧 fixture,
@@ -231,7 +222,7 @@ async def _invoke(client: PlatformHttpClient, when: dict[str, Any]) -> dict[str,
 
 @pytest.mark.contract
 @pytest.mark.parametrize("fixture_path", _FIXTURES, ids=_FIXTURE_IDS)
-async def test_contract_fixture(  # noqa: PLR0911, PLR0912 — fixture 路由表,分支随 fixture 类别线性增长
+async def test_contract_fixture(  # noqa: PLR0911 — fixture 路由表,分支随 fixture 类别线性增长
     fixture_path: Path,
     httpx_mock: HTTPXMock,
     request: pytest.FixtureRequest,
@@ -261,26 +252,15 @@ async def test_contract_fixture(  # noqa: PLR0911, PLR0912 — fixture 路由表
         await _assert_directive_apply_fixture(fixture_id, httpx_mock, request)
         return
 
-    if fixture_id in _DEFERRED_FIXTURES:
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "deferred to a future Python production change (heartbeat no-backoff "
-                    "exemption / per-message pausedTaskTypes drop) — see "
-                    "byo-conformance-contract.md §2.1 後續清單"
-                ),
-            )
-        )
-        if fixture_id == "28-kafka-paused-task-type-drop":
-            await _assert_paused_drop_fixture(fixture_id)
-        else:
-            # 25-heartbeat-503-no-backoff:Python heartbeat 复用通用 with_retry,
-            # 对 503 会做 3 次指数退避,违反 §C 单次豁免契约 → strict xfail。
-            await _assert_response_side_fixture(fixture_id, httpx_mock)
+    # 28-kafka-paused-task-type-drop(2026-06-22 转硬):dispatcher.on_message 现按
+    # pausedTaskTypes 做 per-message drop(不 claim、不提交 offset),对齐决策核。
+    if fixture_id == "28-kafka-paused-task-type-drop":
+        await _assert_paused_drop_fixture(fixture_id)
         return
 
     # 响应侧分类硬断言 lane(§B/§C):typed exception + 累计 4xx fail-fast 阈值。
+    # 25-heartbeat-503-no-backoff 也走此 lane(heartbeat/renew §C no-backoff 豁免,
+    # 单次失败即 TransientError(attempts=1),见 _RESPONSE_SIDE_FIXTURES)。
     if fixture_id in _RESPONSE_SIDE_FIXTURES:
         await _assert_response_side_fixture(fixture_id, httpx_mock)
         return
@@ -677,7 +657,12 @@ async def _assert_response_side_fixture(fixture_id: str, httpx_mock: HTTPXMock) 
     cfg = _cfg_from_fixture(given.get("config") or {})
 
     # 5xx 契约下平台会重复返回(若 SDK 退避会消费多次);此处按 max_attempts 注册。
-    response_count = cfg.retry_max_attempts if status and status >= 500 else 1
+    # 但 heartbeat/renew 走 §C no-backoff 豁免:单次失败不退避 → 只消费 1 次,
+    # 故对豁免端点只注册 1 个响应(否则 pytest_httpx 会因未用尽 mock 而报错)。
+    exempt_no_backoff = when["path"].endswith(("/heartbeat", "/renew"))
+    response_count = (
+        cfg.retry_max_attempts if status and status >= 500 and not exempt_no_backoff else 1
+    )
     for _ in range(response_count):
         httpx_mock.add_response(
             url=cfg.base_url + when["path"],
