@@ -190,9 +190,9 @@ public class AuditAspect {
     String expr = ann.aggregateId();
     if (expr == null || expr.isEmpty()) return "-";
     try {
-      // P0 安全:对齐 ConsoleCacheInvalidationAspect.evaluateSpel(),用 SimpleEvaluationContext
-      // + DataBindingPropertyAccessor 做最小权限上下文。SimpleEvaluationContext 禁止
-      // T(System).exit(0) 类型方法 / Type 引用 / bean 引用,仅允许属性 / 索引 / 算术 / 实例方法。
+      // P0 安全:SpEL 用 SimpleEvaluationContext + DataBindingPropertyAccessor 做最小权限上下文。
+      // SimpleEvaluationContext 禁止 T(System).exit(0) 类型方法 / Type 引用 / bean 引用,
+      // 仅允许属性 / 索引 / 算术 / 实例方法。
       SimpleEvaluationContext ctx =
           SimpleEvaluationContext.forPropertyAccessors(
                   DataBindingPropertyAccessor.forReadOnlyAccess())
