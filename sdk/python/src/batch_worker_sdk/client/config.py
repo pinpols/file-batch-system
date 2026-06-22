@@ -213,8 +213,8 @@ class BatchPlatformClientConfig(BaseModel):
         # docs/sdk/local-e2e-coverage.md)。**不能**用 tenant-first 的 <tenant>.*
         # (orchestrator 不往那派)。group 默认 g-sdk-<tenant>-<workerCode>。
         if kwargs.get("kafka_bootstrap") and not kwargs.get("kafka_topic_pattern"):
-            kwargs["kafka_topic_pattern"] = (
-                r"batch\.task\.dispatch\..+\.node\." + re.escape(worker_code)
+            kwargs["kafka_topic_pattern"] = r"batch\.task\.dispatch\..+\.node\." + re.escape(
+                worker_code
             )
         if kwargs.get("kafka_bootstrap") and not kwargs.get("kafka_group_id"):
             kwargs["kafka_group_id"] = f"g-sdk-{tenant_id}-{worker_code}"
