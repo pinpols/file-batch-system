@@ -31,4 +31,6 @@ regexes = [
     # 幂等键 header value(`idem-*` 形态),不是 API key,被 generic-api-key 规则误报。
     # 例:ConsoleHttpIntegrationTest 用 "idem-approval-001" 触幂等链路。
     '''idem-[a-z0-9-]+''',
+    # sdk-orchestrator-e2e CI 占位 internal secret(非真实凭据,仅供 compose 插值补齐启动)。
+    '''ci-e2e-internal-secret-[0-9a-f]+''',
 ]
