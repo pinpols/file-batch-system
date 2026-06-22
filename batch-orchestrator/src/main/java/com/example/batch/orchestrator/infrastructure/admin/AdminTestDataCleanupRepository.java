@@ -27,7 +27,8 @@ public class AdminTestDataCleanupRepository {
   private final NamedParameterJdbcTemplate jdbc;
 
   /**
-   * 按 prefix 级联清理 11 张核心配置 + 运行实例业务表(不是"零残留"全清)。
+   * 按 prefix 级联清理 14 张核心配置 + 运行实例业务表(不是"零残留"全清)。 含独立配置表 api_key / alert_routing_config /
+   * tenant_quota_policy(各按业务键前缀)。
    *
    * @param prefix 已由 Controller 层正则约束 (`^[a-zA-Z][a-zA-Z0-9-]{2,32}$`,禁 `_/%/\\`),本方法不重复校验
    * @return 每张表删了多少行的 ordered map(LinkedHashMap 保留依赖顺序)
@@ -147,6 +148,23 @@ public class AdminTestDataCleanupRepository {
         "file_template_config",
         jdbc.update(
             "DELETE FROM batch.file_template_config WHERE template_code LIKE :p ESCAPE '\\'",
+            new MapSqlParameterSource("p", like)));
+    // 独立配置表(无 FK 依赖前面的运行态/作业表):按各自业务键前缀清。
+    // 此前漏掉这三张,导致 e2e 反复创建的 api-key / alert-routing / quota-policy 残留累积。
+    result.put(
+        "api_key",
+        jdbc.update(
+            "DELETE FROM batch.api_key WHERE key_name LIKE :p ESCAPE '\\'",
+            new MapSqlParameterSource("p", like)));
+    result.put(
+        "alert_routing_config",
+        jdbc.update(
+            "DELETE FROM batch.alert_routing_config WHERE route_code LIKE :p ESCAPE '\\'",
+            new MapSqlParameterSource("p", like)));
+    result.put(
+        "tenant_quota_policy",
+        jdbc.update(
+            "DELETE FROM batch.tenant_quota_policy WHERE policy_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
     result.put(
         "console_user_account",
