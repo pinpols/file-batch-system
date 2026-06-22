@@ -45,9 +45,9 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 
 | 语言 | register | dispatch+claim | execute | report | terminal | 备注 |
 |---|---|---|---|---|---|---|
-| Go | ✅ | ✅ | ✅ | ❌ | ❌ | report 撞 wire bug #4 |
-| Python | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | 待跑(脚本就绪) |
-| TypeScript | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | 待跑(脚本就绪) |
+| Go | ✅ | ✅ | ✅ | ✅ | ✅ | **全链路本地实测绿**(#655 + #2/#3/#4 全修) |
+| Python | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | 待跑(脚本就绪);需照搬 #2/#3/#4 |
+| TypeScript | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | #1 已修(#655);#2/#3/#4 待改 |
 | Java | 🔲 | 🔲 | 🔲 | 🔲 | 🔲 | 样例 jar,待接入脚本 |
 | Rust | — | — | — | — | — | 样例 register 仍 illustrative stub;需先接 reqwest 真 transport |
 
@@ -61,8 +61,9 @@ SDK 的 wire 契约此前只对 fixture / fake stub 验过,从没对真 orchestr
 | 1 | register | Go/TS 不发 `workerGroup` → `worker_registry.worker_group` NOT NULL 违约 → 注册 500 | **已修(#655)** |
 | 2 | 消费 topic | SDK 订阅 `batch.task.dispatch.<tenant>.*`(tenant-first),orchestrator 派发 `...<workerType>.node.<workerCode>`(base-first)→ 收不到任何任务 | **Go 已修**(本 PR,对齐内建 worker `AbstractTaskConsumer.topicPattern()` 的 node-direct);TS/Python/Rust 待改 |
 | 3 | 派单报文解码 | orchestrator 发 `taskId` 是 JSON number(BIGINT),Go 结构体期望 string → decode 失败 | **Go 已修**(本 PR,tolerant number/string);其余语言待核 |
-| 4 | report | orchestrator 持久化 report 到 jsonb 列报 `invalid input syntax for type json` → report 500 | **待修**(独立专项) |
+| 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **Go 已修**(本 PR);其余语言待核 |
 
-**结论**:SDK **能注册**(#655),但收单/report 路径仍有 wire bug(#2 Go 已修,#3 Go 已修,
-#4 待修)。要"对外可提供",需把 #2/#3/#4 在 **5 语言**统一修齐并各跑本地全链路至 terminal 绿
-——这是一个独立的「SDK wire 契约重校」专项,本地全链路脚本就是它的验收工具。
+**结论**:Go SDK **全链路本地实测绿**(#655 + #2/#3/#4 全修,register→…→terminal SUCCESS)。
+要"对外可提供",把 #2/#3/#4 在 **TS/Python/Java/Rust** 照搬修齐并各跑本地全链路至 terminal 绿
+即可——这是一个独立的「SDK wire 契约重校」专项,本地全链路脚本(`sdk-e2e-local.sh <lang>`)
+就是它的验收工具,Go 是已跑通的参照实现。
