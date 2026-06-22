@@ -122,8 +122,13 @@ async function main(): Promise<void> {
   });
 
   // 1. control-plane transport (apiKey via Authorization header).
+  // tenantId/workerCode are REQUIRED: the transport injects them into claim/renew/
+  // report bodies (TaskClaimRequest needs [tenantId, workerId]); omitting them makes
+  // the claim body's tenantId undefined → orchestrator selectById(null) → 404.
   const transport = new HttpTransport({
     baseUrl: env.baseUrl,
+    tenantId: env.tenantId,
+    workerCode: env.workerCode,
     headers: { authorization: `Bearer ${env.apiKey}` },
   });
 

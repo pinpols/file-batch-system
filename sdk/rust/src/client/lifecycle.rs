@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::decide::{decide_register, plan_stop, Decision};
-use crate::client::transport::{classify_response, HttpResponse, Transport, TransportOutcome};
+use crate::client::transport::{classify_response, Transport, TransportOutcome};
 
 /// The 4 worker runtime states (§1.5). Order/spelling match
 /// [`crate::constants::WORKER_RUNTIME_STATES`].
@@ -210,7 +210,7 @@ impl<T: Transport> Worker<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::transport::FakeTransport;
+    use crate::client::transport::{FakeTransport, HttpResponse};
 
     #[test]
     fn fsm_transitions_from_status() {

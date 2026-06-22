@@ -168,8 +168,11 @@ class TaskDispatcherTest {
     assertThat(reportBody.getValue())
         .containsEntry("success", false)
         .containsEntry("message", "biz boom")
-        .containsEntry("errorCode", "RuntimeException")
-        .containsEntry("resultSummary", "biz boom");
+        .containsEntry("errorCode", "RuntimeException");
+    // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是裸串(否则平台解析 500)
+    assertThat(reportBody.getValue().get("resultSummary").toString())
+        .contains("\"code\":\"RuntimeException\"")
+        .contains("\"message\":\"biz boom\"");
   }
 
   @Test

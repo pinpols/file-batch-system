@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn handler_observes_cancellation() {
-        let mut ctx = TaskContext::new("t1", "tenant-a", "demo");
+        let ctx = TaskContext::new("t1", "tenant-a", "demo");
         // Pre-cancel so the very first poll trips.
         ctx.cancellation.cancel();
         let handler = CancellableHandler;

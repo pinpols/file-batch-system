@@ -15,6 +15,7 @@ import com.example.batch.sdk.task.ProgressReporter;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
@@ -54,6 +55,13 @@ public class TaskDispatcher {
   private final Map<String, SdkTaskHandler> handlers;
   private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
+
+  /**
+   * 平台 {@code result_summary} 是 JSONB 列(mapper {@code #{resultSummary}::jsonb}):必须是合法 JSON,
+   * 发裸人读串("boom")会触发 {@code invalid input syntax for type json} → report 500。统一序列化成 {@code
+   * {code,message}} 对象(对齐内建 worker DefaultTaskExecutionWrapper 契约)。
+   */
+  private static final ObjectMapper RESULT_SUMMARY_MAPPER = new ObjectMapper();
 
   /**
    * P0 backpressure 关键约束:把「已提交到 executor 但尚未跑完」的消息计入容量。{@link Executors#newFixedThreadPool}
@@ -369,19 +377,7 @@ public class TaskDispatcher {
     // REPORT — body 对齐 TaskExecutionReportDto(taskId/tenantId/workerId/success/message/outputs/...)
     String idemReport = BatchPlatformClient.newIdempotencyKey();
     try {
-      Map<String, Object> body = new HashMap<>();
-      body.put("taskId", msg.taskId());
-      body.put("tenantId", msg.tenantId());
-      body.put("workerId", config.getWorkerCode());
-      putPartitionInvocation(body, msg); // 平台 R3-P0-5 late-report CAS 防覆盖守卫依赖该字段
-      body.put("success", result.success());
-      body.put("message", result.message());
-      body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
-      if (result.error() != null) {
-        body.put("errorCode", result.error().getClass().getSimpleName());
-        body.put("resultSummary", result.error().getMessage());
-      }
-      reportWithRetry(msg.taskId(), idemReport, body);
+      reportWithRetry(msg.taskId(), idemReport, successReportBody(msg, result));
       resetClientErrorStreak();
     } catch (PlatformHttpException httpEx) {
       // REPORT 失败:orchestrator 会因 lease 超时自动 retry 派单。非鉴权 4xx 计入连续错误,持续则 fail-fast(P7-2)。
@@ -703,13 +699,54 @@ public class TaskDispatcher {
       putPartitionInvocation(body, msg);
       body.put("success", false);
       body.put("message", message);
+      String code = error != null ? error.getClass().getSimpleName() : "FAILED";
       if (error != null) {
-        body.put("errorCode", error.getClass().getSimpleName());
-        body.put("resultSummary", error.getMessage());
+        body.put("errorCode", code);
       }
+      // result_summary 是 JSONB:发 {code,message} 对象(裸串 → invalid input syntax for type json → 500)
+      body.put("resultSummary", resultSummaryJson(code, message));
       reportWithRetry(msg.taskId(), idem, body);
     } catch (Exception ex) {
       log.error("reportFailure failed for taskId={}: {}", msg.taskId(), ex.getMessage());
+    }
+  }
+
+  /**
+   * 组装成功/业务失败的 report body(对齐 TaskExecutionReportDto)。result_summary 是 JSONB:发 {@code
+   * {code,message}} 对象,裸串会触发 invalid input syntax for type json → 500。
+   */
+  private Map<String, Object> successReportBody(TaskDispatchMessage msg, SdkTaskResult result) {
+    Map<String, Object> body = new HashMap<>();
+    body.put("taskId", msg.taskId());
+    body.put("tenantId", msg.tenantId());
+    body.put("workerId", config.getWorkerCode());
+    putPartitionInvocation(body, msg); // 平台 R3-P0-5 late-report CAS 防覆盖守卫依赖该字段
+    body.put("success", result.success());
+    body.put("message", result.message());
+    body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
+    String code;
+    if (result.error() != null) {
+      code = result.error().getClass().getSimpleName();
+      body.put("errorCode", code);
+    } else {
+      code = result.success() ? "SUCCESS" : "FAILED";
+    }
+    body.put("resultSummary", resultSummaryJson(code, result.message()));
+    return body;
+  }
+
+  /**
+   * 把 {@code (code,message)} 序列化成 JSONB 列要求的合法 JSON 字符串。序列化失败兜底成一个最小合法 JSON 对象(永不发裸串,否则平台 JSONB 解析
+   * 500)。
+   */
+  private static String resultSummaryJson(String code, String message) {
+    try {
+      Map<String, Object> summary = new HashMap<>();
+      summary.put("code", code == null ? "UNKNOWN" : code);
+      summary.put("message", message == null ? "" : message);
+      return RESULT_SUMMARY_MAPPER.writeValueAsString(summary);
+    } catch (Exception e) {
+      return "{\"code\":\"UNKNOWN\",\"message\":\"\"}";
     }
   }
 

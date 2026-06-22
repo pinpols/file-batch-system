@@ -155,3 +155,47 @@ export class FakePlatform {
     );
   }
 }
+
+// ── Test-framework ergonomics (the TS equivalent of the Java testkit's
+// @BatchWorkerTest auto-platform + awaitReport assertion). ────────────────────
+
+/**
+ * The report body recorded for `taskId` (last wins), or `undefined` if none.
+ * Mirrors the Go `ReportFor` / Java `awaitReport` assertion sugar: instead of
+ * scanning `transport.calls` by hand in every test, ask for the report directly.
+ */
+export function reportFor(
+  transport: FakeTransport,
+  taskId: string,
+): ReportBody | undefined {
+  let found: ReportBody | undefined;
+  for (const call of transport.calls) {
+    if (call.op === "report" && call.args[0] === taskId) {
+      found = call.args[1] as ReportBody;
+    }
+  }
+  return found;
+}
+
+/**
+ * node:test ergonomic wrapper: build a {@link FakePlatform} (optionally scripted
+ * + pre-fed dispatch messages), hand it to `body`, and return `body`'s result.
+ * Mirrors the Java `@BatchWorkerTest`-injected platform; `FakePlatform` is pure
+ * in-memory so there is nothing to tear down.
+ *
+ * @example
+ *   await withFakePlatform(async (platform) => {
+ *     // ... drive a WorkerLifecycle with platform.transport / platform.consumer
+ *     assert.equal(reportFor(platform.transport, "42")?.success, true);
+ *   }, { messages: [{ schemaVersion: "v1", taskId: 42, tenantId: "t1" }] });
+ */
+export async function withFakePlatform<T>(
+  body: (platform: FakePlatform) => T | Promise<T>,
+  opts: { script?: FakeTransportScript; messages?: unknown[] } = {},
+): Promise<T> {
+  const platform = new FakePlatform(opts.script ?? {});
+  if (opts.messages && opts.messages.length > 0) {
+    platform.feedMessages(...opts.messages);
+  }
+  return await body(platform);
+}
