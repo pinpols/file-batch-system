@@ -100,7 +100,7 @@ sdk_e2e_start_worker() {
       # 先 install SDK 到本地 m2(样例硬依赖 batch-worker-sdk:1.1.0-SNAPSHOT),再 package 样例。
       # 样例用 maven-jar-plugin + copy-dependencies(lib/ classpath),非 Spring Boot 嵌套 fat-jar,
       # 启动不走嵌套 jar loader,本机可靠。Java 样例环境变量名是 BATCH_KAFKA(非 KAFKA_BOOTSTRAP)。
-      mvn -q -f "$root/pom.xml" -pl sdk/java -am install -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
+      mvn -q -f "$root/pom.xml" -pl sdk/java/core -am install -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
       local jdir="$root/examples/self-hosted-sdk/sample-tenant-worker-java"
       mvn -q -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
       ( cd "$jdir" \
