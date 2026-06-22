@@ -2,7 +2,7 @@
 
 > 状态:决策已定。与 `CLAUDE.md`「citus 冻结」一致,本文是其判据的合并记录。
 > 关联:tag `citus-poc-2026-06-14`(冻结快照)、PR #470(分区抽 main)、
-> `docs/design/partition-idempotency-decision.md`、`docs/backlog/citus-introduction-plan-2026-06-06.md`。
+> `docs/design/partition-idempotency-decision.md`。
 
 ## 0. TL;DR
 

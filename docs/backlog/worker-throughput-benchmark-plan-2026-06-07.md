@@ -5,7 +5,7 @@
 > 范围:`batch-worker-import`,`batch-worker-export`,`batch-worker-process`,`batch-worker-dispatch`,`batch-worker-atomic`,`batch-trigger`,`batch-orchestrator`
 > 关联:
 > - [single-node-throughput-optimization-2026-06-06](./single-node-throughput-optimization-2026-06-06.md)
-> - [citus-introduction-plan-2026-06-06](./citus-introduction-plan-2026-06-06.md)
+> - [扩容现状+biz路径决策(弃Citus)](../analysis/scaling-state-and-biz-path-2026-06-14.md)
 > - [pre-production-capacity-optimization-plan-2026-06-08](./pre-production-capacity-optimization-plan-2026-06-08.md)
 
 ## 结论
@@ -135,7 +135,7 @@ load-tests/target/worker-business-scenario-report-<RUN_ID>.md
 | P0 | 复跑现有 sim 基线 + import/export/process 主业务分支补齐 | 已完成 |
 | P1 | dispatch/atomic 外部 mock failure + trigger cron/misfire smoke | 已完成本地 smoke；容量/故障注入另排 |
 | P2 | full 业务矩阵、1k task storm、真实外部依赖替身扩展 | 后续容量画像 / 外部依赖 profile |
-| P2 | **多租户并发峰值流量 benchmark**(N 租户同时各跑批,N=3/5/10;观测 DB 写吞吐墙、各租户 SLA 劣化曲线)。这是 Citus 决策门槛③的唯一数据源(`citus-introduction-plan-2026-06-06.md` §0)——单租户单流已证 Citus 不缩耗时,没有峰值流量实测就永远无法 go/no-go | 排入容量画像周期;复用 sim 多租户 ta/tb/tc + storm 脚本 |
+| P2 | **多租户并发峰值流量 benchmark**(N 租户同时各跑批,N=3/5/10;观测 DB 写吞吐墙、各租户 SLA 劣化曲线)。这是 Citus 决策门槛③的唯一数据源(`../analysis/scaling-state-and-biz-path-2026-06-14.md` §4)——单租户单流已证 Citus 不缩耗时,没有峰值流量实测就永远无法 go/no-go | 排入容量画像周期;复用 sim 多租户 ta/tb/tc + storm 脚本 |
 
 结论:这轮可以在本地做“模拟真实上下游”的系统级业务覆盖,但结论必须标注为本地模拟环境;真实 S3/邮件网关/客户 SFTP/NAS/第三方 HTTP SLA 仍需生产相似环境单独验收。
 
