@@ -275,6 +275,17 @@ jobs:
       - name: Package + install batch-worker-sdk to local m2
         # -am 拉父 reactor 依赖;装到 ~/.m2 供下面的独立消费工程引用。
         run: mvn -B -pl sdk/java -am -DskipTests install
+      - name: Validate -Prelease packaging (sources + javadoc + ossrh flatten, no sign)
+        # 非 gated:每次 release-validation 都验"发布 profile 真能产出 Central 合规产物"
+        # (源码 jar / javadoc jar / 去父化独立 pom)。-Dgpg.skip 跳过签名(无密钥),
+        # 签名本身在 gated 的 publish-maven job 真发时才需要。
+        run: |
+          mvn -B -pl sdk/java -am -DskipTests -Prelease -Dgpg.skip=true package
+          test -n "$(ls sdk/java/target/*-sources.jar 2>/dev/null)" || { echo "missing sources jar"; exit 1; }
+          test -n "$(ls sdk/java/target/*-javadoc.jar 2>/dev/null)" || { echo "missing javadoc jar"; exit 1; }
+          test -f sdk/java/.flattened-pom.xml || { echo "missing flattened pom"; exit 1; }
+          ! grep -q '<parent>' sdk/java/.flattened-pom.xml || { echo "ossrh flatten must strip parent"; exit 1; }
+          echo "SMOKE OK: -Prelease produced Central-compliant artifacts (sources+javadoc+self-contained pom)"
       - name: Smoke consumer project(独立 pom 引依赖 + 编译最小 handler)
         shell: bash
         run: |
@@ -508,16 +519,25 @@ jobs:
           server-id: central
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
-      - name: mvn deploy batch-worker-sdk
+      - name: Import GPG signing key
+        # 私钥 + passphrase 经 secrets 注入;gpg.passphrase 由 maven-gpg-plugin
+        # 从 MAVEN_GPG_PASSPHRASE(loopback pinentry)读取。未配 secret 时跳过,
+        # 这样 dry-run / 未开通发布的仓库不会因缺密钥红。
+        if: env.MAVEN_GPG_PRIVATE_KEY != ''
+        env:
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+        run: echo "$MAVEN_GPG_PRIVATE_KEY" | gpg --batch --import
+      - name: mvn deploy batch-worker-sdk (-Prelease)
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         # batch-worker-sdk 是 reactor 子模块;-pl 单发它,-am 带上父依赖。
-        # TODO(ops):真发 Maven Central 前需在 sdk/java/pom.xml 补 release profile
-        #   (maven-gpg-plugin 签名 + central-publishing-maven-plugin + distributionManagement);
-        #   根 pom 目前无 distributionManagement。配齐前本 job 仅作门禁占位(经 environment 审批)。
-        run: mvn -B -pl sdk/java -am -DskipTests deploy
+        # -Prelease 激活 sdk/java/pom.xml 的发布 profile(ossrh flatten + sources +
+        # javadoc + gpg 签名 + central-publishing-maven-plugin,autoPublish=false 留
+        # Central 控制台人工确认)。前置(改 groupId / 配 GPG+token / 改占位元数据)
+        # 见 docs/sdk/RELEASING.md §Java。
+        run: mvn -B -pl sdk/java -am -DskipTests -Prelease deploy
 
   publish-go:
     name: publish Go (tag-based, informational)
