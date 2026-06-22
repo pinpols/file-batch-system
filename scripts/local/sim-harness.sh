@@ -55,6 +55,14 @@ fail()   { c_red "  ✗ $*"; FAILED=1; }
 ok()     { c_grn "  ✓ $*"; }
 warn()   { c_ylw "  ! $*"; }
 
+# clean-at-START(幂等):上一轮被 kill -9 / IDE 强停时 EXIT trap 不触发,孤儿 testcontainers
+# 与 biz-shard 残留;每次开跑先自净,不用人工去 docker rm。只清残留,不碰受管 dev 栈。
+clean_stale_env() {
+  [ -x scripts/local/clean-stale-test-env.sh ] || [ -f scripts/local/clean-stale-test-env.sh ] || return 0
+  echo "== 清理上一轮残留容器(幂等)=="
+  bash scripts/local/clean-stale-test-env.sh || true
+}
+
 # ---------------------------------------------------------
 # preflight:启动前检查(不依赖 app 在跑)。FAILED=1 → 退 1。
 # ---------------------------------------------------------
@@ -252,6 +260,7 @@ restart_import() {
 # ---------------------------------------------------------
 sim() {
   echo "== sim:全量 04→25 =="
+  clean_stale_env
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     restart_import default   # 基线 worker:checkpoint=false(17 REPLACE 需要) + no skip
     local sum="$SIM_LOG_DIR/sim-summary.txt"; : > "$sum"
@@ -298,7 +307,8 @@ sim() {
 ROUTING_MARK_BEGIN="# >>> sim-harness routing overlay"
 ROUTING_MARK_END="# <<< sim-harness routing overlay"
 
-routing_sim_teardown() {
+# 仅清 overlay + 还原单片 worker;run 中途复用(此时 shard-1 还在用,不能删)。
+routing_overlay_clear() {
   # 删除 overlay 块,还原单片,重启 3 worker
   if grep -qF "$ROUTING_MARK_BEGIN" .env.local 2>/dev/null; then
     # 可移植删块:避开 sed -i 的 BSD(需 '' 后缀)/ GNU(不带后缀)差异 —— 同目录 tmp + mv,Linux/macOS 通用。
@@ -310,8 +320,19 @@ routing_sim_teardown() {
   fi
 }
 
+# EXIT trap 收尾:overlay 还原 + 删 routing 直起的 biz-shard-1(docker run 起的,不归 compose 管,
+# 不删就会残留到下一轮)。只在退出时调,run 中途用 routing_overlay_clear。
+routing_sim_teardown() {
+  routing_overlay_clear
+  if docker ps -aq --filter "name=${BIZ_SHARD_1_CONTAINER}" 2>/dev/null | grep -q .; then
+    docker rm -f "$BIZ_SHARD_1_CONTAINER" >/dev/null 2>&1 \
+      && c_ylw "  biz-shard-1 容器已删(routing-sim 直起,退出即清)" || true
+  fi
+}
+
 routing_sim() {
   echo "== routing-sim:真实 worker 多片端到端 =="
+  clean_stale_env
   trap routing_sim_teardown EXIT
   set -a; . ./.env.local; set +a
 
@@ -326,7 +347,7 @@ routing_sim() {
     "INSERT INTO batch.business_tenant_placement(tenant_id,placement_key,updated_by) VALUES ('tc','shard-1','routing-sim') ON CONFLICT (tenant_id) DO UPDATE SET placement_key='shard-1'" >/dev/null && ok "tc→shard-1 已登记"
 
   echo "-- 2b) 写 routing overlay + 重启 worker --"
-  routing_sim_teardown  # 先清旧 overlay
+  routing_overlay_clear  # 先清旧 overlay(此处不删 shard,shard-1 正在用)
   {
     echo "$ROUTING_MARK_BEGIN"
     echo "BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED=true"
