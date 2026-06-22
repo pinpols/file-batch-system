@@ -22,14 +22,14 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> seed process stage4c fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_business \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage4c-process-business.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 \
   -f /dev/stdin < docs/test-data/sim-stage4c-process-platform.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4c.log"
@@ -43,7 +43,7 @@ BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
 
 def psql(db, sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", db, "-P", "pager=off"]
+    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db, "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -82,7 +82,7 @@ def launch(job, label, params):
 def wait_instance(rid, expected, timeout=240):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        out = psql("batch_platform", (
+        out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
             "select i.id || '|' || coalesce(i.instance_status,'') "
             "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
             f"where tr.tenant_id='ta' and tr.request_id='{rid}' order by tr.created_at desc limit 1"
@@ -108,8 +108,8 @@ shard_instance = wait_instance(rid_shard, "SUCCESS")
 
 print("\n-- sharded_task_status --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
     "select p.partition_no,p.partition_status,t.task_status,p.output_summary "
     "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
     f"where p.job_instance_id={shard_instance} order by p.partition_no"
@@ -117,19 +117,19 @@ subprocess.run([
 
 print("\n-- sharded_target --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_business", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-P", "pager=off", "-c",
     "select count(*) as rows, sum(total_amount) as amount, sum(event_count) as events, max(high_water_mark) as hwm "
     "from biz.process_stage4_target where tenant_id='ta' and scenario='SHARDED' and biz_date='" + BIZ + "'"
 ], check=False)
 
-shard_check = (psql("batch_business", (
+shard_check = (psql(os.environ.get("BUSINESS_DB", "batch_business"), (
     "select count(*) || '|' || coalesce(sum(total_amount),0) || '|' || "
     "coalesce(sum(event_count),0) || '|' || coalesce(max(high_water_mark),0) "
     "from biz.process_stage4_target "
     f"where tenant_id='ta' and scenario='SHARDED' and biz_date='{BIZ}'"
 ), tuples=True).stdout or "").strip()
-task_check = (psql("batch_platform", (
+task_check = (psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
     "select count(*) filter (where t.task_status='SUCCESS') || '|' || "
     "count(*) filter (where p.partition_status='SUCCESS') "
     "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
@@ -147,7 +147,7 @@ cancel_instance = None
 cancel_partition = None
 deadline = time.time() + 30
 while time.time() < deadline:
-    out = psql("batch_platform", (
+    out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
         "select i.id || '|' || p.id || '|' || coalesce(t.task_status,'') "
         "from batch.trigger_request tr "
         "join batch.job_instance i on i.id=tr.related_job_instance_id "
@@ -187,7 +187,7 @@ print(f"  [cancel] instance={cancel_instance} http={cancel_http} body={cancel_bo
 deadline = time.time() + 90
 cancel_status = ""
 while time.time() < deadline:
-    out = psql("batch_platform", (
+    out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
         "select i.instance_status || '|' || p.partition_status || '|' || t.task_status "
         "from batch.job_instance i "
         "join batch.job_partition p on p.job_instance_id=i.id "
@@ -201,8 +201,8 @@ while time.time() < deadline:
 
 print("\n-- cancel_status --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
     "select i.id,i.instance_status,p.partition_status,t.task_status,t.cancel_requested,t.error_code "
     "from batch.job_instance i join batch.job_partition p on p.job_instance_id=i.id "
     "join batch.job_task t on t.job_partition_id=p.id "

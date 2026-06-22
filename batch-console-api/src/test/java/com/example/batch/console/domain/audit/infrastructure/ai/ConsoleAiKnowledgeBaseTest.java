@@ -38,9 +38,14 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   private ObjectProvider<EmbeddingModel> providerOf(EmbeddingModel model) {
-    ObjectProvider<EmbeddingModel> provider = mock(ObjectProvider.class);
+    ObjectProvider<EmbeddingModel> provider = mockEmbeddingProvider();
     when(provider.getIfAvailable()).thenReturn(model);
     return provider;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ObjectProvider<EmbeddingModel> mockEmbeddingProvider() {
+    return (ObjectProvider<EmbeddingModel>) mock(ObjectProvider.class);
   }
 
   private ConsoleAiProperties propertiesWithRag(boolean enabled) {
@@ -79,7 +84,7 @@ class ConsoleAiKnowledgeBaseTest {
 
   @Test
   void returnsEmptyWhenEmbeddingModelUnavailable() {
-    ObjectProvider<EmbeddingModel> empty = mock(ObjectProvider.class);
+    ObjectProvider<EmbeddingModel> empty = mockEmbeddingProvider();
     when(empty.getIfAvailable()).thenReturn(null);
     ConsoleAiKnowledgeBase base = new ConsoleAiKnowledgeBase(empty, propertiesWithRag(true));
     assertThat(base.retrieve("orchestrator outbox")).isEmpty();

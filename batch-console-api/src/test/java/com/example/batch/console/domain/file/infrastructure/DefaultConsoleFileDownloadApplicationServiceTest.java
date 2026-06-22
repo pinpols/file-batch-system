@@ -76,8 +76,9 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
             + "\",\"targetId\":\""
             + targetId
             + "\"}}";
-    Object record = JsonUtils.fromJson(json, recordResponseClass());
-    when(restClient.get().uri(anyString(), any(Object[].class)).retrieve().body(any(Class.class)))
+    Class<Object> responseClass = recordResponseClass();
+    Object record = JsonUtils.fromJson(json, responseClass);
+    when(restClient.get().uri(anyString(), any(Object[].class)).retrieve().body(responseClass))
         .thenReturn(record);
   }
 

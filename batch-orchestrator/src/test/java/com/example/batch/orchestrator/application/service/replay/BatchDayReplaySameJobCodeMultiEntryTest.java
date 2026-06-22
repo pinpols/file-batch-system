@@ -91,6 +91,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
         .updateStatus(
             updatedId.capture(), eq(ENTRY_SUCCEEDED), eq(5001L), any(), any(), any(), any(), any());
     assertThat(updatedId.getValue()).as("必须按 sourceInstanceId 命中第二条 entry").isEqualTo(102L);
+    assertThat(updatedId.getValue()).as("不得误更新第一条 entry").isNotEqualTo(entryA.id());
     // 不应回退到线性扫
     verify(entryMapper, org.mockito.Mockito.never()).selectBySessionId(anyLong());
   }

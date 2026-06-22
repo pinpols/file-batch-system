@@ -22,10 +22,10 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> apply bootstrap(XML/FIXED_WIDTH runtime config)"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2.log"
@@ -164,8 +164,8 @@ while time.time() < deadline:
         "and instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')"
     )
     out = subprocess.run([
-        "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-        "-d", "batch_platform", "-t", "-A", "-c", sql
+        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+        "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-t", "-A", "-c", sql
     ], capture_output=True, text=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= expected_jobs:
@@ -192,14 +192,14 @@ queries = {
 for title, sql in queries.items():
     print(f"\n-- {title} --", flush=True)
     subprocess.run([
-        "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-        "-d", "batch_platform", "-P", "pager=off", "-c", sql
+        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+        "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", sql
     ], check=False)
 
 print("\n-- business counts --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_business", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-P", "pager=off", "-c",
     "select tenant_id, count(*) filter (where customer_no like 'S2XML%') as xml_rows, "
     "count(*) filter (where customer_no like 'S2FIX%') as fixed_rows "
     "from biz.customer_account where tenant_id='ta' group by tenant_id"

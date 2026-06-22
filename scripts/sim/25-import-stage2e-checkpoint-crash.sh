@@ -66,7 +66,7 @@ BATCH = os.environ["BATCH_NO"]
 EXPECTED_ROWS = int(os.environ["EXPECTED_ROWS"])
 MIN_MARKER = int(os.environ["CHECKPOINT_MIN_MARKER"])
 WORKER_PORT = os.environ["WORKER_IMPORT_PORT"]
-MINIO_CONTAINER = os.environ.get("MINIO_CONTAINER", "batch-minio")
+MINIO_CONTAINER = os.environ.get("MINIO_CONTAINER", os.environ.get("MINIO_CONTAINER", "batch-minio"))
 MINIO_BUCKET = os.environ["BATCH_S3_BUCKET"]
 MINIO_ACCESS_KEY = os.environ["BATCH_S3_ACCESS_KEY"]
 MINIO_SECRET_KEY = os.environ["BATCH_S3_SECRET_KEY"]
@@ -81,7 +81,7 @@ def psql(db, sql, tuples=False):
         "-U", os.environ["POSTGRES_USER"], "-d", db, "-P", "pager=off",
     ]
     if tuples:
-        args += ["-t", "-A"]
+        args += ["-t", "-A", "-F", "\x1f"]
     args += ["-c", sql]
     return sh(args)
 
@@ -177,7 +177,9 @@ def state_row(rid):
     out = (psql(os.environ["PG_PLATFORM_DB"], sql, tuples=True).stdout or "").strip()
     if not out:
         return None
-    parts = out.split("|")
+    parts = out.split("\x1f")
+    if len(parts) != 13:
+        raise RuntimeError(f"unexpected state row field count={len(parts)} raw={out!r}")
     return {
         "instance_id": parts[0],
         "partition_id": parts[1],
@@ -215,7 +217,10 @@ def wait_for_checkpoint(rid):
     raise TimeoutError(f"checkpoint marker not reached; last={last}")
 
 def kill_worker_import():
-    out = sh(["bash", "-lc", f"lsof -tiTCP:{WORKER_PORT} -sTCP:LISTEN | head -1"]).stdout.strip()
+    out = sh([
+        "bash", "-lc",
+        f"source scripts/lib/process.sh; process_listen_pids {WORKER_PORT} | head -1",
+    ]).stdout.strip()
     if not out:
         raise RuntimeError("worker-import listener pid not found")
     print(f"  [kill] worker-import pid={out}", flush=True)

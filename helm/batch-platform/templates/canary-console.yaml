@@ -37,7 +37,7 @@ spec:
   service:
     port: {{ $svc.service.port }}
     targetPort: {{ $svc.port }}
-    # TODO ops:portDiscovery / gateways / hosts 视 mesh 提供方填充
+    # ops 接入:portDiscovery / gateways / hosts 视 mesh 提供方填充
 
   analysis:
     interval: 1m
@@ -53,5 +53,5 @@ spec:
         thresholdRange:
           max: 500          # 单位 ms
         interval: 1m
-    # TODO ops:webhooks(load-test / smoke-test / slack notify)按需补
+    # ops 接入:webhooks(load-test / smoke-test / slack notify)按需补
 {{- end }}

@@ -70,7 +70,7 @@ public final class ConfigPackageGuidanceContent {
       throw new IllegalStateException(RESOURCE + " 缺少 fragments 对象");
     }
     Map<String, String> fragments = new LinkedHashMap<>();
-    fragmentsNode.fields().forEachRemaining(e -> fragments.put(e.getKey(), e.getValue().asText()));
+    fragmentsNode.properties().forEach(e -> fragments.put(e.getKey(), e.getValue().asText()));
 
     JsonNode sheetsNode = root.get("sheets");
     if (sheetsNode == null || !sheetsNode.isObject()) {
@@ -78,9 +78,8 @@ public final class ConfigPackageGuidanceContent {
     }
     Map<String, Sheet> sheets = new LinkedHashMap<>();
     sheetsNode
-        .fields()
-        .forEachRemaining(
-            e -> sheets.put(e.getKey(), parseSheet(e.getKey(), e.getValue(), fragments)));
+        .properties()
+        .forEach(e -> sheets.put(e.getKey(), parseSheet(e.getKey(), e.getValue(), fragments)));
 
     return new ConfigPackageGuidanceContent(fragments, sheets);
   }

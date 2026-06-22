@@ -20,13 +20,33 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# shellcheck source=../lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
+# shellcheck source=../lib/process.sh
+source "$ROOT/scripts/lib/process.sh"
 
 PG="${PG_CONTAINER:-batch-postgres-primary}"
 PGU="${POSTGRES_USER:-batch_user}"
 PLAT_DB="${POSTGRES_DB:-batch_platform}"
 BIZ_DB="${BUSINESS_DB_NAME:-batch_business}"
-CONSOLE="http://localhost:18080"
-FIXTURE_DIR="docs/test-data/test-full-coverage-import-suite"
+CONSOLE_API_PORT="${CONSOLE_API_PORT:-${BATCH_CONSOLE_PORT:-18080}}"
+TRIGGER_PORT="${TRIGGER_PORT:-${BATCH_TRIGGER_PORT:-18081}}"
+ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-${BATCH_ORCHESTRATOR_PORT:-18082}}"
+WORKER_IMPORT_PORT="${WORKER_IMPORT_PORT:-${BATCH_WORKER_IMPORT_PORT:-18083}}"
+WORKER_EXPORT_PORT="${WORKER_EXPORT_PORT:-${BATCH_WORKER_EXPORT_PORT:-18084}}"
+WORKER_DISPATCH_PORT="${WORKER_DISPATCH_PORT:-${BATCH_WORKER_DISPATCH_PORT:-18085}}"
+WORKER_PROCESS_PORT="${WORKER_PROCESS_PORT:-${BATCH_WORKER_PROCESS_PORT:-18086}}"
+WORKER_ATOMIC_PORT="${WORKER_ATOMIC_PORT:-${BATCH_WORKER_ATOMIC_PORT:-18087}}"
+CONSOLE="${CONSOLE_BASE:-http://localhost:${CONSOLE_API_PORT}}"
+KAFKA_CONTAINER="${KAFKA_CONTAINER:-batch-kafka}"
+MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
+REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
+BIZ_SHARD_1_CONTAINER="${BIZ_SHARD_1_CONTAINER:-batch-postgres-biz-shard-1}"
+FIXTURE_DIR="${FIXTURE_DIR:-docs/test-data/test-full-coverage-import-suite}"
+SIM_LOG_DIR="$(log_run_dir "$ROOT" sim-harness sim-harness)"
+HARNESS_TMP_DIR="${HARNESS_TMP_DIR:-$SIM_LOG_DIR/tmp}"
+mkdir -p "$HARNESS_TMP_DIR"
+log_link_dir "$ROOT" sim-harness "$SIM_LOG_DIR"
 
 c_red()  { printf '\033[0;31m%s\033[0m\n' "$*"; }
 c_grn()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -60,7 +80,7 @@ preflight() {
 
   echo "== preflight:基础设施 =="
   local svc
-  for svc in "$PG" batch-kafka batch-minio batch-valkey; do
+  for svc in "$PG" "$KAFKA_CONTAINER" "$MINIO_CONTAINER" "$REDIS_CONTAINER"; do
     local st
     st=$(docker inspect -f '{{.State.Health.Status}}' "$svc" 2>/dev/null || echo missing)
     [[ "$st" == healthy ]] && ok "$svc healthy" || fail "$svc 状态=$st(需 docker compose up infra)"
@@ -68,7 +88,7 @@ preflight() {
 
   echo "== preflight:构建产物 / secrets / fixtures =="
   local n
-  n=$(ls build/runtime-jars/*.jar 2>/dev/null | wc -l | tr -d ' ')
+  n=$(find build/runtime-jars -maxdepth 1 -type f -name '*.jar' 2>/dev/null | wc -l | tr -d ' ')
   [[ "$n" == 8 ]] && ok "runtime-jars 8 个" || fail "runtime-jars=$n(需 build-apps.sh,期望 8)"
 
   local k
@@ -94,7 +114,7 @@ preflight() {
   if curl -s -o /dev/null --max-time 3 "$CONSOLE/actuator/health" 2>/dev/null; then
     echo "== preflight:运行期(app 已起)=="
     local p
-    for p in 18080 18081 18082 18083 18084 18085 18086 18087; do
+    for p in "$CONSOLE_API_PORT" "$TRIGGER_PORT" "$ORCHESTRATOR_PORT" "$WORKER_IMPORT_PORT" "$WORKER_EXPORT_PORT" "$WORKER_DISPATCH_PORT" "$WORKER_PROCESS_PORT" "$WORKER_ATOMIC_PORT"; do
       local hc; hc=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:$p/actuator/health" 2>/dev/null)
       [[ "$hc" == 200 ]] && ok "svc :$p UP" || fail "svc :$p health=$hc"
     done
@@ -164,7 +184,7 @@ reset() {
 prereq() {
   echo "== prereq:biz 表 + RLS + 只读角色 =="
   set -a; . ./.env.local; set +a
-  bash scripts/sim/01-init-biz.sh >/tmp/harness-initbiz.log 2>&1 && ok "01-init-biz" || { c_red "  ✗ 01-init-biz(见 /tmp/harness-initbiz.log)"; return 1; }
+  bash scripts/sim/01-init-biz.sh >"$SIM_LOG_DIR/initbiz.log" 2>&1 && ok "01-init-biz" || { c_red "  ✗ 01-init-biz(见 $SIM_LOG_DIR/initbiz.log)"; return 1; }
   docker exec -i "$PG" psql -q -U "$PGU" -d "$BIZ_DB" < scripts/db/business/rls-phase-a.sql >/dev/null 2>&1 && ok "rls-phase-a" || warn "rls-phase-a 跳过"
   docker exec -i "$PG" psql -q -U "$PGU" -d "$BIZ_DB" < scripts/db/business/diagnostic-readonly-role.sql >/dev/null 2>&1 && ok "只读角色" || warn "只读角色 跳过"
 
@@ -173,21 +193,21 @@ prereq() {
   # batch.refresh_metrics() procedure;这俩是 definition(reset 保留),但 fresh 库 / 清过
   # definition 时缺失会致 atomic stage 整片 REJECTED。幂等(ON CONFLICT / CREATE OR REPLACE),每轮装配。
   docker exec -i "$PG" psql -q -U "$PGU" -d "$PLAT_DB" -v ON_ERROR_STOP=1 \
-    < scripts/db/test-seed/platform_seed.sql >/tmp/harness-platform-seed.log 2>&1 \
+    < scripts/db/test-seed/platform_seed.sql >"$SIM_LOG_DIR/platform-seed.log" 2>&1 \
     && ok "platform_seed(atomic/procedure)" \
-    || { c_red "  ✗ platform_seed(见 /tmp/harness-platform-seed.log)"; return 1; }
+    || { c_red "  ✗ platform_seed(见 $SIM_LOG_DIR/platform-seed.log)"; return 1; }
 
   echo "== prereq:shard-1(幂等)=="
-  bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >/tmp/harness-shard1.log 2>&1 && ok "shard-1 就绪" || { c_red "  ✗ shard-1(见 /tmp/harness-shard1.log)"; return 1; }
+  bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >"$SIM_LOG_DIR/shard1.log" 2>&1 && ok "shard-1 就绪" || { c_red "  ✗ shard-1(见 $SIM_LOG_DIR/shard1.log)"; return 1; }
 
   echo "== prereq:下游模拟器(sftp/mockserver)=="
-  bash scripts/sim/02-start-sim.sh >/tmp/harness-sim02.log 2>&1 && ok "sftp/mockserver" || { c_red "  ✗ 02-start-sim(见 /tmp/harness-sim02.log)"; return 1; }
+  bash scripts/sim/02-start-sim.sh >"$SIM_LOG_DIR/sim02.log" 2>&1 && ok "sftp/mockserver" || { c_red "  ✗ 02-start-sim(见 $SIM_LOG_DIR/sim02.log)"; return 1; }
 
   echo "== prereq:租户导入(03)=="
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
-    bash scripts/sim/03-import-tenants.sh ) >/tmp/harness-import.log 2>&1 \
+    bash scripts/sim/03-import-tenants.sh ) >"$SIM_LOG_DIR/import-tenants.log" 2>&1 \
     && ok "租户配置导入" \
-    || { c_red "  ✗ 03-import 失败(见 /tmp/harness-import.log)"; return 1; }
+    || { c_red "  ✗ 03-import 失败(见 $SIM_LOG_DIR/import-tenants.log)"; return 1; }
   c_grn "== prereq 完成 =="
 }
 
@@ -212,7 +232,7 @@ restart_import() {
     skip) extra="-Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.skip.error-sink-type=ERROR_TABLE" ;;
     checkpoint) extra="-Dbatch.worker.checkpoint.enabled=true" ;;
   esac
-  local pid; pid=$(pgrep -f "build/runtime-jars/worker-import.jar" | head -1)
+  local pid; pid="$(process_listen_pids "$WORKER_IMPORT_PORT" | head -1)"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null
     for _ in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
@@ -220,13 +240,13 @@ restart_import() {
   fi
   # shellcheck disable=SC2086
   nohup java --enable-native-access=ALL-UNNAMED -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off $extra \
-    -jar build/runtime-jars/worker-import.jar --spring.profiles.active=local >logs/worker-import.log 2>&1 &
+    -jar build/runtime-jars/worker-import.jar --spring.profiles.active=local >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1 &
   disown
   for _ in $(seq 1 40); do
-    curl -s -o /dev/null -w '%{http_code}' http://localhost:18083/actuator/health 2>/dev/null | grep -q 200 && { echo "  [worker-import:$mode ready]"; return 0; }
+    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && { echo "  [worker-import:$mode ready]"; return 0; }
     sleep 3
   done
-  echo "  [worker-import:$mode NOT ready]" >&2; return 1
+  echo "  [worker-import:$mode NOT ready] 见 $SIM_LOG_DIR/worker-import-${mode}.log" >&2; return 1
 }
 
 # ---------------------------------------------------------
@@ -234,9 +254,9 @@ sim() {
   echo "== sim:全量 04→25 =="
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     restart_import default   # 基线 worker:checkpoint=false(17 REPLACE 需要) + no skip
-    local sum=/tmp/harness-sim-summary.txt; : > "$sum"
+    local sum="$SIM_LOG_DIR/sim-summary.txt"; : > "$sum"
     local sim_failed=0
-    for s in $(ls scripts/sim/[0-2][0-9]-*.sh | sort); do
+    while IFS= read -r s; do
       local n; n=$(basename "$s")
       case "$n" in 00-*|01-*|02-*|03-*) continue;; esac
       # per-stage batchNo 隔离:全局 BATCH_NO 会让各 stage 共享 batchNo,致断言/清理跨 stage
@@ -253,17 +273,18 @@ sim() {
         25-*) restart_import checkpoint ;;  # checkpoint=true
       esac
       echo ">>> $n $(date +%T)" | tee -a "$sum"
-      if bash "$s" >"/tmp/harness-$n.log" 2>&1; then
+      local stage_log="$SIM_LOG_DIR/$n.log"
+      if bash "$s" >"$stage_log" 2>&1; then
         echo "PASS $n" | tee -a "$sum"
       else
         local rc=$?
         sim_failed=1
         echo "FAIL $n (exit $rc)" | tee -a "$sum"
-        tail -6 "/tmp/harness-$n.log" | sed 's/^/   /' | tee -a "$sum"
+        tail -6 "$stage_log" | sed 's/^/   /' | tee -a "$sum"
       fi
       case "$n" in 23-*|25-*) restart_import default ;; esac   # 恢复基线
       case "$n" in *load*|*stage*) sleep 20;; esac
-    done
+    done < <(find scripts/sim -maxdepth 1 -type f -name '[0-2][0-9]-*.sh' | sort)
     echo "== sim 完成 ==" | tee -a "$sum"
     exit "$sim_failed" )
 }
@@ -285,7 +306,7 @@ routing_sim_teardown() {
       && mv .env.local.tmp .env.local
     c_ylw "  routing overlay 已从 .env.local 移除,重启 worker 还原单片"
     unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
-    bash scripts/local/restart.sh worker-import worker-export worker-process >/tmp/harness-routing-restore.log 2>&1 || true
+    bash scripts/local/restart.sh worker-import worker-export worker-process >"$SIM_LOG_DIR/routing-restore.log" 2>&1 || true
   fi
 }
 
@@ -295,7 +316,7 @@ routing_sim() {
   set -a; . ./.env.local; set +a
 
   echo "-- 1) shard-1 + secrets --"
-  bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >/tmp/harness-rs-shard1.log 2>&1 && ok "shard-1" || { fail "shard-1"; return 1; }
+  bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >"$SIM_LOG_DIR/rs-shard1.log" 2>&1 && ok "shard-1" || { fail "shard-1"; return 1; }
   local s0u s0n s0p s1u s1n s1p
   s0u=$(grep BIZ_SHARD_URL secrets/biz-shards/shard-0.env|cut -d= -f2-|tr -d '"'); s0n=$(grep BIZ_SHARD_USERNAME secrets/biz-shards/shard-0.env|cut -d= -f2-); s0p=$(grep BIZ_SHARD_PASSWORD secrets/biz-shards/shard-0.env|cut -d= -f2-)
   s1u=$(grep BIZ_SHARD_URL secrets/biz-shards/shard-1.env|cut -d= -f2-|tr -d '"'); s1n=$(grep BIZ_SHARD_USERNAME secrets/biz-shards/shard-1.env|cut -d= -f2-); s1p=$(grep BIZ_SHARD_PASSWORD secrets/biz-shards/shard-1.env|cut -d= -f2-)
@@ -322,22 +343,22 @@ routing_sim() {
     echo "$ROUTING_MARK_END"
   } >> .env.local
   unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
-  bash scripts/local/restart.sh worker-import worker-export worker-process >/tmp/harness-rs-restart.log 2>&1
-  for i in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}' http://localhost:18083/actuator/health 2>/dev/null | grep -q 200 && break; sleep 3; done
+  bash scripts/local/restart.sh worker-import worker-export worker-process >"$SIM_LOG_DIR/rs-restart.log" 2>&1
+  for i in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && break; sleep 3; done
   ok "3 biz worker 已带 routing 重启"
 
   echo "-- 4) 跑导入(04-seed + 05-load)--"
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
-    bash scripts/sim/04-seed-source-data.sh >/tmp/harness-rs-seed.log 2>&1
-    bash scripts/sim/05-load.sh >/tmp/harness-rs-load.log 2>&1 ) && ok "导入触发完成" || warn "导入有非零退出(看日志)"
+    bash scripts/sim/04-seed-source-data.sh >"$SIM_LOG_DIR/rs-seed.log" 2>&1
+    bash scripts/sim/05-load.sh >"$SIM_LOG_DIR/rs-load.log" 2>&1 ) && ok "导入触发完成" || warn "导入有非零退出(看日志)"
   sleep 30
 
   echo "-- 5) 验:tc 业务数据落 shard-1 而非 shard-0 --"
   local tbl="customer_account"  # ta 写 customer;tc 写 risk_score。两边都查,任一有 tc 行即证
   local on1 on0
   for tbl in risk_score customer_account transaction; do
-    on1=$(PGPASSWORD="$s1p" docker run --rm --network "$(docker inspect "$PG" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')" -e PGPASSWORD="$s1p" postgres:17 psql -h batch-postgres-biz-shard-1 -U "$s1n" -d batch_business -tAc "SELECT count(*) FROM biz.$tbl WHERE tenant_id='tc'" 2>/dev/null || echo 0)
-    on0=$(docker exec "$PG" psql -U "$PGU" -d batch_business -tAc "SELECT count(*) FROM biz.$tbl WHERE tenant_id='tc'" 2>/dev/null || echo 0)
+    on1=$(PGPASSWORD="$s1p" docker run --rm --network "$(docker inspect "$PG" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')" -e PGPASSWORD="$s1p" postgres:17 psql -h "$BIZ_SHARD_1_CONTAINER" -U "$s1n" -d "$BIZ_DB" -tAc "SELECT count(*) FROM biz.$tbl WHERE tenant_id='tc'" 2>/dev/null || echo 0)
+    on0=$(docker exec "$PG" psql -U "$PGU" -d "$BIZ_DB" -tAc "SELECT count(*) FROM biz.$tbl WHERE tenant_id='tc'" 2>/dev/null || echo 0)
     echo "    biz.$tbl  tc@shard-1=$on1  tc@shard-0=$on0"
   done
   c_grn "== routing-sim 完成(看上面 tc 是否落 shard-1;EXIT 自动还原单片)=="

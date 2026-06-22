@@ -75,7 +75,7 @@ def psql(db, sql, tuples=True):
     args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql",
             "-U", os.environ["POSTGRES_USER"], "-d", db, "-P", "pager=off"]
     if tuples:
-        args += ["-t", "-A"]
+        args += ["-t", "-A", "-F", "\x1f"]
     args += ["-c", sql]
     return sh(args)
 
@@ -127,7 +127,7 @@ def read_partitions(instance_id):
              " coalesce(template_code,''), coalesce(target_ref,'')"
              " from batch.job_partition where tenant_id='ta' and job_instance_id=%d"
              " order by partition_no" % instance_id)
-    return [ln.split("|") for ln in r.stdout.strip().splitlines() if ln]
+    return [ln.split("\x1f") for ln in r.stdout.strip().splitlines() if ln]
 
 
 def wait_partitions_terminal(instance_id, timeout=180):
@@ -137,7 +137,7 @@ def wait_partitions_terminal(instance_id, timeout=180):
                  "select count(*) filter (where partition_status in ('SUCCESS','SUCCEEDED')),"
                  " count(*) filter (where partition_status like '%FAIL%'), count(*)"
                  " from batch.job_partition where tenant_id='ta' and job_instance_id=%d" % instance_id)
-        ok, failed, total = (r.stdout.strip().split("|") + ["0", "0", "0"])[:3]
+        ok, failed, total = (r.stdout.strip().split("\x1f") + ["0", "0", "0"])[:3]
         if int(total) > 0 and int(ok) + int(failed) >= int(total):
             return int(ok), int(failed), int(total)
         time.sleep(5)
@@ -254,7 +254,7 @@ parts = [ln for ln in r.stdout.strip().splitlines() if ln]
 print(f"  partitions: {parts}")
 assert len(parts) == 2, f"期望 2 个 partition,实得 {len(parts)}"
 for ln in parts:
-    cols = ln.split("|")
+    cols = ln.split("\x1f")
     assert cols[1], f"partition 缺 source_file_id: {ln}"
     assert cols[2] == TEMPLATE, f"partition template_code 不符: {ln}"
 print("  ✓ 2 个绑定异构 partition(各带 source_file_id + template_code)")
@@ -268,7 +268,7 @@ while time.time() < deadline:
              "select count(*) filter (where partition_status in ('SUCCESS','SUCCEEDED')),"
              " count(*) filter (where partition_status like '%FAIL%'), count(*)"
              " from batch.job_partition where tenant_id='ta' and job_instance_id=%d" % instance_id)
-    ok, failed, total = (r.stdout.strip().split("|") + ["0", "0", "0"])[:3]
+    ok, failed, total = (r.stdout.strip().split("\x1f") + ["0", "0", "0"])[:3]
     if int(ok) + int(failed) >= int(total) and int(total) > 0:
         final = (int(ok), int(failed), int(total))
         break

@@ -45,10 +45,10 @@ class LeaseRenewalSchedulerFixedDelayTest {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     ScheduledExecutorService exec = mock(ScheduledExecutorService.class);
-    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg(), http, dispatcher, exec);
-
-    // 执行
-    s.start();
+    try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg(), http, dispatcher, exec)) {
+      // 执行
+      s.start();
+    }
 
     // 断言 — 调度走的是 fixed-delay,不是 fixed-rate
     ArgumentCaptor<Long> initialDelay = ArgumentCaptor.forClass(Long.class);

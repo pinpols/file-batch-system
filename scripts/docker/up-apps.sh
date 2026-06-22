@@ -23,6 +23,8 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=../lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
@@ -32,7 +34,8 @@ if ! docker network inspect "$APP_NETWORK_NAME" >/dev/null 2>&1; then
   docker network create "$APP_NETWORK_NAME" >/dev/null
 fi
 
-mkdir -p "$ROOT/logs/docker"
+DOCKER_LOG_DIR="$(log_current_dir "$ROOT" docker docker)"
+echo "应用容器文件日志目录: $DOCKER_LOG_DIR（兼容 logs/docker）"
 
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \

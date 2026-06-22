@@ -46,7 +46,7 @@ PCT_WORKFLOW="${PCT_WORKFLOW:-20}"
 
 # 跨日时间偏移:启动 JVM clock offset(BatchDateTimeSupport 当前未支持该属性,
 # 启动脚本仅尝试注入 -Dbatch.testing.clock-offset;真正生效需后续在 Clock bean
-# 上实现注入。详见 docs/plans/r3-3-soak-tests.md TODO 段)。
+# 上实现注入。详见 docs/plans/r3-3-soak-tests.md 的阻塞说明)。
 CLOCK_OFFSET="${CLOCK_OFFSET:-+12h}"
 
 # 调试/跳过开关

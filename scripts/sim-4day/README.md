@@ -21,9 +21,10 @@ cd <repo>
 # P0 清空异常数据(保留 config)
 bash scripts/sim-4day/00-clean.sh
 # P1 配置:重导 ta/tb/tc(需 token)+ bootstrap + 克隆到 10 租户
-#   token: curl -s -c /tmp/cj POST :18080/api/console/auth/login -d '{"username":"admin","password":"admin123"}'
+#   token: SIM_COOKIE_FILE="$(mktemp)"; curl -s -c "$SIM_COOKIE_FILE" POST "$CONSOLE_BASE/api/console/auth/login" -d '{"username":"admin","password":"admin123"}'
 #   （00-clean 不动 config;若已克隆过可跳过 P1)
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform < scripts/sim-4day/10-clone-tenants.sql
+source scripts/lib/env-common.sh
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" < scripts/sim-4day/10-clone-tenants.sql
 
 # P3+P4 一键 4 天(每天行数递增 300/600/900/1200 + Day0 投大文件)
 bash scripts/sim-4day/41-run-4days.sh 2026-06-06 300
@@ -38,7 +39,7 @@ bash scripts/sim-4day/30-gen-bigfiles.sh 20260606
 bash scripts/sim-4day/50-watch.sh
 bash scripts/sim-4day/50-watch.sh --loop
 ```
-也可在控制台 UI 看:`http://localhost:18080`(文件流水线 / 监控 / Outbox / 审批)。
+也可在控制台 UI 看:`$CONSOLE_BASE`(文件流水线 / 监控 / Outbox / 审批)。
 
 ## 关键技术契约(已验证)
 - **IMPORT**:`launch{jobCode, params:{templateCode, content:<CSV>}}` → ParseStep(preserveLogicalRow)

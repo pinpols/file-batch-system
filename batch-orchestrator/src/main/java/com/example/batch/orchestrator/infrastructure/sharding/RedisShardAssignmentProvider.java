@@ -23,7 +23,7 @@ import org.springframework.scheduling.annotation.Scheduled;
  * <p>容错：Redis 读写任何异常发生时，回退到上一次成功读到的 {@link ShardAssignment}， 保证调度不中断。集群启动时若 Redis 不可用，首次 {@link
  * #current()} 返回 {@link ShardAssignment#single()}（退化为单实例）。
  *
- * <p>TODO(needs-manual-review): 审计 (2026-05-23) 提议改为 @Component 注册。 当前由 {@link
+ * <p>人工评审记录(2026-05-23):审计曾提议改为 @Component 注册。 当前由 {@link
  * com.example.batch.orchestrator.config.ShardingConfiguration} 通过 {@code @Bean} 方法装配, 这种方式产生的也是
  * Spring 管理 bean,理论上 {@code @Scheduled} 心跳能生效;但为消除歧义, 已新增 {@link #selfCheckOnStartup()} 启动期自检,首次
  * heartbeat 失败会立刻 WARN 暴露。 真正改 @Component 需要把构造参数 (memberId / memberTtl) 重构为 @Value / properties

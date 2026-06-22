@@ -9,7 +9,10 @@
 # 设计同 verify:用 docker run 把分片挂到运行栈网络(避免 compose external-network/env 问题)。
 # compose 里的 postgres-biz-shard-1 是 shard-1 的「生产形态」声明;本脚本是通用「就地开片」路径。
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 
 KEY="${1:-}"
 PORT="${2:-}"
@@ -18,9 +21,9 @@ if [ -z "$KEY" ] || [ -z "$PORT" ]; then
   exit 2
 fi
 
-SECRETS_DIR="secrets/biz-shards"
+SECRETS_DIR="${BIZ_SHARD_SECRETS_DIR:-secrets/biz-shards}"
 CONTAINER="batch-postgres-biz-$KEY"
-PRIMARY_NAME="batch-postgres-primary"
+PRIMARY_NAME="${PG_CONTAINER:-batch-postgres-primary}"
 
 echo "==> [${KEY}] 1/5 起 PG 容器(挂运行栈网络)"
 if ! docker ps --format '{{.Names}}' | grep -qx "$PRIMARY_NAME"; then
@@ -37,9 +40,9 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
 else
   docker run -d --name "$CONTAINER" --network "$NETWORK" \
     -p "$PORT:5432" \
-    -e POSTGRES_DB=batch_platform \
-    -e POSTGRES_USER=batch_user \
-    -e POSTGRES_PASSWORD=batch_pass_123 \
+    -e POSTGRES_DB="$PLATFORM_DB" \
+    -e POSTGRES_USER="$POSTGRES_USER" \
+    -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
     -e POSTGRES_INITDB_ARGS="--encoding=UTF8" \
     -v "$(pwd)/docker/biz-shard-init:/docker-entrypoint-initdb.d:ro" \
     -v "$(pwd)/scripts/db/business/create_biz_tables.sql:/biz-sql/create_biz_tables.sql:ro" \
@@ -49,23 +52,23 @@ fi
 
 echo "==> [${KEY}] 2/5 等待就绪(含 init 建库建表)"
 for i in $(seq 1 40); do
-  if docker exec "$CONTAINER" pg_isready -U batch_user -d batch_business >/dev/null 2>&1; then
+  if docker exec "$CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$BUSINESS_DB" >/dev/null 2>&1; then
     ready=1; break
   fi
   sleep 2
 done
 [ "${ready:-0}" = 1 ] || { echo "    ✗ 未就绪"; docker logs --tail 30 "$CONTAINER"; exit 1; }
-n_tables="$(docker exec "$CONTAINER" psql -U batch_user -d batch_business -tAc \
+n_tables="$(docker exec "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" -tAc \
   "SELECT count(*) FROM information_schema.tables WHERE table_schema='biz'")"
 echo "    就绪;biz 表数=$n_tables"
 
 echo "==> [${KEY}] 3/5 角色+授权+RLS(rls-phase-a,幂等)"
-docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U batch_user -d batch_business \
+docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   < scripts/db/business/rls-phase-a.sql >/dev/null
 echo "    writer/admin + grants + RLS 已施加"
 
 echo "==> [${KEY}] 4/5 只读排故角色(diagnostic-readonly-role,幂等)"
-docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U batch_user -d batch_business \
+docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   < scripts/db/business/diagnostic-readonly-role.sql >/dev/null
 echo "    readonly / readonly_all 已建"
 
@@ -76,9 +79,9 @@ if [ -f "$SECRET" ]; then
 else
   {
     echo "# biz $KEY 凭据(provision-biz-shard.sh 生成)。prod 把 username 换 batch_business_writer。"
-    echo "BIZ_SHARD_URL=\"jdbc:postgresql://localhost:$PORT/batch_business?currentSchema=biz&reWriteBatchedInserts=true\""
-    echo "BIZ_SHARD_USERNAME=batch_user"
-    echo "BIZ_SHARD_PASSWORD=batch_pass_123"
+    echo "BIZ_SHARD_URL=\"jdbc:postgresql://localhost:$PORT/$BUSINESS_DB?currentSchema=biz&reWriteBatchedInserts=true\""
+    echo "BIZ_SHARD_USERNAME=$POSTGRES_USER"
+    echo "BIZ_SHARD_PASSWORD=$POSTGRES_PASSWORD"
   } > "$SECRET"
   echo "    生成 $SECRET"
 fi

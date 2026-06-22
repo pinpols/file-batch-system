@@ -105,7 +105,7 @@ cleanup_orphan_testcontainers() {
   done)
   if [[ -n "$orphans" ]]; then
     printf '  cleaning %d orphan testcontainer(s)\n' "$(printf '%s\n' "$orphans" | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
-    printf '%s\n' "$orphans" | /usr/bin/xargs -r "$docker_bin" rm -f >/dev/null 2>&1 || true
+    printf '%s\n' "$orphans" | /usr/bin/xargs "$docker_bin" rm -f >/dev/null 2>&1 || true
   fi
 }
 

@@ -20,10 +20,14 @@
 # =========================================================
 set -uo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
+
 export ROWS="${ROUNDS:-5}"               # 每个 import 生成多少数据行
 export ONLY="${ONLY:-}"
 export CLEAN_SIM_OUTPUTS="${CLEAN_SIM_OUTPUTS:-false}"
-export MINIO_BUCKET="${MINIO_BUCKET:-batch-dev}"
+export MINIO_BUCKET="${MINIO_BUCKET:-$BATCH_S3_BUCKET}"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
@@ -79,8 +83,8 @@ def run_cmd(args, input_text=None):
     return subprocess.run(args, input=input_text, capture_output=True, text=True)
 
 def sql_value(sql):
-    out = run_cmd(["docker","exec","batch-postgres-primary","psql","-U","batch_user",
-        "-d","batch_platform","-t","-A","-c",sql])
+    out = run_cmd(["docker","exec",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
+        "-d",os.environ.get("PLATFORM_DB", "batch_platform"),"-t","-A","-c",sql])
     return out.stdout.strip()
 
 def cleanup_outputs():
@@ -107,10 +111,10 @@ def cleanup_outputs():
        and biz_type in ({in_biz})
        and source_ref = '{BATCH}';
     """
-    run_cmd(["docker","exec","-i","batch-postgres-primary","psql","-U","batch_user",
-        "-d","batch_platform","-v","ON_ERROR_STOP=1"], sql)
+    run_cmd(["docker","exec","-i",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
+        "-d",os.environ.get("PLATFORM_DB", "batch_platform"),"-v","ON_ERROR_STOP=1"], sql)
     for biz in biz_types:
-        run_cmd(["docker","exec","batch-minio","mc","rm","--recursive","--force",
+        run_cmd(["docker","exec",os.environ.get("MINIO_CONTAINER", "batch-minio"),"mc","rm","--recursive","--force",
             f"local/{BUCKET}/outbound/{biz}/{BIZ}/{BATCH}"])
 
 def launch(tenant, job, params):

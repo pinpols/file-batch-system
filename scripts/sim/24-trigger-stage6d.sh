@@ -27,13 +27,13 @@ export OUTBOX_COUNT="${OUTBOX_COUNT:-12}"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> seed trigger stage6d fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage6c-trigger-fixtures.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage6d-trigger-fixtures.sql >/dev/null
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6d.log"
@@ -50,14 +50,14 @@ API_JOB = "TA_PROCESS_STAGE4_EMPTY_SUCCESS"
 CRON_JOB = "TA_TRIGGER_STAGE6C_SCHEDULED"
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-P", "pager=off"]
+    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
     return subprocess.run(args, check=False, capture_output=True, text=True)
 
 def psql_file(path, *vars):
-    args = ["docker", "exec", "-i", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-v", "ON_ERROR_STOP=1"]
+    args = ["docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-v", "ON_ERROR_STOP=1"]
     for key, value in vars:
         args += ["-v", f"{key}={value}"]
     args += ["-f", "/dev/stdin"]
@@ -271,16 +271,16 @@ non_terminal = int(scalar(
 
 print("\n-- trigger_stage6d_status --", flush=True)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
     "select trigger_type, request_status, count(*) "
     "from batch.trigger_request "
     f"where tenant_id='ta' and request_id like '{BATCH}%' "
     "group by trigger_type, request_status order by trigger_type, request_status"
 ], check=False)
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
     "select publish_status, count(*) "
     "from batch.trigger_outbox_event "
     f"where tenant_id='ta' and request_id like '{BATCH}%' "

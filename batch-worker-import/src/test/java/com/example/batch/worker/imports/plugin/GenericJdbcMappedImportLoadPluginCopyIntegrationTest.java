@@ -22,6 +22,7 @@ import org.testcontainers.utility.DockerImageName;
 class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
 
   @Container
+  @SuppressWarnings("resource")
   private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
           .withDatabaseName("batch_business")

@@ -6,13 +6,19 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=scripts/lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
 START="${1:-2026-06-10}"; BASE="${2:-300}"; WAIT="${WAIT:-120}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SQL_DIR="$HERE/sql"
+SIM4DAY_LOG_DIR="${SIM4DAY_LOG_DIR:-$(log_run_dir "$ROOT" sim-4day "sim-4day-batchday-${START//-/}")}"
+log_link_dir "$ROOT" sim-4day "$SIM4DAY_LOG_DIR"
+exec > >(tee -a "$SIM4DAY_LOG_DIR/00-run-4days-batchday.log") 2>&1
 CONSOLE="${CONSOLE_BASE_URL}"
-CJ=/tmp/console-cookies-42.txt
+CJ="$SIM4DAY_LOG_DIR/console-cookies.txt"
 TENANTS=(ta tb tc t04 t05 t06 t07 t08 t09 t10)
-PQF(){ docker exec -i batch-postgres-primary psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tA "$@" -f /dev/stdin 2>/dev/null; }
+SIM4DAY_CLOSE_ERR_LOG="$SIM4DAY_LOG_DIR/close-errors.log"
+PQF(){ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tA "$@" -f /dev/stdin 2>>"$SIM4DAY_CLOSE_ERR_LOG"; }
 nextday(){ python3 -c "import datetime as d;print((d.date.fromisoformat('$1')+d.timedelta(days=$2)).isoformat())"; }
 
 # 日切结算 = CLOSE 的状态转移(day_status→SETTLED + settled_at)。本应走
@@ -26,12 +32,15 @@ close_day(){ # tenant bizDate
 }
 
 echo "########## 真批量日 4 天  起=$START 基准行=$BASE ##########"
-: > /tmp/sim42-close-err.log
+echo "########## 日志目录: $SIM4DAY_LOG_DIR ##########"
+: > "$SIM4DAY_CLOSE_ERR_LOG"
 for off in 0 1 2 3; do
   BD=$(nextday "$START" "$off"); ROWS=$(( BASE*(off+1) ))
   echo; echo "########## ===== 业务日 $BD (rows/import=$ROWS) ===== ##########"
   echo "[1] 开日+跑批(launch 自动 open batch_day)"
-  ROWS="$ROWS" bash "$HERE/40-run-day.sh" "$BD" >/dev/null 2>&1 && echo "    ✓ 已触发 10 租户"
+  day_log="$SIM4DAY_LOG_DIR/$(printf '%02d' $((off + 1)))-batchday-${BD}.log"
+  SIM4DAY_LOG_DIR="$SIM4DAY_LOG_DIR" SIM4DAY_CAPTURED=1 ROWS="$ROWS" bash "$HERE/40-run-day.sh" "$BD" \
+    > "$day_log" 2>&1 && echo "    ✓ 已触发 10 租户(日志: $day_log)"
   echo "[2] 等 ${WAIT}s 让 worker 跑完窗口内作业…"; sleep "$WAIT"
   echo -n "[3] 日切 CLOSE 10 租户: "
   for t in "${TENANTS[@]}"; do close_day "$t" "$BD"; done; echo
@@ -43,5 +52,5 @@ done
 echo; echo "########## 4 天批量日生命周期总览 ##########"
 PQF -v start_date="$START" -v end_date="$(nextday "$START" 3)" < "$SQL_DIR/batchday-summary.sql" \
   | awk -F'|' 'BEGIN{printf "  %-12s %-16s %4s %8s\n","bizDate","status","n","settled"}{printf "  %-12s %-16s %4s %8s\n",$1,$2,$3,$4}'
-echo "  (CLOSE 失败详情若有: /tmp/sim42-close-err.log)"
+echo "  (CLOSE 失败详情若有: $SIM4DAY_CLOSE_ERR_LOG)"
 echo "########## 完。业务数据增量见 bash scripts/sim-4day/50-watch.sh ##########"

@@ -81,7 +81,7 @@ public final class SensorSqlValidator {
   }
 
   private static void checkAllowedSchemas(Statement stmt, List<String> allowedSchemas) {
-    List<String> tableNames = new TablesNamesFinder().getTableList(stmt);
+    List<String> tableNames = List.copyOf(new TablesNamesFinder<Void>().getTables(stmt));
     for (String name : tableNames) {
       int dot = name.indexOf('.');
       if (dot <= 0) {

@@ -7,16 +7,19 @@
 # 跑前/跑后断言 config 行数不变,防误删。
 set -euo pipefail
 
-PG=batch-postgres-primary
-PGU=batch_user
-MINIO=batch-minio
-MC_ALIAS=local
-BUCKET=batch-dev
 HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+PG="${PG_CONTAINER:-batch-postgres-primary}"
+PGU="${POSTGRES_USER:-batch_user}"
+MINIO="${MINIO_CONTAINER:-batch-minio}"
+MC_ALIAS="${MC_ALIAS:-local}"
+BUCKET="${BATCH_S3_BUCKET:-batch-dev}"
 SQL_DIR="$HERE/sql"
 
-psql_plat() { docker exec -i "$PG" psql -U "$PGU" -d batch_platform -v ON_ERROR_STOP=1 "$@"; }
-psql_biz()  { docker exec -i "$PG" psql -U "$PGU" -d batch_business -v ON_ERROR_STOP=1 "$@"; }
+psql_plat() { docker exec -i "$PG" psql -U "$PGU" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"; }
+psql_biz()  { docker exec -i "$PG" psql -U "$PGU" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 "$@"; }
 
 echo "==> 0/4 config 基线快照(截断后须不变)"
 CFG_BEFORE=$(psql_plat -tA -f /dev/stdin < "$SQL_DIR/config-baseline.sql")
@@ -31,7 +34,7 @@ psql_biz -f /dev/stdin < "$SQL_DIR/clean-business-runtime.sql"
 echo "    biz.* 已截断"
 
 echo "==> 3/4 清 MinIO bucket + 重建 outbound prefix"
-docker exec "$MINIO" mc alias set "$MC_ALIAS" http://localhost:9000 minioadmin minioadmin123 >/dev/null 2>&1 || true
+docker exec "$MINIO" mc alias set "$MC_ALIAS" http://localhost:9000 "$BATCH_S3_ACCESS_KEY" "$BATCH_S3_SECRET_KEY" >/dev/null 2>&1 || true
 docker exec "$MINIO" mc rm --recursive --force "$MC_ALIAS/$BUCKET/" >/dev/null 2>&1 || true
 for p in ingress ta/outbound/report tb/outbound/statement tc/outbound/risk-alert; do
   echo "init" | docker exec -i "$MINIO" mc pipe "$MC_ALIAS/$BUCKET/$p/.keep" >/dev/null 2>&1 || true

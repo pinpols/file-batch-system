@@ -7,7 +7,6 @@ import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractStageExecutor;
-import com.example.batch.worker.core.support.AbstractStageExecutor.StageStepDescriptor;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
@@ -220,7 +219,7 @@ public class DefaultExportStageExecutor
   }
 
   private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
-    List<StageStepDescriptor> ordered = new ArrayList<>();
+    List<AbstractStageExecutor.StageStepDescriptor> ordered = new ArrayList<>();
     for (ExportStage stage :
         List.of(
             ExportStage.PREPARE,
@@ -240,7 +239,7 @@ public class DefaultExportStageExecutor
 
   /** 内联 record 把 {@link ExportStageStep} + {@link ExportStage} 适配到基类的 StageStepDescriptor 契约。 */
   private record StepDescriptor(String stepCode, String stepName, String implCode, String stageCode)
-      implements StageStepDescriptor {}
+      implements AbstractStageExecutor.StageStepDescriptor {}
 
   private void register(
       Map<String, ExportStageStep> indexed, String implCode, ExportStageStep step) {

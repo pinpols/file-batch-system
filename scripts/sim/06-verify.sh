@@ -3,6 +3,9 @@ if (( BASH_VERSINFO[0] < 4 )); then
   echo "❌ 需 bash 4+,macOS 默认 3.2 不支持新一代关联数组语法。请 brew install bash 后用 /usr/local/bin/bash 跑。" >&2
   exit 1
 fi
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/process.sh
+source "$ROOT/scripts/lib/process.sh"
 # =========================================================
 # 06-verify.sh:对账 4 类 worker 的产物
 #
@@ -73,7 +76,7 @@ fi
 
 # (b) worker-export 进程是否在听 18084 / 容器是否在
 worker_ok=0
-if lsof -i :18084 -sTCP:LISTEN >/dev/null 2>&1; then
+if process_port_is_listening 18084; then
   ok "worker-export :18084" "LISTEN(本地 mvn 进程)"
   worker_ok=1
 elif docker ps --format '{{.Names}}' | grep -q '^batch-worker-export$'; then

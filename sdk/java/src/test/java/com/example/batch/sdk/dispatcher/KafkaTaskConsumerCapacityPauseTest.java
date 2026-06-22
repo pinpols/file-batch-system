@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,13 +52,15 @@ class KafkaTaskConsumerCapacityPauseTest {
     when(dispatcher.submittedCount()).thenReturn(2); // == maxConcurrentTasks
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
-    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    mockConsumer.assign(List.of(tp));
-    KafkaTaskConsumer consumer = newConsumer(mockConsumer);
+    try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
+      mockConsumer.assign(List.of(tp));
+      try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-    consumer.applyBackpressure();
+        consumer.applyBackpressure();
 
-    assertThat(mockConsumer.paused()).containsExactly(tp);
+        assertThat(mockConsumer.paused()).containsExactly(tp);
+      }
+    }
   }
 
   @Test
@@ -67,17 +68,19 @@ class KafkaTaskConsumerCapacityPauseTest {
     when(dispatcher.submittedCount()).thenReturn(2, 0); // 第一次满,第二次空
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
-    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    mockConsumer.assign(List.of(tp));
-    KafkaTaskConsumer consumer = newConsumer(mockConsumer);
+    try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
+      mockConsumer.assign(List.of(tp));
+      try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-    // first tick: pause
-    consumer.applyBackpressure();
-    assertThat(mockConsumer.paused()).containsExactly(tp);
+        // first tick: pause
+        consumer.applyBackpressure();
+        assertThat(mockConsumer.paused()).containsExactly(tp);
 
-    // second tick: in-flight drained -> resume
-    consumer.applyBackpressure();
-    assertThat(mockConsumer.paused()).isEmpty();
+        // second tick: in-flight drained -> resume
+        consumer.applyBackpressure();
+        assertThat(mockConsumer.paused()).isEmpty();
+      }
+    }
   }
 
   @Test
@@ -85,30 +88,34 @@ class KafkaTaskConsumerCapacityPauseTest {
     when(dispatcher.submittedCount()).thenReturn(5); // 持续满
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
-    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    mockConsumer.assign(List.of(tp));
-    KafkaTaskConsumer consumer = newConsumer(mockConsumer);
+    try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
+      mockConsumer.assign(List.of(tp));
+      try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-    consumer.applyBackpressure();
-    Set<TopicPartition> afterFirst = Set.copyOf(mockConsumer.paused());
-    consumer.applyBackpressure();
-    consumer.applyBackpressure();
+        consumer.applyBackpressure();
+        Set<TopicPartition> afterFirst = Set.copyOf(mockConsumer.paused());
+        consumer.applyBackpressure();
+        consumer.applyBackpressure();
 
-    // paused 集仍是同一份(MockConsumer.pause 累加,但语义上 partition 集不变)
-    assertThat(mockConsumer.paused()).isEqualTo(afterFirst);
+        // paused 集仍是同一份(MockConsumer.pause 累加,但语义上 partition 集不变)
+        assertThat(mockConsumer.paused()).isEqualTo(afterFirst);
+      }
+    }
   }
 
   @Test
   void doesNotPauseWhenInFlightBelowCapacity() {
     when(dispatcher.submittedCount()).thenReturn(1);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
-    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    mockConsumer.assign(List.of(tp));
-    KafkaTaskConsumer consumer = newConsumer(mockConsumer);
+    try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
+      mockConsumer.assign(List.of(tp));
+      try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-    consumer.applyBackpressure();
+        consumer.applyBackpressure();
 
-    assertThat(mockConsumer.paused()).isEmpty();
+        assertThat(mockConsumer.paused()).isEmpty();
+      }
+    }
   }
 
   /**
@@ -130,23 +137,25 @@ class KafkaTaskConsumerCapacityPauseTest {
     when(dispatcher.submittedCount()).thenReturn(10, 6, 5, 4);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
-    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    mockConsumer.assign(List.of(tp));
-    KafkaTaskConsumer consumer =
-        new KafkaTaskConsumer(bigConfig, dispatcher, mockConsumer, new ObjectMapper());
+    try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
+      mockConsumer.assign(List.of(tp));
+      try (KafkaTaskConsumer consumer =
+          new KafkaTaskConsumer(bigConfig, dispatcher, mockConsumer, new ObjectMapper())) {
 
-    // tick 1: inFlight=10 -> pause
-    consumer.applyBackpressure();
-    assertThat(mockConsumer.paused()).containsExactly(tp);
-    // tick 2: inFlight=6, still >= max/2=5 -> 保持 paused
-    consumer.applyBackpressure();
-    assertThat(mockConsumer.paused()).containsExactly(tp);
-    // tick 3: inFlight=5, 不 < 5 -> 仍保持 paused
-    consumer.applyBackpressure();
-    assertThat(mockConsumer.paused()).containsExactly(tp);
-    // tick 4: inFlight=4 < 5 -> resume
-    consumer.applyBackpressure();
-    assertThat(mockConsumer.paused()).isEmpty();
+        // tick 1: inFlight=10 -> pause
+        consumer.applyBackpressure();
+        assertThat(mockConsumer.paused()).containsExactly(tp);
+        // tick 2: inFlight=6, still >= max/2=5 -> 保持 paused
+        consumer.applyBackpressure();
+        assertThat(mockConsumer.paused()).containsExactly(tp);
+        // tick 3: inFlight=5, 不 < 5 -> 仍保持 paused
+        consumer.applyBackpressure();
+        assertThat(mockConsumer.paused()).containsExactly(tp);
+        // tick 4: inFlight=4 < 5 -> resume
+        consumer.applyBackpressure();
+        assertThat(mockConsumer.paused()).isEmpty();
+      }
+    }
   }
 
   /**
@@ -163,40 +172,44 @@ class KafkaTaskConsumerCapacityPauseTest {
     when(dispatcher.submittedCount()).thenReturn(2, 0);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
-    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    mockConsumer.assign(List.of(poison, healthy));
-    KafkaTaskConsumer consumer = newConsumer(mockConsumer);
+    try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
+      mockConsumer.assign(List.of(poison, healthy));
+      try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-    // arrange: 一条 v3 poison 记录落到 t0 → RETRY_LATER → seek+pause + 记入 poison 集
-    byte[] v3 =
-        ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
-                + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
-            .getBytes(StandardCharsets.UTF_8);
-    boolean keepGoing =
-        consumer.handleRecordAndMaybeCommit(
-            new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
-    assertThat(keepGoing).isFalse();
-    assertThat(mockConsumer.paused()).contains(poison);
+        // arrange: 一条 v3 poison 记录落到 t0 → RETRY_LATER → seek+pause + 记入 poison 集
+        byte[] v3 =
+            ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
+                    + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        boolean keepGoing =
+            consumer.handleRecordAndMaybeCommit(
+                new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
+        assertThat(keepGoing).isFalse();
+        assertThat(mockConsumer.paused()).contains(poison);
 
-    // act: 容量满 → pause 整个 assignment;再跌破 → resume
-    consumer.applyBackpressure(); // pause
-    assertThat(mockConsumer.paused()).contains(poison, healthy);
-    consumer.applyBackpressure(); // resume 仅非 poison
+        // act: 容量满 → pause 整个 assignment;再跌破 → resume
+        consumer.applyBackpressure(); // pause
+        assertThat(mockConsumer.paused()).contains(poison, healthy);
+        consumer.applyBackpressure(); // resume 仅非 poison
 
-    // assert: poison 分区仍 paused,healthy 分区已 resume
-    assertThat(mockConsumer.paused()).containsExactly(poison);
+        // assert: poison 分区仍 paused,healthy 分区已 resume
+        assertThat(mockConsumer.paused()).containsExactly(poison);
+      }
+    }
   }
 
   @Test
   void capacityPauseSkippedWhenNoPartitionsAssigned() {
     when(dispatcher.submittedCount()).thenReturn(10);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
-    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    // 未 assign -> pause/resume 都跳过(避免 IllegalStateException)
-    KafkaTaskConsumer consumer = newConsumer(mockConsumer);
+    try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
+      // 未 assign -> pause/resume 都跳过(避免 IllegalStateException)
+      try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-    consumer.applyBackpressure();
+        consumer.applyBackpressure();
 
-    assertThat(mockConsumer.paused()).isEmpty();
+        assertThat(mockConsumer.paused()).isEmpty();
+      }
+    }
   }
 }

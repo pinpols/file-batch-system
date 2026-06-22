@@ -5,9 +5,9 @@
 # 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及六个 Java 模块。
 # 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
-# 4) PID 写入 logs/start-all.pids（TAB 分隔：name<TAB>pid<TAB>绝对路径 jar），日志写入 logs/app/<module>.log。
+# 4) PID 写入 logs/pids/start-all.pids（兼容软链 logs/start-all.pids），日志写入 logs/current/app/<module>.log。
 #    Docker 容器日志通过 docker logs 查看，如需落盘可手动导出到 logs/docker/。
-# 5) 每次启动会覆盖模块日志（logs/app/<module>.log），不追加。
+# 5) 每次启动会覆盖模块当前日志（兼容软链 logs/app/<module>.log），不追加。
 # 6) 可执行 jar 统一从 build/runtime-jars/ 读取，由 build-apps.sh 产出。
 # 7) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
 #    本脚本会尝试常见安装路径（Homebrew、Docker.app 等）。
@@ -27,7 +27,18 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=../lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
+# shellcheck source=../lib/process.sh
+source "$ROOT/scripts/lib/process.sh"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
+PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
+PG_REPLICA_CONTAINER="${PG_REPLICA_CONTAINER:-batch-postgres-replica}"
+KAFKA_CONTAINER="${KAFKA_CONTAINER:-batch-kafka}"
+KAFKA_INIT_CONTAINER="${KAFKA_INIT_CONTAINER:-batch-kafka-init}"
+MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
+MINIO_INIT_CONTAINER="${MINIO_INIT_CONTAINER:-batch-minio-init}"
+REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
 
 # 本地 dev 启动加速 JVM 参数（6 个模块并发起 Spring Boot fat jar 慢的主因是类扫描+JIT）：
 #   TieredStopAtLevel=1  只做 C1 编译，跳过 C2（启动 -30~50%，稳态吞吐 -20~30%，local 无所谓）
@@ -43,14 +54,13 @@ SKIP_CDS="${SKIP_CDS:-1}"
 CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v3-share-off}"
 
 LOG_ROOT="$ROOT/logs"
-DOCKER_LOG_DIR="$LOG_ROOT/docker"
-LOG_DIR="$LOG_ROOT/app"
-mkdir -p "$LOG_DIR" "$DOCKER_LOG_DIR"
+LOG_DIR="$(log_current_dir "$ROOT" app app)"
+DOCKER_LOG_DIR="$(log_current_dir "$ROOT" docker docker)"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 CDS_DIR="$ROOT/build/cds"
 mkdir -p "$RUNTIME_JAR_DIR" "$CDS_DIR"
-PID_FILE="$LOG_ROOT/start-all.pids"
-PID_FILE_NEW="$(mktemp "$LOG_ROOT/start-all.pids.XXXXXX")"
+PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
+PID_FILE_NEW="$(mktemp "$PID_FILE.XXXXXX")"
 trap 'rm -f "$PID_FILE_NEW"' EXIT
 
 existing_pid_for() {
@@ -164,7 +174,7 @@ start_java() {
   nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${__CDS_FLAG} ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
   printf '%s\t%s\t%s\n' "$name" "$pid" "$jar" >>"$PID_FILE_NEW"
-  echo "  已启动 ${name} pid=${pid} 运行包 build/runtime-jars/${name}.jar 日志 logs/app/${name}.log"
+  echo "  已启动 ${name} pid=${pid} 运行包 build/runtime-jars/${name}.jar 日志 logs/current/app/${name}.log（兼容 logs/app/${name}.log）"
 }
 
 wait_postgres() {
@@ -209,7 +219,7 @@ wait_kafka_topics_ready() {
   local expected_topics="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter}"
   local i all_ready listed
   for i in $(seq 1 60); do
-    listed="$(docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list 2>/dev/null || true)"
+    listed="$(docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>/dev/null || true)"
     all_ready=true
     local old_ifs="$IFS"
     IFS=','
@@ -230,7 +240,7 @@ wait_kafka_topics_ready() {
     sleep 2
   done
   echo "ERROR: Kafka topics 在超时时间内未就绪" >&2
-  docker logs batch-kafka-init >&2 || true
+  docker logs "$KAFKA_INIT_CONTAINER" >&2 || true
   exit 1
 }
 
@@ -297,12 +307,12 @@ docker compose --env-file "$COMPOSE_ENV_FILE" ${COMPOSE_PROFILES[@]+"${COMPOSE_P
 # minio-init 依赖 minio，仍需串行于 minio healthy 之后
 echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
 wait_postgres & _pid_pg=$!
-wait_container_healthy batch-minio "MinIO" & _pid_minio=$!
-wait_container_healthy batch-valkey "Redis" & _pid_redis=$!
+wait_container_healthy "$MINIO_CONTAINER" "MinIO" & _pid_minio=$!
+wait_container_healthy "$REDIS_CONTAINER" "Redis" & _pid_redis=$!
 wait_kafka_topics_ready & _pid_kafka=$!
 _pid_replica=
 if [[ "${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}" == "true" ]]; then
-  wait_container_healthy batch-postgres-replica "PG Replica" & _pid_replica=$!
+  wait_container_healthy "$PG_REPLICA_CONTAINER" "PG Replica" & _pid_replica=$!
 fi
 
 _basic_failed=0
@@ -315,18 +325,18 @@ if (( _basic_failed == 1 )); then
 fi
 unset _pid_pg _pid_minio _pid_redis _pid_kafka _pid_replica _basic_failed _pid
 
-wait_container_exited_zero batch-minio-init "MinIO bucket init"
+wait_container_exited_zero "$MINIO_INIT_CONTAINER" "MinIO bucket init"
 
 # ── 业务库 DDL 落地（idempotent，CREATE TABLE IF NOT EXISTS）──
 # create_biz_tables.sql 同时建 biz.* 业务表 + batch.process_staging（PROCESS WAP staging）。
 # Postgres 容器初始化只建库 + 几个 schema/shedlock，业务表必须每次启动 apply 一次，
 # 避免新增表（如 P1-7 加的 process_staging）在旧 PG 卷上缺失导致 worker 启动 SQL 异常。
 echo "==> 应用业务库 DDL（biz.* + batch.process_staging）..."
-if docker exec -i batch-postgres-primary psql -U "${POSTGRES_USER:-batch_user}" -d batch_business -v ON_ERROR_STOP=1 \
+if docker exec -i "$PG_CONTAINER" psql -U "${POSTGRES_USER:-batch_user}" -d "${BUSINESS_DB_NAME:-batch_business}" -v ON_ERROR_STOP=1 \
      < "$ROOT/scripts/db/business/create_biz_tables.sql" >/dev/null 2>&1; then
   echo "  业务库 DDL 已 apply"
 else
-  echo "  ⚠️  业务库 DDL apply 失败（不阻塞启动；详见 docker logs batch-postgres-primary）"
+  echo "  ⚠️  业务库 DDL apply 失败（不阻塞启动；详见 docker logs $PG_CONTAINER）"
 fi
 
 if [[ "${BUILD:-0}" == "1" ]]; then
@@ -365,7 +375,7 @@ _clear_occupied_ports() {
     local name="${names[$i]}"
     local port="${ports[$i]}"
     local pids
-    pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+    pids="$(process_listen_pids "$port")"
     [[ -z "$pids" ]] && continue
     while IFS= read -r pid; do
       [[ -z "$pid" ]] && continue
@@ -534,7 +544,7 @@ wait_all_apps_healthy() {
     if _is_up "$name"; then
       printf '  │  ✓ %-18s UP      (port %s)\n' "$name" "$port"
     else
-      printf '  │  ✗ %-18s 未就绪  (port %s)  → 查看 logs/app/%s.log\n' "$name" "$port" "$name"
+      printf '  │  ✗ %-18s 未就绪  (port %s)  → 查看 logs/current/app/%s.log\n' "$name" "$port" "$name"
     fi
   done
   echo "  └──────────────────────────────────────────────────────────────────────┘"

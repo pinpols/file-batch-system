@@ -108,7 +108,7 @@ public class HeartbeatScheduler implements AutoCloseable {
       // 动机:DefaultWorkerRegistryService#heartbeat 在 registry 行不存在时会回退降级到 register
       // 路径(运维误删 / 平台冷启重建索引等场景),那一刻若 body 缺这些字段,worker_registry 行
       // 就会带 null 字段重建。把字段每次都带上消除该窗口。null 字段由 Jackson NON_NULL 略过,平台
-      // 端 record 允许 null。TODO:platform 端 heartbeat 路径目前仅消费 status/load/capabilityTags,
+      // 端 record 允许 null。兼容性说明:platform 端 heartbeat 路径目前仅消费 status/load/capabilityTags,
       // workerGroup/host*/processId/buildId 暂不刷新 worker_registry(见
       // DefaultWorkerRegistryService#heartbeat),后续 ORCH-P5 把这些列也纳入 touchHeartbeat。
       if (identity != null) {
