@@ -21,15 +21,17 @@
 
 **`ADR-041 控制总额贯穿闸`**:统一定义贯穿 `import→process→export→dispatch` 的控制总额(笔数 + 金额)契约——trailer schema、跨阶段 count 信封字段、投递回读契约、与 ADR-021 的边界(本 ADR 只管「文件传输完整性:数对不对、全不全」,**不裁定业务对错**)、分阶段。流程同 ADR-040:先设计 review,OK 后逐 PR 落地 Phase 1。
 
-## Phase 1 — 对账完整性闭环（最高价值,~5 PR,全部不动架构/不越界）
+## Phase 1 — 对账完整性闭环（最高价值,~5 PR,全部不动架构/不越界)
 
-| PR | 内容 | 模块 | 备注 |
+> 状态(2026-06-23):**Phase 1.1–1.5 已全部落 main 并各带单测,全部 default-off**。详见 ADR-041「实施状态」。
+
+| PR | 内容 | 模块 | 状态 / 实现类 |
 |---|---|---|---|
-| 1.1 | 入站 **trailer 笔数校验**(`DatasetRuleEvaluator` 读 `trailer_template` 声明记录数 vs 实际行数) | import | `trailer_template` 列已存在 |
-| 1.2 | **控制金额对账**(汇总金额列 vs trailer 声明总额,新增 `controlTotalCheck` 规则) | import | 复用规则框架 |
-| 1.3 | **端到端 count 信封**(REPORT 带 `inputCount/outputCount`,orchestrator 跨阶段核 `import→process→export` 连续性) | core + orchestrator | process 静默丢行可被抓 |
-| 1.4 | **出站内嵌控制记录**(export `GenerateStep` 按 `header_template`/`trailer_template` 写头尾笔数/金额进输出文件) | export | 下游可在带内对账 |
-| 1.5 | **投递后目的端回读校验**(dispatch 落地后 readback size/checksum 比对 manifest) | dispatch | 传输损坏/半写可被抓 |
+| 1.1 | 入站 **trailer 笔数校验**(`DatasetRuleEvaluator` 读 `trailer_template` 声明记录数 vs 实际行数) | import | ✅ `TrailerControlRecord` + `DatasetRuleEvaluator.controlRecordCheck` |
+| 1.2 | **控制金额对账**(汇总金额列 vs trailer 声明总额,新增 `controlTotalCheck` 规则) | import | ✅ `ControlTotalEvaluator` |
+| 1.3 | **端到端 count 信封**(REPORT 带 `inputCount/outputCount`,orchestrator 跨阶段核 `import→process→export` 连续性) | core + orchestrator | ✅ `CountContinuityOutboxService` |
+| 1.4 | **出站内嵌控制记录**(export 按 `trailer_template` 写头尾笔数/金额进输出文件) | export | ✅ `OutboundTrailerRecord` + `DelimitedExportFormat` |
+| 1.5 | **投递后目的端回读校验**(dispatch 落地后 readback size/checksum 比对 manifest) | dispatch | ✅ `DispatchReadbackVerifier`(`readback_verify_enabled`) |
 
 > 这 5 条是「一个东西的五个面」,建议在 ADR-041 下统一设计、分 PR 落地。完成后系统「结算级对账」短板补上大半。
 
