@@ -13,7 +13,7 @@ name: sdk-contract-parity
 # 触发:总是触发(去 on.paths),由 `changes` job(dorny/paths-filter)探测 sdk 相关
 # 变更 → 各 contract job `needs: changes` 条件执行。无关 PR 上各 job skip(skip=success),
 # 不付 Maven/toolchain 冷启动成本,但 required check 仍上报状态(不会卡住无关 PR)。
-# 文档/README(!sdk/**/*.md)不算 sdk 变更。
+# 仅正向 glob 触发(去掉了会反向误判的 !sdk/**/*.md 负向模式)。
 #
 # Ruleset required(2026-06-22):validate-fixtures + {java,python,go,rust,typescript}
 # contract 已设为阻塞门禁。sdk-live-transport(真 kafka,偶发 flake)与 parity-report
@@ -60,11 +60,13 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v3
         with:
-          # 文档/README 不算 sdk 变更(!sdk/**/*.md 置于 sdk/** 之后取最后匹配)。
+          # 仅正向 glob:命中任一即 sdk=true。**不要**加 '!sdk/**/*.md' 之类独立负向模式——
+          # dorny/paths-filter(micromatch)对含负向的列表会把「不匹配该负向」的文件也判为命中,
+          # 导致任何非-sdk-md 改动(如 batch-worker/**)都误判 sdk=true → 触发全套 SDK 契约 CI。
+          # 代价:sdk 下 .md 文档改动也会触发 sdk CI(罕见、无害),换取过滤正确性。
           filters: |
             sdk:
               - 'sdk/**'
-              - '!sdk/**/*.md'
               - 'batch-common/src/main/java/io/github/pinpols/batch/common/enums/**'
               - 'batch-common/src/main/java/io/github/pinpols/batch/common/security/**'
               - 'docs/api/sdk-contract-fixtures/**'
