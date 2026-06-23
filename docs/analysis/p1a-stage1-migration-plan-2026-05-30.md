@@ -392,7 +392,7 @@
 ## 附录 A:统计口径
 - 文件扫描时间:2026-05-30
 - 源根:`batch-console-api/src/main/java/io/github/pinpols/batch/console`
-- 工具:`find … -name '*.java'`、`grep -rE 'import com\.example\.batch\.console\.…'`
+- 工具:`find … -name '*.java'`、`grep -rE 'import io\.github\.pinpols\.batch\.console\.…'`
 - 数据未含 `src/test`、`src/main/resources`
 
 ## 附录 B:遗留议题(给 P1-B / P1-C)
