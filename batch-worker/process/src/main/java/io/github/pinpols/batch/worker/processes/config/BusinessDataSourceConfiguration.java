@@ -7,6 +7,8 @@ import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
 import io.github.pinpols.batch.common.rls.RlsPolicyHealthIndicator;
+import io.github.pinpols.batch.common.rls.RlsProperties;
+import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
 import io.github.pinpols.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -28,7 +31,8 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 @Configuration("processWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties({
   BusinessDataSourceProperties.class,
-  BusinessRoutingProperties.class
+  BusinessRoutingProperties.class,
+  RlsProperties.class
 })
 @RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
@@ -102,7 +106,24 @@ public class BusinessDataSourceConfiguration {
       havingValue = "true",
       matchIfMissing = true)
   public RlsPolicyHealthIndicator rlsPolicyHealthIndicator(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
-    return new RlsPolicyHealthIndicator(processBusinessDataSource);
+      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
+      RlsProperties rlsProperties) {
+    return new RlsPolicyHealthIndicator(processBusinessDataSource, rlsProperties.getExemptTables());
+  }
+
+  /**
+   * 启动期 RLS 闭世界 fail-fast 守门 —— opt-in。仅当 {@code batch.rls.startup-fail-fast=true} 装配(默认
+   * false=不阻断启动,只靠 health DOWN 可见),且上下文里有 business datasource。复用 health indicator 同一套闭世界检查逻辑。
+   *
+   * <p>{@code @ConditionalOnBean(processBusinessDataSource)} 守门:无 biz datasource 的上下文不装配本副作用
+   * bean,避免牵连其他 worker 启动失败(踩过的坑)。
+   */
+  @Bean(name = "rlsStartupFailFastCheck")
+  @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true")
+  @ConditionalOnBean(name = "processBusinessDataSource")
+  public RlsStartupFailFastCheck rlsStartupFailFastCheck(
+      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
+      RlsProperties rlsProperties) {
+    return new RlsStartupFailFastCheck(processBusinessDataSource, rlsProperties.getExemptTables());
   }
 }
