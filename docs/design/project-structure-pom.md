@@ -31,7 +31,7 @@ batch-platform
 - 对 GPL / AGPL / 商业限制类依赖，必须在设计评审或上线评审前完成合规确认
 
 
-考虑到本项目同时包含调度、编排、执行、文件处理和控制台，建议使用 **单仓多模块 Maven**。基线采用 **JDK 21(LTS)+ Spring Boot 4.0.6**。生产/开发/CI 统一 JDK 21，开发与 CI 环境也保持同一主版本，避免字节码和依赖行为漂移。
+考虑到本项目同时包含调度、编排、执行、文件处理和控制台，建议使用 **单仓多模块 Maven**。基线采用 **JDK 21(LTS)+ Spring Boot 4.1.0**。生产/开发/CI 统一 JDK 21，开发与 CI 环境也保持同一主版本，避免字节码和依赖行为漂移。
 
 **模块职责与依赖边界**：
 
@@ -841,7 +841,7 @@ spring:
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.3</version>
+        <version>4.1.0</version>
         <relativePath/>
     </parent>
 

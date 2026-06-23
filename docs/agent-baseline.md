@@ -192,7 +192,7 @@
 技术栈固定，不允许擅自替换：
 
 - JDK 21
-- Spring Boot 4.0.6
+- Spring Boot 4.1.0
 - Maven 多模块
 - PostgreSQL
 - Quartz
