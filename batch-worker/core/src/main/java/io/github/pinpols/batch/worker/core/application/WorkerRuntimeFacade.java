@@ -5,8 +5,11 @@ import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
+import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
+import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,10 @@ public class WorkerRuntimeFacade {
 
   public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
     return taskExecutionWrapper.claim(tenantId, taskId, workerId);
+  }
+
+  public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
+    return taskExecutionWrapper.claimBatch(items);
   }
 
   public WorkerExecutionResult execute(PulledTask task) {
