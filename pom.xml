@@ -260,7 +260,7 @@
                                     <version>[3.9.0,)</version>
                                 </requireMavenVersion>
                                 <requireJavaVersion>
-                                    <version>[25,)</version>
+                                    <version>[21,)</version>
                                 </requireJavaVersion>
                                 <bannedDependencies>
                                     <excludes>
