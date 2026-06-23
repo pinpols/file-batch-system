@@ -26,6 +26,11 @@
     <name>batch-worker-sdk-testkit</name>
     <description>Integration test kit for tenant SDK workers: FakeBatchPlatform + EmbeddedKafka + @BatchWorkerTest (SDK-P5-2)</description>
 
+    <properties>
+        <!-- 对齐 core:SDK 编译目标锁 Java 21(LTS),不继承平台 release=25 -->
+        <maven.compiler.release>21</maven.compiler.release>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
