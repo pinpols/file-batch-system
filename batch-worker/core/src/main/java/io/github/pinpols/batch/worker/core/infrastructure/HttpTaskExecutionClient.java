@@ -8,9 +8,12 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
+import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
+import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
@@ -19,6 +22,7 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +56,7 @@ public class HttpTaskExecutionClient
   private final Optional<MeterRegistry> meterRegistry;
   private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
   private final int renewBatchMaxItems;
+  private final int claimBatchMaxItems;
   // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
   private volatile RestClient restClient;
 
@@ -64,7 +69,8 @@ public class HttpTaskExecutionClient
       Environment environment,
       @Autowired(required = false) MeterRegistry meterRegistry,
       ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator,
-      WorkerLeaseProperties leaseProperties) {
+      WorkerLeaseProperties leaseProperties,
+      WorkerBatchClaimProperties batchClaimProperties) {
     this.properties = properties;
     this.securityProperties = securityProperties;
     this.restClientBuilderProvider = restClientBuilderProvider;
@@ -72,6 +78,7 @@ public class HttpTaskExecutionClient
     this.meterRegistry = Optional.ofNullable(meterRegistry);
     this.reportOutboxCoordinator = reportOutboxCoordinator;
     this.renewBatchMaxItems = Math.max(1, leaseProperties.getRenewBatchMaxItems());
+    this.claimBatchMaxItems = batchClaimProperties.effectiveBatchSize();
   }
 
   /**
@@ -104,6 +111,105 @@ public class HttpTaskExecutionClient
       return Optional.empty();
     }
     return Optional.of(outcome.body() != null ? outcome.body() : EMPTY_EFFECTIVE_CONFIG);
+  }
+
+  @Override
+  public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
+    if (items == null || items.isEmpty()) {
+      return List.of();
+    }
+    List<TaskClaimResult> out = new ArrayList<>(items.size());
+    for (int i = 0; i < items.size(); i += claimBatchMaxItems) {
+      int end = Math.min(i + claimBatchMaxItems, items.size());
+      out.addAll(claimBatchChunkHttpOrFallback(items.subList(i, end)));
+    }
+    return out;
+  }
+
+  /** 单 chunk:优先 {@code POST /claim-batch};404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #claim}。 */
+  private List<TaskClaimResult> claimBatchChunkHttpOrFallback(List<TaskClaimItem> chunk) {
+    RetryState state =
+        RetryState.initial(
+            properties.getClaimMaxAttempts(),
+            properties.getClaimInitialBackoffMillis(),
+            properties.getClaimMaxBackoffMillis());
+    while (state.canAttempt()) {
+      try {
+        List<ClaimBatchHttpItem> payload =
+            chunk.stream()
+                .map(it -> new ClaimBatchHttpItem(it.tenantId(), it.taskId(), it.workerId(), null))
+                .toList();
+        String traceId = currentTraceId();
+        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        ClaimBatchHttpResponse response =
+            client()
+                .post()
+                .uri("/internal/tasks/claim-batch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                .body(new ClaimBatchHttpRequest(payload))
+                .retrieve()
+                .body(ClaimBatchHttpResponse.class);
+        return mapClaimChunkOrFallback(chunk, response);
+      } catch (HttpClientErrorException ex) {
+        if (ex.getStatusCode() == HttpStatus.NOT_FOUND
+            || ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+          log.debug(
+              "claim-batch not supported or bad request ({}), falling back to single claim",
+              ex.getStatusCode());
+          return fallbackClaimChunk(chunk);
+        }
+        throw ex;
+      } catch (HttpServerErrorException | ResourceAccessException ex) {
+        if (state.isLastAttempt()) {
+          log.warn(
+              "claim-batch transient failure after {} attempts, falling back to single claim: {}",
+              state.max(),
+              ex.getMessage());
+          return fallbackClaimChunk(chunk);
+        }
+        log.warn(
+            "claim-batch transient, retrying: attempt={}/{}, message={}",
+            state.attempt(),
+            state.max(),
+            ex.getMessage());
+        sleepBackoff(state.backoff());
+        state = state.advance();
+      }
+    }
+    return fallbackClaimChunk(chunk);
+  }
+
+  private List<TaskClaimResult> mapClaimChunkOrFallback(
+      List<TaskClaimItem> chunk, ClaimBatchHttpResponse response) {
+    if (response == null
+        || response.results() == null
+        || response.results().size() != chunk.size()) {
+      log.warn(
+          "claim-batch response mismatch: chunk size {}, response results {}",
+          chunk.size(),
+          response == null || response.results() == null ? null : response.results().size());
+      return fallbackClaimChunk(chunk);
+    }
+    List<TaskClaimResult> out = new ArrayList<>(chunk.size());
+    for (int i = 0; i < chunk.size(); i++) {
+      ClaimBatchHttpResult row = response.results().get(i);
+      Long taskId = chunk.get(i).taskId();
+      boolean claimed = row != null && row.claimed();
+      out.add(new TaskClaimResult(taskId, claimed, claimed ? row.config() : null));
+    }
+    return out;
+  }
+
+  /** 降级:逐条 {@link #claim},结果语义与批量一致。 */
+  private List<TaskClaimResult> fallbackClaimChunk(List<TaskClaimItem> chunk) {
+    List<TaskClaimResult> out = new ArrayList<>(chunk.size());
+    for (TaskClaimItem it : chunk) {
+      Optional<EffectiveTaskConfig> cfg = claim(it.tenantId(), it.taskId(), it.workerId());
+      out.add(new TaskClaimResult(it.taskId(), cfg.isPresent(), cfg.orElse(null)));
+    }
+    return out;
   }
 
   @Override
@@ -528,4 +634,14 @@ public class HttpTaskExecutionClient
   private record BatchRenewHttpResponse(List<BatchRenewHttpResult> results) {}
 
   private record BatchRenewHttpResult(Long taskId, boolean renewed, Boolean cancelRequested) {}
+
+  // ── ADR-046 P2 切片 2.3:claim-batch 线上报文(worker-local,与 orchestrator 端点契约对齐)──
+  private record ClaimBatchHttpRequest(List<ClaimBatchHttpItem> items) {}
+
+  private record ClaimBatchHttpItem(
+      String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
+
+  private record ClaimBatchHttpResponse(List<ClaimBatchHttpResult> results) {}
+
+  private record ClaimBatchHttpResult(Long taskId, boolean claimed, EffectiveTaskConfig config) {}
 }
