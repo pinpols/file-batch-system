@@ -525,7 +525,7 @@ if [[ "$RUN_STATIC_GATES" == true ]]; then
     echo "[PMD gate] skipped via BATCH_CI_SKIP_PMD_GATE=1 (debug only)"
   else
     # 注：必须先 test-compile 让 reactor 编译 batch-common 等 sibling 模块，否则下游
-    # 模块解析 com.example.batch:batch-common:${revision} 失败（CI 干净 .m2 找不到）。
+    # 模块解析 io.github.pinpols.batch:batch-common:${revision} 失败（CI 干净 .m2 找不到）。
     run_step "PMD — code conventions (fail PR if violations introduced)" run_mvn -DskipTests test-compile pmd:check -fae
   fi
 
@@ -566,7 +566,7 @@ fi
 if [[ "$RUN_LOAD_SMOKE" == true ]]; then
   run_step \
     "Load Smoke (JobLaunchSimulation)" \
-    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=com.example.batch.loadtest.simulations.JobLaunchSimulation -Dusers.peak=\${BATCH_LOAD_SMOKE_USERS_PEAK:-5} -Dduration.seconds=\${BATCH_LOAD_SMOKE_DURATION_SECONDS:-30} -Dramp.seconds=\${BATCH_LOAD_SMOKE_RAMP_SECONDS:-10}"
+    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=io.github.pinpols.batch.loadtest.simulations.JobLaunchSimulation -Dusers.peak=\${BATCH_LOAD_SMOKE_USERS_PEAK:-5} -Dduration.seconds=\${BATCH_LOAD_SMOKE_DURATION_SECONDS:-30} -Dramp.seconds=\${BATCH_LOAD_SMOKE_RAMP_SECONDS:-10}"
 fi
 
 if [[ "$RUN_LOAD_CAPACITY" == true ]]; then
@@ -574,7 +574,7 @@ if [[ "$RUN_LOAD_CAPACITY" == true ]]; then
   # 失败即非零退出，作为容量回归门禁。stepped ramp 25→200 users，约 5-10 分钟。
   run_step \
     "Capacity Baseline (CapacityBaselineSimulation)" \
-    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=com.example.batch.loadtest.simulations.CapacityBaselineSimulation -DjobCode=\${BATCH_LOAD_CAPACITY_JOB_CODE:-E2E_IMPORT_LOAD} -DtenantId=\${BATCH_LOAD_CAPACITY_TENANT_ID:-t1}"
+    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=io.github.pinpols.batch.loadtest.simulations.CapacityBaselineSimulation -DjobCode=\${BATCH_LOAD_CAPACITY_JOB_CODE:-E2E_IMPORT_LOAD} -DtenantId=\${BATCH_LOAD_CAPACITY_TENANT_ID:-t1}"
 fi
 
 if [[ "$RUN_DEPLOY_SMOKE" == true ]]; then

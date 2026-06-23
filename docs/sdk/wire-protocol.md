@@ -157,7 +157,7 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 
 ## A. 协议版本与 schemaVersion(BYO SDK 兼容矩阵)
 
-派单消息 `TaskDispatchMessage.schemaVersion`(Phase 0 起携带)是协议演进的主版本锚。SDK 侧 [TaskDispatchMessage.java](../../batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/TaskDispatchMessage.java):
+派单消息 `TaskDispatchMessage.schemaVersion`(Phase 0 起携带)是协议演进的主版本锚。SDK 侧 [TaskDispatchMessage.java](../../batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java):
 
 ```java
 public static final Set<String> SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2");
@@ -178,7 +178,7 @@ public static final Set<String> SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2");
 
 ## B. 错误码语义(BYO SDK 必须等价分类)
 
-### HTTP `/internal/*` 端点状态码(对照 [PlatformHttpException.java](../../batch-worker-sdk/src/main/java/com/example/batch/sdk/internal/PlatformHttpException.java))
+### HTTP `/internal/*` 端点状态码(对照 [PlatformHttpException.java](../../batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/internal/PlatformHttpException.java))
 
 | HTTP code | 语义 | BYO SDK 必须实现的行为 |
 |---|---|---|
@@ -247,10 +247,10 @@ on http-call(endpoint, body):
 ## 7. 引用
 
 - 协议规范源头:**ADR-035** [`docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md`](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) §3(协议)/ §4(配置)/ §11(运行期)
-- SDK HTTP 封装:`batch-worker-sdk/src/main/java/com/example/batch/sdk/internal/PlatformHttpClient.java`
-- SDK Kafka:`batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/KafkaTaskConsumer.java`
-- SDK 调度:`batch-worker-sdk/src/main/java/com/example/batch/sdk/scheduler/{HeartbeatScheduler,LeaseRenewalScheduler}.java`
-- Orch 接收:`batch-orchestrator/src/main/java/com/example/batch/orchestrator/controller/{WorkerController,TaskController}.java`
+- SDK HTTP 封装:`batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/internal/PlatformHttpClient.java`
+- SDK Kafka:`batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/KafkaTaskConsumer.java`
+- SDK 调度:`batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/scheduler/{HeartbeatScheduler,LeaseRenewalScheduler}.java`
+- Orch 接收:`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/{WorkerController,TaskController}.java`
 - Orch 故障感知:`batch-orchestrator/.../scheduler/WorkerHeartbeatTimeoutScheduler.java`
 - 排障:[`docs/sdk/troubleshooting.md`](troubleshooting.md)
 - 上线流程:[`docs/runbook/per-tenant-worker-onboarding.md`](../runbook/per-tenant-worker-onboarding.md)

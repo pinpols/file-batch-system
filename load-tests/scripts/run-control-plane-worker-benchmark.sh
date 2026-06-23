@@ -149,7 +149,7 @@ run_pipeline_completion() {
   (
     cd "$LOAD_DIR"
     mvn gatling:test \
-      -Dsimulation=com.example.batch.loadtest.simulations.LaunchPipelineCompletionSimulation \
+      -Dsimulation=io.github.pinpols.batch.loadtest.simulations.LaunchPipelineCompletionSimulation \
       -Dtrigger.baseUrl="$TRIGGER_BASE_URL" \
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
@@ -211,7 +211,7 @@ run_trigger_pressure() {
   (
     cd "$LOAD_DIR"
     mvn gatling:test \
-      -Dsimulation=com.example.batch.loadtest.simulations.SchedulingBacklogUnderLoadSimulation \
+      -Dsimulation=io.github.pinpols.batch.loadtest.simulations.SchedulingBacklogUnderLoadSimulation \
       -Dtrigger.baseUrl="$TRIGGER_BASE_URL" \
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
@@ -258,7 +258,7 @@ run_mixed_pressure() {
   (
     cd "$LOAD_DIR"
     mvn gatling:test \
-      -Dsimulation=com.example.batch.loadtest.simulations.ControlPlaneMixedPressureSimulation \
+      -Dsimulation=io.github.pinpols.batch.loadtest.simulations.ControlPlaneMixedPressureSimulation \
       -Dtrigger.baseUrl="$TRIGGER_BASE_URL" \
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \

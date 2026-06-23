@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper">
+<mapper namespace="io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper">
 
     <resultMap id="userAccountEntityMap"
-               type="com.example.batch.console.domain.rbac.entity.ConsoleUserAccountEntity">
+               type="io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="username" property="username"/>
@@ -48,7 +48,7 @@
             </if>
         </where>
         order by id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
 
     <select id="countByQuery" resultType="long">

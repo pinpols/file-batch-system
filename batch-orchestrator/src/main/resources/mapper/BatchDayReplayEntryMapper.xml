@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayReplayEntryMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper">
 
     <resultMap id="ReplayEntryResultMap"
-               type="com.example.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity">
         <constructor>
             <idArg  column="id"                  javaType="java.lang.Long"/>
             <arg    column="session_id"          javaType="java.lang.Long"/>
@@ -23,7 +23,7 @@
     </resultMap>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity">
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity">
         insert into batch.batch_day_replay_entry (
             session_id, tenant_id, job_code, source_instance_id, rerun_instance_id,
             status, failure_reason, started_at, finished_at, result_version_id,

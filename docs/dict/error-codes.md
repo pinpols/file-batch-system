@@ -39,6 +39,6 @@
 
 ## 相关
 
-- 源枚举：[`batch-common/.../enums/ResultCode.java`](../../batch-common/src/main/java/com/example/batch/common/enums/ResultCode.java)
+- 源枚举：[`batch-common/.../enums/ResultCode.java`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/ResultCode.java)
 - API 协议：[`../api/console-api-protocol.md`](../api/console-api-protocol.md) §错误码
 - 编码规约：[`../coding-conventions.md`](../coding-conventions.md) §5 异常体系

@@ -33,9 +33,9 @@ GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipe
 
 参考代码路径：
 
-- `batch-worker-export/src/main/java/com/example/batch/worker/exports/stage/GenerateStep.java`
-- `batch-worker-export/src/main/java/com/example/batch/worker/exports/stage/StoreStep.java`
-- `batch-worker-export/src/main/java/com/example/batch/worker/exports/stage/format/AbstractExportFormat.java#generatePaged`
+- `batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java`
+- `batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java`
+- `batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java#generatePaged`
 - 四个 format：`JsonExportFormat` / `DelimitedExportFormat` / `FixedWidthExportFormat` / `ExcelExportFormat`
 
 ---

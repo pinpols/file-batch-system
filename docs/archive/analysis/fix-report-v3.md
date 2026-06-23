@@ -34,7 +34,7 @@
 
 ##### C-2.2 · AbstractTaskConsumer 信号量泄漏
 
-**文件**：`batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractTaskConsumer.java`
+**文件**：`batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumer.java`
 
 **改动**：`doConsume` 改造——`tryAcquire` 成功后所有出口统一进 try/finally，包括 JSON 解析异常、ensureStarted 异常、accepts 失败、业务 exec 异常。之前 try 只从 executor 调用才起，导致 `JsonUtils.fromJson` 抛异常时 permit 泄漏，多次触发后信号量耗尽 → 背压失效。
 
@@ -53,7 +53,7 @@ try {
 
 ##### C-2.9 · ConsoleSessionRegistry Caffeine/Redis 更新顺序
 
-**文件**：`batch-console-api/src/main/java/com/example/batch/console/support/ConsoleSessionRegistry.java`
+**文件**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleSessionRegistry.java`
 
 **改动**：`nextSessionVersion()` 中 INCR 成功后**立即** put Caffeine，再做 expire。expire 失败降级为 WARN 不破坏版本号正确性。原序列 INCR → expire → put 在 expire 抛异常时会走 catch 分支用本地旧值 +1，造成 local mirror 落后 Redis → 单会话判断错乱。
 
@@ -253,7 +253,7 @@ V62 migration 由本会话之前的另一过程创建（未 commit），部分 s
 
 - `import DateTimeException` 缺包名 → `import java.time.DateTimeException`
 - multi-catch `ZoneRulesException | DateTimeException` 子类重复 → 改用单 catch `DateTimeException`
-- `DefaultResourceScheduler` 缺 `import com.example.batch.common.utils.Texts`
+- `DefaultResourceScheduler` 缺 `import io.github.pinpols.batch.common.utils.Texts`
 
 ---
 

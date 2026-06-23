@@ -1,6 +1,6 @@
 """单任务进度 / checkpoint 槽位(P4 实现)。
 
-对齐 Java ``com.example.batch.sdk.task.ProgressReporter`` —— "最新值胜出"
+对齐 Java ``io.github.pinpols.batch.sdk.task.ProgressReporter`` —— "最新值胜出"
 语义:handler 在紧循环里更新进度会覆盖前一份快照;租约续期 tick 采样
 :meth:`latest`,作为 renew 请求体的 ``details`` 字段上送。
 

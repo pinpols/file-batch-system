@@ -5,18 +5,18 @@
 ## 目录职责
 
 - 该模块只负责压测，不参与主工程的常规编译链
-- 所有压测参数统一收敛到 [GatlingConfig.java](./src/test/java/com/example/batch/loadtest/GatlingConfig.java)
-- 所有场景脚本放在 `src/test/java/com/example/batch/loadtest/simulations/`
+- 所有压测参数统一收敛到 [GatlingConfig.java](./src/test/java/io/github/pinpols/batch/loadtest/GatlingConfig.java)
+- 所有场景脚本放在 `src/test/java/io/github/pinpols/batch/loadtest/simulations/`
 
 ## 场景列表
 
-- [JobLaunchSimulation.java](./src/test/java/com/example/batch/loadtest/simulations/JobLaunchSimulation.java) — trigger **`POST /api/triggers/launch`** 写压测
-- [ConsoleQuerySimulation.java](./src/test/java/com/example/batch/loadtest/simulations/ConsoleQuerySimulation.java) — console 列表类查询读压测
-- [CapacityBaselineSimulation.java](./src/test/java/com/example/batch/loadtest/simulations/CapacityBaselineSimulation.java) — 混合读写容量基线（阶梯加压）
-- [SchedulingSnapshotUnderLoadSimulation.java](./src/test/java/com/example/batch/loadtest/simulations/SchedulingSnapshotUnderLoadSimulation.java) — **launch 写压 + orchestrator `GET /internal/scheduler/snapshot`**（调度路径只读可观测性）
-- [SchedulingBacklogUnderLoadSimulation.java](./src/test/java/com/example/batch/loadtest/simulations/SchedulingBacklogUnderLoadSimulation.java) — 固定 launch RPS + 调度/队列/WAITING/READY 查询，配合 SQL sampler 观测派发滞后
-- [LaunchPipelineCompletionSimulation.java](./src/test/java/com/example/batch/loadtest/simulations/LaunchPipelineCompletionSimulation.java) — **launch → console batch-status 轮询终态**，统计 Gatling 分组 **`pipeline_completion`**（依赖真实 Worker）
-- [WorkerTaskLifecycleSimulation.java](./src/test/java/com/example/batch/loadtest/simulations/WorkerTaskLifecycleSimulation.java) — 基于显式 CSV 任务清单压 **CLAIM → REPORT** 内部接口（会修改任务状态，仅限隔离任务）
+- [JobLaunchSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/JobLaunchSimulation.java) — trigger **`POST /api/triggers/launch`** 写压测
+- [ConsoleQuerySimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/ConsoleQuerySimulation.java) — console 列表类查询读压测
+- [CapacityBaselineSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/CapacityBaselineSimulation.java) — 混合读写容量基线（阶梯加压）
+- [SchedulingSnapshotUnderLoadSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/SchedulingSnapshotUnderLoadSimulation.java) — **launch 写压 + orchestrator `GET /internal/scheduler/snapshot`**（调度路径只读可观测性）
+- [SchedulingBacklogUnderLoadSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/SchedulingBacklogUnderLoadSimulation.java) — 固定 launch RPS + 调度/队列/WAITING/READY 查询，配合 SQL sampler 观测派发滞后
+- [LaunchPipelineCompletionSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/LaunchPipelineCompletionSimulation.java) — **launch → console batch-status 轮询终态**，统计 Gatling 分组 **`pipeline_completion`**（依赖真实 Worker）
+- [WorkerTaskLifecycleSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/WorkerTaskLifecycleSimulation.java) — 基于显式 CSV 任务清单压 **CLAIM → REPORT** 内部接口（会修改任务状态，仅限隔离任务）
 
 维度说明见 [docs/testing/load-test-dimensions.md](../docs/testing/load-test-dimensions.md)。
 

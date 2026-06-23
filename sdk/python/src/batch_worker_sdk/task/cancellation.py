@@ -1,6 +1,6 @@
 """单任务取消信号(P4 实现)。
 
-对齐 Java ``com.example.batch.sdk.task.CancellationSignal``。Java 侧用
+对齐 Java ``io.github.pinpols.batch.sdk.task.CancellationSignal``。Java 侧用
 ``volatile boolean`` 保证跨线程可见性:租约续期调度器线程在 renew 响应里
 看到 ``cancelRequested=true`` 时翻转 bit,handler 线程在长循环里轮询。
 

@@ -17,20 +17,20 @@ CLAUDE.md §架构硬约束：
 
 | 文件 | 用途 | JdbcTemplate 合理性 |
 |---|---|---|
-| [ShedLockProviderFactory.java](batch-common/src/main/java/com/example/batch/common/config/ShedLockProviderFactory.java) | JDBC LockProvider 回退（trigger / worker 用） | ShedLock JDBC 实现要求 |
-| [BatchStartupSelfCheck.java](batch-common/src/main/java/com/example/batch/common/health/BatchStartupSelfCheck.java) | `information_schema.tables/columns` 启动健康检查 | 系统表查询无 mapper 必要 |
-| [ArchiveSchemaDriftCheck.java](batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java) | 归档表 schema 漂移检测 | `information_schema` 查询 |
-| [OrchestratorStartupLeaseAudit.java](batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/startup/OrchestratorStartupLeaseAudit.java) | 启动 lease 审计 | 一次性诊断查询 |
-| [ProcessStagingOrphanCleaner.java](batch-worker-process/src/main/java/com/example/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java) | staging 表 orphan 清理 | 跨表 cleanup SQL，业务 mapper 不暴露 |
+| [ShedLockProviderFactory.java](batch-common/src/main/java/io/github/pinpols/batch/common/config/ShedLockProviderFactory.java) | JDBC LockProvider 回退（trigger / worker 用） | ShedLock JDBC 实现要求 |
+| [BatchStartupSelfCheck.java](batch-common/src/main/java/io/github/pinpols/batch/common/health/BatchStartupSelfCheck.java) | `information_schema.tables/columns` 启动健康检查 | 系统表查询无 mapper 必要 |
+| [ArchiveSchemaDriftCheck.java](batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java) | 归档表 schema 漂移检测 | `information_schema` 查询 |
+| [OrchestratorStartupLeaseAudit.java](batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/startup/OrchestratorStartupLeaseAudit.java) | 启动 lease 审计 | 一次性诊断查询 |
+| [ProcessStagingOrphanCleaner.java](batch-worker-process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java) | staging 表 orphan 清理 | 跨表 cleanup SQL，业务 mapper 不暴露 |
 
 ### 1.2 ✅ 合规：ADR-009 SQL plugin 4 个
 
 | 文件 | 用途 |
 |---|---|
-| [GenericJdbcMappedExportDataPlugin.java](batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java) | 用户配置 SQL 导出 |
-| [SqlTemplateExportDataPlugin.java](batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java) | 同上 |
-| [GenericJdbcMappedImportLoadPlugin.java](batch-worker-import/src/main/java/com/example/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java) | 用户配置 SQL 导入 |
-| [SqlTransformComputePlugin.java](batch-worker-process/src/main/java/com/example/batch/worker/processes/sql/SqlTransformComputePlugin.java) | 用户配置 SQL 加工 |
+| [GenericJdbcMappedExportDataPlugin.java](batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java) | 用户配置 SQL 导出 |
+| [SqlTemplateExportDataPlugin.java](batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java) | 同上 |
+| [GenericJdbcMappedImportLoadPlugin.java](batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java) | 用户配置 SQL 导入 |
+| [SqlTransformComputePlugin.java](batch-worker-process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java) | 用户配置 SQL 加工 |
 
 ADR-009 设计上必须 `NamedParameterJdbcTemplate`（用户运行时输入的 SQL，不能预先 mapper 化）。
 
@@ -40,7 +40,7 @@ ADR-009 设计上必须 `NamedParameterJdbcTemplate`（用户运行时输入的 
 
 ### 1.4 🟡 false positive：1 处
 
-[SqlTemplateExportSqlValidator.java:185](batch-worker-export/src/main/java/com/example/batch/worker/exports/sql/SqlTemplateExportSqlValidator.java:185) — 仅注释里出现 `NamedParameterJdbcTemplate` 字符串，没实际引用。
+[SqlTemplateExportSqlValidator.java:185](batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/sql/SqlTemplateExportSqlValidator.java:185) — 仅注释里出现 `NamedParameterJdbcTemplate` 字符串，没实际引用。
 
 ---
 
@@ -59,15 +59,15 @@ ADR-009 设计上必须 `NamedParameterJdbcTemplate`（用户运行时输入的 
 
 ### 2.2 唯一分裂点：5 个集成测试不继承 `AbstractIntegrationTest`
 
-[AbstractIntegrationTest.java](batch-common/src/test/java/com/example/batch/testing/AbstractIntegrationTest.java) 已统一管理 PG / Kafka / MinIO / Redis 容器，但下面 5 个测试自己起 `PostgreSQLContainer`：
+[AbstractIntegrationTest.java](batch-common/src/test/java/io/github/pinpols/batch/testing/AbstractIntegrationTest.java) 已统一管理 PG / Kafka / MinIO / Redis 容器，但下面 5 个测试自己起 `PostgreSQLContainer`：
 
 | 测试 | 是否合理 | 备注 |
 |---|---|---|
-| [SlidingWindowRateLimiterIT](batch-console-api/src/test/java/com/example/batch/console/support/ratelimit/SlidingWindowRateLimiterIT.java) | 🟡 部分 | 只需 Redis；可继承用 lazy 启动 |
-| [SqlConsistencyIntegrationTest](batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/SqlConsistencyIntegrationTest.java) | 🟡 部分 | 校验 SQL 一致性，可能要干净 schema；建议加注释 |
-| [BatchDaySqlMigrationsIntegrationTest](batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/BatchDaySqlMigrationsIntegrationTest.java) | ✅ 合理 | Flyway migration 测试**必须**独立 DB |
-| [LocalFlywayPlatformMigrationsIntegrationTest](batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/LocalFlywayPlatformMigrationsIntegrationTest.java) | ✅ 合理 | 同上 |
-| [SqlTransformComputePluginIntegrationTest](batch-worker-process/src/test/java/com/example/batch/worker/processes/sql/SqlTransformComputePluginIntegrationTest.java) | 🟡 部分 | 业务表测试，可继承 |
+| [SlidingWindowRateLimiterIT](batch-console-api/src/test/java/io/github/pinpols/batch/console/support/ratelimit/SlidingWindowRateLimiterIT.java) | 🟡 部分 | 只需 Redis；可继承用 lazy 启动 |
+| [SqlConsistencyIntegrationTest](batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/SqlConsistencyIntegrationTest.java) | 🟡 部分 | 校验 SQL 一致性，可能要干净 schema；建议加注释 |
+| [BatchDaySqlMigrationsIntegrationTest](batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDaySqlMigrationsIntegrationTest.java) | ✅ 合理 | Flyway migration 测试**必须**独立 DB |
+| [LocalFlywayPlatformMigrationsIntegrationTest](batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/LocalFlywayPlatformMigrationsIntegrationTest.java) | ✅ 合理 | 同上 |
+| [SqlTransformComputePluginIntegrationTest](batch-worker-process/src/test/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePluginIntegrationTest.java) | 🟡 部分 | 业务表测试，可继承 |
 
 **风险**：每个独立 container = 多启动一次 PG（容器启动 ~5s），CI 累计开销大；版本号在多处维护容易漂移。
 

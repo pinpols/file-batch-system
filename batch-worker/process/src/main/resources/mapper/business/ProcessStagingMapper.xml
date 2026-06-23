@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.worker.processes.mapper.business.ProcessStagingMapper">
+<mapper namespace="io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper">
 
     <!--
       孤儿清理：staged_at 早于 retentionHours 小时的行，单次最多删 batchSize 条。

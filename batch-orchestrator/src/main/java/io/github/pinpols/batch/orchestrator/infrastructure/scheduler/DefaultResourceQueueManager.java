@@ -1,0 +1,81 @@
+package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
+
+import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
+import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
+import java.util.Comparator;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+/**
+ * 解析调度请求的目标资源队列：有显式 {@code queueCode} 时直查，否则在租户启用的所有队列里按下述优先级挑一个：
+ *
+ * <ol>
+ *   <li>{@code queueType} 精确匹配 {@code workerType} 的队列优先于 {@code MIXED} 队列（避免"混合队列"抢走本该去专用队列的作业）。
+ *   <li>{@code fairShareWeight} 倒序——权重大的队列更可能被选中。
+ *   <li>{@code maxRunningJobs} 倒序——容量大的队列优先。
+ *   <li>{@code maxRunningPartitions} 倒序——分区容量大的优先。
+ *   <li>{@code queueCode} 字典序回退，保证挑选结果稳定（防并发下随机性）。
+ * </ol>
+ *
+ * <p>{@code fairShareWeight / maxRunningJobs / maxRunningPartitions} 的 null / ≤0 值统一规范化为 1。
+ */
+@Component
+@RequiredArgsConstructor
+public class DefaultResourceQueueManager implements ResourceQueueManager {
+
+  private final ResourceQueueMapper resourceQueueMapper;
+
+  @Override
+  public ResourceQueueEntity resolveQueue(ResourceSchedulingRequest request) {
+    if (request == null || !Texts.hasText(request.getTenantId())) {
+      return null;
+    }
+    List<ResourceQueueEntity> queues =
+        resourceQueueMapper.selectByTenantAndEnabled(request.getTenantId(), true);
+    if (queues == null || queues.isEmpty()) {
+      return null;
+    }
+    if (Texts.hasText(request.getQueueCode())) {
+      return queues.stream()
+          .filter(queue -> request.getQueueCode().equalsIgnoreCase(queue.queueCode()))
+          .findFirst()
+          .orElse(null);
+    }
+    return queues.stream()
+        .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
+        .sorted(
+            Comparator.comparing(
+                    (ResourceQueueEntity queue) -> !"MIXED".equalsIgnoreCase(queue.queueType()))
+                .thenComparing(
+                    queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
+                .thenComparing(
+                    queue -> normalizedWeight(queue.maxRunningJobs()), Comparator.reverseOrder())
+                .thenComparing(
+                    queue -> normalizedWeight(queue.maxRunningPartitions()),
+                    Comparator.reverseOrder())
+                .thenComparing(
+                    ResourceQueueEntity::queueCode,
+                    Comparator.nullsLast(String::compareToIgnoreCase)))
+        .findFirst()
+        .orElse(null);
+  }
+
+  private boolean matchesQueueType(ResourceQueueEntity queue, String workerType) {
+    if (queue == null) {
+      return false;
+    }
+    if (!Texts.hasText(workerType)) {
+      return true;
+    }
+    return workerType.equalsIgnoreCase(queue.queueType())
+        || "MIXED".equalsIgnoreCase(queue.queueType());
+  }
+
+  private Integer normalizedWeight(Integer weight) {
+    return weight == null || weight <= 0 ? 1 : weight;
+  }
+}

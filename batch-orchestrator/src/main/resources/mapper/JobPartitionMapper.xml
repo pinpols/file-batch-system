@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.JobPartitionMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper">
     <!--
       关键约束：JobPartition 的状态推进采用 DB 乐观锁（version CAS）。
       约定：UPDATE affected rows == 0 视为并发冲突/状态已被其他实例推进，调用方应安静放弃或重试，不应抛系统异常。
     -->
-    <resultMap id="JobPartitionResultMap" type="com.example.batch.orchestrator.domain.entity.JobPartitionEntity">
+    <resultMap id="JobPartitionResultMap" type="io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_instance_id" property="jobInstanceId"/>
@@ -61,7 +61,7 @@
         for update
     </select>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobPartitionEntity"
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_partition (
             tenant_id,

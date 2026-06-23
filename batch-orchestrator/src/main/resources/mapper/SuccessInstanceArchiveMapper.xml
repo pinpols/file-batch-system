@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.SuccessInstanceArchiveMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper">
 
     <!-- 选所有终态 instance id（SUCCESS / PARTIAL_FAILED / FAILED / CANCELLED / TERMINATED）
          且 finished_at 早于 cutoff（按 id asc 防 missed delete，带 limit）。

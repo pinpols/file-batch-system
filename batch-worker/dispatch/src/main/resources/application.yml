@@ -36,7 +36,7 @@ spring:
 
 mybatis:
   # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
-  type-aliases-package: com.example.batch.worker.dispatchs.domain
+  type-aliases-package: io.github.pinpols.batch.worker.dispatchs.domain
 
 batch:
   worker:

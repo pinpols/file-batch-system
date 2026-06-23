@@ -338,7 +338,7 @@ ADR-035 §8.B 留口 + 用户决策(2026-05-31):除了 `SdkAbstractAtomicHandler
 | 风险 | 缓解 |
 |---|---|
 | 抽象类越大,5 个 stage hook 命名分歧难统一 | 每个子类各自 Generic + hooks 独立,基类只放 template 序 + 共享工具,**不强行共享 stage 命名** |
-| API 早稳定难调,租户落地后 rename 破坏其代码 | P1 类签名标 `@Beta`(`com.example.batch.sdk.annotation`,自定义注解);P3 sample 跑通 + P4 文档稳定后再去 `@Beta` |
+| API 早稳定难调,租户落地后 rename 破坏其代码 | P1 类签名标 `@Beta`(`io.github.pinpols.batch.sdk.annotation`,自定义注解);P3 sample 跑通 + P4 文档稳定后再去 `@Beta` |
 | 租户误以为"SDK 抽象类 = 平台 pipeline" | Javadoc 顶部明确"租户自己的 DB 状态,平台只看终态 + counts";本 ADR §与平台 pipeline 的边界节明示 |
 | 5 子类全发布后真业务可能只用 3 个 | 不做未来证明 — 真用不到的子类 P5 评估 deprecate(SemVer minor),不影响发布 |
 

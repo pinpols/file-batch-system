@@ -1,7 +1,7 @@
 """任务 handler 抽象基类 + 行级计数器(ADR-036)。
 
 对齐 Java ``SdkAbstractTaskHandler`` 与 ``SdkRowResult``
-(``com.example.batch.sdk.handler``)。Java SDK 暴露同步 ``execute`` 模板
+(``io.github.pinpols.batch.sdk.handler``)。Java SDK 暴露同步 ``execute`` 模板
 方法,锁死执行序 ``validate -> before -> doExecute -> after + finally
 cleanup``,让租户代码只能填写受保护钩子。Python 版本保留同样的模板方法
 形态,但将 ``execute`` 改为 ``async def`` 以契合 SDK 仅异步契约

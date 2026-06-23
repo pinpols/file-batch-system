@@ -21,7 +21,7 @@ worker(import/export/process/dispatch)技术上都能经 `@ConditionalOnProperty
 
 **新增第 10 个模块 `batch-worker-atomic`** —— 专用 Task SPI worker:
 
-- 把 shell / sql / stored-proc / http 四个 executor **从 worker-core 迁入本模块**(`com.example.batch.worker.atomic.*`)
+- 把 shell / sql / stored-proc / http 四个 executor **从 worker-core 迁入本模块**(`io.github.pinpols.batch.worker.atomic.*`)
 - 四个 pipeline worker 的 classpath **物理上不再含这些 executor** → 结构上做不了 SPI(强于 CI 软守护)
 - worker-core 退回纯运行时(CLAIM / lease / report / dispatch-consumer + SPI registry 路由机器)
 - 本 worker 部署时配**独立低权限 datasource**(不连业务库)、独立 K8s serviceaccount / 网络策略 /

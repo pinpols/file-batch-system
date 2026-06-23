@@ -5,7 +5,7 @@
 //! Kafka topic via [`rdkafka`]. It mirrors, field-for-field, the other reference
 //! adapters:
 //!
-//! * Java   — `com.example.batch.sdk.dispatcher.KafkaTaskConsumer` (Apache Kafka client),
+//! * Java   — `io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer` (Apache Kafka client),
 //! * Python — `batch_worker_sdk.internal._kafka.KafkaTaskConsumer` (aiokafka),
 //! * (the TS/Go phase-2 `consumer.*` files carry the seam + `FakeConsumer`).
 //!

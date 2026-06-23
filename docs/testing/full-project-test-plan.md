@@ -168,13 +168,13 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 - Helm 生产部署产物：`helm/batch-platform/`
 - Phase 1 盘点矩阵：`docs/testing/phase-coverage.md`
 - Phase 2 P0 回归范围：`docs/testing/phase-coverage.md`
-- console-api 核心 HTTP smoke：`batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHttpIntegrationIT.java`
+- console-api 核心 HTTP smoke：`batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationIT.java`
 - console-api Excel 导入/导出 controller 测试：`ConsoleFileTemplateExcelControllerTest`、`ConsoleFileChannelExcelControllerTest`、`ConsoleWorkflowExcelControllerTest`、`ConsoleJobDefinitionExcelControllerTest`、`ConsoleReportExcelControllerTest`
 - console-api Excel 导入/导出 service 负向测试：`DefaultConsoleFileTemplateExcelApplicationServiceTest`、`DefaultConsoleFileChannelExcelApplicationServiceTest`、`DefaultConsoleWorkflowExcelApplicationServiceTest`、`DefaultConsoleJobDefinitionExcelApplicationServiceTest`
-- console-api 安全负向：`batch-console-api/src/test/java/com/example/batch/console/config/ConsoleSecurityConfigurationTest.java`
-- console-request tenant mismatch：`batch-console-api/src/test/java/com/example/batch/console/support/ConsoleRequestContextFilterTest.java`
-- orchestrator 并发 claim：`batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/ConcurrentTaskClaimIntegrationTest.java`
-- orchestrator 外部渠道失败恢复：`batch-orchestrator/src/test/java/com/example/batch/orchestrator/infrastructure/mq/KafkaOutboxPublisherTest.java`
+- console-api 安全负向：`batch-console-api/src/test/java/io/github/pinpols/batch/console/config/ConsoleSecurityConfigurationTest.java`
+- console-request tenant mismatch：`batch-console-api/src/test/java/io/github/pinpols/batch/console/support/ConsoleRequestContextFilterTest.java`
+- orchestrator 并发 claim：`batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ConcurrentTaskClaimIntegrationTest.java`
+- orchestrator 外部渠道失败恢复：`batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/KafkaOutboxPublisherTest.java`
 
 当前统一口径（截至 2026-04-08）：
 

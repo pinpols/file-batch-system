@@ -142,8 +142,8 @@
 
 #### 证据
 
-- `batch-trigger/src/main/java/com/example/batch/trigger/web/TriggerController.java`
-- `batch-trigger/src/main/java/com/example/batch/trigger/web/TriggerManagementController.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/web/TriggerController.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/web/TriggerManagementController.java`
 - `batch-trigger/pom.xml`
 
 #### 影响
@@ -179,9 +179,9 @@
 
 #### 证据
 
-- `batch-console-api/src/main/java/com/example/batch/console/support/ConsoleAuthenticationFilter.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleAuthenticationFilter.java`
 - `batch-console-api/src/main/resources/application.yml`
-- `batch-console-api/src/main/java/com/example/batch/console/config/ConsoleSecurityProperties.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityProperties.java`
 
 #### 影响
 
@@ -210,7 +210,7 @@
 #### 证据
 
 - `batch-console-api/src/main/resources/application.yml`
-- `batch-console-api/src/main/java/com/example/batch/console/support/ConsoleJwtService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleJwtService.java`
 - `db/migration/V52__seed_system_tenant_and_builtin_accounts.sql`
 - `db/migration/V42__add_tenant_user_role.sql`
 
@@ -232,7 +232,7 @@
 
 #### 证据
 
-- `batch-console-api/src/main/java/com/example/batch/console/support/ConsoleAuthenticationFilter.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleAuthenticationFilter.java`
 
 #### 影响
 
@@ -265,7 +265,7 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-console-api/src/main/java/com/example/batch/console/support/ConsoleIdempotencyInterceptor.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleIdempotencyInterceptor.java`
 
 #### 影响
 
@@ -286,7 +286,7 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-trigger/src/main/java/com/example/batch/trigger/web/TriggerController.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/web/TriggerController.java`
 
 #### 影响
 
@@ -309,7 +309,7 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-trigger/src/main/java/com/example/batch/trigger/service/DefaultTriggerService.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/DefaultTriggerService.java`
 
 #### 影响
 
@@ -329,7 +329,7 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-trigger/src/main/java/com/example/batch/trigger/service/DefaultTriggerService.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/DefaultTriggerService.java`
 
 #### 影响
 
@@ -354,8 +354,8 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-trigger/src/main/java/com/example/batch/trigger/service/DefaultTriggerService.java`
-- `batch-trigger/src/main/java/com/example/batch/trigger/web/TriggerController.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/DefaultTriggerService.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/web/TriggerController.java`
 
 #### 影响
 
@@ -377,7 +377,7 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-trigger/src/main/java/com/example/batch/trigger/service/DefaultTriggerService.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/DefaultTriggerService.java`
 - `db/migration/V37__fix_trigger_request_dedup_constraint.sql`
 
 #### 影响
@@ -406,7 +406,7 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-console-api/src/main/java/com/example/batch/console/service/WebhookDispatcher.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/service/WebhookDispatcher.java`
 - `batch-common/src/main/java/org/springframework/boot/autoconfigure/web/client/RestClientAutoConfiguration.java`
 
 #### 影响
@@ -440,7 +440,7 @@ JWT 会暴露在：
 
 #### 证据
 
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleJobApplicationService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleJobApplicationService.java`
 
 #### 影响
 

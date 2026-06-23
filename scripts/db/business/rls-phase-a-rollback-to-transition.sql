@@ -22,7 +22,6 @@ DECLARE
   t TEXT;
   tables TEXT[] := ARRAY[
     'biz.customer_account',
-    'biz.customer_processed',
     'biz.process_account_summary',
     'biz.process_event_copy',
     'biz.process_order_event',

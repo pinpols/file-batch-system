@@ -1,1 +1,1 @@
-com.example.batch.sdk.autoconfigure.BatchWorkerSdkAutoConfiguration
+io.github.pinpols.batch.sdk.autoconfigure.BatchWorkerSdkAutoConfiguration

@@ -302,9 +302,9 @@ fail-fast：关闭（`-Dsurefire.failFast=false`、`-Djunit.jupiter.execution.fa
 
 | 测试类 | 命令（摘要） | 结果 | 备注 |
 |---|---|---|---|
-| `com.example.batch.e2e.DispatchPipelineE2eIT` | `mvn test -pl batch-e2e-tests -am -Dtest=DispatchPipelineE2eIT ...` | PASS | 见上方预先修复 |
-| `com.example.batch.e2e.ImportPipelineE2eIT` | `mvn test -pl batch-e2e-tests -am -Dtest=ImportPipelineE2eIT ...` | FAIL | 当前错误：`customerNo is required`；前序修复已处理 `run_mode`、`ON CONFLICT`、JSON 解析兼容/宽松转换，但解析出来行仍缺 `customerNo`（继续定位 task_payload/content 形态） |
-| `com.example.batch.e2e.ExportPipelineE2eIT` | `mvn test -pl batch-e2e-tests -am -Dtest=ExportPipelineE2eIT ...` | PASS | 补齐 `ExportPayload` 的 `run_mode` 兼容字段后通过 |
+| `io.github.pinpols.batch.e2e.DispatchPipelineE2eIT` | `mvn test -pl batch-e2e-tests -am -Dtest=DispatchPipelineE2eIT ...` | PASS | 见上方预先修复 |
+| `io.github.pinpols.batch.e2e.ImportPipelineE2eIT` | `mvn test -pl batch-e2e-tests -am -Dtest=ImportPipelineE2eIT ...` | FAIL | 当前错误：`customerNo is required`；前序修复已处理 `run_mode`、`ON CONFLICT`、JSON 解析兼容/宽松转换，但解析出来行仍缺 `customerNo`（继续定位 task_payload/content 形态） |
+| `io.github.pinpols.batch.e2e.ExportPipelineE2eIT` | `mvn test -pl batch-e2e-tests -am -Dtest=ExportPipelineE2eIT ...` | PASS | 补齐 `ExportPayload` 的 `run_mode` 兼容字段后通过 |
 
 ---
 

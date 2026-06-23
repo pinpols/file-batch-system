@@ -102,6 +102,6 @@ event:heartbeat
 
 ## 参考实现
 
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/realtime/ConsoleOpsSummaryRealtimeStream.java`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/realtime/ConsoleRealtimeRedisPubSubConsumer.java`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleOpsApplicationService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/realtime/ConsoleOpsSummaryRealtimeStream.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/realtime/ConsoleRealtimeRedisPubSubConsumer.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleOpsApplicationService.java`

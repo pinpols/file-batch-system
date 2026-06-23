@@ -1,5 +1,5 @@
 """Typed 参数反序列化助手 —— 对齐 Java
-``com.example.batch.sdk.handler.typed.SdkTypedParameters``。
+``io.github.pinpols.batch.sdk.handler.typed.SdkTypedParameters``。
 
 Java 用 Jackson + 反射式 ``JavaType.findTypeParameters`` 从具体 handler 子类
 解析泛型 ``<I>``。Python 干同样的活 —— 但由 pydantic v2 同时完成 schema 校验

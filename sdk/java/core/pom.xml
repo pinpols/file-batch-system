@@ -14,7 +14,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
         <relativePath>../../../pom.xml</relativePath>
@@ -26,7 +26,7 @@
 
     <!--
       发布元数据(Maven Central 强制要求 url / licenses / scm / developers)。
-      ⚠ 占位:首次发布前须改成真实值。groupId 继承父 pom 的 `com.example.batch`,
+      ⚠ 占位:首次发布前须改成真实值。groupId 继承父 pom 的 `io.github.pinpols.batch`,
       Central **不接受** example 命名空间——发布前须把根 pom <groupId> 改成自有
       且已在 Central 验证的命名空间(如 io.yourorg)。详见 docs/sdk/RELEASING.md。
     -->
@@ -107,7 +107,7 @@
         <!-- Lane P shared-constants parity: test scope only (不污染 tenant 运行时 jar)。
              需要直接读取 batch-common 的 TaskStatus / SensitiveDataValidator 与 yaml 对账。 -->
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
@@ -122,7 +122,7 @@
       插件;默认 CI / 本地构建**完全不受影响**(无 `-Prelease` 时这些插件不绑定)。
 
       首次真发布前的前置(见 docs/sdk/RELEASING.md §Java):
-        1. 把根 pom <groupId> 从 com.example.batch 改成自有且已在 Central 验证的
+        1. 把根 pom <groupId> 从 io.github.pinpols.batch 改成自有且已在 Central 验证的
            命名空间(Central 拒绝 example.* / com.example.*)。
         2. 配置 GPG 签名密钥(发布机/CI 导入私钥),passphrase 经
            MAVEN_GPG_PASSPHRASE 注入(workflow 已接 secrets)。

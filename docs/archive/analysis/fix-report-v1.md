@@ -136,7 +136,7 @@
 ### #8-1 StateMachine 硬编码反射消除
 
 **修复**：
-1. 将 `Stateful` 接口从 `batch-orchestrator` 迁移到 `batch-common`（新建 `com.example.batch.common.persistence.Stateful`），orchestrator 侧保留继承别名
+1. 将 `Stateful` 接口从 `batch-orchestrator` 迁移到 `batch-common`（新建 `io.github.pinpols.batch.common.persistence.Stateful`），orchestrator 侧保留继承别名
 2. `WorkflowRunEntity` 和 `WorkflowNodeRunEntity` 实现 `Stateful` 接口
 3. 加上已有的 `JobInstanceEntity`/`JobPartitionEntity`/`JobTaskEntity`，所有传入 `StateMachine.transition()` 的实体均走编译期安全路径，反射回退不再触发
 

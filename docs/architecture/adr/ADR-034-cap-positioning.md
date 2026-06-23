@@ -87,7 +87,7 @@
 
 PR #111(`BatchTaskExecutorRegistry` @Autowired)/ #113 / #114(`ComponentScan` miss `spi.task` / `resilience`)证明:Spring 装配错 → bean 缺失 → 整个进程启 hold-back,**比分区更糟**(分区是局部,装配错是全局)。
 
-由 [ArchUnit 守护](../../batch-e2e-tests/src/test/java/com/example/batch/e2e/arch/SpringWiringGuardArchTest.java)(PR #115)防回归。CAP 之外的工程纪律也必须守。
+由 [ArchUnit 守护](../../batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/arch/SpringWiringGuardArchTest.java)(PR #115)防回归。CAP 之外的工程纪律也必须守。
 
 ## 何时升级本 ADR
 

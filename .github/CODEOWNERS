@@ -41,8 +41,8 @@
 /batch-common/src/main/java/            @pinpols
 
 # 安全 / 鉴权(改这块要双慎)
-/batch-common/src/main/java/com/example/batch/security/  @pinpols
-/batch-console-api/src/main/java/com/example/batch/console/support/auth/  @pinpols
+/batch-common/src/main/java/io/github/pinpols/batch/security/  @pinpols
+/batch-console-api/src/main/java/io/github/pinpols/batch/console/support/auth/  @pinpols
 
 # 文档 — API 契约 / 架构 / runbook
 /docs/api/                              @pinpols

@@ -2,7 +2,7 @@
 
 > P1-B 落地(2026-05-30)— 集中管理 BE 各 `*ProxyService` 调下游服务的降级 / fail-fast 决策。
 >
-> 实现工具:[DownstreamFallback](../../batch-common/src/main/java/com/example/batch/common/resilience/DownstreamFallback.java) — 当前是手写 try/catch + Micrometer metrics 的轻量集中模板。
+> 实现工具:[DownstreamFallback](../../batch-common/src/main/java/io/github/pinpols/batch/common/resilience/DownstreamFallback.java) — 当前是手写 try/catch + Micrometer metrics 的轻量集中模板。
 > 后续 Resilience4j 引入(SB4 兼容性确认后)只需替换本类内部实现,调用方不变。
 
 ## 适用边界

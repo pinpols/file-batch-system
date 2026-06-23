@@ -85,7 +85,7 @@ grep -rn "@SchedulerLock" --include='*.java' batch-*/src/main
 
 ### 红线 D — environment 前缀必须正确
 
-[RedisShedLockProvider:42](batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/redis/RedisShedLockProvider.java:42) 用 `BatchRedisKeys.shedLock(environment, name)` 生成键，environment 来自 `${spring.application.name:batch-orchestrator}`。**如果 dev / staging / prod 共用一套 Redis，这个前缀必须区分环境**，否则跨环境串号。
+[RedisShedLockProvider:42](batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/RedisShedLockProvider.java:42) 用 `BatchRedisKeys.shedLock(environment, name)` 生成键，environment 来自 `${spring.application.name:batch-orchestrator}`。**如果 dev / staging / prod 共用一套 Redis，这个前缀必须区分环境**，否则跨环境串号。
 
 部署前检查：
 
@@ -145,7 +145,7 @@ UPDATE job_instance
 
 1. **每张状态机表都有 `version` 列**（默认 0，每次更新 +1）
 2. **mapper 方法必须叫 `updateWithCas` 系列**（项目惯例 — `markRunning` / `markFinished` / `withRefresh` 等内部走 CAS）
-3. **抛 `OptimisticLockingFailureException`** 而不是返回 `false` —— 让上层 retry 循环（外层 `REQUIRES_NEW` + 重试 N 次，参 [`LaunchBatchDayService.upsertBatchDayInstance`](../../batch-orchestrator/src/main/java/com/example/batch/orchestrator/service/LaunchBatchDayService.java)）
+3. **抛 `OptimisticLockingFailureException`** 而不是返回 `false` —— 让上层 retry 循环（外层 `REQUIRES_NEW` + 重试 N 次，参 [`LaunchBatchDayService.upsertBatchDayInstance`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/LaunchBatchDayService.java)）
 4. **不要在 CAS 失败时静默返回**：把 happy path 和 conflict 用不同异常类型区分
 
 ### 反例
@@ -162,7 +162,7 @@ UPDATE job_instance
 
 ### 1. ShedLock 锁获取失败监控
 
-**当前**：[RedisShedLockProvider:54-57](batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/redis/RedisShedLockProvider.java:54) 把 Redis 错误当"未拿到锁"处理，仅 `log.warn`。
+**当前**：[RedisShedLockProvider:54-57](batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/RedisShedLockProvider.java:54) 把 Redis 错误当"未拿到锁"处理，仅 `log.warn`。
 
 **风险**：Redis 长时间不可用 → 所有 scheduler 静默不跑 → 运维不见得发现。
 
@@ -221,7 +221,7 @@ public void runSettlement() {
 @SchedulerLock(name = "user_xxx_export", lockAtMostFor = "PT1H")  // ← 一个用户对应一个锁名？
 ```
 
-**正确**：业务级别限流用 [`SlidingWindowRateLimiter`](../../batch-console-api/src/main/java/com/example/batch/console/support/ratelimit/SlidingWindowRateLimiter.java) 或 quota 表（`RedisQuotaRuntimeStateService`）。ShedLock 只为定时任务设计。
+**正确**：业务级别限流用 [`SlidingWindowRateLimiter`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/SlidingWindowRateLimiter.java) 或 quota 表（`RedisQuotaRuntimeStateService`）。ShedLock 只为定时任务设计。
 
 ### 误用 3：状态机表加 ShedLock 而不是 CAS
 

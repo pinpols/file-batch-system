@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.worker.core.mapper.WorkerReportOutboxPgMapper">
+<mapper namespace="io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper">
 
     <insert id="upsert">
         INSERT INTO batch.worker_report_outbox (
@@ -21,7 +21,7 @@
             updated_at = EXCLUDED.updated_at
     </insert>
 
-    <select id="claimNextReturning" resultType="com.example.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
+    <select id="claimNextReturning" resultType="io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
         WITH picked AS (
             SELECT id FROM batch.worker_report_outbox
             WHERE publish_status = #{statusNew} AND next_attempt_at &lt;= #{nowEpochMillis}

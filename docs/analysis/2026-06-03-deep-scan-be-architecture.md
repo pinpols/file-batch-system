@@ -73,21 +73,21 @@
 ### P0-1 mapper XML 多租守护断层 ⚠️
 
 - **现象**:CLAUDE.md §多租隔离明文要求"**各模块** `MapperXmlTenantGuardArchTest`(静态扫描 mapper XML,禁可空 `<if tenantId>` 守护)"。实际只有 2 处:
-  - `batch-orchestrator/src/test/java/com/example/batch/orchestrator/arch/MapperXmlTenantGuardArchTest.java`
-  - `batch-console-api/src/test/java/com/example/batch/console/arch/MapperXmlTenantGuardArchTest.java`
+  - `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/arch/MapperXmlTenantGuardArchTest.java`
+  - `batch-console-api/src/test/java/io/github/pinpols/batch/console/arch/MapperXmlTenantGuardArchTest.java`
 - 而以下模块都带 mapper XML 且**没有**对应守护:
   - `batch-trigger/src/main/resources/mapper/` — 5 个 XML(TriggerDefinition / TenantStatus / TriggerRuntimeState / TriggerRequest / TriggerOutboxEvent)
   - `batch-worker-dispatch/src/main/resources/mapper/` — 2 个 XML
   - `batch-worker-process/src/main/resources/mapper/business/` — 1 个 XML
 - **根因**:守护脚本写在 orchestrator + console-api 各自模块 `src/test/java` 下,模块边界 + 写在测试目录意味着新模块不会自动继承;模块新增时没人 `cp` 一份;最新 commit 加入的 worker-process 也漏配。
-- **建议**:把 `MapperXmlTenantGuardArchTest` 上提到 `batch-common/src/test/java/com/example/batch/common/arch/` 做成 `public abstract class` 或 `public static List<File> findMapperXml(String moduleRoot)`,各模块只写 1 行 `class XxxMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest { ... }`;同时在 `batch-common/pom.xml` 的 test-jar 暴露给所有模块。新模块创建时附 `Makefile` 模板自动 stub。
+- **建议**:把 `MapperXmlTenantGuardArchTest` 上提到 `batch-common/src/test/java/io/github/pinpols/batch/common/arch/` 做成 `public abstract class` 或 `public static List<File> findMapperXml(String moduleRoot)`,各模块只写 1 行 `class XxxMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest { ... }`;同时在 `batch-common/pom.xml` 的 test-jar 暴露给所有模块。新模块创建时附 `Makefile` 模板自动 stub。
 
 ### P0-2 `*Record` 后缀红线 3 处违反 ⚠️
 
 - **位置**(全 3 处都是生产 `src/main`):
-  - `batch-worker-import/src/main/java/com/example/batch/worker/imports/domain/ImportBadRecord.java`
-  - `batch-orchestrator/src/main/java/com/example/batch/orchestrator/auth/ApiKeyRecord.java`(同时是 `public record`)
-  - `batch-worker-sdk/src/main/java/com/example/batch/sdk/idempotent/SdkIdempotencyRecord.java`(SDK 属外发,影响面更大)
+  - `batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/domain/ImportBadRecord.java`
+  - `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyRecord.java`(同时是 `public record`)
+  - `batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/idempotent/SdkIdempotencyRecord.java`(SDK 属外发,影响面更大)
 - CLAUDE.md §持久化(ADR-001):**"表行类型放 `domain/entity/`,统一 `*Entity` 后缀(record 或 `@Data` class),**禁** `*Record` 后缀"**。
 - **根因**:
   1. `ApiKeyRecord` 早期沉淀,逃过 2026-05-02 全平台清理(`refactor(orch/console): 清理遗留 *Record 类`),原因是其落在 `auth/` 而非 `domain/entity/`,语义边缘
@@ -97,7 +97,7 @@
 
 ### P0-3 `LoadStep.executeLegacy` 假 `@Deprecated`
 
-- **位置**:`batch-worker-import/src/main/java/com/example/batch/worker/imports/stage/LoadStep.java:91, 96, 281-282`
+- **位置**:`batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java:91, 96, 281-282`
 - **现象**:方法 `executeLegacy` 标了 `@Deprecated` + javadoc "将在下一版本下线",但同文件 `LoadStep` 主入口在 line 91、96 两个分支**仍主动调用**它(`return executeLegacy(context);`)。这不是兼容旧调用方,是主路径之一。
 - **根因**:`@Deprecated` 用错语义 — 标的是"我希望下线",但行为依赖仍在;Streaming 路径未完全替代 customerPayloads 路径,fallback 链没断。
 - **建议**:① 现状未达到 `@Deprecated` 语义,改成 javadoc 说明 + `// TODO(2026-Qx): 删除 customerPayloads 路径` 更诚实;② 如真要下线,补一份"主入口分支何时返 SUCCESS 而不走 legacy"的判定表;③ 排查 `customerPayloads` attribute 写入方,谁还在塞这条 key。
@@ -149,7 +149,7 @@
 
 ### P1-5 Mutation IT 自建链路
 
-- **现象**:`batch-console-api/src/test/java/.../integration/Console*MutationIntegrationTest.java` 10 个文件,都 `extends AbstractMutationIntegrationTest`(本地基类),**而非 CLAUDE.md 要求的 `AbstractIntegrationTest`**。检查 `AbstractMutationIntegrationTest` 顶部确实 `import com.example.batch.testing.AbstractIntegrationTest;` —— 但**它自己的 class 声明是 abstract,未 extends**。
+- **现象**:`batch-console-api/src/test/java/.../integration/Console*MutationIntegrationTest.java` 10 个文件,都 `extends AbstractMutationIntegrationTest`(本地基类),**而非 CLAUDE.md 要求的 `AbstractIntegrationTest`**。检查 `AbstractMutationIntegrationTest` 顶部确实 `import io.github.pinpols.batch.testing.AbstractIntegrationTest;` —— 但**它自己的 class 声明是 abstract,未 extends**。
 - **根因**:该基类的 javadoc 写"不强加 `@SpringBootTest`,子类各自声明启用 properties"—— 实际是放弃了 Testcontainers PG/Kafka/Redis/MinIO 复用,跑 Mutation IT 时各自启 Spring context。
 - **建议**:① 把 `AbstractMutationIntegrationTest extends AbstractIntegrationTest`,让 10 个 Mutation IT 自动复用 Testcontainers 容器复用机制(目前可能每个测试类一个独立 PG 容器,启动慢);② 验证是否真的共享容器(`docker ps` 抓快照对照)。
 
@@ -162,7 +162,7 @@
 
 ### P1-7 ADR-021 等文档 vs 实现脱钩
 
-- **现象**:`docs/architecture/adr/ADR-021-data-quality-reconciliation.md` 顶部状态写"**默认两档都不开工**",但代码已有 `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/dataquality/`(DataQualityCheckExecutor + DataQualityGateOutcome)+ V147 archive table。
+- **现象**:`docs/architecture/adr/ADR-021-data-quality-reconciliation.md` 顶部状态写"**默认两档都不开工**",但代码已有 `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dataquality/`(DataQualityCheckExecutor + DataQualityGateOutcome)+ V147 archive table。
 - **根因**:ADR 顶部状态 stale,实现已超 v0.0 mini 但未回写 ADR。
 - **建议**:ADR-021 状态改"v0.0 mini 已落地",列已实现清单 + 还未做清单,触发 v1.0 完整方案的"金融触发"判定提问写明。
 
@@ -187,7 +187,7 @@
 
 ### P3-1 ~ P3-4 概要
 
-- **P3-1**:`batch-orchestrator/src/main/java/com/example/batch/orchestrator/service/` 与 `application/service/`(标准 DDD 分层)并存,11 个 service 在外层 service/ 包 — 整理移入 `application/service/` 子域。
+- **P3-1**:`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/` 与 `application/service/`(标准 DDD 分层)并存,11 个 service 在外层 service/ 包 — 整理移入 `application/service/` 子域。
 - **P3-2**:console-api 660 文件已是其它模块平均 3x,虽未越界但是单模块爆失败,**建议下个季度内启动 console-api 子模块拆分评估**(rbac / ops / definition / runtime 四子域)。
 - **P3-3**:`examples/sample-tenant-worker-spring/.../SampleSpringWorkerIT.java` 自建 `@SpringBootTest`(examples 独立 reactor 合理),但要 README 写明"独立 reactor 不复用 AbstractIntegrationTest"。
 - **P3-4**:`db/migration` 165 个 V***.sql 单目录;Flyway 支持多 location(`db/migration/2026/06/V165__*.sql`),按月分子目录有助 review。
@@ -198,7 +198,7 @@
 
 | 项目 | 何以为非问题 |
 |---|---|
-| 模块逆向依赖(worker → orchestrator / trigger → orchestrator) | `grep -rln "import com.example.batch.orchestrator" batch-trigger batch-worker-*` 0 命中,9 模块 + console-api 全部走 `batch-common` 作为下行依赖,**模块边界很干净** |
+| 模块逆向依赖(worker → orchestrator / trigger → orchestrator) | `grep -rln "import io.github.pinpols.batch.orchestrator" batch-trigger batch-worker-*` 0 命中,9 模块 + console-api 全部走 `batch-common` 作为下行依赖,**模块边界很干净** |
 | 禁 JPA / Spring Data JDBC | `grep` pom 0 命中,ADR-001 + 2026-05-02 全平台清理已铁底 |
 | `ZoneId.systemDefault()` 业务代码命中 | 5 处命中全在 `BatchTimezoneProvider` / `BatchDateTimeSupport` / 守护测试 / javadoc,无业务违反 |
 | `Charset.forName` 业务代码命中 | 5 处命中全在 `EncodingUtils` 实现内部 + 守护测试 + javadoc,无业务违反 |

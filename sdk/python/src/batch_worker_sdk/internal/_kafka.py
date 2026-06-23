@@ -1,6 +1,6 @@
 """Kafka 任务派发消费者 —— Java 端消费者的 asyncio 移植版本。
 
-对应 Java ``com.example.batch.sdk.dispatcher.KafkaTaskConsumer``(详细设
+对应 Java ``io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer``(详细设
 计说明见 Java 源码)。刻意的差异:
 
 - 使用 ``aiokafka.AIOKafkaConsumer``(而非阻塞式 ``KafkaConsumer``)——

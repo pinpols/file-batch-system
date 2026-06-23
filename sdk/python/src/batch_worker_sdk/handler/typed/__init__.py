@@ -1,4 +1,4 @@
-"""Typed handler 模板 —— 对齐 Java ``com.example.batch.sdk.handler.typed``。
+"""Typed handler 模板 —— 对齐 Java ``io.github.pinpols.batch.sdk.handler.typed``。
 
 提供 5 种 SDK handler 形态的强类型(pydantic 支撑)变体:单方法
 :class:`SdkTypedTaskHandler`(任意任务),以及 4 个行流水模板

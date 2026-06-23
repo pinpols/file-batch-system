@@ -21,7 +21,7 @@
 set -euo pipefail
 
 ENV_PROD="${1:-.env.prod}"
-BATCH_TOPICS_FILE="batch-common/src/main/java/com/example/batch/common/kafka/BatchTopics.java"
+BATCH_TOPICS_FILE="batch-common/src/main/java/io/github/pinpols/batch/common/kafka/BatchTopics.java"
 
 # 目录元数据 topic — 不在运行态 MQ 流量上,不要求 .env.prod 同步
 WHITELIST_RE='^(OUTBOX_EVENT|WORKER_HEARTBEAT)$'

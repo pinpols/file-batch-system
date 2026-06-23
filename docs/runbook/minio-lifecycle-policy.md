@@ -3,7 +3,7 @@
 > 针对 R-4.6（错误输出文件永驻 MinIO 无 TTL）的运维 runbook。
 > 维护人：SRE；每半年复盘一次过期天数是否合理。
 >
-> **License 提示**：MinIO Server = AGPL v3。本系统自托管 + 不改源码 + 用户不直连 → **无 license 风险**（同 Citus / Grafana / Loki / Tempo，统一评估见 [`docs/backlog/citus-introduction-plan-2026-06-06.md`](../backlog/citus-introduction-plan-2026-06-06.md) §11）。
+> **License 提示**：MinIO Server = AGPL v3。本系统自托管 + 不改源码 + 用户不直连 → **无 license 风险**（同 Citus / Grafana / Loki / Tempo，license 风险结论一致:无）。
 
 ## 背景
 

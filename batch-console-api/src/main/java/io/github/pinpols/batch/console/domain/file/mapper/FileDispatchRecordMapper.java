@@ -1,0 +1,13 @@
+package io.github.pinpols.batch.console.domain.file.mapper;
+
+import io.github.pinpols.batch.console.domain.file.query.FileDispatchRecordQuery;
+import java.util.List;
+import java.util.Map;
+import org.apache.ibatis.annotations.Param;
+
+public interface FileDispatchRecordMapper {
+
+  List<Map<String, Object>> selectByQuery(@Param("q") FileDispatchRecordQuery q);
+
+  long countByQuery(@Param("q") FileDispatchRecordQuery q);
+}

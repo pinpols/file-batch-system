@@ -57,8 +57,8 @@
     },
     "component" : {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-platform@1.0.0?type=pom",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-platform@1.0.0?type=pom",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-platform",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -69,7 +69,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-platform@1.0.0?type=pom",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-platform@1.0.0?type=pom",
       "externalReferences" : [
         {
           "type" : "website",
@@ -99,8 +99,8 @@
   "components" : [
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-common",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -111,7 +111,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -6947,8 +6947,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-trigger@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-trigger@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-trigger",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -6959,7 +6959,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-trigger@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-trigger@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -10649,8 +10649,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-orchestrator@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-orchestrator@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-orchestrator",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -10661,7 +10661,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-orchestrator@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-orchestrator@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -12839,8 +12839,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-worker-core@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-core@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-worker-core",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -12851,7 +12851,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-worker-core@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-worker-core@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -12865,8 +12865,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-worker-import@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-import@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-worker-import",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -12877,7 +12877,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-worker-import@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-worker-import@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -12961,8 +12961,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-worker-export@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-export@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-worker-export",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -12973,7 +12973,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-worker-export@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-worker-export@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -13062,8 +13062,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-worker-dispatch@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-dispatch@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-worker-dispatch",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -13074,7 +13074,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-worker-dispatch@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-worker-dispatch@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -13402,8 +13402,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-console-api@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-console-api@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-console-api",
       "version" : "1.0.0",
       "description" : "Batch scheduling platform multi-module engineering skeleton",
@@ -13414,7 +13414,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-console-api@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-console-api@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -17146,8 +17146,8 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.example.batch/batch-e2e-tests@1.0.0?type=jar",
-      "group" : "com.example.batch",
+      "bom-ref" : "pkg:maven/io.github.pinpols.batch/batch-e2e-tests@1.0.0?type=jar",
+      "group" : "io.github.pinpols.batch",
       "name" : "batch-e2e-tests",
       "version" : "1.0.0",
       "description" : "Heavy end-to-end tests: trigger → schedule → Kafka → worker claim → pipeline → report",
@@ -17158,7 +17158,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.example.batch/batch-e2e-tests@1.0.0?type=jar",
+      "purl" : "pkg:maven/io.github.pinpols.batch/batch-e2e-tests@1.0.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -17173,21 +17173,21 @@
   ],
   "dependencies" : [
     {
-      "ref" : "pkg:maven/com.example.batch/batch-platform@1.0.0?type=pom",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-platform@1.0.0?type=pom",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-trigger@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-orchestrator@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-worker-core@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-worker-import@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-worker-export@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-worker-dispatch@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-console-api@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-e2e-tests@1.0.0?type=jar"
+        "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-trigger@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-orchestrator@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-core@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-import@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-export@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-dispatch@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-console-api@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-e2e-tests@1.0.0?type=jar"
       ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
       "dependsOn" : [
         "pkg:maven/org.springframework.boot/spring-boot-starter@4.0.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-validation@4.0.3?type=jar",
@@ -17724,9 +17724,9 @@
       ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-trigger@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-trigger@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-web@4.0.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-validation@4.0.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-security@4.0.3?type=jar",
@@ -18171,9 +18171,9 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-orchestrator@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-orchestrator@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-web@4.0.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-actuator@4.0.3?type=jar",
         "pkg:maven/io.micrometer/micrometer-registry-prometheus@1.16.3?type=jar",
@@ -18450,9 +18450,9 @@
       ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-worker-core@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-core@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
         "pkg:maven/org.springframework/spring-context@7.0.5?type=jar",
         "pkg:maven/org.springframework/spring-jdbc@7.0.5?type=jar",
         "pkg:maven/org.springframework/spring-web@7.0.5?type=jar",
@@ -18462,9 +18462,9 @@
       ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-worker-import@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-import@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-worker-core@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-core@1.0.0?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-actuator@4.0.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-web@4.0.3?type=jar",
         "pkg:maven/io.micrometer/micrometer-registry-prometheus@1.16.3?type=jar",
@@ -18535,9 +18535,9 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-worker-export@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-export@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-worker-core@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-core@1.0.0?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-actuator@4.0.3?type=jar",
         "pkg:maven/io.micrometer/micrometer-registry-prometheus@1.16.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-web@4.0.3?type=jar",
@@ -18557,9 +18557,9 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-worker-dispatch@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-worker-dispatch@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-worker-core@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-core@1.0.0?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-actuator@4.0.3?type=jar",
         "pkg:maven/io.micrometer/micrometer-registry-prometheus@1.16.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-web@4.0.3?type=jar",
@@ -18599,9 +18599,9 @@
       ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-console-api@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-console-api@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-common@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-common@1.0.0?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-web@4.0.3?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-security@4.0.3?type=jar",
         "pkg:maven/org.springframework.security/spring-security-oauth2-jose@7.0.3?type=jar",
@@ -19143,13 +19143,13 @@
       ]
     },
     {
-      "ref" : "pkg:maven/com.example.batch/batch-e2e-tests@1.0.0?type=jar",
+      "ref" : "pkg:maven/io.github.pinpols.batch/batch-e2e-tests@1.0.0?type=jar",
       "dependsOn" : [
-        "pkg:maven/com.example.batch/batch-orchestrator@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-console-api@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-worker-import@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-worker-export@1.0.0?type=jar",
-        "pkg:maven/com.example.batch/batch-worker-dispatch@1.0.0?type=jar"
+        "pkg:maven/io.github.pinpols.batch/batch-orchestrator@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-console-api@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-import@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-export@1.0.0?type=jar",
+        "pkg:maven/io.github.pinpols.batch/batch-worker-dispatch@1.0.0?type=jar"
       ]
     }
   ]

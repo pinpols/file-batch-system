@@ -1,0 +1,16 @@
+package io.github.pinpols.batch.console.domain.file.web.request;
+
+import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+public class DeleteFileRequest {
+
+  @ValidTenantId private String tenantId;
+  @NotNull private Long fileId;
+
+  @Size(max = 512, message = "reason too long (max 512)")
+  private String reason;
+}

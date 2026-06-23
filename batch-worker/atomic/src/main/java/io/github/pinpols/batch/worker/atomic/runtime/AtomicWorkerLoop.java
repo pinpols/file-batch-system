@@ -1,0 +1,44 @@
+package io.github.pinpols.batch.worker.atomic.runtime;
+
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
+import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
+import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
+import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+/** 专用原子任务 worker 心跳循环。 */
+@Service
+public class AtomicWorkerLoop extends AbstractWorkerLoop {
+
+  private final AtomicWorkerConfiguration configuration;
+
+  public AtomicWorkerLoop(
+      WorkerRuntimeFacade workerRuntimeFacade,
+      BatchDateTimeSupport dateTimeSupport,
+      AtomicWorkerConfiguration configuration) {
+    super(workerRuntimeFacade, dateTimeSupport);
+    this.configuration = configuration;
+  }
+
+  @Override
+  protected WorkerConfiguration workerConfiguration() {
+    return configuration;
+  }
+
+  @Override
+  protected String workerGroup() {
+    return "atomic";
+  }
+
+  @Override
+  protected int workerPort() {
+    return 8086;
+  }
+
+  @Scheduled(fixedDelayString = "${batch.worker.atomic.heartbeat-interval-millis:15000}")
+  public void heartbeat() {
+    doHeartbeat();
+  }
+}

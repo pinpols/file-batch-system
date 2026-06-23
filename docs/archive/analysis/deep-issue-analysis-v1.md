@@ -42,7 +42,7 @@
 
 ### #1-1 Outbox 发布窗口竞态 [High]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/mq/DefaultScheduleForwarder.java:48-60`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/DefaultScheduleForwarder.java:48-60`
 
 **问题**：`markPublishing(NEW → PUBLISHING)` 成功后，若 Kafka `publish()` 立即失败（网络中断、Broker 故障），事件永远卡在 `PUBLISHING` 状态——因为下一轮轮询只捞 `NEW/FAILED`，`PUBLISHING` 无超时回退机制。
 
@@ -54,7 +54,7 @@
 
 ### #1-2 CAS 冲突仅打 warn，无 metrics 上报 [Medium]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:206-234`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:206-234`
 
 **问题**：`warnIfCasMiss` 在 CAS 返回 0 时只输出日志，无法区分"合理并发推进"与"真正状态冲突"，监控告警系统无法感知冲突频率。
 
@@ -66,7 +66,7 @@
 
 ### #1-3 ActiveTaskLeaseRegistry 优雅关闭存在 TOCTOU [Medium]
 
-**文件**：`batch-worker-core/src/main/java/com/example/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java:46-64`
+**文件**：`batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java:46-64`
 
 **问题**：`snapshot()` 基于 `ConcurrentHashMap.values()`（非原子视图），`awaitDrain()` 以 500 ms 轮询判断是否为空。关机时若任务正在 `register` 中，`snapshot()` 可能读到空集合而提前退出，导致已 claim 的任务成为孤儿，超期后进死信队列。
 
@@ -80,7 +80,7 @@
 
 ### #2-1 Outbox 与状态写入非同一事务 [Critical]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/engine/TaskDispatchOutboxService.java:50`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/TaskDispatchOutboxService.java:50`
 
 **问题**：
 
@@ -106,7 +106,7 @@ DefaultPartitionDispatchService
 
 ### #2-2 assignWorker 回滚后返回值与 DB 状态不一致 [High]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskAssignmentService.java:86-112`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultTaskAssignmentService.java:86-112`
 
 **问题**：
 
@@ -130,7 +130,7 @@ if (claimed <= 0) {
 
 ### #3-1 版本号冲突后无法递增，陷入永久冲突循环 [High]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:336-339`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:336-339`
 
 **问题**：
 
@@ -149,7 +149,7 @@ jobInstance.setVersion(version + 1);  // 抛异常后永不执行
 
 ### #3-2 workflow_node_run 并发创建可能产生重复记录 [Medium]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:109-137`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:109-137`
 
 **问题**：两个并发 outcome 同时读到 `current == null`，都执行 `recordNodeRunStart`。虽有 `UNIQUE(workflow_run_id, node_code, run_seq)` 约束，但 `nextRunSeq()` 若非数据库序列实现，计算结果可能重复，导致约束冲突或异常数据。
 
@@ -163,7 +163,7 @@ jobInstance.setVersion(version + 1);  // 抛异常后永不执行
 
 ### #4-1 无 partition 场景 idempotencyKey 不含重试计数 [High]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/engine/TaskDispatchOutboxService.java:149-154`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/TaskDispatchOutboxService.java:149-154`
 
 **问题**：
 
@@ -180,7 +180,7 @@ return task.getTenantId() + ":task:" + task.getId();
 
 ### #4-2 Outbox 熔断器无半开（half-open）自动恢复 [Medium]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java:118-134`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java:118-134`
 
 **问题**：熔断打开后直接 `return null` 跳过本轮，轮询靠指数退避缓解压力，但无探测机制。Kafka 恢复后，熔断器无法自动进入半开状态，Outbox 积压无法追赶，延迟可达分钟级。
 
@@ -190,7 +190,7 @@ return task.getTenantId() + ":task:" + task.getId();
 
 ### #4-3 DLQ 发送失败后消息双重丢失 [Medium]
 
-**文件**：`batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractTaskConsumer.java:113-129`
+**文件**：`batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumer.java:113-129`
 
 **问题**：
 
@@ -209,7 +209,7 @@ return true;  // 立即确认 Kafka 偏移量
 
 ### #5-1 testing-open 可绕过所有内部接口认证 [High]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/config/InternalAuthFilter.java:34-46`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/InternalAuthFilter.java:34-46`
 
 **问题**：
 
@@ -228,7 +228,7 @@ if (securityProperties.isTestingOpen()) {
 
 ### #5-2 Outbox payload 明文写入 Kafka [Medium]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/mq/KafkaOutboxPublisher.java:100-101`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/KafkaOutboxPublisher.java:100-101`
 
 **问题**：完整 task payload（含业务参数、可能的密钥引用）序列化为 JSON 写入 Kafka topic，无任何加密或字段脱敏。Kafka ACL 若配置不当，任何消费者均可读取所有历史任务数据。
 
@@ -250,7 +250,7 @@ if (securityProperties.isTestingOpen()) {
 
 ### #6-1 OutboxPollScheduler shutdown 不等待任务完成 [Medium]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java:76-81`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java:76-81`
 
 **问题**：
 
@@ -276,7 +276,7 @@ if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
 
 ### #6-2 信号量数量无法运行时调整 [Low]
 
-**文件**：`batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractTaskConsumer.java:145-157`
+**文件**：`batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumer.java:145-157`
 
 `maxConcurrentTasks` 在启动时固化为 `Semaphore(permits)`，运行时无法动态缩扩容，也无法通过 Actuator 查看当前可用许可数。
 
@@ -286,7 +286,7 @@ if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
 
 ### #7-1 Outbox 轮询异常未分类，无法差异化告警 [Medium]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java:88-115`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java:88-115`
 
 **问题**：DB 断连、OOM、Kafka 故障统一 `log.error`，无法区分"瞬时故障（快速重试）"与"持久故障（立即告警）"，SRE 响应延迟。
 
@@ -310,7 +310,7 @@ spring.datasource.hikari.leak-detection-threshold: 30000
 
 ### #8-1 StateMachine 用硬编码反射方法名回退 [Medium]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/statemachine/DefaultStateMachine.java:39-58`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/statemachine/DefaultStateMachine.java:39-58`
 
 **问题**：
 
@@ -337,7 +337,7 @@ for (String methodName : List.of("getInstanceStatus", "getPartitionStatus", "get
 
 ### #8-3 ObjectProvider 延迟注入掩盖潜在循环依赖 [Low]
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:72`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultTaskOutcomeService.java:72`
 
 ```java
 private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;

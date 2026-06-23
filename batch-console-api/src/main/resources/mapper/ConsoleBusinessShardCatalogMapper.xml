@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.ConsoleBusinessShardCatalogMapper">
+<mapper namespace="io.github.pinpols.batch.console.mapper.ConsoleBusinessShardCatalogMapper">
 
     <resultMap id="catalogMap"
-               type="com.example.batch.console.domain.entity.BusinessShardCatalogEntity">
+               type="io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity">
         <id column="placement_key" property="placementKey"/>
         <result column="host" property="host"/>
         <result column="port" property="port"/>

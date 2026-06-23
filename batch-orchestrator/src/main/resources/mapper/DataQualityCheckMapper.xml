@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.DataQualityCheckMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.DataQualityCheckMapper">
 
     <resultMap id="DqCheckResultMap"
-               type="com.example.batch.orchestrator.domain.entity.DataQualityCheckEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.DataQualityCheckEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -25,7 +25,7 @@
       DataQualityCheckEntity 是 record（无 setter），不写回 id；
       caller 不依赖 id 回填（写入即结束）。
     -->
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.DataQualityCheckEntity">
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.DataQualityCheckEntity">
         insert into batch.data_quality_check (
             tenant_id, job_instance_id, rule_id, rule_code, rule_type,
             severity, status, metrics_json, failure_sample, error_message, checked_at

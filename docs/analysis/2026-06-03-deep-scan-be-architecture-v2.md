@@ -255,7 +255,7 @@
 
 ### v2-P2-D console-api 类 DDD 与传统分层双轨
 
-- **现象**:`com.example.batch.console.domain.<bc>.web|service|mapper|support|application|infrastructure|entity|param|query`(11 个 bounded context:rbac / file / notification / observability / audit / workflow / job / governance / ops / param / query)— 是真实 DDD 包结构;同时顶层 `web/`(7 个 Controller:ArchivePolicy / ConfigCache / Config / ConfigSync / QuotaPolicy / ResourceQueue / ResourceTag)+ `application/` + `infrastructure/` + `mapper/` + `service/` + `support/`(传统分层)6 个并存。
+- **现象**:`io.github.pinpols.batch.console.domain.<bc>.web|service|mapper|support|application|infrastructure|entity|param|query`(11 个 bounded context:rbac / file / notification / observability / audit / workflow / job / governance / ops / param / query)— 是真实 DDD 包结构;同时顶层 `web/`(7 个 Controller:ArchivePolicy / ConfigCache / Config / ConfigSync / QuotaPolicy / ResourceQueue / ResourceTag)+ `application/` + `infrastructure/` + `mapper/` + `service/` + `support/`(传统分层)6 个并存。
 - **影响**:开发者要决定"新功能放 `domain/<bc>/` 还是顶层 `web/`"全靠记忆,IDE 类型补全 7 Controller vs 67 Controller 混排误导新人。
 - **建议**:出"包结构 ADR"明文判定"是否走 bc 分包",顶层 7 个 Controller 全部迁入对应 bc(ConfigCache → `domain/config/web/`,ResourceQueue → `domain/governance/web/`)。
 

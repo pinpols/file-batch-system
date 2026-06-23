@@ -1,6 +1,6 @@
 """内置 HTTP 分发 handler(ADR-036 Dispatch 形态)。
 
-对齐 Java ``com.example.batch.sdk.handler.builtin.HttpDispatchHandler`` /
+对齐 Java ``io.github.pinpols.batch.sdk.handler.builtin.HttpDispatchHandler`` /
 ``HttpDispatchConfig``。Java 版是 JDBC → 逐行 HTTP;Python 版把 *目标选择*
 委托给租户钩子(:meth:`HttpDispatchHandler._resolve_targets`),让同一个内置
 能同时服务 DB 驱动、配置内联、上游 API 三种 target 来源。

@@ -104,7 +104,7 @@
 
 ### V4-P1-2 · `ParseSupport.writeParsedRecord` 硬编码 `CustomerImportPayload`（✅ 2026-04-22 已完成）
 
-**文件**：`batch-worker-import/src/main/java/com/example/batch/worker/imports/stage/format/ParseSupport.java`
+**文件**：`batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/ParseSupport.java`
 
 **原症状**：`preserveLogicalRow=false` 时，不管 template 声明啥 schema，rows 统一被 `objectMapper.convertValue(row, CustomerImportPayload.class)` 强转。non-customer 导入（但又没配 `jdbc_mapped_import` 触发 `preserveLogicalRow=true`）会被捕获并抑制除 customer 字段之外的列，validate 阶段报 `customerNo is required`。
 

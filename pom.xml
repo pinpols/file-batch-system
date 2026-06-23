@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.example.batch</groupId>
+    <groupId>io.github.pinpols.batch</groupId>
     <artifactId>batch-platform</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
@@ -275,10 +275,10 @@
                                     <message>禁 JPA/Hibernate ORM / Spring Data JDBC / log4j1.x(ADR-001 + CLAUDE.md 红线)。持久化统一 MyBatis + JdbcTemplate。</message>
                                 </bannedDependencies>
                                 <requireReleaseDeps>
-                                    <message>禁第三方 SNAPSHOT 依赖进入构建(本仓自有模块 com.example.batch:* 豁免)。</message>
+                                    <message>禁第三方 SNAPSHOT 依赖进入构建(本仓自有模块 io.github.pinpols.batch:* 豁免)。</message>
                                     <onlyWhenRelease>false</onlyWhenRelease>
                                     <excludes>
-                                        <exclude>com.example.batch:*</exclude>
+                                        <exclude>io.github.pinpols.batch:*</exclude>
                                     </excludes>
                                 </requireReleaseDeps>
                             </rules>
@@ -483,21 +483,21 @@
                                     <rule>
                                         <element>CLASS</element>
                                         <includes>
-                                            <include>com.example.batch.orchestrator.application.service.governance.DefaultCompensationService</include>
-                                            <include>com.example.batch.orchestrator.application.service.workflow.DefaultWorkflowDagService</include>
-                                            <include>com.example.batch.orchestrator.application.service.task.DefaultPartitionDispatchService</include>
-                                            <include>com.example.batch.orchestrator.application.service.task.ChildJobLaunchSupport</include>
-                                            <include>com.example.batch.orchestrator.infrastructure.scheduler.BatchDayOpenScheduler</include>
-                                            <include>com.example.batch.orchestrator.infrastructure.scheduler.CrossDayDependencyReconciler</include>
-                                            <include>com.example.batch.orchestrator.infrastructure.sla.JobSlaScheduler</include>
-                                            <include>com.example.batch.orchestrator.service.BatchDayGateService</include>
-                                            <include>com.example.batch.trigger.application.TriggerOutboxRelay</include>
-                                            <include>com.example.batch.worker.exports.sql.SqlTemplateExportSqlValidator</include>
-                                            <include>com.example.batch.worker.dispatchs.stage.DefaultDispatchStageExecutor</include>
-                                            <include>com.example.batch.worker.imports.stage.DefaultImportStageExecutor</include>
-                                            <include>com.example.batch.console.domain.rbac.support.ConsoleAuthenticationFilter</include>
-                                            <include>com.example.batch.console.config.ReadReplicaRoutingDataSource</include>
-                                            <include>com.example.batch.common.persistence.mybatis.AuditFieldsInterceptor</include>
+                                            <include>io.github.pinpols.batch.orchestrator.application.service.governance.DefaultCompensationService</include>
+                                            <include>io.github.pinpols.batch.orchestrator.application.service.workflow.DefaultWorkflowDagService</include>
+                                            <include>io.github.pinpols.batch.orchestrator.application.service.task.DefaultPartitionDispatchService</include>
+                                            <include>io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport</include>
+                                            <include>io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayOpenScheduler</include>
+                                            <include>io.github.pinpols.batch.orchestrator.infrastructure.scheduler.CrossDayDependencyReconciler</include>
+                                            <include>io.github.pinpols.batch.orchestrator.infrastructure.sla.JobSlaScheduler</include>
+                                            <include>io.github.pinpols.batch.orchestrator.service.BatchDayGateService</include>
+                                            <include>io.github.pinpols.batch.trigger.application.TriggerOutboxRelay</include>
+                                            <include>io.github.pinpols.batch.worker.exports.sql.SqlTemplateExportSqlValidator</include>
+                                            <include>io.github.pinpols.batch.worker.dispatchs.stage.DefaultDispatchStageExecutor</include>
+                                            <include>io.github.pinpols.batch.worker.imports.stage.DefaultImportStageExecutor</include>
+                                            <include>io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthenticationFilter</include>
+                                            <include>io.github.pinpols.batch.console.config.ReadReplicaRoutingDataSource</include>
+                                            <include>io.github.pinpols.batch.common.persistence.mybatis.AuditFieldsInterceptor</include>
                                         </includes>
                                         <limits>
                                             <limit>
@@ -654,7 +654,7 @@
                                 <compilerArgs combine.children="append">
                                     <arg>-XDcompilePolicy=simple</arg>
                                     <arg>--should-stop=ifError=FLOW</arg>
-                                    <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:ERROR -XepOpt:NullAway:AnnotatedPackages=com.example.batch</arg>
+                                    <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:ERROR -XepOpt:NullAway:AnnotatedPackages=io.github.pinpols.batch</arg>
                                 </compilerArgs>
                                 <annotationProcessorPaths combine.children="append">
                                     <path>

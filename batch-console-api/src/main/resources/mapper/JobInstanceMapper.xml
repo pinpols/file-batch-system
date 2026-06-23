@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.job.mapper.JobInstanceMapper">
-    <resultMap id="JobInstanceResultMap" type="com.example.batch.console.domain.job.entity.JobInstanceEntity">
+<mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper">
+    <resultMap id="JobInstanceResultMap" type="io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_code" property="jobCode"/>
@@ -89,11 +89,11 @@
             </when>
             <when test="sortBy == 'duration'">
                 order by (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at)) desc
-                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+                <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </when>
             <otherwise>
                 order by id desc
-                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+                <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </otherwise>
         </choose>
     </select>

@@ -108,7 +108,7 @@ git commit -m "build(s3): 加 AWS SDK v2 (s3+apache-client) 依赖,暂与 minio 
 
 ## Task 2: S3ObjectStore 换 AWS SDK v2(核心,9 方法 + presigner)
 
-**Files:** Modify `batch-common/src/main/java/com/example/batch/common/storage/S3ObjectStore.java`;Test 新建/改 `S3ObjectStoreIntegrationTest`(若已存在则改,继承现有 MinIOContainer IT 模式)
+**Files:** Modify `batch-common/src/main/java/io/github/pinpols/batch/common/storage/S3ObjectStore.java`;Test 新建/改 `S3ObjectStoreIntegrationTest`(若已存在则改,继承现有 MinIOContainer IT 模式)
 
 - [ ] **Step 1: 先看现有 S3ObjectStore 测试**
 
@@ -257,8 +257,8 @@ Expected: 9 方法行为测试 PASS(put/get/getFrom/statSize/exists/list/copy/de
 
 - [ ] **Step 1: git mv 改名 + 改类名**
 ```bash
-git mv batch-common/src/main/java/com/example/batch/common/config/MinioAutoConfiguration.java \
-       batch-common/src/main/java/com/example/batch/common/config/S3AutoConfiguration.java
+git mv batch-common/src/main/java/io/github/pinpols/batch/common/config/MinioAutoConfiguration.java \
+       batch-common/src/main/java/io/github/pinpols/batch/common/config/S3AutoConfiguration.java
 ```
 类名 `MinioAutoConfiguration` → `S3AutoConfiguration`。
 
