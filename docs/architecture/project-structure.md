@@ -1,30 +1,32 @@
 # file-batch-system 项目结构
 
-> 2026-06-03 整理。批量任务编排控制面 + 文件 / 任务交付闭环。10 平台模块 Maven multi-module + 4 SDK 模块 + 独立 reactor。
+> 2026-06-03 整理。批量任务编排控制面 + 文件 / 任务交付闭环。平台模块 Maven multi-module(worker 已聚合为 `batch-worker` 下的 6 个子模块)+ 多语言 SDK + 独立 reactor。
 
 ## 顶层结构
 
 ```
 file-batch-system/
 ├── batch-common/                           基础设施 / Spring AutoConfiguration / 共享 DTO
-├── batch-trigger/                          调度触发(Quartz + 业务日历)→ trigger_outbox_event
+├── batch-trigger/                          调度触发(默认 wheel,opt-in Quartz + 业务日历)→ trigger_outbox_event
 ├── batch-orchestrator/                     状态主机:CLAIM/EXECUTE/REPORT 闭环 + workflow 编排
-├── batch-worker-core/                      Worker SPI 基础(pipeline stages 抽象)
-├── batch-worker-import/                    IMPORT pipeline(Preprocess→Validate→Load,5 stages)
-├── batch-worker-export/                    EXPORT pipeline(Query→Render→Sink,6 stages)
-├── batch-worker-process/                   PROCESS pipeline(纯业务计算)
-├── batch-worker-dispatch/                  DISPATCH pipeline(下游分发)
-├── batch-worker-atomic/                    专用 Task SPI(shell/sql/stored-proc/http 隔离,ADR-029)
+├── batch-worker/                           worker 聚合器(aggregator + 各 worker parent;artifactId 不变)
+│   ├── core/                               Worker SPI 基础(pipeline stages 抽象;artifactId 仍为 batch-worker-core)
+│   ├── import/                             IMPORT pipeline(Preprocess→Validate→Load,5 stages)
+│   ├── export/                             EXPORT pipeline(Query→Render→Sink,6 stages)
+│   ├── process/                            PROCESS pipeline(纯业务计算)
+│   ├── dispatch/                           DISPATCH pipeline(下游分发)
+│   └── atomic/                             专用 Task SPI(shell/sql/stored-proc/http 隔离,ADR-029)
 ├── batch-console-api/                      控制面 REST API(运维/查询/审批)
-├── batch-worker-sdk/                       租户自托管 SDK(Spring-free,ADR-035)
-├── batch-worker-sdk-spring-boot-starter/   SDK 的可选 Spring 适配模块
-├── batch-worker-sdk-testkit/               SDK 端到端测试工具(FakeBatchPlatform)
-├── batch-worker-sdk-python/                Python SDK(httpx + pydantic + aiokafka)
+├── sdk/
+│   ├── java/{core,spring,testkit}/         Java SDK:核心(Spring-free,ADR-035)+ Spring 适配 + testkit(FakeBatchPlatform)
+│   ├── go/                                 Go SDK
+│   ├── python/                             Python SDK(httpx + pydantic + aiokafka)
+│   ├── rust/                               Rust SDK
+│   └── typescript/                         TypeScript SDK
 ├── batch-e2e-tests/                        BE 端到端测试(独立 reactor 节点)
 ├── load-tests/                             压测(独立 reactor,不入主 reactor)
 │
-├── db/migration/                           Flyway PostgreSQL migrations(V160+)
-├── archive/migration/                      冷表 archive.* schema migrations
+├── db/migration/                           Flyway PostgreSQL migrations(V1 起,当前到 V184)
 ├── docs/                                   全文档体系(见下)
 ├── scripts/                                工程脚本(ci/db/dev/docker/local/ops/tools)
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
@@ -36,29 +38,34 @@ file-batch-system/
 └── AGENTS.md                               Agent / SDK 协议总览
 ```
 
-## 平台 10 模块(固定,不可擅自增删)
+## 平台模块(固定,不可擅自增删;worker 已聚合到 `batch-worker` 下)
+
+> `batch-worker` 是聚合器(aggregator + parent),其下 6 个子模块的 artifactId 保持不变(仍为 `batch-worker-core` / `batch-worker-import` 等)。
 
 | 模块 | 主要 package | 一句话职责 |
 |---|---|---|
 | `batch-common` | `common/{config,events,outbox,security,testing,...}` | 跨模块复用:AutoConfig、Outbox 抽象、RLS、Timezone、i18n、Testcontainers 基类 |
-| `batch-trigger` | `trigger/{quartz,calendar,outbox}` | Quartz 调度 → `trigger_outbox_event`(orchestrator 拉取后启动 instance) |
+| `batch-trigger` | `trigger/{wheel,quartz,calendar,outbox}` | 调度(默认 wheel,opt-in Quartz)→ `trigger_outbox_event`(orchestrator 拉取后启动 instance) |
 | `batch-orchestrator` | `orchestrator/{application,domain,infrastructure,controller}` | **状态主机**:CLAIM / EXECUTE / REPORT 状态流转;workflow DAG 编排;outbox 投递 |
-| `batch-worker-core` | `worker/core/{pipeline,stage,registry}` | Worker SPI 抽象、PipelineStage 接口、StepRegistry |
-| `batch-worker-import` | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 5 stages(Preprocess/Validate/Load/...) |
-| `batch-worker-export` | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 6 stages(Query/Render/Sink/...) |
-| `batch-worker-process` | `worker/processes/{stage,...}` | 纯业务计算(无文件 IO) |
-| `batch-worker-dispatch` | `worker/dispatch/{stage,target,...}` | 下游分发(向外部系统投递) |
-| `batch-worker-atomic` | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛) |
+| `batch-worker/core`(artifactId `batch-worker-core`) | `worker/core/{pipeline,stage,registry}` | Worker SPI 抽象、PipelineStage 接口、StepRegistry |
+| `batch-worker/import`(artifactId `batch-worker-import`) | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 5 stages(Preprocess/Validate/Load/...) |
+| `batch-worker/export`(artifactId `batch-worker-export`) | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 6 stages(Query/Render/Sink/...) |
+| `batch-worker/process`(artifactId `batch-worker-process`) | `worker/processes/{stage,...}` | 纯业务计算(无文件 IO) |
+| `batch-worker/dispatch`(artifactId `batch-worker-dispatch`) | `worker/dispatch/{stage,target,...}` | 下游分发(向外部系统投递) |
+| `batch-worker/atomic`(artifactId `batch-worker-atomic`) | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛) |
 | `batch-console-api` | `console/{domain,application,controller,...}` | 控制面 REST + 审批 + 运维操作(唯一允许走读写分离的模块) |
 
-## SDK 4 模块(不属固定 10)
+## SDK 模块(多语言,不属固定平台模块)
 
 | 模块 | 类型 | 用途 |
 |---|---|---|
-| `batch-worker-sdk` | Java(Spring-free) | 租户在自有进程里跑 worker 的核心 SDK |
-| `batch-worker-sdk-spring-boot-starter` | Java(可选) | SDK 的 Spring Boot 自动装配 starter |
-| `batch-worker-sdk-testkit` | Java(test-scope) | `FakeBatchPlatform` 端到端测试工具 |
-| `batch-worker-sdk-python` | Python | 与 Java SDK 对齐的 Python 实现(PyPI: `batch-worker-sdk-python`) |
+| `sdk/java/core` | Java(Spring-free) | 租户在自有进程里跑 worker 的核心 SDK(ADR-035) |
+| `sdk/java/spring` | Java(可选) | SDK 的 Spring Boot 自动装配 starter |
+| `sdk/java/testkit` | Java(test-scope) | `FakeBatchPlatform` 端到端测试工具 |
+| `sdk/go` | Go | 与 Java SDK 对齐的 Go 实现 |
+| `sdk/python` | Python | 与 Java SDK 对齐的 Python 实现(httpx + pydantic + aiokafka) |
+| `sdk/rust` | Rust | 与 Java SDK 对齐的 Rust 实现 |
+| `sdk/typescript` | TypeScript | 与 Java SDK 对齐的 TypeScript 实现 |
 
 ## 关键架构约束(详 [`../../CLAUDE.md`](../../CLAUDE.md))
 

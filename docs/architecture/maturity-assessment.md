@@ -1,3 +1,5 @@
+> 注:本文为 2026-04-26 时点快照,部分内容已被后续实现取代(如 wheel scheduler 已切为默认),以代码与 ADR 为准。
+
 # 项目工程成熟度评估
 
 > 评估时间：2026-04-26  
@@ -44,7 +46,7 @@
 
 ## 3. 9 维度详评
 
-### 3.1 架构成熟度 — **L4** ✅
+### 3.1 架构成熟度 — **L4**
 
 **强项**：
 - 硬约束清晰且强制（Outbox 同事务 / Orchestrator 唯一状态主机 / CLAIM 流程不可绕过 / MyBatis vs JDBC 分层）
@@ -56,7 +58,7 @@
 - Phase 3（分库分表）还没动
 - Wheel 默认未切（代码 ready 但灰度未推进）
 
-### 3.2 代码工程质量 — **L4** ✅
+### 3.2 代码工程质量 — **L4**
 
 **强项**：
 - `CLAUDE.md` 强制规范（参数 ≤6 / FQN 禁用 / DictEnum / SpecHandler / 分支消除规则）
@@ -69,7 +71,7 @@
 - PMD 基线快照（`docs/pmd-violations.md`）仍有 ExcessiveParameterList × 11 / NcssCount × 5 / AvoidDuplicateLiterals × 283 未清
 - ExcessiveParameterList × 11 实质违反 CLAUDE.md "参数 ≤6" 硬约束，应优先清
 
-### 3.3 测试 — **L3+** ⚠️
+### 3.3 测试 — **L3+**
 
 **强项**：
 - 三层覆盖：unit + IT + e2e
@@ -82,7 +84,7 @@
 - `application-test.yml` 多处 override prod 默认值（read-replica / worker-cache / mq-routing.mode 三处已知），prod 路径在 IT 层覆盖率打折扣
 - 缺统一的覆盖率门控（jacoco 已就位但未在 pr-gate 强制 minCoverage 阈值）
 
-### 3.4 运行时可靠性 — **L4** ✅
+### 3.4 运行时可靠性 — **L4**
 
 **强项**：
 - fail-open 多处回退：read-replica quarantine + worker-cache Redis 异常退 DB + quota Redis 异常放行
@@ -96,7 +98,7 @@
 - 海量场景（>1000 万/天）承载力还在 `scalability-assessment.md` 评估阶段，实测未做
 - `load-tests` 模块存在但产出报告未归档
 
-### 3.5 可观测性 — **L4** ✅
+### 3.5 可观测性 — **L4**
 
 **强项**：
 - 完整 OTel 栈：Tempo（traces）+ Loki（logs）+ Prometheus（metrics）+ Jaeger（trace UI 兼容）+ Grafana + Alertmanager
@@ -108,7 +110,7 @@
 - SLO / SLI 定义未见独立文档
 - 告警阈值散在 `alertmanager-batch-template.yml` 里，没有"业务 SLO → 告警阈值"的双向映射文档
 
-### 3.6 安全合规 — **L4** ✅
+### 3.6 安全合规 — **L4**
 
 **强项**：
 - bypass-mode 全局开关 + prod profile @PostConstruct 守护拒绝
@@ -121,7 +123,7 @@
 - NOTICE 文件极简（指针式），对外发版严格法务可能要求嵌入完整 attribution
 - BSD-3-Clause / EPL-2.0 全文未原文嵌入（admin gap）
 
-### 3.7 持续交付 / CI — **L4** ✅
+### 3.7 持续交付 / CI — **L4**
 
 **强项**：
 - 4 个 GitHub Actions workflow 分层（pr-gate / full-ci-gate / staging-gate / capacity-gate）
@@ -132,7 +134,7 @@
 - 未看到 release notes / version-cut 流程文档
 - artifact 发布流程（Docker Hub / Maven Central）未文档化
 
-### 3.8 运维就绪 — **L4+** ✅✅
+### 3.8 运维就绪 — **L4+**
 
 **强项**：
 - 23 个 runbook 覆盖大多数运维场景：incident-response / daily-inspection / rolling-upgrade-workers / pg-table-partitioning / minio-lifecycle / orchestrator-statefulset-migration 等
@@ -143,7 +145,7 @@
 - 未见 capacity planning 真实压测数据归档（load-tests 模块在但产出报告位置不明）
 - 没有 chaos engineering / DR drill 记录
 
-### 3.9 文档 / 协作约束 — **L5** ✅✅✅
+### 3.9 文档 / 协作约束 — **L5**
 
 **强项**：
 - 113 markdown / 23 runbook / 13 架构文档 / API openapi yaml + protocol changelog 强制双更约束
@@ -208,7 +210,7 @@
 - ✅ **mq-routing.mode**（2026-04-26）：删 `application-test.yml` 的 `mq.routing.mode: SINGLE`，让 IT 走 prod 默认 TENANT 模式；`OutboxPublishIntegrationTest` + `OutboxEventToKafkaDispatchIntegrationTest` 5 个测试改 subscribe + assert 期望 `base + ".t1"` 后缀 topic；7 个 Kafka 相关测试全过（含 `JobTypeOutboxChainIntegrationTest` / `KafkaOutboxPublisherTest`）
 - ✅ **jacoco minCoverage 门控**（2026-04-26）：pom.xml jacoco 阈值降到 25% 起步（实测 trigger 44% / orchestrator 30% / console-api 全跑约 30-40%），CI 脚本 `scripts/ci/run-full-regression.sh` 删 `|| true` 让 `jacoco:check@check` 真正阻断 CI；调用语法用 `@check` execution id（裸 `jacoco:check` 走 default-cli 拿不到 pom 配的 rules）。逐步提升节奏：6 个月内到 40% / 1 年内到 60%
 
-### P1：PMD 基线 299 条 violation 设清零截止时间 ✅（2026-04-26 完成）
+### P1：PMD 基线 299 条 violation 设清零截止时间 （2026-04-26 完成）
 
 **起点（2026-04-12）**：
 - ExcessiveParameterList × 11（违反 CLAUDE.md "参数 ≤6" 硬约束）

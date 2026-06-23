@@ -56,7 +56,7 @@
 ## P1(推荐)
 
 ### P1-1 Redis Sentinel / Cluster
-- **现状**:Valkey 单点。ShedLock 选主 + quota + cache 依赖它。
+- **现状**:Redis 单点。ShedLock 选主 + quota + cache 依赖它。
 - **① 运维件**:Sentinel(3 哨兵 + 1 主 N 从)或 Cluster;或 ElastiCache。
 - **② 应用侧**:✅ cache fail-open(Redis 挂→直通 DB,`worker-cache.enabled` fail-open);⚠️ ShedLock 依赖 Redis,Redis 全挂期间调度互斥退化——可配 ShedLock 走 PG 回退(`docs/runbook/redis-shedlock-down.md`)。
 - **验证**:Sentinel 主从切换,缓存/选主短暂抖动后恢复,业务不崩。
@@ -78,6 +78,6 @@
 **先 P0-1 Kafka HA + P0-2 PG Patroni + P0-3 备份演练 → P1-1 Redis Sentinel → (确需扩展再)Citus + P1-2 PgBouncer。** 应用层已就位,基础件按上表逐项落地(自托管 operator 或云托管二选一);Helm 的 svc 地址是"假设运维会建",chart 不自建,别误以为装了 Helm 就有 HA。
 
 ## 关联
-- `playbooks/pg-primary-failover.md` / `backup-and-pitr.md` / `redis-shedlock-down.md` / `citus-deployment.md`
+- `playbooks/pg-primary-failover.md` / `backup-and-pitr.md` / `redis-shedlock-down.md`
 - `helm/values-prod.yaml`(基础件连接地址 + Kafka broker 期望拓扑)、`docker/observability/prometheus-batch-rules.yml`(HA 告警)
 - **Kafka broker HA**:`deploy/ha/20-kafka-strimzi.yaml`(prod CR) + `deploy/ha/README.md`(apply/验证) + `docker-compose.kafka-ha.yml`(本地 3 broker 演练 override) + `scripts/data/init-kafka-topics.sh`(RF / min.insync 可配)

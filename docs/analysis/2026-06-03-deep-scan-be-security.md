@@ -28,7 +28,7 @@
 
 ### 总体观察
 
-1. **设计层面已经走"纵深防御"路线**:每条对外可达路径至少叠 2 层(认证+RBAC,白名单+IP 校验,SensitiveDataValidator+黑名单,租户 mapper guard + RLS GUC)。这种结构降低单点失守爆失败半径。
+1. **设计层面已经走"纵深防御"路线**:每条对外可达路径至少叠 2 层(认证+RBAC,白名单+IP 校验,SensitiveDataValidator+黑名单,租户 mapper guard + RLS GUC)。这种结构降低单点失守 blast radius。
 2. **守护测试(ArchUnit / boot test)覆盖关键约束**:MapperXmlTenantGuardArchTest / PipelineWorkerAtomicClasspathCheck / `@PostConstruct` 启动期校验在 prod profile 强拒占位符,均能在 PR 阶段拦住误改。
 3. **遗留弱点偏"防御折扣"**:P1-1 / P1-2 不是直接漏洞,而是某层防御被简化(SHA-256 无盐 / profile 缺失默认非 prod);单层失守仍有其他层回退,但应补回深度。
 4. **生态依赖跟进及时**:Boot 4.0.6 / Netty 4.2.13 / Postgres 42.7.11 都是最新 LTS,过去 30 天连续 OSS 扫描发现 14 个 CVE 已修复。建议自动化日常 CVE 扫描接入 PR gate(security-scan 模块已存在,建议接 cron)。

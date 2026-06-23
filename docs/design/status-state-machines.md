@@ -7,7 +7,7 @@
 
 | 实体 | enum 类 | DB 列 | CHECK 约束 | 状态值 |
 |---|---|---|---|---|
-| `job_instance.instance_status` | `JobInstanceStatus` | V5:52 | ✓ | CREATED / WAITING / READY / RUNNING / PARTIAL_FAILED / SUCCESS / FAILED / CANCELLED / TERMINATED |
+| `job_instance.instance_status` | `JobInstanceStatus` | V5:52 | ✓ | CREATED / WAITING / READY / RUNNING / PAUSED（ADR-044 可逆暂停态,resume 回 RUNNING）/ PARTIAL_FAILED / SUCCESS / FAILED / CANCELLED / TERMINATED |
 | `pipeline_instance.run_status` | `PipelineRunStatus` | V6:103 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / **COMPENSATING** / TERMINATED |
 | `workflow_run.run_status` | `WorkflowRunStatus` | V5:121 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / TERMINATED |
 | `workflow_node_run.node_status` | `WorkflowNodeRunStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / SKIPPED / TERMINATED |

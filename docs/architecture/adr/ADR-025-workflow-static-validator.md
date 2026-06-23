@@ -47,7 +47,7 @@
 | V7 | 跨日依赖 range 跨度 > 90 天（接 ADR-018 上限） | ERROR |
 | V8 | 跨日依赖 OPTIONAL 节点的 output 被下一日 REQUIRED 引用（传染性退化） | ERROR |
 | V9 | GATEWAY join_mode = ALL_OF 但 incoming edges < 2 | ERROR |
-| V10 | GATEWAY join_mode = N_OF_M 但 N > M 或 M ≠ incoming count | ERROR |
+| V10 | GATEWAY join_mode = N_OF 但 N > M 或 M ≠ incoming count | ERROR |
 | V11 | edge type 与节点 type 矛盾（如 START 节点有 incoming） | ERROR |
 | V12 | param_schema 类型与上游 outputs 契约类型不匹配 | WARN（contract 不全的 worker 仍能跑） |
 | V13 | 同 (workflow_code, node_code) 重复 | ERROR |

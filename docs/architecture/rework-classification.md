@@ -1,9 +1,11 @@
+> 注:本文为 2026-04-25 时点快照,部分内容已被后续实现取代,以代码与 ADR 为准。
+
 # 改造工作量分类 — 哪些动代码、哪些只动配置/数据/运维
 
 > 配套文档：[`scalability-assessment.md`](./scalability-assessment.md) — 这里只回答"分类落地"问题。
 > 评估日期：2026-04-25
 
-`scalability-assessment.md` 列了一长串改进项，但**改动性质差异巨大**——有些是 cron 跑 SQL 一周完成，有些是数据访问层重写半年起步。这份文档把它们按"改什么"重新分类，帮你判断**哪些可以立刻开始、哪些需要立项**。
+`scalability-assessment.md` 列了一长串改进项，但**改动性质差异巨大**——有些是 cron 跑 SQL 一周完成，有些是数据访问层重写半年起步。这份文档把它们按"改什么"重新分类，用于判断**哪些可以立刻开始、哪些需要立项**。
 
 ---
 
@@ -36,7 +38,7 @@
 | `OrchestratorConfigCacheService` 无主动失效 | **F** 代码（中） | 监听 Redis pub/sub channel，配置变更广播，多实例同步 |
 | Worker 内重试不跨 worker | **F** 代码（中） | partition 第 N 次失败时改派给其他 worker（修改 RetryGovernanceService）|
 | 单 PostgreSQL 实例（read replica）| **D + E** 配置 + 少量代码 | 起 PG 从库；改 `console-api` / queries 路由层走从库（写入仍主库）|
-| `biz_business` 直连查询 | **D + E** 同上 | 给 `business` datasource 也加 read replica 路由 |
+| `batch_business` 直连查询 | **D + E** 同上 | 给 `business` datasource 也加 read replica 路由 |
 | JVM 启动慢 + 弹性扩缩 | **A + D** 运维 + 配置 | k8s pre-warm pool / HPA 提前扩容；CDS / GraalVM native image 探索 |
 
 ### 2.2 红色（真海量硬伤，6 项）
@@ -54,7 +56,7 @@
 
 ## 3. 按 Phase 看"动代码 vs 不动代码"比例
 
-### Phase 1 — 中等量级前置（5 项）— **2026-04-25 全部完成 ✅**
+### Phase 1 — 中等量级前置（5 项）— **2026-04-25 全部完成 **
 
 | 项 | 类型 | 改代码？ | 状态 | 交付物 |
 |---|---|---|---|---|
@@ -66,7 +68,7 @@
 
 **Phase 1：5 项里只有 1 项要改代码** ✅✅✅✅✅(改) — 全部交付，详见上表
 
-### Phase 2 — 百万 → 千万（5 项）— **2026-04-25 全部完成 ✅**（opt-in scaffolding）
+### Phase 2 — 百万 → 千万（5 项）— **2026-04-25 全部完成 **（opt-in scaffolding）
 
 | 项 | 类型 | 改代码？ | 状态 | 交付物 / 开关 |
 |---|---|---|---|---|
@@ -169,7 +171,7 @@ Phase 1 全部 + Phase 2 选 3 项：
 
 ## 6. 怎么判断该走哪条路
 
-| 你的情况 | 推荐 |
+| 场景 | 推荐 |
 |---|---|
 | 没看到具体业务量级目标 | 5.1 防御性改进（不浪费） |
 | 业务量级 < 100 万/天，担心稳定性 | 5.1 防御性改进 + 加 worker auto-restart |

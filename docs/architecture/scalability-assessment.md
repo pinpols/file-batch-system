@@ -1,3 +1,5 @@
+> 注:本文为 2026-04-25 时点快照,部分内容已被后续实现取代,以代码与 ADR 为准。
+
 # 海量批量调度承载力评估
 
 > 评估日期：2026-04-25
@@ -37,12 +39,12 @@
 |---|---|---|---|
 | **单 PostgreSQL 实例** | `batch_platform` 一库扛 outbox + job_instance + partition + workflow_run + file_record 全部元数据 | 5K–10K 任务/秒派发（合理硬件） | 写入瓶颈；外加慢查询拖死调度回环 |
 | **`job_partition` 单表** | 没分区表（PG partitioning），全靠普通索引 | 单表 5000 万行查询开始抖（取决于 WHERE 复杂度） | `WaitingPartitionDispatchScheduler` 扫表变慢 → 调度滞后 |
-| **`outbox_event` 无清理** | 没看到自动归档/删除 PUBLISHED 事件的机制 | 1 亿行后即使有索引也开始慢 | poller select latency 爆失败 → publish 滞后 → 整链路变慢 |
+| **`outbox_event` 无清理** | 没看到自动归档/删除 PUBLISHED 事件的机制 | 1 亿行后即使有索引也开始慢 | poller select latency 急剧膨胀 → publish 滞后 → 整链路变慢 |
 | **`DefaultWorkerSelector` 实时查 DB** | 每次派发都 `SELECT worker_registry WHERE status='ONLINE'` | worker 数 < 几百 OK | 万级 worker 时该 query 成热点 |
 | **`OrchestratorConfigCacheService` 无主动失效** | 改 `default_params` 必须重启 orchestrator 才生效（本周踩过） | 配置变更频率低就行 | 多实例集群想做"灰度更新一个 job"基本不可能 |
 | **历史数据治理是手工脚本** | `cleanup-historical-failures.sql` 是 `psql -f` 跑 | 单实例可控 | 海量场景必须自动化（带 watermark 的归档作业），否则一年后整库变废 |
 | **Worker 内重试不跨 worker** | DISPATCH retry 是同 partition 同 worker 重新走 | 单点失败容忍度有限 | worker 节点本身慢/坏时，retry 全在同节点没用 |
-| **biz_business 直连查询** | EXPORT worker 直接 `SELECT FROM biz.*`，无 read replica 路由 | 几千 QPS OK | 海量 export 时业务主库被查崩 |
+| **batch_business 直连查询** | EXPORT worker 直接 `SELECT FROM biz.*`，无 read replica 路由 | 几千 QPS OK | 海量 export 时业务主库被查崩 |
 | **JVM 启动慢 + 弹性扩缩** | 每个进程 15–30s CDS warmup + Spring Boot 初始化 | 静态规模 OK | 真要"突发流量自动扩 50 个 worker"——半分钟才上线，等不及 |
 
 **中等规模**（百万任务/天，~10 worker 实例，~50 租户）：调优能撑住，但需要：
@@ -90,7 +92,7 @@
 
 ### 4.4 workflow JOB 节点扇出表膨胀
 
-一个 workflow 跑会创建多个 child `job_instance`（本周验证过：`TC_WF_RISK_PIPELINE` 1 个 workflow → 4 个 job_instance）。扇出 100 倍的复杂 workflow 会让 instance 表爆失败。需要对 `workflow_run` 单独建 archive 流程。
+一个 workflow 跑会创建多个 child `job_instance`（本周验证过：`TC_WF_RISK_PIPELINE` 1 个 workflow → 4 个 job_instance）。扇出 100 倍的复杂 workflow 会让 instance 表急剧膨胀。需要对 `workflow_run` 单独建 archive 流程。
 
 ### 4.5 资源 quota 软限流不够强 — **2026-04-25 已完成 Redis Lua 迁移**
 
@@ -121,7 +123,7 @@
 
 按规模分阶段，每个 Phase 不必跳过下一个就能开始；**Phase 1 做完前不要追海量**，否则技术债会失控。
 
-### Phase 1 — 中等量级前置（中小 → 中）— **2026-04-25 全部完成 ✅**
+### Phase 1 — 中等量级前置（中小 → 中）— **2026-04-25 全部完成 **
 
 | 项 | 优先级 | 说明 | 状态 / 交付物 |
 |---|---|---|---|
@@ -131,7 +133,7 @@
 | 完整观测三块板 | P0 | P99 latency / outbox 积压 / DL 量 grafana | ✅ `docker/observability/grafana-dashboard-batch-coverage.json`（6 panel）|
 | worker auto-restart | P0 | k8s liveness + readiness（解决本周观察到的 worker 闲置 8h 自动死） | ✅ `scripts/local/watchdog.sh`（本地）+ docker-compose `restart: unless-stopped`（容器）|
 
-### Phase 2 — 百万 → 千万 — **2026-04-25 全部 5 项 scaffolding 完成 ✅**
+### Phase 2 — 百万 → 千万 — **2026-04-25 全部 5 项 scaffolding 完成 **
 
 > 全部 opt-in：默认关闭（保持历史行为），运维侧按需翻开关。详见 [`docs/architecture/rework-classification.md`](rework-classification.md#phase-2--百万--千万5-项--2026-04-25-全部完成--opt-in-scaffolding) Phase 2 落地表。
 
@@ -186,7 +188,7 @@
 
 ---
 
-## 9. 我的总评
+## 9. 总评
 
 - **架构方向**：✅ 对，对得住"经典 mature 批量调度平台"的设计目标
 - **工程完成度**：✅ 高，端到端能跑通真实场景（IMPORT/EXPORT/DISPATCH 全 stage 验证完）

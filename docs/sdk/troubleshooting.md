@@ -23,7 +23,7 @@
 
 | 症状 | 根因 | 处理 |
 |---|---|---|
-| `POST /internal/workers/register → 401` | API key SHA-256 hash 在 `batch.api_key` 不匹配,或 tenantId 跟 key 绑定不一致(ADR-035 §2「鉴权」) | 重新申请 / 轮转 key;**不会** fallback `X-Internal-Secret`(防泄漏冒充) |
+| `POST /internal/workers/register → 401` | API key hash 在 `batch.api_key` 不匹配(默认 KDF 为 PBKDF2-HMAC-SHA256 + per-key salt,V166 起;legacy 行仍为裸 SHA-256,首次校验通过后异步升级到 PBKDF2),或 tenantId 跟 key 绑定不一致(ADR-035 §2「鉴权」) | 重新申请 / 轮转 key;**不会** fallback `X-Internal-Secret`(防泄漏冒充) |
 | `409 conflict` 同名 taskType | 同 tenantId 已有另一 worker 注册同 `taskType` descriptor(不兼容) | 改 `taskType` 命名 / 协调先 deactivate 旧 worker / 走 console 强制反注册 |
 | `400 invalid descriptor` | `SdkTaskHandler.descriptor()` JSON schema 不合规(parameter 缺类型 / 枚举值非字符串) | 比对 `custom_task_type_registry` schema(roadmap §M3.1);本地用 testkit 单测 descriptor |
 | `heartbeat 429 / timeout` 偶发 | 网络抖动;SDK 默认重试 + 指数退避 | 单次抖动可忽略;持续 → 看下条 |
@@ -46,11 +46,11 @@ handler 没收到 `execute()`,console 看 job 卡在 ready / dispatched。
 
 ## 4. log 噪声
 
-SDK 暂未发布通用 `ThrottledLogger`(在 sdk-roadmap backlog)。临时降级方式:
+Java SDK 已实装 `ThrottledLogger`(`sdk/java/core/.../sdk/internal/ThrottledLogger.java`),重复 WARN(如 lease 失效)会聚合输出。仍需进一步降噪时:
 
 - logback / log4j2 config 给 `io.github.pinpols.batch.sdk.dispatcher` / `...kafka` 单独提到 `WARN`
 - 或加 `TurboFilter` / rate-limit appender(如 `RateLimitingFilter`)
-- 热点循环里的 INFO 暂时改 DEBUG;待 SDK 提供官方 throttled logger 再回退
+- 热点循环里的 INFO 暂时改 DEBUG
 
 ---
 

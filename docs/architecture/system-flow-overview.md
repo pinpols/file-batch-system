@@ -161,7 +161,7 @@ flowchart LR
 
 ### 一句话叙事
 
-1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`** 走 Quartz；切到 `wheel` 走新 HashedWheel；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 同事务写 `trigger_request` + `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch（**ADR-010 固化异步路径，无开关；详见 §1.4**）。
+1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=wheel`** 走 HashedWheelTimer；opt-in 回退 `quartz` 走 Quartz；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 同事务写 `trigger_request` + `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch（**ADR-010 固化异步路径，无开关；详见 §1.4**）。
 2. **调度**：orchestrator `LaunchService` 写入 `job_instance` + `job_partition` + `outbox_event`（同一事务）。
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态（含 i18n 三元组 + ADR-009 节点 outputs）→ orchestrator 推进状态机 + 落 `workflow_node_run.output` JSONB 列。
@@ -393,7 +393,7 @@ flowchart LR
     direction TB
     JD[("job_definition<br/>job_code -> workerType")]:::store
     WD[(workflow_definition<br/>workflow_code)]:::store
-    WN[(workflow_node<br/>type=START/TASK/GATEWAY/END<br/>+ join_mode=ALL/ANY/N_OF_M)]:::store
+    WN[(workflow_node<br/>type=START/TASK/GATEWAY/END<br/>+ join_mode=ALL/ANY/N_OF)]:::store
     WE[(workflow_edge<br/>edge_type=SUCCESS/FAILURE/<br/>CONDITION/ALWAYS)]:::store
   end
 
@@ -426,7 +426,7 @@ flowchart LR
 
 - **node_type**：`START` / `END`（占位，无 job）/ `TASK`（绑 job_code）/ `GATEWAY`（条件分支）/ `FILE_STEP`（短路本地步骤）/ `JOB`（同 TASK 别名兼容）
 - **edge_type**：`SUCCESS`（前 node 成功才走）/ `FAILURE`（前 node 失败才走，常用于补偿/通知）/ `CONDITION`（带表达式）/ `ALWAYS`（无视前态）
-- **join_mode** in `workflow_node`：`ALL`（所有入边都满足才触发）/ `ANY`（任一入边满足即触发）/ `N_OF_M`（指定数量）—— 详见 `docs/architecture/workflow-dependency-guide.md`
+- **join_mode** in `workflow_node`：`ALL`（所有入边都满足才触发）/ `ANY`（任一入边满足即触发）/ `N_OF`（指定数量）—— 详见 `docs/architecture/workflow-dependency-guide.md`
 - 与 worker pipeline stage 的关系：**workflow 编排"多个 job"，stage 编排"一个 job 内的多步"**，两层正交
 
 ---

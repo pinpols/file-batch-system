@@ -92,7 +92,7 @@
 
 ## 相对设计说明书的补充与差异（摘要）
 
-以下内容是对《批量调度系统设计说明书》**第 9 章文件链路**的**对齐说明**，避免把「插件层能力」和「整条流水线是否已做到设计全文」混为一谈。
+以下内容是对**文件链路设计**的**对齐说明**，避免把「插件层能力」和「整条流水线是否已做到设计全文」混为一谈。
 
 ### 与设计一致、或方向一致的部分
 
@@ -108,7 +108,7 @@
 ### 与说明书仍有差距（非本页插件能单独补齐）
 
 - **LOAD 策略**：说明书允许 **中间表导入、异步合并**（§9.3 扩展点表、§9.9 入库级幂等）。当前 **`jdbc_mapped`** 为 **直连业务表**的批量 **INSERT / UPSERT**，**不**等同于「仅 staging + 下游 `INSERT…SELECT` / 异步合并 job」；若要走该模式，需要 **staging 表 + 合并作业** 或 **专用 `ImportLoadPlugin`**。
-- **格式与能力**：GENERATE 已支持 **JSON/DELIMITED/EXCEL/FIXED_WIDTH**；导出 **snapshotMode** 等全文参数见 **`design-gap-audit.md`** §9。导入 PARSE 已含 Excel/XML/定长，当前两侧能力已基本对齐，剩余差距主要在更细的产品化和样式能力。
+- **格式与能力**：GENERATE 已支持 **JSON/DELIMITED/EXCEL/FIXED_WIDTH**；导出 **snapshotMode** 等参数见 [file-pipeline-design.md](../design/file-pipeline-design.md)。导入 PARSE 已含 Excel/XML/定长，当前两侧能力已基本对齐，剩余差距主要在更细的产品化和样式能力。
 - **边查边写 / 禁止全量加载**：设计说明书 §9.12 类约束与当前 **Parse / 部分校验 / 部分导出路径** 仍有差距，以 gap 文档为准；**分页导出明细**在 `ExportDataPlugin.loadDetailPage` + `GenerateStep` 循环中已改为 **cursor/keyset** 推进，减少大偏移页扫描，但这仍不等价于全链路已完全达标。
 
-以上摘要的权威对照仍以仓库 **`design-gap-audit.md`** 与 **`批量调度系统设计说明书（完整版）-20260321.md`** 原文为准；本文件仅服务 **Worker 插件与路由**说明。
+以上摘要的权威对照仍以仓库 [file-pipeline-design.md](../design/file-pipeline-design.md) 与代码原文为准；本文件仅服务 **Worker 插件与路由**说明。

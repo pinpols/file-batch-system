@@ -61,7 +61,7 @@ flowchart LR
   WI -->|"JDBC -> batch_business<br/>customer_account"| B
   WE -->|"JDBC -> batch_business<br/>settlement_batch / settlement_detail"| B
   WE -->|"S3 API -> MinIO<br/>export object write"| M
-  WP -->|"JDBC -> batch_platform<br/>process_staging (WAP write/audit/publish)"| P
+  WP -->|"JDBC -> batch_business<br/>batch.process_staging (WAP write/audit/publish; 经 processBusinessDataSource, 见 process-worker-known-issues.md P0-1)"| B
   WP -->|"JDBC -> batch_business<br/>SQL transform source/target tables"| B
 ```
 

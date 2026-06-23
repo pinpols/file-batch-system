@@ -188,7 +188,7 @@
 ### P3-1 ~ P3-4 概要
 
 - **P3-1**:`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/` 与 `application/service/`(标准 DDD 分层)并存,11 个 service 在外层 service/ 包 — 整理移入 `application/service/` 子域。
-- **P3-2**:console-api 660 文件已是其它模块平均 3x,虽未越界但是单模块爆失败,**建议下个季度内启动 console-api 子模块拆分评估**(rbac / ops / definition / runtime 四子域)。
+- **P3-2**:console-api 660 文件已是其它模块平均 3x,虽未越界但是单模块急剧膨胀,**建议下个季度内启动 console-api 子模块拆分评估**(rbac / ops / definition / runtime 四子域)。
 - **P3-3**:`examples/sample-tenant-worker-spring/.../SampleSpringWorkerIT.java` 自建 `@SpringBootTest`(examples 独立 reactor 合理),但要 README 写明"独立 reactor 不复用 AbstractIntegrationTest"。
 - **P3-4**:`db/migration` 165 个 V***.sql 单目录;Flyway 支持多 location(`db/migration/2026/06/V165__*.sql`),按月分子目录有助 review。
 

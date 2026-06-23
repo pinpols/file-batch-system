@@ -50,7 +50,7 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 
 **用户感知**：极少数 task 多走一次 CLAIM 重试（毫秒级延迟）。
 
-**缓解**：CLAIM 本身就是悲观锁回退，**不需要修**。如果想更敏感，TTL 调到 2s（`batch.scheduler.worker-cache.ttl-seconds`）。
+**缓解**：CLAIM 本身就是悲观锁回退，**不需要修**。如果想更敏感，TTL 调到 2s（`batch.scheduler.worker-cache.ttl-millis`，即 2000;默认 5000）。
 
 ## 弹性缩容的 4 个隐藏雷
 

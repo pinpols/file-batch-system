@@ -1,6 +1,8 @@
+> 注:本文为实施前时点快照,wheel scheduler 现已落地并切为默认,以代码与 ADR-033 为准。
+
 # Quartz 替换为时间轮的可执行方案
 
-> **状态**：决策依据 + 起步设计；阶段 0(零成本动作)可立刻做,阶段 1(实施)等业务量级到拐点再开干。
+> **状态**：决策依据 + 起步设计；阶段 0(零成本动作)可立刻做,阶段 1(实施)等业务量级到拐点再启动。
 >
 > **关联文档**:
 > - [`docs/runbook/feature-switches.md`](../runbook/feature-switches.md) §3.4(原 quartz-datasource 开关移除说明)
@@ -15,7 +17,7 @@
 >
 > **工程量(2026-04-25 经外部 review 校准)**:1.5-2 人月开发 + 1 人月 staging/灰度观察 = 真实从开工到全量切换 2-3 个月。原 "≤ 800 行 / 1 人月" 估算偏乐观,**未计入** fire 强约束 / 滑动窗口去重 / failover fast-path / 双引擎防护 / cron 一致性等生产风险回退。
 >
-> ⚠️ **动工前必读**:[`quartz-replacement-design.md`](./quartz-replacement-design.md)(详细实施设计 + 5 项风险回退 + Pre-flight Checklist)。本文档(evaluation)只承载战略决策,设计层细节全部在 design.md。
+> **实施前必读**:[`quartz-replacement-design.md`](./quartz-replacement-design.md)(详细实施设计 + 5 项风险回退 + Pre-flight Checklist)。本文档(evaluation)只承载战略决策,设计层细节全部在 design.md。
 
 ---
 

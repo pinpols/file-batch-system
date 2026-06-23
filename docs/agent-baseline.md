@@ -14,7 +14,7 @@
 1. 用户本轮最新明确指令
 2. 当前仓库中已经接受并落地的工程基线
 3. 项目设计文档
-4. 本 `AGENT.md`
+4. 本 `agent-baseline.md`
 
 补充规则：
 
@@ -137,6 +137,7 @@
 - `batch-worker-export`
 - `batch-worker-process`
 - `batch-worker-dispatch`
+- `batch-worker-atomic`
 - `batch-console-api`
 
 说明：
@@ -163,6 +164,8 @@
   - 处理链路阶段实现（PROCESS 域 staging → target publish）
 - `batch-worker-dispatch`
   - 分发链路阶段实现
+- `batch-worker-atomic`
+  - 专用原子任务 worker(ADR-029):shell / sql / stored-proc / http 执行器，不带文件 pipeline
 - `batch-console-api`
   - 控制台后端 API、触发、补偿、补跑、审计、实例查询、文件链路查询、运维接口
 
@@ -176,6 +179,7 @@
 - `batch-worker-export`
 - `batch-worker-process`
 - `batch-worker-dispatch`
+- `batch-worker-atomic`
 - `batch-console-api`
 
 当前应作为库模块存在，不单独启动：

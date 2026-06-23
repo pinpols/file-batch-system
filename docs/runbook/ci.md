@@ -8,8 +8,11 @@
 |---|---|---|---|
 | `pr-gate` | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈,阻断不合格 PR | 45 min |
 | `full-ci-gate` | push main(合并 PR 或直推) | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
+| `staging-gate` | nightly(每天 18:00 UTC / 北京 02:00 schedule)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,4 shard 并发)闸门;**不替代** full-ci-gate | — |
 
-> **2026-05-23 删除 `staging-gate` / `capacity-gate` / `promote-staging`**:前两条目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;后一条要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
+> **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
+>
+> `staging-gate` **仍存在**:作为 nightly schedule / staging 分支的全量 E2E 回退闸门(见上表与 `e2e-tier-strategy.md`)。
 
 ## 触发矩阵(开发者视角)
 
@@ -224,8 +227,9 @@ make ops-compensate     # 触发补偿
 
 | 路径 | 触发 | 是否自动 approve | 是否自动 enable auto-merge |
 |---|---|---|---|
-| `dependabot-auto-merge.yml` | Dependabot 开的 PR | patch bump / 安全告警 → ✅ | patch bump → ✅ |
 | `label-automerge.yml` | 任意人开 PR + 打 `automerge` 标签 | ❌（必须有人 review approve） | ✅ |
+
+> Dependabot PR(`.github/dependabot.yml` 配置的 Maven 等生态)不走独立 auto-merge workflow,需人工或经 `automerge` 标签走 `label-automerge.yml` 路径。
 
 **用法（label 路径）**：
 1. 开 PR
@@ -293,7 +297,7 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
 | codeql | 4:21 | PR / push / 周 | ≤6m | ✅ |
 | workflow-lint | 0:18 | 改 `.github/workflows/**` | ≤1m | ✅ |
 | full-ci-gate | 6:19 | push main / nightly / 手动 | ≤10m | ✅(已贴目标) |
-| build-image | 2:53 | push main / tag | ≤6m | ✅(-73% vs 旧 10:54) |
+| staging-gate | — | nightly schedule / 手动 | — | 全量 E2E 回退闸门 |
 
 ### Job 级分布
 
@@ -303,10 +307,7 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
 **full-ci-gate(9 job 并行,瓶颈 security-scan)**
 - static-checks 1:36 / unit-it-a 3:04 / unit-it-b1 3:13 / unit-it-b2 4:06 / e2e-shard 1-4 各 4:23-4:58 / **security-scan 6:15** ← critical path
 
-**build-image(7 模块并行,瓶颈 orchestrator)**
-- batch-worker-{import,dispatch,process,export,console-api,trigger} 1:49-2:26 / **batch-orchestrator 2:47** ← critical path
-
-> 2026-05-23:PR #27 合并后,本仓不再有 staging-gate / capacity-gate / promote-staging — 之前的 skip 三件套已删,流水线进一步精简。
+> 2026-05-23:PR #27 合并后,本仓删除了 `capacity-gate` / `promote-staging`(dead code,见本文档开头说明);`staging-gate` 仍保留为 nightly 全量 E2E 回退闸门。
 
 ---
 
@@ -317,7 +318,8 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
   workflows/
     pr-gate.yml              # PR 门禁
     full-ci-gate.yml         # 主干质量门禁(含安全扫 + Checkov)
-    build-image.yml          # 镜像构建
+    staging-gate.yml         # nightly / 手动 全量 E2E 回退闸门
+    label-automerge.yml      # automerge 标签自动归并
   actions/
     setup-build-env/         # 共享 setup：JDK、Maven cache、OpenAPI 校验
   renovate.json              # 依赖自动更新配置

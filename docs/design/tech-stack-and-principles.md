@@ -6,7 +6,7 @@
 
 | 类别 | 技术 | 版本 | 使用模块 |
 |------|------|------|---------|
-| 框架 | Spring Boot | 4.0.3 | all |
+| 框架 | Spring Boot | 4.1.0 | all |
 | 语言 | Java | 25 | all |
 | 持久化（PG） | MyBatis Spring Boot Starter | 4.0.0 | orchestrator, workers, trigger, console-api | 禁止 Spring Data JDBC |
 | 数据库迁移 | Flyway | managed | all |
@@ -15,8 +15,8 @@
 | 对象存储 | MinIO Java SDK | 8.6.0 | common, orchestrator, workers |
 | 分布式缓存 / SSE | Spring Data Redis (Lettuce) | managed | orchestrator, console-api |
 | 分布式锁 | ShedLock (JDBC + Redis) | 6.3.0 | common |
-| 调度（默认） | Quartz Scheduler (JDBC JobStore) | managed | trigger |
-| 调度（opt-in） | Netty HashedWheelTimer | managed | trigger（`batch.trigger.scheduler-impl=wheel`） |
+| 调度（默认） | Netty HashedWheelTimer | managed | trigger（`batch.trigger.scheduler-impl=wheel`，默认值） |
+| 调度（opt-in 回退） | Quartz Scheduler (JDBC JobStore) | managed | trigger（`BATCH_TRIGGER_SCHEDULER_IMPL=quartz`） |
 | 安全 | Spring Security + OAuth2 JOSE | managed | console-api |
 | HTTP 客户端 | OkHttp | 4.12.0 | export, dispatch |
 | 电子表格 | Apache POI | 5.4.0 | import, export, console-api |

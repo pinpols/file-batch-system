@@ -1,8 +1,10 @@
-# ADR-007: 单 PostgreSQL 实例双 Schema 隔离（batch / batch_worker）
+# ADR-007: 单 PostgreSQL 实例多 Schema 隔离（batch / quartz / archive）
 
 - **状态**: 已采纳
 - **日期**: 2026-03-25
 - **决策人**: 后端平台团队
+
+> 实现订正：落地后平台库实际 schema 为 `batch` / `quartz` / `archive`，**未单独建 `batch_worker` schema 与 `batch_worker_app` 用户**;worker 注册表是 `batch.worker_registry`（不是 `worker_registration` / `worker_heartbeat`,心跳走 HTTP 上报 + orchestrator 侧超时扫描）。worker 通过 HTTP 调 orchestrator 完成 register/heartbeat/claim/report,不直写平台表。下文保留原决策表述,以代码与 Flyway 为准。
 
 ## 背景
 

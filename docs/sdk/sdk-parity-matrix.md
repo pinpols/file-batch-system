@@ -6,12 +6,12 @@
 
 ## 0. 怎么读这张表 + 核查方法论(重要)
 
-本表是**逐文件亲核**的结果,不是 grep 汇总。原因:**几次自动化审查(含 4 个并行 agent)在这件事上系统性误报**,根因是——
+本表是**逐文件亲核**的结果,不是 grep 汇总。原因:基于单点 `grep` 的快速扫描在这件事上容易系统性误判,根因是——
 
 - **能力实现按语言惯例分散**:薄档(Go/Rust/TS)的**幂等**和 retry 打包在 `resilience.*` 里,**不在** `handler.*`。只 grep `handler.*` 会得出"无幂等"的错误结论。
 - **富档模板路径有层级**:Python 类型化模板在 `handler/typed/_typed_*.py`,不在 `handler/_import.py`。查错路径会得出"没接 ADR-037"。
 
-**复核守则**:判定某能力"缺失"前,必须 `grep -rn '<符号>' sdk/<lang>/`(全目录,不限单文件),并打开实现文件确认,不能凭单点 grep 或 agent 摘要下结论。判定"已落 main"要 `git show origin/main:<file>` 读实际内容,不看 PR 状态(见 [[feedback_shared_worktree_collisions]])。
+**复核守则**:判定某能力"缺失"前,必须 `grep -rn '<符号>' sdk/<lang>/`(全目录,不限单文件),并打开实现文件确认,不能凭单点 grep 下结论。判定"已落 main"要按 `main` 分支实际内容核对,不看 PR 状态。
 
 ## 1. 两档定位(有意,不是缺口)
 
@@ -33,7 +33,7 @@
 | backpressure pause/resume | ✅ | ✅ `_kafka.py:263` | ✅ `consumer.go` | ✅ | ✅ `consumer.ts` |
 | 401/403 fail-fast | ✅ | ✅ | ✅ `decide.go` | ✅ | ✅ `transport.ts:14` |
 
-> **非缺口小项**:Python `dispatcher.py:337` 用 `msg.get("workerType")`,无 `taskType` 回退。BE v2 已不发 `taskType`(`batch-common/.../TaskDispatchMessage.java` 注释),故非正确性缺口;Java 的 `@JsonAlias` 只是 belt-and-suspenders。
+> **非缺口小项**:Python `dispatcher.py:337` 用 `msg.get("workerType")`,无 `taskType` 回退。BE v2 已不发 `taskType`(`batch-common/.../TaskDispatchMessage.java` 注释),故非正确性缺口;Java 的 `@JsonAlias` 只是额外的向后兼容冗余。
 
 ## 3. ADR-037(断点续跑/可靠提交)+ 幂等(五语言齐)
 
@@ -87,7 +87,7 @@
 
 > `drop-message`(fixture 28 paused / schema-reject / foreign-tenant)= 跳过**不提交**(可重投);`commit-skip`(fixture 30 decode)= 跳过**并提交**(不可恢复的 poison)。两者是 schema `kafka` 枚举里语义相反的两个值。
 
-**历史教训(2026-06-17)**:Java 曾对未知大版本返回 `DROP_TERMINAL`(提交,**违反 fixture 18** 静默丢 v3 任务);Python 早期无差别 commit 整批;decode 行 Go/TS 与 Java/Python 分歧。已在 PR #545/#546(disposition+schema)/ #550(诚实记录)/ 本 PR(decode 钉死)闭环。**核查此类问题必须逐 SDK 实际读 consumer 的 disposition 分支 + 比对 fixture,不能只看 happy-path 或假设"一致"**——decode 分歧正是真去读 Rust/TS 才暴露的;别只验 Java/Python 就下"五语言一致"结论。
+**历史教训(2026-06-17)**:Java 曾对未知大版本返回 `DROP_TERMINAL`(提交,**违反 fixture 18** 静默丢 v3 任务);Python 早期无差别 commit 整批;decode 行 Go/TS 与 Java/Python 分歧。已在 PR #545/#546(disposition+schema)/ #550(诚实记录)/ 本 PR(decode 钉死)闭环。**核查此类问题必须逐 SDK 实际读 consumer 的 disposition 分支 + 比对 fixture,不能只看 happy-path 或假设"一致"**——decode 分歧正是逐语言通读 Rust/TS 实现才暴露的,需对全部五语言逐一核对后再下"五语言一致"结论。
 
 ## 5. 真正"没对齐"的——是工程尾巴 / 有意边界,不是代码缺口
 
@@ -102,4 +102,4 @@
 **该对齐的维度(协议引擎 / ADR-037 / 幂等 / 富档 batteries / Kafka offset-commit 契约)五语言已对齐,无需改代码的缺口。** 差异项要么是两档定位的有意设计(薄档无 typed/atomic/builtin、可观测 BYO),要么是发布动作(尚未 publish)。
 
 > offset-commit 契约**五行全部钉死、五语言对齐**(见 §4.5):4 行 schema/paused/tenant 由 fixture 16/17/18/28 + PR #545/#546 闭环;decode/parse-error 行由 fixture 30 钉成 commit-skip,Go/TS 已对齐。
-</content>
+

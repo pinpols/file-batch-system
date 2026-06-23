@@ -14,7 +14,7 @@
 | 04 | [runtime-module-communication.md](./runtime-module-communication.md) | trigger / orchestrator / worker / console-api 模块间运行时通信拓扑 | 排查跨模块调用问题 |
 | 05 | [kafka-topic-plan.md](./kafka-topic-plan.md) | Kafka Topic 命名 / 分区 / PATTERN 订阅规范 | 加新 topic 前 |
 | 06 | [worker-plugins.md](./worker-plugins.md) | Worker 平台框架 + IMPORT / EXPORT / DISPATCH 插件扩展机制 | 写新 Worker 类型前 |
-| 07 | [workflow-dependency-guide.md](./workflow-dependency-guide.md) | DAG / GATEWAY / joinMode (ALL / ANY / N_OF_M) / CONDITION 边的编排指南 | 配 Workflow 前 |
+| 07 | [workflow-dependency-guide.md](./workflow-dependency-guide.md) | DAG / GATEWAY / joinMode (ALL / ANY / N_OF) / CONDITION 边的编排指南 | 配 Workflow 前 |
 | 08 | [scalability-assessment.md](./scalability-assessment.md) | 千万级承载力评估（绿/黄/红 + 改造路线图，2026-04-25） | 容量规划 / 上量评估 |
 | 09 | [rework-classification.md](./rework-classification.md) | scalability 评估的"改什么"分类（代码 / 配置 / 数据 / 运维 / SQL / 部署 / 文档） | 决定哪些项目立项、哪些当下办 |
 | 10 | [quartz-replacement-design.md](./quartz-replacement-design.md) | Quartz → HashedWheelTimer 生产级实施设计 | 调度器选型 / 上线 |

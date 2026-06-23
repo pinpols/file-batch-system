@@ -232,14 +232,12 @@ public class BatchTaskExecutorRegistry {
 
 | Builtin | 模块 | 大小 |
 |---|---|---|
-| `ShellTaskExecutor` | `batch-worker-core/.../executor/shell/` | ~300 行 |
-| `SqlTaskExecutor` | `batch-worker-core/.../executor/sql/` | ~400 行 |
+| `ShellTaskExecutor` | `batch-worker/atomic/.../executor/shell/` | ~300 行 |
+| `SqlTaskExecutor` | `batch-worker/atomic/.../executor/sql/` | ~400 行 |
 | `StoredProcTaskExecutor` | 同上 | ~300 行 |
 | `HttpTaskExecutor` | 同上 | ~250 行 |
 
-放在 `batch-worker-core` 而不是新 module,理由:
-- 所有 worker(import/export/...)启动时都会加载 core → 这 4 个 builtin 自动可用
-- 用户不需要为了"跑个 shell 任务"开新 worker 进程
+> 实现订正:原设计曾提议把 4 件套放进 `batch-worker-core`(理由:所有 worker 启动即加载 core,builtin 自动可用)。落地时按 [ADR-029 专用 SPI worker](../architecture/adr/ADR-029-dedicated-spi-worker.md)改为**独立隔离在 `batch-worker/atomic` 子模块**——特权执行器(shell/sql/stored-proc/http)有 RCE 风险面,必须与普通 worker 进程隔离、独立开关与审批,不随 core 默认进每个 worker。
 
 **安全 / 隔离硬约束**:见 [roadmap §P0 Phase 3](../architecture/p0-p1-p2-roadmap.md#phase-3通用执行能力-4-件套-builtin)。
 

@@ -1,7 +1,7 @@
 # BYO SDK Conformance Contract（防漂移契约)
 
 > **目的**:把"一个 BYO(Bring-Your-Own)SDK 算不算合规"从口头约定变成**机器可断言的硬契约**。
-> 任何语言实现(Java / Python / **Go / TypeScript / Rust** / .NET …)要被认作平台兼容,必须满足本文 §1 的三条**强制约束**。
+> 任何语言实现(Java / Python / **Go / TypeScript / Rust** / .NET …)要被认作平台兼容,必须满足本文 §1 的四条**强制约束**。
 > 这是 ADR-035 Lane P(drift guard)的**单一权威源**,新增语言前先读本文。
 
 ## 0. 为什么需要这份契约
@@ -26,7 +26,7 @@ SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语
 
 每语言必须有一个 **contract runner**,加载 `sdk-contract-fixtures/*.json`,按 `given/when` 驱动 SDK,
 断言 `then.expect` 的**每个出现的字段**(见 §2 字段语义)。`then.sdkExpectedAction` 仅作人读注释,**不作断言依据**。
-覆盖必须 100%(当前 12 个场景,数量随协议演进增长)。
+覆盖必须 100%(当前 30 个场景,以 `sdk-contract-fixtures/` 目录实际 fixture 数为准,数量随协议演进增长)。
 
 ### 1.3 必须接入 `sdk-contract-parity.yml` CI
 
