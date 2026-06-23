@@ -132,6 +132,17 @@ class RlsClosedWorldCheckIntegrationTest {
             + "   OR tenant_id = current_setting('app.tenant_id', true))");
   }
 
+  /** 建表 + ENABLE/FORCE RLS + 施一个**同名但语义坏**的 policy(policyClause 决定坏法)。 */
+  private void createTableWithNamedPolicy(String table, String policyClause) {
+    jdbc.execute(
+        "CREATE TABLE biz."
+            + table
+            + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
+    jdbc.execute("ALTER TABLE biz." + table + " ENABLE ROW LEVEL SECURITY");
+    jdbc.execute("ALTER TABLE biz." + table + " FORCE ROW LEVEL SECURITY");
+    jdbc.execute("CREATE POLICY tenant_isolation_transition ON biz." + table + " " + policyClause);
+  }
+
   // ─── 用例 ──────────────────────────────────────────────────────────────
 
   @Test
@@ -207,5 +218,47 @@ class RlsClosedWorldCheckIntegrationTest {
     // 豁免后不抛
     RlsStartupFailFastCheck exempt = new RlsStartupFailFastCheck(dataSource, List.of("foo"));
     exempt.checkOnStartup();
+  }
+
+  // ─── P1-2:同名但语义坏的 policy 必须 DOWN(只验名存在发现不了) ─────────────
+
+  @Test
+  @DisplayName("⑥ 同名 policy 但 USING(true) 放行全表 → health DOWN(防只验名)")
+  void policyUsingTrue_healthDown() {
+    createTableWithNamedPolicy(
+        "customer_account", "AS PERMISSIVE FOR ALL TO PUBLIC USING (true) WITH CHECK (true)");
+
+    Health health = new RlsPolicyHealthIndicator(dataSource).health();
+
+    assertThat(health.getStatus()).as("USING(true) 不引用 app.tenant_id,语义坏").isEqualTo(Status.DOWN);
+    @SuppressWarnings("unchecked")
+    List<String> missing = (List<String>) health.getDetails().get("missingPolicy");
+    assertThat(missing).contains("biz.customer_account");
+  }
+
+  @Test
+  @DisplayName("⑦ 同名 policy 但缺 WITH CHECK → health DOWN")
+  void policyMissingWithCheck_healthDown() {
+    createTableWithNamedPolicy(
+        "customer_account",
+        "AS PERMISSIVE FOR ALL TO PUBLIC"
+            + " USING (tenant_id = current_setting('app.tenant_id', true))");
+
+    Health health = new RlsPolicyHealthIndicator(dataSource).health();
+
+    assertThat(health.getStatus()).as("FOR ALL 缺 WITH CHECK,写入不受隔离").isEqualTo(Status.DOWN);
+  }
+
+  @Test
+  @DisplayName("⑧ 同名 policy 但 FOR SELECT 而非 FOR ALL → health DOWN")
+  void policyForSelectNotAll_healthDown() {
+    createTableWithNamedPolicy(
+        "customer_account",
+        "AS PERMISSIVE FOR SELECT TO PUBLIC"
+            + " USING (tenant_id = current_setting('app.tenant_id', true))");
+
+    Health health = new RlsPolicyHealthIndicator(dataSource).health();
+
+    assertThat(health.getStatus()).as("FOR SELECT 不覆盖写入,cmd<>ALL").isEqualTo(Status.DOWN);
   }
 }

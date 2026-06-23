@@ -76,7 +76,12 @@ public class RlsClosedWorldChecker {
           + "JOIN pg_namespace n ON n.oid = c.relnamespace "
           + "WHERE n.nspname = ? AND c.relname = ?";
 
-  /** policy 存在性 —— 接受 transition 或 strict 任一(灰度兼容)。占位符由 ACCEPTED_POLICY_NAMES 长度生成。 */
+  /**
+   * policy <b>语义合规</b>检查 —— 不只验同名 policy 存在,还验 policy 真的在做租户隔离(防误建的同名坏 policy): 必须 {@code
+   * cmd='ALL'}(FOR ALL)、{@code permissive='PERMISSIVE'}、有 {@code WITH CHECK}、且 {@code USING} 表达式引用了
+   * {@code app.tenant_id}(防 {@code USING(true)} 放行全表)。接受 transition / strict 任一名(灰度兼容)。 任一性质不满足 →
+   * 该表算"缺合规 policy"(health DOWN)。占位符由 ACCEPTED_POLICY_NAMES 长度生成。
+   */
   private final String checkPolicySql;
 
   private final DataSource businessDataSource;
@@ -91,7 +96,11 @@ public class RlsClosedWorldChecker {
     this.checkPolicySql =
         "SELECT 1 FROM pg_policies WHERE schemaname = ? AND tablename = ? AND policyname IN ("
             + "?,".repeat(ACCEPTED_POLICY_NAMES.size() - 1)
-            + "?)";
+            + "?)"
+            // 语义合规:FOR ALL + PERMISSIVE + 有 WITH CHECK + USING 引用 app.tenant_id(防同名坏 policy)。
+            // 'app.tenant_id' 是代码常量字面量,非外部输入,内联安全。
+            + " AND cmd = 'ALL' AND permissive = 'PERMISSIVE' AND with_check IS NOT NULL"
+            + " AND qual IS NOT NULL AND position('app.tenant_id' in qual) > 0";
   }
 
   private static List<String> stripSchemaPrefix(List<String> tables) {
