@@ -345,7 +345,7 @@ step_6_scan() {
   local fqn
   fqn=$(git log --since='3 days ago' -p -- '*.java' 2>/dev/null \
     | grep '^+' | grep -v '^+++' | grep -v "import\|@link\|//\|^\\+ *\\*" \
-    | grep -cE 'com\.example\.batch\.[a-z][a-z0-9_]+(\.[a-z][a-z0-9_]+)+\.[A-Z]' || true)
+    | grep -cE 'io\.github\.pinpols\.batch\.[a-z][a-z0-9_]+(\.[a-z][a-z0-9_]+)+\.[A-Z]' || true)
   local jpa
   jpa=$(git log --since='3 days ago' -p -- '*.java' 2>/dev/null \
     | grep '^+' | grep -v '^+++' \
