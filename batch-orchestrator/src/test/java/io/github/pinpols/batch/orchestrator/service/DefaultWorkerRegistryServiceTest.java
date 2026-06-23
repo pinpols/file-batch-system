@@ -18,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
+import io.github.pinpols.batch.orchestrator.mapper.SystemParameterMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.lang.reflect.Field;
 import java.time.Instant;
@@ -46,6 +47,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Mock private WorkerRegistryMapper mapper;
   @Mock private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+  @Mock private SystemParameterMapper systemParameterMapper;
   private final io.github.pinpols.batch.orchestrator.infrastructure.progress
           .PipelineStageProgressCache
       progressCache =
@@ -56,7 +58,9 @@ class DefaultWorkerRegistryServiceTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    service = new DefaultWorkerRegistryService(mapper, customTaskTypeRegistryMapper, progressCache);
+    service =
+        new DefaultWorkerRegistryService(
+            mapper, customTaskTypeRegistryMapper, progressCache, systemParameterMapper);
     // @Lazy self 字段注入,单元测下用反射手动指向自己 (走非事务路径)
     Field self = DefaultWorkerRegistryService.class.getDeclaredField("self");
     self.setAccessible(true);
@@ -85,6 +89,26 @@ class DefaultWorkerRegistryServiceTest {
         null,
         null,
         protocolVersion);
+  }
+
+  private WorkerHeartbeatDto dtoWithSdkVersion(String sdkVersion) {
+    return new WorkerHeartbeatDto(
+        "ta",
+        "w1",
+        "default",
+        WorkerRegistryStatus.ONLINE.code(),
+        "host",
+        "1.2.3.4",
+        "pid",
+        "build-1",
+        sdkVersion,
+        Instant.now(),
+        List.of(),
+        1,
+        null,
+        null,
+        null,
+        null);
   }
 
   private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
@@ -291,6 +315,74 @@ class DefaultWorkerRegistryServiceTest {
     service.register(dto(null));
 
     verify(mapper).updateById(any());
+  }
+
+  // ===== register: 租户级最低 SDK 版本门禁 (opt-in) =====
+
+  @Test
+  @DisplayName("register: 配置最低=1,worker 报 1.x → 过(主版本不低于)")
+  void registerSdkVersionAtMinAccepted() {
+    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
+        .thenReturn("1.0.0");
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.5.2"));
+
+    verify(mapper).insert(any());
+    assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 配置最低=2,worker 报 1.x → 拒(VALIDATION_ERROR),不写入数据库")
+  void registerOutdatedSdkVersionRejected() {
+    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version"))
+        .thenReturn("2.0.0");
+
+    assertThatThrownBy(() -> service.register(dtoWithSdkVersion("1.9.9")))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("sdk_version_too_old");
+
+    verify(mapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("register: worker sdkVersion 空 → 过(legacy / 非 SDK worker 放行,不读配置)")
+  void registerBlankSdkVersionAccepted() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    WorkerRegistryEntity result = service.register(dtoWithSdkVersion(" "));
+
+    verify(systemParameterMapper, never()).selectParamValue(anyString(), anyString());
+    verify(mapper).insert(any());
+    assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 该租户未配 worker.min_sdk_version → 过(opt-in 放行)")
+  void registerNoMinVersionConfiguredAccepted() {
+    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version")).thenReturn(null);
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.0.0"));
+
+    verify(mapper).insert(any());
+    assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 配置值脏(abc)解析不出主版本 → 过(不因脏配置误杀,不抛)")
+  void registerDirtyMinVersionConfigAccepted() {
+    when(systemParameterMapper.selectParamValue("ta", "worker.min_sdk_version")).thenReturn("abc");
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    WorkerRegistryEntity result = service.register(dtoWithSdkVersion("1.0.0"));
+
+    verify(mapper).insert(any());
+    assertThat(result).isNotNull();
   }
 
   // ===== register: 自定义 taskType descriptor upsert (SDK Phase 3 M3.1) =====

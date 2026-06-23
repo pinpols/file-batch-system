@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.SystemParameterMapper">
+
+    <!--
+      register 准入判定只读取单个 param_value(如 worker.min_sdk_version);
+      表 CRUD 在 console。无条件 tenant_id 过滤(典型业务路径,非跨租 admin)。
+    -->
+    <select id="selectParamValue" resultType="java.lang.String">
+        select param_value
+          from batch.system_parameter
+         where tenant_id = #{tenantId}
+           and param_key = #{paramKey}
+         limit 1
+    </select>
+
+</mapper>
