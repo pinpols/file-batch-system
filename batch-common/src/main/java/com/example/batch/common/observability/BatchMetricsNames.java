@@ -41,6 +41,22 @@ public final class BatchMetricsNames {
   public static final String CLAIM_LATENCY_MS = "batch.worker.claim.latency.ms";
   public static final String CLAIM_FAILURE_TOTAL = "batch.worker.claim.failure.total";
 
+  // ─── ADR-046 P2 多行 claim/report 批量(控制面 churn O(N)→O(N/K)) ───
+  /** 单次 claim-batch 的 partition 数分布(DistributionSummary):看 K 实际多大 = churn 省了多少。 */
+  public static final String BATCH_CLAIM_SIZE = "batch.task.batch_claim.size";
+
+  /** claim-batch 逐项 outcome 计数(Counter,tag outcome=claimed|skipped)。 */
+  public static final String BATCH_CLAIM_ITEMS_TOTAL = "batch.task.batch_claim.items.total";
+
+  /** 单次 report-batch 的 partition 数分布(DistributionSummary)。 */
+  public static final String BATCH_REPORT_SIZE = "batch.task.batch_report.size";
+
+  /** report-batch 逐项 outcome 计数(Counter,tag outcome=ok|failed):批内部分失败可观测。 */
+  public static final String BATCH_REPORT_ITEMS_TOTAL = "batch.task.batch_report.items.total";
+
+  /** 批量 outcome tag key。 */
+  public static final String TAG_OUTCOME = "outcome";
+
   // ─── tag key 标准化(避免各处 hard-code "tenantId" / "tenant_id" 漂) ───
   public static final String TAG_TENANT = "tenant_id";
   public static final String TAG_JOB_TYPE = "job_type";
