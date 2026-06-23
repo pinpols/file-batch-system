@@ -125,6 +125,13 @@
          where tenant_id = #{tenantId} and status = #{status}
     </select>
 
+    <!-- 缺口②:per-tenant 活跃 worker 配额计数(排除 DECOMMISSIONED 终态) -->
+    <select id="countByTenant" resultType="int">
+        select count(1) from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and status &lt;&gt; 'DECOMMISSIONED'
+    </select>
+
     <select id="countByTenantsAndStatus" resultType="java.util.Map">
         select tenant_id, count(1) as cnt
           from batch.worker_registry

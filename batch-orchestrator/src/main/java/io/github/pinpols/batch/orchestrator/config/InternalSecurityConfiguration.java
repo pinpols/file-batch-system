@@ -21,4 +21,15 @@ public class InternalSecurityConfiguration {
     registration.setOrder(1);
     return registration;
   }
+
+  /** 缺口③:内部端点请求体大小上限过滤器,order=0 排在鉴权前,让超大体在鉴权前即被廉价拦掉。 */
+  @Bean
+  public FilterRegistrationBean<InternalRequestSizeFilter> internalRequestSizeFilter(
+      InternalRequestProperties internalRequestProperties) {
+    FilterRegistrationBean<InternalRequestSizeFilter> registration = new FilterRegistrationBean<>();
+    registration.setFilter(new InternalRequestSizeFilter(internalRequestProperties));
+    registration.addUrlPatterns("/internal/*");
+    registration.setOrder(0);
+    return registration;
+  }
 }

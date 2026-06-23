@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatResponse;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerDrainRequest;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerTenantRequest;
@@ -11,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.service.WorkerRegistryServerService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Worker 节点注册与生命周期管控内部控制器，基础路径 {@code /internal/workers}。 覆盖注册（{@code register}）、心跳上报（{@code
@@ -32,11 +36,20 @@ public class WorkerController {
 
   private final WorkerRegistryServerService workerRegistryService;
   private final WorkerDrainGovernanceService workerDrainGovernanceService;
+  private final TenantActionRateLimiter tenantActionRateLimiter;
 
   @PostMapping("/register")
   public WorkerRegistryEntity register(
       @RequestBody WorkerHeartbeatDto request, HttpServletRequest httpRequest) {
-    return workerRegistryService.register(normalize(request, httpRequest));
+    WorkerHeartbeatDto normalized = normalize(request, httpRequest);
+    // 缺口①:per-tenant worker 注册限流(opt-in,默认 max=0/disabled 直接放行)。
+    // 仅 register 挂硬限流防注册风暴;claim/report/heartbeat 高频热路径不挂,避免误伤正常 worker。
+    String tenantId = normalized == null ? null : normalized.tenantId();
+    if (!tenantActionRateLimiter.tryConsume(tenantId, RateLimitAction.WORKER_REGISTER)) {
+      throw new ResponseStatusException(
+          HttpStatus.TOO_MANY_REQUESTS, "worker register rate limit exceeded");
+    }
+    return workerRegistryService.register(normalized);
   }
 
   // SDK Phase 2 §2.3:心跳回包从 WorkerRegistryEntity 改为下发 platform directive。
