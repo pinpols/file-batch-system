@@ -1,6 +1,6 @@
 # BYO(Bring Your Own)SDK 接入指南
 
-> **目标**:让其他语言(Go / Python / Node / .NET / Rust …)团队照协议规范自研 worker SDK,平台不维护多语言代码,只稳协议。
+> **目标**:让其他语言(Go / Python / TypeScript / Rust …)团队照协议规范自研 worker SDK,平台不维护多语言代码,只稳协议。当前已有官方实现:Go / Python / TypeScript / Rust(+ 参考实现 Java),**无 .NET 实现**。
 > **协议权威源(双轨)**:[`docs/sdk/wire-protocol.md`](wire-protocol.md)(读者视图)+ [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml)(机器视图)。
 > **行为对账**:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) — language-agnostic JSON 契约用例,任何实现都可写 runner 跑通验证。
 > **配套**:[ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) §3/§4/§9/§11、[`docs/sdk/quickstart.md`](quickstart.md)(Java SDK 五分钟接入)、[`docs/sdk/troubleshooting.md`](troubleshooting.md)。
@@ -12,7 +12,7 @@
 
 写本 SDK 之前先确认:
 
-- **已有 worker 进程是 Go / Python / Node / .NET / Rust**,不想在生产引 JVM(JVM 内存预算 / 启动时间 / 镜像体积是硬约束)。
+- **已有 worker 进程是 Go / Python / TypeScript / Rust**(或其他语言),不想在生产引 JVM(JVM 内存预算 / 启动时间 / 镜像体积是硬约束)。
 - **想深度集成自家观测体系**(用 OpenTelemetry SDK 的 Go 版 / Python 版,衔接公司 trace / metric / log pipeline),不愿吃 Java SDK 默认行为。
 - **是高级用户**:能读协议规范、能跑契约测试、能跟上协议演进(平台改 wire schema 时同步升级)。
 
@@ -135,7 +135,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 | 项 | 收益 | Java SDK 参考 |
 |---|---|---|
 | **capacity-aware partition pause/resume** | in-flight 满时不阻塞别 worker,Kafka 端原生 backpressure | `KafkaTaskConsumer.applyBackpressure()` |
-| **ThrottledLogger 同款防噪** | 大量重复 WARN(如 lease 失效)聚合输出,日志成本可控 | `batch-worker-sdk/.../util/ThrottledLogger.java` |
+| **ThrottledLogger 同款防噪** | 大量重复 WARN(如 lease 失效)聚合输出,日志成本可控 | `sdk/java/core/.../sdk/internal/ThrottledLogger.java` |
 | **OpenTelemetry trace 衔接** | dispatch message `runtimeAttributes.traceId` 透传到 task ctx,trace 全链路打通 | `SdkTaskContext.traceId()` |
 | **graceful drain on SIGTERM** | K8s rolling deploy 0 task 丢失 | §1.6 |
 | **buildId / sdkVersion 上报** | 平台 fingerprint 看板(`/ops/worker-fingerprints`)能反查租户 SDK 版本分布 | `WorkerHeartbeatDto.buildId / sdkVersion`(register 期上报一次) |
@@ -189,6 +189,8 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 ### .NET / C#
 
+> **尚无官方实现** —— 以下仅为自研提示,平台未提供 .NET SDK,也无示例 worker。
+
 - **Kafka**:`Confluent.Kafka` 官方库。
 - **HTTP**:`HttpClient`(注意复用,`new HttpClient()` per call 会耗 socket)。
 - **心跳调度**:`System.Threading.Timer` 或 `IHostedService`。
@@ -198,14 +200,14 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 ## 5. 参考实现
 
-- **Java SDK(参考实现 + 协议主版本守护)**:[`batch-worker-sdk/`](../../batch-worker-sdk/) — 包含 `BatchPlatformClient` / `PlatformHttpClient` / `KafkaTaskConsumer` / `HeartbeatScheduler` / `LeaseRenewalScheduler` / `TaskDispatcher` 完整链路。
-- **Java SDK 示例租户 worker**:[`examples/sample-tenant-worker-java/`](../../examples/sample-tenant-worker-java/) —— plain Java(无 Spring)、200 行起一个 worker 进程。
-- **Java SDK 契约测试**:[`batch-worker-sdk/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java`](../../batch-worker-sdk/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java) —— 字段集守护;本 lane 抽出的 JSON fixtures 即源自此。
+- **Java SDK(参考实现 + 协议主版本守护)**:[`sdk/java/core/`](../../sdk/java/core/) — 包含 `BatchPlatformClient` / `PlatformHttpClient` / `KafkaTaskConsumer` / `HeartbeatScheduler` / `LeaseRenewalScheduler` / `TaskDispatcher` 完整链路。
+- **Java SDK 示例租户 worker**:[`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java/) —— plain Java(无 Spring)、200 行起一个 worker 进程。
+- **Java SDK 契约测试**:[`sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java`](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java) —— 字段集守护;本 lane 抽出的 JSON fixtures 即源自此。
 - **多语言示例租户 worker**(命名统一 `sample-tenant-worker-<lang>`):
-  - [`examples/sample-tenant-worker-go/`](../../examples/sample-tenant-worker-go/) —— `sdk/go` 运行时 + segmentio/kafka-go(可 `go build`)。
-  - [`examples/sample-tenant-worker-typescript/`](../../examples/sample-tenant-worker-typescript/) —— `sdk/typescript` 运行时 + kafkajs(Node ≥25)。
-  - [`examples/sample-tenant-worker-rust/`](../../examples/sample-tenant-worker-rust/) —— `sdk/rust` + rdkafka,**示意**(真 HTTP 待 reqwest 适配器,CI 编译)。
-  - [`examples/sample-tenant-worker-python/`](../../examples/sample-tenant-worker-python/) —— Python 3.12 asyncio。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-go/`](../../examples/self-hosted-sdk/sample-tenant-worker-go/) —— `sdk/go` 运行时 + segmentio/kafka-go(可 `go build`)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-typescript/`](../../examples/self-hosted-sdk/sample-tenant-worker-typescript/) —— `sdk/typescript` 运行时 + kafkajs(Node ≥20)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-rust/`](../../examples/self-hosted-sdk/sample-tenant-worker-rust/) —— `sdk/rust` + rdkafka,**已接 `ReqwestTransport`(真 HTTP),本机实测全链路绿**(见 `local-e2e-coverage.md`)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-python/`](../../examples/self-hosted-sdk/sample-tenant-worker-python/) —— Python 3.12 asyncio。
 
 ---
 

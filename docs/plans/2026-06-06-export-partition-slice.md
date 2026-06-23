@@ -1,12 +1,10 @@
 # EXPORT 分片导出修复 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 让 EXPORT 真正按 partition 切数据(每片只取 1/N、各产独立分片文件),消除「分 N 片 → N× 重复/覆盖丢数据」的 bug。
 
 **Architecture:** orchestrator 已正确切 N 片并把 `PARTITION_NO`/`PARTITION_COUNT` 注入 executionContext;修复全在 export worker 侧:把这两个值经 `ExportDataContext` 传进 2 个数据插件,在现有 keyset-分页 SQL 外层叠加 `hashtext % count = idx` 分片谓词;文件名/objectName 加 `_p{NO}of{COUNT}` 后缀使各片独立落地。产物形态 = N 个分片文件(与 import 分片、现有独立-partition 架构对称)。
 
-**Tech Stack:** Java 17 + Spring Boot,MyBatis/JdbcTemplate,PostgreSQL(`hashtext`),JUnit5 + AssertJ + Mockito,Testcontainers(`AbstractIntegrationTest`)。
+**Tech Stack:** Java 21 + Spring Boot,MyBatis/JdbcTemplate,PostgreSQL(`hashtext`),JUnit5 + AssertJ + Mockito,Testcontainers(`AbstractIntegrationTest`)。
 
 设计来源:[docs/backlog/export-partition-slice-fix-2026-06-06.md](../backlog/export-partition-slice-fix-2026-06-06.md)
 
@@ -41,7 +39,7 @@
 
 Run:
 ```bash
-cd /Users/dengchao/Downloads/file-batch-system
+cd <repo-root>
 git checkout -b feature/export-partition-slice
 git branch --show-current
 ```
@@ -89,7 +87,7 @@ public record ExportDataContext(
 
 - [ ] **Step 2: 编译验证(2 个旧构造点走兼容构造器,不报错)**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-common -am compile`
+Run: `cd <repo-root> && mvn -q -pl batch-common -am compile`
 Expected: BUILD SUCCESS(`GenerateStep`/`RegisterStep` 的 6 参 `new ExportDataContext(...)` 命中兼容构造器)
 
 - [ ] **Step 3: Commit**
@@ -150,7 +148,7 @@ private static int intOrDefault(Object value, int def) {
 
 - [ ] **Step 2: 编译验证**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-worker-export -am compile`
+Run: `cd <repo-root> && mvn -q -pl batch-worker-export -am compile`
 Expected: BUILD SUCCESS
 
 - [ ] **Step 3: Commit**
@@ -204,7 +202,7 @@ class SqlTemplateExportPartitionTest {
 
 - [ ] **Step 2: 运行,确认失败**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-worker-export test -Dtest=SqlTemplateExportPartitionTest`
+Run: `cd <repo-root> && mvn -q -pl batch-worker-export test -Dtest=SqlTemplateExportPartitionTest`
 Expected: FAIL — `buildPagedSql` 现签名是 3 参,编译/方法不匹配
 
 - [ ] **Step 3: 改 buildPagedSql 签名 + 叠加分片谓词**
@@ -257,7 +255,7 @@ String sql =
 
 - [ ] **Step 5: 运行,确认通过**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-worker-export test -Dtest=SqlTemplateExportPartitionTest`
+Run: `cd <repo-root> && mvn -q -pl batch-worker-export test -Dtest=SqlTemplateExportPartitionTest`
 Expected: PASS(3 tests)
 
 - [ ] **Step 6: Commit**
@@ -360,7 +358,7 @@ class GenericJdbcMappedExportPartitionTest {
 
 - [ ] **Step 3: 运行确认失败 → 已实现后通过**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-worker-export test -Dtest=GenericJdbcMappedExportPartitionTest`
+Run: `cd <repo-root> && mvn -q -pl batch-worker-export test -Dtest=GenericJdbcMappedExportPartitionTest`
 Expected: 先 FAIL(方法不存在),Step 1 实现后 PASS(2 tests)
 
 - [ ] **Step 4: Commit**
@@ -414,7 +412,7 @@ class BatchFileConstantsPartitionTagTest {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-common test -Dtest=BatchFileConstantsPartitionTagTest`
+Run: `cd <repo-root> && mvn -q -pl batch-common test -Dtest=BatchFileConstantsPartitionTagTest`
 Expected: FAIL — 方法不存在
 
 - [ ] **Step 3: 实现 insertPartitionTag**
@@ -438,7 +436,7 @@ public static String insertPartitionTag(String name, int partitionNo, int partit
 
 - [ ] **Step 4: 运行确认通过**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-common test -Dtest=BatchFileConstantsPartitionTagTest`
+Run: `cd <repo-root> && mvn -q -pl batch-common test -Dtest=BatchFileConstantsPartitionTagTest`
 Expected: PASS(4 tests)
 
 - [ ] **Step 5: PrepareStep 应用后缀(约 91-95 行 + resolveObjectName 签名)**
@@ -479,7 +477,7 @@ private String resolveObjectName(
 
 - [ ] **Step 6: 编译验证**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-worker-export -am compile`
+Run: `cd <repo-root> && mvn -q -pl batch-worker-export -am compile`
 Expected: BUILD SUCCESS
 
 - [ ] **Step 7: Commit**
@@ -568,7 +566,7 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
 
 - [ ] **Step 2: 运行 IT**
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q -pl batch-worker-export verify -Dit.test=ExportPartitionSliceIT -DfailIfNoTests=false`
+Run: `cd <repo-root> && mvn -q -pl batch-worker-export verify -Dit.test=ExportPartitionSliceIT -DfailIfNoTests=false`
 Expected: PASS — 两个用例均 4 片无重叠且并集 = 1000
 
 - [ ] **Step 3: Commit**
@@ -590,7 +588,7 @@ git commit -m "test(export): 分片完整性 IT — 4 片无重叠 + 全覆盖(s
 
 > mvn 注意(本仓约定):`e2e-tests` 纯测试模块用 `verify` 不用 `install`;推前必须 `clean` 防 stale cache。
 
-Run: `cd /Users/dengchao/Downloads/file-batch-system && mvn -q clean test -pl batch-common,batch-worker-export -am`
+Run: `cd <repo-root> && mvn -q clean test -pl batch-common,batch-worker-export -am`
 Expected: BUILD SUCCESS,新单测全部通过
 
 - [ ] **Step 2: 更新设计文档状态**
@@ -610,13 +608,3 @@ Expected: BUILD SUCCESS,新单测全部通过
 git add docs/backlog/export-partition-slice-fix-2026-06-06.md docs/changelog.md
 git commit -m "docs(export): 分片修复落地,更新 backlog 状态 + changelog"
 ```
-
----
-
-## Self-Review
-
-**Spec coverage**:① partition 透传(Task 1-2)② sql_template 分片(Task 3)③ jdbc_mapped 分片(Task 4)④ N 个分片文件/文件名后缀(Task 5)⑤ 分片完整性验证(Task 6)⑥ 向后兼容 partitionCount==1(每个分片点都 `>1` 才生效,Task 3/4/5 单测覆盖单片路径)—— 设计各点均有对应 task。fail-fast guard 经评估去除(分片列恒存在),已在 File Structure 注明。
-
-**Placeholder scan**:Task 6 IT 的建表/灌数/模板配置标注「按 AbstractIntegrationTest 既有约定补全」——这是因测试基建细节需执行时对照基类,非逻辑占位;分片断言逻辑(无重叠 + 并集 = 1000)已完整给出。其余步骤均有完整代码 + 精确命令。
-
-**Type consistency**:`ExportDataContext` 8 参构造器(Task 1)↔ GenerateStep 8 参调用(Task 2)↔ IT 8 参构造(Task 6)一致;`buildPagedSql` 5 参(Task 3)、`buildDetailQuery`/`PagedQuery`(Task 4)、`insertPartitionTag`(Task 5)签名前后一致;分片谓词正模式 `((hashtext(..) % cnt) + cnt) % cnt = idx`、`idx = partitionNo-1` 在 sql_template / jdbc_mapped / 单测三处一致。

@@ -175,7 +175,7 @@ PartitionDispatchService.dispatch
 
 | 方案 | 拒绝 |
 |---|---|
-| 多个 worker_group 物理切（per affinity） | 当 affinity 维度 ≥ 3（机房 + 硬件 + 合规）时 group 数量爆失败（笛卡尔），运维不可承受 |
+| 多个 worker_group 物理切（per affinity） | 当 affinity 维度 ≥ 3（机房 + 硬件 + 合规）时 group 数量爆炸（笛卡尔），运维不可承受 |
 | 让业务 job 自己 SQL filter worker | 跨服务边界，调度逻辑泄漏到业务侧 |
 | 直接用 K8s scheduler | 把 batch 平台耦合到 K8s 上，且 K8s scheduler 不感知"批量任务"语义 |
 
@@ -201,7 +201,7 @@ PartitionDispatchService.dispatch
 2. **异构硬件**：worker 池里有 GPU / FPGA / 高内存 / 低内存等不同形态；
 3. **合规隔离**：监管 / 合规要求"风控 worker 物理隔离普通 ETL"；
 4. **license 绑机**：商业组件 license 限定在某些 worker 上跑（Oracle 客户端 / Db2 client 等）；
-5. **worker_group 数量爆失败**：当前 worker_group 数 ≥ 8 且仍增长。
+5. **worker_group 数量爆炸**：当前 worker_group 数 ≥ 8 且仍增长。
 
 单机房 + 同质 worker + 无合规隔离场景不开工 — `worker_group` 完全够用。
 

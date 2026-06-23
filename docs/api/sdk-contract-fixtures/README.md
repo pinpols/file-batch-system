@@ -1,7 +1,7 @@
 # SDK Contract Fixtures(language-agnostic)
 
 > **用途**:为 BYO(Bring Your Own)SDK 提供**与语言无关**的协议行为对账用例。
-> 任何语言实现(Go / Python / Node / .NET / Rust …)都可写一个 contract runner,按 fixture JSON 的
+> 任何语言实现(Java / Go / Python / TypeScript / Rust …)都可写一个 contract runner,按 fixture JSON 的
 > `given` 起 SDK、`when` 触发 HTTP / Kafka 调用、断言 `then.sdkExpectedAction` 描述的行为。
 >
 > **权威源**:本目录与 [`docs/sdk/wire-protocol.md`](../../sdk/wire-protocol.md) §B/§C 错误码 + 重试规则、
@@ -60,8 +60,16 @@
 | `20-report-idempotency-key-header.json` | **请求侧**:report 带 `Idempotency-Key` header(`<lang>-<uuid>` 形态) |
 | `21-claim-4xx-client-error-no-failfast.json` | 单次非 401/409 的 4xx → client-error,不重试不 fail-fast(累计阈值 5) |
 | `22-renew-404-not-found-give-up.json` | renew 404 → not-found,放弃不重试不 fail-fast |
+| `23-claim-4xx-fifth-fail-fast.json` | 非 401/409 的 4xx 累计第 5 次(`clientErrorCount=4` + 本次)→ 跨过阈值 `CLIENT_ERROR_FAIL_FAST_THRESHOLD=5`,fail-fast 不重试(与 21 成对照) |
+| `24-report-idempotency-key-minted-not-fixed.json` | **请求侧**(反例):未提供 `idempotencyKey` → SDK 必须自 mint `<lang>-<uuid4>` 形态键,**不得**用固定 `report-{taskId}`(与 20 透传互补) |
+| `25-heartbeat-503-no-backoff.json` | heartbeat 503 → 跳过本 tick、等下一调度 tick(`maxAttempts:1`,不走指数退避;与 09 成对照) |
+| `26-heartbeat-directive-degraded.json` | heartbeat 200, platformStatus=DEGRADED → FSM 切 DEGRADED,**不** pause Kafka(仍接派单) |
+| `27-heartbeat-desired-max-concurrent.json` | heartbeat 200, desiredMaxConcurrent=2 → 有效本地并发上限收敛到 2(`effectiveMaxConcurrent`) |
+| `28-kafka-paused-task-type-drop.json` | dispatch 消息 workerType 命中 `pausedTaskTypes` → drop 且 **不** commit offset(平台 unpause 后重投) |
+| `29-kafka-ignore-unknown-field.json` | 已知 major(v1)消息带未知前向字段(`futureRoutingHint`)→ 照常 accept + dispatch,忽略未知字段(与 18 正交) |
+| `30-kafka-decode-error-commit-skip.json` | 无法解码的 poison 消息(非 JSON)→ 跳过且 **commit** offset 前移(避免 head-of-line 阻塞;区别于 18/28 的不提交可重投。Rust 薄档对其 N/A) |
 
-> **请求侧** fixture(13/14/15/19/20)用 `then.expect.requestBodyIncludes`/`requestBodyExcludes`/`requestHeaders` 断言 SDK **出向**请求;`schemaAccept`(16-18)断言 kafka 消息按 schemaVersion accept/reject。字段语义见 `docs/sdk/byo-conformance-contract.md` §2.1。
+> **请求侧** fixture(13/14/15/19/20/24)用 `then.expect.requestBodyIncludes`/`requestBodyExcludes`/`requestHeaders` 断言 SDK **出向**请求;`schemaAccept`(16-18、29)断言 kafka 消息按 schemaVersion / 未知字段 accept/reject。字段语义见 `docs/sdk/byo-conformance-contract.md` §2.1。
 
 ## 实现这套 runner 的建议
 

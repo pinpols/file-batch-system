@@ -185,7 +185,7 @@ Worker 拿到 effective config 走两个通道：
 
 > 估工档位：S = 1 PR；M = 2-3 PR；L = 一个迭代。
 
-### 4.1 P0 第一步：`ExecutionMode` 落地草案 ✅ 已落地
+### 4.1 P0 第一步：`ExecutionMode` 落地草案 已落地
 
 > **2026-04-27 状态**：commit `7584359f`(模型层 + V73 migration)+ `0d64f69c`(运行时 IN/OUT 双向打通)。完整运行时回路与时序见 [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §7.8。
 
@@ -219,7 +219,7 @@ console-api 与 worker SDK：
 
 不做 storage migration（旧 job 默认 FULL，行为不变）。
 
-### 4.2 P0 第二步：`BatchLifecycleStatus` ✅ 已落地
+### 4.2 P0 第二步：`BatchLifecycleStatus` 已落地
 
 > **2026-04-27 状态**：commit `6ee278ab`。5 个具体 Status 投影 `lifecycle()` 方法均通过单测覆盖；`ConsoleMetaEnumRegistrationTest.EXCLUDED` 加白(派生公共投影,不对外暴露)。
 
@@ -239,7 +239,7 @@ public enum JobInstanceStatus {
 
 不改 DB，只新增方法 + 单测投影一致性（5 个枚举的所有值必须能映射到一个 lifecycle）。
 
-### 4.3 P1 第一步：`BatchType` 公共投影 ✅ 已落地
+### 4.3 P1 第一步：`BatchType` 公共投影 已落地
 
 > **2026-04-27 状态**：新增 `batch-common/.../enums/BatchType.java` 含 7 个枚举值（IMPORT / EXPORT / PROCESS / DISPATCH / SYNC / GENERAL / WORKFLOW）。PROCESS 已补 `batch-worker-process` 最小模块，SYNC 仅保留占位枚举（不实现 worker，详见 §5）。`JobType` / `PipelineType` 各加 `batchType()` 投影方法，单测覆盖投影完整性 + 共享业务类型一致性（IMPORT / EXPORT / PROCESS / DISPATCH 两边映射相等）。
 
@@ -257,7 +257,7 @@ PROCESS 落地后通过 V74 扩展 `job_definition.job_type`、`pipeline_definit
 
 `ConsoleMetaQueryService.REGISTRATIONS` 加 `batchType` + `docs/api/console-api.openapi.yaml` 的 `CommonResponseMetaEnums` 同步追加 `batchType` / `executionMode`（后者补 P0-1 漏登记）。
 
-### 4.4 P1 第二步：claim() 返回 effective config ✅ 已落地（含 Stage 2）
+### 4.4 P1 第二步：claim 返回 effective config 已落地（含 Stage 2）
 
 > **2026-04-27 状态**：Stage 1 + Stage 2 全部完成。
 >
@@ -332,7 +332,7 @@ public record EffectiveTaskConfig(
 - **解决问题**：worker step / plugin 想"按 partition 切文件 / 切机构号"无需自己回查 DB；`batch-worker-import` 的 `ParseStep` 默认 partition-aware（可关）
 - 详细契约见 [`docs/architecture/core-model.md §3.6`](../architecture/core-model.md)
 
-### 4.5 P2：PROCESS worker 模块 ✅ 已落地 WAP+bookends 真五段版
+### 4.5 P2：PROCESS worker 模块 已落地 WAP+bookends 真五段版
 
 > **2026-04-28 状态(第二轮)**：把 PROCESS 从"5 stage 模板表面 + COMPUTE 一段干所有事"重做为真正的 **WAP+bookends**(Write-Audit-Publish + 前后置)—— 5 个 stage 各自承担明确职责,与 Netflix Atlas / Iceberg branch 等成熟数据平台的模式对齐。
 
@@ -369,7 +369,7 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 
 > ⚠️ **2026-04-28 深度评估发现的洞**：详细列表见 [`process-worker-known-issues.md`](./process-worker-known-issues.md)。简版：**2 个 P0**（WAP COMMIT/FEEDBACK 非原子 → 孤儿 staging；staging 缺 tenant_id 强过滤 → 防御纵深缺失）、**5 个 P1**（重跑 staging 永久泄漏 / attributes 污染 SQL 命名参数 / COMPUTE 二次跑 sourceSql / writeMode=INSERT 重跑必 UK 冲突 / staging 无写入上限）、**9 个 P2**。按该文档 §5 sprint 切片推进，先修 P0+P1-6。
 
-### 4.6 P2：`TriggerType.DEPENDENCY` 评估 ✅ 已闭环，暂缓实现
+### 4.6 P2：`TriggerType.DEPENDENCY` 评估 已闭环，暂缓实现
 
 > **2026-04-27 状态**：不新增 `TriggerType.DEPENDENCY`，不新增 `dependency_definition` 表。跨 workflow 编排继续用显式 trigger API、EVENT 触发，或在同一 workflow 内用 `workflow_edge` 表达节点依赖。
 

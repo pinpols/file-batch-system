@@ -1,7 +1,5 @@
 # EXPORT 分片 keyset 区间优化(方案A)Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 让导出分片在命中激活条件时,每片在 DB 侧只读自己 1/N 的游标区间(索引区间扫),把 hashtext 的 N× 全表扫描放大降到 ~1×;不命中则逐字节退回现有 hashtext。
 
 **Architecture:** 在两个 ExportDataPlugin(`SqlTemplateExportDataPlugin` / `GenericJdbcMappedExportDataPlugin`)的 `loadDetailPage` 内,首次调用(`exportSnapshot` 无缓存边界)时算游标列 `min/max` 等宽区间 `[loN,hiN)` 缓存进 `exportSnapshot`(跨页复用的同一可变 map);分页谓词由 hashtext 换成 `cur>=:__loN AND cur<:__hiN`(末片含上界)。边界每分区自算,不经 orchestrator(对称 import range-slice 的每分区 `statObject`)。任何异常/空 min-max/非数值游标列 → 退回 hashtext,绝不失败。
@@ -34,9 +32,9 @@
 
 **并行 session 在 churn 主工作区,必须隔离。**
 
-- [ ] **Step 1: 用 superpowers:using-git-worktrees 建 worktree(基于最新 main)**
+- [ ] **Step 1: 建独立 worktree(基于最新 main)**
 
-REQUIRED SUB-SKILL: `superpowers:using-git-worktrees`。基线 `origin/main`(含 #390,`788df5f2f`)。分支名 `feature/export-keyset-range`。
+基线 `origin/main`(含 #390,`788df5f2f`)。分支名 `feature/export-keyset-range`。
 
 - [ ] **Step 2: worktree 内确认依赖在位**
 
@@ -645,13 +643,4 @@ gh pr merge --auto --squash
 
 - [ ] **Step 5: 合并后同步 main + 清理 worktree**
 
-REQUIRED SUB-SKILL: `superpowers:using-git-worktrees`(清理);`superpowers:finishing-a-development-branch`。
-
----
-
-## Self-Review notes(已自检)
-
-- **Spec 覆盖**:激活条件(§2)→ planner.optedIn + partitionCount;每分区自算边界(§3.1)→ minMax 回调在 plugin 内、不经 orchestrator;等宽切(§3.2)→ ExportKeysetRange.equalWidth;谓词(§3.3)→ buildPagedSql/buildDetailQuery range 变体;倾斜接受(§4)→ IT skew 用例;组件改动(§5)→ Task 3/4;fallback(§5)→ planner try/catch + toBig null + INACTIVE;测试(§7)→ Task 1/2/3/4/5。✓
-- **占位符**:`minMax` 里 PLACEHOLDER_REPLACED_BY_CURSOR 已显式标注实现时替换(把 cursorColumn 传入)——非遗漏,是实现指令。
-- **类型一致**:`ExportKeysetRange` 在 Task 1 定 4 参、Task 3 升 6 参——已在 Task 3 Step 3 显式给出最终 6 参定义并要求回填 Task 1/2 测试构造。`buildDetailQuery` 增 `ExportKeysetRange` 重载 + 兼容旧重载,与 `buildPagedSql` 同模式。
-- **可见性**:`DetailSql`/`PagedQuery` 需 package-private 供同包测试(Task 4 Step 1 注明)。
+合并后将 main 同步到本地,并清理本次使用的 feature 分支 / worktree。

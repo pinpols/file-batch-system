@@ -7,18 +7,18 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-06-14
-- **CLAUDE.md §分支用途 改写:`citus` 分支冻结为只读参考**。原"2 条常驻活分支(main + citus 并排活跃轨道,定期 main→citus 同步)"改为"唯一常驻活分支 = main;citus 冻结(❄️ reference-only,停止同步,不再开发)"。决策依据:多租峰值流量单机压测(`docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md`)实测瓶颈在控制面分层并发(launch 消费 + worker 认领,已修 20→62/s),**PG 写有 10-15× 余量、零锁争用 → Citus 解决的是未来才有的写墙,当前非杠杆**;且 biz 分区先于 biz 分片、真要上有 Azure 托管 Citus 路径 B。citus 降级为"时间点 POC + 薄保险",快照 tag `citus-poc-2026-06-14`;耐久学习资产在 `docs/{backlog,analysis,runbook,design}` + `scripts/db/citus/01-distribute.sql`,不在活分支。新增**解冻流程**(重审 main delta Citus 正确性 + 重跑 distribute + 重跑 sim)。`citus → main` 永不合(一直如此,不变)。main 的「新多租大表复合 PK 前瞻」规则继续生效以压低将来解冻成本。
+- **CLAUDE.md §分支用途 改写:`citus` 分支冻结为只读参考**。原"2 条常驻活分支(main + citus 并排活跃轨道,定期 main→citus 同步)"改为"唯一常驻活分支 = main;citus 冻结(reference-only,停止同步,不再开发)"。决策依据:多租峰值流量单机压测(`docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md`)实测瓶颈在控制面分层并发(launch 消费 + worker 认领,已修 20→62/s),**PG 写有 10-15× 余量、零锁争用 → Citus 解决的是未来才有的写墙,当前非杠杆**;且 biz 分区先于 biz 分片、真要上有 Azure 托管 Citus 路径 B。citus 降级为"时间点 POC + 薄保险",快照 tag `citus-poc-2026-06-14`;耐久学习资产在 `docs/{backlog,analysis,runbook,design}` + `scripts/db/citus/01-distribute.sql`,不在活分支。新增**解冻流程**(重审 main delta Citus 正确性 + 重跑 distribute + 重跑 sim)。`citus → main` 永不合(一直如此,不变)。main 的「新多租大表复合 PK 前瞻」规则继续生效以压低将来解冻成本。
 
 ### 2026-06-10
 - **CLAUDE.md §架构硬约束 新增「UNIQUE = upsert 幂等契约关键约束」**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上,改任何 UNIQUE 列集(分区/分片/重建/迁移)= 语义变更而非运维操作,动手前必须 `grep 'on conflict'` 全量核对 + 幂等语义评审。背景:2026-06-10 分区脚本实跑,分区键被迫进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)`,orchestrator outbox 写入全失败、主链中断后回滚(PR #448)。此前该假设是隐性的——本条款将其显式化为权威约束。
-- **CLAUDE.md §多租隔离 新增「新表 PK 前瞻」**:新建多租大表 PK 一律复合 `(tenant_id, id)`(或含分区键),禁单列 `id` PK。理由:Citus 可行性实扫(`docs/analysis/scaling-state-and-biz-path-2026-06-14.md` §2,2026-06-10 复核仍成立)确认存量 23 张表单列 PK 是最大迁移阻塞(复合化重构估 12-20 周,`useGeneratedKeys` 已从 43 涨到 49 处),新表止血控制阻塞面增速。小字典/配置/系统表豁免。存量表**不迁移**(等 Citus 触发门槛满足后按 POC 推进)。
+- **CLAUDE.md §多租隔离 新增「新表 PK 前瞻」**:新建多租大表 PK 一律复合 `(tenant_id, id)`(或含分区键),禁单列 `id` PK。理由:Citus 可行性实扫(`docs/analysis/scaling-state-and-biz-path-2026-06-14.md` §2,2026-06-10 复核仍成立)确认存量 23 张表单列 PK 是最大迁移阻塞(复合化重构估 12-20 周,`useGeneratedKeys` 已从 43 涨到 49 处),新表收敛控制阻塞面增速。小字典/配置/系统表豁免。存量表**不迁移**(等 Citus 触发门槛满足后按 POC 推进)。
 
 ### 2026-06-01
 - **CLAUDE.md §Java 编码细则 #3 添测试豁免**:`@Autowired` field 注入除了原有的 `@Lazy self` AOP workaround 例外,新增第二类豁免 — `@SpringBootTest` IT 测试。理由:全仓 IT 测继承 `AbstractIntegrationTest` 走 Spring 测试惯例,77 处 `@Autowired private Foo foo;` 已是事实标准,Spring `@SpringBootTest` 下构造器注入需要额外 ParameterResolver 协调且生态不偏好。本规则只豁免 IT 测试,生产代码继续严格执行构造器注入。最近 2 天扫到 17 处看似违反实为这条豁免覆盖,不予迁移。
 
 ### 2026-05-21
 - **ADR-032 控制台 4 角色 RBAC 重设计 落地**:`ROLE_CONFIG_ADMIN` 合并升级为 `ROLE_ADMIN`(V149 自动迁移),新增 `ROLE_TENANT_ADMIN`(本租户管理员,租户自服务发放员工)。新矩阵:平台 ADMIN/AUDITOR × 租户 TENANT_ADMIN/TENANT_USER。`ConsoleUserAccountService` 增 4 层守卫(Service 强制注入 tenantId / 跨租户拒绝 / 角色越授拒绝)。`canSwitchTenant` 收敛为 ADMIN+AUDITOR,TENANT_ADMIN 绑定自己租户。详见 `docs/architecture/adr/ADR-032-four-role-rbac-redesign.md`。
-- **CLAUDE.md §测试约定 新增**:扫 454 单测 + 23 IT(最近 3 天 diff)归纳已成事实的统一项 + 新代码标准:JUnit5 + AssertJ + Mockito 三件套已 100% 统一(无 JUnit4 / Hamcrest / EasyMock 混入);新单测一律 `@ExtendWith(MockitoExtension.class)` 声明式 mock 初始化(避免命令式 `openMocks`);方法命名首选 `shouldX_whenY()`,接受现存 `xxx_when_yyy()` 下划线风格;集成测必须 `extends AbstractIntegrationTest` 复用 Testcontainers base;`@DisplayName` / `@Nested` / AAA 注释推荐但不强制。**不做大规模 rename**(跟平行会话冲突风险高),只锁约定止血。
+- **CLAUDE.md §测试约定 新增**:扫 454 单测 + 23 IT(最近 3 天 diff)归纳已成事实的统一项 + 新代码标准:JUnit5 + AssertJ + Mockito 三件套已 100% 统一(无 JUnit4 / Hamcrest / EasyMock 混入);新单测一律 `@ExtendWith(MockitoExtension.class)` 声明式 mock 初始化(避免命令式 `openMocks`);方法命名首选 `shouldX_whenY()`,接受现存 `xxx_when_yyy()` 下划线风格;集成测必须 `extends AbstractIntegrationTest` 复用 Testcontainers base;`@DisplayName` / `@Nested` / AAA 注释推荐但不强制。**不做大规模 rename**(跟平行会话冲突风险高),只锁约定收敛。
 - **`docs/coding-conventions.md` §1 新增子节 1.1「调用方约束(inline build 提取)」**:CLAUDE.md §Java 编码细则 #2「方法参数 ≤ 6」长期只覆盖签名,调用现场 `f(X.builder().a()...build())` 长链让"参数臃肿从签名搬到调用处"的隐患由 `PositionalArgsConventionTest` 拦白名单 51 个类型,但 return 位置和非白名单类型一直靠 review 隐性把关。本次沉淀判定线为 chain 长度表(≤3 单行禁提取 / 4-6 单行 fluent 禁提取 / 7-9 看场景 / ≥10 必须提取),并明确豁免(SDK args / 短工厂方法 / 声明式注册 / test fixture)。配套治理基线落 commit `76582aef`(11 处 return chain≥10)。守护边界:`PositionalArgsConventionTest` 不变(继续只拦白名单方法实参 inline build),return 位置因每项目语义不同,靠 review 按判定线手工把关。
 
 ### 2026-05-20
@@ -33,7 +33,7 @@
 
 ### 2026-05-07
 - **CLAUDE.md §版本管理重写**：从"默认 1.0.0 非 SNAPSHOT"改为完整 SemVer 2.0.0 + `${revision}` 模型；约定 `MAJOR.MINOR.PATCH[-PRERELEASE]` / `-SNAPSHOT` 是 main 分支默认形态 / git tag 用 annotated `v<version>` / 描述性 tag 与版本 tag 共存。新增 [`docs/runbook/releasing.md`](runbook/releasing.md) 落地完整 release flow（标准 / hotfix / RC / patch / Maven 命令速查 / SemVer 判定提问 / FAQ）。明确**不抄 Spring Cloud Release Train / CalVer**：单 repo 单 PR 单部署 → 9 模块共 `${revision}` 已是主流；BOM 模块也不引入。当前 GA = `v1.0.0` @ commit `525e60f0`，main 默认 `1.1.0-SNAPSHOT`。
-- **CLAUDE.md 新增 §ADR 实施范围纪律（防越界）**：写死系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用 ❌ 不做清单。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` §5。
+- **CLAUDE.md 新增 §ADR 实施范围纪律（防越界）**：写死系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用「不做清单」。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` §5。
 - **CLAUDE.md §archive 冷表对齐**：覆盖范围由 "14 张" 修正为 17 张（V108 加 result_version；V110 加 batch_day_replay_session + batch_day_replay_entry）；新增 V116 forensic_export_log / V118 data_quality_rule / V118 data_quality_check 暂未入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 的事实说明（运维域 + 时间点决定是否归档）。
 
 ### 2026-05-04
@@ -95,7 +95,7 @@
 - **shutdown 期 Redis 调用收敛**（重启日志复查发现）：orchestrator graceful shutdown 时 Lettuce 先关，OutboxPollScheduler 继续 tick 抢 ShedLock → `setIfAbsent` 抛 `java.lang.IllegalStateException: LettuceConnectionFactory has been STOPPED` → 冒泡到 OutboxPollScheduler `catch (Throwable t)` 打 `ERROR Outbox 轮询异常（非数据库类）`。两处补丁：
   - `RedisShedLockProvider.lock/unlock` 的 catch 追加 `IllegalStateException`（与 `DataAccessException` 并列），统一 `rootReason()` 抽取消息格式，关闭期 return Optional.empty 视为未拿到锁。
   - `OutboxPollScheduler.pollAndReschedule` 在 `executeWithLock` 之前加前置 `gracefulShutdown.isDraining()` 短路（原先的 check 在 `executeAdvance` 里，发生在拿锁之后）；这样 shutdown 期间根本不会调用 Redis，也不会产生 WARN。
-- **运行日志长期噪声 + 真错误一锅端**（跟进 2026-04-22 "收敛运行日志长期噪声" 批次；这轮抓的是日志里剩下的 ERROR/WARN 噪声大头）：
+- **运行日志长期噪声 + 真错误批量处理**（跟进 2026-04-22 "收敛运行日志长期噪声" 批次；这轮抓的是日志里剩下的 ERROR/WARN 噪声大头）：
   - **`LaunchBatchDayService.upsertBatchDayInstance` 加 `DuplicateKeyException` 重试**：03:00 等整点时多个触发同时落 `default-tenant/default_calendar/<bizDate>` 的 batch_day_instance，两个线程 `findFirstByTenantIdAndCalendarCodeAndBizDate` 都返回 null，都走 INSERT 分支，第二个撞 `uk_batch_day_instance` → 500 → trigger 当 SYSTEM_ERROR 重试。外层 retry 循环现在同时抓 `OptimisticLockingFailureException`（update 分支 CAS 失败）和 `DuplicateKeyException`（INSERT 分支并发撞键），`last` 容器类型升到 `DataAccessException` 兼容两者；重试后 SELECT 已能看到对方的记录，走 update 分支收敛。
   - **`DefaultTriggerService.handleHttpClientError` 区分 422/409/404**：
     - 422 Unprocessable = 业务拒绝（典型：`current execution time is outside batch window`、tenant closed、validation 失败）→ REJECTED + WARN + 不抛异常，避免 Quartz 打 `Job threw an unhandled Exception` ERROR 并进 misfire retry；下次 cron fire 仍是同样结果，重试无意义。
@@ -173,10 +173,10 @@
   - `DefaultWorkerSelector.matchesResourceTag` 只比对 `worker.resource_tag` 单值，忽略 `capability_tags` JSONB 数组 → 扩展为"单值等于 OR 数组命中"，同时畸形 JSON 降级为 WARN 不抛。新增 `DefaultWorkerSelectorTest` 6 case。
 - **worker-import `business` 数据源 URL 加 `?stringtype=unspecified`**（`application-local.yml`）：`GenericJdbcMappedImportLoadPlugin.setObject(String)` 绑定到 NUMERIC/DATE 列时 Postgres 不隐式 cast，导致 tb TRANSACTION / tc RISK_SCORE 批 LOAD 失败。加参数后服务端按列类型自动转换。
 - **DB 改动种子化（Flyway 不承接这类；详见 hardening-backlog-v4 的 V4-P0-1）**：
-  - ✅ `biz.transaction` / `biz.risk_score` / `biz.risk_alert` 三张业务表 DDL 已落 `scripts/db/business/create_biz_tables.sql`（含索引 + CHECK）
-  - ✅ `tb/IMP-TRANSACTION-CSV`、`tc/IMP-RISK-SCORE-JSON`、`tc/EXP-RISK-ALERT-JSON` 的 `jdbcMappedImport` / `sqlTemplateExport` / `default_query_sql` 已落 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql`（UPDATE 块在原 INSERT 下方）
-  - ❓ `default-tenant/exp_settlement_csv_v1` 源头暂未定位（live DB created_by='system'，可能来自 Console 上传 / 租户初始化服务），留到 P1-1 批次
-  - ❌ `default-tenant` `export_queue` / `workflow_queue` `resource_tag` 清空、2 条 `job_definition.enabled=false`（TA_DISPATCH_ORDER / gen_reconcile）不入种子 — 属运维临时动作 / 待 P0-2 根治
+  - [已完成] `biz.transaction` / `biz.risk_score` / `biz.risk_alert` 三张业务表 DDL 已落 `scripts/db/business/create_biz_tables.sql`（含索引 + CHECK）
+  - [已完成] `tb/IMP-TRANSACTION-CSV`、`tc/IMP-RISK-SCORE-JSON`、`tc/EXP-RISK-ALERT-JSON` 的 `jdbcMappedImport` / `sqlTemplateExport` / `default_query_sql` 已落 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql`（UPDATE 块在原 INSERT 下方）
+  - [待定位] `default-tenant/exp_settlement_csv_v1` 源头暂未定位（live DB created_by='system'，可能来自 Console 上传 / 租户初始化服务），留到 P1-1 批次
+  - [未入种子] `default-tenant` `export_queue` / `workflow_queue` `resource_tag` 清空、2 条 `job_definition.enabled=false`（TA_DISPATCH_ORDER / gen_reconcile）不入种子 — 属运维临时动作 / 待 P0-2 根治
 
 ### 2026-04-20
 - **异常数据入口治理**：新增 `CodeNormalizer` 工具（batch-common/utils），定义两类归一规则：

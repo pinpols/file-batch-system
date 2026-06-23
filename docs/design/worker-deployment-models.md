@@ -1,7 +1,7 @@
 # Worker 部署模型:平台 worker vs 自托管 SDK
 
 **状态**:基线说明 · 2026-05-31
-**关联 ADR**:[ADR-035](../adr/ADR-035-tenant-self-hosted-sdk.md) · [ADR-036](../adr/ADR-036-sdk-business-templates.md) · [ADR-029](../adr/ADR-029-atomic-worker-isolation.md)
+**关联 ADR**:[ADR-035](../adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [ADR-036](../adr/ADR-036-sdk-task-handler-templates.md) · [ADR-029](../adr/ADR-029-dedicated-spi-worker.md)
 **关联模块**:`batch-worker-{core,import,export,process,dispatch,atomic}` · `batch-worker-sdk`
 
 > 本文档讲清两种 worker 的**边界、互补关系、混用方式、选型决策**。属架构基线,长期维护;具体协议字段在 [`docs/api/`](../api/),具体演进历史在 ADR-035。
@@ -27,7 +27,7 @@
 | **跟平台耦合** | 同 reactor 同代码库,版本必须一致 | 协议解耦,SDK 版本可滞后 |
 | **数据可达性** | 必须能访问平台 DB + 业务数据源 | **平台访问不到租户数据** |
 | **特权** | 持平台 DB 写权限 | 只有 API Key + Kafka 凭据 |
-| **故障爆失败半径** | 多租户共享(handler 挂 = 全租户卡) | 单租户隔离 |
+| **故障 blast radius（爆炸半径）** | 多租户共享(handler 挂 = 全租户卡) | 单租户隔离 |
 | **成本归属** | 平台账单 | 租户账单 |
 | **运维方** | 平台团队 | 租户团队 |
 
@@ -159,7 +159,7 @@ orchestrator (launch workflow_run)
 | 进程内 Quartz | 状态不可见,console 上查不到运行记录,运维盲区 |
 | 进程内自实现重试 | 没补偿、没审批联动,跟 workflow 引擎脱节 |
 | 进程内 cron 持久化(写自家 DB) | 跨重启可能丢任务 / 状态跟平台不一致 |
-| 进程内业务定时 + 平台 trigger 并存 | 同一业务两种调度入口,运维理解成本爆失败 |
+| 进程内业务定时 + 平台 trigger 并存 | 同一业务两种调度入口,运维理解成本急剧膨胀 |
 
 **正确做法**:**所有调度都在平台 trigger + workflow 配置**,SDK 进程纯被动 poll Kafka 接活。
 
@@ -637,8 +637,8 @@ public SdkTaskResult execute(SdkTaskContext ctx) {
 
 **参考**
 
-- [ADR-035 租户自托管 SDK](../adr/ADR-035-tenant-self-hosted-sdk.md)
-- [ADR-036 SDK 业务模板](../adr/ADR-036-sdk-business-templates.md)
-- [ADR-029 Atomic worker 隔离](../adr/ADR-029-atomic-worker-isolation.md)
+- [ADR-035 租户自托管 SDK](../adr/ADR-035-tenant-self-hosted-worker-sdk.md)
+- [ADR-036 SDK 业务模板](../adr/ADR-036-sdk-task-handler-templates.md)
+- [ADR-029 Atomic worker 隔离](../adr/ADR-029-dedicated-spi-worker.md)
 - [batch-worker-sdk 深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
 - [Pipeline vs Workflow 边界](pipeline-vs-workflow-definition.md)

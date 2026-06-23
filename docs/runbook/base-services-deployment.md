@@ -186,7 +186,7 @@ Postgres / Kafka / Redis 跑在单独 VM 集群，**不在 K8s 里**；应用 K8
 | 基础服务 | 必需配置 | 违反后果 |
 |---|---|---|
 | **Postgres** | `fsync=on`、`synchronous_commit=on`、开启 WAL 归档 | Outbox 事件和任务状态丢失 → 任务静默消失 |
-| **Postgres** | 连接池上游建议 PgBouncer `transaction` 模式 | Hikari 连接爆失败 |
+| **Postgres** | 连接池上游建议 PgBouncer `transaction` 模式 | Hikari 连接暴增 |
 | **Kafka** | `replication-factor≥3`、`min.insync.replicas=2`、`unclean.leader.election.enable=false` | `acks=all` 配合才生效；否则消息丢失 |
 | **Kafka** | Topic 分区数足够（`batch.task.dispatch.*` 每 topic ≥ 6 分区起步） | worker 并发吃不满 |
 | **Redis** | 持久化开启（AOF everysec 或 RDB 15min），主从 + 哨兵 / Redis Sentinel | ShedLock 锁状态丢失 → 触发重复调度 |
@@ -210,7 +210,7 @@ spring:
       port: ${BATCH_REDIS_PORT}
 batch:
   storage:
-    minio:
+    s3:
       endpoint: ${BATCH_S3_ENDPOINT}
       access-key: ${BATCH_S3_ACCESS_KEY}
       secret-key: ${BATCH_S3_SECRET_KEY}

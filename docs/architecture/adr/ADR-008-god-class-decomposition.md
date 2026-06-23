@@ -67,4 +67,4 @@ DefaultLaunchService（~280 行协调器）
 ## 参考
 
 - ADR-003（T1/T2 事务拆分）：与本次重构紧密关联，`PartitionDispatchService` 独立为 bean 是 T1/T2 拆分的前提。
-- `design-patterns-evaluation.md`：包含重构前后的详细评估和度量。
+- [maturity-assessment.md](../maturity-assessment.md)：包含工程成熟度与重构相关的评估和度量。

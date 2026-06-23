@@ -61,8 +61,8 @@ objectName = base-part{NO}of{COUNT} → 各片独立文件,不再覆盖
 每片输出独立文件、各注册一条 `file_record`。理由:
 - 与现有「每个 partition task 完全独立、无 fan-in」架构对称,与 import 各片独立写库对称。
 - `file_record` 本就一 batch 多条,治本后这 N 条各指向正确的 1/N 文件,数据模型零改动。
-- 合并单文件需引入 fan-in barrier + 下载 N 片拼接重传(2× IO + OOM 风险,踩
-  [streaming-large-file](../verifications/streaming-large-file-import-export-2026-06-06.md) 的雷),
+- 合并单文件需引入 fan-in barrier + 下载 N 片拼接重传(2× IO + OOM 风险,即
+  [streaming-large-file](../verifications/streaming-large-file-import-export-2026-06-06.md) 已记录的问题),
   且 CSV header / JSON array / 定长对齐使「合并 ≠ cat」。**单文件交付作为独立可选 post-merge feature 另案,不进本次。**
 
 ### 组件改动

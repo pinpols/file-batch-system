@@ -108,7 +108,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
 ## 端到端测试
 
-只保留 4 条主路径，避免测试爆失败。
+只保留 4 条主路径，避免测试爆炸。
 
 - 导入主链路：上游文件 -> 扫描 -> parse -> validate -> load -> 业务表写入数据库
 - 导出主链路：业务表 -> 生成文件 -> 加密/存储 -> 注册 -> 分发 -> 回执

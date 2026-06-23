@@ -1,4 +1,6 @@
 
+> 注:本文为 2026-04-09 时点快照,部分内容已被后续实现取代(如调度器默认已切为 wheel),以代码与 ADR 为准。
+
 # 架构基线文档（Architecture Truth）
 
 > **单一事实源**：本文档描述系统的**当前真实状态**（As-Is）、目标状态（To-Be）以及两者之间的差距清单。
@@ -282,7 +284,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 ## 8. 设计模式与反模式状态
 
-详见 [`design-patterns-evaluation.md`](./design-patterns-evaluation.md)。
+设计模式与反模式的评估见各 ADR（尤其 [ADR-008 上帝类拆分](./adr/ADR-008-god-class-decomposition.md)）与 [maturity-assessment.md](./maturity-assessment.md)。
 
 **摘要**：
 

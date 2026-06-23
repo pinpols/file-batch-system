@@ -5,7 +5,7 @@
 ## TL;DR
 
 **症状**:`batch.outbox_event` 里大量行长时间停在 `publish_status='PUBLISHING'`,下游 Kafka 看不到对应事件,任务派发停顿。
-**一行修复**:正常情况 `OutboxPollScheduler.resetStalePublishingEvents` 会自动把超时(默认 `batch.orchestrator.outbox.publishing-timeout-seconds`)的行拨回 `FAILED` 重投;若没动,**走 orchestrator 治理接口** `POST /internal/outbox/reset-stale`(不直接改 DB)。
+**一行修复**:正常情况调度会自动调用 `OutboxEventMapper.resetStalePublishing` 把超时(默认 `batch.outbox.publishing-timeout-seconds`)的行拨回可重投状态;若仍有大量 `FAILED`/`GIVE_UP` 残留,**走 orchestrator 治理接口** `POST /internal/outbox/republish`(reset 为 NEW,由 OutboxForwarder 重发;不直接改 DB)。无独立的 reset-stale 接口——stale 行只由上述定时回收自动处理。
 
 ---
 
@@ -89,21 +89,20 @@
 
 适用:scheduler 没在跑(ShedLock 锁残留)或 stale 阈值过大。
 
-1. **优先**:走 orchestrator 治理接口(CLAUDE.md 红线:console-api / 运维**不能**直接 `UPDATE batch.outbox_event`)
+1. **stale 行(卡 PUBLISHING)无独立手动接口**:回收只由调度自动调 `OutboxEventMapper.resetStalePublishing` 完成。若怀疑 scheduler 没在跑(ShedLock 锁残留),走第 2、3 步释放锁 / 重启即可恢复自动回收。**对已转 `FAILED`/`GIVE_UP` 的行**,走 orchestrator 治理接口重投(CLAUDE.md 红线:console-api / 运维**不能**直接 `UPDATE batch.outbox_event`):
    ```bash
-   curl -X POST http://localhost:18082/internal/outbox/reset-stale \
+   curl -X POST http://localhost:18082/internal/outbox/republish \
      -H "X-Internal-Secret: ${INTERNAL_SECRET}" \
      -H "Content-Type: application/json" \
-     -d '{"timeoutSeconds": 60}'
-   # 该接口最终调 OutboxEventMapper.resetStalePublishing 同一段 SQL
+     -d '{"tenantId": "<tenant>", "dryRun": false}'
+   # OutboxOpsController 仅暴露 /cleanup 与 /republish 两个接口;republish 把 FAILED/GIVE_UP reset 为 NEW 由 OutboxForwarder 重发
    ```
-   (若接口路径与本仓实际不同,以 `ConsoleOrchestratorProxyService` / orchestrator internal controller 为准 — TODO 校对一次写死)
 
 2. **释放残留 ShedLock 锁**(只在确认 scheduler 不跑时):
    - Redis provider:
      ```bash
      redis-cli -h localhost -p ${REDIS_PORT:-16379} \
-       --scan --pattern 'shedlock:*:outbox_poll*' | xargs -r redis-cli del
+       --scan --pattern '*shedlock:*:outbox_poll*' | xargs -r redis-cli del
      ```
    - jdbc provider:
      ```sql
@@ -116,7 +115,7 @@
    docker compose restart batch-orchestrator
    ```
 
-### 方案 C:核武器 — 直接改 DB(只在生产严重事故 + 上述均失败)
+### 方案 C:最后手段(破坏性操作)— 直接改 DB(只在生产严重事故 + 上述均失败)
 
 **违反 CLAUDE.md 红线**,只在 P0 事故 + 走过 incident commander approval 时使用。事后必须补 post-mortem 说明为什么治理接口不行。
 

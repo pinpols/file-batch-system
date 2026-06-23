@@ -4,12 +4,15 @@
 
 - `batch.task.dispatch.import`
 - `batch.task.dispatch.export`
+- `batch.task.dispatch.process`
 - `batch.task.dispatch.dispatch`
+- `batch.trigger.launch.v1`
 - `batch.task.result`
 - `batch.task.retry`
 - `batch.task.dead-letter`
 - `batch.outbox.event`
-- `batch.worker.heartbeat`
+
+> 注:worker 心跳走 HTTP（`POST /api/workers/{workerCode}/heartbeat`，见 `WorkerController`），不经 Kafka。`BatchTopics.WORKER_HEARTBEAT` 常量仅作消息类型登记保留,无实际心跳 topic 生产/消费。
 
 ## Key 设计
 
@@ -18,7 +21,7 @@
 - Retry topics: `tenantId:jobCode:instanceNo:partitionId:attemptNo`
 - Dead-letter topics: `tenantId:jobCode:instanceNo:partitionId:taskId`
 - Outbox topics: `tenantId:eventName:aggregateType:aggregateId`
-- Heartbeat topics: `tenantId:workerCode:workerGroup:workerId`
+- Trigger launch (`batch.trigger.launch.v1`): `tenantId:jobCode`
 
 ## 事件体字段
 
