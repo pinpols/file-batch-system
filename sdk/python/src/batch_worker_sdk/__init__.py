@@ -1,17 +1,17 @@
 """batch-worker-sdk:file-batch-system worker 协议的 Python SDK。
 
-包结构严格对齐 Java SDK(``com.example.batch.sdk.*``):
+包结构严格对齐 Java SDK(``io.github.pinpols.batch.sdk.*``):
 
 ==========================================================  ===================================
 Java                                                        Python
 ==========================================================  ===================================
-``com.example.batch.sdk.client``                            :mod:`batch_worker_sdk.client`
-``com.example.batch.sdk.dispatcher``                        :mod:`batch_worker_sdk.dispatcher`
-``com.example.batch.sdk.handler``                           :mod:`batch_worker_sdk.handler`
-``com.example.batch.sdk.internal``                          :mod:`batch_worker_sdk.internal`
-``com.example.batch.sdk.retry``                             :mod:`batch_worker_sdk.retry`
-``com.example.batch.sdk.scheduler``                         :mod:`batch_worker_sdk.scheduler`
-``com.example.batch.sdk.task``                              :mod:`batch_worker_sdk.task`
+``io.github.pinpols.batch.sdk.client``                            :mod:`batch_worker_sdk.client`
+``io.github.pinpols.batch.sdk.dispatcher``                        :mod:`batch_worker_sdk.dispatcher`
+``io.github.pinpols.batch.sdk.handler``                           :mod:`batch_worker_sdk.handler`
+``io.github.pinpols.batch.sdk.internal``                          :mod:`batch_worker_sdk.internal`
+``io.github.pinpols.batch.sdk.retry``                             :mod:`batch_worker_sdk.retry`
+``io.github.pinpols.batch.sdk.scheduler``                         :mod:`batch_worker_sdk.scheduler`
+``io.github.pinpols.batch.sdk.task``                              :mod:`batch_worker_sdk.task`
 ==========================================================  ===================================
 
 对外公开的入口(只保留 canonical 路径,不提供兼容 shim):

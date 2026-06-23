@@ -9,7 +9,7 @@ P0 Phase 4 示范:**业务方如何在主项目外开发 `BatchTaskExecutor` 插
 - 独立 Maven module(**不挂主 reactor**),自己有 pom + version
 - 唯一硬依赖:`batch-common`(`provided` scope,运行时由 worker classpath 提供)
 - 不引 `batch-worker-core` / Spring / 任何 framework
-- 通过 `META-INF/services/com.example.batch.common.spi.task.BatchTaskExecutor` 注册,JDK `ServiceLoader` 自动发现
+- 通过 `META-INF/services/io.github.pinpols.batch.common.spi.task.BatchTaskExecutor` 注册,JDK `ServiceLoader` 自动发现
 
 ## 构建
 
@@ -53,7 +53,7 @@ mvn install -f examples/sftp-push-executor/pom.xml
 
 1. 复制本 module 改 `artifactId` / 包名 / class 名
 2. 实现 `BatchTaskExecutor` 三个方法(`taskType` / `capability` / `execute`)
-3. 在 `META-INF/services/com.example.batch.common.spi.task.BatchTaskExecutor` 写自己实现类全名
+3. 在 `META-INF/services/io.github.pinpols.batch.common.spi.task.BatchTaskExecutor` 写自己实现类全名
 4. 加业务依赖到 pom(注意 worker 已有的 jar 用 `provided` 避免冲突)
 5. `mvn install`,jar 部署到 worker classpath
 

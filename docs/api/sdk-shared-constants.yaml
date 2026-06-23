@@ -15,10 +15,10 @@
 #   - Python (and other) SDKs pick up via Lane Q parity test (follow-up; today a stub)
 #
 # Sources (file paths relative to repo root):
-#   schema_versions_supported  : batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/TaskDispatchMessage.java (SUPPORTED_MAJOR_VERSIONS)
-#   worker_runtime_states      : batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/WorkerRuntimeState.java
-#   sensitive_keywords         : batch-common/src/main/java/com/example/batch/common/security/SensitiveDataValidator.java (SENSITIVE_KEYWORDS)
-#   task_statuses              : batch-common/src/main/java/com/example/batch/common/enums/TaskStatus.java
+#   schema_versions_supported  : batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java (SUPPORTED_MAJOR_VERSIONS)
+#   worker_runtime_states      : batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/WorkerRuntimeState.java
+#   sensitive_keywords         : batch-common/src/main/java/io/github/pinpols/batch/common/security/SensitiveDataValidator.java (SENSITIVE_KEYWORDS)
+#   task_statuses              : batch-common/src/main/java/io/github/pinpols/batch/common/enums/TaskStatus.java
 #   atomic_error_codes         : NOT YET A FORMAL ENUM in main code (per spec, listed as intent placeholder
 #                                for ADR-029 atomic workers; populate when AtomicErrorCode.java lands).
 #

@@ -20,7 +20,7 @@ spring:
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml
-  type-aliases-package: com.example.batch.worker.dispatchs.domain
+  type-aliases-package: io.github.pinpols.batch.worker.dispatchs.domain
 
 management:
   endpoints:

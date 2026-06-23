@@ -48,7 +48,7 @@ spring:
 
 mybatis:
   # MyBatis domain 的别名包路径（用于 mapper XML 简化类型引用）
-  type-aliases-package: com.example.batch.orchestrator.domain
+  type-aliases-package: io.github.pinpols.batch.orchestrator.domain
 
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理

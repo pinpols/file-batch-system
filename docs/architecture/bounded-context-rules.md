@@ -1,13 +1,13 @@
 # Bounded Context 边界规则(P1-A Stage 1)
 
-> 守护测试:`batch-console-api/src/test/java/com/example/batch/console/arch/BoundedContextDependencyArchTest.java`
+> 守护测试:`batch-console-api/src/test/java/io/github/pinpols/batch/console/arch/BoundedContextDependencyArchTest.java`
 > 进度 metric:`BoundedContextMigrationProgressTest.java`
 > Roadmap:[`docs/architecture/p0-p1-p2-roadmap.md`](p0-p1-p2-roadmap.md) § P1-A
 
 ## 9 个有界上下文
 
 `console-api` 的领域代码按下列 9 个 context + 1 个 shared 组织,根包统一为
-`com.example.batch.console.domain.<ctx>`:
+`io.github.pinpols.batch.console.domain.<ctx>`:
 
 | Context | 职责一句话 |
 |---|---|
@@ -24,10 +24,10 @@
 
 ## 允许的跨 context 通信(共 4 种)
 
-1. **共享类型**:`com.example.batch.console.shared.*` 的 DTO / Entity / 工具,任何 context 都可 import。
+1. **共享类型**:`io.github.pinpols.batch.console.shared.*` 的 DTO / Entity / 工具,任何 context 都可 import。
    - 放进 shared 的门槛:≥ 2 个 context 共用,且本身无业务方法。
 2. **应用层接口端口(Application Service)**:跨 context 调用必须经由应用层 service 接口
-   (`com.example.batch.console.application.<ctx>.XxxService`),通过 Spring 构造器注入。
+   (`io.github.pinpols.batch.console.application.<ctx>.XxxService`),通过 Spring 构造器注入。
    ArchUnit 不约束 application 包,等同放行。
 3. **Spring 事件**:`ApplicationEventPublisher` 发布事件 + 目标 context 的 `@EventListener` 订阅,
    事件载荷放 `shared.event` 或发布 context 自己的 event 子包。
@@ -35,7 +35,7 @@
    (反向依赖反转),用 Spring DI 装配。
 
 **禁止**:
-- 直接 import `com.example.batch.console.domain.<other-ctx>.*` 下的具体类
+- 直接 import `io.github.pinpols.batch.console.domain.<other-ctx>.*` 下的具体类
 - 把 shared 当无边界容器塞业务逻辑(代码审查 reject)
 - 在 controller / mapper 跨 context(应限制在 application 层)
 

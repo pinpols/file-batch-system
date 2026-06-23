@@ -435,7 +435,7 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 ### 8.2 Domain 子包与代码风格（按职责）
 
-各业务模块的 `com.example.batch.<module>.domain`（及_worker 模块的 `.../domain` 单包）承载**领域侧数据结构**，与 `controller` / `service` / `mapper` 分层正交。以下按**子目录**约定形态、命名与 Refactor 方向；若与上文总表冲突，以本节 **domain 落位** 为准。
+各业务模块的 `io.github.pinpols.batch.<module>.domain`（及_worker 模块的 `.../domain` 单包）承载**领域侧数据结构**，与 `controller` / `service` / `mapper` 分层正交。以下按**子目录**约定形态、命名与 Refactor 方向；若与上文总表冲突，以本节 **domain 落位** 为准。
 
 #### 8.2.1 总原则
 
@@ -575,10 +575,10 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 ```xml
 <select id="...">
   SELECT ... FROM xxx WHERE 1=1
-  <include refid="com.example.batch.common.mapper.CommonFragments.tenantPredicate"/>
-  <include refid="com.example.batch.common.mapper.CommonFragments.activePredicate"/>
-  <include refid="com.example.batch.common.mapper.CommonFragments.orderByUpdatedDesc"/>
-  <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+  <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.tenantPredicate"/>
+  <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.activePredicate"/>
+  <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.orderByUpdatedDesc"/>
+  <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
 </select>
 ```
 
@@ -1095,8 +1095,8 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 统一入口：
 
-- `BatchDateTimeSupport`：`batch-common/src/main/java/com/example/batch/common/time/BatchDateTimeSupport.java`
-- `BatchTimezoneProvider`：`batch-common/src/main/java/com/example/batch/common/config/BatchTimezoneProvider.java`
+- `BatchDateTimeSupport`：`batch-common/src/main/java/io/github/pinpols/batch/common/time/BatchDateTimeSupport.java`
+- `BatchTimezoneProvider`：`batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchTimezoneProvider.java`
 
 类型选择规则：
 
@@ -1154,7 +1154,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 - 导出路径强制断言 → `EncodingUtils.requireUtf8(raw)`
 - **禁止** 业务代码自行调用 `Charset.forName(...)`——别名差异（`utf8` / `UTF8` / `utf-8`）和非法值交给 `EncodingUtils` 处理
 
-`EncodingUtils`：`batch-common/src/main/java/com/example/batch/common/utils/EncodingUtils.java`
+`EncodingUtils`：`batch-common/src/main/java/io/github/pinpols/batch/common/utils/EncodingUtils.java`
 
 ## 21. 配置开关规范
 

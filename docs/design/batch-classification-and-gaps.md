@@ -57,7 +57,7 @@
 
 ## 2. 现状对照矩阵
 
-按上述 3 个维度过本平台代码（`batch-common/src/main/java/com/example/batch/common/enums/`）。
+按上述 3 个维度过本平台代码（`batch-common/src/main/java/io/github/pinpols/batch/common/enums/`）。
 
 ### 2.1 BatchType ↔ `JobType` / `PipelineType`
 
@@ -192,7 +192,7 @@ Worker 拿到 effective config 走两个通道：
 新增枚举：
 
 ```java
-// batch-common/src/main/java/com/example/batch/common/enums/ExecutionMode.java
+// batch-common/src/main/java/io/github/pinpols/batch/common/enums/ExecutionMode.java
 public enum ExecutionMode {
   FULL,            // 每次全跑;典型:小表全量重算、初始化
   INCREMENTAL,     // 按 watermark 增量;典型:T+1 增量导出
@@ -224,7 +224,7 @@ console-api 与 worker SDK：
 > **2026-04-27 状态**：commit `6ee278ab`。5 个具体 Status 投影 `lifecycle()` 方法均通过单测覆盖；`ConsoleMetaEnumRegistrationTest.EXCLUDED` 加白(派生公共投影,不对外暴露)。
 
 ```java
-// batch-common/src/main/java/com/example/batch/common/enums/BatchLifecycleStatus.java
+// batch-common/src/main/java/io/github/pinpols/batch/common/enums/BatchLifecycleStatus.java
 public enum BatchLifecycleStatus {
   CREATED, WAITING, READY, RUNNING,
   SUCCESS, FAILED, CANCELLED, TERMINATED
@@ -244,7 +244,7 @@ public enum JobInstanceStatus {
 > **2026-04-27 状态**：新增 `batch-common/.../enums/BatchType.java` 含 7 个枚举值（IMPORT / EXPORT / PROCESS / DISPATCH / SYNC / GENERAL / WORKFLOW）。PROCESS 已补 `batch-worker-process` 最小模块，SYNC 仅保留占位枚举（不实现 worker，详见 §5）。`JobType` / `PipelineType` 各加 `batchType()` 投影方法，单测覆盖投影完整性 + 共享业务类型一致性（IMPORT / EXPORT / PROCESS / DISPATCH 两边映射相等）。
 
 ```java
-// batch-common/src/main/java/com/example/batch/common/enums/BatchType.java
+// batch-common/src/main/java/io/github/pinpols/batch/common/enums/BatchType.java
 public enum BatchType implements DictEnum {
   IMPORT, EXPORT, PROCESS, DISPATCH, SYNC, GENERAL, WORKFLOW
 }
@@ -268,7 +268,7 @@ PROCESS 落地后通过 V74 扩展 `job_definition.job_type`、`pipeline_definit
 **Stage 1 改动**：
 
 ```java
-// batch-common/src/main/java/com/example/batch/common/dto/EffectiveTaskConfig.java
+// batch-common/src/main/java/io/github/pinpols/batch/common/dto/EffectiveTaskConfig.java
 public record EffectiveTaskConfig(
     String tenantId, Long taskId, Long jobInstanceId, Long jobPartitionId, String instanceNo,
     String jobCode, String taskType, Integer taskSeq, String workerType, String priorityBand,
@@ -291,7 +291,7 @@ public record EffectiveTaskConfig(
 **Stage 2 改动**（合入本批）：
 
 ```java
-// batch-common/src/main/java/com/example/batch/common/kafka/TaskDispatchMessage.java
+// batch-common/src/main/java/io/github/pinpols/batch/common/kafka/TaskDispatchMessage.java
 // schemaVersion 从 "v1" 升 "v2";删 taskType / taskSeq / businessKey / payload /
 // highWaterMarkIn(全部 worker 走 claim 拿);保留 task key + 路由元数据。
 public record TaskDispatchMessage(

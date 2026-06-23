@@ -13,7 +13,7 @@
 
 ### P0.1 BE — POST /api/console/auth/change-password
 
-**文件**:`batch-console-api/src/main/java/com/example/console/api/auth/`
+**文件**:`batch-console-api/src/main/java/io/github/pinpols/console/api/auth/`
 
 #### 新增 DTO
 

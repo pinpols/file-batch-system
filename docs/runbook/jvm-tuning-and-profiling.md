@@ -155,7 +155,7 @@ jcmd <pid> JFR.dump name=continuous filename=/tmp/now.jfr              # 从 §1
 # 两个事件 + method filter 采样指定方法的调用计时/调用栈。适合生产环境精确定位单个慢方法,
 # 比 async-profiler 全量采样开销更可控。filter 语法以 `jcmd <pid> help JFR.start` 为准:
 jcmd <pid> help JFR.start                                              # 先看本机 JDK 25 支持的 filter 写法
-jcmd <pid> JFR.start name=mt jdk.MethodTiming#filter=com.example.batch.<Class>::<method>
+jcmd <pid> JFR.start name=mt jdk.MethodTiming#filter=io.github.pinpols.batch.<Class>::<method>
 jcmd <pid> JFR.dump name=mt filename=/tmp/method-timing.jfr            # 用 JMC 打开看每方法累计耗时/调用次数
 
 # === async-profiler:CPU / Alloc / Lock 火焰图 ===
@@ -168,9 +168,9 @@ jcmd <pid> JFR.dump name=mt filename=/tmp/method-timing.jfr            # 用 JMC
 java -jar arthas-boot.jar <pid>
 > dashboard                                                  # 实时 CPU / 内存 / 线程
 > thread -b                                                  # 找死锁
-> trace com.example.batch.Foo doBar                          # 实时看方法耗时分布
-> watch com.example.batch.Foo doBar "{params, returnObj, throwExp}" -x 3  # 看入参 / 返回
-> monitor -c 5 com.example.batch.Foo doBar                   # 每 5s 输出方法 QPS / 平均耗时
+> trace io.github.pinpols.batch.Foo doBar                          # 实时看方法耗时分布
+> watch io.github.pinpols.batch.Foo doBar "{params, returnObj, throwExp}" -x 3  # 看入参 / 返回
+> monitor -c 5 io.github.pinpols.batch.Foo doBar                   # 每 5s 输出方法 QPS / 平均耗时
 
 # === 三连击 thread dump(死锁 / 卡顿)===
 for i in 1 2 3; do jstack <pid> > /tmp/td-$i.txt; sleep 30; done

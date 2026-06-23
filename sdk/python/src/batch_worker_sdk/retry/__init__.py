@@ -1,4 +1,4 @@
-"""retry/backoff —— 对齐 Java ``com.example.batch.sdk.retry``。"""
+"""retry/backoff —— 对齐 Java ``io.github.pinpols.batch.sdk.retry``。"""
 
 from __future__ import annotations
 

@@ -20,7 +20,7 @@
 
 ### P0-1 审计 tenant_id 回退 `"system"` 字符串 → 跨租审计取证断链
 
-**文件**: `batch-console-api/src/main/java/com/example/batch/console/domain/audit/support/AuditAspect.java:246-271`
+**文件**: `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/support/AuditAspect.java:246-271`
 
 ```java
 private static String resolveTenantFallback(String principalTenantId) {
@@ -47,7 +47,7 @@ private static String resolveTenantFallback(String principalTenantId) {
 
 ### P1-1 Kafka 异步消费回写 trigger_request 缺少 RLS context
 
-**文件**: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/trigger/TriggerLaunchConsumer.java:88-178`
+**文件**: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/trigger/TriggerLaunchConsumer.java:88-178`
 
 ```java
 @KafkaListener(topics = BatchTopics.TRIGGER_LAUNCH_V1, ...)
@@ -75,7 +75,7 @@ public void consume(...) {
 
 ### P1-2 调度任务遍历 tenant 不 set RlsTenantContextHolder
 
-**文件**: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/quota/QuotaRuntimeStateSnapshotScheduler.java:53-111`
+**文件**: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/quota/QuotaRuntimeStateSnapshotScheduler.java:53-111`
 
 ```java
 @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
@@ -109,7 +109,7 @@ private int snapshotTenant(String tenantId) {
 
 ### P1-3 @Async + @TransactionalEventListener(AFTER_COMMIT) 推送侧无补偿
 
-**文件**: `batch-console-api/src/main/java/com/example/batch/console/domain/observability/realtime/ConsoleRealtimeEventBridge.java:34-56`
+**文件**: `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleRealtimeEventBridge.java:34-56`
 
 ```java
 @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
@@ -139,7 +139,7 @@ public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
 
 ### P1-4 Outbox 转发器 Kafka send 在 @Transactional 内 → rollback 不撤回 Kafka 消息
 
-**文件**: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/mq/OutboxPublishCircuitBreaker.java`(子代理引用,需复核精确行号)
+**文件**: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPublishCircuitBreaker.java`(子代理引用,需复核精确行号)
 
 **问题**:Kafka producer `send()` 在 outbox 转发 `@Transactional` 内执行,中途网络抖动 / Kafka 短期不可用:
 - 消息可能已被 broker 接收(producer ack pending 但实际 leader 已收)
@@ -158,7 +158,7 @@ public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
 
 ### P1-5 DefaultCompensationService handler 路由 map 与 `self` 代理混用
 
-**文件**: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/governance/DefaultCompensationService.java:73,135,564`
+**文件**: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java:73,135,564`
 
 **子代理报告**:类构造器初始化 `handlersByType` map 用方法引用 `this::rerunJob`,但 `appendPreInsertFailureLog` 走 `self` 代理(REQUIRES_NEW)。handler 派发时(map.get(type).accept(...))在 `this` 上调,REQUIRES_NEW 失效。
 
@@ -186,7 +186,7 @@ public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
 
 ### P2-1 OperationAuditQueryService 等纯查方法无 `readOnly=true`
 
-**文件**: `batch-console-api/src/main/java/com/example/batch/console/domain/audit/application/OperationAuditQueryService.java`(子代理报告,行号 25 附近)
+**文件**: `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/application/OperationAuditQueryService.java`(子代理报告,行号 25 附近)
 
 `@Transactional` 默认 readOnly=false → 路由判定走主库;改 `@Transactional(readOnly = true)` 可下沉到 replica,释放主库连接池。
 
@@ -198,7 +198,7 @@ public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
 
 ### P2-2 DbRowExistsSensorPolicy 用 `readOnly=true, REQUIRES_NEW` 语义不明
 
-**文件**: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/sensor/DbRowExistsSensorPolicy.java:57`
+**文件**: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/sensor/DbRowExistsSensorPolicy.java:57`
 
 子代理报告:sensor 在独立只读事务里查 DB,若父事务是 read-write 且 sensor 返回 false,父事务继续写。问题是 sensor 的隔离视图可能滞后于父 tx 未 commit 的修改 — sensor 本意是查"独立可见性",但 REQUIRES_NEW 在 MySQL/PG 不同隔离级别下表现不同(尤其 PG REPEATABLE READ 默认锁定 snapshot)。
 
@@ -210,7 +210,7 @@ public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
 
 ### P2-3 RoutingHints 是普通 ThreadLocal — 异步分叉后 `@RouteToPrimary` 失效
 
-**文件**: `batch-console-api/src/main/java/com/example/batch/console/config/RoutingHints.java:14-18`
+**文件**: `batch-console-api/src/main/java/io/github/pinpols/batch/console/config/RoutingHints.java:14-18`
 
 ```java
 // JavaDoc 自述:

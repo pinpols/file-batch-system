@@ -148,7 +148,7 @@ public final class CursorCodec {
 ```xml
 <sql id="limit-clause">
   limit #{page.pageSize}
-  <if test="page instanceof @com.example.batch.common.page.PageQuery$Offset">
+  <if test="page instanceof @io.github.pinpols.batch.common.page.PageQuery$Offset">
     offset #{page.offset}
   </if>
 </sql>
@@ -188,7 +188,7 @@ const {
 ### 5.0 阶段 0:offset 公共片段抽取(✅ 已完成 2026-05-20)
 
 **纯重构,无行为变更**。把 21 个 mapper.xml 里完全相同的 5 行 offset bind 抽到
-`batch-common/src/main/resources/mapper/CommonFragments.xml` 的 `<sql id="offsetPageClause">`,各 mapper 末尾 `<include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>`。
+`batch-common/src/main/resources/mapper/CommonFragments.xml` 的 `<sql id="offsetPageClause">`,各 mapper 末尾 `<include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>`。
 减少 ~80 LOC 重复,MyBatis 跨命名空间 include 标准能力,零运行时开销。
 
 ### 5.1 阶段 1:基础设施(预计 1.5d)
@@ -270,7 +270,7 @@ Pilot 验收:
 +  </if>
    ...其它过滤...
    order by id desc
-   <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+   <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
  </select>
 ```
 

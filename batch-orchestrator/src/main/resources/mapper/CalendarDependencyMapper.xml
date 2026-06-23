@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.CalendarDependencyMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyMapper">
 
     <resultMap id="CalendarDependencyResultMap"
-               type="com.example.batch.orchestrator.domain.entity.CalendarDependencyEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyEntity">
         <constructor>
             <idArg  column="id"              javaType="java.lang.Long"/>
             <arg    column="tenant_id"       javaType="java.lang.String"/>
@@ -19,7 +19,7 @@
     </resultMap>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id"
-            parameterType="com.example.batch.orchestrator.domain.entity.CalendarDependencyEntity">
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyEntity">
         insert into batch.calendar_dependency (
             tenant_id, upstream_code, downstream_code, rule, enabled, description
         ) values (

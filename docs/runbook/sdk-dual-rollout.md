@@ -3,7 +3,7 @@
 > 决策依据:[`docs/plans/sdk-roadmap-2026-h2.md`](../plans/sdk-roadmap-2026-h2.md) §1 决策记录 #3(2 周兼容窗口)
 > + §15.5 PR 合并节奏(协议先,使用方后)。
 > 红线机制:[`scripts/local/pre-push-sdk-checks.sh`](../../scripts/local/pre-push-sdk-checks.sh)
-> + [`SdkWireContractTest`](../../batch-orchestrator/src/test/java/com/example/batch/orchestrator/controller/SdkWireContractTest.java)
+> + [`SdkWireContractTest`](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/controller/SdkWireContractTest.java)
 > + [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml)。
 
 ## 为什么需要 dual-rollout
@@ -111,5 +111,5 @@ T2: (可选) Agent-API / FE 跟上(如新字段需要在 console 展示)
 - [SDK roadmap H2-2026 plan](../plans/sdk-roadmap-2026-h2.md) §1 决策 #3 / §2 Phase 0 / §15.5
 - [ADR-035 租户自托管 SDK](../adr/ADR-035-tenant-self-hosted-sdk.md) §9 两套绑定契约
 - [Orchestrator internal OpenAPI](../api/orchestrator-internal.openapi.yaml)
-- [SdkWireContractTest](../../batch-orchestrator/src/test/java/com/example/batch/orchestrator/controller/SdkWireContractTest.java)
-- [SDK TaskDispatchMessage schemaVersion 实现](../../batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/TaskDispatchMessage.java)
+- [SdkWireContractTest](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/controller/SdkWireContractTest.java)
+- [SDK TaskDispatchMessage schemaVersion 实现](../../batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java)

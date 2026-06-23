@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-SRC = ROOT / "batch-common/src/main/java/com/example/batch/common/enums/ResultCode.java"
+SRC = ROOT / "batch-common/src/main/java/io/github/pinpols/batch/common/enums/ResultCode.java"
 OUT = ROOT / "docs/dict/error-codes.md"
 
 ENUM_LINE = re.compile(
@@ -94,7 +94,7 @@ def render(rows: list[dict]) -> str:
             "",
             "## 相关",
             "",
-            "- 源枚举：[`batch-common/.../enums/ResultCode.java`](../../batch-common/src/main/java/com/example/batch/common/enums/ResultCode.java)",
+            "- 源枚举：[`batch-common/.../enums/ResultCode.java`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/ResultCode.java)",
             "- API 协议：[`../api/console-api-protocol.md`](../api/console-api-protocol.md) §错误码",
             "- 编码规约：[`../coding-conventions.md`](../coding-conventions.md) §5 异常体系",
             "",

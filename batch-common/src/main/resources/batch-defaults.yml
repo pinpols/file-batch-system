@@ -214,7 +214,7 @@ logging:
     # 这些 statement 设计就是为重跑设计的,安全的。压到 ERROR 级别只保留真问题。
     org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor: ERROR
     # Quartz autoStartup=false 是 wheel 模式正常配置,启动期信息性 WARN 一条,压到 INFO。
-    com.example.batch.trigger.wheel.QuartzPauseWhenWheelEnabledCustomizer: INFO
+    io.github.pinpols.batch.trigger.wheel.QuartzPauseWhenWheelEnabledCustomizer: INFO
 
 # ------------------------------------------------------------------
 # Batch 平台共享配置

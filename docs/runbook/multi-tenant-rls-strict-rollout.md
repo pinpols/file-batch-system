@@ -186,4 +186,4 @@ ThreadLocal 不传 — `RlsTenantContextHolder` 在子线程返 null → strict 
 - `scripts/db/business/rls-phase-a.sql`(transition policy 安装 — 还能跑,幂等)
 - `scripts/db/business/rls-phase-a-strict.sql`(本翻转脚本)
 - `scripts/db/business/rls-phase-a-rollback-to-transition.sql`(回滚脚本)
-- `batch-common/src/test/java/com/example/batch/common/rls/RlsStrictModePreflightIntegrationTest.java`(翻转前必过的 preflight)
+- `batch-common/src/test/java/io/github/pinpols/batch/common/rls/RlsStrictModePreflightIntegrationTest.java`(翻转前必过的 preflight)

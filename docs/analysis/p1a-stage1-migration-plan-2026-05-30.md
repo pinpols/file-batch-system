@@ -1,6 +1,6 @@
 # P1-A Stage 1:console-api 子包归一迁移规划(2026-05-30)
 
-> 目标:在不引入部署变化(单模块、单 jar)前提下,把 `batch-console-api` 内的 controller / application / infrastructure / mapper / entity / DTO 按 9 个有界上下文(bounded context)+ 1 个 `shared` 横切包重组到 `com.example.batch.console.domain.<context>.*` 之下,为后续 P1-A Stage 2(独立模块拆分)与 ArchUnit 包依赖约束铺路。
+> 目标:在不引入部署变化(单模块、单 jar)前提下,把 `batch-console-api` 内的 controller / application / infrastructure / mapper / entity / DTO 按 9 个有界上下文(bounded context)+ 1 个 `shared` 横切包重组到 `io.github.pinpols.batch.console.domain.<context>.*` 之下,为后续 P1-A Stage 2(独立模块拆分)与 ArchUnit 包依赖约束铺路。
 >
 > 本文档只规划,不动代码。配套 ArchUnit 规则与脚本化迁移由后续 agent 处理。
 
@@ -8,7 +8,7 @@
 
 ## 1. 当前包结构盘点
 
-源根:`batch-console-api/src/main/java/com/example/batch/console/`
+源根:`batch-console-api/src/main/java/io/github/pinpols/batch/console/`
 
 | 顶层包 | 文件数 | 备注 |
 |---|---:|---|
@@ -34,7 +34,7 @@
 
 ## 2. 9 个 bounded context 归类表
 
-> 命名约定:`com.example.batch.console.domain.<ctx>.{web,application,infrastructure,domain,mapper}`(单模块包内层级)。
+> 命名约定:`io.github.pinpols.batch.console.domain.<ctx>.{web,application,infrastructure,domain,mapper}`(单模块包内层级)。
 > 数字为粗略估算(controller + service + mapper + entity + request + response + param + query 合计),不含 `shared` 与 `config`。
 
 ### 2.1 job(任务定义 / 实例 / 调度)
@@ -146,7 +146,7 @@
 
 ## 3. shared 横切判定
 
-放入 `com.example.batch.console.shared.*`(或保持 `support.*` 包名,语义即 shared),判定理由如下。
+放入 `io.github.pinpols.batch.console.shared.*`(或保持 `support.*` 包名,语义即 shared),判定理由如下。
 
 | 文件 / 包 | 归类 | 判定理由 |
 |---|---|---|
@@ -175,7 +175,7 @@
 
 ## 4. 跨上下文耦合热点
 
-通过 `grep "import com.example.batch.console.mapper\." infrastructure/<ctx>/*.java`、`grep "console\.application\." support/` 排查。下列条目按耦合严重程度从高到低排列:
+通过 `grep "import io.github.pinpols.batch.console.mapper\." infrastructure/<ctx>/*.java`、`grep "console\.application\." support/` 排查。下列条目按耦合严重程度从高到低排列:
 
 1. **`infrastructure/config/DefaultConsoleTenantConfigCopyService` → 14 个 mapper(跨 5+ context)**
    引用 `AlertRoutingConfig`、`BatchWindow`、`BusinessCalendar`、`CalendarHoliday`、`FileChannelConfig`、`FileTemplateConfig`、`JobDefinition`、`PipelineDefinition`、`PipelineStepDefinition`、`ResourceQueue`、`TenantQuotaPolicy`、`WorkflowDefinition`、`WorkflowEdge`、`WorkflowNode`。
@@ -222,7 +222,7 @@
 
 ## 5. 包路径映射(示例 30+)
 
-> 规则:`com.example.batch.console.{web,application,infrastructure,service,mapper,domain.entity}.X` → `com.example.batch.console.domain.<ctx>.{web,application,infrastructure,mapper,entity}.X`。
+> 规则:`io.github.pinpols.batch.console.{web,application,infrastructure,service,mapper,domain.entity}.X` → `io.github.pinpols.batch.console.domain.<ctx>.{web,application,infrastructure,mapper,entity}.X`。
 
 | # | 旧路径 | 新路径 |
 |---:|---|---|
@@ -391,8 +391,8 @@
 
 ## 附录 A:统计口径
 - 文件扫描时间:2026-05-30
-- 源根:`batch-console-api/src/main/java/com/example/batch/console`
-- 工具:`find … -name '*.java'`、`grep -rE 'import com\.example\.batch\.console\.…'`
+- 源根:`batch-console-api/src/main/java/io/github/pinpols/batch/console`
+- 工具:`find … -name '*.java'`、`grep -rE 'import io\.github\.pinpols\.batch\.console\.…'`
 - 数据未含 `src/test`、`src/main/resources`
 
 ## 附录 B:遗留议题(给 P1-B / P1-C)

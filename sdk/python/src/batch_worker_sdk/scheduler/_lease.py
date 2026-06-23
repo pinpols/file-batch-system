@@ -1,6 +1,6 @@
 """异步租约续约调度器。
 
-对应 Java ``com.example.batch.sdk.scheduler.LeaseRenewalScheduler``,作为
+对应 Java ``io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler``,作为
 长生命周期的 ``asyncio.Task`` 由
 :class:`~batch_worker_sdk.client.client.BatchPlatformClient.start` 启动。
 

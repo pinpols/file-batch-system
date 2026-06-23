@@ -66,7 +66,7 @@
 
 ## 4. 运行入口
 
-所有场景均在 **`load-tests/`** 目录下执行，参数见该目录 [`README.md`](../../load-tests/README.md) 与 [`GatlingConfig`](../../load-tests/src/test/java/com/example/batch/loadtest/GatlingConfig.java) 系统属性说明。
+所有场景均在 **`load-tests/`** 目录下执行，参数见该目录 [`README.md`](../../load-tests/README.md) 与 [`GatlingConfig`](../../load-tests/src/test/java/io/github/pinpols/batch/loadtest/GatlingConfig.java) 系统属性说明。
 
 ---
 

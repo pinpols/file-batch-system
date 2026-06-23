@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper">
     <resultMap id="BatchDayWaitingLaunchMap"
-               type="com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -29,7 +29,7 @@
     </sql>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity">
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity">
         insert into batch.batch_day_waiting_launch (
             tenant_id, calendar_code, job_code, biz_date, request_id, trace_id, trigger_type,
             wait_reason, launch_payload, wait_status, released_at, released_by, created_at, updated_at

@@ -97,7 +97,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
 ### 3.1 核心接口
 
 ```java
-package com.example.batch.common.spi.task;
+package io.github.pinpols.batch.common.spi.task;
 
 public interface BatchTaskExecutor {
   /** 全平台唯一标识(snake_case,如 "shell" / "sql" / "stored_proc" / "http" / "sftp_push")。 */
@@ -164,7 +164,7 @@ public record TaskResult(
 ### 3.4 Registry
 
 ```java
-package com.example.batch.common.spi.task;
+package io.github.pinpols.batch.common.spi.task;
 
 @Component
 public class BatchTaskExecutorRegistry {
@@ -285,7 +285,7 @@ public class ImportTaskExecutor implements BatchTaskExecutor {
 
 写一个**外部 jar**(放 `examples/` 或新 repo)演示:
 - 不引 `batch-worker-core`,只 depend `batch-common.spi.task`
-- 用 `META-INF/services/com.example.batch.common.spi.task.BatchTaskExecutor` 注册
+- 用 `META-INF/services/io.github.pinpols.batch.common.spi.task.BatchTaskExecutor` 注册
 - 放到 worker classpath → 启动期 ServiceLoader 自动加载
 - 业务方可以照这个模板写
 

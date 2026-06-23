@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -14,12 +14,12 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
             <classifier>tests</classifier>
@@ -28,7 +28,7 @@
         <!-- Phase 0 §2.1:test-scope 引入 SDK,跑 SdkWireContractTest 防协议字段漂移。
              SDK 自身不依赖 batch-common(隔离租户进程依赖),因此反向引入安全。 -->
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-sdk</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

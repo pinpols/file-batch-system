@@ -28,7 +28,7 @@ breaking-change-gate (oasdiff vs prev)─┴─► package + smoke (TS/Py/Java/G
    - **TypeScript**:`npm run build`(tsc 编译 `src/*.ts` → `dist/*.js + *.d.ts`)→ `npm pack` 出 tarball → 新临时目录 `npm i <tarball>` + 跑最小脚本 `classifyHttp(500,1)`。
      > ⚠️ TS SDK **必须编译后发布**:Node 拒绝对 `node_modules` 下的 `.ts` 做 type-stripping,直接发原始 `.ts` 装上后 `import` 即 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`。`package.json` 的 `exports`/`main`/`types` 指向 `dist/`,`files` 只含 `dist`。
    - **Python**:`python -m build` 出 sdist + wheel → 全新 venv `pip install <wheel>` → `import batch_worker_sdk` + 引用公共 SPI(`SdkAbstractTaskHandler` / `SdkTaskResult`)。
-   - **Java**:`mvn -pl sdk/java -am install` 装到本地 m2 → 独立消费 pom 引 `com.example.batch:batch-worker-sdk:${revision}` 编译最小 handler,证明发布 jar 的入口 + 依赖闭包能被外部工程解析。
+   - **Java**:`mvn -pl sdk/java -am install` 装到本地 m2 → 独立消费 pom 引 `io.github.pinpols.batch:batch-worker-sdk:${revision}` 编译最小 handler,证明发布 jar 的入口 + 依赖闭包能被外部工程解析。
    - **Go**:tag-based 无产物 → `go vet` + `go build` + `go list -m`(模块可解析)。
    - **Rust**:`cargo package --no-verify` 产 `.crate`,校验打包元数据完整。
 4. **supply-chain(best-effort,失败不挂)**:syft 生成 SBOM(SPDX-JSON,上传 artifact);oasdiff 对上个 release 生成 protocol changelog(上传 artifact)。

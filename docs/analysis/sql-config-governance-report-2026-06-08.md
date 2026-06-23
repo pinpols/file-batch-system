@@ -123,7 +123,7 @@
 
 代表文件：
 
-- `batch-console-api/src/main/java/com/example/batch/console/domain/ops/service/ConsoleAdminTestDataCleanupService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/service/ConsoleAdminTestDataCleanupService.java`
 
 典型现象：
 

@@ -1,4 +1,4 @@
-"""dispatcher 子包 —— 对齐 Java ``com.example.batch.sdk.dispatcher``。
+"""dispatcher 子包 —— 对齐 Java ``io.github.pinpols.batch.sdk.dispatcher``。
 
 承载 :class:`TaskDispatcher`(按租户维护 in-flight 注册表 + handler 路由)
 以及 :func:`run_worker` 入口。

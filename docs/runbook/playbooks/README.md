@@ -63,7 +63,7 @@
 
 - **主入口**:[`docs/runbook/incident-response.md`](../incident-response.md)
 - **系统总览**:`docs/architecture/`
-- **配套 chaos IT**(Plan #1):`batch-common/src/test/java/com/example/batch/testing/chaos/` — 每个 P0 剧本应有对应 IT 验证恢复路径
+- **配套 chaos IT**(Plan #1):`batch-common/src/test/java/io/github/pinpols/batch/testing/chaos/` — 每个 P0 剧本应有对应 IT 验证恢复路径
 - **alert 名待补清单**(本仓尚未集中维护):由 ops 团队拉单维护;每篇剧本里出现的 `TODO 待 ops 补` 都是待办项
 
 ## 维护规则

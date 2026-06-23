@@ -56,7 +56,7 @@
 
 ### 1 处规范硬违规(必修)
 
-- **FQN 违规**:`batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java:260` 出现 `com.example.batch.common.utils.JsonUtils.fromJson(...)`,未走 import,违反 CLAUDE.md "禁止全限定类名"。修复:加 import 后用短名。
+- **FQN 违规**:`batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java:260` 出现 `io.github.pinpols.batch.common.utils.JsonUtils.fromJson(...)`,未走 import,违反 CLAUDE.md "禁止全限定类名"。修复:加 import 后用短名。
 
 ### 4 处"重构未走完"的复制粘贴(同源)
 
@@ -183,7 +183,7 @@
 
 | 项 | 实地证据 | 落地状态 |
 |---|---|---|
-| **S1 trigger Spring Security**(原 deep-issue §1) | `batch-trigger/src/main/java/com/example/batch/trigger/config/TriggerSecurityConfiguration.java:42-46` 真起 `SecurityFilterChain` 把 `/actuator/**` 之外的请求强制 `authenticated()`;最早 commit `cd389a0b`(2026-04-22 v4 闭环) | ✅ 已落 |
+| **S1 trigger Spring Security**(原 deep-issue §1) | `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java:42-46` 真起 `SecurityFilterChain` 把 `/actuator/**` 之外的请求强制 `authenticated()`;最早 commit `cd389a0b`(2026-04-22 v4 闭环) | ✅ 已落 |
 | **S1 X-Console-Token**(原 deep-issue §2) | `legacyHeaderAuthEnabled` 在 `ConsoleSecurityProperties.java:38` 代码默认 `true`,但 `application.yml:67` 用 env `BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false` 覆盖默认关闭,注释"5.2: 默认关闭旧式 X-Console-Token 鉴权" | 🟡 deprecated,opt-in compat |
 | **S2 `DefaultConsoleJobApplicationService` 拆分**(原 ADR-008 + deep-issue §6) | 该类现仅 **90 LOC**(纯 delegate);拆出 6 个兄弟类:`ConsoleJobOpsSupport`(407)、`ConsoleJobQueryService`(226)、`DefaultConsoleJobApprovalService`(192)、`DefaultConsoleJobRecoveryService`(230)、`DefaultConsoleJobTriggerService`(133) | ✅ 已拆 |
 

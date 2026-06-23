@@ -307,7 +307,7 @@ jobs:
             </properties>
             <dependencies>
               <dependency>
-                <groupId>com.example.batch</groupId>
+                <groupId>io.github.pinpols.batch</groupId>
                 <artifactId>batch-worker-sdk</artifactId>
                 <version>${REV}</version>
               </dependency>

@@ -1,6 +1,6 @@
 """租户实现的任务处理协议(对齐 Java SdkTaskHandler)。
 
-对齐 Java ``com.example.batch.sdk.task.SdkTaskHandler``。Python 形式采用
+对齐 Java ``io.github.pinpols.batch.sdk.task.SdkTaskHandler``。Python 形式采用
 :class:`~typing.Protocol` 而非 :class:`abc.ABC`:运行时可校验的结构化类型
 更契合异步 handler,也省掉了 Java 必须、Python 不需要的继承样板。
 

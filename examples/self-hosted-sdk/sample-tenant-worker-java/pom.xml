@@ -16,7 +16,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.example.batch.ext</groupId>
+  <groupId>io.github.pinpols.batch.ext</groupId>
   <artifactId>sample-tenant-worker</artifactId>
   <version>1.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
@@ -33,7 +33,7 @@
 
   <dependencies>
     <dependency>
-      <groupId>com.example.batch</groupId>
+      <groupId>io.github.pinpols.batch</groupId>
       <artifactId>batch-worker-sdk</artifactId>
       <version>${batch-sdk.version}</version>
     </dependency>
@@ -45,7 +45,7 @@
 
     <!-- 集成测试:testkit 起内嵌 Kafka + HTTP stub,验证 SampleTenantWorker 全部 handler 端到端 -->
     <dependency>
-      <groupId>com.example.batch</groupId>
+      <groupId>io.github.pinpols.batch</groupId>
       <artifactId>batch-worker-sdk-testkit</artifactId>
       <version>${batch-sdk.version}</version>
       <scope>test</scope>
@@ -74,7 +74,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>com.example.batch.ext.sample.SampleTenantWorker</mainClass>
+              <mainClass>io.github.pinpols.batch.ext.sample.SampleTenantWorker</mainClass>
               <addClasspath>true</addClasspath>
               <classpathPrefix>lib/</classpathPrefix>
             </manifest>

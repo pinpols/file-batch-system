@@ -1,6 +1,6 @@
 """TaskDispatcher —— Java SDK dispatcher 在 asyncio 上的 Python 移植。
 
-行为对齐 ``com.example.batch.sdk.dispatcher.TaskDispatcher``,但运行模型有差异:
+行为对齐 ``io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher``,但运行模型有差异:
 不再使用固定容量的 ``ExecutorService``,而是每条入站派发消息开一个 fresh
 ``asyncio.Task``,由 ``KafkaTaskConsumer`` 的容量感知分区暂停来从外部限流
 (并发上限走 Kafka pause 而非内部 worker pool)。

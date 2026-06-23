@@ -17,12 +17,12 @@
 
 证据：
 
-- `batch-console-api/src/main/java/com/example/batch/console/config/ConsoleSecurityConfiguration.java:60`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleApprovalController.java:23`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleApprovalController.java:34`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleFileController.java:29`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleResultVersionController.java:26`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:26`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityConfiguration.java:60`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleApprovalController.java:23`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleApprovalController.java:34`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleFileController.java:29`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleResultVersionController.java:26`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:26`
 
 建议：所有写操作控制器补齐最小权限 `@PreAuthorize`；SecurityFilterChain 增加 `/api/console/**` 的保守回退角色；补回越权回归测试。
 
@@ -32,12 +32,12 @@
 
 证据：
 
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleFileController.java:40`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleFileController.java:48`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleFileController.java:86`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:52`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:58`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:168`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleFileController.java:40`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleFileController.java:48`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleFileController.java:86`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:52`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:58`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:168`
 
 建议：所有入口统一 `tenantGuard.resolveTenant(...)` 后再转发；禁止服务层直接使用请求体租户；补跨租户文件操作 403 测试。
 
@@ -47,13 +47,13 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 证据：
 
-- `batch-orchestrator/src/main/java/com/example/batch/orchestrator/config/InternalAuthFilter.java:41`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/ops/DefaultConsoleOrchestratorProxyService.java:35`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/ops/DefaultConsoleOrchestratorProxyService.java:135`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/ops/DefaultConsoleApprovalApplicationService.java:117`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:116`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:119`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleResultVersionController.java:121`
+- `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/InternalAuthFilter.java:41`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/ops/DefaultConsoleOrchestratorProxyService.java:35`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/ops/DefaultConsoleOrchestratorProxyService.java:135`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/ops/DefaultConsoleApprovalApplicationService.java:117`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/file/DefaultConsoleFileApplicationService.java:116`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:119`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleResultVersionController.java:121`
 
 建议：抽一个 Orchestrator 专用 `RestClient` Bean 或 factory，固定 baseUrl 与 `X-Internal-Secret`；禁止业务类自行拼 builder。
 
@@ -66,9 +66,9 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 证据：
 
 - `batch-common/src/main/java/org/springframework/boot/autoconfigure/web/client/RestClientAutoConfiguration.java:16`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/ops/DefaultConsoleTriggerProxyService.java:34`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/ops/DefaultConsoleOrchestratorProxyService.java:36`
-- `batch-trigger/src/main/java/com/example/batch/trigger/config/QuartzTriggerConfiguration.java:20`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/ops/DefaultConsoleTriggerProxyService.java:34`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/ops/DefaultConsoleOrchestratorProxyService.java:36`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/QuartzTriggerConfiguration.java:20`
 
 建议：改为 `ObjectProvider<RestClient.Builder>` 每次取新 builder，或定义 trigger/orchestrator/worker 专用不可变 `RestClient` Bean。
 
@@ -78,9 +78,9 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 证据：
 
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:36`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:98`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:103`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:36`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:98`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:103`
 
 建议：submit 强制覆盖 body tenantId；entries 增加 tenantId 解析并使用 UriBuilder。
 
@@ -90,11 +90,11 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 证据：
 
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:36`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:47`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleBatchDayReplayController.java:66`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleResultVersionController.java:89`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleResultVersionController.java:105`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:36`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:47`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleBatchDayReplayController.java:66`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleResultVersionController.java:89`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleResultVersionController.java:105`
 
 建议：写操作统一要求 `X-Idempotency-Key`；对不需要幂等的 telemetry/auth 单独列白名单。
 
@@ -106,7 +106,7 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 证据：
 
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleAuthController.java:65`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleAuthController.java:65`
 - `docs/api/console-api.openapi.yaml:125`
 
 建议：补 OpenAPI logout 路径，并重新生成前端 `../batch-console/src/types/api.generated.ts`。
@@ -117,7 +117,7 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 证据：
 
-- `batch-common/src/main/java/com/example/batch/common/config/BatchSecurityProperties.java:68`
+- `batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchSecurityProperties.java:68`
 
 建议：与 Console JWT secret 策略对齐，统一做 trim、大小写归一、占位符 contains、长度下限。
 
@@ -127,8 +127,8 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 证据：
 
-- `batch-console-api/src/main/java/com/example/batch/console/config/ConsoleSecurityProperties.java:58`
-- `batch-console-api/src/main/java/com/example/batch/console/support/auth/ConsoleJwtService.java:96`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityProperties.java:58`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/auth/ConsoleJwtService.java:96`
 
 建议：给 `NimbusJwtDecoder` 配置带 clock skew 的 validator，或删除无效配置。
 
@@ -140,7 +140,7 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 - `batch-common/src/main/java/org/springframework/boot/autoconfigure/web/client/RestClientAutoConfiguration.java:1`
 
-建议：迁移到 `com.example.batch.common.config` 并通过 auto-configuration imports 注册。
+建议：迁移到 `io.github.pinpols.batch.common.config` 并通过 auto-configuration imports 注册。
 
 ## 验证记录
 

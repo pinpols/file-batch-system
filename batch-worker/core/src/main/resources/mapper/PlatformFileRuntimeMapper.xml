@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.worker.core.mapper.PlatformFileRuntimeMapper">
+<mapper namespace="io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper">
     <!--
       显式列清单(取代 select *):resultType=map 的查询按列名读取,列集必须与表全列一致;
       显式化后 map 形状对 schema 变更稳定(新增列不会悄悄进 map),且避免 select * 把列序/大字段

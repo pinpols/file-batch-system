@@ -122,9 +122,9 @@ openssl rsa -in console-login.priv.NEW.pem -pubout -outform DER 2>/dev/null | \
 
 ## 9. 相关源
 
-- BE 密钥服务：[`ConsoleLoginKeyPairService.java`](../../batch-console-api/src/main/java/com/example/batch/console/support/auth/ConsoleLoginKeyPairService.java)
-- BE controller：[`ConsoleAuthController.java`](../../batch-console-api/src/main/java/com/example/batch/console/web/ConsoleAuthController.java)
-- BE 配置 + 守护：[`ConsoleSecurityProperties.java`](../../batch-console-api/src/main/java/com/example/batch/console/config/ConsoleSecurityProperties.java)
+- BE 密钥服务：[`ConsoleLoginKeyPairService.java`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/support/auth/ConsoleLoginKeyPairService.java)
+- BE controller：[`ConsoleAuthController.java`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleAuthController.java)
+- BE 配置 + 守护：[`ConsoleSecurityProperties.java`](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityProperties.java)
 - FE 加密：[`loginCrypto.ts`](../../../batch-console/src/utils/loginCrypto.ts)
 - Helm Secret：[`helm/batch-platform/templates/secret.yaml`](../../helm/batch-platform/templates/secret.yaml)
 - i18n key：`error.auth.encryption_required` / `_failed` / `_unavailable`

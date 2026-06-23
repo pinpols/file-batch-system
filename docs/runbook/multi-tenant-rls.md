@@ -283,11 +283,11 @@ A: 不直接 — SDK 租户 worker 连自己 DB,跟平台 biz.* 无关。若 SDK
 
 - Plan: `docs/plans/multi-tenant-isolation-plan-2026-05-31.md` §Phase A
 - ADR-035: 租户自托管 worker SDK(平行 phase,Phase B)
-- 代码:`batch-common/src/main/java/com/example/batch/common/rls/`
+- 代码:`batch-common/src/main/java/io/github/pinpols/batch/common/rls/`
   - `RlsTenantContextHolder` ThreadLocal(PR #155)
   - `RlsTenantSessionSupport` SET LOCAL 工具(PR #155)
   - `RlsPolicyHealthIndicator` healthcheck(PR #155)
-- 测试:`batch-common/src/test/java/com/example/batch/common/rls/`
+- 测试:`batch-common/src/test/java/io/github/pinpols/batch/common/rls/`
   - `RlsTenantIsolationIntegrationTest` 5 个反例验证(PR #155)
   - `RlsPhaseAMigrationCoverageTest` migration 清单一致性守护(PR #155)
 - Migration:`scripts/db/business/rls-phase-a.sql`(PR #155)

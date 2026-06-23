@@ -1,1 +1,1 @@
-com.example.batch.ext.sftp.SftpPushTaskExecutor
+io.github.pinpols.batch.ext.sftp.SftpPushTaskExecutor

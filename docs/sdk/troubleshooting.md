@@ -48,7 +48,7 @@ handler 没收到 `execute()`,console 看 job 卡在 ready / dispatched。
 
 SDK 暂未发布通用 `ThrottledLogger`(在 sdk-roadmap backlog)。临时降级方式:
 
-- logback / log4j2 config 给 `com.example.batch.sdk.dispatcher` / `...kafka` 单独提到 `WARN`
+- logback / log4j2 config 给 `io.github.pinpols.batch.sdk.dispatcher` / `...kafka` 单独提到 `WARN`
 - 或加 `TurboFilter` / rate-limit appender(如 `RateLimitingFilter`)
 - 热点循环里的 INFO 暂时改 DEBUG;待 SDK 提供官方 throttled logger 再回退
 

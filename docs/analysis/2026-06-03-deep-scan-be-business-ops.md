@@ -43,7 +43,7 @@
 
 ### P0-1 `ApprovalType` 枚举与代码硬编码的审批类型不对齐,登记缺失会触发 console meta 渲染兜空
 
-- 文件:`batch-common/src/main/java/com/example/batch/common/enums/ApprovalType.java`,`batch-console-api/.../DefaultConsoleJobRecoveryService.java:167`,`batch-console-api/.../ConsoleSelfServiceJobService.java:75`
+- 文件:`batch-common/src/main/java/io/github/pinpols/batch/common/enums/ApprovalType.java`,`batch-console-api/.../DefaultConsoleJobRecoveryService.java:167`,`batch-console-api/.../ConsoleSelfServiceJobService.java:75`
 - 现象:`ApprovalType` 仅声明 4 个 code(`CATCH_UP / COMPENSATION / DLQ_REPLAY / DOWNLOAD`),但仓内实际写入 `approval_command.approval_type` 的还有:
   - `"SELF_SERVICE"`(`ConsoleSelfServiceJobService.java:75` body.put)
   - `"WORKFLOW_NODE"` / `"OUTBOX_CLEANUP"` 在文档 `CLAUDE.md` 路由部分被任务点名,但实际代码中**完全找不到**(`grep -rn "WORKFLOW_NODE_ACTION\|OUTBOX_CLEANUP" batch-* --include="*.java"` 0 命中)。

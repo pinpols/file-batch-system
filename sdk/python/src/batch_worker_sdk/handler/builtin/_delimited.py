@@ -1,6 +1,6 @@
 """内置文件 handler 共享的定界符(CSV 类)编解码。
 
-对齐 Java ``com.example.batch.sdk.handler.builtin.support.DelimitedFormat``
+对齐 Java ``io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedFormat``
 与 ``DelimitedCodec`` —— RFC4180 风格的单物理行一记录。
 
 保持包内私有(``_delimited``)放在 :mod:`handler.builtin` 下,因为 Java 对应

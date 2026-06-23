@@ -91,7 +91,7 @@ def pick_where(exc_type_simple: str) -> str:
 
 
 def ensure_import(text: str) -> str:
-    needle = "com.example.batch.common.logging.SwallowedExceptionLogger"
+    needle = "io.github.pinpols.batch.common.logging.SwallowedExceptionLogger"
     if needle in text:
         return text
     lines = text.splitlines(keepends=True)

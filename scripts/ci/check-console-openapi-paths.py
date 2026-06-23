@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
@@ -19,19 +20,43 @@ except ImportError as exc:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OPENAPI_PATH = REPO_ROOT / "docs" / "api" / "console-api.openapi.yaml"
+
+
+def base_package() -> str:
+    """基础包名 = 根 pom.xml 的 <project><groupId>(单一真相源)。
+
+    改基础包名只需改 pom groupId,本脚本(及任何复用者)自动跟随,避免硬编码
+    com/example/batch 这类路径段在重命名时被漏改 → 静默扫不到 Controller。
+    取 <project> 直接子级 groupId(非 <parent> 里的),namespace-agnostic。
+    """
+    root = ET.parse(REPO_ROOT / "pom.xml").getroot()
+    tag = root.tag
+    ns = tag[: tag.index("}") + 1] if "}" in tag else ""
+    gid = root.find(f"{ns}groupId")  # 直接子级 = 本项目 groupId(不会取到 parent 的)
+    if gid is None or not (gid.text or "").strip():
+        raise SystemExit("could not read <project><groupId> from root pom.xml")
+    return gid.text.strip()
+
+
 # P1-A Stage 1 后,Controller 按 bounded context 散落到 domain/<ctx>/web/,
-# 所以从 console/ 根目录递归扫所有 *Controller.java,不再钉死 web/。
+# 从 console/ 根目录递归扫所有 *Controller.java(不钉死 web/);
+# 包路径由 pom groupId 派生(见 base_package),重命名免改本脚本。
+BASE_PACKAGE = base_package()
 CONSOLE_ROOT = (
     REPO_ROOT
     / "batch-console-api"
     / "src"
     / "main"
     / "java"
-    / "com"
-    / "example"
-    / "batch"
+    / Path(*BASE_PACKAGE.split("."))
     / "console"
 )
+if not CONSOLE_ROOT.is_dir():
+    raise SystemExit(
+        f"CONSOLE_ROOT 不存在: {CONSOLE_ROOT}\n"
+        f"(基础包 {BASE_PACKAGE} 派生路径扫不到 console controllers —— "
+        f"pom groupId 与实际包路径不一致?)"
+    )
 
 CLASS_MAPPING = re.compile(r"@RequestMapping\s*(?:\((?P<args>.*?)\))?", re.DOTALL)
 METHOD_MAPPING = re.compile(

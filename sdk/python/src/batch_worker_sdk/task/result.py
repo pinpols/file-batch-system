@@ -1,6 +1,6 @@
 """任务执行结果(对齐 Java SdkTaskResult)。
 
-对齐 Java ``com.example.batch.sdk.task.SdkTaskResult``。Handler 返回后
+对齐 Java ``io.github.pinpols.batch.sdk.task.SdkTaskResult``。Handler 返回后
 SDK 框架将其序列化为平台 REPORT 协议。Atomic Lane K 错误码
 (``AtomicErrorCode``)写入 ``output``(例如
 ``output['errorCode'] = 'ATOMIC_TIMEOUT'``),让平台侧错误分类保持语言无关。

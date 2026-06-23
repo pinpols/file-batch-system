@@ -1,6 +1,6 @@
 """自定义 taskType 描述符(对齐 Java SdkTaskTypeDescriptor)。
 
-对齐 Java ``com.example.batch.sdk.task.SdkTaskTypeDescriptor``。由
+对齐 Java ``io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor``。由
 :meth:`SdkTaskHandler.descriptor` 返回,并在 worker-register 请求体中
 上送,以便 console 渲染参数表单、orchestrator 在派发时合并默认值。
 """

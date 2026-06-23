@@ -1,6 +1,6 @@
 """任务执行上下文(对齐 Java SdkTaskContext)。
 
-对齐 Java ``com.example.batch.sdk.task.SdkTaskContext`` —— 即传给
+对齐 Java ``io.github.pinpols.batch.sdk.task.SdkTaskContext`` —— 即传给
 :meth:`SdkTaskHandler.execute` 的值对象 record。Python 形态是 Java 9 参构造的
 扁平化、更 Pythonic 的投影:调度上下文子 record 内联为顶层字段
 (``biz_date`` / ``attempt_no`` / ``trigger_code`` / ``workflow_run_id``

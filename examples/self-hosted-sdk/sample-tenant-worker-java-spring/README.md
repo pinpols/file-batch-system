@@ -29,7 +29,7 @@ java -jar examples/sample-tenant-worker-spring/target/sample-tenant-worker-sprin
 ## 接入只需 3 步(零 wiring 代码)
 
 1. 依赖 `batch-worker-sdk-spring-boot-starter`(见 [`pom.xml`](pom.xml))。
-2. 把每个 `SdkTaskHandler` 实现声明成 `@Component`(见 [`EchoHandler`](src/main/java/com/example/batch/ext/sample/spring/EchoHandler.java))。
+2. 把每个 `SdkTaskHandler` 实现声明成 `@Component`(见 [`EchoHandler`](src/main/java/io/github/pinpols/batch/ext/sample/spring/EchoHandler.java))。
 3. 在 `application.yml` 填 `batch.worker-sdk.*`。
 
 starter 自动完成:properties → `BatchPlatformClientConfig` 绑定、收集所有 `SdkTaskHandler` bean 注册、

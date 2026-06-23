@@ -86,7 +86,7 @@ maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:30}
 ```bash
 cd load-tests
 mvn gatling:test \
-    -Dgatling.includes=com.example.batch.loadtest.simulations.JobLaunchSimulation \
+    -Dgatling.includes=io.github.pinpols.batch.loadtest.simulations.JobLaunchSimulation \
     -Dtrigger.baseUrl=http://localhost:18081 \
     -DtenantId=default-tenant \
     -DjobCode=disp_local_probe \
@@ -120,7 +120,7 @@ mvn gatling:test \
 ```bash
 cd load-tests
 mvn gatling:test \
-    -Dgatling.includes=com.example.batch.loadtest.simulations.JobLaunchSimulation \
+    -Dgatling.includes=io.github.pinpols.batch.loadtest.simulations.JobLaunchSimulation \
     -Dtrigger.baseUrl=http://localhost:18081 \
     -DtenantId=default-tenant \
     -DjobCode=disp_local_probe \
@@ -190,7 +190,7 @@ TOKEN=$(curl -fsS -X POST http://localhost:18080/api/console/auth/login \
   | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
 
 mvn gatling:test \
-  -Dsimulation=com.example.batch.loadtest.simulations.SchedulingBacklogUnderLoadSimulation \
+  -Dsimulation=io.github.pinpols.batch.loadtest.simulations.SchedulingBacklogUnderLoadSimulation \
   -Dtrigger.baseUrl=http://localhost:18081 \
   -Dconsole.baseUrl=http://localhost:18080 \
   -Dorchestrator.baseUrl=http://localhost:18082 \

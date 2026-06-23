@@ -1,6 +1,6 @@
 """内置文件导入 handler(ADR-036 Import 形态)。
 
-对齐 Java ``com.example.batch.sdk.handler.builtin.FileImportHandler`` /
+对齐 Java ``io.github.pinpols.batch.sdk.handler.builtin.FileImportHandler`` /
 ``FileImportConfig``。Java 实现面向 JDBC(file → table);Python 版保持 sink
 无关 —— 把源文件解析成行 dict,实际 load 委托给租户可覆盖的
 :meth:`FileImportHandler._load_batch` 钩子。租户继承后插自己的目的端

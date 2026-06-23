@@ -29,9 +29,9 @@
 
 **判定**：全 5 项为测试 fixture / 文档示例，**非真实泄漏**。处置：加 `.gitleaksignore` 白名单：
 ```
-batch-console-api/src/test/java/com/example/batch/console/support/auth/ConsoleJwtServiceTest.java:generic-api-key:38
-batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHttpIntegrationTest.java:generic-api-key:225
-batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHttpIntegrationIT.java:generic-api-key:146
+batch-console-api/src/test/java/io/github/pinpols/batch/console/support/auth/ConsoleJwtServiceTest.java:generic-api-key:38
+batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationTest.java:generic-api-key:225
+batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationIT.java:generic-api-key:146
 docs/runbook/realtime-sse-verification.md:curl-auth-header:24
 batch-worker-import/src/test/resources/fixtures/test-rsa-private-pkcs8.pem:private-key:1
 ```

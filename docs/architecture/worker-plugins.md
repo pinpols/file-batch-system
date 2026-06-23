@@ -7,7 +7,7 @@
 
 ## 导入 LOAD — `ImportLoadPlugin`
 
-- **契约**：`batch-common` → `com.example.batch.common.plugin.ImportLoadPlugin`
+- **契约**：`batch-common` → `io.github.pinpols.batch.common.plugin.ImportLoadPlugin`
 - **默认实现**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`（通用 JDBC UPSERT）
 - **通用 JDBC（少写类）**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`
   - 模板 **`query_param_schema.jdbcMappedImport`**（或 **`jdbc_mapped_import`**）里声明：`schema`、`table`、`tenantColumn`、`columnMappings`（`from`/`to`）、可选 `conflictColumns`（UPSERT）、`systemBindings`（`${traceId}` 等占位符）。
@@ -28,7 +28,7 @@
 
 ## 导出 GENERATE — `ExportDataPlugin`
 
-- **契约**：`com.example.batch.common.plugin.ExportDataPlugin`
+- **契约**：`io.github.pinpols.batch.common.plugin.ExportDataPlugin`
 - **通用 JDBC**：`jdbc_mapped_export` → `GenericJdbcMappedExportDataPlugin`  
   - 模板 **`query_param_schema.jdbcMappedExport`**（或 **`jdbc_mapped_export`**）：`batchTable`、`batchTenantColumn`、`batchNoColumn`、`batchSelectColumns`（须含 **`id`**）、`detailTable`、`detailFkColumn`、`detailOrderByColumn`、`detailSelectColumns`。  
   - 明细分页通过 **`detailOrderByColumn` keyset/cursor** 推进，不再依赖 `LIMIT/OFFSET`。  

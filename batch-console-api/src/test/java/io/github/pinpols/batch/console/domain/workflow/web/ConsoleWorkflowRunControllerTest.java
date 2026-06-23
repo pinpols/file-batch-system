@@ -1,0 +1,89 @@
+package io.github.pinpols.batch.console.domain.workflow.web;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+/** P2: ConsoleWorkflowRunController cancel/terminate/skip-node 透传到 proxy。 */
+class ConsoleWorkflowRunControllerTest {
+
+  private final ConsoleOrchestratorProxyService proxy = mock(ConsoleOrchestratorProxyService.class);
+  private final ConsoleRequestMetadataResolver requestMetadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  private MockMvc mockMvc;
+
+  @BeforeEach
+  void setUp() {
+    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+    ConsoleApiExceptionHandler exceptionHandler =
+        ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(new ConsoleWorkflowRunController(proxy, responseFactory))
+            .setControllerAdvice(exceptionHandler)
+            .build();
+  }
+
+  @Test
+  void cancelShouldDelegate() throws Exception {
+    when(proxy.workflowRunAction(3L, "ta", "cancel")).thenReturn(Map.of("status", "ok"));
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/cancel").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).workflowRunAction(3L, "ta", "cancel");
+  }
+
+  @Test
+  void terminateShouldDelegate() throws Exception {
+    when(proxy.workflowRunAction(3L, "ta", "terminate")).thenReturn(Map.of("status", "ok"));
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/terminate").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).workflowRunAction(3L, "ta", "terminate");
+  }
+
+  @Test
+  void pauseShouldDelegate() throws Exception {
+    when(proxy.workflowRunAction(3L, "ta", "pause")).thenReturn(Map.of("status", "PAUSED"));
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/pause").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).workflowRunAction(3L, "ta", "pause");
+  }
+
+  @Test
+  void resumeShouldDelegate() throws Exception {
+    when(proxy.workflowRunAction(3L, "ta", "resume")).thenReturn(Map.of("status", "RUNNING"));
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/resume").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+    verify(proxy).workflowRunAction(3L, "ta", "resume");
+  }
+
+  @Test
+  void skipNodeShouldPassNodeCode() throws Exception {
+    when(proxy.workflowRunSkipNode(3L, "ta", "NODE_A")).thenReturn(Map.of("status", "skipped"));
+    mockMvc
+        .perform(
+            post("/api/console/workflow-runs/3/skip-node")
+                .param("tenantId", "ta")
+                .param("nodeCode", "NODE_A"))
+        .andExpect(status().isOk());
+    verify(proxy).workflowRunSkipNode(3L, "ta", "NODE_A");
+  }
+}

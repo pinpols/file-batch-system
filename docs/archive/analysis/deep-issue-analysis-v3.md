@@ -126,7 +126,7 @@ Tier 分级依据修复成本：A < 30min，B < 2h，C 需要事务/语义重构
 
 #### S-1.1 GCM tag 校验可被绕过
 
-**文件**：`batch-common/src/main/java/com/example/batch/common/service/BatchObjectCryptoService.java:169`
+**文件**：`batch-common/src/main/java/io/github/pinpols/batch/common/service/BatchObjectCryptoService.java:169`
 
 `decryptIfNeeded(InputStream)` 返回裸 `CipherInputStream` 供外部调用，**调用方若未完整读取或未显式关闭**，GCM tag 验证不执行。攻击者篡改尾部 16 字节（GCM tag）后，若调用链异常退出或提前 break，返回"解密成功"的内容，实际完整性保证被破坏。
 
@@ -140,7 +140,7 @@ Tier 分级依据修复成本：A < 30min，B < 2h，C 需要事务/语义重构
 
 #### S-1.2 SFTP 主机密钥检查可关闭 + 密码用 String
 
-**文件**：`batch-worker-dispatch/src/main/java/com/example/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java:102-199`
+**文件**：`batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java:102-199`
 
 - 第 164-166 行 JSch `setPassword(String)`，凭证常驻堆无法 `Arrays.fill` 擦除
 - 第 145-153 行默认 StrictHostKeyChecking=yes，但允许渠道配置 `sftp_strict_host_key_checking=no` 关闭
@@ -157,7 +157,7 @@ Tier 分级依据修复成本：A < 30min，B < 2h，C 需要事务/语义重构
 
 #### S-1.3 ConsoleTenantGuard 空串 + JWT 缺失旁路
 
-**文件**：`batch-console-api/src/main/java/com/example/batch/console/support/ConsoleTenantGuard.java:34-62`
+**文件**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleTenantGuard.java:34-62`
 
 两个入口条件缺失校验：
 
@@ -174,7 +174,7 @@ Tier 分级依据修复成本：A < 30min，B < 2h，C 需要事务/语义重构
 
 #### S-1.4 Excel 公式注入防护不全 + XXE 未显式禁用
 
-**文件**：`batch-console-api/src/main/java/com/example/batch/console/support/ConsoleExcelStyles.java`（`escapeFormula()`），`ConsoleSingleSheetExcelImportSupport.java:325`
+**文件**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ConsoleExcelStyles.java`（`escapeFormula()`），`ConsoleSingleSheetExcelImportSupport.java:325`
 
 - `escapeFormula()` 只防 `= + - @` 四个首字符，未覆盖 Unicode 变体（如 U+FF01 全宽感叹号）、制表符前置等
 - 导出 Excel 含 `configPayloadJson` / `secretPayloadJson` 原样写入，若 JSON value 含 `="cmd"` 会被 Excel 识别为公式
