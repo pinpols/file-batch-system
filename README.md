@@ -82,8 +82,11 @@ docker compose --env-file .env.local -f docker-compose.yml up -d
 | PostgreSQL | `localhost:15432`（用户 `batch_user`，密码 `batch_pass_123`） |
 | Redis | `localhost:16379` |
 | Kafka | `localhost:19092` |
+| Kafka UI | `http://localhost:18090` |
 | MinIO API | `http://localhost:19000`（Bucket: `batch-dev`） |
 | MinIO Console | `http://localhost:19001` |
+
+MinIO 对象排查优先用 `mc`。常用命令见 [对象存储后端（S3 协议）配置与多云接入](docs/runbook/object-storage-s3-backends.md#本地-minio-mc-常用命令)。
 
 ### 编译
 

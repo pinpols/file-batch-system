@@ -19,7 +19,7 @@
 > 推荐用 `BatchPlatformClientConfig.fromEnv()` 直接吃环境变量,默认前缀 **`BATCH_SDK_`**(即 `BATCH_SDK_BASE_URL` / `BATCH_SDK_TENANT_ID` / ...)。完整变量名见 `BatchPlatformClientConfig.fromEnv()` 的 Javadoc。
 > sample 工程([`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java/))走 builder 风格 + `BATCH_*` 短前缀,两种都行,二选一。
 
-> 平台 `<revision>` 当前 `1.1.0-SNAPSHOT`(见根 `pom.xml`)。release 时由 `-Drevision=X.Y.Z` 覆盖,SDK 坐标版本同步。
+> 平台 `<revision>` 当前 `1.1.0`(见根 `pom.xml`)。SDK 坐标版本与平台版本同步。
 
 ---
 
@@ -33,7 +33,7 @@
 <dependency>
   <groupId>io.github.pinpols.batch</groupId>
   <artifactId>batch-worker-sdk</artifactId>
-  <version>1.1.0-SNAPSHOT</version>
+  <version>1.1.0</version>
 </dependency>
 ```
 

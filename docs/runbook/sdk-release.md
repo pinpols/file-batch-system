@@ -103,7 +103,7 @@ Actions → `sdk-release-validation` → **Run workflow**(`workflow_dispatch`),`
 | Python | `sdk/python/src/batch_worker_sdk/_version.py`(`0.5.0a0`,hatch 读) | `python -m build` | sdist + wheel;依赖 httpx/pydantic/aiokafka |
 | Rust | `sdk/rust/Cargo.toml` `version`(`1.1.0`) | `cargo package` | 默认 zero-dep;补了 `repository`/`readme`/`keywords`/`categories` |
 | Go | git tag | (无) | module `github.com/pinpols/file-batch-system/batch-worker-sdk-go` |
-| Java | 根 pom `${revision}`(`1.1.0-SNAPSHOT`,发版去 `-SNAPSHOT`) | `mvn -pl sdk/java/core -am -Prelease deploy` | groupId `io.github.pinpols.batch`、artifactId `batch-worker-sdk`;**`release` profile 已就绪**(ossrh flatten + sources + javadoc + gpg 签名 + central-publishing-plugin,`autoPublish=false`) |
+| Java | 根 pom `${revision}`(`1.1.0`) | `mvn -pl sdk/java/core -am -Prelease deploy` | groupId `io.github.pinpols.batch`、artifactId `batch-worker-sdk`;**`release` profile 已就绪**(ossrh flatten + sources + javadoc + gpg 签名 + central-publishing-plugin,`autoPublish=false`) |
 
 > 发布前版本号对齐:各语言版本号目前**各自独立**,非强制与根 pom `${revision}` 同步(SDK 是松耦合的租户产物)。发版时按各语言自身的 SemVer 推进。
 

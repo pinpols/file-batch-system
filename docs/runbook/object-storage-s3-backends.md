@@ -70,6 +70,120 @@ batch.storage.s3:
 3. **COS bucket 名**:强制 `name-APPID` 格式。
 4. **HTTPS**:托管云一律 `https://`。
 
+## 本地 MinIO `mc` 常用命令
+
+本地 compose 已包含 `minio-init`，镜像内自带 `mc`。不想在宿主机安装 `mc` 时，先定义一个临时 helper：
+
+```bash
+mcli() {
+  docker compose --env-file .env.local run --rm --entrypoint sh minio-init -lc \
+    'mc alias set local "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null; mc "$@"' \
+    sh "$@"
+}
+```
+
+如果宿主机已安装 `mc`，可直接配置本机 alias：
+
+```bash
+mc alias set batch-local http://localhost:19000 minioadmin minioadmin123
+```
+
+下列示例默认使用上面的 `mcli` helper；本机 `mc` 模式下把 `mcli` 替换成 `mc`，并把 `local/` 替换成 `batch-local/` 即可。
+
+### 基础巡检
+
+```bash
+# 查看服务信息。
+mcli admin info local
+
+# 查看 bucket 列表。
+mcli ls local
+
+# 确认本地默认 bucket 存在。
+mcli ls local/batch-dev
+
+# 查看 bucket 体积。
+mcli du local/batch-dev
+```
+
+### 查看对象
+
+```bash
+# 查看一级目录。
+mcli ls local/batch-dev/
+
+# 递归查看 ingress 目录。
+mcli ls --recursive local/batch-dev/ingress/
+
+# 只看对象树，适合快速判断目录层级。
+mcli tree --files local/batch-dev
+
+# 查看对象元数据、大小、etag、content-type。
+mcli stat local/batch-dev/ingress/ta/sample.csv
+
+# 直接读取小文件内容。
+mcli cat local/batch-dev/outbound/REPORT/2026-06-24/report.csv | head -20
+```
+
+### 上传与下载
+
+```bash
+# 上传单个文件到导入扫描目录。
+mcli cp ./sample.csv local/batch-dev/ingress/ta/sample.csv
+
+# 上传目录，适合批量投放测试文件。
+mcli mirror ./fixtures/import/ local/batch-dev/ingress/ta/
+
+# 下载单个对象到本地目录。
+mcli cp local/batch-dev/outbound/REPORT/2026-06-24/report.csv ./tmp/
+
+# 下载整个 outbound 目录。
+mcli mirror local/batch-dev/outbound/ ./tmp/outbound/
+```
+
+### 查找与过滤
+
+```bash
+# 查找 CSV 文件。
+mcli find local/batch-dev/ingress/ --name '*.csv'
+
+# 查找最近 1 小时生成的导出对象。
+mcli find local/batch-dev/outbound/ --newer-than 1h
+
+# 查找超过 1GiB 的对象。
+mcli find local/batch-dev/ --larger 1GiB
+```
+
+### 清理对象
+
+```bash
+# 删除单个对象。
+mcli rm local/batch-dev/ingress/ta/sample.csv
+
+# 清理某个测试批次目录。
+mcli rm --recursive --force local/batch-dev/tmp/test-batch-001/
+
+# 清空 bucket 前先 dry-run：只列出将要删除的对象。
+mcli rm --recursive --force --dry-run local/batch-dev/
+```
+
+### 临时下载链接
+
+```bash
+# 生成 10 分钟有效的预签名下载地址，便于排查浏览器或下游下载问题。
+mcli share download --expire 10m local/batch-dev/outbound/REPORT/2026-06-24/report.csv
+```
+
+### 与系统表联动排查
+
+对象路径通常来自 `file_record.storage_path`、导出任务的 `outputPath` 或分发任务参数。先在数据库定位路径，再用 `mc stat/cat/cp` 校验对象是否存在、内容是否可读。
+
+```bash
+# 示例：拿到 storage_path 后检查对象。
+mcli stat local/batch-dev/ingress/ta/sample.csv
+mcli cat local/batch-dev/ingress/ta/sample.csv | head -5
+```
+
 ## ⚠ 迁移说明(2026-06-06：`minio` 前缀更名为 `s3`)
 
 配置前缀从 `batch.storage.minio` 改为 `batch.storage.s3`,对应环境变量 `BATCH_MINIO_*` 改为 `BATCH_S3_*`:

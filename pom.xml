@@ -40,7 +40,7 @@
         <!-- 统一版本入口：SemVer 2.0.0 (MAJOR.MINOR.PATCH[-PRERELEASE])。
              默认 *-SNAPSHOT 表示开发分支；release 时用 `-Drevision=X.Y.Z` 覆盖发非 SNAPSHOT。
              发布流程详见 docs/runbook/releasing.md。 -->
-        <revision>1.1.0-SNAPSHOT</revision>
+        <revision>1.1.0</revision>
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
