@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.service;
 
 import io.github.pinpols.batch.common.dto.SdkProtocolVersions;
+import io.github.pinpols.batch.common.dto.SdkVersions;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -9,16 +10,19 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
+import io.github.pinpols.batch.orchestrator.mapper.SystemParameterMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -39,13 +43,19 @@ import org.springframework.transaction.annotation.Transactional;
  *       同一 workerCode。
  * </ul>
  */
+@Slf4j
 @Service("orchestratorWorkerRegistryService")
 @RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
+  /** 租户级最低 SDK 主版本门禁的 system_parameter 键。console 在该键写最低版本字符串(如 {@code "1.0.0"} / {@code "2"})。 */
+  private static final String MIN_SDK_VERSION_PARAM_KEY = "worker.min_sdk_version";
+
   private final WorkerRegistryMapper workerRegistryMapper;
   private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
   private final PipelineStageProgressCache pipelineStageProgressCache;
+  private final SystemParameterMapper systemParameterMapper;
+  private final WorkerRegistryProperties workerRegistryProperties;
 
   @Lazy @Autowired private DefaultWorkerRegistryService self;
 
@@ -53,6 +63,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   @Transactional
   public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
     rejectUnsupportedProtocolVersion(request);
+    rejectOutdatedSdkVersion(request);
     WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
     String newStatus =
@@ -71,6 +82,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
             : (registry == null ? null : registry.capabilityTags());
 
     if (registry == null) {
+      // 缺口②:仅对新 worker_code 做 per-tenant 数量配额校验(opt-in,默认 max<=0 不限);
+      // 幂等重注册已存在的 worker_code 走 else 分支,永不被配额拦截。
+      rejectIfTenantWorkerQuotaExceeded(request.tenantId());
       registry =
           new WorkerRegistryEntity(
               null,
@@ -114,6 +128,22 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   }
 
   /**
+   * 缺口②:per-tenant worker 数量配额。仅在注册<b>新</b> worker_code 时调用。{@code maxPerTenant <= 0} 视为不限(opt-in,
+   * 默认不生效);当前活跃数(非 DECOMMISSIONED)已达上限时拒绝注册,防注册风暴撑爆 worker_registry。
+   */
+  private void rejectIfTenantWorkerQuotaExceeded(String tenantId) {
+    int max = workerRegistryProperties.getMaxPerTenant();
+    if (max <= 0) {
+      return;
+    }
+    int current = workerRegistryMapper.countByTenant(tenantId);
+    if (current >= max) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR, "error.worker.too_many_workers", current, max);
+    }
+  }
+
+  /**
    * SDK 协议门禁:worker register 携带的 {@code protocolVersion} 主版本若不在平台支持集合内,直接拒绝注册(400)。
    *
    * <p>向后兼容:{@code protocolVersion} 为空(老 SDK / 非 SDK 平台 worker)按 legacy
@@ -132,6 +162,57 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           "error.worker.unsupported_protocol_version",
           protocolVersion,
           SdkProtocolVersions.SUPPORTED_MAJOR_VERSIONS);
+    }
+  }
+
+  /**
+   * 租户级最低 SDK 版本门禁(opt-in):worker register 自报的 {@code sdkVersion} 主版本若 <b>低于</b> 该租户在 {@code
+   * batch.system_parameter}(key={@value #MIN_SDK_VERSION_PARAM_KEY})配置的最低主版本,拒绝注册(400 + i18n 引导升级)。
+   *
+   * <p>默认放行(向后兼容):
+   *
+   * <ul>
+   *   <li>该租户未配该 key → 不门禁(opt-in,不破坏现有 worker)。
+   *   <li>{@code sdkVersion} 空 / 空白 → 放行(legacy / 非 SDK worker,对齐协议门禁的 legacy 放行)。
+   *   <li>配置值或上报值解析不出主版本(脏值)→ 放行 + log warn(不因脏配置 / 脏上报误杀注册)。
+   * </ul>
+   *
+   * <p>只比主版本(对齐协议门禁与 console {@code WorkerCompatibilityEvaluator},均为主版本),解析复用 {@link
+   * SdkVersions#parseMajor}。
+   */
+  private void rejectOutdatedSdkVersion(WorkerHeartbeatDto request) {
+    String reportedSdkVersion = request.sdkVersion();
+    if (reportedSdkVersion == null || reportedSdkVersion.isBlank()) {
+      return;
+    }
+    String requiredMinVersion =
+        systemParameterMapper.selectParamValue(request.tenantId(), MIN_SDK_VERSION_PARAM_KEY);
+    if (requiredMinVersion == null || requiredMinVersion.isBlank()) {
+      return;
+    }
+    Integer requiredMajor = SdkVersions.parseMajor(requiredMinVersion);
+    if (requiredMajor == null) {
+      log.warn(
+          "tenant {} 配置的 {}=\"{}\" 解析不出主版本,跳过最低 SDK 版本门禁",
+          request.tenantId(),
+          MIN_SDK_VERSION_PARAM_KEY,
+          requiredMinVersion);
+      return;
+    }
+    Integer reportedMajor = SdkVersions.parseMajor(reportedSdkVersion);
+    if (reportedMajor == null) {
+      log.warn(
+          "worker {} 上报的 sdkVersion=\"{}\" 解析不出主版本,跳过最低 SDK 版本门禁",
+          request.workerCode(),
+          reportedSdkVersion);
+      return;
+    }
+    if (reportedMajor < requiredMajor) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR,
+          "error.worker.sdk_version_too_old",
+          reportedSdkVersion,
+          requiredMinVersion);
     }
   }
 

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
+import io.github.pinpols.batch.common.dto.SdkVersions;
 import io.github.pinpols.batch.console.domain.ops.dto.SdkPlatformConstants;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.ReasonCode;
@@ -23,7 +24,7 @@ public class WorkerCompatibilityEvaluator {
    * @return 兼容状态(永不为 null)
    */
   public WorkerCompatibility evaluate(String reportedSdkVersion) {
-    Integer major = parseMajor(reportedSdkVersion);
+    Integer major = SdkVersions.parseMajor(reportedSdkVersion);
     String platformMajor = "v" + SdkPlatformConstants.CURRENT_SDK_MAJOR;
     if (major == null) {
       return new WorkerCompatibility(
@@ -42,33 +43,5 @@ public class WorkerCompatibilityEvaluator {
     }
     return new WorkerCompatibility(
         Status.OK, ReasonCode.COMPATIBLE, reportedSdkVersion, platformMajor);
-  }
-
-  /**
-   * 解析 sdkVersion 的整数主版本(如 {@code "1.1.0"} → 1;{@code "2.0.0-rc"} → 2;{@code "v1.3"} → 1)。
-   * 取首段连续数字;空 / 无前导数字 → null(交由调用方判 UNKNOWN)。
-   */
-  private Integer parseMajor(String sdkVersion) {
-    if (sdkVersion == null || sdkVersion.isBlank()) {
-      return null;
-    }
-    String trimmed = sdkVersion.strip();
-    int start = 0;
-    // 容忍前缀 'v'/'V'(如 "v1.2.0")
-    if (trimmed.charAt(0) == 'v' || trimmed.charAt(0) == 'V') {
-      start = 1;
-    }
-    int end = start;
-    while (end < trimmed.length() && Character.isDigit(trimmed.charAt(end))) {
-      end++;
-    }
-    if (end == start) {
-      return null;
-    }
-    try {
-      return Integer.parseInt(trimmed.substring(start, end));
-    } catch (NumberFormatException ex) {
-      return null;
-    }
   }
 }

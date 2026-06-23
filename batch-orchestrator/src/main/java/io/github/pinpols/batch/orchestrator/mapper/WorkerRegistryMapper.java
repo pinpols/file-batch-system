@@ -59,6 +59,12 @@ public interface WorkerRegistryMapper {
   long countByTenantAndStatus(@Param("tenantId") String tenantId, @Param("status") String status);
 
   /**
+   * 缺口②：统计某租户当前活跃（非 DECOMMISSIONED）的 worker 数，用于 register 时的 per-tenant 数量配额校验。 DECOMMISSIONED
+   * 是人工/运维终止的终态，不占用配额，故排除。
+   */
+  int countByTenant(@Param("tenantId") String tenantId);
+
+  /**
    * 批量聚合：一次返回多租户在指定状态下的 worker 数量（{@code GROUP BY tenant_id}），避免 N 次 round-trip。
    *
    * @return 行结构 {@code {tenant_id: String, cnt: Long}};未出现的 tenant 表示该 status 下计数为 0
