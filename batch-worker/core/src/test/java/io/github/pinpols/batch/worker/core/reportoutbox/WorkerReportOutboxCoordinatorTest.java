@@ -98,7 +98,8 @@ class WorkerReportOutboxCoordinatorTest {
               new MockEnvironment(),
               null,
               coordinatorProvider,
-              new io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties());
+              new io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties(),
+              new io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties());
 
       @SuppressWarnings("unchecked")
       ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
