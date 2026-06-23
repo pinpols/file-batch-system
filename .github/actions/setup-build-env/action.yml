@@ -5,7 +5,7 @@ inputs:
   java-version:
     description: JDK version
     required: false
-    default: "25"
+    default: "21"
   compile-load-tests:
     description: Whether to compile load-tests module
     required: false

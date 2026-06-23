@@ -162,7 +162,7 @@ public class DefaultTriggerService implements TriggerService {
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     LaunchResponse result =
         tx.execute(
-            _ -> {
+            ignored -> {
               TriggerRequestEntity pendingRequest =
                   requestFromPending != null
                       ? triggerRequestMapper.selectById(requestFromPending.getId())
@@ -245,7 +245,7 @@ public class DefaultTriggerService implements TriggerService {
     // 且无并发开销（TransactionTemplate.execute 单线程内同步执行）。
     AtomicReference<TriggerRequestEntity> existingHolder = new AtomicReference<>();
     tx.execute(
-        _ -> {
+        ignored -> {
           TriggerRequestEntity existing =
               triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
           if (existing != null) {

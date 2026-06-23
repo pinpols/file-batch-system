@@ -38,7 +38,7 @@ class OtelTraceContextTest {
         SpanContext.create(
             VALID_TRACE_ID, VALID_SPAN_ID, TraceFlags.getSampled(), TraceState.getDefault());
     Span span = Span.wrap(valid);
-    try (Scope _ = Context.current().with(span).makeCurrent()) {
+    try (Scope ignored = Context.current().with(span).makeCurrent()) {
       assertThat(OtelTraceContext.currentTraceIdOrNull()).isEqualTo(VALID_TRACE_ID);
       // IdGenerator 桥接到同一 traceId
       assertThat(IdGenerator.newTraceId()).isEqualTo(VALID_TRACE_ID);
@@ -54,7 +54,7 @@ class OtelTraceContextTest {
             TraceFlags.getDefault(),
             TraceState.getDefault());
     Span invalidSpan = Span.wrap(invalid);
-    try (Scope _ = Context.current().with(invalidSpan).makeCurrent()) {
+    try (Scope ignored = Context.current().with(invalidSpan).makeCurrent()) {
       assertThat(OtelTraceContext.currentTraceIdOrNull()).isNull();
       // fallback to UUID
       assertThat(IdGenerator.newTraceId()).hasSize(32).matches("[0-9a-f]+");

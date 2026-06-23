@@ -41,8 +41,8 @@
              默认 *-SNAPSHOT 表示开发分支；release 时用 `-Drevision=X.Y.Z` 覆盖发非 SNAPSHOT。
              发布流程详见 docs/runbook/releasing.md。 -->
         <revision>1.1.0-SNAPSHOT</revision>
-        <java.version>25</java.version>
-        <maven.compiler.release>25</maven.compiler.release>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <awssdk.version>2.31.78</awssdk.version>
         <testcontainers.version>1.21.4</testcontainers.version>
@@ -260,7 +260,7 @@
                                     <version>[3.9.0,)</version>
                                 </requireMavenVersion>
                                 <requireJavaVersion>
-                                    <version>[25,)</version>
+                                    <version>[21,)</version>
                                 </requireJavaVersion>
                                 <bannedDependencies>
                                     <excludes>
@@ -607,11 +607,10 @@
                             <artifactId>spotbugs-maven-plugin</artifactId>
                             <version>4.9.8.3</version>
                             <!--
-                              注意:截至 2026-05-20,SpotBugs core 4.9.3 仅支持到 Java 23 (bytecode v67)。
-                              本项目 maven.compiler.release=25 (v69),SpotBugs 暂无法解析 → 报
-                              "No classes found to analyze"。等 SpotBugs 4.10+ 发布支持 v69 后,
-                              此 profile 即可正常运行,无需改 pom 结构。
-                              短期跑通方案:临时改 maven.compiler.release=23 + 跑 spotbugs(不提交)。
+                              注意:SpotBugs core 4.9.x 支持到 Java 23 (bytecode v67)。
+                              本项目 maven.compiler.release=21 (v65,2026-06 由 25 降级)在支持
+                              范围内 → profile 可正常运行。此前 release=25/v69 时 SpotBugs 无法
+                              解析("No classes found to analyze")的限制,降到 21 后已消除。
                             -->
                             <configuration>
                                 <effort>Max</effort>
@@ -639,8 +638,8 @@
           先在 batch-common 试点(已加 @NullMarked package-info),逐模块推。
           启用方式:mvn -P nullaway -pl batch-common compile
           失败策略:initial -XepDisableAllChecks → -Xep:NullAway:ERROR 收敛。
-          Java 25 注:ErrorProne 截至 2026-05-20 最新 2.36 支持到 Java 24;Java 25 (v69)
-                    bytecode 需 ErrorProne 2.37+。届时 profile 即可直接生效。
+          Java 版本注:ErrorProne 2.36 支持到 Java 24;本项目 release=21 (v65,2026-06 由
+                    25 降级)在支持范围内,profile 可直接生效(此前 25/v69 需 2.37+ 的限制已消除)。
         -->
         <profile>
             <id>nullaway</id>
