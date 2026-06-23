@@ -13,8 +13,10 @@ import io.github.pinpols.batch.common.kafka.SchedulingContext;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
+import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -109,6 +111,90 @@ class TaskDispatchExecutorTest {
     assertThat(executor.execute(sampleMessage(), null)).isNull();
     assertThat(executor.execute(sampleMessage(), "")).isNull();
     verify(workerRuntimeFacade, never()).claim(any(), any(), any());
+  }
+
+  @Test
+  void executeBatchClaimsOnceAndExecutesOnlyClaimedItems() {
+    TaskDispatchMessage m1 = messageWithTaskId(1L);
+    TaskDispatchMessage m2 = messageWithTaskId(2L);
+    // claim-batch:taskId 1 领到(含 config),taskId 2 没领到
+    when(workerRuntimeFacade.claimBatch(any()))
+        .thenReturn(
+            List.of(
+                new TaskClaimResult(1L, true, freshCfg(1L)), new TaskClaimResult(2L, false, null)));
+    when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("1", true, ""));
+
+    List<WorkerExecutionResult> results = executor.executeBatch(List.of(m1, m2), "w1");
+
+    assertThat(results).hasSize(1); // 只执行领到的 taskId 1
+    verify(workerRuntimeFacade).claimBatch(any()); // 一次 claim-batch
+    ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
+    verify(workerRuntimeFacade).execute(captor.capture());
+    assertThat(captor.getValue().getTaskId()).isEqualTo("1");
+  }
+
+  @Test
+  void executeBatchEmptyOrInvalidInputReturnsEmpty() {
+    assertThat(executor.executeBatch(List.of(), "w1")).isEmpty();
+    assertThat(executor.executeBatch(null, "w1")).isEmpty();
+    assertThat(executor.executeBatch(List.of(sampleMessage()), "")).isEmpty();
+    verify(workerRuntimeFacade, never()).claimBatch(any());
+  }
+
+  private static EffectiveTaskConfig freshCfg(Long taskId) {
+    return new EffectiveTaskConfig(
+        "t1",
+        taskId,
+        100L,
+        200L,
+        "INST-1",
+        "FRESH_JOB",
+        "FRESH_TYPE",
+        99,
+        "FRESH_TYPE",
+        "HIGH",
+        "fresh-biz",
+        "fresh-idem",
+        "FRESH_PAYLOAD",
+        "fresh-trace",
+        "INCREMENTAL",
+        "update_time",
+        "fresh-watermark",
+        "EXPONENTIAL",
+        5,
+        600,
+        1,
+        1,
+        "FRESH_JOB:2026-05-01:1",
+        null,
+        null,
+        "inv-fresh");
+  }
+
+  private static TaskDispatchMessage messageWithTaskId(Long taskId) {
+    return new TaskDispatchMessage(
+        "v2",
+        "t1",
+        100L,
+        200L,
+        taskId,
+        "INST-1",
+        "MSG_JOB",
+        "IMPORT",
+        "w-pre-selected",
+        "HIGH",
+        "msg-trace",
+        "msg-idem",
+        Instant.parse("2026-04-27T12:00:00Z"),
+        new SchedulingContext(
+            LocalDate.parse("2026-05-01"),
+            LocalDate.parse("2026-04-30"),
+            LocalDate.parse("2026-05-04"),
+            false,
+            1,
+            "API",
+            null,
+            null));
   }
 
   private static TaskDispatchMessage sampleMessage() {
