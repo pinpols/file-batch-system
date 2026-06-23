@@ -1,132 +1,63 @@
 package io.github.pinpols.batch.common.rls;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
-import org.springframework.jdbc.datasource.DataSourceUtils;
 
 /**
- * Phase A · RLS healthcheck — 启动期 + actuator/health 时确认 biz.* 9 张表(+ batch.process_staging) 都启用了
- * RLS 并异常退出 transition policy。
+ * Phase A · RLS healthcheck — 启动期 + actuator/health 时<b>闭世界</b>确认真实 biz.* 表(+
+ * batch.process_staging) 都启用了 RLS(ENABLE + FORCE)且挂了 tenant_isolation policy。
  *
- * <p>检查项:对 `pg_class.relrowsecurity / relforcerowsecurity` 校验 ENABLE + FORCE,对 `pg_policies` 校验存在
- * `tenant_isolation_transition` policy。
+ * <p><b>闭世界(closed-world)</b>:不再遍历硬编码清单,而是扫真实 biz schema 的表(排除分区子表)。新增 biz 表漏配 RLS 时也会被发现 —— 旧的硬编码
+ * 清单做不到(不在清单里就静默放过 → 跨租户泄露)。检查逻辑见 {@link RlsClosedWorldChecker}。
  *
- * <p>缺一报 DOWN,details 列出缺哪张表 — 让平台运维加新 biz 表时漏配 RLS 立刻可见。
+ * <p>缺一报 DOWN,details 分 {@code missingEnableRls}/{@code missingForceRls}/{@code missingPolicy}
+ * 列出缺哪张表 —— 让平台运维加新 biz 表时漏配 RLS 立刻可见。biz 库不可达保持 try-catch 转 DOWN,不 crash。
  */
 @Slf4j
 public class RlsPolicyHealthIndicator implements HealthIndicator {
 
-  /** 受 RLS 保护的 biz 表 + batch.process_staging。新加业务表必须更新本清单 + Flyway 加 policy。 */
-  public static final List<String> EXPECTED_RLS_TABLES =
-      List.of(
-          "biz.customer_account",
-          "biz.process_account_summary",
-          "biz.process_event_copy",
-          "biz.process_order_event",
-          "biz.risk_alert",
-          "biz.risk_score",
-          "biz.settlement_batch",
-          "biz.settlement_detail",
-          "biz.transaction",
-          "batch.process_staging");
-
-  /** 翻转 transition → strict 期间,健康检查接受任一 policy 名(灰度兼容)。 */
+  /** 翻转 transition → strict 期间,健康检查接受任一 policy 名(灰度兼容)。保留作向后引用。 */
   public static final List<String> ACCEPTED_POLICY_NAMES =
-      List.of("tenant_isolation_transition", "tenant_isolation_strict");
+      RlsClosedWorldChecker.ACCEPTED_POLICY_NAMES;
 
-  private final DataSource businessDataSource;
+  private final RlsClosedWorldChecker checker;
 
+  /** 兼容旧构造器:无豁免清单。 */
   public RlsPolicyHealthIndicator(DataSource businessDataSource) {
-    this.businessDataSource = businessDataSource;
+    this(businessDataSource, List.of());
+  }
+
+  public RlsPolicyHealthIndicator(DataSource businessDataSource, List<String> exemptBizTables) {
+    this.checker = new RlsClosedWorldChecker(businessDataSource, exemptBizTables);
   }
 
   @Override
   public Health health() {
-    List<String> missingRls = new ArrayList<>();
-    List<String> missingForce = new ArrayList<>();
-    List<String> missingPolicy = new ArrayList<>();
-    boolean tableNotFound = false;
-
-    Connection conn = DataSourceUtils.getConnection(businessDataSource);
-    try (Statement st = conn.createStatement()) {
-      for (String fqTable : EXPECTED_RLS_TABLES) {
-        String[] parts = fqTable.split("\\.", 2);
-        String schema = parts[0];
-        String table = parts[1];
-
-        // 1. 表是否存在
-        boolean exists;
-        try (ResultSet rs =
-            st.executeQuery(
-                "SELECT 1 FROM information_schema.tables WHERE table_schema='"
-                    + schema
-                    + "' AND table_name='"
-                    + table
-                    + "'")) {
-          exists = rs.next();
-        }
-        if (!exists) {
-          tableNotFound = true;
-          continue;
-        }
-
-        // 2. ENABLE + FORCE 检查
-        try (ResultSet rs =
-            st.executeQuery(
-                "SELECT relrowsecurity, relforcerowsecurity FROM pg_class c "
-                    + "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                    + "WHERE n.nspname='"
-                    + schema
-                    + "' AND c.relname='"
-                    + table
-                    + "'")) {
-          if (rs.next()) {
-            if (!rs.getBoolean(1)) missingRls.add(fqTable);
-            if (!rs.getBoolean(2)) missingForce.add(fqTable);
-          }
-        }
-
-        // 3. policy 是否存在 — 接受 transition 或 strict 任一(灰度兼容)
-        String policyInList = "('" + String.join("','", ACCEPTED_POLICY_NAMES) + "')";
-        try (ResultSet rs =
-            st.executeQuery(
-                "SELECT 1 FROM pg_policies WHERE schemaname='"
-                    + schema
-                    + "' AND tablename='"
-                    + table
-                    + "' AND policyname IN "
-                    + policyInList)) {
-          if (!rs.next()) missingPolicy.add(fqTable);
-        }
-      }
+    RlsClosedWorldChecker.Result result;
+    try {
+      result = checker.check();
     } catch (SQLException e) {
       log.warn("RLS health check failed: {}", e.getMessage());
       return Health.down().withException(e).build();
-    } finally {
-      DataSourceUtils.releaseConnection(conn, businessDataSource);
     }
 
-    Health.Builder builder =
-        (missingRls.isEmpty() && missingForce.isEmpty() && missingPolicy.isEmpty())
-            ? Health.up()
-            : Health.down();
-    builder.withDetail("expectedTables", EXPECTED_RLS_TABLES.size());
-    if (tableNotFound) {
-      // 部分表可能在某些部署里不存在(只装单一 worker module),不算 fail
-      builder.withDetail(
-          "note", "some expected tables missing in this deployment (single-worker mode?)");
+    Health.Builder builder = result.isClean() ? Health.up() : Health.down();
+    if (!result.missingEnable().isEmpty()) {
+      builder.withDetail("missingEnableRls", result.missingEnable());
     }
-    if (!missingRls.isEmpty()) builder.withDetail("missingEnableRls", missingRls);
-    if (!missingForce.isEmpty()) builder.withDetail("missingForceRls", missingForce);
-    if (!missingPolicy.isEmpty()) builder.withDetail("missingPolicy", missingPolicy);
+    if (!result.missingForce().isEmpty()) {
+      builder.withDetail("missingForceRls", result.missingForce());
+    }
+    if (!result.missingPolicy().isEmpty()) {
+      builder.withDetail("missingPolicy", result.missingPolicy());
+    }
+    if (!result.isClean()) {
+      builder.withDetail("missingRlsTables", result.allMissingTables());
+    }
     return builder.build();
   }
 }
