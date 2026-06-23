@@ -31,6 +31,7 @@ import com.example.batch.orchestrator.controller.request.TaskReportBatchResponse
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,12 +61,13 @@ class TaskControllerApplicationServiceTest {
   private TaskControllerApplicationService service;
 
   private final BundleBatchClaimProperties batchClaimProperties = new BundleBatchClaimProperties();
+  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   @BeforeEach
   void setUp() {
     service =
         new TaskControllerApplicationService(
-            taskExecutionService, new ObjectMapper(), batchClaimProperties);
+            taskExecutionService, new ObjectMapper(), batchClaimProperties, meterRegistry);
     // reportBatch 经 self 代理逐项调 report;单测里无 Spring 代理,自引用指回本实例即可触发真逻辑
     ReflectionTestUtils.setField(service, "self", service);
   }
@@ -221,6 +223,58 @@ class TaskControllerApplicationServiceTest {
   void reportBatchEmptyInputReturnsEmpty() {
     assertThat(service.reportBatch(new TaskReportBatchRequest(null)).results()).isEmpty();
     assertThat(service.reportBatch(null).results()).isEmpty();
+  }
+
+  // ===== 2.4 观测指标 =====
+
+  @Test
+  @DisplayName("批量指标:claim/report 记录批大小分布 + 逐项 outcome 计数")
+  void batchMetricsRecordSizeAndOutcomes() {
+    // claim:1 领到(taskId=1)+ 1 跳过(taskId=2 被抢)
+    when(taskExecutionService.assignWorker(eq("ta"), eq(1L), eq("w1")))
+        .thenReturn(task(TaskStatus.RUNNING.code(), "w1"));
+    when(taskExecutionService.assignWorker(eq("ta"), eq(2L), eq("w1")))
+        .thenReturn(task(TaskStatus.RUNNING.code(), "w-other"));
+    service.claimBatch(
+        new TaskClaimBatchRequest(
+            List.of(
+                new TaskClaimItemPayload("ta", 1L, "w1", "i1"),
+                new TaskClaimItemPayload("ta", 2L, "w1", "i2"))));
+
+    assertThat(meterRegistry.summary("batch.task.batch_claim.size").count()).isEqualTo(1);
+    assertThat(meterRegistry.summary("batch.task.batch_claim.size").totalAmount()).isEqualTo(2.0);
+    assertThat(
+            meterRegistry
+                .counter("batch.task.batch_claim.items.total", "outcome", "claimed")
+                .count())
+        .isEqualTo(1.0);
+    assertThat(
+            meterRegistry
+                .counter("batch.task.batch_claim.items.total", "outcome", "skipped")
+                .count())
+        .isEqualTo(1.0);
+
+    // report:taskId=2 抛 → 1 ok + 1 failed
+    when(taskExecutionService.applyTaskOutcome(any()))
+        .thenAnswer(
+            inv -> {
+              TaskOutcomeCommand c = inv.getArgument(0);
+              if (c.taskId() == 2L) {
+                throw new RuntimeException("boom");
+              }
+              return null;
+            });
+    service.reportBatch(new TaskReportBatchRequest(List.of(reportDto(1L), reportDto(2L))));
+
+    assertThat(meterRegistry.summary("batch.task.batch_report.size").totalAmount()).isEqualTo(2.0);
+    assertThat(
+            meterRegistry.counter("batch.task.batch_report.items.total", "outcome", "ok").count())
+        .isEqualTo(1.0);
+    assertThat(
+            meterRegistry
+                .counter("batch.task.batch_report.items.total", "outcome", "failed")
+                .count())
+        .isEqualTo(1.0);
   }
 
   private static TaskExecutionReportDto reportDto(Long taskId) {

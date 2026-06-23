@@ -23,6 +23,7 @@ import com.example.batch.orchestrator.controller.TaskController;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +44,10 @@ class TaskControllerTest {
   void setUp() {
     TaskControllerApplicationService taskControllerApplicationService =
         new TaskControllerApplicationService(
-            taskExecutionService, new ObjectMapper(), new BundleBatchClaimProperties());
+            taskExecutionService,
+            new ObjectMapper(),
+            new BundleBatchClaimProperties(),
+            new SimpleMeterRegistry());
     mockMvc =
         MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
             .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
