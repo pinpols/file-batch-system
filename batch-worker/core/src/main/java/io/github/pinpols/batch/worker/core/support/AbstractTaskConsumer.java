@@ -76,6 +76,10 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    */
   public abstract String listenerId();
 
+  private String batchListenerId() {
+    return listenerId() + "-batch";
+  }
+
   /** D-3: 子类可提供 DLQ 发布器，用于转发无法处理的"毒丸"消息。 */
   protected abstract DeadLetterPublisher deadLetterPublisher();
 
@@ -176,7 +180,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     if (!acquired) {
       // 背压：当实例内并发达到上限时，暂停拉取新消息。
       // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程长期停滞导致 rebalance 风险）。
-      pauseContainer();
+      pauseContainer(listenerId());
       return false;
     }
     // C-2.2: 所有 acquired=true 之后的出口（包括 JSON 解析异常 / accepts 失败 / 业务异常）
@@ -269,7 +273,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       // 无论处理成功/失败/抛异常，都必须释放 permit；
       // 若之前触发过 pause，则在释放后尝试恢复消费。
       sem.release();
-      resumeContainerIfPaused();
+      resumeContainerIfPaused(listenerId());
       BatchMdc.removeAll(
           StructuredLogField.TENANT_ID,
           StructuredLogField.TRACE_ID,
@@ -300,7 +304,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     int n = payloads.size();
     if (!sem.tryAcquire(n)) {
       // 背压:实例内并发不足以吃下整批 → 暂停拉取,不提交,等容量恢复后重投。
-      pauseContainer();
+      pauseContainer(batchListenerId());
       return false;
     }
     try {
@@ -352,7 +356,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       return allDlq;
     } finally {
       sem.release(n);
-      resumeContainerIfPaused();
+      resumeContainerIfPaused(batchListenerId());
       BatchMdc.removeAll(
           StructuredLogField.TENANT_ID,
           StructuredLogField.TRACE_ID,
@@ -434,9 +438,9 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     }
   }
 
-  private void pauseContainer() {
+  private void pauseContainer(String containerId) {
     MessageListenerContainer container =
-        kafkaListenerEndpointRegistry.getListenerContainer(listenerId());
+        kafkaListenerEndpointRegistry.getListenerContainer(containerId);
     if (container == null) {
       return;
     }
@@ -446,13 +450,13 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       }
     } catch (Exception ex) {
       log.warn(
-          "failed to pause container: listenerId={}, error={}", listenerId(), ex.getMessage(), ex);
+          "failed to pause container: listenerId={}, error={}", containerId, ex.getMessage(), ex);
     }
   }
 
-  private void resumeContainerIfPaused() {
+  private void resumeContainerIfPaused(String containerId) {
     MessageListenerContainer container =
-        kafkaListenerEndpointRegistry.getListenerContainer(listenerId());
+        kafkaListenerEndpointRegistry.getListenerContainer(containerId);
     if (container == null) {
       return;
     }
@@ -462,7 +466,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       }
     } catch (Exception ex) {
       log.warn(
-          "failed to resume container: listenerId={}, error={}", listenerId(), ex.getMessage(), ex);
+          "failed to resume container: listenerId={}, error={}", containerId, ex.getMessage(), ex);
     }
   }
 
