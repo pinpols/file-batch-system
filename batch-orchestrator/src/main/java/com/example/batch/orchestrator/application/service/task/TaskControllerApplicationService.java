@@ -21,6 +21,9 @@ import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequ
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewResultPayload;
+import com.example.batch.orchestrator.controller.request.TaskReportBatchRequest;
+import com.example.batch.orchestrator.controller.request.TaskReportBatchResponse;
+import com.example.batch.orchestrator.controller.request.TaskReportResultPayload;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,6 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Backoff;
@@ -54,6 +59,13 @@ public class TaskControllerApplicationService {
   private final TaskExecutionService taskExecutionService;
   private final ObjectMapper objectMapper;
   private final BundleBatchClaimProperties batchClaimProperties;
+
+  /**
+   * 自引用(AOP self-invocation 豁免①):reportBatch 逐项调用 {@link #report} 需经代理才能触发其
+   * {@code @Retryable}(死锁退避)与 {@code applyTaskOutcome} 的 {@code @Transactional}(逐项独立事务)。 直接
+   * this.report() 会绕过代理。
+   */
+  @Lazy @Autowired private TaskControllerApplicationService self;
 
   @Timed(
       value = "batch.task.claim.duration",
@@ -135,6 +147,44 @@ public class TaskControllerApplicationService {
             .verifierFailures(request.isSuccess() ? request.getVerifierFailures() : null)
             .build();
     taskExecutionService.applyTaskOutcome(command);
+  }
+
+  /**
+   * ADR-046 P2 切片 2.2:批量上报 —— 一次 HTTP 往返上报 K 个**独立** partition 的结果, 把控制面往返从 O(N) 降到 O(N/K)。
+   *
+   * <p>**逐项独立事务 + 逐项结果**:每项经 {@code self.report}(各自 {@code @Transactional} + {@code @Retryable}
+   * 死锁退避)推进,**某项失败(版本 CAS 冲突 / 校验 / 其它)只标记该项,不影响其余项也不回滚整批** —— 这正是 ADR-046 要求的「批内部分失败 =
+   * 失败项独立、不退整束」。worker 据逐项结果只重报 ok=false 的项。
+   *
+   * <p>设计取舍:不在单事务里做 savepoint 批量推进 —— {@code applyTaskOutcome} 自身 {@code @Transactional} + 父汇总
+   * self-invocation + 死锁 {@code @Retryable},逐项独立事务隔离最强、复用已验证路径,风险最低; 真正的 churn 收益在「一次 HTTP 报 K
+   * 个」。outbox 单 INSERT 批写是更高风险的次要微优,后置(见计划 §2.2)。
+   *
+   * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝。
+   */
+  public TaskReportBatchResponse reportBatch(TaskReportBatchRequest request) {
+    List<TaskExecutionReportDto> items =
+        request == null || request.items() == null ? List.of() : request.items();
+    int cap = batchClaimProperties.effectiveBatchSize();
+    if (items.size() > cap) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "report batch size " + items.size() + " exceeds max " + cap);
+    }
+    List<TaskReportResultPayload> results = new ArrayList<>(items.size());
+    for (TaskExecutionReportDto item : items) {
+      Long taskId = item.getTaskId();
+      try {
+        self.report(taskId, item);
+        results.add(new TaskReportResultPayload(taskId, true, null));
+      } catch (RuntimeException e) {
+        // 逐项独立:该项失败不影响其余项;worker 只重报 ok=false 的项
+        log.warn("batch report item failed: taskId={} err={}", taskId, e.toString());
+        results.add(new TaskReportResultPayload(taskId, false, e.getMessage()));
+      }
+    }
+    return new TaskReportBatchResponse(results);
   }
 
   /**

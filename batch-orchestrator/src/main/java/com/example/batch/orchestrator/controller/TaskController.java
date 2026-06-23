@@ -12,6 +12,8 @@ import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
+import com.example.batch.orchestrator.controller.request.TaskReportBatchRequest;
+import com.example.batch.orchestrator.controller.request.TaskReportBatchResponse;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -98,6 +100,16 @@ public class TaskController {
     return taskControllerApplicationService.claimBatch(normalize(request, httpRequest));
   }
 
+  /**
+   * ADR-046 P2 切片 2.2:批量上报 —— 一次 HTTP 往返上报 K 个独立 partition 的结果(O(N)→O(N/K))。 逐项独立事务推进,逐项返回 {@code
+   * {taskId, ok, error}};某项失败只标记该项,不影响其余项。
+   */
+  @PostMapping("/report-batch")
+  public TaskReportBatchResponse reportBatch(
+      @RequestBody TaskReportBatchRequest request, HttpServletRequest httpRequest) {
+    return taskControllerApplicationService.reportBatch(normalize(request, httpRequest));
+  }
+
   private static TaskClaimRequest normalize(
       TaskClaimRequest request, HttpServletRequest httpRequest) {
     String tenantId =
@@ -127,6 +139,19 @@ public class TaskController {
               item == null ? null : item.partitionInvocationId()));
     }
     return new TaskClaimBatchRequest(items);
+  }
+
+  private static TaskReportBatchRequest normalize(
+      TaskReportBatchRequest request, HttpServletRequest httpRequest) {
+    if (request == null || request.items() == null) {
+      return request;
+    }
+    for (TaskExecutionReportDto item : request.items()) {
+      if (item != null) {
+        item.setTenantId(InternalRequestTenantGuard.resolveTenant(httpRequest, item.getTenantId()));
+      }
+    }
+    return request;
   }
 
   private static TaskHeartbeatRequest normalize(
