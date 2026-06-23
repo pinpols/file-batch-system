@@ -77,11 +77,21 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
   }
 
-  /** 启动一个 IMPORT 单作业,返回其唯一 task(及其 partition)。 */
+  /**
+   * 启动一个 IMPORT 单作业,返回其唯一 task(及其 partition)。
+   *
+   * <p>每个作业用**独立 worker_group**(group 内仅 1 个 worker)—— 多个同组 ONLINE worker 时 orchestrator 的 worker
+   * 选择会按负载挑定某一个,用别的同组 worker 去 claim 会落空(claimed=false)。 独立 group 保证每个 task 只有唯一可选 worker,claim
+   * 结果确定(本机偶发对齐、CI 必现该非确定性)。
+   */
   private LaunchedTask launchOne(int idx) {
     LaunchSeed seed =
         LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+            jdbcTemplate,
+            TENANT,
+            "IMPORT",
+            "ITGRP_" + idx + "_" + System.nanoTime(),
+            TriggerType.API);
     LaunchRequest req =
         LaunchRequest.builder()
             .tenantId(TENANT)
