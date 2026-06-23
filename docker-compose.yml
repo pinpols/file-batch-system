@@ -201,6 +201,23 @@ services:
     networks:
       - batch-network
 
+  kafka-ui:
+    image: provectuslabs/kafka-ui:${KAFKA_UI_IMAGE_TAG:-latest}
+    container_name: batch-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${KAFKA_UI_PORT:-18090}:8080"
+    environment:
+      <<: *common-runtime-env
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    networks:
+      - batch-network
+
   minio:
     image: minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-09-07T16-13-09Z}
     container_name: batch-minio

@@ -8,7 +8,7 @@ version: 0.1.0
 # 镜像 tag 默认从这里取，禁止落 SNAPSHOT 到 chart）。
 # 发版流程：改 pom.xml <revision> 跑 release → 打稳定 tag → build 镜像 → 同步 appVersion。
 # 详见 docs/runbook/releasing.md §Release flow。
-appVersion: "1.0.4"
+appVersion: "1.1.0"
 keywords:
   - batch
   - etl

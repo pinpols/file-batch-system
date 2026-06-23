@@ -31,6 +31,7 @@
 
 - PostgreSQL
 - Kafka
+- Kafka UI
 - MinIO
 - Redis
 - `batch-trigger`
@@ -40,6 +41,16 @@
 - `batch-worker-process`
 - `batch-worker-dispatch`
 - `batch-console-api`
+
+默认宿主机端口：
+
+| 服务 | 地址 |
+|---|---|
+| console-api | `http://localhost:18080` |
+| Kafka broker | `localhost:19092` |
+| Kafka UI | `http://localhost:18090` |
+| MinIO API | `http://localhost:19000` |
+| MinIO Console | `http://localhost:19001` |
 
 ## 启动观测栈
 
