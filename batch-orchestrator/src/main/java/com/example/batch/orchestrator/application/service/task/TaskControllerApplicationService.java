@@ -4,6 +4,7 @@ import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.observability.BatchMetricsNames;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
@@ -29,6 +30,7 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +61,7 @@ public class TaskControllerApplicationService {
   private final TaskExecutionService taskExecutionService;
   private final ObjectMapper objectMapper;
   private final BundleBatchClaimProperties batchClaimProperties;
+  private final MeterRegistry meterRegistry;
 
   /**
    * 自引用(AOP self-invocation 豁免①):reportBatch 逐项调用 {@link #report} 需经代理才能触发其
@@ -103,6 +106,7 @@ public class TaskControllerApplicationService {
           "claim batch size " + items.size() + " exceeds max " + cap);
     }
     List<TaskClaimResultPayload> results = new ArrayList<>(items.size());
+    int claimed = 0;
     for (TaskClaimItemPayload item : items) {
       JobTaskEntity task =
           taskExecutionService.assignWorker(item.tenantId(), item.taskId(), item.workerId());
@@ -110,9 +114,22 @@ public class TaskControllerApplicationService {
         EffectiveTaskConfig config =
             taskExecutionService.loadEffectiveConfig(item.tenantId(), item.taskId());
         results.add(new TaskClaimResultPayload(item.taskId(), true, config));
+        claimed++;
       } else {
         results.add(new TaskClaimResultPayload(item.taskId(), false, null));
       }
+    }
+    // 2.4 观测:批大小分布(看 K 实际多大=churn 省多少)+ 逐项 outcome 计数
+    if (!items.isEmpty()) {
+      meterRegistry.summary(BatchMetricsNames.BATCH_CLAIM_SIZE).record(items.size());
+      meterRegistry
+          .counter(
+              BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "claimed")
+          .increment(claimed);
+      meterRegistry
+          .counter(
+              BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "skipped")
+          .increment(items.size() - claimed);
     }
     return new TaskClaimBatchResponse(results);
   }
@@ -173,16 +190,29 @@ public class TaskControllerApplicationService {
           "report batch size " + items.size() + " exceeds max " + cap);
     }
     List<TaskReportResultPayload> results = new ArrayList<>(items.size());
+    int ok = 0;
     for (TaskExecutionReportDto item : items) {
       Long taskId = item.getTaskId();
       try {
         self.report(taskId, item);
         results.add(new TaskReportResultPayload(taskId, true, null));
+        ok++;
       } catch (RuntimeException e) {
         // 逐项独立:该项失败不影响其余项;worker 只重报 ok=false 的项
         log.warn("batch report item failed: taskId={} err={}", taskId, e.toString());
         results.add(new TaskReportResultPayload(taskId, false, e.getMessage()));
       }
+    }
+    // 2.4 观测:批大小分布 + 逐项 outcome(批内部分失败可观测)
+    if (!items.isEmpty()) {
+      meterRegistry.summary(BatchMetricsNames.BATCH_REPORT_SIZE).record(items.size());
+      meterRegistry
+          .counter(BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "ok")
+          .increment(ok);
+      meterRegistry
+          .counter(
+              BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "failed")
+          .increment(items.size() - ok);
     }
     return new TaskReportBatchResponse(results);
   }
