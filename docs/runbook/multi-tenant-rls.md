@@ -98,7 +98,7 @@ WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
 翻之前必须每一项 ✅:
 
 - [x] **A.** 所有 biz.* 写入/读取路径已接线(见 §3.2 表,4 个 plugin + 1 个 adapter)— PR #155/#158/#160
-- [ ] **B.** sim 跑全链路一遍,日志无 `RLS SET LOCAL failed` warn(`scripts/sim/05-load.sh + 07-spi-load.sh`)— **待运维生产前跑**
+- [ ] **B.** sim 跑全链路一遍,日志无 `RLS SET LOCAL failed` warn(`scripts/sim/05-load.sh + 07-atomic-load.sh`)— **待运维生产前跑**
 - [ ] **C.** 生产 prod-shadow 跑 ≥ 1 周,actuator/health 持续绿,无 `RLS SET LOCAL failed` log — **待运维**
 - [x] **D.** `RlsStrictModePreflightIntegrationTest` 7 个 test 覆盖 transition + strict + 漏 SET + 回滚 — PR(当前)
 - [x] **E.** Release notes / on-call 翻转手册 — `docs/runbook/multi-tenant-rls-strict-rollout.md`,回滚脚本 `rls-phase-a-rollback-to-transition.sql` — PR(当前)
@@ -212,7 +212,7 @@ jdbcTemplate(adminDs).queryForList("SELECT tenant_id, count(*) FROM biz.customer
 ### Symptom: 应用 SELECT 返 0 行,期望有数据(strict 模式标准排查路径)
 
 ```
-2026-05-31T12:00 c.e.b.w.i.l.LoadStep - inserted 0 rows for tenant=ta
+2026-05-31T12:00 i.g.p.b.w.i.s.LoadStep - inserted 0 rows for tenant=ta
 ```
 
 **transition 模式下**:几乎不会因 RLS 返 0 行(未设回退允许)。先排查业务过滤 / 数据本身。

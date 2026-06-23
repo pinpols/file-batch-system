@@ -1,5 +1,7 @@
 # 大表分区 cutover 执行手册（DBA-2026-05-20 P0-1 / P0-2）
 
+> **状态说明(2026-06)**:`outbox_event` / `job_instance` 的月分区改造**已落 Flyway**:`db/migration/V172__outbox_event_monthly_partition.sql` 与 `V173__job_instance_monthly_partition.sql`(幂等改造,ON CONFLICT→NOT EXISTS,详见 `partition-idempotency-decision.md`)。本手册描述的手工 `scripts/db/partition-migration/*.sql` cutover 流程为历史遗留,新环境随 Flyway 自动迁移即可,无需手工 cutover;本文保留作背景与回滚参考。
+>
 > 目标：把 `outbox_event` 与 `job_instance` 从普通表改造为按月分区（RANGE on `created_at` / `biz_date`），解除"无界增长 → 单 SELECT 退化 → 调度延迟"的最后一道增长红线。
 >
 > 本手册串起 `scripts/db/partition-migration/01-*.sql` / `02-*.sql` / `03-add-future-partitions.sql`，给出**完整的预演 → cutover → 校验 → 回滚**流程。
@@ -47,8 +49,9 @@ mvn -pl batch-orchestrator -am flyway:migrate \
     -Dflyway.url=jdbc:postgresql://localhost:15500/batch_platform
 
 # 3. 灌测试数据（每张表 1-10 万行模拟）
-psql ... -f scripts/db/test-seed/seed-outbox-events.sql  # 若无,可用 generate_series
-psql ... -f scripts/db/test-seed/seed-job-instances.sql
+# 注:seed-outbox-events.sql / seed-job-instances.sql 为示意脚本,仓内当前不存在(待补);
+#     可用 generate_series 现写 INSERT 灌数,或参考 scripts/db/test-seed/ 下现有 seed 脚本。
+psql ... -c "INSERT INTO batch.outbox_event (...) SELECT ... FROM generate_series(1, 100000);"
 
 # 4. 执行 cutover
 psql ... -v ON_ERROR_STOP=1 -f scripts/db/partition-migration/01-outbox-event-partitioned.sql
@@ -217,7 +220,8 @@ BEGIN;
 DROP TABLE batch.outbox_event CASCADE;
 ALTER TABLE batch.outbox_event_legacy RENAME TO outbox_event;
 -- 3. 重建索引
-\i scripts/db/partition-migration/rollback-restore-indexes.sql  -- 待补
+-- 待补:rollback-restore-indexes.sql 仓内尚未提供,需手工按原表索引定义重建后再执行
+-- \i scripts/db/partition-migration/rollback-restore-indexes.sql
 COMMIT;
 ```
 

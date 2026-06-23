@@ -3,15 +3,14 @@
 > 本文档是批量调度平台的**单一权威模型文档**。
 > 它统一定义四组最容易被分散理解的概念：**统一实例模型、统一状态模型、统一上下文模型、统一恢复模型**。
 >  
-> 阅读顺序建议：先看 [architecture-truth.md](./architecture-truth.md)，再看本文档，最后回看 [implementation-status.md](./implementation-status.md) 和 [design-gap-audit.md](./design-gap-audit.md)。
+> 阅读顺序建议：先看 [architecture-truth.md](./architecture-truth.md)，再看本文档，最后回看 [maturity-assessment.md](./maturity-assessment.md) 和 [scalability-assessment.md](./scalability-assessment.md)。
 
 ## 1. 这份文档解决什么问题
 
 当前项目里，核心概念分散在多个地方：
 - `architecture-truth.md` 讲系统事实
-- `implementation-status.md` 讲落地状态
-- `design-gap-audit.md` 讲差距和修复顺序
-- `批量调度系统设计说明.md` 讲原始设计
+- `maturity-assessment.md` 讲落地状态与成熟度
+- `scalability-assessment.md` 讲承载力差距和改造路线
 - ADR 讲局部决策
 
 问题不在于信息少，而在于**同一个词在不同文档里容易被不同团队理解成不同东西**。  
@@ -106,12 +105,12 @@
 ### 3.5 代码对照
 
 当前代码中已经存在这些实体：
-- [`JobInstanceEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobInstanceEntity.java)
-- [`WorkflowRunEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/WorkflowRunEntity.java)
-- [`JobPartitionEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobPartitionEntity.java)
-- [`JobTaskEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobTaskEntity.java)
-- [`JobStepInstanceEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobStepInstanceEntity.java)
-- [`WorkflowNodeRunEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkflowNodeRunEntity.java)
+- [`JobInstanceEntity.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobInstanceEntity.java)
+- [`WorkflowRunEntity.java`](../../batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/WorkflowRunEntity.java)
+- [`JobPartitionEntity.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobPartitionEntity.java)
+- [`JobTaskEntity.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobTaskEntity.java)
+- [`JobStepInstanceEntity.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobStepInstanceEntity.java)
+- [`WorkflowNodeRunEntity.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkflowNodeRunEntity.java)
 
 ### 3.6 Partition 切分契约（orchestrator → worker）
 
@@ -307,8 +306,8 @@ job_instance.expected_       ──┘                ↓
 
 当前仓库已经存在两种相关形态：
 
-1. Orchestrator 侧的 [`ExecutionContext`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)
-2. Worker core 侧的 [`ExecutionContext`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
+1. Orchestrator 侧的 [`ExecutionContext`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)
+2. Worker core 侧的 [`ExecutionContext`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
 3. 旧名 `PipelineContext` 仅保留为兼容语义和历史检索词，仓库里不再新增该类型
 
 它们的共同点是：
@@ -322,7 +321,7 @@ job_instance.expected_       ──┘                ↓
 
 兼容层说明：
 - 当前仍保留少量 `pipelineCode` 兼容入口，这是刻意保留的兼容层，不视为漏改
-- 典型落点见 [`ExecutionContext.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[`PipelineDefinitionModel.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java)、[`AbstractPipelineStepExecutionAdapter.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
+- 典型落点见 [`ExecutionContext.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[`PipelineDefinitionModel.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java)、[`AbstractPipelineStepExecutionAdapter.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
 
 ### 5.3 统一上下文的推荐结构
 
@@ -374,9 +373,9 @@ job_instance.expected_       ──┘                ↓
 
 ### 5.6 代码对照
 
-- [`PipelineRuntimeKeys.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PipelineRuntimeKeys.java)
-- [`AbstractPipelineStepExecutionAdapter.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
-- [`AbstractStageExecutor.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractStageExecutor.java)
+- [`PipelineRuntimeKeys.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PipelineRuntimeKeys.java)
+- [`AbstractPipelineStepExecutionAdapter.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
+- [`AbstractStageExecutor.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractStageExecutor.java)
 
 ---
 
@@ -494,8 +493,7 @@ job_instance.expected_       ──┘                ↓
 ## 9. 需要同步阅读的文档
 
 - [architecture-truth.md](./architecture-truth.md)
-- [implementation-status.md](./implementation-status.md)
-- [design-gap-audit.md](./design-gap-audit.md)
+- [maturity-assessment.md](./maturity-assessment.md)
+- [scalability-assessment.md](./scalability-assessment.md)
 - [runtime-module-communication.md](./runtime-module-communication.md)
-- [design-patterns-evaluation.md](./design-patterns-evaluation.md)
 - [adr/README.md](./adr/README.md)

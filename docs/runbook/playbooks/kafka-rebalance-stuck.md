@@ -109,7 +109,7 @@
      --from-beginning --max-messages 5
    ```
 
-### 方案 C:核武器 — broker 重启 / group 重置(15+ min)
+### 方案 C:最后手段(破坏性操作)— broker 重启 / group 重置(15+ min)
 
 触发条件:broker 自身异常、`__consumer_offsets` 损坏、整个 group 状态机错乱。
 

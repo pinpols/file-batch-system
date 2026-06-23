@@ -168,7 +168,7 @@ sed -i '' 's|<revision>1.2.0-SNAPSHOT</revision>|<revision>1.2.0-RC.1</revision>
 git commit -am "release: 1.2.0-RC.1"
 git tag -a v1.2.0-RC.1 -m "Release Candidate 1 for 1.2.0"
 mvn -DskipTests deploy   # 发到 nexus 让 QA 拉
-git push origin main vv1.2.0-RC.1
+git push origin main v1.2.0-RC.1
 
 # RC 验证完后回 SNAPSHOT 继续修，或直接发 GA
 sed -i '' 's|<revision>1.2.0-RC.1</revision>|<revision>1.2.0-SNAPSHOT</revision>|' pom.xml

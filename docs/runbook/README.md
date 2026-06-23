@@ -2,7 +2,7 @@
 
 部署 / 监控 / 灰度 / 应急 / 巡检 五类 SOP。每份都设计为"事到临头能照着跑"。
 
-> **被 PD / SRE 临时拉去救火？** 先看 [04 incident-response.md](./incident-response.md) → [05 troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md)。
+> **应急入口**:发生线上故障时,先看 [04 incident-response.md](./incident-response.md) → [05 troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md)。
 
 ## 文件清单（编号按"用得最频繁→最少见"排序）
 

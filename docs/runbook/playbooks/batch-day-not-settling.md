@@ -124,7 +124,7 @@
    - Redis provider:
      ```bash
      redis-cli -h localhost -p ${REDIS_PORT:-16379} \
-       --scan --pattern 'shedlock:*:batch_day_settle' | xargs -r redis-cli del
+       --scan --pattern '*shedlock:*:batch_day_settle' | xargs -r redis-cli del
      ```
 2. 重启 orchestrator:`docker compose restart batch-orchestrator`
 3. 等 60s,看 audit log 有没有新的 `BATCH_DAY_SETTLED` / `BATCH_DAY_FAILED`。

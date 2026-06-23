@@ -15,7 +15,7 @@
 | 凭据(SFTP / MinIO / DB)| 平台级,所有 worker 同一份 | 0 隔离 |
 | 资源池(线程 / 连接)| 进程级共享,无 per-tenant 配额 | 0 隔离 |
 
-**已经踩过的痛(或迟早会踩)**:
+**已经遇到的问题(或迟早会遇到)**:
 - 跨租户数据泄露(`MapperXmlTenantGuardArchTest` 已守住一次,动态 SQL 仍有风险)
 - Noisy neighbor:大租户文件挤兑小租户(扩容缓解,不解决)
 - 故障传染:A 租户怪文件触发 worker OOM → B/C 受影响
@@ -304,7 +304,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 
 | 问题 | 说明 |
 |---|---|
-| **Flyway 复杂度爆失败** | 9 张表 × N 个 schema = N 倍 migration,每次发版都要跑 N 遍,失败回滚地狱 |
+| **Flyway 复杂度急剧上升** | 9 张表 × N 个 schema = N 倍 migration,每次发版都要跑 N 遍,失败回滚复杂 |
 | **MyBatis XML 写不动** | `<select>` 里 `from biz.customer_account` 要变量化 schema 名,每个 mapper 都要改 |
 | **连接池切 schema 损耗** | session 切 `search_path` 频繁,HikariCP connection reuse 受损 |
 | **跨租户聚合 query 难写** | `SELECT ... FROM biz_ta.x UNION biz_tb.x UNION ...` 字符串拼接 N 段 |
@@ -323,9 +323,9 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 |---|---|
 | **每接一个租户 = 一次完整 DBA 谈判**(权限 / 网络 / 凭据 / SLA / 合规审计)| 接入周期周 → 月 |
 | **凭据池管理复杂** | N 个租户 = N 套凭据 + N 个 vault entry + N 个轮转策略 + 凭据失效报警链路 |
-| **网络拓扑爆失败** | VPN / 专线 / IP 白名单 / 反向 PrivateLink 全平台维护 |
+| **网络拓扑复杂度急剧上升** | VPN / 专线 / IP 白名单 / 反向 PrivateLink 全平台维护 |
 | **schema 漂移** | 租户改表平台不知道,跑异常退出才发现;每个租户的 schema 跟平台 ORM 兼容性独立维护 |
-| **SQL 兼容性** | 租户用 PG / MySQL / Oracle 不同版本,平台 ORM 要全兼容,driver / 方言地狱 |
+| **SQL 兼容性** | 租户用 PG / MySQL / Oracle 不同版本,平台 ORM 要全兼容,driver / 方言兼容困难 |
 | **故障归因** | 慢了 / 错了到底是平台 worker 还是租户 DB → 扯皮,SLA 难定义 |
 | **租户运维负担** | 租户 DBA 要为平台开权限 + 监控 + 防火墙 + 凭据轮转,租户接入成本不在我们手里 |
 | **业界经验** | Fivetran 走这条 — 有专门的 Solutions Engineer 帮租户跑 30+ 步配置,本质是「重接入」产品形态 |
@@ -387,7 +387,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 |---|---|---|---|
 | 1 | Phase A(RLS)收尾(R1/R2/R3)是否做? | ✅ P0 必做 | happy-path 已上线但 fail-open;不收尾 = RLS 形同未做,数据泄露风险仍在 |
 | 2 | Phase B(SDK)是否做? | ✅ P1 推荐 | 不做 = 跨语言 / 自家依赖 / 数据驻留诉求没路径 |
-| 3 | Phase C(per-tenant schema)是否默认开? | ❌ 否决(§6.1)| 价值伪需求,运维爆失败 |
+| 3 | Phase C(per-tenant schema)是否默认开? | ❌ 否决(§6.1)| 价值伪需求,运维复杂度急剧上升 |
 | 4 | Phase D(per-tenant worker pool)是否做? | ✅ P1 几乎免费 | **核心代码已 ready**,只缺 Helm 模板,1.5-2 周完成 |
 | 5 | Phase A 后是否限制平台运维用 `BYPASSRLS`? | ✅ 限制 | 不限制 = RLS 等于没做 |
 | 6 | SDK 接入文档放主 repo 还是独立 repo? | 独立 repo | 主 repo 文档膨胀,租户 onboarding 体验差 |

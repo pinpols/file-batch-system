@@ -1,3 +1,5 @@
+> 注:本文为实施前时点快照,wheel scheduler 现已落地并切为默认,以代码与 ADR-033 为准。
+
 # Quartz 替换为时间轮 — 生产级实施设计
 
 > **配套文档**：[`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)（战略决策层:为什么换、何时换);本文档是战术实施层(怎么换的每一处问题)。
@@ -845,7 +847,7 @@ public void shutdown() throws InterruptedException {
 
 ---
 
-## 16. 实施前 Checklist(动工前必须 ✅)
+## 16. 实施前 Checklist(实施前必须完成)
 
 ### 16.1 设计层
 

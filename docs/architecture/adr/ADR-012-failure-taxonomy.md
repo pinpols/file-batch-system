@@ -154,7 +154,7 @@ NULL = 用 §响应派发 默认表。
 | 1 | TIMEOUT 二次分类怎么做 | 不在 v1 实现自动二次分类。timeout 默认 UNKNOWN + 触发 ops review；后续可加 `TimeoutContextHint` 在 worker 侧上报"timeout 期间最后一次操作类型"用于二次分类 |
 | 2 | 是否暴露 `errorClassHint` 给 console 用户手填 | **不做**。class 由代码 / 异常 / classifier 决定，用户填会污染审计；ops 真要重新分类走"reclassify approval"独立 API（v2） |
 | 3 | 跨 ADR 一致性 | ADR-021 的 DQ check 失败必须返 DATA_QUALITY；ADR-018 跨日依赖等待映射到 UPSTREAM_DELAY 而非 FAILED |
-| 4 | metric 基数 | failure_class 7 枚举 × tenant × jobCode 基数可控；不加 errorKey 维度（基数爆失败） |
+| 4 | metric 基数 | failure_class 7 枚举 × tenant × jobCode 基数可控；不加 errorKey 维度（基数爆炸） |
 
 ### 不会做
 

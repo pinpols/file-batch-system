@@ -42,11 +42,11 @@
      ```bash
      # Redis 还活着时可以列锁,看是不是被某 instance 长期抓住没释放
      redis-cli -h localhost -p ${REDIS_PORT:-16379} \
-       --scan --pattern 'shedlock:*:outbox_poll*'
+       --scan --pattern '*shedlock:*:outbox_poll*'
      redis-cli -h localhost -p ${REDIS_PORT:-16379} \
-       --scan --pattern 'shedlock:*:batch_day_settle'
+       --scan --pattern '*shedlock:*:batch_day_settle'
      ```
-     - key 命名是 `shedlock:<spring.application.name>:<lockName>`(见 `ShedLockProviderFactory#redisLockProvider`)
+     - 实际 key 格式是 `job-lock:<env>:shedlock:<env>:<lockName>`(`<env>` 默认取 `spring.application.name`,见 `batch-defaults.yml` 注释与 `ShedLockProviderFactory#redisLockProvider`),所以 scan pattern 要以 `*shedlock:` 起头才能命中
    - 切到 `jdbc` 后,锁在 `batch.shedlock` 表
      ```sql
      select name, lock_until, locked_at, locked_by
@@ -119,7 +119,7 @@ ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoC
    ```
 3. `OutboxPollScheduler` / `BatchDaySettleScheduler` 会自动恢复(下一个 tick 抢锁成功)。
 
-### 方案 C:核武器 — 回滚到上一版(15+ min)
+### 方案 C:最后手段(破坏性操作)— 回滚到上一版(15+ min)
 
 仅当方案 A 失败(jdbc fallback 也起不来,例如 `batch.shedlock` schema drift)。
 
@@ -135,7 +135,7 @@ ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoC
 - **写 incident-response 关联本剧本**:在 `docs/runbook/incident-response.md` 表里追加 P1 行。
 - **思考默认 provider 选择**:本仓 2026-05-28 默认切 `redis`(批注见 `BatchShedLockAutoConfiguration`),如果半年内 Redis 已 down 过 2 次 → 考虑默认回 `jdbc`,把 redis 当性能优化的可选项。
 - **alert 缺失**:`BatchRedisDown` / `BatchShedLockAcquireFail` 必须补;`BatchShedLockJdbcFallbackActive`(告知 ops 当前正在降级)更佳。
-- **剧本走不通**:Redis 又活了但锁没释放(`shedlock:<env>:<lockName>` key 有残留 TTL),手动 `DEL` 该 key,补一篇 `redis-shedlock-stuck-lock.md`。
+- **剧本走不通**:Redis 又活了但锁没释放(`job-lock:<env>:shedlock:<env>:<lockName>` key 有残留 TTL),手动 `DEL` 该 key,补一篇 `redis-shedlock-stuck-lock.md`。
 
 ## 关联
 

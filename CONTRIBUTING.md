@@ -21,7 +21,7 @@ and documentation contract.
 - `mvn -q -DskipTests compile`
 - Targeted `mvn test` or `mvn verify` for the affected module
 - `bash scripts/ci/run-full-regression.sh --help`
-- `bash scripts/ci/check-console-openapi-paths.py`
+- `python scripts/ci/check-console-openapi-paths.py`
 
 ## Commit Hygiene
 

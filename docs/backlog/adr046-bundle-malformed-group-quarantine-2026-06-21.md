@@ -30,7 +30,7 @@ launcher 对**确定性坏数据**会 fail-fast 抛 `IllegalStateException`:
 
 `FileGovernanceScheduler.triggerArrivalGroup` 的 launch-fail catch 加了 counter
 `batch.file.arrival.bundle.launch.failed`。运维可对该 metric 配告警 → 永久坏数据从「静默刷日志」变成「可触达人工」。
-**保持 retryable、不引终态**——因为有些「坏」其实是可恢复的(如迟到的成员文件补齐后绑定就齐了),引终态有误丢可恢复组的风险。这是状态主机审慎原则下的最小修。
+**保持 retryable、不引终态**——因为有些「坏」其实是可恢复的(如迟到的成员文件补齐后绑定就齐了),引终态有误丢可恢复组的风险。这是唯一状态权威审慎原则下的最小修。
 
 ## 本条要做的(若上)
 
@@ -39,14 +39,14 @@ launcher 对**确定性坏数据**会 fail-fast 抛 `IllegalStateException`:
 1. **区分异常类型**:`BundleArrivalLauncher` 对确定性校验失败抛一个**专用异常**(如 `BundleGroupInvalidException`),与瞬时 launch 失败(`LaunchService` 抛的其它 `RuntimeException`)区分。
 2. **新增组级隔离状态**:`FileGovernanceScheduler` catch 到专用异常时,把组迁入新的 `QUARANTINED`/`MANUAL` 终态(不再每 tick 重试),并落一条 governance audit(带失败原因:mixed-jobCode / missing-binding / …)。瞬时失败仍走现有「保持 WAITING_ARRIVAL retryable」。
 3. **人工恢复入口**:console-api 加一个「重置隔离组 → 重新 evaluate」的运维动作(走 `ConsoleOrchestratorProxyService` → orchestrator internal,符合「console 不直接写状态」红线),供修完数据后重放。
-4. **状态机改动审慎**:这一条动的是 orchestrator 状态主机(到达组状态流转),改动面比看上去大——新状态要进 `FileGovernanceMapper` 的状态枚举/查询/监控投影,要和现有 `WAITING_ARRIVAL`/`TRIGGERED`/`TIMEOUT` 的语义、幂等跳过逻辑、metrics gauge 一起对齐。**必须按「先定语义再写码、小 PR」推进**,不要和功能开发混在一起。
+4. **状态机改动审慎**:这一条动的是 orchestrator 状态机(到达组状态流转),改动面比看上去大——新状态要进 `FileGovernanceMapper` 的状态枚举/查询/监控投影,要和现有 `WAITING_ARRIVAL`/`TRIGGERED`/`TIMEOUT` 的语义、幂等跳过逻辑、metrics gauge 一起对齐。**必须按「先定语义再写码、小 PR」推进**,不要和功能开发混在一起。
 
 ## 为什么暂不做(YAGNI)
 
 - 触发要「坏数据」,正常清单/scanner 写入路径不会产生混合 jobCode(同一清单一个 jobCode)。
 - #628 已把 arrival group key 加 bizDate,跨 bizDate 混组这条已基本不会发生。
 - #629 的 metric 已把「静默」变「可告警」,运维侧的硬伤已堵。
-- 引终态/人工恢复入口是状态主机改动,风险 > 当前收益。等生产真出现该 metric 报警、且确认是高频/需自动隔离时再上。
+- 引终态/人工恢复入口是状态机改动,风险 > 当前收益。等生产真出现该 metric 报警、且确认是高频/需自动隔离时再上。
 
 ## 验收(若上)
 

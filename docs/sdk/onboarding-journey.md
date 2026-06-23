@@ -29,7 +29,7 @@
 [`troubleshooting.md`](./troubleshooting.md) §1):
 
 - `BatchPlatformClientConfig.fromEnv()` 默认 **`BATCH_SDK_`**(`BATCH_SDK_BASE_URL` / `BATCH_SDK_TENANT_ID` / `BATCH_SDK_API_KEY` / `BATCH_SDK_KAFKA_BOOTSTRAP` / `BATCH_SDK_KAFKA_SASL_JAAS_CONFIG` ...)
-- `examples/sample-tenant-worker-java/` builder 风格用短前缀 **`BATCH_`**(`BATCH_BASE_URL` / `BATCH_API_KEY` / `BATCH_KAFKA_PROTOCOL` / `BATCH_KAFKA_SASL_JAAS` ...)
+- `examples/self-hosted-sdk/sample-tenant-worker-java/` builder 风格用短前缀 **`BATCH_`**(`BATCH_BASE_URL` / `BATCH_API_KEY` / `BATCH_KAFKA_PROTOCOL` / `BATCH_KAFKA_SASL_JAAS` ...)
 
 > 半混会触发 `missing required env vars: ...`(`troubleshooting.md` §1 第一行)。
 
@@ -152,7 +152,7 @@ if (ctx.isCancelled()) {
 }
 ```
 
-API 在 `batch-worker-sdk/.../task/SdkTaskContext.java:125`。无自检的 handler 不会被强杀,
+API 在 `sdk/java/core/.../task/SdkTaskContext.java:125`。无自检的 handler 不会被强杀,
 最坏要等 `client.stop(Duration)` 超时(见 §6)。
 
 ---
@@ -168,7 +168,7 @@ API 在 `batch-worker-sdk/.../task/SdkTaskContext.java:125`。无自检的 handl
    - **partition revoke**:停 v1.2.0 进程的 Kafka consumer,新单只会落到 v1.3.0 的 partition 上;
      在跑中的 task 走完即结束。无侵入,但粒度粗(整 worker)。
    - **server-side pause**(细粒度):orchestrator 端按 taskType 暂停派发(`HeartbeatDirective`
-     带 `pausedTaskTypes`,见 `batch-worker-sdk/.../dispatcher/HeartbeatDirective.java`),
+     带 `pausedTaskTypes`,见 `sdk/java/core/.../dispatcher/HeartbeatDirective.java`),
      只 drain 指定 type,其他继续。
 3. **drain 老 buildId**:观察 fingerprint summary,v1.2.0 在线 task 归零后 `client.stop(Duration)`
    → 进程退出 → console fingerprint 表自动剔除(§6 的 timeout scheduler 回退)。
@@ -186,7 +186,7 @@ API 在 `batch-worker-sdk/.../task/SdkTaskContext.java:125`。无自检的 handl
 client.stop(Duration.ofSeconds(60));  // 默认 30s
 ```
 
-签名见 `batch-worker-sdk/.../client/BatchPlatformClient.java:174`。超时未结束的 task 会打
+签名见 `sdk/java/core/.../client/BatchPlatformClient.java:174`。超时未结束的 task 会打
 WARN 列 taskId(由 `TaskDispatcher.stop(Duration)` 报),平台侧 task 留在 RUNNING,靠 §6.2 回退。
 
 ### 6.2 平台回退

@@ -1,7 +1,5 @@
 # MinIO Java SDK → AWS SDK for Java v2 迁移 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development(推荐)或 superpowers:executing-plans 逐 Task 执行。步骤用 `- [ ]` checkbox。
-
 **Goal:** 把全仓对象存储客户端从 `io.minio:minio:8.6.0` 全量换成 `software.amazon.awssdk:s3` v2(同步 + apache-client);MinIO **服务器不动**,只换客户端 SDK。
 
 **Architecture:** S3ObjectStore 是唯一 SDK 收敛点(9 方法换 AWS SDK v2);client 构造从 MinioClient 单 bean 变为 S3Client + S3Presigner 双 bean(v2 presign 独立);6 处漏网生产代码 1 处收敛 BatchObjectStore、5 处换 SDK;Minio* 类改名 S3*;配置 key 不动。
@@ -466,13 +464,3 @@ gh pr create --base main --head feature/migrate-to-aws-sdk-v2 \
   --body "..."
 gh pr merge --auto --squash
 ```
-
----
-
-## Self-Review notes(已自检)
-
-- **Spec 覆盖**:核心 S3ObjectStore(Task 2)/ client 双 bean(Task 3)/ BucketSupport+Health 改名(Task 4)/ 6 漏网(Task 5)/ 12 测试(Task 6)/ 移依赖+文档(Task 7)。✓
-- **占位符**:Task 5/6 因文件多且重复,给的是「读实际用法 + 按映射表改」指令而非逐文件成品——这是机械重复 SDK swap,实现者照映射表逐个改,非遗漏。核心文件(S3ObjectStore/Config/BucketSupport/Health)给了完整成品代码。
-- **类型一致**:S3Client/S3Presigner 字段名贯穿 Task 2/3;S3BucketSupport.ensureBucket 签名(S3Client)在 Task 2 Step 5 调用与 Task 4 Step 2 定义一致;ObjectSummary 构造 4 参(key/size/Instant/etag)v2 直接 `item.lastModified()` 已是 Instant。
-- **编译连续性**:Task 1 加依赖不删 minio(中途可编译);Task 2/3/4 互依赖 → 合并 commit;Task 7 最后删 minio。无长红期。
-- **Server 不变**:全程 MinIOContainer / docker MinIO 不动,仅客户端 SDK 换。

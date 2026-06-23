@@ -13,7 +13,7 @@
 bash scripts/ci/security-scan.sh
 ```
 
-如果你只想跑某一类，可以直接透传参数：
+只跑某一类时,可直接透传参数：
 
 ```bash
 bash scripts/ci/security-scan.sh --mode=secret
@@ -24,7 +24,7 @@ bash scripts/ci/security-scan.sh --mode=image
 bash scripts/ci/security-scan.sh --mode=dast --target-url=http://localhost:18080
 ```
 
-如果你必须跳过打包，也可以直接调用 Java 模块：
+需跳过打包时,也可直接调用 Java 模块：
 
 ```bash
 mvn -f security-scan/pom.xml package
@@ -42,7 +42,7 @@ java -jar security-scan/target/security-scan-1.0.0.jar --mode=all --root=. --tar
 - `trivy-image.json`
 - `zap-report.html`
 
-如果要改路径，统一通过 `--report-dir=...` 控制。`zap-report` 也会自动跟着改到这个目录下，除非你显式覆盖。
+改路径统一通过 `--report-dir=...` 控制。`zap-report` 也会自动跟到该目录下,除非显式覆盖。
 
 ## 前置条件
 
@@ -52,7 +52,7 @@ java -jar security-scan/target/security-scan-1.0.0.jar --mode=all --root=. --tar
 brew install gitleaks semgrep trivy
 ```
 
-如果你已经安装过，可以先用下面命令确认：
+已安装过的,可先用下面命令确认：
 
 ```bash
 command -v gitleaks semgrep trivy docker mvn
@@ -90,7 +90,7 @@ gitleaks detect --source . --redact --no-banner
 安装：
 
 ```bash
-# Maven 已在当前环境可用；如果你本机没有，请先安装 Maven 3.9+
+# Maven 已在当前环境可用；本机若没有，请先安装 Maven 3.9+
 ```
 
 ```bash

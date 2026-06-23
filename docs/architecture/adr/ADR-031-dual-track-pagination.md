@@ -185,7 +185,7 @@ const {
 
 ## 5. 实施计划
 
-### 5.0 阶段 0:offset 公共片段抽取(✅ 已完成 2026-05-20)
+### 5.0 阶段 0:offset 公共片段抽取( 已完成 2026-05-20)
 
 **纯重构,无行为变更**。把 21 个 mapper.xml 里完全相同的 5 行 offset bind 抽到
 `batch-common/src/main/resources/mapper/CommonFragments.xml` 的 `<sql id="offsetPageClause">`,各 mapper 末尾 `<include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>`。
@@ -305,7 +305,7 @@ Encode:`CursorCodec.encode(Map.of("createdAt", row.getCreatedAt(), "id", row.get
 
 每个 PR 单独跑,带性能或漏写证据。模式已稳,推广是机械操作。
 
-### 5.4 阶段 4:FE 移动端推广(✅ JobInstance pilot 已完成 2026-05-20)
+### 5.4 阶段 4:FE 移动端推广( JobInstance pilot 已完成 2026-05-20)
 
 - `MJobInstances` 移动端切 cursor + infinite scroll(已落地)
 - `MAlerts` / `MOutbox` / 其它 mobile list 按需 — 等对应 BE 端点 cursor 化后切

@@ -1,3 +1,5 @@
+> 注:本文为 2026-05-29 时点快照,部分内容已被后续实现取代(如 Task SPI / 四件套 / Spark 已落地),以代码与 ADR 为准。
+
 # P0 / P1 / P2 演进路线图(2026-05-29)
 
 > 基于 [代码行统计](../stats/loc-2026-05-29.md) + 跟 DolphinScheduler / Azkaban 对比识别的核心缺陷。
@@ -181,7 +183,7 @@ batch-console-api/src/main/java/io/github/pinpols/batch/console/
 
 ### 不要做的
 
-- ❌ 不拆 DB(分布式事务复杂度爆失败,业务上没必要)
+- ❌ 不拆 DB(分布式事务复杂度暴增,业务上没必要)
 - ❌ 不拆 orchestrator(状态主机本来就该单点)
 - ❌ 不做 gRPC(同栈 REST 足够)
 

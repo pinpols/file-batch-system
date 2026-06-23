@@ -94,7 +94,7 @@
 
 #### 3.8 partition fanout 算完就定，运行时无法 dynamic re-shard
 - **位置**：`DefaultSchedulePlanBuilder.java:43-85`、`DefaultPartitionDispatchService.java:136-164`
-- **现状**：T2 dispatch 时一次性算 partition_count，写完 `job_partition` 就锁死；某 partition 数据爆失败只能等 lease 超时
+- **现状**：T2 dispatch 时一次性算 partition_count，写完 `job_partition` 就锁死；某 partition 数据暴增只能等 lease 超时
 - **业界**：Spark dynamic allocation；Argo `withParam` 运行时展开；Spring Batch `Partitioner` 也是启动时定，但 `RemotePartitionHandler` 支持 chunk-level 再分
 - **影响**：大 IMPORT 数据倾斜时单 partition 拖死整个 instance；缺少"运行时再 fork 子 partition"的能力
 - **修法**：先在 worker `report` 时支持上报 `additionalPartitionsRequested`，orchestrator 拿到后在同 instance 下补 partition + outbox（独立 ADR）

@@ -324,8 +324,8 @@ All other partial updates are handled by a dedicated `PUT` endpoint or an action
    `GET /api/console/job-definitions`, `GET /api/console/queries/instances`, `GET /api/console/tenants/quota`
 
 2. **Do not use singular for a resource collection**, even if the context is "my tenant" or "meta info".  
-   Correct: `/api/console/queries/…`, `/api/console/tenants/…`  
-   Wrong: `/api/console/queries/…`, `/api/console/tenant/…`
+   Correct: `/api/console/queries/instances`, `/api/console/tenants/…`  
+   Wrong: `/api/console/query/instance`, `/api/console/tenant/…`
 
 3. **Exception — namespace prefixes are singular by convention.**  
    `/api/console/meta/enums` — "meta" here is a namespace qualifier, not a collection.  
@@ -374,8 +374,8 @@ Examples:
 | Batch action | `POST /api/console/approvals/batch-approve` | ✅ hyphenated |
 | Query namespace | `/api/console/queries/instances` | ✅ plural |
 | Meta namespace | `/api/console/meta/enums` | ✅ singular namespace exception |
-| ❌ Singular collection | `/api/console/queries/instances` | ❌ |
-| ❌ Verb path-sep batch | `POST /api/console/approvals/batch-approve` | ❌ |
+| ❌ Singular collection | `/api/console/query/instance` | ❌ |
+| ❌ Verb path-sep batch | `POST /api/console/approvals/batch/approve` | ❌ |
 
 ---
 
@@ -503,10 +503,13 @@ Deployment note:
 - `POST /api/console/workers/{workerCode}/drain`
 - `POST /api/console/workers/{workerCode}/force-offline`
 - `POST /api/console/workers/{workerCode}/takeover`
+- `POST /api/console/workers/{workerCode}/warmup`
 - `GET /api/console/workers/{workerCode}/claimed-tasks`
 - `GET /api/console/workers/events`
 - `GET /api/console/workers/events` subscribes to worker registry realtime changes. It emits `worker-updated` signals after drain, force-offline, or takeover actions succeed.
 - Worker list query is served by `GET /api/console/queries/workers`.
+- `takeover` is the explicit manual handoff path: it requeues in-flight tasks and marks the worker decommissioned immediately.
+- `force-offline` keeps the stronger ops semantics and should be treated as an emergency offlining command.
 
 ### Alerts
 
@@ -516,6 +519,9 @@ Deployment note:
 - `GET /api/console/alerts/events`
 - `GET /api/console/alerts/events` subscribes to alert governance realtime changes. It emits `alert-updated` signals after ack, silence, or close actions succeed.
 - Alert list query is served by `GET /api/console/queries/alerts`.
+- `ack` is the UI-facing confirm action. It maps to backend alert status `ACKED`.
+- `silence` maps to backend alert status `SUPPRESSED`.
+- `close` maps to backend alert status `CLOSED`.
 
 ### Job Instances and Workflow Runs
 
@@ -880,16 +886,6 @@ Deployment note:
 - Requires `ROLE_ADMIN`.
 - Requires `Idempotency-Key` header.
 
-### Workers
-
-- `POST /api/console/workers/{workerCode}/drain`
-- `POST /api/console/workers/{workerCode}/takeover`
-- `POST /api/console/workers/{workerCode}/force-offline`
-- `GET /api/console/workers/{workerCode}/claimed-tasks`
-- `POST /api/console/workers/{workerCode}/warmup`
-- `takeover` is the explicit manual handoff path: it requeues in-flight tasks and marks the worker decommissioned immediately.
-- `force-offline` keeps the stronger ops semantics and should be treated as an emergency offlining command.
-
 ### Files
 
 - `POST /api/console/files/archive`
@@ -904,22 +900,6 @@ Deployment note:
 - `GET /api/console/files/{fileId}/errors/export` — export file error records as CSV (param: `tenantId`, optional `errorStage`)
 - File operation endpoints use `ConsoleFileOperationResponse`. `POST /api/console/files/presign-download` uses `ConsolePresignDownloadResponse`, where `approvalNo` and `downloadUrl` are mutually exclusive and one side may be `null` depending on whether the request goes through approval submission or direct presign execution.
 - Download success responses are raw file bytes with `Content-Disposition: attachment`; validation or state errors still return the normal JSON error envelope via the global exception handler.
-
-### Alerts
-
-- `GET /api/console/queries/alerts`
-- `POST /api/console/alerts/{alertId}/ack`
-- `POST /api/console/alerts/{alertId}/silence`
-- `POST /api/console/alerts/{alertId}/close`
-- `ack` is the UI-facing confirm action. It maps to backend alert status `ACKED`.
-- `silence` maps to backend alert status `SUPPRESSED`.
-- `close` maps to backend alert status `CLOSED`.
-
-### Scheduler
-
-- `GET /api/console/scheduler/snapshot`
-- `GET /api/console/scheduler/snapshot/history`
-- Scheduler snapshot responses keep the stable display slices `policies / queues / workers`; the frontend should treat those lists as the primary render contract.
 
 ### AI
 
@@ -1077,7 +1057,7 @@ Notes:
 | Endpoint | Filter Parameters | Match |
 |----------|-------------------|-------|
 | `/query/audits` | `operationType`, `operationResult` (exact); `operatorId`, `traceId` (partial); `fileId` (exact); `startTime`/`endTime` (range) | mixed |
-| `/query/alerts` | `severity`, `status`, `alertType` (exact) | exact |
+| `/query/alerts` | `severity`, `status`, `alertType` (exact); `traceId` (exact); `startDate`/`endDate` (range on `last_seen_at`) | mixed |
 | `/query/files` | `fileStatus`, `bizType` (exact); `fileName` (partial); `traceId`, `fileId` (exact); `fromTime`/`toTime` (range) | mixed |
 | `/query/instances` | `jobCode` (partial); `instanceStatus`, `instanceNo`, `bizDate` (exact); `traceId` (partial); `startDate`/`endDate` (range); `sortBy` (`id`/`duration`); `minDurationSeconds` (threshold filter) | mixed |
 | `/query/job-definitions` | `jobCode`, `jobName`, `workerGroup`, `queueCode` (partial); `jobType`, `scheduleType`, `enabled` (exact) | mixed |
@@ -1203,45 +1183,7 @@ Request body:
 }
 ```
 
-### Governance
-
-- `GET /api/console/ops/governance` — list circuit breaker / rate limit parameters (with defaults)
-- `POST /api/console/ops/governance` — update governance parameter
-- `POST /api/console/ops/governance/reset` — reset governance parameter to default
-
-### Tenant Self-Service
-
-- `GET /api/console/tenants/quota` — query tenant quota policies
-- `GET /api/console/tenants/usage` — query tenant usage metrics
-- `POST /api/console/tenants/quota/request` — request quota change (stored as system parameter; returns request key)
-
-### File Upload & Arrival Confirmation
-
-- `POST /api/console/files/presign-upload` — create an application-managed upload session (params: `tenantId`, `channelCode`, `fileName`)
-- `PUT /api/console/files/{fileId}/content` — upload multipart file content to `BatchObjectStore` (param: `tenantId`, form field: `file`)
-- `POST /api/console/files/{fileId}/confirm-arrival` — confirm file arrival (param: `tenantId`)
-
-### Archive & Cleanup Policies
-
-- `GET /api/console/ops/archive-policies` — list archive/cleanup policies
-- `PUT /api/console/ops/archive-policies` — upsert archive/cleanup policy
-
-### Cluster Diagnostic
-
-- `GET /api/console/ops/cluster-diagnostic` — full cluster health diagnostic
-- `GET /api/console/ops/cluster-diagnostic/shedlock` — ShedLock lease status
-- `GET /api/console/ops/cluster-diagnostic/workers` — worker registry consistency
-- `GET /api/console/ops/cluster-diagnostic/outbox` — outbox health
-
-### Self-Service Rerun / Compensation
-
-- `POST /api/console/self-service/jobs/rerun-request` — submit rerun request (creates approval workflow)
-- `POST /api/console/self-service/jobs/compensation-request` — submit compensation request (creates approval workflow)
-
-### Event Catalog
-
-- `GET /api/console/event-catalog/event-types` — list subscribable event types
-- `GET /api/console/event-catalog/topics` — list Kafka topics
+> **Governance / Tenant Self-Service / Archive & Cleanup Policies / Cluster Diagnostic / Self-Service Rerun · Compensation / Event Catalog**:these endpoints are already enumerated in the **Current Route Catalog** above (see the same-named subsections: Governance, Tenant Self-Service, Archive Policies, Cluster Diagnostic, Self-Service Jobs, Event Catalog). The `File Upload & Arrival Confirmation` endpoints (`presign-upload` / `{fileId}/content` / `{fileId}/confirm-arrival`) are listed under the **Files** subsection above (with `tenantId` / `channelCode` / `fileName` params and the `file` multipart form field).
 
 ### API Versioning
 

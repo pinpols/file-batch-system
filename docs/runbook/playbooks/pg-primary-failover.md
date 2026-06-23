@@ -102,7 +102,7 @@
    ```
 
 5. **事后清理 stale PUBLISHING**
-   - `OutboxPollScheduler.resetStalePublishingEvents` 会自动重置(默认 `batch.orchestrator.outbox.publishing-timeout-seconds`,见 `OutboxProperties`),正常 1-2 轮后回 `FAILED` 重投。
+   - 调度自动调 `OutboxEventMapper.resetStalePublishing` 重置(默认 `batch.outbox.publishing-timeout-seconds`,见 `OutboxProperties`),正常 1-2 轮后回 `FAILED` 重投。
    - 若想立即清:
      ```sql
      update batch.outbox_event
@@ -123,7 +123,7 @@
 3. 等主库 ops 抢救:常见原因是磁盘满 / OOM kill / WAL 损坏,看 `docker logs batch-postgres-primary`
 4. 主库回来后:**不要直接重启业务**,先确认 `pg_is_in_recovery()` = `f`,再按方案 A 步骤 4 重启
 
-### 方案 C:核武器 — 回滚 + 重建(30+ min)
+### 方案 C:最后手段(破坏性操作)— 回滚 + 重建(30+ min)
 
 触发条件:主库数据卷损坏、replica 同步早就断、上一版 PG migration 把 schema 破坏。
 

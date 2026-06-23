@@ -987,7 +987,9 @@ batch-orchestrator      ← 编排调度服务（唯一状态主机）
 batch-worker-core       ← Worker 公共核心
 batch-worker-import     ← 文件导入 Worker
 batch-worker-export     ← 文件导出 Worker
+batch-worker-process    ← 文件加工 Worker
 batch-worker-dispatch   ← 文件分发 Worker
+batch-worker-atomic     ← 原子任务 Worker（ADR-029：shell/sql/stored-proc/http）
 batch-console-api       ← 控制台 BFF（面向前端）
 ```
 
@@ -1002,8 +1004,8 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 | 字段                                  | 枚举类                   | 允许值                                                              |
 | ----------------------------------- | --------------------- | ---------------------------------------------------------------- |
-| `job_definition.job_type`           | `JobType`             | `GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW`        |
-| `job_definition.schedule_type`      | —                     | `CRON` / `FIXED_RATE` / `MANUAL` / `EVENT` / `ONE_TIME`          |
+| `job_definition.job_type`           | `JobType`             | `GENERAL` / `IMPORT` / `EXPORT` / `PROCESS` / `DISPATCH` / `WORKFLOW` / `ATOMIC` |
+| `job_definition.schedule_type`      | `ScheduleType`        | `CRON` / `FIXED_RATE` / `MANUAL`                                 |
 | `job_definition.retry_policy`       | `RetryPolicyType`     | `NONE` / `FIXED` / `EXPONENTIAL`                                 |
 | `job_definition.catch_up_policy`    | `CatchUpPolicyType`   | `NONE` / `AUTO` / `MANUAL_APPROVAL`                              |
 | `workflow_definition.workflow_type` | `WorkflowType`        | `DAG` / `PIPELINE` / `MIXED`                                     |
@@ -1019,7 +1021,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | 字段                             | 枚举类                   | 允许值                                                                                                                                         |
 | ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `outbox_event.publish_status`  | `OutboxPublishStatus` | `NEW` / `PUBLISHING` / `PUBLISHED` / `FAILED` / `GIVE_UP`                                                                                   |
-| `trigger_request.trigger_type` | `TriggerType`         | `API` / `MANUAL` / `EVENT` / `CATCH_UP` / `SCHEDULED`                                                                                       |
+| `trigger_request.trigger_type` | `TriggerType`         | `API` / `MANUAL` / `EVENT` / `CATCH_UP` / `SCHEDULED` / `RERUN`                                                                             |
 | `job_instance.status`          | `JobInstanceStatus`   | `CREATED` / `WAITING` / `READY` / `RUNNING` / `PARTIAL_FAILED` / `SUCCESS` / `FAILED` / `CANCELLED` / `TERMINATED`                          |
 | `workflow_run.status`          | `WorkflowRunStatus`   | `CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED`                                                                                 |
 | `file_record.status`           | `FileStatus`          | `RECEIVED` / `PARSING` / `PARSED` / `VALIDATED` / `LOADED` / `GENERATED` / `DISPATCHING` / `DISPATCHED` / `ARCHIVED` / `FAILED` / `DELETED` |
@@ -1168,7 +1170,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | 层                                           | 默认                                     | 场景                                                                |
 | ------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------- |
 | Java 字段 `bypassMode`                        | `false`                                | 回退最安全，防未知 profile 意外放开                                            |
-| `application-local.yml`（6 个模块）              | `true`                                 | IDE 本地跑默认旁路，开发者调试不受安全链拖累                                          |
+| `application-local.yml`（8 个模块）              | `true`                                 | IDE 本地跑默认旁路，开发者调试不受安全链拖累                                          |
 | `docker/compose/app.yml` env                | `${BATCH_SECURITY_BYPASS_MODE:-false}` | docker-compose 起容器默认不旁路，环境形态贴近生产；需要旁路时显式设 env 覆盖                  |
 | `.env.local` / `.env.test` / `.env.example` | `false`                                | 跟 compose 对齐                                                      |
 | `.env.prod`                                 | `false`                                | 生产显式关                                                             |
