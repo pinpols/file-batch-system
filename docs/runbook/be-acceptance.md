@@ -100,7 +100,7 @@ pgrep -fl cloudflared && echo "tunnel: running" || echo "tunnel: not active(隧�
 
 | 类型 | 例 | 处理 |
 |---|---|---|
-| 工具链 | Mockito + JDK 25 不兼容 / Spotless plugin 内部 NPE | backlog 跳过(等 plugin 升级) |
+| 工具链 | Mockito + JDK 21 不兼容 / Spotless plugin 内部 NPE | backlog 跳过(等 plugin 升级) |
 | 环境 | docker 容器没起 / 端口占 / 磁盘满 | 先解决环境再续跑 |
 | 代码 bug | 真测试失败 + 业务逻辑错 | 修代码 → 单跑该测试 → 续跑剩余 |
 
