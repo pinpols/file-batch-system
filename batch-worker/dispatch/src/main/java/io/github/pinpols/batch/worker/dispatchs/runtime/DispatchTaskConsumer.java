@@ -9,9 +9,7 @@ import io.github.pinpols.batch.worker.dispatchs.config.DispatchWorkerConfigurati
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 /** 分发任务 Kafka 消费者，接收并处理分发类型的任务消息。 */
@@ -59,17 +57,7 @@ public class DispatchTaskConsumer extends AbstractTaskConsumer {
   }
 
   @Override
-  protected String listenerId() {
+  public String listenerId() {
     return "dispatch-task-consumer";
-  }
-
-  @KafkaListener(
-      id = "dispatch-task-consumer",
-      topicPattern = "#{__listener.topicPattern()}",
-      groupId = "#{__listener.consumerGroupId()}")
-  public void consume(String payload, Acknowledgment acknowledgment) {
-    if (doConsume(payload)) {
-      acknowledgment.acknowledge();
-    }
   }
 }
