@@ -10,7 +10,7 @@
 
 - 单一 jar(目标 < 2 MB),依赖只 4 个:`jackson-databind` / `kafka-clients` / `slf4j-api` / `lombok(provided)`
 - **不依赖** Spring / batch-common / 任何 framework
-- JDK 25(`<java.version>` 由根 pom 控制)
+- **JDK 21+**(编译目标 `maven.compiler.release=21`,本模块 override 不随平台 25;租户在 LTS 上即可跑)
 - 通信协议权威源:[`docs/sdk/wire-protocol.md`](../docs/sdk/wire-protocol.md) + [`docs/api/sdk-contract-fixtures/`](../docs/api/sdk-contract-fixtures/) 12 个 JSON 用例
 
 ## 快速接入(5 分钟)

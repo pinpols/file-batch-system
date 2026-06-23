@@ -30,7 +30,7 @@
       Central **不接受** example 命名空间——发布前须把根 pom <groupId> 改成自有
       且已在 Central 验证的命名空间(如 io.yourorg)。详见 docs/sdk/RELEASING.md。
     -->
-    <url>https://github.com/your-org/file-batch-system</url>
+    <url>https://github.com/pinpols/file-batch-system</url>
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
@@ -40,16 +40,25 @@
     </licenses>
     <developers>
         <developer>
-            <id>your-org</id>
-            <name>Your Org SDK Team</name>
-            <email>sdk@your-org.example</email>
+            <id>pinpols</id>
+            <name>pinpols</name>
+            <!-- TODO(owner):首发前换成真实公开联系邮箱(Central 不强制 email) -->
+            <email>noreply@github.com</email>
         </developer>
     </developers>
     <scm>
-        <connection>scm:git:https://github.com/your-org/file-batch-system.git</connection>
-        <developerConnection>scm:git:git@github.com:your-org/file-batch-system.git</developerConnection>
-        <url>https://github.com/your-org/file-batch-system</url>
+        <connection>scm:git:https://github.com/pinpols/file-batch-system.git</connection>
+        <developerConnection>scm:git:git@github.com:pinpols/file-batch-system.git</developerConnection>
+        <url>https://github.com/pinpols/file-batch-system</url>
     </scm>
+
+    <properties>
+        <!-- 租户自托管 SDK 面向租户环境:编译目标锁 Java 21(LTS,广泛部署),
+             不继承根 pom 的 release=25(那是平台运行时)。否则 jar 是 bytecode 25,
+             租户只能在 JDK 25 上跑,违背 BYO「在自己环境跑」的初衷,且与 quickstart
+             「JDK 21+」矛盾。core 零依赖,可独立降 target;无 >21 语法。 -->
+        <maven.compiler.release>21</maven.compiler.release>
+    </properties>
 
     <dependencies>
         <!-- 仅 jackson(JSON 序列化)+ kafka-client(派单消费)+ slf4j-api(日志门面)

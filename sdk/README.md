@@ -18,6 +18,23 @@
 
 > 发布名权威源 = 各语言工程的 manifest(`pyproject.toml` / `Cargo.toml` / `package.json` / `pom.xml`);发布通道与真名见 [`docs/sdk/RELEASING.md`](../docs/sdk/RELEASING.md)。1.0 前多数走源码 / 本地安装。
 
+## 最低环境要求
+
+权威源 = 各语言 manifest(构建文件),下表与之同步:
+
+| 语言 | 最低运行时 | 运行依赖 | 备注 |
+|---|---|---|---|
+| **Java** | **JDK 21+** | `jackson-databind` / `kafka-clients` / `slf4j-api`(`lombok` 仅 provided 编译期) | jar 编译到 bytecode 21(`maven.compiler.release=21`,不随平台 25),租户在 LTS 上即可跑 |
+| **Python** | **3.12+** | `httpx>=0.27` / `pydantic` / `aiokafka` | async-only(现代 typing:`type` 语句 / PEP 695) |
+| **Go** | **1.25+** | 核心零依赖;Kafka 适配器 = 独立 nested module(`segmentio/kafka-go`) | 不用 Kafka 则不引该依赖 |
+| **TypeScript** | **Node 20+**(active LTS) | 核心零依赖;Kafka = 可选 `kafkajs`(`optionalDependencies`) | 发布产物编译为 ES2023 JS(`dist/`),非原始 `.ts` |
+| **Rust** | **stable**(edition 2021) | 核心零依赖;`http`(reqwest+rustls)/ `kafka`(rdkafka)= 可选 feature | 默认 feature 全关 = std-only |
+
+**通用前置(所有语言)**:
+- 网络可达平台:HTTP `/internal/*` + Kafka broker(`batch.task.dispatch.<tenant>.*`)
+- 一个平台签发的 **API key**(进 HTTP header,数据 0 出域)
+- 时区/编码按平台约定(UTF-8;时间统一 UTC 传输)
+
 ## 两种形态(都在每个语言里)
 
 1. **decision core** —— 纯函数、无 IO,把 wire 输入(HTTP 状态 / 心跳指令 / 续租 / 背压 / 停止信号)映射成结构化决策。跨语言 1:1 对齐,由契约 fixture 钉死(`then.expect` 词表)。
