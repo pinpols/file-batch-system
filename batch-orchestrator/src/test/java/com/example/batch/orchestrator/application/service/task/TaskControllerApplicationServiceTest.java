@@ -14,8 +14,12 @@ import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
+import com.example.batch.orchestrator.config.BundleBatchClaimProperties;
 import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest;
 import com.example.batch.orchestrator.controller.request.TaskCancelRequest;
+import com.example.batch.orchestrator.controller.request.TaskClaimBatchRequest;
+import com.example.batch.orchestrator.controller.request.TaskClaimBatchResponse;
+import com.example.batch.orchestrator.controller.request.TaskClaimItemPayload;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
 import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
 import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
@@ -52,9 +56,13 @@ class TaskControllerApplicationServiceTest {
 
   private TaskControllerApplicationService service;
 
+  private final BundleBatchClaimProperties batchClaimProperties = new BundleBatchClaimProperties();
+
   @BeforeEach
   void setUp() {
-    service = new TaskControllerApplicationService(taskExecutionService, new ObjectMapper());
+    service =
+        new TaskControllerApplicationService(
+            taskExecutionService, new ObjectMapper(), batchClaimProperties);
   }
 
   // ===== claim =====
@@ -100,6 +108,64 @@ class TaskControllerApplicationServiceTest {
     EffectiveTaskConfig result = service.claim(100L, new TaskClaimRequest("ta", "w1", "inv-1"));
     assertThat(result).isNull();
     verify(taskExecutionService).loadEffectiveConfig(eq("ta"), eq(100L));
+  }
+
+  // ===== claimBatch (ADR-046 P2 切片 2.1) =====
+
+  @Test
+  @DisplayName("claimBatch: 逐项独立 —— 领到/被抢/不存在 三种各自返回,不抛异常")
+  void claimBatchReturnsPerItemResultsWithoutThrowing() {
+    // task 1:领到(RUNNING + w1)
+    when(taskExecutionService.assignWorker(eq("ta"), eq(1L), eq("w1")))
+        .thenReturn(task(TaskStatus.RUNNING.code(), "w1"));
+    when(taskExecutionService.loadEffectiveConfig(eq("ta"), eq(1L))).thenReturn(null);
+    // task 2:被并发对手抢走(RUNNING + 别的 worker)
+    when(taskExecutionService.assignWorker(eq("ta"), eq(2L), eq("w1")))
+        .thenReturn(task(TaskStatus.RUNNING.code(), "w-other"));
+    // task 3:不存在(assignWorker 返 null)
+    when(taskExecutionService.assignWorker(eq("ta"), eq(3L), eq("w1"))).thenReturn(null);
+
+    TaskClaimBatchResponse resp =
+        service.claimBatch(
+            new TaskClaimBatchRequest(
+                List.of(
+                    new TaskClaimItemPayload("ta", 1L, "w1", "inv-1"),
+                    new TaskClaimItemPayload("ta", 2L, "w1", "inv-2"),
+                    new TaskClaimItemPayload("ta", 3L, "w1", "inv-3"))));
+
+    assertThat(resp.results()).hasSize(3);
+    assertThat(resp.results().get(0).taskId()).isEqualTo(1L);
+    assertThat(resp.results().get(0).claimed()).isTrue();
+    assertThat(resp.results().get(1).claimed()).isFalse();
+    assertThat(resp.results().get(2).claimed()).isFalse();
+    // 只对领到的 task 1 拉 config
+    verify(taskExecutionService).loadEffectiveConfig(eq("ta"), eq(1L));
+    verify(taskExecutionService, never()).loadEffectiveConfig(eq("ta"), eq(2L));
+    verify(taskExecutionService, never()).loadEffectiveConfig(eq("ta"), eq(3L));
+  }
+
+  @Test
+  @DisplayName("claimBatch: 超过 maxBatchSize → 直接拒绝(保护 orchestrator)")
+  void claimBatchRejectsOversizeBatch() {
+    batchClaimProperties.setMaxBatchSize(2);
+
+    assertThatThrownBy(
+            () ->
+                service.claimBatch(
+                    new TaskClaimBatchRequest(
+                        List.of(
+                            new TaskClaimItemPayload("ta", 1L, "w1", "i1"),
+                            new TaskClaimItemPayload("ta", 2L, "w1", "i2"),
+                            new TaskClaimItemPayload("ta", 3L, "w1", "i3")))))
+        .isInstanceOf(BizException.class);
+    verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString());
+  }
+
+  @Test
+  @DisplayName("claimBatch: 空/null 入参 → 空结果")
+  void claimBatchEmptyInputReturnsEmpty() {
+    assertThat(service.claimBatch(new TaskClaimBatchRequest(null)).results()).isEmpty();
+    assertThat(service.claimBatch(null).results()).isEmpty();
   }
 
   // ===== report =====

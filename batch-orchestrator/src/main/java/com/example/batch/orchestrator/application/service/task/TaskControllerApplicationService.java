@@ -7,8 +7,13 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
+import com.example.batch.orchestrator.config.BundleBatchClaimProperties;
 import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest;
 import com.example.batch.orchestrator.controller.request.TaskCancelRequest;
+import com.example.batch.orchestrator.controller.request.TaskClaimBatchRequest;
+import com.example.batch.orchestrator.controller.request.TaskClaimBatchResponse;
+import com.example.batch.orchestrator.controller.request.TaskClaimItemPayload;
+import com.example.batch.orchestrator.controller.request.TaskClaimResultPayload;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
 import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
 import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
@@ -48,6 +53,7 @@ public class TaskControllerApplicationService {
 
   private final TaskExecutionService taskExecutionService;
   private final ObjectMapper objectMapper;
+  private final BundleBatchClaimProperties batchClaimProperties;
 
   @Timed(
       value = "batch.task.claim.duration",
@@ -63,6 +69,40 @@ public class TaskControllerApplicationService {
     }
     // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
     return taskExecutionService.loadEffectiveConfig(request.tenantId(), taskId);
+  }
+
+  /**
+   * ADR-046 P2 切片 2.1:批量认领 —— 一次 HTTP 往返认领 K 个**独立** partition 对应的 task, 把控制面往返从 O(N) 降到 O(N/K)。
+   *
+   * <p>语义与单条 {@link #claim} 完全一致(逐 task 各自 {@code assignWorker} CAS),只是**逐项返回结果而非抛异常**: 没领到的
+   * task(被并发对手领走 / READY 窗口已过 / 不存在)记 {@code claimed=false},worker 只处理领到的子集。 **不是束级状态机 / 不共享幂等 ——
+   * 每个 partition 仍是独立单元**(见 ADR-046 §1)。
+   *
+   * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝(保护 orchestrator)。
+   */
+  public TaskClaimBatchResponse claimBatch(TaskClaimBatchRequest request) {
+    List<TaskClaimItemPayload> items =
+        request == null || request.items() == null ? List.of() : request.items();
+    int cap = batchClaimProperties.effectiveBatchSize();
+    if (items.size() > cap) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "claim batch size " + items.size() + " exceeds max " + cap);
+    }
+    List<TaskClaimResultPayload> results = new ArrayList<>(items.size());
+    for (TaskClaimItemPayload item : items) {
+      JobTaskEntity task =
+          taskExecutionService.assignWorker(item.tenantId(), item.taskId(), item.workerId());
+      if (task != null && isClaimedBy(task, item.workerId())) {
+        EffectiveTaskConfig config =
+            taskExecutionService.loadEffectiveConfig(item.tenantId(), item.taskId());
+        results.add(new TaskClaimResultPayload(item.taskId(), true, config));
+      } else {
+        results.add(new TaskClaimResultPayload(item.taskId(), false, null));
+      }
+    }
+    return new TaskClaimBatchResponse(results);
   }
 
   @Retryable(

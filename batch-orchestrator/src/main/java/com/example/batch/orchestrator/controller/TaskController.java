@@ -3,6 +3,9 @@ package com.example.batch.orchestrator.controller;
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import com.example.batch.orchestrator.controller.request.TaskCancelRequest;
+import com.example.batch.orchestrator.controller.request.TaskClaimBatchRequest;
+import com.example.batch.orchestrator.controller.request.TaskClaimBatchResponse;
+import com.example.batch.orchestrator.controller.request.TaskClaimItemPayload;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
 import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
 import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
@@ -85,6 +88,16 @@ public class TaskController {
     return taskControllerApplicationService.renewBatch(normalize(request, httpRequest));
   }
 
+  /**
+   * ADR-046 P2 切片 2.1:批量认领 —— 一次 HTTP 往返认领 K 个独立 partition 对应的 task(O(N)→O(N/K))。 逐项返回结果(claimed +
+   * config),没领到的项不抛异常;worker 只处理 claimed=true 的子集。
+   */
+  @PostMapping("/claim-batch")
+  public TaskClaimBatchResponse claimBatch(
+      @RequestBody TaskClaimBatchRequest request, HttpServletRequest httpRequest) {
+    return taskControllerApplicationService.claimBatch(normalize(request, httpRequest));
+  }
+
   private static TaskClaimRequest normalize(
       TaskClaimRequest request, HttpServletRequest httpRequest) {
     String tenantId =
@@ -94,6 +107,26 @@ public class TaskController {
         tenantId,
         request == null ? null : request.workerId(),
         request == null ? null : request.partitionInvocationId());
+  }
+
+  private static TaskClaimBatchRequest normalize(
+      TaskClaimBatchRequest request, HttpServletRequest httpRequest) {
+    if (request == null || request.items() == null) {
+      return request;
+    }
+    List<TaskClaimItemPayload> items = new ArrayList<>(request.items().size());
+    for (TaskClaimItemPayload item : request.items()) {
+      String tenantId =
+          InternalRequestTenantGuard.resolveTenant(
+              httpRequest, item == null ? null : item.tenantId());
+      items.add(
+          new TaskClaimItemPayload(
+              tenantId,
+              item == null ? null : item.taskId(),
+              item == null ? null : item.workerId(),
+              item == null ? null : item.partitionInvocationId()));
+    }
+    return new TaskClaimBatchRequest(items);
   }
 
   private static TaskHeartbeatRequest normalize(
