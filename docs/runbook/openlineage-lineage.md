@@ -16,7 +16,7 @@
 
 ## 设计要点
 
-- **不引 openlineage-java 客户端**:SB4 + JDK25 兼容性未验,事件是文档化 JSON,用 Jackson 手搓 + JDK
+- **不引 openlineage-java 客户端**:SB4 + JDK 21 兼容性未验,事件是文档化 JSON,用 Jackson 手搓 + JDK
   HttpClient 发即可,零新依赖(同 P1-B 不贸然引 Resilience4j 的教训)。
 - **绝不阻塞主链**:挂在 `WorkflowTerminalOutboxService.writeTerminalEvent` 的 `afterCommit` 同步里
   (终态真提交才发,回滚不发假血缘);emit 提交到独立 daemon 线程池,池满即丢,所有异常 swallow。

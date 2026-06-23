@@ -2,7 +2,7 @@
 
 > 分析基准日期：2026-04-08
 > 全量测试状态：21 E2E + 190 单元/集成，全部通过
-> 工具说明：JaCoCo 0.8.12 不支持 Java 25 bytecode（class file version 69），采用静态分析替代
+> 工具说明（已更新）：平台已随 #698 回到 JDK 21（bytecode class file version 65），JaCoCo 0.8.12 支持,可正常生成覆盖率报告——原“JaCoCo 不支持 Java 25 bytecode（v69），采用静态分析替代”的前提已失效。下文历史结论基于当时的静态分析,予以保留。
 
 ---
 

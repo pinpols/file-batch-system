@@ -116,5 +116,5 @@ cd sdk/typescript && npm install && npm run build && npm pack --pack-destination
 cd sdk/python && python3.12 -m build && python3.12 -m venv /tmp/v && /tmp/v/bin/pip install dist/*.whl
 # Go(本机需 export GOROOT=/usr/local/opt/go/libexec)
 cd sdk/go && go vet ./... && go build ./...
-# Rust / Java 交 CI(本机常缺 cargo / JDK25 慢)
+# Rust / Java 交 CI(本机常缺 cargo / JDK 21 慢)
 ```

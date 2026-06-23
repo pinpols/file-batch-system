@@ -212,7 +212,7 @@ kubectl logs <pod> --previous | tail -50
 ├─ "startup probe failed" → 启动时间超 startupProbe.timeoutSeconds
 │  → 临时调大：values.yaml startupProbe.failureThreshold
 │  → 长期：减少 @PostConstruct 重活 / 缩 Flyway baseline / 评估 Spring Boot AOT
-│    （注：原方案里的 AppCDS 预热在 JDK 25 + SB 4 上因 dump/runtime native-access 标志
+│    （注：原方案里的 AppCDS 预热在 JDK 21 + SB 4 上因 dump/runtime native-access 标志
 │     错位会触发 NoClassDefFoundError，scripts/local/start-all.sh 已默认 -Xshare:off）
 │
 └─ BatchStartupSelfCheck 报错 → 按日志列出的缺失项处理

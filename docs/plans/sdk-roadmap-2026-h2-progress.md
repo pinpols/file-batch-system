@@ -3,7 +3,7 @@
 > 日期倒序。每个 phase 收官后追加 5 行 retro:实际 vs plan diff + 经验。
 > 维护规则参见主 plan §1 决策 #隐-1。
 
-> **共享前置(环境)**:本机默认 JDK 21,项目要 JDK 25(`.mvn/jvm.config` 用 `--sun-misc-unsafe-memory-access=allow`)。每次新环境/容器重建需重新下载 Oracle JDK 25 解包到 `/opt/jdk25`,并把系统 JDK 21 的 cacerts 拷过去解决 SSL 信任,约 30s。建议归档为 `scripts/local/setup-jdk25.sh`。下文各条不再重复此前置。
+> **共享前置(环境)**:本机默认 JDK 21,项目要 JDK 25(`.mvn/jvm.config` 用 `--sun-misc-unsafe-memory-access=allow`)。每次新环境/容器重建需重新下载 Oracle JDK 25 解包到 `/opt/jdk25`,并把系统 JDK 21 的 cacerts 拷过去解决 SSL 信任,约 30s。建议归档为 `scripts/local/setup-jdk25.sh`。下文各条不再重复此前置。（注:平台已于 #698 回 JDK 21,此 JDK 25 前置已过时）
 
 ---
 
