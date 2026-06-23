@@ -17,7 +17,7 @@
 >   —— N=25 partition、chunk K=10 → claim-batch 只发 ⌈25/10⌉=3 次 HTTP(单条路径需 25 次),
 >   逐项结果完整映射。证明 CLAIM 往返 O(N)→⌈N/K⌉,进 CI、不依赖独占栈。
 > - **双 listener 互斥(本地实证)**:flag 开仅 `*-batch` 容器启动、flag 关仅单条容器启动
->   (process worker 隔离 boot,throwaway consumer group,见会话记录)。JDK25 fat-jar 正常起(~28s)。
+>   (process worker 隔离 boot,throwaway consumer group,见会话记录)。fat-jar 正常起(~28s)。
 > - **真栈端到端负载验收脚本**:`scripts/local/adr046-batch-consume-load.sh`(需独占全栈 + flag 开):
 >   触发高 fan-out 作业 → 跑到终态 → 比对 orchestrator `batch_task_batch_claim_size`
 >   指标(count=claim-batch 调用数 / sum=认领 partition 数)算实削减,PASS 条件=全 SUCCESS 且 calls<partitions。

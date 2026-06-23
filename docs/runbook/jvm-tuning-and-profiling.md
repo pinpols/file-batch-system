@@ -1,6 +1,6 @@
 # JVM 调优 与 性能 / 堆栈分析
 
-生产 JDK 25 + Spring Boot 4 环境的 JVM 参数推荐 + 排障工具链 + 应急 SOP。本文档分 3 段:
+生产 JDK 21 + Spring Boot 4 环境的 JVM 参数推荐 + 排障工具链 + 应急 SOP。本文档分 3 段:
 
 - **§1 参数**:统一基础 + 按模块分档,直接抄进 Helm values
 - **§2 工具**:profiling / 排障 toolkit + 装方式
@@ -43,7 +43,7 @@
 # === JFR 持续 in-flight(几乎零开销,出事故能 dump 最后 10 分钟)===
 -XX:StartFlightRecording=name=continuous,settings=profile,maxsize=256m,maxage=10m,dumponexit=true,filename=/var/log/app/jfr-exit.jfr
 
-# === JDK 25 native access ===
+# === JDK 21 native access ===
 --enable-native-access=ALL-UNNAMED
 ```
 
@@ -98,13 +98,14 @@ services:
 
 > Helm template 拼接:`JAVA_OPTS = javaOpts + " " + services.<name>.javaOptsExtra`,见 §落地 PR 改动。
 
-### 1.4 Spring Boot 4 / JDK 25 新机制
+### 1.4 Spring Boot 4 / JDK 21 新机制
 
 **Virtual threads(Project Loom)**:
 - console-api 适合开(纯 HTTP / SSE,IO 阻塞型);在 `application-prod.yml` 加 `spring.threads.virtual.enabled: true`
 - worker / orchestrator 谨慎:底下 Kafka client / JDBC 有 native pin,VT 可能反而退化
 
-**AOT cache(JDK 25 CDS)**:启动快 30-50%
+**AppCDS / 动态 CDS(JDK 21)**:启动快 30-50%
+（AOT cache 为 JDK 24+ 特性,当前平台 JDK 21 不适用,保留备未来升级）
 ```bash
 # Dockerfile 中第一次启动写 archive
 -XX:ArchiveClassesAtExit=/var/cache/app/app.jsa
@@ -150,13 +151,16 @@ jcmd <pid> Thread.print                            # 等价 jstack
 jcmd <pid> JFR.start name=adhoc duration=120s filename=/tmp/adhoc.jfr  # ad-hoc 录制
 jcmd <pid> JFR.dump name=continuous filename=/tmp/now.jfr              # 从 §1.1 持续录制里 dump
 
-# === JEP 520 JFR Method Timing & Tracing(JDK 25 新增,低开销定位慢方法)===
-# 无需 async-profiler/arthas 字节码插桩,直接用 JFR 的 jdk.MethodTiming / jdk.MethodTrace
-# 两个事件 + method filter 采样指定方法的调用计时/调用栈。适合生产环境精确定位单个慢方法,
-# 比 async-profiler 全量采样开销更可控。filter 语法以 `jcmd <pid> help JFR.start` 为准:
-jcmd <pid> help JFR.start                                              # 先看本机 JDK 25 支持的 filter 写法
-jcmd <pid> JFR.start name=mt jdk.MethodTiming#filter=io.github.pinpols.batch.<Class>::<method>
-jcmd <pid> JFR.dump name=mt filename=/tmp/method-timing.jfr            # 用 JMC 打开看每方法累计耗时/调用次数
+# === JFR Method Timing & Tracing 注意:JEP 520 为 JDK 25 特性,当前平台 JDK 21 不可用 ===
+# JEP 520(jdk.MethodTiming / jdk.MethodTrace)是 JDK 25 新增,21 上没有,不要直接套用下方“需 JDK 25”示例。
+# 21 上用常规 JFR 替代(jcmd JFR.start),配合 JMC 离线分析定位慢方法:
+jcmd <pid> JFR.start name=adhoc settings=profile duration=120s filename=/tmp/adhoc.jfr  # 常规 JFR profile 录制(JDK 21 可用)
+jcmd <pid> JFR.dump name=adhoc filename=/tmp/method-profile.jfr        # 用 JMC 打开看 Method Profiling 视图定位热点
+#
+# 以下为 JEP 520 method timing 示例,仅当平台升级到 JDK 25+ 才可用(当前 JDK 21 不可用):
+jcmd <pid> help JFR.start                                              # 需 JDK 25:看本机支持的 filter 写法
+jcmd <pid> JFR.start name=mt jdk.MethodTiming#filter=io.github.pinpols.batch.<Class>::<method>  # 需 JDK 25
+jcmd <pid> JFR.dump name=mt filename=/tmp/method-timing.jfr            # 需 JDK 25:用 JMC 打开看每方法累计耗时/调用次数
 
 # === async-profiler:CPU / Alloc / Lock 火焰图 ===
 ./profiler.sh -d 60 -f /tmp/cpu.html <pid>                  # 60s CPU 火焰图(HTML)

@@ -4,7 +4,7 @@
 > 这是空模板;每次跑验收时按日期复制本文件并填写。
 
 ## 工具链 / 环境(不修主代码)
-- [ ] (e.g. Mockito 5.20 + JDK 25 mock interface 失败)
+- [ ] (e.g. Mockito 5.20 + JDK 21 mock interface 失败)
 - [ ] (e.g. ReadReplicaIT 缺 docker compose replica)
 
 ## 他人 commit 引入违约(交给作者)
