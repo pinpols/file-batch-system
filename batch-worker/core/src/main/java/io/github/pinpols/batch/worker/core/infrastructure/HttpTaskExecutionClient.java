@@ -62,6 +62,9 @@ public class HttpTaskExecutionClient
 
   // 构造器注入(CLAUDE.md §Java #3 合规)。MeterRegistry 为 optional bean,沿用
   // @Autowired(required=false) 在 ctor 参数上 — 这是构造器注入,不是 field/setter 注入。
+  // PMD ExcessiveParameterList 抑制:Spring DI 构造器(CLAUDE.md §Java #2 对 Spring DI 构造器豁免参数上限),
+  // 8 个均为注入依赖;ruleset 本身将该 @SuppressWarnings 列为既定逃生门。
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public HttpTaskExecutionClient(
       OrchestratorTaskClientProperties properties,
       BatchSecurityProperties securityProperties,
