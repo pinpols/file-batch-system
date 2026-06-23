@@ -32,6 +32,12 @@ public class KafkaConsumerConfiguration {
   @Value("${spring.kafka.consumer.max-poll-records:20}")
   private int maxPollRecords;
 
+  @Value("${batch.worker.max-concurrent-tasks:8}")
+  private int maxConcurrentTasks;
+
+  @Value("${batch.worker.batch-claim.enabled:false}")
+  private boolean batchClaimEnabled;
+
   @Value("${spring.kafka.consumer.fetch-min-size:1024}")
   private int fetchMinBytes;
 
@@ -110,6 +116,7 @@ public class KafkaConsumerConfiguration {
   public ConcurrentKafkaListenerContainerFactory<String, String> batchKafkaListenerContainerFactory(
       ConsumerFactory<String, String> kafkaConsumerFactory,
       ObservationRegistry observationRegistry) {
+    validateBatchBackpressureConfiguration();
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(kafkaConsumerFactory);
@@ -119,5 +126,17 @@ public class KafkaConsumerConfiguration {
     factory.getContainerProperties().setObservationEnabled(true);
     factory.getContainerProperties().setObservationRegistry(observationRegistry);
     return factory;
+  }
+
+  private void validateBatchBackpressureConfiguration() {
+    if (!batchClaimEnabled || maxPollRecords <= maxConcurrentTasks) {
+      return;
+    }
+    throw new IllegalStateException(
+        "batch.worker.batch-claim.enabled=true requires spring.kafka.consumer.max-poll-records "
+            + "<= batch.worker.max-concurrent-tasks; got max-poll-records="
+            + maxPollRecords
+            + ", max-concurrent-tasks="
+            + maxConcurrentTasks);
   }
 }
