@@ -1,8 +1,21 @@
 # ADR-046 Phase 2 · 切片 2.3 施工方案 —— worker-core 消费端攒批
 
-> 状态:**待施工**(代码留给有全栈压测环境时做;2.0/2.1/2.2/2.4 已落 main)。
+> 状态:**全部落 main(2.0–2.3d 完成)**。2.3a 客户端 #689 / 2.3b 执行器 #691 /
+> 2.3c 批量 listener + 公共 consume 上提 core #692 已合;2.3d 验收见下「验收结论」。
+> flag `batch.worker.batch-claim.enabled` 默认 **关**,生产开启前看 2.3d 验收门。
 > 包名以重命名后为准:`io.github.pinpols.batch.*`。
 > 前置:orchestrator 侧 `POST /internal/tasks/claim-batch` / `report-batch` 已在 main(#683/#684)。
+>
+> **2.3d 验收结论(2026-06-23)**:
+> - **确定性往返削减(CI 固化)**:`HttpTaskExecutionClientTest#claimBatchReducesClaimRoundTripsToCeilNOverK`
+>   —— N=25 partition、chunk K=10 → claim-batch 只发 ⌈25/10⌉=3 次 HTTP(单条路径需 25 次),
+>   逐项结果完整映射。证明 CLAIM 往返 O(N)→⌈N/K⌉,进 CI、不依赖独占栈。
+> - **双 listener 互斥(本地实证)**:flag 开仅 `*-batch` 容器启动、flag 关仅单条容器启动
+>   (process worker 隔离 boot,throwaway consumer group,见会话记录)。JDK25 fat-jar 正常起(~28s)。
+> - **真栈端到端负载验收脚本**:`scripts/local/adr046-batch-consume-load.sh`(需独占全栈 + flag 开):
+>   触发高 fan-out 作业 → 跑到终态 → 比对 orchestrator `batch_task_batch_claim_size`
+>   指标(count=claim-batch 调用数 / sum=认领 partition 数)算实削减,PASS 条件=全 SUCCESS 且 calls<partitions。
+>   留给独占窗口跑(共享栈被占时不可跑,会与他人 CLAIM 抢占)。
 
 ## 目标与护栏
 - 把 worker 消费从「1 Kafka record = 1 task = 1 claim + 1 report」改成「攒 K 条 → **一次** claim-batch → 逐 partition 独立执行 → **一次** report-batch」,控制面往返 O(N)→O(N/K)。
@@ -64,7 +77,7 @@ worker 侧补:`batch.worker.batch_consume.size` 直方图 + 攒批命中率;orch
 - **压测验收门(硬性)**:上万 fan-out,对照 2.0 基线(`load-tests/run-control-plane-worker-benchmark.sh`)证明 claim/report 往返与锁争用实降、零正确性回归;**达标才允许在生产开 flag**。
 
 ## 分步建议(逐 PR,可回退)
-1. **2.3a**:client `claimBatch`+`reportBatch`(+接口+DTO+单测)——纯加法,不接 listener。
-2. **2.3b**:`executeBatch`(+单测)。
-3. **2.3c**:batch factory + `doConsumeBatch` + 子类 batch listener + worker flag(默认关)。
-4. **2.3d**:e2e + 压测验收 → 达标后才开 flag。
+1. **2.3a** ✅:client `claimBatch`+`reportBatch`(+接口+DTO+单测)——纯加法,不接 listener(#689)。
+2. **2.3b** ✅:`executeBatch`(+单测)(#691)。
+3. **2.3c** ✅:batch factory + `doConsumeBatch` + 公共 consume listener 上提 `AbstractTaskConsumer` + worker flag(默认关)(#692)。
+4. **2.3d** ✅:确定性往返削减单测 + 双 listener 互斥本地实证 + 真栈负载脚本(见顶部「验收结论」)。生产开 flag 仍需先在独占栈跑 `adr046-batch-consume-load.sh` 达标。

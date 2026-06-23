@@ -41,6 +41,9 @@ allowed_file() {
     scripts/local/replay-forensic-bundle.sh) return 0 ;;
     scripts/local/start-all.sh) return 0 ;;
     scripts/local/validate-seed-scenarios.sh) return 0 ;;
+    # ADR-046 2.3d 攒批负载验收:内联 SQL 为只读断言探针(job_partition 终态计数 +
+    # trigger_request 取 job_instance_id)+ API 触发,与 validate-seed-scenarios / sdk-e2e 探针脚本同类。
+    scripts/local/adr046-batch-consume-load.sh) return 0 ;;
     scripts/ops/heal-dead-letters.sh) return 0 ;;
     scripts/ops/heal-drain-timeout.sh) return 0 ;;
     scripts/ops/heal-retry-partitions.sh) return 0 ;;

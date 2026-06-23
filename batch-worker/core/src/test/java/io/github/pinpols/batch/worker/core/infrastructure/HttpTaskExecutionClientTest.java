@@ -15,6 +15,7 @@ import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import mockwebserver3.MockResponse;
@@ -123,6 +124,10 @@ class HttpTaskExecutionClientTest {
   }
 
   private HttpTaskExecutionClient newClient(int port) {
+    return newClient(port, new WorkerBatchClaimProperties());
+  }
+
+  private HttpTaskExecutionClient newClient(int port, WorkerBatchClaimProperties batchProps) {
     OrchestratorTaskClientProperties props = clientProperties(port);
     props.setClaimMaxAttempts(1);
     @SuppressWarnings("unchecked")
@@ -136,7 +141,64 @@ class HttpTaskExecutionClientTest {
         new SimpleMeterRegistry(),
         noopCoordinator,
         new WorkerLeaseProperties(),
-        new WorkerBatchClaimProperties());
+        batchProps);
+  }
+
+  /**
+   * ADR-046 P2 切片 2.3d 验收:**攒批把 CLAIM 控制面往返从 O(N) 降到 ⌈N/K⌉**。
+   *
+   * <p>N=25 个独立 partition、chunk K=10 → 走 {@code claim-batch} 只发 ⌈25/10⌉=3 次 HTTP;对照单条路径每个 partition
+   * 一次 CLAIM = 25 次。逐项结果完整映射(25 个全部领到)。这是 2.3c 批量 listener 在生产高 fan-out 下省下控制面往返的根因,以确定性 HTTP
+   * 计数固化,不依赖独占全栈压测窗口。
+   */
+  @Test
+  void claimBatchReducesClaimRoundTripsToCeilNOverK() throws Exception {
+    int n = 25;
+    int k = 10;
+    try (MockWebServer server = new MockWebServer()) {
+      // 3 个 chunk:[1..10]、[11..20]、[21..25],各一次 claim-batch 响应(全部 claimed=true)
+      server.enqueue(claimBatchChunkResponse(1, 10));
+      server.enqueue(claimBatchChunkResponse(11, 10));
+      server.enqueue(claimBatchChunkResponse(21, 5));
+      server.start();
+
+      WorkerBatchClaimProperties batchProps = new WorkerBatchClaimProperties();
+      batchProps.setEnabled(true);
+      batchProps.setMaxBatchSize(k);
+      HttpTaskExecutionClient client = newClient(server.getPort(), batchProps);
+
+      List<TaskClaimItem> items = new ArrayList<>(n);
+      for (long id = 1; id <= n; id++) {
+        items.add(new TaskClaimItem("ta", id, "w1"));
+      }
+      List<TaskClaimResult> results = client.claimBatch(items);
+
+      int expectedRoundTrips = (n + k - 1) / k; // ⌈25/10⌉ = 3
+      assertThat(server.getRequestCount()).isEqualTo(expectedRoundTrips);
+      assertThat(expectedRoundTrips).isLessThan(n); // 3 « 25:对照单条路径的 O(N)
+      assertThat(results).hasSize(n);
+      assertThat(results).allMatch(TaskClaimResult::claimed);
+      assertThat(results).extracting(TaskClaimResult::taskId).doesNotHaveDuplicates().hasSize(n);
+    }
+  }
+
+  /** 构造一个 claim-batch chunk 的 200 响应:taskId 从 startId 起连续 size 个,全部 claimed=true。 */
+  private static MockResponse claimBatchChunkResponse(long startId, int size) {
+    StringBuilder body = new StringBuilder("{\"results\":[");
+    for (int i = 0; i < size; i++) {
+      if (i > 0) {
+        body.append(',');
+      }
+      body.append("{\"taskId\":")
+          .append(startId + i)
+          .append(",\"claimed\":true,\"config\":{\"jobCode\":\"J\"}}");
+    }
+    body.append("]}");
+    return new MockResponse.Builder()
+        .code(200)
+        .addHeader("Content-Type", "application/json")
+        .body(body.toString())
+        .build();
   }
 
   @Test
