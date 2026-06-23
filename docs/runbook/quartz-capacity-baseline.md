@@ -216,7 +216,7 @@ QRTZ_LOCKS 抢锁等待已成主因
 
 ## 6. 相关代码
 
-- 4 个指标定义：`batch-trigger/src/main/java/com/example/batch/trigger/observability/QuartzMetrics.java`
+- 4 个指标定义：`batch-trigger/src/main/java/io/github/pinpols/batch/trigger/observability/QuartzMetrics.java`
 - JobListener / TriggerListener 实现：`batch-trigger/.../observability/QuartzMetricsListener.java`
 - 启动期注册 + gauge：`batch-trigger/.../observability/QuartzMetricsConfiguration.java`
 - 关闭开关（默认开）：`batch.trigger.quartz-metrics.enabled=false`

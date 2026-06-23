@@ -18,14 +18,14 @@ paths = [
     # 文档示例
     '''docs/runbook/realtime-sse-verification\.md''',
     # 测试代码:PEM header/footer 字面量(用于 strip 解析,非真私钥)
-    '''batch-worker[-/]import/src/test/java/com/example/batch/worker/imports/preprocess/ImportPreprocessPipelineRsaTest\.java''',
+    '''batch-worker[-/]import/src/test/java/io/github/pinpols/batch/worker/imports/preprocess/ImportPreprocessPipelineRsaTest\.java''',
     # 测试代码:JWT 测试 fixture STRONG_SECRET 字面量(非真实凭据,shallow-clone CI 误判 generic-api-key)
-    '''batch-console-api/src/test/java/com/example/batch/console/domain/rbac/support/ConsoleJwtServiceTest\.java''',
+    '''batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtServiceTest\.java''',
     # 测试代码:FilesystemObjectStore/EncryptingObjectStore/Console FS presign 端点的 HMAC fixture
     # ("test-presign-secret-1234567890",非真实凭据,generic-api-key 误判)
-    '''batch-common/src/test/java/com/example/batch/common/storage/FilesystemObjectStoreTest\.java''',
-    '''batch-common/src/test/java/com/example/batch/common/storage/EncryptingObjectStoreTest\.java''',
-    '''batch-console-api/src/test/java/com/example/batch/console/domain/file/web/ConsoleFilesystemPresignDownloadControllerTest\.java''',
+    '''batch-common/src/test/java/io/github/pinpols/batch/common/storage/FilesystemObjectStoreTest\.java''',
+    '''batch-common/src/test/java/io/github/pinpols/batch/common/storage/EncryptingObjectStoreTest\.java''',
+    '''batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFilesystemPresignDownloadControllerTest\.java''',
 ]
 regexes = [
     # 幂等键 header value(`idem-*` 形态),不是 API key,被 generic-api-key 规则误报。

@@ -128,36 +128,36 @@
 
 ### A1. 极长参数（优先级最高）
 
-- **43 参数**：`batch-console-api/src/main/java/com/example/batch/console/mapper/FileTemplateConfigMapper.java`
+- **43 参数**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/FileTemplateConfigMapper.java`
   - 方法：`upsertFileTemplateConfig(...)`
   - 风险：新增/删除字段导致接口与 XML 频繁改动，调用方极易错位传参
   - 建议：封装为 `FileTemplateConfigUpsertParam`（或复用 `FileTemplateConfigEntity/DTO`）并在 XML 改为 `#{p.templateCode}` 等
 
 ### A2. 典型“维护/Upsert”长参数
 
-- **15 参数**：`batch-console-api/src/main/java/com/example/batch/console/mapper/JobDefinitionMapper.java`
+- **15 参数**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/JobDefinitionMapper.java`
   - 方法：`updateJobDefinitionMaintenance(...)`
   - 建议：封装为 `JobDefinitionMaintenanceUpdateParam`
 
-- **14 参数**：`batch-console-api/src/main/java/com/example/batch/console/mapper/WorkflowNodeMapper.java`
+- **14 参数**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/WorkflowNodeMapper.java`
   - 方法：`upsertWorkflowNode(...)`
   - 建议：封装为 `WorkflowNodeUpsertParam`
 
-- **9 参数**：`batch-console-api/src/main/java/com/example/batch/console/mapper/WorkflowDefinitionMapper.java`
+- **9 参数**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/WorkflowDefinitionMapper.java`
   - 方法：`upsertWorkflowDefinition(...)`
   - 建议：封装为 `WorkflowDefinitionUpsertParam`
 
-- **6 参数**：`batch-console-api/src/main/java/com/example/batch/console/mapper/WorkflowEdgeMapper.java`
+- **6 参数**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/WorkflowEdgeMapper.java`
   - 方法：`upsertWorkflowEdge(...)`
   - 建议：封装为 `WorkflowEdgeUpsertParam`
 
 ### A3. 文件通道配置（中长参数）
 
-- **12 参数**：`batch-console-api/src/main/java/com/example/batch/console/mapper/FileChannelConfigMapper.java`
+- **12 参数**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/FileChannelConfigMapper.java`
   - 方法：`upsertFileChannelConfig(...)`
   - 建议：封装为 `FileChannelConfigUpsertParam`
 
-- **11 参数**：`batch-console-api/src/main/java/com/example/batch/console/mapper/FileChannelConfigMapper.java`
+- **11 参数**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/FileChannelConfigMapper.java`
   - 方法：`updateFileChannelConfig(...)`
   - 建议：封装为 `FileChannelConfigUpdateParam`
 
@@ -169,15 +169,15 @@
 
 ### B1. 已发现参数 ≥ 5 的 list()
 
-- `batch-console-api/src/main/java/com/example/batch/console/application/ConsoleResourceQueueApplicationService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ConsoleResourceQueueApplicationService.java`
   - `list(String tenantId, String queueCode, String queueType, Boolean enabled, int pageNo, int pageSize)`（6）
   - 建议：`ResourceQueueQueryRequest`（tenantId/queueCode/queueType/enabled/pageNo/pageSize）
 
-- `batch-console-api/src/main/java/com/example/batch/console/application/ConsolePipelineDefinitionApplicationService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ConsolePipelineDefinitionApplicationService.java`
   - `list(String tenantId, String jobCode, String pipelineType, Boolean enabled, int pageNo, int pageSize)`（6）
   - 建议：`PipelineDefinitionQueryRequest`
 
-- `batch-console-api/src/main/java/com/example/batch/console/application/ConsoleQuotaPolicyApplicationService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ConsoleQuotaPolicyApplicationService.java`
   - `list(String tenantId, String policyCode, Boolean enabled, int pageNo, int pageSize)`（5）
   - 建议：`QuotaPolicyQueryRequest`
 
@@ -208,35 +208,35 @@
 
 ### `mapper`（4）✅ 全部完成
 
-- 15: ~~`batch-console-api/src/main/java/com/example/batch/console/mapper/JobDefinitionMapper.java` -> `updateJobDefinitionMaintenance()`~~ ✅ `JobDefinitionMaintenanceUpdateParam`
-- 14: ~~`batch-console-api/src/main/java/com/example/batch/console/mapper/WorkflowNodeMapper.java` -> `upsertWorkflowNode()`~~ ✅ `WorkflowNodeUpsertParam`
-- 9: ~~`batch-console-api/src/main/java/com/example/batch/console/mapper/WorkflowDefinitionMapper.java` -> `upsertWorkflowDefinition()`~~ ✅ `WorkflowDefinitionUpsertParam`
-- 6: ~~`batch-console-api/src/main/java/com/example/batch/console/mapper/WorkflowEdgeMapper.java` -> `upsertWorkflowEdge()`~~ ✅ `WorkflowEdgeUpsertParam`
+- 15: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/JobDefinitionMapper.java` -> `updateJobDefinitionMaintenance()`~~ ✅ `JobDefinitionMaintenanceUpdateParam`
+- 14: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/WorkflowNodeMapper.java` -> `upsertWorkflowNode()`~~ ✅ `WorkflowNodeUpsertParam`
+- 9: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/WorkflowDefinitionMapper.java` -> `upsertWorkflowDefinition()`~~ ✅ `WorkflowDefinitionUpsertParam`
+- 6: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/mapper/WorkflowEdgeMapper.java` -> `upsertWorkflowEdge()`~~ ✅ `WorkflowEdgeUpsertParam`
 
 ### `application`（22）✅ 全部完成
 
-- 11: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/scheduler/QuotaRuntimeStateService.java` -> `evaluateAndReserve()`~~ ✅ `QuotaReservationRequest`（审计前已完成）
-- 10: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/ApprovalWorkflowService.java` -> `submit()`~~ ✅ `ApprovalSubmitCommand`（审计前已完成）
-- 10: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultApprovalWorkflowService.java` -> `submit()`~~ ✅ `ApprovalSubmitCommand`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultCompensationService.java` -> `launchCompensation()`~~ ✅ `CompensationLaunchRequest`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `createTasksAndMaybeOutboxEvents()`~~ ✅ `TaskCreationContext`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `dispatch()`~~ ✅ `DispatchContext`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskExecutionService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultTaskOutcomeService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/PartitionDispatchService.java` -> `dispatch()`~~ ✅ `DispatchContext`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/TaskExecutionService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/TaskOutcomeService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultCompensationService.java` -> `appendCompensationLog()`~~ ✅ `CompensationLogContext`
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `buildTask()`~~ ✅ `TaskBuildContext`（审计前已完成）
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `createTasksAndMaybeOutboxEvents()`~~ ✅ `TaskCreationContext`（审计前已完成）
-- 6: `batch-console-api/src/main/java/com/example/batch/console/application/ConsolePipelineDefinitionApplicationService.java` -> `list()`（见 infrastructure 剩余待改）
-- 6: `batch-console-api/src/main/java/com/example/batch/console/application/ConsoleResourceQueueApplicationService.java` -> `list()`（见 infrastructure 剩余待改）
-- 6: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/engine/TaskDispatchOutboxService.java` -> `writeDispatchEvent()`
-- 6: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/engine/TaskDispatchOutboxService.java` -> `writeDispatchEvent()`
-- 6: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/scheduler/QuotaRuntimeStateService.java` -> `describe()`~~ ✅ `QuotaDescribeRequest`
-- 6: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/scheduler/QuotaRuntimeStateService.java` -> `loadOrCreate()`~~ ✅ `StateContext`
-- 6: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultWorkflowNodeDispatchService.java` -> `dispatchJobNode()`
-- 6: `batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultWorkflowNodeDispatchService.java` -> `dispatchJobNode()`
+- 11: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/scheduler/QuotaRuntimeStateService.java` -> `evaluateAndReserve()`~~ ✅ `QuotaReservationRequest`（审计前已完成）
+- 10: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/ApprovalWorkflowService.java` -> `submit()`~~ ✅ `ApprovalSubmitCommand`（审计前已完成）
+- 10: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultApprovalWorkflowService.java` -> `submit()`~~ ✅ `ApprovalSubmitCommand`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultCompensationService.java` -> `launchCompensation()`~~ ✅ `CompensationLaunchRequest`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `createTasksAndMaybeOutboxEvents()`~~ ✅ `TaskCreationContext`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `dispatch()`~~ ✅ `DispatchContext`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultTaskExecutionService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultTaskOutcomeService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/PartitionDispatchService.java` -> `dispatch()`~~ ✅ `DispatchContext`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/TaskExecutionService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/TaskOutcomeService.java` -> `recordNodeRunFinish()`~~ ✅ `NodeRunFinishCommand`（审计前已完成）
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultCompensationService.java` -> `appendCompensationLog()`~~ ✅ `CompensationLogContext`
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `buildTask()`~~ ✅ `TaskBuildContext`（审计前已完成）
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultPartitionDispatchService.java` -> `createTasksAndMaybeOutboxEvents()`~~ ✅ `TaskCreationContext`（审计前已完成）
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ConsolePipelineDefinitionApplicationService.java` -> `list()`（见 infrastructure 剩余待改）
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ConsoleResourceQueueApplicationService.java` -> `list()`（见 infrastructure 剩余待改）
+- 6: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/TaskDispatchOutboxService.java` -> `writeDispatchEvent()`
+- 6: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/TaskDispatchOutboxService.java` -> `writeDispatchEvent()`
+- 6: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/scheduler/QuotaRuntimeStateService.java` -> `describe()`~~ ✅ `QuotaDescribeRequest`
+- 6: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/scheduler/QuotaRuntimeStateService.java` -> `loadOrCreate()`~~ ✅ `StateContext`
+- 6: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowNodeDispatchService.java` -> `dispatchJobNode()`
+- 6: `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowNodeDispatchService.java` -> `dispatchJobNode()`
 
 ### `web`（0）
 
@@ -248,26 +248,26 @@
 
 ### `infrastructure`（22）
 
-- 12: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` -> `createReconciledFileRecord()`~~ ✅ `ReconciledFileRecordCommand`
-- 11: ~~`batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleAiApplicationService.java` -> `buildAuditCommand()`~~ ✅ `AuditContext`
-- 10: ~~`batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleConfigApplicationService.java` -> `logChange()`~~ ✅ `ChangeLogCommand`
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` -> `appendAudit()`~~ ✅ `FileAuditCommand`
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
-- 8: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/scheduler/DefaultResourceScheduler.java` -> `resolveFairnessScore()`~~ ✅ `FairnessScoreContext`
-- 7: ~~`batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleFileApplicationService.java` -> `executeFileOperation()`~~ ✅ `FileExecContext`
-- 7: ~~`batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleFileApplicationService.java` -> `submitApproval()`~~ ✅ `ApprovalSubmitContext`
-- 7: ~~`batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleJobApplicationService.java` -> `submitApproval()`~~ ✅ `ApprovalSubmitContext`
-- 7: ~~`batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleWorkflowExcelApplicationService.java` -> `logDefinitionChange()`~~ ✅ `DefinitionChangeContext`
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
-- 7: ~~`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
-- 6: `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleAiApplicationService.java` -> `buildPrompt()`
-- 6: `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleFileChannelExcelApplicationService.java` -> `logChange()`
-- 6: `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleFileChannelExcelApplicationService.java` -> `requireEnum()`
-- 6: `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleFileTemplateExcelApplicationService.java` -> `logChange()`
-- 6: `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleFileTemplateExcelApplicationService.java` -> `requireEnum()`
-- 6: `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsolePipelineDefinitionApplicationService.java` -> `list()`
-- 6: `batch-console-api/src/main/java/com/example/batch/console/infrastructure/DefaultConsoleResourceQueueApplicationService.java` -> `list()`
+- 12: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` -> `createReconciledFileRecord()`~~ ✅ `ReconciledFileRecordCommand`
+- 11: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleAiApplicationService.java` -> `buildAuditCommand()`~~ ✅ `AuditContext`
+- 10: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleConfigApplicationService.java` -> `logChange()`~~ ✅ `ChangeLogCommand`
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` -> `appendAudit()`~~ ✅ `FileAuditCommand`
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
+- 8: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultResourceScheduler.java` -> `resolveFairnessScore()`~~ ✅ `FairnessScoreContext`
+- 7: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleFileApplicationService.java` -> `executeFileOperation()`~~ ✅ `FileExecContext`
+- 7: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleFileApplicationService.java` -> `submitApproval()`~~ ✅ `ApprovalSubmitContext`
+- 7: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleJobApplicationService.java` -> `submitApproval()`~~ ✅ `ApprovalSubmitContext`
+- 7: ~~`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleWorkflowExcelApplicationService.java` -> `logDefinitionChange()`~~ ✅ `DefinitionChangeContext`
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
+- 7: ~~`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java` -> `updateGroupState()`~~ ✅ `ArrivalGroupUpdateContext`
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleAiApplicationService.java` -> `buildPrompt()`
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleFileChannelExcelApplicationService.java` -> `logChange()`
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleFileChannelExcelApplicationService.java` -> `requireEnum()`
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleFileTemplateExcelApplicationService.java` -> `logChange()`
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleFileTemplateExcelApplicationService.java` -> `requireEnum()`
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsolePipelineDefinitionApplicationService.java` -> `list()`
+- 6: `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/DefaultConsoleResourceQueueApplicationService.java` -> `list()`
 

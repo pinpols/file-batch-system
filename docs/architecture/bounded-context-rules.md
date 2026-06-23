@@ -1,6 +1,6 @@
 # Bounded Context 边界规则(P1-A Stage 1)
 
-> 守护测试:`batch-console-api/src/test/java/com/example/batch/console/arch/BoundedContextDependencyArchTest.java`
+> 守护测试:`batch-console-api/src/test/java/io/github/pinpols/batch/console/arch/BoundedContextDependencyArchTest.java`
 > 进度 metric:`BoundedContextMigrationProgressTest.java`
 > Roadmap:[`docs/architecture/p0-p1-p2-roadmap.md`](p0-p1-p2-roadmap.md) § P1-A
 

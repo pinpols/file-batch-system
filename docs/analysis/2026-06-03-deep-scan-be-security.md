@@ -83,7 +83,7 @@
 
 ### P1-1 — API key 弱哈希(裸 SHA-256 / 无盐)
 
-**位置**:`batch-orchestrator/src/main/java/com/example/batch/orchestrator/auth/ApiKeyVerifier.java:83-91`
+**位置**:`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java:83-91`
 
 ```java
 private static String sha256Hex(String input) {
@@ -102,7 +102,7 @@ private static String sha256Hex(String input) {
 
 ### P1-2 — bypass-mode JWT 失败降级到 admin 测试路径
 
-**位置**:`batch-console-api/src/main/java/com/example/batch/console/domain/rbac/support/ConsoleAuthenticationFilter.java:140-153`
+**位置**:`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleAuthenticationFilter.java:140-153`
 
 ```java
 if (batchSecurityProperties.isBypassMode()) {
@@ -122,7 +122,7 @@ if (batchSecurityProperties.isBypassMode()) {
 
 ### P2-1 — CORS 允许的 header 列表无守护测试
 
-**位置**:`batch-console-api/src/main/java/com/example/batch/console/config/ConsoleCorsConfiguration.java:46-53`
+**位置**:`batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleCorsConfiguration.java:46-53`
 
 显式 allowedHeaders 写死 7 个;新 controller 若要求自定义 header(如 `X-Trace-Override`),改动易漏改 CORS → 浏览器 preflight 失败但测试同源直连成功,容易上线后才发现。
 
@@ -130,7 +130,7 @@ if (batchSecurityProperties.isBypassMode()) {
 
 ### P2-2 — RLS SET LOCAL 字符串拼接
 
-**位置**:`batch-common/src/main/java/com/example/batch/common/rls/RlsTenantSessionSupport.java:50`
+**位置**:`batch-common/src/main/java/io/github/pinpols/batch/common/rls/RlsTenantSessionSupport.java:50`
 
 ```java
 stmt.execute("SET LOCAL " + SESSION_VAR_NAME + " = '" + escapeSqlLiteral(tenantId) + "'");
@@ -148,7 +148,7 @@ try (PreparedStatement ps = conn.prepareStatement("SELECT set_config('app.tenant
 
 ### P2-3 — HTTP executor 响应头/体可能含敏感数据写入数据库
 
-**位置**:`batch-worker-atomic/src/main/java/com/example/batch/worker/atomic/http/HttpTaskExecutor.java:505-509`
+**位置**:`batch-worker-atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java:505-509`
 
 ```java
 output.put("responseHeaders", resp.headers().map());
@@ -164,7 +164,7 @@ output.put("responseBody", responseBody);
 
 ### P2-4 — JWT IP/UA 绑定漂移仅 WARN
 
-**位置**:`batch-console-api/src/main/java/com/example/batch/console/domain/rbac/support/ConsoleJwtService.java:315-348`
+**位置**:`batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtService.java:315-348`
 
 软绑定无 deny 选项;移动网 / CDN 抖动场景全噪。已加 5min Caffeine 抑制器,但**纵深价值有限**:攻击者偷到 cookie 后,跨网访问只会触发一条 WARN。
 
@@ -172,7 +172,7 @@ output.put("responseBody", responseBody);
 
 ### P2-5 — `decryptIfNeeded` 调用契约依赖 Javadoc
 
-**位置**:`batch-common/src/main/java/com/example/batch/common/service/BatchObjectCryptoService.java:170-234`
+**位置**:`batch-common/src/main/java/io/github/pinpols/batch/common/service/BatchObjectCryptoService.java:170-234`
 
 如 Javadoc 所警示:返回的流必须读完 + close,否则 GCM tag 不校验 → 攻击者可以投入"前 N 字节合法 + 末尾被改"的密文,业务读取前半段后丢弃即可绕过完整性保证。
 
@@ -182,7 +182,7 @@ output.put("responseBody", responseBody);
 
 ### P3-1 — placeholder 前缀列表的 false positive
 
-**位置**:`batch-common/src/main/java/com/example/batch/common/config/BatchSecurityProperties.java:69-71`
+**位置**:`batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchSecurityProperties.java:69-71`
 
 `"secret"` 前缀会误拒合法密钥如 `secretofKnowingNothing-3142`;但同样无法防 `P@ssw0rd1234` / `admin-12345678` 这类弱字典密码。
 
@@ -198,7 +198,7 @@ output.put("responseBody", responseBody);
 
 ### P3-3 — Trigger 模块 actuator 全开
 
-**位置**:`batch-trigger/src/main/java/com/example/batch/trigger/config/TriggerSecurityConfiguration.java:46`
+**位置**:`batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java:46`
 
 ```java
 .requestMatchers("/actuator/**").permitAll()

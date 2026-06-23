@@ -29,10 +29,10 @@
 
 证据：
 
-- `batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/KafkaTaskConsumer.java`
+- `batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/KafkaTaskConsumer.java`
   - 34-36 行注释说明：dispatcher 提交到线程池后立刻 commit offset。
   - 149-154 行实际是处理 poll 批次后统一 `consumer.commitSync()`。
-- `batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/TaskDispatcher.java`
+- `batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcher.java`
   - 184-203 行：`draining` / `fatal` / `platformState` 非接收态时直接 `return`。
   - 210-220 行：tenant mismatch 注释写“不 ack offset”，但方法依旧只是 `return`，外层 consumer 仍会统一 commit。
 
@@ -55,12 +55,12 @@
 
 证据：
 
-- `batch-console-api/src/main/java/com/example/batch/console/config/ConsoleSecurityConfiguration.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityConfiguration.java`
   - 51-52 行：启用 CORS，但 `csrf(AbstractHttpConfigurer::disable)`。
 - `../batch-console/src/api/client.ts`
   - 11-14 行：axios `withCredentials=true`，依赖 HttpOnly cookie。
   - 15-19 行：前端声明 `XSRF-TOKEN` / `X-XSRF-TOKEN`，但注释明确 BE 当前可能尚未配置。
-- `batch-console-api/src/main/java/com/example/batch/console/domain/rbac/web/ConsoleAuthController.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleAuthController.java`
   - 183-188 行：cookie 为 HttpOnly + Secure + SameSite=Lax。
 
 风险：
@@ -101,10 +101,10 @@
 
 证据：
 
-- `batch-worker-import/src/main/java/com/example/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java`
+- `batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java`
   - 391-400 行：先 `buildCopyCsv` 生成完整字符串，再 `new StringReader(csv)` 传给 `CopyManager.copyIn`。
   - 465-470 行：`StringBuilder` 初始容量按 `records.size() * insertCols.size() * 16` 估算。
-- `batch-worker-import/src/main/java/com/example/batch/worker/imports/stage/support/ImportStageSupport.java`
+- `batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/support/ImportStageSupport.java`
   - 58-71 行：模板 `chunk_size` 只做 `Math.max(1, value)`，没有上限。
 
 风险：
@@ -122,9 +122,9 @@
 
 证据：
 
-- `batch-worker-import/src/main/java/com/example/batch/worker/imports/config/JdbcMappedImportSecurityProperties.java`
+- `batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/config/JdbcMappedImportSecurityProperties.java`
   - 15-31 行：`strictIdempotency` 默认 false，注释称兼容模式。
-- `batch-worker-import/src/main/java/com/example/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java`
+- `batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java`
   - 99-107 行：无 `conflict_columns` 时日志明确提示 retry 会重复写。
 - `docs/runbook/platform-worker-checkpoint-howto.md`
   - 明确要求 checkpoint 场景确认 `strict-idempotency=true`。
@@ -168,11 +168,11 @@
 
 证据：
 
-- `batch-worker-core/src/main/java/com/example/batch/worker/core/infrastructure/TaskExecutionPool.java`
+- `batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/TaskExecutionPool.java`
   - 40-48 行：使用 `Executors.newFixedThreadPool`。
-- `batch-worker-core/src/main/java/com/example/batch/worker/core/config/WorkerExecutionTimeoutProperties.java`
+- `batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerExecutionTimeoutProperties.java`
   - 17-20 行：注释要求 `poolSize >= batch.worker.max-concurrent-tasks`。
-- `batch-worker-core/src/main/java/com/example/batch/worker/core/infrastructure/WorkerStartupRuntimeAudit.java`
+- `batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerStartupRuntimeAudit.java`
   - 88-100 行：发现 `execution poolSize < maxConcurrentTasks` 只进入 audit issue。
 
 风险：
@@ -188,7 +188,7 @@
 
 证据：
 
-- `batch-orchestrator/src/main/java/com/example/batch/orchestrator/config/InternalAuthFilter.java`
+- `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/InternalAuthFilter.java`
   - 24-34 行：同时支持 `X-Internal-Secret` 和 per-tenant API key。
   - 99-106 行：legacy secret 通过后直接放行，且不绑定 tenant。
 
@@ -211,7 +211,7 @@
   - 128-142 行：默认暴露 `health,info,prometheus,loggers`，health details 为 `always`。
 - `batch-common/src/main/resources/application-prod.yml`
   - 13-16 行：prod 将 management port 隔离到独立端口。
-- `batch-trigger/src/main/java/com/example/batch/trigger/config/TriggerSecurityConfiguration.java`
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java`
   - 45-46、68-72 行：`/actuator/**` permitAll 且 filter 放行。
 
 风险：

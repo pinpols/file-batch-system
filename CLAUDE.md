@@ -149,7 +149,7 @@ CI `pr-gate` 拦截漂移。
 | AAA 注释 | 业务逻辑 > 3 行的测试**建议** `// arrange / // act / // assert` 三行注释(目前 0 使用,新代码示范) |
 | Builder / Fixture | 重复构造的 entity / command 抽 `XxxTestBuilder` 静态工厂或 `@Builder` 私有 record(参考 `JobInstanceTerminalStatusCommand` 测试) |
 
-完整测试基础设施(`AbstractIntegrationTest` / `@BatchIntegrationTest` / Testcontainers 端口选择 / Flyway schemas)见 `batch-common/src/test/java/com/example/batch/testing/`。
+完整测试基础设施(`AbstractIntegrationTest` / `@BatchIntegrationTest` / Testcontainers 端口选择 / Flyway schemas)见 `batch-common/src/test/java/io/github/pinpols/batch/testing/`。
 
 ## ADR 与范围纪律
 

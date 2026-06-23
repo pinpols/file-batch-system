@@ -24,9 +24,9 @@ class ServiceEntryGuardArchTest {
   private static final List<Path> GUARDED_SERVICES =
       List.of(
           Paths.get(
-              "src/main/java/com/example/batch/orchestrator/service/DefaultLaunchValidationService.java"),
+              "src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchValidationService.java"),
           Paths.get(
-              "src/main/java/com/example/batch/orchestrator/service/BatchDayGateService.java"));
+              "src/main/java/io/github/pinpols/batch/orchestrator/service/BatchDayGateService.java"));
 
   @Test
   void coreServiceEntriesMustGuardAgainstNullInputs() throws IOException {

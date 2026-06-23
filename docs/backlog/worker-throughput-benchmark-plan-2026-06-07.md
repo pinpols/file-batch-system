@@ -153,7 +153,7 @@ load-tests/target/worker-business-scenario-report-<RUN_ID>.md
 | 控制面压测入口 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger 小基线和并行压测;Kafka lag 采样 | 阶段 4、5、6 |
 | worker stress 入口 | `load-tests/scripts/run-worker-stress-tests.sh` | import/export/dispatch/process 阶梯加压 | 阶段 2、3、4 |
 | process 大数据入口 | `load-tests/scripts/run-process-worker-benchmark.sh` | aggregate/copy/idempotency 数据准备、运行和报告 | 阶段 4 |
-| e2e 失败/恢复资产 | `batch-e2e-tests/src/test/java/com/example/batch/e2e/*Failure*`,`*Replay*`,`*Drain*`,`*RestartRecovery*` | failure pipeline、DLQ replay、worker drain、process restart recovery 等场景 | 阶段 4、5、6 |
+| e2e 失败/恢复资产 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/*Failure*`,`*Replay*`,`*Drain*`,`*RestartRecovery*` | failure pipeline、DLQ replay、worker drain、process restart recovery 等场景 | 阶段 4、5、6 |
 
 ### 阶段 0 初步缺口
 

@@ -8,7 +8,7 @@
 
 ## 1. 当前包结构盘点
 
-源根:`batch-console-api/src/main/java/com/example/batch/console/`
+源根:`batch-console-api/src/main/java/io/github/pinpols/batch/console/`
 
 | 顶层包 | 文件数 | 备注 |
 |---|---:|---|
@@ -391,7 +391,7 @@
 
 ## 附录 A:统计口径
 - 文件扫描时间:2026-05-30
-- 源根:`batch-console-api/src/main/java/com/example/batch/console`
+- 源根:`batch-console-api/src/main/java/io/github/pinpols/batch/console`
 - 工具:`find … -name '*.java'`、`grep -rE 'import com\.example\.batch\.console\.…'`
 - 数据未含 `src/test`、`src/main/resources`
 

@@ -112,7 +112,7 @@ OpenAPI 校验结果：
 - `helm/batch-platform/templates/secret.yaml`
 - `helm/batch-platform/templates/configmap.yaml`
 - `batch-config-defaults/src/main/resources/batch-defaults.yml`
-- `batch-console-api/src/main/java/com/example/batch/console/support/auth/ConsoleJwtService.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/auth/ConsoleJwtService.java`
 
 整改结果：
 

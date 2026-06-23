@@ -52,7 +52,7 @@ Expected: 输出 `feature/export-partition-slice`
 ## Task 1: ExportDataContext 加 partition 字段
 
 **Files:**
-- Modify: `batch-common/src/main/java/com/example/batch/common/plugin/ExportDataContext.java`
+- Modify: `batch-common/src/main/java/io/github/pinpols/batch/common/plugin/ExportDataContext.java`
 
 - [ ] **Step 1: 加字段 + 兼容构造器**
 
@@ -95,7 +95,7 @@ Expected: BUILD SUCCESS(`GenerateStep`/`RegisterStep` 的 6 参 `new ExportDataC
 - [ ] **Step 3: Commit**
 
 ```bash
-git add batch-common/src/main/java/com/example/batch/common/plugin/ExportDataContext.java
+git add batch-common/src/main/java/io/github/pinpols/batch/common/plugin/ExportDataContext.java
 git commit -m "feat(export): ExportDataContext 增加 partitionNo/partitionCount 字段"
 ```
 
@@ -104,7 +104,7 @@ git commit -m "feat(export): ExportDataContext 增加 partitionNo/partitionCount
 ## Task 2: GenerateStep 注入真实 partition
 
 **Files:**
-- Modify: `batch-worker-export/src/main/java/com/example/batch/worker/exports/stage/GenerateStep.java`(`buildExportDataContext`,约 205-220 行)
+- Modify: `batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java`(`buildExportDataContext`,约 205-220 行)
 
 - [ ] **Step 1: 读 partition 并用 8 参构造器注入**
 
@@ -156,7 +156,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add batch-worker-export/src/main/java/com/example/batch/worker/exports/stage/GenerateStep.java
+git add batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java
 git commit -m "feat(export): GenerateStep 把 partition 注入 ExportDataContext"
 ```
 
@@ -165,7 +165,7 @@ git commit -m "feat(export): GenerateStep 把 partition 注入 ExportDataContext
 ## Task 3: SqlTemplate 插件分片谓词
 
 **Files:**
-- Test: `batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/SqlTemplateExportPartitionTest.java`(新)
+- Test: `batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportPartitionTest.java`(新)
 - Modify: `.../plugin/SqlTemplateExportDataPlugin.java`(`buildPagedSql` 205-220、`loadDetailPage` 116 行)
 
 - [ ] **Step 1: 写失败单测**
@@ -263,7 +263,7 @@ Expected: PASS(3 tests)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/SqlTemplateExportPartitionTest.java
+git add batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportPartitionTest.java
 git commit -m "feat(export): sql_template 分页 SQL 叠加 hashtext 分片谓词"
 ```
 
@@ -272,7 +272,7 @@ git commit -m "feat(export): sql_template 分页 SQL 叠加 hashtext 分片谓�
 ## Task 4: JdbcMapped 插件分片谓词
 
 **Files:**
-- Test: `batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/GenericJdbcMappedExportPartitionTest.java`(新)
+- Test: `batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportPartitionTest.java`(新)
 - Modify: `.../plugin/GenericJdbcMappedExportDataPlugin.java`(`loadDetailPage` SQL/args 构造,约 107-126 行)
 
 - [ ] **Step 1: 抽出可测的 SQL 构造(重构,行为不变)**
@@ -366,7 +366,7 @@ Expected: 先 FAIL(方法不存在),Step 1 实现后 PASS(2 tests)
 - [ ] **Step 4: Commit**
 
 ```bash
-git add batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/GenericJdbcMappedExportPartitionTest.java
+git add batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportPartitionTest.java
 git commit -m "feat(export): jdbc_mapped 明细分页 SQL 叠加 hashtext 分片谓词"
 ```
 
@@ -375,7 +375,7 @@ git commit -m "feat(export): jdbc_mapped 明细分页 SQL 叠加 hashtext 分片
 ## Task 5: 分片文件名后缀
 
 **Files:**
-- Test: `batch-common/src/test/java/com/example/batch/common/constants/BatchFileConstantsPartitionTagTest.java`(新)
+- Test: `batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java`(新)
 - Modify: `batch-common/.../constants/BatchFileConstants.java`、`batch-worker-export/.../stage/PrepareStep.java`
 
 - [ ] **Step 1: 写 insertPartitionTag 失败单测**
@@ -485,7 +485,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add batch-common/src/main/java/com/example/batch/common/constants/BatchFileConstants.java batch-common/src/test/java/com/example/batch/common/constants/BatchFileConstantsPartitionTagTest.java batch-worker-export/src/main/java/com/example/batch/worker/exports/stage/PrepareStep.java
+git add batch-common/src/main/java/io/github/pinpols/batch/common/constants/BatchFileConstants.java batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java
 git commit -m "feat(export): 分片导出文件名/objectName 加 _p{no}of{count} 后缀"
 ```
 
@@ -494,7 +494,7 @@ git commit -m "feat(export): 分片导出文件名/objectName 加 _p{no}of{count
 ## Task 6: 分片完整性 IT(真实 PG hashtext)
 
 **Files:**
-- Test: `batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/ExportPartitionSliceIT.java`(新,继承 `AbstractIntegrationTest`)
+- Test: `batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportPartitionSliceIT.java`(新,继承 `AbstractIntegrationTest`)
 
 - [ ] **Step 1: 写 IT —— sql_template 4 片无重叠 + 全覆盖**
 
@@ -574,7 +574,7 @@ Expected: PASS — 两个用例均 4 片无重叠且并集 = 1000
 - [ ] **Step 3: Commit**
 
 ```bash
-git add batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/ExportPartitionSliceIT.java
+git add batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportPartitionSliceIT.java
 git commit -m "test(export): 分片完整性 IT — 4 片无重叠 + 全覆盖(sql_template + jdbc_mapped)"
 ```
 

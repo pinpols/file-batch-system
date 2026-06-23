@@ -40,7 +40,7 @@ REQUIRED SUB-SKILL: `superpowers:using-git-worktrees`。基线 `origin/main`(含
 
 - [ ] **Step 2: worktree 内确认依赖在位**
 
-Run: `grep -c 'partitionNo\|partitionCount' batch-common/src/main/java/com/example/batch/common/plugin/ExportDataContext.java`
+Run: `grep -c 'partitionNo\|partitionCount' batch-common/src/main/java/io/github/pinpols/batch/common/plugin/ExportDataContext.java`
 Expected: `2`
 
 ---
@@ -48,8 +48,8 @@ Expected: `2`
 ## Task 1: ExportKeysetRange 值对象 + 等宽切分
 
 **Files:**
-- Create: `batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/ExportKeysetRange.java`
-- Test: `batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java`(本 Task 仅测 ExportKeysetRange.equalWidth)
+- Create: `batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRange.java`
+- Test: `batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java`(本 Task 仅测 ExportKeysetRange.equalWidth)
 
 - [ ] **Step 1: 写失败测试**
 
@@ -126,8 +126,8 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/ExportKeysetRange.java \
-        batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java
+git add batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRange.java \
+        batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java
 git commit -m "feat(export-keyset): ExportKeysetRange 等宽区间值对象"
 ```
 
@@ -267,8 +267,8 @@ Expected: PASS(6 个)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/ExportKeysetRangePlanner.java \
-        batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java
+git add batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlanner.java \
+        batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java
 git commit -m "feat(export-keyset): 激活判定 + 每分区边界缓存(只算一次,异常退 hashtext)"
 ```
 
@@ -453,10 +453,10 @@ Expected: PASS(既有 hashtext / 分页测试不受影响)
 - [ ] **Step 8: Commit**
 
 ```bash
-git add batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/ExportKeysetRange.java \
-        batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java \
-        batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/SqlTemplateExportKeysetRangeTest.java \
-        batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java
+git add batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRange.java \
+        batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java \
+        batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportKeysetRangeTest.java \
+        batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java
 git commit -m "feat(export-keyset): sql_template 接入 keyset 区间谓词 + min/max 边界"
 ```
 
@@ -564,8 +564,8 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add batch-worker-export/src/main/java/com/example/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java \
-        batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/GenericJdbcMappedExportKeysetRangeTest.java
+git add batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java \
+        batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportKeysetRangeTest.java
 git commit -m "feat(export-keyset): jdbc_mapped 接入 keyset 区间谓词 + min/max 边界"
 ```
 
@@ -610,7 +610,7 @@ Expected: PASS(4 个用例)
 - [ ] **Step 3: Commit**
 
 ```bash
-git add batch-worker-export/src/test/java/com/example/batch/worker/exports/plugin/ExportKeysetRangeIT.java
+git add batch-worker-export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangeIT.java
 git commit -m "test(export-keyset): 端到端 4 片无重叠+全覆盖+倾斜+退hashtext+边界只算一次 IT"
 ```
 

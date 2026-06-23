@@ -27,8 +27,9 @@ CONSOLE_ROOT = (
     / "src"
     / "main"
     / "java"
-    / "com"
-    / "example"
+    / "io"
+    / "github"
+    / "pinpols"
     / "batch"
     / "console"
 )

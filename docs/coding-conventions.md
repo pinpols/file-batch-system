@@ -1095,8 +1095,8 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 统一入口：
 
-- `BatchDateTimeSupport`：`batch-common/src/main/java/com/example/batch/common/time/BatchDateTimeSupport.java`
-- `BatchTimezoneProvider`：`batch-common/src/main/java/com/example/batch/common/config/BatchTimezoneProvider.java`
+- `BatchDateTimeSupport`：`batch-common/src/main/java/io/github/pinpols/batch/common/time/BatchDateTimeSupport.java`
+- `BatchTimezoneProvider`：`batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchTimezoneProvider.java`
 
 类型选择规则：
 
@@ -1154,7 +1154,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 - 导出路径强制断言 → `EncodingUtils.requireUtf8(raw)`
 - **禁止** 业务代码自行调用 `Charset.forName(...)`——别名差异（`utf8` / `UTF8` / `utf-8`）和非法值交给 `EncodingUtils` 处理
 
-`EncodingUtils`：`batch-common/src/main/java/com/example/batch/common/utils/EncodingUtils.java`
+`EncodingUtils`：`batch-common/src/main/java/io/github/pinpols/batch/common/utils/EncodingUtils.java`
 
 ## 21. 配置开关规范
 

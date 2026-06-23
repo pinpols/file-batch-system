@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 class CorsWildcardArchTest {
 
   private static final Path MAIN_SOURCES =
-      Path.of("src/main/java/com/example/batch/console").toAbsolutePath();
+      Path.of("src/main/java/io/github/pinpols/batch/console").toAbsolutePath();
 
   /** 匹配 setAllowedOrigins / addAllowedOrigin / allowedOrigins / addAllowedOriginPattern 含 "*" 调用 */
   private static final Pattern WILDCARD_CALL =

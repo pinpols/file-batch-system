@@ -68,7 +68,7 @@ Excel 导入阶段现在拒绝：
 - V4 nodeParams DSL 引用不存在的节点
 - V18 DSL 只能引用上游节点
 
-**文件**：`batch-console-api/src/main/java/com/example/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java`（+240 行）
+**文件**：`batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java`（+240 行）
 
 **测试**：`ConfigPackageExcelValidatorWorkflowTest.java`（11 cases，覆盖所有拓扑错误）
 
@@ -85,9 +85,9 @@ Excel 导入阶段现在拒绝：
 - ID 清洗（中文/标点→下划线）
 
 **文件**：
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/mermaid/WorkflowMermaidRenderer.java`
-- `batch-console-api/src/main/java/com/example/batch/console/infrastructure/mermaid/WorkflowMermaidResponse.java`
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleWorkflowDefinitionController.java`（新端点）
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/mermaid/WorkflowMermaidRenderer.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/mermaid/WorkflowMermaidResponse.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleWorkflowDefinitionController.java`（新端点）
 
 **测试**：`WorkflowMermaidRendererTest.java`（7 cases）
 

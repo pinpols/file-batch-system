@@ -24,7 +24,7 @@
 
 ### V4-BUG-1 · Trigger 管理接口 `/api/triggers/management/*` 全线 HTTP 403
 
-**文件**：`batch-trigger/src/main/java/com/example/batch/trigger/config/TriggerSecurityConfiguration.java`
+**文件**：`batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java`
 
 **症状**：`/list` / `/scheduler-status` / `/drain/status` 等端点返回 `HTTP 403 Content-Length: 0`。`bypass-mode=true` 本应让所有内部接口放行，但实际所有请求都被 Spring Security 拒绝。
 
@@ -47,7 +47,7 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 
 ### V4-BUG-2 · `DefaultWorkerSelector` 忽略 `capability_tags` 数组
 
-**文件**：`batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelector.java`
+**文件**：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelector.java`
 
 **症状**：worker_registry 的 `capability_tags` JSONB 字段里声明的多能力被 selector 完全忽略；resource_queue 带 tag 的 queue 只能匹配 `worker.resource_tag`（单值）相等的 worker，一旦多个 queue 要求不同 tag 就没法用一个 worker 兼顾。
 
@@ -154,9 +154,9 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 ## 文件改动清单
 
 **代码改动**：
-- `batch-trigger/src/main/java/com/example/batch/trigger/config/TriggerSecurityConfiguration.java`
-- `batch-orchestrator/src/main/java/com/example/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelector.java`
-- `batch-orchestrator/src/test/java/com/example/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelectorTest.java`（新增）
+- `batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java`
+- `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelector.java`
+- `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelectorTest.java`（新增）
 - `batch-worker-import/src/main/resources/application-local.yml`
 
 **DB 改动落位状态**（见 hardening-backlog-v4#V4-P0-1）：

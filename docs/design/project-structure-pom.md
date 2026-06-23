@@ -1660,7 +1660,7 @@ batch-platform
 
 ```text
 batch-common
-└── src/main/java/com/example/batch/common
+└── src/main/java/io/github/pinpols/batch/common
     ├── constants
     │   ├── JobConstants.java
     │   └── MqTopics.java
@@ -1691,7 +1691,7 @@ batch-common
 
 ```text
 batch-trigger
-└── src/main/java/com/example/batch/trigger
+└── src/main/java/io/github/pinpols/batch/trigger
     ├── config
     │   ├── QuartzConfig.java
     │   └── DataSourceConfig.java
@@ -1727,7 +1727,7 @@ batch-trigger
 
 ```text
 batch-orchestrator
-└── src/main/java/com/example/batch/orchestrator
+└── src/main/java/io/github/pinpols/batch/orchestrator
     ├── application
     │   └── service                            ← 核心业务服务（God Class 拆分后的产物）
     │       ├── LaunchValidationService.java   (接口)
@@ -1764,7 +1764,7 @@ batch-orchestrator
 
 ```text
 batch-worker-core
-└── src/main/java/com/example/batch/worker/core
+└── src/main/java/io/github/pinpols/batch/worker/core
     ├── app
     │   ├── TaskDispatchExecutor.java
     │   └── WorkerRuntimeFacade.java
@@ -1816,7 +1816,7 @@ batch-worker-core
 
 ```text
 batch-worker-import
-└── src/main/java/com/example/batch/worker/imports
+└── src/main/java/io/github/pinpols/batch/worker/imports
     ├── config
     │   ├── BusinessDataSourceConfiguration.java
     │   ├── BusinessDataSourceProperties.java
@@ -1853,7 +1853,7 @@ batch-worker-import
 
 ```text
 batch-worker-export
-└── src/main/java/com/example/batch/worker/exports
+└── src/main/java/io/github/pinpols/batch/worker/exports
     ├── config
     │   ├── BusinessDataSourceConfiguration.java
     │   ├── BusinessDataSourceProperties.java
@@ -1891,7 +1891,7 @@ batch-worker-export
 
 ```text
 batch-worker-dispatch
-└── src/main/java/com/example/batch/worker/dispatchs
+└── src/main/java/io/github/pinpols/batch/worker/dispatchs
     ├── config
     │   ├── BusinessDataSourceProperties.java
     │   ├── DispatchWorkerConfiguration.java
@@ -1939,7 +1939,7 @@ batch-worker-dispatch
 
 ```text
 batch-console-api
-└── src/main/java/com/example/batch/console
+└── src/main/java/io/github/pinpols/batch/console
     ├── controller
     │   ├── JobManageController.java
     │   ├── JobRunController.java

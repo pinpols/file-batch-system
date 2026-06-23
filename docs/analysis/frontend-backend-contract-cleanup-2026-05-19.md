@@ -18,7 +18,7 @@ In Console*Controller but not in OpenAPI:
 
 代码入口：
 
-- `batch-console-api/src/main/java/com/example/batch/console/web/ConsoleMetaController.java`
+- `batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleMetaController.java`
 - 前端调用：`../batch-console/src/api/meta.ts`
 
 处理要求：

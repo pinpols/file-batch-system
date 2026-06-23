@@ -65,8 +65,8 @@ jobs:
             sdk:
               - 'sdk/**'
               - '!sdk/**/*.md'
-              - 'batch-common/src/main/java/com/example/batch/common/enums/**'
-              - 'batch-common/src/main/java/com/example/batch/common/security/**'
+              - 'batch-common/src/main/java/io/github/pinpols/batch/common/enums/**'
+              - 'batch-common/src/main/java/io/github/pinpols/batch/common/security/**'
               - 'docs/api/sdk-contract-fixtures/**'
               - 'docs/api/sdk-shared-constants.yaml'
               - 'docs/api/orchestrator-internal.openapi.yaml'

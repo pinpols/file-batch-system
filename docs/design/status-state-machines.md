@@ -109,7 +109,7 @@ PENDING → ACCEPTED → LAUNCHED
 ## 5. 实现层关键 enum 文件
 
 ```
-batch-common/src/main/java/com/example/batch/common/enums/
+batch-common/src/main/java/io/github/pinpols/batch/common/enums/
   ├─ JobInstanceStatus.java
   ├─ PipelineRunStatus.java
   ├─ WorkflowRunStatus.java

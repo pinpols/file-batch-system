@@ -69,7 +69,7 @@ batch-common/
 - **二进制兼容**:无(yml 是 resource 文件,不影响 API)
 - **应用启动**:无变化(`classpath:batch-defaults.yml` 仍然 resolve 到同一文件)
 - **CI / 干净 clone**:无操作即可工作
-- **本地已 build 的工作树**:首次 `mvn clean install` 后正常;旧 `~/.m2/repository/com/example/batch/batch-config-defaults/` 残留 jar 不影响后续构建,可手动删除
+- **本地已 build 的工作树**:首次 `mvn clean install` 后正常;旧 `~/.m2/repository/io/github/pinpols/batch/batch-config-defaults/` 残留 jar 不影响后续构建,可手动删除
 
 ---
 

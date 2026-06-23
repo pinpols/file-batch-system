@@ -117,7 +117,7 @@ PWA 用户点击启用通知
 问题点：
 
 - 后端 `ConsolePushController.vapidPublicKey()` 返回 `CommonResponse<ConsolePushVapidPublicKeyResponse>`，实际 JSON 是 `{"code":...,"data":{"publicKey":"..."}}`。前端 `../batch-console/src/composables/useWebPush.ts:67` 到 `:69` 直接解构顶层 `{ publicKey }`，会拿到 `undefined`。
-- 后端 `subscribe` / `unsubscribe` 要求 query 参数 `tenantId`：`batch-console-api/src/main/java/com/example/batch/console/web/ConsolePushController.java:55` 到 `:63`、`:68` 到 `:74`。前端 `useWebPush.ts:79` 到 `:83` 与 `:95` 到 `:99` 没有传 `tenantId`，会 400。
+- 后端 `subscribe` / `unsubscribe` 要求 query 参数 `tenantId`：`batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsolePushController.java:55` 到 `:63`、`:68` 到 `:74`。前端 `useWebPush.ts:79` 到 `:83` 与 `:95` 到 `:99` 没有传 `tenantId`，会 400。
 - 后端注释声称 VAPID 公钥是“公开端点”：`ConsolePushController.java:39` 到 `:43`。但安全回退 `ConsoleSecurityConfiguration.java:68` 到 `:85` 只放行 auth/login/logout/static，`/api/console/push/vapid-public-key` 实际仍要求 Console 角色。若产品期望登录前订阅，当前会 401。
 - 前端文件顶部仍写“当前后端这 3 个端点还没上”：`useWebPush.ts:15` 到 `:17`，说明契约没有被回归验证。
 
@@ -229,7 +229,7 @@ DispatchCommand
 
 证据：
 
-- `security-scan/src/main/java/com/example/batch/securityscan/ScanStep.java:82` 到 `:86` 只执行 `zap-baseline.py -t <target> -r <report>`。
+- `security-scan/src/main/java/io/github/pinpols/batch/securityscan/ScanStep.java:82` 到 `:86` 只执行 `zap-baseline.py -t <target> -r <report>`。
 - `.github/workflows/staging-gate.yml:100` 到 `:106` 只传 `--mode=dast --target-url=...`，没有登录、cookie、JWT、context、OpenAPI import。
 - `docs/runbook/security-scan.md:186` 也写到若要扫完整控制台路径，需要先登录或配置 context。
 

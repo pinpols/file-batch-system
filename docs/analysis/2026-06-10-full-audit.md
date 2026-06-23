@@ -60,7 +60,7 @@
 
 ### P1-1 `RlsPolicyHealthIndicator` 是死代码,RLS 健康守护从未生效(置信 90)
 
-- **位置**:`batch-common/src/main/java/com/example/batch/common/rls/RlsPolicyHealthIndicator.java:25`
+- **位置**:`batch-common/src/main/java/io/github/pinpols/batch/common/rls/RlsPolicyHealthIndicator.java:25`
 - 无 `@Component`、无任何 AutoConfiguration/`@Bean` 注册,唯一引用是测试。runbook `docs/runbook/multi-tenant-rls.md` 宣称的"缺 ENABLE/FORCE/policy 即 /actuator/health 报 DOWN"自 PR #155(2026-05-31)起从未存在——06-09 的 `process_event_copy` 漏 RLS 正是它本该拦的场景。
 - **修法**:在持有 business DataSource 的模块(worker-process/import/export)加 `@Bean` 注册(profile 条件化,e2e 单库跳过)+ 补"indicator 必须被 AutoConfiguration 引用"守护测试。
 

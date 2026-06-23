@@ -32,7 +32,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: /tmp/tc-images
-        key: tc-images-${{ hashFiles('batch-common/src/test/java/com/example/batch/testing/AbstractIntegrationTest.java') }}
+        key: tc-images-${{ hashFiles('batch-common/src/test/java/io/github/pinpols/batch/testing/AbstractIntegrationTest.java') }}
 
     - name: Restore testcontainer images from cache
       if: steps.tc-image-cache.outputs.cache-hit == 'true'

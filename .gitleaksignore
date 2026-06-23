@@ -1,8 +1,8 @@
 # R7 安全扫描 2026-05-16 — 测试 fixture / 文档示例白名单
 # 所有条目均经人工核查为非真实凭据（见 docs/analysis/security-scan-2026-05-16.md §1）
-batch-console-api/src/test/java/com/example/batch/console/support/auth/ConsoleJwtServiceTest.java:generic-api-key:38
-batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHttpIntegrationTest.java:generic-api-key:225
-batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHttpIntegrationIT.java:generic-api-key:146
+batch-console-api/src/test/java/io/github/pinpols/batch/console/support/auth/ConsoleJwtServiceTest.java:generic-api-key:38
+batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationTest.java:generic-api-key:225
+batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationIT.java:generic-api-key:146
 docs/runbook/realtime-sse-verification.md:curl-auth-header:24
 batch-worker-import/src/test/resources/fixtures/test-rsa-private-pkcs8.pem:private-key:1
 # application-local.yml 是本地开发 profile,RSA 密钥用于本地登录加密;生产由 Helm Secret 注入覆盖
