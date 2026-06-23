@@ -9,9 +9,7 @@ import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 /** 专用原子任务 worker 的 Kafka 消费者:消费 batch.task.dispatch.atomic,执行 shell/sql/stored-proc/http 原子任务。 */
@@ -59,17 +57,7 @@ public class AtomicTaskConsumer extends AbstractTaskConsumer {
   }
 
   @Override
-  protected String listenerId() {
+  public String listenerId() {
     return "spi-task-consumer";
-  }
-
-  @KafkaListener(
-      id = "spi-task-consumer",
-      topicPattern = "#{__listener.topicPattern()}",
-      groupId = "#{__listener.consumerGroupId()}")
-  public void consume(String payload, Acknowledgment acknowledgment) {
-    if (doConsume(payload)) {
-      acknowledgment.acknowledge();
-    }
   }
 }

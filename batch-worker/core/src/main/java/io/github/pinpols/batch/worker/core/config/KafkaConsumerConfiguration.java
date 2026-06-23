@@ -100,4 +100,24 @@ public class KafkaConsumerConfiguration {
     factory.getContainerProperties().setObservationRegistry(observationRegistry);
     return factory;
   }
+
+  /**
+   * ADR-046 P2 切片 2.3c:批量 listener container factory(setBatchListener=true)。 子类的批量
+   * {@code @KafkaListener}(仅 {@code batch.worker.batch-claim.enabled=true} 时 autoStartup)用它, 一次
+   * poll 收 List&lt;String&gt; payload 交 {@code doConsumeBatch}。同 MANUAL_IMMEDIATE ack(整批一次确认)。
+   */
+  @Bean(name = "batchKafkaListenerContainerFactory")
+  public ConcurrentKafkaListenerContainerFactory<String, String> batchKafkaListenerContainerFactory(
+      ConsumerFactory<String, String> kafkaConsumerFactory,
+      ObservationRegistry observationRegistry) {
+    ConcurrentKafkaListenerContainerFactory<String, String> factory =
+        new ConcurrentKafkaListenerContainerFactory<>();
+    factory.setConsumerFactory(kafkaConsumerFactory);
+    factory.setConcurrency(Math.max(1, listenerConcurrency));
+    factory.setBatchListener(true);
+    factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+    factory.getContainerProperties().setObservationEnabled(true);
+    factory.getContainerProperties().setObservationRegistry(observationRegistry);
+    return factory;
+  }
 }

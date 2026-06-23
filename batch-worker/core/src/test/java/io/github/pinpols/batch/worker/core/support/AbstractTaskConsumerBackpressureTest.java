@@ -107,7 +107,7 @@ class AbstractTaskConsumerBackpressureTest {
           }
 
           @Override
-          protected String listenerId() {
+          public String listenerId() {
             return "test-listener";
           }
 

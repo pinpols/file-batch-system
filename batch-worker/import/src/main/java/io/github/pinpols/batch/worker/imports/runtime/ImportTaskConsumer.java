@@ -10,9 +10,7 @@ import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 /**
@@ -75,17 +73,7 @@ public class ImportTaskConsumer extends AbstractTaskConsumer {
   }
 
   @Override
-  protected String listenerId() {
+  public String listenerId() {
     return "import-task-consumer";
-  }
-
-  @KafkaListener(
-      id = "import-task-consumer",
-      topicPattern = "#{__listener.topicPattern()}",
-      groupId = "#{__listener.consumerGroupId()}")
-  public void consume(String payload, Acknowledgment acknowledgment) {
-    if (doConsume(payload)) {
-      acknowledgment.acknowledge();
-    }
   }
 }

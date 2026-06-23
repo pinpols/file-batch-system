@@ -26,6 +26,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
@@ -51,6 +52,35 @@ class AbstractTaskConsumerTest {
 
     assertThat(result).isTrue();
     verify(executor, never()).execute(any(), anyString());
+  }
+
+  @Test
+  void doConsumeBatch_groupsAcceptedMessagesByTenantAndExecutesBatch() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.executeBatch(any(), anyString())).thenReturn(List.of());
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
+
+    String j1 = JsonUtils.toJson(buildMessage(1L, "t1", "IMPORT", null));
+    String j2 = JsonUtils.toJson(buildMessage(2L, "t1", "IMPORT", null));
+    boolean result =
+        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(j1, j2));
+
+    assertThat(result).isTrue(); // 整批成功 → 提交
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<TaskDispatchMessage>> cap = ArgumentCaptor.forClass(List.class);
+    verify(executor).executeBatch(cap.capture(), anyString()); // 同租户一次 executeBatch
+    assertThat(cap.getValue()).hasSize(2);
+    verify(executor, never()).execute(any(), anyString()); // 不走单条路径
+  }
+
+  @Test
+  void doConsumeBatch_emptyOrNullReturnsTrueWithoutExecuting() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
+
+    assertThat((boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of()))
+        .isTrue();
+    verify(executor, never()).executeBatch(any(), anyString());
   }
 
   @Test
@@ -383,7 +413,7 @@ class AbstractTaskConsumerTest {
           }
 
           @Override
-          protected String listenerId() {
+          public String listenerId() {
             return "test-listener";
           }
 
