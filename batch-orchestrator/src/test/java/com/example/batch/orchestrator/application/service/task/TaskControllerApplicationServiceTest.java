@@ -26,6 +26,8 @@ import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
+import com.example.batch.orchestrator.controller.request.TaskReportBatchRequest;
+import com.example.batch.orchestrator.controller.request.TaskReportBatchResponse;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +40,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * 守护 worker → orchestrator HTTP 入口的边界处理:
@@ -63,6 +66,8 @@ class TaskControllerApplicationServiceTest {
     service =
         new TaskControllerApplicationService(
             taskExecutionService, new ObjectMapper(), batchClaimProperties);
+    // reportBatch 经 self 代理逐项调 report;单测里无 Spring 代理,自引用指回本实例即可触发真逻辑
+    ReflectionTestUtils.setField(service, "self", service);
   }
 
   // ===== claim =====
@@ -166,6 +171,65 @@ class TaskControllerApplicationServiceTest {
   void claimBatchEmptyInputReturnsEmpty() {
     assertThat(service.claimBatch(new TaskClaimBatchRequest(null)).results()).isEmpty();
     assertThat(service.claimBatch(null).results()).isEmpty();
+  }
+
+  // ===== reportBatch (ADR-046 P2 切片 2.2) =====
+
+  @Test
+  @DisplayName("reportBatch: 批内某项失败只标记该项,其余照常推进(逐项独立)")
+  void reportBatchPartialFailureIsolatesFailingItem() {
+    // taskId=2 的 applyTaskOutcome 抛(模拟版本 CAS 冲突);1/3 正常
+    when(taskExecutionService.applyTaskOutcome(any()))
+        .thenAnswer(
+            inv -> {
+              TaskOutcomeCommand c = inv.getArgument(0);
+              if (c.taskId() == 2L) {
+                throw new RuntimeException("version CAS conflict");
+              }
+              return null;
+            });
+
+    TaskReportBatchResponse resp =
+        service.reportBatch(
+            new TaskReportBatchRequest(List.of(reportDto(1L), reportDto(2L), reportDto(3L))));
+
+    assertThat(resp.results()).hasSize(3);
+    assertThat(resp.results().get(0).ok()).isTrue();
+    assertThat(resp.results().get(1).ok()).isFalse();
+    assertThat(resp.results().get(1).error()).contains("CAS");
+    assertThat(resp.results().get(2).ok()).isTrue();
+    // 三项都被尝试推进(失败项不阻断后续)
+    verify(taskExecutionService, org.mockito.Mockito.times(3)).applyTaskOutcome(any());
+  }
+
+  @Test
+  @DisplayName("reportBatch: 超过 maxBatchSize → 拒绝,不推进任何项")
+  void reportBatchRejectsOversize() {
+    batchClaimProperties.setMaxBatchSize(2);
+
+    assertThatThrownBy(
+            () ->
+                service.reportBatch(
+                    new TaskReportBatchRequest(
+                        List.of(reportDto(1L), reportDto(2L), reportDto(3L)))))
+        .isInstanceOf(BizException.class);
+    verify(taskExecutionService, never()).applyTaskOutcome(any());
+  }
+
+  @Test
+  @DisplayName("reportBatch: 空/null 入参 → 空结果")
+  void reportBatchEmptyInputReturnsEmpty() {
+    assertThat(service.reportBatch(new TaskReportBatchRequest(null)).results()).isEmpty();
+    assertThat(service.reportBatch(null).results()).isEmpty();
+  }
+
+  private static TaskExecutionReportDto reportDto(Long taskId) {
+    TaskExecutionReportDto dto = new TaskExecutionReportDto();
+    dto.setTaskId(taskId);
+    dto.setTenantId("ta");
+    dto.setWorkerId("w1");
+    dto.setSuccess(true);
+    return dto;
   }
 
   // ===== report =====
