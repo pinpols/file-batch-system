@@ -12,6 +12,19 @@
 
 ---
 
+## [1.1.0] - 2026-06-24
+
+### Added
+- 本地 Docker Compose 增加 Kafka UI 服务，默认端口 `18090`，连接同一 compose 网络内的 Kafka `kafka:29092`。
+- MinIO 运维文档补充 `mc` 常用命令，覆盖 alias、bucket/object 查看、上传下载、同步、查找、删除和临时分享链接。
+
+### Changed
+- 应用版本从 `1.1.0-SNAPSHOT` 切到正式版 `1.1.0`，同步 Maven revision、load-tests、Helm appVersion、生产镜像 tag、OpenAPI 与 SDK 文档。
+- 基础环境镜像版本对齐到同一模板入口；保留 `REDIS_IMAGE_TAG` 兼容旧命名，同时补 `VALKEY_IMAGE_TAG` 表达实际镜像。
+- 版本升级脚本与 CI 对齐检查扩展为统一守护：后续 GA 发布必须同步应用版本、部署 tag、OpenAPI、SDK 文档、load-tests、基础镜像 tag 与 `CHANGELOG.md`。
+
+---
+
 ## 2026-05-23 — 跨仓库版本引用对齐（infra/dep bump 收尾）
 
 ### Changed

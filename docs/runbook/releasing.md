@@ -73,7 +73,7 @@ V119 把 `job_execution_log` / `job_step_instance` 的 FK 改为 `ON DELETE CASC
 | `MAJOR` | `2.0.0` | 不向后兼容的破坏性改动（API 删字段 / 行为反向 / DB schema 不可逆） |
 | `MINOR` | `1.1.0` | 向后兼容的新功能（加字段 / 加端点 / 加 ADR backend） |
 | `PATCH` | `1.0.1` | 向后兼容的 bug fix（不加新功能） |
-| `-SNAPSHOT` | `1.1.0-SNAPSHOT` | 开发分支当前正在累积的下一版本（**任何时候 main 分支默认形态**） |
+| `-SNAPSHOT` | `1.2.0-SNAPSHOT` | 开发分支当前正在累积的下一版本 |
 | `-RC.N` | `1.1.0-RC.1` | 准发布候选（QA / 灰度验证用） |
 | `-M1` / `-alpha.1` / `-beta.1` | `1.1.0-M1` | 早期里程碑 / 内部预览（可选，本项目暂不强制） |
 
@@ -87,7 +87,7 @@ V119 把 `job_execution_log` / `job_step_instance` 的 FK 改为 `ON DELETE CASC
 ### 2.1 平时（开发期）
 
 ```bash
-# pom.xml 默认 <revision>1.1.0-SNAPSHOT</revision>，所有 build / IT 用此值。
+# pom.xml 默认 <revision>1.2.0-SNAPSHOT</revision>，所有 build / IT 用此值。
 mvn package -DskipTests
 mvn -pl batch-orchestrator -am test
 ```
@@ -255,10 +255,10 @@ Release 时把 `[Unreleased]` 改成 `[X.Y.Z] - YYYY-MM-DD`，再开新空 `[Unr
 - 否 + 加东西 → MINOR；
 - 否 + 改东西 → PATCH。
 
-## 9. 当前状态（2026-05-07）
+## 9. 当前状态（2026-06-24）
 
-- **GA 版本**：`v1.0.0` @ commit `525e60f0`（含 ADR-012/017/018/020/021/022/023/025/026 backend 全落地、9 模块、Migration 至 V118、1220 tests / 0 failures）
-- **下一开发版本**：`<revision>1.1.0-SNAPSHOT</revision>`（main 分支默认）
+- **GA 版本**：`v1.1.0`
+- **下一开发版本**：发布后按下一轮规划切回 `<revision>1.2.0-SNAPSHOT</revision>` 或目标 hotfix 分支版本。
 
 ## 10. FAQ
 
@@ -269,7 +269,7 @@ A：CalVer 优势在"协调多 repo 多团队多组件兼容性"。本项目单 
 A：出现"外部 / 别的 repo 要 import 锁定本仓多模块的兼容版本组合"时。当前所有消费者都在本仓内，不需要。
 
 **Q：跨 SNAPSHOT 边界的本地构建怎么办？**
-A：本仓所有模块用 `${revision}`，统一 SNAPSHOT 不会有漂移。如果要消费别的 SNAPSHOT 工件（如本地装的 batch-common-1.1.0-SNAPSHOT 给 IDE 别的项目引用），用 `mvn install` 把当前 SNAPSHOT 装到本地 ~/.m2 即可。
+A：本仓所有模块用 `${revision}`，统一 SNAPSHOT 不会有漂移。如果要消费本地 SNAPSHOT 工件（如下一开发周期的 batch-common-1.2.0-SNAPSHOT 给 IDE 别的项目引用），用 `mvn install` 把当前 SNAPSHOT 装到本地 ~/.m2 即可。
 
 **Q：v0.x 阶段怎么办？**
 A：本项目跳过 v0.x，直接 1.0.0 GA。后续遇到大重构再考虑 0.x 阶段（未来如果要从内部产品转开源 lib，可能会有这个需求）。

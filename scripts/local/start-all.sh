@@ -36,6 +36,7 @@ PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 PG_REPLICA_CONTAINER="${PG_REPLICA_CONTAINER:-batch-postgres-replica}"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-batch-kafka}"
 KAFKA_INIT_CONTAINER="${KAFKA_INIT_CONTAINER:-batch-kafka-init}"
+KAFKA_UI_CONTAINER="${KAFKA_UI_CONTAINER:-batch-kafka-ui}"
 MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 MINIO_INIT_CONTAINER="${MINIO_INIT_CONTAINER:-batch-minio-init}"
 REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
@@ -262,6 +263,24 @@ wait_container_healthy() {
   exit 1
 }
 
+wait_container_running() {
+  local container="$1"
+  local label="$2"
+  echo "==> 等待 ${label} 运行..."
+  local i status
+  for i in $(seq 1 90); do
+    status="$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || true)"
+    if [[ "$status" == "running" ]]; then
+      echo "  ${label} 已运行"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: ${label} 在超时时间内未运行" >&2
+  docker logs "$container" >&2 || true
+  exit 1
+}
+
 # Orchestrator 就绪后再启动三个 worker（与 stop-all 顺序对称）
 wait_orchestrator_healthy() {
   local port="${BATCH_ORCHESTRATOR_PORT:-18082}"
@@ -300,30 +319,31 @@ else
   echo "==> read-replica 已显式关闭 → 跳过 postgres-replica 容器"
 fi
 
-echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
+echo "==> Docker Compose 启动基础依赖（postgres / kafka / kafka-ui / minio / redis${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
 docker compose --env-file "$COMPOSE_ENV_FILE" ${COMPOSE_PROFILES[@]+"${COMPOSE_PROFILES[@]}"} up -d
 
-# postgres / minio / redis / kafka-topics 相互无依赖，并发 wait 节省 5-10s
+# postgres / minio / redis / kafka-topics / kafka-ui 相互无依赖，并发 wait 节省 5-10s
 # minio-init 依赖 minio，仍需串行于 minio healthy 之后
-echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
+echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics / kafka-ui${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
 wait_postgres & _pid_pg=$!
 wait_container_healthy "$MINIO_CONTAINER" "MinIO" & _pid_minio=$!
 wait_container_healthy "$REDIS_CONTAINER" "Redis" & _pid_redis=$!
 wait_kafka_topics_ready & _pid_kafka=$!
+wait_container_running "$KAFKA_UI_CONTAINER" "Kafka UI" & _pid_kafka_ui=$!
 _pid_replica=
 if [[ "${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}" == "true" ]]; then
   wait_container_healthy "$PG_REPLICA_CONTAINER" "PG Replica" & _pid_replica=$!
 fi
 
 _basic_failed=0
-for _pid in "$_pid_pg" "$_pid_minio" "$_pid_redis" "$_pid_kafka" ${_pid_replica:+"$_pid_replica"}; do
+for _pid in "$_pid_pg" "$_pid_minio" "$_pid_redis" "$_pid_kafka" "$_pid_kafka_ui" ${_pid_replica:+"$_pid_replica"}; do
   if ! wait "$_pid"; then _basic_failed=1; fi
 done
 if (( _basic_failed == 1 )); then
   echo "ERROR: 部分基础服务等待失败，见上方日志" >&2
   exit 1
 fi
-unset _pid_pg _pid_minio _pid_redis _pid_kafka _pid_replica _basic_failed _pid
+unset _pid_pg _pid_minio _pid_redis _pid_kafka _pid_kafka_ui _pid_replica _basic_failed _pid
 
 wait_container_exited_zero "$MINIO_INIT_CONTAINER" "MinIO bucket init"
 
@@ -462,7 +482,7 @@ trap - EXIT
 echo ""
 echo "全部进程已在后台运行。端口（默认）："
 echo "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | process 18086 | dispatch 18085 | atomic 18087"
-echo "  Postgres 15432 | Kafka 19092 | MinIO 19000 | Redis 16379（宿主机映射）"
+echo "  Postgres 15432 | Kafka 19092 | Kafka UI 18090 | MinIO 19000/19001 | Redis 16379（宿主机映射）"
 echo "停止请执行: ./scripts/local/stop-all.sh"
 
 # ─────────────────────────────────────────────
