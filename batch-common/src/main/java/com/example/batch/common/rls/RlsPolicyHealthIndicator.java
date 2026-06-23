@@ -13,7 +13,7 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 
 /**
- * Phase A · RLS healthcheck — 启动期 + actuator/health 时确认 biz.* 10 张表(+ batch.process_staging) 都启用了
+ * Phase A · RLS healthcheck — 启动期 + actuator/health 时确认 biz.* 9 张表(+ batch.process_staging) 都启用了
  * RLS 并异常退出 transition policy。
  *
  * <p>检查项:对 `pg_class.relrowsecurity / relforcerowsecurity` 校验 ENABLE + FORCE,对 `pg_policies` 校验存在
@@ -28,7 +28,6 @@ public class RlsPolicyHealthIndicator implements HealthIndicator {
   public static final List<String> EXPECTED_RLS_TABLES =
       List.of(
           "biz.customer_account",
-          "biz.customer_processed",
           "biz.process_account_summary",
           "biz.process_event_copy",
           "biz.process_order_event",
