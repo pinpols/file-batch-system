@@ -11,9 +11,9 @@
   - R2:RLS 由 transition 切到 strict(移除 fail-open 逃逸分支)。
   - R3:租户隔离守护从白名单改为闭世界 fail-fast。
   - 影响:三条未达成前 RLS 处于 fail-open,隔离形同未启用。
-- **结算级缺口路线图 Phase 0–1**(来源:`plans/settlement-gap-remediation-roadmap-2026-06-20.md`)
-  - Phase 0:确立 ADR-041 控制总额贯穿闸(注:ADR-041 文档与 trailer 校验部分已落地,**启动前先核对剩余范围**)。
-  - Phase 1:对账完整性闭环(trailer 笔数校验 / 控制金额对账 / 端到端 count 信封 / 出站内嵌控制记录 / 投递后回读校验)。
+- **结算级缺口路线图**(来源:`plans/settlement-gap-remediation-roadmap-2026-06-20.md`)
+  - Phase 0(ADR-041)+ Phase 1(对账完整性闭环 1.1–1.5):**已全部落 main 并各带单测,default-off**(2026-06-23 核实,ADR-041 已置 Accepted)。**不再是待办**。
+  - 剩余:**Phase 2**(长任务 task 级心跳 / ADR-038 checkpoint 接入 Load/GenerateStep / 准入软节流⚠️需小 ADR)、**Phase 3**(maker-checker 双控 / dual-use 命令审计表 / 告警升级阶梯 / 人工数据修正受控 API⚠️需 ADR-021 对齐)、**Phase 4**(事件驱动到达 / 依赖感知 fire⚠️需 ADR / 实例 pause-resume / TriggerType.EVENT 消费者)。多数需 ADR 决策,待定。
 
 ## P1 —— 容量与验证基础设施
 

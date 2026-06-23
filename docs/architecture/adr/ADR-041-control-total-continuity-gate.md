@@ -1,9 +1,23 @@
 # ADR-041 · 控制总额贯穿闸 —— 文件传输完整性的端到端对账
 
-- **Status**: Proposed
-- **Date**: 2026-06-20
+- **Status**: Accepted(Phase 1.1–1.5 已落地,见下「实施状态」)
+- **Date**: 2026-06-20(实施收口 2026-06-23)
 - **Related**: `docs/analysis/system-wide-capability-gap-analysis-2026-06-20.md`(全系统缺口分析,本 ADR 的源)、`docs/plans/settlement-gap-remediation-roadmap-2026-06-20.md`(Phase 1)、ADR-021(数据质量对账,**边界对照**)、ADR-038(checkpoint)、`DispatchManifestSupport`(出站 sidecar)
-- **Plan**: 见 §实施分阶段(= roadmap Phase 1.1–1.5)。本 PR 仅设计文档,评审定方向后逐 PR 落地。
+- **Plan**: 见 §实施分阶段(= roadmap Phase 1.1–1.5)。
+
+## 实施状态(2026-06-23)
+
+Phase 1 的 5 个切片**已全部落 main 并各带单测**,全部 **default-off、向后兼容**(不动热表 schema、不动 run 模型):
+
+| 切片 | 实现类 | 接入点 | 测试 |
+|---|---|---|---|
+| 1.1 入站 trailer 笔数校验 | `TrailerControlRecord` + `DatasetRuleEvaluator`(`controlRecordCheck`) | import `ValidateStep` | `TrailerControlRecordTest` / `DatasetRuleEvaluatorControlRecordTest` |
+| 1.2 入站控制金额对账 | `ControlTotalEvaluator`(`controlTotalCheck`) | import `ValidateStep` | `ControlTotalEvaluatorTest` |
+| 1.3 跨阶段 count 信封 | `CountContinuityOutboxService` | orchestrator `DefaultTaskOutcomeService.checkContinuity` | `CountContinuityOutboxServiceTest` |
+| 1.4 出站内嵌控制记录 | `OutboundTrailerRecord` + `DelimitedExportFormat` | export 格式写出 | `OutboundTrailerRecordTest` |
+| 1.5 投递后回读校验 | `DispatchReadbackVerifier` | dispatch `DeliverDispatchStep`(`readback_verify_enabled`) | `DispatchReadbackVerifierTest` |
+
+启用方式:在 `file_template_config.template_config` 配 `trailer_template.present=true` + `validation_rule_set` 内开 `controlRecordCheck`/`controlTotalCheck`;dispatch 渠道配 `readback_verify_enabled`。
 
 ## 范围边界
 
