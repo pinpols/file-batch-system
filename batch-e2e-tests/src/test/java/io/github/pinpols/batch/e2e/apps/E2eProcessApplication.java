@@ -75,11 +75,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
       @ComponentScan.Filter(
           type = FilterType.REGEX,
           pattern =
-              "com\\.example\\.batch\\.worker\\.processes\\.config\\.PlatformDataSourceConfiguration"),
+              "io\\.github\\.pinpols\\.batch\\.worker\\.processes\\.config\\.PlatformDataSourceConfiguration"),
       @ComponentScan.Filter(
           type = FilterType.REGEX,
           pattern =
-              "com\\.example\\.batch\\.worker\\.processes\\.config\\.BusinessDataSourceConfiguration")
+              "io\\.github\\.pinpols\\.batch\\.worker\\.processes\\.config\\.BusinessDataSourceConfiguration")
     })
 @ImportAutoConfiguration({
   BatchJsonAutoConfiguration.class,

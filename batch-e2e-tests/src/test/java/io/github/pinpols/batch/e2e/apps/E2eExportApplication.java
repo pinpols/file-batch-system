@@ -83,11 +83,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
       @ComponentScan.Filter(
           type = FilterType.REGEX,
           pattern =
-              "com\\.example\\.batch\\.worker\\.exports\\.config\\.PlatformDataSourceConfiguration"),
+              "io\\.github\\.pinpols\\.batch\\.worker\\.exports\\.config\\.PlatformDataSourceConfiguration"),
       @ComponentScan.Filter(
           type = FilterType.REGEX,
           pattern =
-              "com\\.example\\.batch\\.worker\\.exports\\.config\\.BusinessDataSourceConfiguration"),
+              "io\\.github\\.pinpols\\.batch\\.worker\\.exports\\.config\\.BusinessDataSourceConfiguration"),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
           classes = BatchWorkerImportApplication.class),
