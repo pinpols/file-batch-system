@@ -19,6 +19,12 @@ public interface TaskExecutionClient {
    */
   Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId);
 
+  /**
+   * ADR-046 P2 切片 2.3:一次 HTTP 往返认领 K 个独立 task(O(N)→O(N/K))。逐项返回 {@link TaskClaimResult} (claimed +
+   * config),语义与单条 {@link #claim} 一致;批量传输失败(404/400/5xx 耗尽/响应不匹配)时实现应回退到逐条 {@link #claim},保证可用性。
+   */
+  List<TaskClaimResult> claimBatch(List<TaskClaimItem> items);
+
   boolean renewLease(String tenantId, Long taskId, String workerId, String partitionInvocationId);
 
   /**

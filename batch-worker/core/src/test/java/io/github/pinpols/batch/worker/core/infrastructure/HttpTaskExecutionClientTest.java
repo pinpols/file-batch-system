@@ -6,9 +6,12 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
+import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
+import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -52,7 +55,8 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               noopCoordinator,
-              new WorkerLeaseProperties());
+              new WorkerLeaseProperties(),
+              new WorkerBatchClaimProperties());
 
       TaskExecutionReport report = report(42L);
       client.report(report);
@@ -66,6 +70,73 @@ class HttpTaskExecutionClientTest {
                   .count())
           .isEqualTo(1.0d);
     }
+  }
+
+  @Test
+  void claimBatchMapsPerItemResultsFromSingleHttpCall() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      // 一次 /claim-batch 调用返回 2 项:1 领到(含 config)+ 1 没领到
+      server.enqueue(
+          new MockResponse.Builder()
+              .code(200)
+              .addHeader("Content-Type", "application/json")
+              .body(
+                  "{\"results\":[{\"taskId\":1,\"claimed\":true,\"config\":{\"jobCode\":\"J\"}},"
+                      + "{\"taskId\":2,\"claimed\":false,\"config\":null}]}")
+              .build());
+      server.start();
+
+      HttpTaskExecutionClient client = newClient(server.getPort());
+      List<TaskClaimResult> results =
+          client.claimBatch(
+              List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
+
+      assertThat(server.getRequestCount()).isEqualTo(1); // 一次 HTTP 领 2 个
+      assertThat(results).hasSize(2);
+      assertThat(results.get(0).taskId()).isEqualTo(1L);
+      assertThat(results.get(0).claimed()).isTrue();
+      assertThat(results.get(0).config()).isNotNull();
+      assertThat(results.get(1).claimed()).isFalse();
+      assertThat(results.get(1).config()).isNull();
+    }
+  }
+
+  @Test
+  void claimBatchFallsBackToSingleClaimOn404() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(404).build()); // claim-batch 不支持
+      server.enqueue(new MockResponse.Builder().code(200).build()); // 单条 claim task1
+      server.enqueue(new MockResponse.Builder().code(409).build()); // 单条 claim task2 没领到
+      server.start();
+
+      HttpTaskExecutionClient client = newClient(server.getPort());
+      List<TaskClaimResult> results =
+          client.claimBatch(
+              List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
+
+      // 1 次 batch(404) + 2 次单条降级
+      assertThat(server.getRequestCount()).isEqualTo(3);
+      assertThat(results).hasSize(2);
+      assertThat(results.get(0).claimed()).isTrue();
+      assertThat(results.get(1).claimed()).isFalse();
+    }
+  }
+
+  private HttpTaskExecutionClient newClient(int port) {
+    OrchestratorTaskClientProperties props = clientProperties(port);
+    props.setClaimMaxAttempts(1);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+    when(noopCoordinator.getIfAvailable()).thenReturn(null);
+    return new HttpTaskExecutionClient(
+        props,
+        new BatchSecurityProperties(),
+        restClientBuilderProvider(),
+        new MockEnvironment(),
+        new SimpleMeterRegistry(),
+        noopCoordinator,
+        new WorkerLeaseProperties(),
+        new WorkerBatchClaimProperties());
   }
 
   @Test
@@ -93,7 +164,8 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               noopCoordinator,
-              new WorkerLeaseProperties());
+              new WorkerLeaseProperties(),
+              new WorkerBatchClaimProperties());
 
       client.report(report(7L));
 
@@ -136,7 +208,8 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               noopCoordinator,
-              new WorkerLeaseProperties());
+              new WorkerLeaseProperties(),
+              new WorkerBatchClaimProperties());
 
       // 不应抛出
       client.report(report(99L));
@@ -181,7 +254,8 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               coordinatorProvider,
-              new WorkerLeaseProperties());
+              new WorkerLeaseProperties(),
+              new WorkerBatchClaimProperties());
 
       client.report(report(100L));
 
@@ -222,7 +296,8 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               null,
               noopCoordinator,
-              new WorkerLeaseProperties());
+              new WorkerLeaseProperties(),
+              new WorkerBatchClaimProperties());
 
       List<TaskLeaseRenewItem> items =
           List.of(
