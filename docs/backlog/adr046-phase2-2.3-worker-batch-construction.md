@@ -6,6 +6,12 @@
 > 包名以重命名后为准:`io.github.pinpols.batch.*`。
 > 前置:orchestrator 侧 `POST /internal/tasks/claim-batch` / `report-batch` 已在 main(#683/#684)。
 >
+> **P2 测试/sim 收口(2026-06-23)**:除各切片单测外补了 ① 端点级真 PG IT
+> `TaskBatchClaimReportIntegrationTest`(@SpringBootTest + Testcontainers:claim-batch 认领 K 个独立 task +
+> report-batch 混合成功/失败逐项独立隔离,坐实此前只手动真栈验过的 2.1/2.2);② sim 回归 stage
+> `scripts/sim/27-batch-claim-consume.sh`(flag 开=端到端攒批回归,比对 `batch_task_batch_claim_size`
+> 指标增量;flag 关=自动 SKIP 不破默认套件)。
+>
 > **2.3d 验收结论(2026-06-23)**:
 > - **确定性往返削减(CI 固化)**:`HttpTaskExecutionClientTest#claimBatchReducesClaimRoundTripsToCeilNOverK`
 >   —— N=25 partition、chunk K=10 → claim-batch 只发 ⌈25/10⌉=3 次 HTTP(单条路径需 25 次),
