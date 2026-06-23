@@ -315,7 +315,7 @@ public class HashedWheelTriggerScheduler {
     // CallerRunsPolicy:executor 队列满时让 wheel worker 同步跑(背压),不丢 fire。
     Timeout timeout =
         wheel.newTimeout(
-            _ -> {
+            ignored -> {
               try {
                 triggerFireExecutor.execute(() -> fire(state, scheduledFireTime, dedupKey));
               } catch (TaskRejectedException rejected) {

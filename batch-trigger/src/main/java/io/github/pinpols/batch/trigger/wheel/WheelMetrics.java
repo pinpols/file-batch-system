@@ -150,7 +150,7 @@ public class WheelMetrics {
     fireFailedByGroupReason
         .computeIfAbsent(
             key,
-            _ ->
+            ignored ->
                 Counter.builder(FIRE_FAILED)
                     .tags(Tags.of("group", jobGroup, "reason", reason))
                     .register(registry))

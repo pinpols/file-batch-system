@@ -45,40 +45,40 @@ These are the main runtime-facing third-party components currently used by the p
 
 | Component | Version | License | Used By | Notes |
 |---|---|---|---|---|
-| Spring Boot | 4.0.3 | Apache-2.0 | all | Parent BOM |
-| Spring Framework | managed by Spring Boot 4.0.6 | Apache-2.0 | all | Transitive |
-| Spring Kafka | managed by Spring Boot 4.0.6 | Apache-2.0 | orchestrator, worker-core, workers | Runtime messaging |
-| Spring Data Redis (Lettuce) | managed by Spring Boot 4.0.6 | Apache-2.0 | orchestrator, console-api | 分布式缓存、SSE 广播 |
-| Spring Security | managed by Spring Boot 4.0.6 | Apache-2.0 | console-api | Console 鉴权 |
-| Spring Security OAuth2 JOSE | managed by Spring Boot 4.0.6 | Apache-2.0 | console-api | JWT Token 签发/验签 |
+| Spring Boot | 4.1.0 | Apache-2.0 | all | Parent BOM |
+| Spring Framework | managed by Spring Boot 4.1.0 | Apache-2.0 | all | Transitive |
+| Spring Kafka | managed by Spring Boot 4.1.0 | Apache-2.0 | orchestrator, worker-core, workers | Runtime messaging |
+| Spring Data Redis (Lettuce) | managed by Spring Boot 4.1.0 | Apache-2.0 | orchestrator, console-api | 分布式缓存、SSE 广播 |
+| Spring Security | managed by Spring Boot 4.1.0 | Apache-2.0 | console-api | Console 鉴权 |
+| Spring Security OAuth2 JOSE | managed by Spring Boot 4.1.0 | Apache-2.0 | console-api | JWT Token 签发/验签 |
 | Spring AI Starter Model OpenAI | 2.0.0-M3 | Apache-2.0 | console-api | Console AI feature |
 | MyBatis Spring Boot Starter | 4.0.1 | Apache-2.0 | orchestrator, workers, trigger, console-api | Runtime persistence layer |
-| Flyway Core | managed by Spring Boot 4.0.6 | Apache-2.0 | all | Platform migrations |
-| Flyway PostgreSQL support | managed by Spring Boot 4.0.6 | Apache-2.0 | all | PostgreSQL dialect |
-| Hibernate Validator | managed by Spring Boot 4.0.6 | Apache-2.0 | orchestrator | Bean Validation 实现 |
+| Flyway Core | managed by Spring Boot 4.1.0 | Apache-2.0 | all | Platform migrations |
+| Flyway PostgreSQL support | managed by Spring Boot 4.1.0 | Apache-2.0 | all | PostgreSQL dialect |
+| Hibernate Validator | managed by Spring Boot 4.1.0 | Apache-2.0 | orchestrator | Bean Validation 实现 |
 | MinIO Java SDK | 8.6.0 | Apache-2.0 | common, orchestrator, workers | Object storage access |
-| Jackson Databind | managed by Spring Boot 4.0.6 | Apache-2.0 | common | JSON serialization |
-| Jackson Datatype JSR310 | managed by Spring Boot 4.0.6 | Apache-2.0 | common | Java time module |
-| Micrometer Core | managed by Spring Boot 4.0.6 | Apache-2.0 | worker-core | 应用指标基础 |
-| Micrometer Registry Prometheus | managed by Spring Boot 4.0.6 | Apache-2.0 | orchestrator, workers, trigger, console-api | Metrics export |
-| Micrometer Tracing Bridge OTel | managed by Spring Boot 4.0.6 | Apache-2.0 | common | Observation → OpenTelemetry 桥接 |
-| OpenTelemetry Exporter OTLP | managed by Spring Boot 4.0.6 | Apache-2.0 | common | Trace/Span 推送到 OTel Collector |
-| OpenTelemetry Exporter JDK Sender | managed by Spring Boot 4.0.6 | Apache-2.0 | common | 使用 JDK HttpClient 替代 OkHttp 5.x |
+| Jackson Databind | managed by Spring Boot 4.1.0 | Apache-2.0 | common | JSON serialization |
+| Jackson Datatype JSR310 | managed by Spring Boot 4.1.0 | Apache-2.0 | common | Java time module |
+| Micrometer Core | managed by Spring Boot 4.1.0 | Apache-2.0 | worker-core | 应用指标基础 |
+| Micrometer Registry Prometheus | managed by Spring Boot 4.1.0 | Apache-2.0 | orchestrator, workers, trigger, console-api | Metrics export |
+| Micrometer Tracing Bridge OTel | managed by Spring Boot 4.1.0 | Apache-2.0 | common | Observation → OpenTelemetry 桥接 |
+| OpenTelemetry Exporter OTLP | managed by Spring Boot 4.1.0 | Apache-2.0 | common | Trace/Span 推送到 OTel Collector |
+| OpenTelemetry Exporter JDK Sender | managed by Spring Boot 4.1.0 | Apache-2.0 | common | 使用 JDK HttpClient 替代 OkHttp 5.x |
 | OkHttp | 4.12.0 | Apache-2.0 | export, dispatch | HTTP client |
 | Apache POI | 5.4.0 | Apache-2.0 | import, export, console-api | Spreadsheet handling |
-| Quartz Scheduler | managed by Spring Boot 4.0.6 | Apache-2.0 | trigger | Cron / FixedRate 调度 |
-| SLF4J API | managed by Spring Boot 4.0.6 | MIT | all (transitive) | Logging facade |
-| PostgreSQL JDBC Driver | managed by Spring Boot 4.0.6 | BSD-2-Clause | all | Database driver |
+| Quartz Scheduler | managed by Spring Boot 4.1.0 | Apache-2.0 | trigger | Cron / FixedRate 调度 |
+| SLF4J API | managed by Spring Boot 4.1.0 | MIT | all (transitive) | Logging facade |
+| PostgreSQL JDBC Driver | managed by Spring Boot 4.1.0 | BSD-2-Clause | all | Database driver |
 | JSch (mwiede fork) | 0.2.23 | BSD-3-Clause | dispatch | SFTP support |
-| Angus Mail | managed by Spring Boot 4.0.6 | EPL-2.0 / GPL-2.0 with Classpath Exception | dispatch | SMTP 邮件分发 |
-| Jakarta EE APIs | managed by Spring Boot 4.0.6 | EPL-2.0 | all | API surface |
-| Logback Classic | managed by Spring Boot 4.0.6 | EPL-1.0 + LGPL-2.1 | all (transitive) | Logging backend |
-| Netty DNS Resolver macOS | managed by Spring Boot 4.0.6 | Apache-2.0 | orchestrator, console-api | macOS profile 条件激活 |
+| Angus Mail | managed by Spring Boot 4.1.0 | EPL-2.0 / GPL-2.0 with Classpath Exception | dispatch | SMTP 邮件分发 |
+| Jakarta EE APIs | managed by Spring Boot 4.1.0 | EPL-2.0 | all | API surface |
+| Logback Classic | managed by Spring Boot 4.1.0 | EPL-1.0 + LGPL-2.1 | all (transitive) | Logging backend |
+| Netty DNS Resolver macOS | managed by Spring Boot 4.1.0 | Apache-2.0 | orchestrator, console-api | macOS profile 条件激活 |
 | Project Lombok | 1.18.46 | MIT | all (provided) | Annotation processor |
 | JSqlParser | 4.5 | Apache-2.0 | export | SQL parsing / schema whitelist |
 | ShedLock | 6.3.0 | Apache-2.0 | common | Distributed lock |
-| Spring Boot Configuration Processor | managed by Spring Boot 4.0.6 | Apache-2.0 | all (annotation processor) | 编译期生成 `spring-configuration-metadata.json`，IDE 提示 / dict 自动化 |
-| Netty (HashedWheelTimer) | managed by Spring Boot 4.0.6 | Apache-2.0 | trigger | Wheel scheduler 实现（`batch.trigger.scheduler-impl=wheel` 启用） |
+| Spring Boot Configuration Processor | managed by Spring Boot 4.1.0 | Apache-2.0 | all (annotation processor) | 编译期生成 `spring-configuration-metadata.json`，IDE 提示 / dict 自动化 |
+| Netty (HashedWheelTimer) | managed by Spring Boot 4.1.0 | Apache-2.0 | trigger | Wheel scheduler 实现（`batch.trigger.scheduler-impl=wheel` 启用） |
 
 ## Test and Tooling Dependencies
 
@@ -88,15 +88,15 @@ These packages are used in test or build tooling and are not shipped as producti
 |---|---|---|---|---|
 | Testcontainers BOM / modules | 1.21.4 | Apache-2.0 | test | all |
 | testcontainers-redis | 2.2.2–2.2.4 | Apache-2.0 | test | dispatch, trigger, console-api |
-| Spring Boot starter test | managed by Spring Boot 4.0.6 | Apache-2.0 | test | all |
-| Spring Kafka Test | managed by Spring Boot 4.0.6 | Apache-2.0 | test | orchestrator, worker-core |
-| MyBatis starter test | managed by Spring Boot 4.0.6 | Apache-2.0 | test | orchestrator, workers, console-api |
+| Spring Boot starter test | managed by Spring Boot 4.1.0 | Apache-2.0 | test | all |
+| Spring Kafka Test | managed by Spring Boot 4.1.0 | Apache-2.0 | test | orchestrator, worker-core |
+| MyBatis starter test | managed by Spring Boot 4.1.0 | Apache-2.0 | test | orchestrator, workers, console-api |
 | WireMock | 3.9.1 | Apache-2.0 | test | e2e-tests |
 | MockWebServer | 4.12.0 | Apache-2.0 | test | worker-core, trigger |
 | GreenMail | 2.1.8 | Apache-2.0 | test | dispatch（SMTP 测试） |
 | Okio / Okio JVM | 3.17.0 | Apache-2.0 | test/runtime helper | transitive via OkHttp |
-| AssertJ | managed by Spring Boot 4.0.6 | Apache-2.0 | test | all |
-| Mockito | managed by Spring Boot 4.0.6 | MIT | test | all |
+| AssertJ | managed by Spring Boot 4.1.0 | Apache-2.0 | test | all |
+| Mockito | managed by Spring Boot 4.1.0 | MIT | test | all |
 | Kotlin Standard Library | transitive via OkHttp 4.x | Apache-2.0 | transitive | — |
 
 ## SDK 模块覆盖(对外发布物)
@@ -130,7 +130,7 @@ Python SDK 自身按 **Apache-2.0** 发布(与主仓一致);上述传递依赖�
 
 ## Notes
 
-1. Some versions are managed by the Spring Boot 4.0.6 BOM and are intentionally shown as "managed by Spring Boot 4.0.6".
+1. Some versions are managed by the Spring Boot 4.1.0 BOM and are intentionally shown as "managed by Spring Boot 4.1.0".
 2. Test-scoped dependencies are listed for completeness, but they do not ship in production images or jars.
 3. If you need the exact resolved dependency tree, run:
 

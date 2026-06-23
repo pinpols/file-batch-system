@@ -13,7 +13,7 @@
 # 自包含,不需要 host 端 mvn(适配 Portainer 这类直接跑 `docker compose build` 的 GitOps 工具)。
 
 # ───── Stage 1: 共享 builder(全模块一次性 build)─────
-FROM maven:3-eclipse-temurin-25 AS builder
+FROM maven:3-eclipse-temurin-21 AS builder
 
 WORKDIR /workspace
 
@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     mvn -B -T 1C -DskipTests -pl '!batch-e2e-tests' package
 
 # ───── Stage 2: per-image runtime(各服务挑自己 jar)─────
-FROM eclipse-temurin:25-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 ARG MODULE
 ARG MODULE_DIR=${MODULE}
@@ -62,7 +62,7 @@ ENV BATCH_TIMEZONE_DEFAULT_ZONE="Asia/Shanghai" \
     LANG="C.UTF-8" \
     LC_ALL="C.UTF-8"
 
-# curl 不 pin 版本:容器基底 eclipse-temurin:25-jre-jammy 已 pin,curl 跟随 jammy 安全补丁
+# curl 不 pin 版本:容器基底 eclipse-temurin:21-jre-jammy 已 pin,curl 跟随 jammy 安全补丁
 # hadolint ignore=DL3008
 RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g; s|http://security.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list \
     && apt-get update -o Acquire::Retries=3 \

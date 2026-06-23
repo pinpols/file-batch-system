@@ -68,7 +68,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
       - name: Java contract + shared-constants parity
         if: matrix.lang == 'java'
@@ -270,7 +270,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
       - name: Package + install batch-worker-sdk to local m2
         # -am 拉父 reactor 依赖;装到 ~/.m2 供下面的独立消费工程引用。
@@ -513,7 +513,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
           # setup-java 会把这些写进 ~/.m2/settings.xml 的 server 凭据。
           server-id: central
