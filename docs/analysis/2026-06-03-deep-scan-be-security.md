@@ -325,7 +325,7 @@ console-api 仅放 `health/info/prometheus` 3 个具体路径,trigger 这边 `**
 ### 反序列化 / RCE 静态扫描
 
 `grep ObjectInputStream | XMLDecoder | new Yaml | SnakeYaml`:**无命中**(全仓)。
-`Class.forName` 仅 1 处:`PipelineWorkerAtomicClasspathCheck:71`,固定 canary class 名(`com.example.batch.worker.atomic.runtime.AtomicWorkerLoop`),无用户输入。
+`Class.forName` 仅 1 处:`PipelineWorkerAtomicClasspathCheck:71`,固定 canary class 名(`io.github.pinpols.batch.worker.atomic.runtime.AtomicWorkerLoop`),无用户输入。
 `Runtime.getRuntime().exec`:**无命中**。
 `ProcessBuilder`:仅 `ShellTaskExecutor`(已审计)。
 

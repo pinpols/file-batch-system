@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.EventOutboxRetryMapper">
-    <resultMap id="EventOutboxRetryResultMap" type="com.example.batch.orchestrator.domain.entity.EventOutboxRetryEntity">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.EventOutboxRetryMapper">
+    <resultMap id="EventOutboxRetryResultMap" type="io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="outbox_event_id" property="outboxEventId"/>
@@ -15,7 +15,7 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.EventOutboxRetryEntity"
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.event_outbox_retry (
             tenant_id,

@@ -1,6 +1,6 @@
 """Worker 运行时状态机(NORMAL/DEGRADED/PAUSED/DRAINING)。
 
-对齐 Java ``com.example.batch.sdk.dispatcher.WorkerRuntimeState``
+对齐 Java ``io.github.pinpols.batch.sdk.dispatcher.WorkerRuntimeState``
 (见 ``batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/WorkerRuntimeState.java``)。
 Phase 2 §2.4:状态机由心跳响应里返回的平台指令驱动。真正根据心跳变更
 状态的实现在 P2 落地;本模块只声明枚举,保持公开 API 稳定。

@@ -259,7 +259,7 @@ password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
 | 编号 | 问题 | 影响 |
 |------|------|------|
 | A-1.1 | console-api 直接依赖 orchestrator jar | 无法独立部署 |
-| A-1.2 | scanBasePackages 扫描整个 `com.example.batch` | 加载无关 Bean |
+| A-1.2 | scanBasePackages 扫描整个 `io.github.pinpols.batch` | 加载无关 Bean |
 | A-1.3 | ParseStep 静态 TypeReference 共享可变状态 | 并发初始化风险 |
 | A-2.1 | JobInstanceMapper.selectByQuery 无分页 | OOM 风险 |
 | A-2.2 | TaskOutcomeService N+1 查询 | 高负载时 DB 过载 |qua

@@ -6,7 +6,7 @@
 **Source**: curated from the current `pom.xml` / module POM files + `batch-worker-sdk-python/pyproject.toml`;Maven 部分以 `mvn -P compliance` 输出为底(266+ transitive 依赖见 `sbom.json`)。
 
 This document is a human-readable snapshot of the third-party components referenced by the repository at the time of generation.
-Internal modules under `com.example.batch:*` are excluded.
+Internal modules under `io.github.pinpols.batch:*` are excluded.
 
 **变更摘要(2026-06-03 vs 2026-04-26)**:
 - 新增模块 `batch-worker-sdk` / `batch-worker-sdk-spring-boot-starter` / `batch-worker-sdk-testkit`(详见 `Used By` 列)

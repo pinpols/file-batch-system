@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.OutboxEventMapper">
-    <resultMap id="OutboxEventResultMap" type="com.example.batch.orchestrator.domain.entity.OutboxEventEntity">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper">
+    <resultMap id="OutboxEventResultMap" type="io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="aggregate_type" property="aggregateType"/>
@@ -18,7 +18,7 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.OutboxEventEntity"
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity"
             useGeneratedKeys="true" keyProperty="id">
         with claimed_key as (
             insert into batch.outbox_event_dedup_key (

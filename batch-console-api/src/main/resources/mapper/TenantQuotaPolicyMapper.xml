@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper">
+<mapper namespace="io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper">
     <select id="selectByQuery" resultType="map">
         select
             id,
@@ -23,7 +23,7 @@
             and enabled = #{enabled}
         </if>
         order by id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
 
     <select id="countByQuery" resultType="long">
@@ -53,7 +53,7 @@
         limit 1
     </select>
 
-    <insert id="upsertTenantQuotaPolicy" parameterType="com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
+    <insert id="upsertTenantQuotaPolicy" parameterType="io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
         insert into batch.tenant_quota_policy (
             tenant_id, policy_code, max_running_jobs_per_tenant,
             max_partitions_per_tenant, max_qps_per_tenant,
@@ -74,7 +74,7 @@
     </insert>
 
     <insert id="insert"
-            parameterType="com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
+            parameterType="io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
         insert into batch.tenant_quota_policy (
             tenant_id, policy_code, max_running_jobs_per_tenant,
             max_partitions_per_tenant, max_qps_per_tenant,
@@ -87,7 +87,7 @@
     </insert>
 
     <update id="update"
-            parameterType="com.example.batch.console.domain.param.TenantQuotaPolicyUpdateParam">
+            parameterType="io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpdateParam">
         update batch.tenant_quota_policy
         set max_running_jobs_per_tenant = #{maxRunningJobsPerTenant},
             max_partitions_per_tenant = #{maxPartitionsPerTenant},

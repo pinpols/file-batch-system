@@ -1,4 +1,4 @@
-"""client 子包 —— 对齐 Java ``com.example.batch.sdk.client``。
+"""client 子包 —— 对齐 Java ``io.github.pinpols.batch.sdk.client``。
 
 包含 :class:`BatchPlatformClient` 入口类及其配置模型
 :class:`BatchPlatformClientConfig`。

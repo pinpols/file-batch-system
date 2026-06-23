@@ -1,6 +1,6 @@
 """orchestrator ``/internal/*`` 协议的异步 HTTP 客户端。
 
-对应 Java ``com.example.batch.sdk.internal.PlatformHttpClient`` —— 端点集合 /
+对应 Java ``io.github.pinpols.batch.sdk.internal.PlatformHttpClient`` —— 端点集合 /
 请求头 / 幂等语义完全一致;底层使用 ``httpx.AsyncClient``,因为 Python 端
 SDK 仅支持 async(详见 ``sdk-python/README.md`` Roadmap)。
 

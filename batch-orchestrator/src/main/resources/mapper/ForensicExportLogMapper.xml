@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.ForensicExportLogMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper">
 
     <resultMap id="ForensicExportLogMap"
-               type="com.example.batch.orchestrator.domain.entity.ForensicExportLogEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -37,7 +37,7 @@
     </sql>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.ForensicExportLogEntity"
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.forensic_export_log (
             tenant_id, export_id, biz_date_from, biz_date_to,

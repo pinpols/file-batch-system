@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper">
     <!--
       TenantSchedulerSnapshotEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
@@ -10,7 +10,7 @@
       detail_json 是 JSONB；读路径通过 ::text 转字符串再走 JsonbStringTypeHandler 包装。
     -->
     <resultMap id="tenantSchedulerSnapshotMap"
-               type="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -27,8 +27,8 @@
             <arg column="quota_reset_policy" javaType="java.lang.String"/>
             <arg column="online_workers" javaType="java.lang.Integer"/>
             <arg column="detail_json_text"
-                 javaType="com.example.batch.orchestrator.domain.value.JsonbString"
-                 typeHandler="com.example.batch.orchestrator.infrastructure.mybatis.JsonbStringTypeHandler"/>
+                 javaType="io.github.pinpols.batch.orchestrator.domain.value.JsonbString"
+                 typeHandler="io.github.pinpols.batch.orchestrator.infrastructure.mybatis.JsonbStringTypeHandler"/>
         </constructor>
     </resultMap>
 
@@ -48,7 +48,7 @@
     </select>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity">
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity">
         insert into batch.tenant_scheduler_snapshot (
             tenant_id, snapshot_at, fair_share_group, policy_code,
             active_jobs, active_partitions, max_jobs_base, burst_limit, effective_job_cap,

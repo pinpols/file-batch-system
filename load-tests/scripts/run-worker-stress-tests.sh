@@ -77,7 +77,7 @@ run_one() {
   (
     cd "$LOAD_DIR"
     mvn gatling:test \
-      -Dsimulation=com.example.batch.loadtest.simulations.LaunchPipelineCompletionSimulation \
+      -Dsimulation=io.github.pinpols.batch.loadtest.simulations.LaunchPipelineCompletionSimulation \
       -Dtrigger.baseUrl="$TRIGGER_BASE_URL" \
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \

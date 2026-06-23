@@ -1,4 +1,4 @@
-"""Handler 子包 —— 对齐 Java ``com.example.batch.sdk.handler``。
+"""Handler 子包 —— 对齐 Java ``io.github.pinpols.batch.sdk.handler``。
 
 承载 :class:`SdkTaskHandler` Protocol、声明式 ``@batch_task`` 装饰器,以及对齐
 Java ``handler/`` 根目录的 5 个形态抽象类(``SdkAbstractTaskHandler`` + 5 个

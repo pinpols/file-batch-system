@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.CompensationCommandMapper">
-    <resultMap id="CompensationCommandResultMap" type="com.example.batch.orchestrator.domain.entity.CompensationCommandEntity">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper">
+    <resultMap id="CompensationCommandResultMap" type="io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="command_no" property="commandNo"/>
@@ -27,7 +27,7 @@
         <result column="finished_at" property="finishedAt"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.CompensationCommandEntity"
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.compensation_command (
             tenant_id,

@@ -14,8 +14,8 @@ spring:
     # 排除 batch-common 的 S3/storage 自动配置，避免构建无用的 S3Client——
     # AWS SDK v2 的 AwsBasicCredentials 构造即校验 secret 非空，缺凭据会导致启动失败。
     exclude:
-      - com.example.batch.common.config.S3AutoConfiguration
-      - com.example.batch.common.config.BatchObjectStoreAutoConfiguration
+      - io.github.pinpols.batch.common.config.S3AutoConfiguration
+      - io.github.pinpols.batch.common.config.BatchObjectStoreAutoConfiguration
   quartz:
     # Quartz 调度器配置（使用 JDBC JobStore，支持集群）
     job-store-type: jdbc

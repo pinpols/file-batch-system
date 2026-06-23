@@ -10,7 +10,7 @@
 
 | 语言 | 包 / 坐标 | 安装 | 子目录 |
 |---|---|---|---|
-| **Java** | `com.example.batch:batch-worker-sdk` | Maven 坐标(+ 可选 Spring starter) | [`java/`](java/) |
+| **Java** | `io.github.pinpols.batch:batch-worker-sdk` | Maven 坐标(+ 可选 Spring starter) | [`java/`](java/) |
 | **Python** | `batch-worker-sdk`(import `batch_worker_sdk`) | `pip install batch-worker-sdk` | [`python/`](python/) |
 | **Go** | `batch-worker-sdk-go` | `go get`(module path 见 README) | [`go/`](go/) |
 | **TypeScript** | `@batch/worker-sdk` | `npm i @batch/worker-sdk` | [`typescript/`](typescript/) |

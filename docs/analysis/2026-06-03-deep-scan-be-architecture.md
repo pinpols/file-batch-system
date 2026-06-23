@@ -149,7 +149,7 @@
 
 ### P1-5 Mutation IT 自建链路
 
-- **现象**:`batch-console-api/src/test/java/.../integration/Console*MutationIntegrationTest.java` 10 个文件,都 `extends AbstractMutationIntegrationTest`(本地基类),**而非 CLAUDE.md 要求的 `AbstractIntegrationTest`**。检查 `AbstractMutationIntegrationTest` 顶部确实 `import com.example.batch.testing.AbstractIntegrationTest;` —— 但**它自己的 class 声明是 abstract,未 extends**。
+- **现象**:`batch-console-api/src/test/java/.../integration/Console*MutationIntegrationTest.java` 10 个文件,都 `extends AbstractMutationIntegrationTest`(本地基类),**而非 CLAUDE.md 要求的 `AbstractIntegrationTest`**。检查 `AbstractMutationIntegrationTest` 顶部确实 `import io.github.pinpols.batch.testing.AbstractIntegrationTest;` —— 但**它自己的 class 声明是 abstract,未 extends**。
 - **根因**:该基类的 javadoc 写"不强加 `@SpringBootTest`,子类各自声明启用 properties"—— 实际是放弃了 Testcontainers PG/Kafka/Redis/MinIO 复用,跑 Mutation IT 时各自启 Spring context。
 - **建议**:① 把 `AbstractMutationIntegrationTest extends AbstractIntegrationTest`,让 10 个 Mutation IT 自动复用 Testcontainers 容器复用机制(目前可能每个测试类一个独立 PG 容器,启动慢);② 验证是否真的共享容器(`docker ps` 抓快照对照)。
 
@@ -198,7 +198,7 @@
 
 | 项目 | 何以为非问题 |
 |---|---|
-| 模块逆向依赖(worker → orchestrator / trigger → orchestrator) | `grep -rln "import com.example.batch.orchestrator" batch-trigger batch-worker-*` 0 命中,9 模块 + console-api 全部走 `batch-common` 作为下行依赖,**模块边界很干净** |
+| 模块逆向依赖(worker → orchestrator / trigger → orchestrator) | `grep -rln "import io.github.pinpols.batch.orchestrator" batch-trigger batch-worker-*` 0 命中,9 模块 + console-api 全部走 `batch-common` 作为下行依赖,**模块边界很干净** |
 | 禁 JPA / Spring Data JDBC | `grep` pom 0 命中,ADR-001 + 2026-05-02 全平台清理已铁底 |
 | `ZoneId.systemDefault()` 业务代码命中 | 5 处命中全在 `BatchTimezoneProvider` / `BatchDateTimeSupport` / 守护测试 / javadoc,无业务违反 |
 | `Charset.forName` 业务代码命中 | 5 处命中全在 `EncodingUtils` 实现内部 + 守护测试 + javadoc,无业务违反 |

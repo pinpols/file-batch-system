@@ -1,0 +1,27 @@
+package io.github.pinpols.batch.worker.imports.jdbc;
+
+import io.github.pinpols.batch.common.exception.WorkerConfigException;
+
+/** jdbc_mapped_import 的写入数据库策略。默认保持原 batch INSERT/UPSERT 行为。 */
+public enum ImportLoadStrategy {
+  BATCH_UPSERT,
+  PARTITION_REPLACE_COPY,
+  PARTITION_STAGE_SWAP_COPY;
+
+  public static ImportLoadStrategy parse(Object raw) {
+    if (raw == null) {
+      return BATCH_UPSERT;
+    }
+    String text = String.valueOf(raw).trim();
+    if (text.isEmpty()) {
+      return BATCH_UPSERT;
+    }
+    String normalized = text.replace('-', '_').toUpperCase();
+    for (ImportLoadStrategy strategy : values()) {
+      if (strategy.name().equals(normalized)) {
+        return strategy;
+      }
+    }
+    throw new WorkerConfigException("unsupported jdbc_mapped_import.loadStrategy: " + text);
+  }
+}

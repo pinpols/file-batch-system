@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper">
+<mapper namespace="io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper">
 
     <insert id="upsert">
         INSERT INTO worker_report_outbox (
@@ -26,7 +26,7 @@
         ORDER BY id ASC LIMIT 1
     </select>
 
-    <select id="updateClaimReturning" resultType="com.example.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
+    <select id="updateClaimReturning" resultType="io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
         UPDATE worker_report_outbox
         SET publish_status = #{statusPublishing}, updated_at = #{now}
         WHERE id = #{id} AND publish_status = #{statusNew}

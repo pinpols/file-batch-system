@@ -13,7 +13,7 @@ info:
   description: >
     Orchestrator 暴露给 self-hosted SDK / 内部 worker 的 `/internal/*` 协议。这套接口的 schema
     是 ADR-035 §9 「两套绑定」契约的 source of truth —— SDK 端的 wire DTOs
-    (`com.example.batch.sdk.wire.*`) 必须保持一致,字段重命名 / 删除 / 新增走
+    (`io.github.pinpols.batch.sdk.wire.*`) 必须保持一致,字段重命名 / 删除 / 新增走
     `docs/runbook/sdk-dual-rollout.md` 双向滚动纪律。
 
     本文件**只描述 SDK 可见的内部协议**,不暴露给 FE / 外部消费者(不在 console-api Swagger UI)。

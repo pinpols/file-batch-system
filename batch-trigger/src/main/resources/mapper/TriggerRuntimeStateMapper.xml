@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.trigger.mapper.TriggerRuntimeStateMapper">
+<mapper namespace="io.github.pinpols.batch.trigger.mapper.TriggerRuntimeStateMapper">
 
     <resultMap id="TriggerRuntimeStateResultMap"
-               type="com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity">
+               type="io.github.pinpols.batch.common.persistence.entity.TriggerRuntimeStateEntity">
         <id column="id" property="id"/>
         <result column="job_definition_id" property="jobDefinitionId"/>
         <result column="tenant_id" property="tenantId"/>
@@ -106,7 +106,7 @@
     </update>
 
     <insert id="insertOnReconcile"
-            parameterType="com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity"
+            parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerRuntimeStateEntity"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.trigger_runtime_state (
             job_definition_id, tenant_id, job_code, next_fire_time,

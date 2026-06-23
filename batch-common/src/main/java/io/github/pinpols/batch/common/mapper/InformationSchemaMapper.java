@@ -1,0 +1,48 @@
+package io.github.pinpols.batch.common.mapper;
+
+import java.util.List;
+import java.util.Map;
+import org.apache.ibatis.annotations.Param;
+
+/**
+ * PostgreSQL {@code information_schema} 系统目录查询。
+ *
+ * <p>仅供启动期校验 / 漂移检测使用（{@code BatchStartupSelfCheck} / {@code ArchiveSchemaDriftCheck}），不参与业务读写。
+ *
+ * <p>跨所有 batch 模块共用。每个模块 {@code @MapperScan} 必须包含 {@code io.github.pinpols.batch.common.mapper}。
+ */
+public interface InformationSchemaMapper {
+
+  /** 给定 schemaName 是否存在。 */
+  int countSchema(@Param("schemaName") String schemaName);
+
+  /** 给定 (schema, table) 是否存在。 */
+  int countTable(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
+  /** 给定 (schema, table, column) 是否存在。 */
+  int countColumn(
+      @Param("schemaName") String schemaName,
+      @Param("tableName") String tableName,
+      @Param("columnName") String columnName);
+
+  /** 给定 (schema, table) 的所有列名（无序）。表不存在时返空列表。 */
+  List<String> listColumns(
+      @Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
+  /**
+   * 给定 (schema, table) 的所有列的类型元数据,每行 map 含 {@code column_name / data_type / is_nullable /
+   * column_default}。表不存在时返空列表。
+   *
+   * <p>用于 {@code ArchiveSchemaDriftCheck} 列级类型 / nullable 漂移检测 — 仅靠列名集合无法捕获 ALTER COLUMN ... TYPE /
+   * DROP NOT NULL 这类语义变更。
+   */
+  List<Map<String, Object>> listColumnsWithTypes(
+      @Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
+  /**
+   * 列出 pg_constraint 里所有 {@code convalidated=false} 的约束（即 ADD CONSTRAINT NOT VALID 后未补 VALIDATE 的）。
+   *
+   * <p>仅 PostgreSQL 支持；其它方言下 mapper 实现可返空列表跳过。
+   */
+  List<String> listInvalidConstraints();
+}

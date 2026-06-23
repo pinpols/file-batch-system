@@ -1,0 +1,103 @@
+package io.github.pinpols.batch.loadtest.simulations;
+
+import io.github.pinpols.batch.loadtest.GatlingConfig;
+import io.gatling.javaapi.core.ChainBuilder;
+import io.gatling.javaapi.core.ScenarioBuilder;
+import io.gatling.javaapi.core.Simulation;
+import io.gatling.javaapi.http.HttpProtocolBuilder;
+import java.time.Duration;
+
+import static io.gatling.javaapi.core.CoreDsl.*;
+import static io.gatling.javaapi.http.HttpDsl.*;
+
+/**
+ * Measures the query-side throughput and latency of the console API:
+ *   GET /api/console/queries/instances        (job instance list)
+ *   GET /api/console/queries/workers          (worker registry)
+ *   GET /api/console/queries/alerts           (alert events)
+ *   GET /actuator/health                    (health probe baseline)
+ *
+ * <p>Load profile: constant {@code users.peak} users for {@code duration.seconds}.
+ *
+ * <p>SLO assertions:
+ * <ul>
+ *   <li>p99 response time &lt; {@code slo.read.p99ms} (default 300 ms)</li>
+ *   <li>error rate &lt; 0.1 %</li>
+ * </ul>
+ *
+ * <p>Run:
+ * <pre>
+ *   mvn gatling:test -Dsimulation=ConsoleQuerySimulation \
+ *       -DtenantId=t1 -Dusers.peak=30 -Dduration.seconds=180
+ * </pre>
+ *
+ * <p>NOTE: The console API requires authentication. Set the Authorization header
+ * via {@code -Dconsole.authToken=Bearer <token>}.
+ */
+public class ConsoleQuerySimulation extends Simulation {
+
+    private static final String AUTH_TOKEN = System.getProperty("console.accessToken") != null
+            ? "Bearer " + System.getProperty("console.accessToken")
+            : System.getProperty("console.authToken", "Bearer load-test-token");
+
+    // ── Protocol ───────────────────────────────────────────────────────────────
+
+    private final HttpProtocolBuilder httpProtocol = http
+            .baseUrl(GatlingConfig.CONSOLE_BASE_URL)
+            .acceptHeader("application/json")
+            .header("Authorization", AUTH_TOKEN)
+            .shareConnections();
+
+    // ── Request chain: weighted mix of typical console queries ─────────────────
+
+    private final ChainBuilder queries = exec(
+            http("GET /api/console/query/instances")
+                    .get("/api/console/queries/instances")
+                    .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                    .queryParam("pageNo", "1")
+                    .queryParam("pageSize", "20")
+                    .check(status().is(200))
+    )
+            .pause(1)
+            .exec(
+                    http("GET /api/console/query/workers")
+                            .get("/api/console/queries/workers")
+                            .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                            .check(status().is(200))
+            )
+            .pause(1)
+            .exec(
+                    http("GET /api/console/query/alerts")
+                            .get("/api/console/queries/alerts")
+                            .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                            .queryParam("pageNo", "1")
+                            .queryParam("pageSize", "10")
+                            .check(status().is(200))
+            )
+            .pause(1)
+            .exec(
+                    http("GET /actuator/health")
+                            .get("/actuator/health")
+                            .check(status().is(200))
+            );
+
+    private final ScenarioBuilder scenario = scenario("Console Query")
+            .forever().on(queries);
+
+    // ── Load profile ───────────────────────────────────────────────────────────
+
+    {
+        setUp(
+                scenario.injectOpen(
+                        constantUsersPerSec(GatlingConfig.USERS_PEAK)
+                                .during(GatlingConfig.DURATION_SECONDS)
+                )
+        )
+                .protocols(httpProtocol)
+                .maxDuration(Duration.ofSeconds(GatlingConfig.DURATION_SECONDS + 30L))
+                .assertions(
+                        global().responseTime().percentile(99).lt(GatlingConfig.READ_P99_MS),
+                        global().failedRequests().percent().lt(0.1)
+                );
+    }
+}

@@ -59,7 +59,7 @@ KafkaFactory = Any  # callable: (config, dispatcher) -> _KafkaConsumerLike
 
 
 class BatchPlatformClient:
-    """SDK 入口,对齐 Java ``com.example.batch.sdk.client.BatchPlatformClient``。
+    """SDK 入口,对齐 Java ``io.github.pinpols.batch.sdk.client.BatchPlatformClient``。
 
     典型用法::
 

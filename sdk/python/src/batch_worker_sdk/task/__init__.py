@@ -1,4 +1,4 @@
-"""Task 子包 —— 对齐 Java ``com.example.batch.sdk.task``。
+"""Task 子包 —— 对齐 Java ``io.github.pinpols.batch.sdk.task``。
 
 数据 + 执行上下文模型::class:`SdkTaskContext`、
 :class:`SdkTaskResult`、:class:`SdkTaskTypeDescriptor`、

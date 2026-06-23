@@ -59,7 +59,7 @@ Expected: 输出 `feature/export-partition-slice`
 把 record 改为(新增 2 字段 + 一个 6 参兼容构造器,默认 partition 1/1,使 RegisterStep 等只关心数据头的调用点零改):
 
 ```java
-package com.example.batch.common.plugin;
+package io.github.pinpols.batch.common.plugin;
 
 import java.util.Map;
 
@@ -171,7 +171,7 @@ git commit -m "feat(export): GenerateStep 把 partition 注入 ExportDataContext
 - [ ] **Step 1: 写失败单测**
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -212,7 +212,7 @@ Expected: FAIL — `buildPagedSql` 现签名是 3 参,编译/方法不匹配
 ```java
 static String buildPagedSql(
     String baseSql, String cursorColumn, boolean hasCursor, int partitionCount, int partitionNo) {
-  String cursorIdent = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
+  String cursorIdent = io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
   StringBuilder where = new StringBuilder();
   if (partitionCount > 1) {
     where.append(
@@ -328,11 +328,11 @@ final Object[] sqlArgs = pq.args();
 - [ ] **Step 2: 写失败单测**
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.PagedQuery;
+import io.github.pinpols.batch.worker.exports.plugin.GenericJdbcMappedExportDataPlugin.PagedQuery;
 import org.junit.jupiter.api.Test;
 
 class GenericJdbcMappedExportPartitionTest {
@@ -381,7 +381,7 @@ git commit -m "feat(export): jdbc_mapped 明细分页 SQL 叠加 hashtext 分片
 - [ ] **Step 1: 写 insertPartitionTag 失败单测**
 
 ```java
-package com.example.batch.common.constants;
+package io.github.pinpols.batch.common.constants;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -501,13 +501,13 @@ git commit -m "feat(export): 分片导出文件名/objectName 加 _p{no}of{count
 要点(照 `AbstractIntegrationTest` 既有 Testcontainers PG 复用):造一张 M=1000 行表,对 `partitionCount=4`、`partitionNo=1..4` 各自反复 `loadDetailPage` 翻页到 `nextCursor==null`,收集每片主键集合,断言 4 片两两无交集且并集 = 全部 1000 行;再对 jdbc_mapped 模式重复同样断言。
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.batch.common.plugin.ExportDataContext;
-import com.example.batch.common.plugin.ExportDataPlugin.DetailPage;
-import com.example.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.plugin.ExportDataPlugin.DetailPage;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;

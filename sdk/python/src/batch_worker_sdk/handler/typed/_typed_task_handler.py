@@ -1,5 +1,5 @@
 """单方法 typed task handler —— 对齐 Java
-``com.example.batch.sdk.handler.typed.SdkTypedTaskHandler``。
+``io.github.pinpols.batch.sdk.handler.typed.SdkTypedTaskHandler``。
 
 Java:``abstract class SdkTypedTaskHandler<I, O>`` —— 租户返回业务对象
 ``O``,框架将其序列化到 output map。

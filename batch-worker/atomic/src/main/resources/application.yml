@@ -18,8 +18,8 @@ spring:
     # worker-atomic 只跑原子任务(sql/shell/stored-proc/http),不使用对象存储。
     # 排除 S3/storage 自动配置,避免构建无用 S3Client(AWS SDK 缺凭据构造即失败)。
     exclude:
-      - com.example.batch.common.config.S3AutoConfiguration
-      - com.example.batch.common.config.BatchObjectStoreAutoConfiguration
+      - io.github.pinpols.batch.common.config.S3AutoConfiguration
+      - io.github.pinpols.batch.common.config.BatchObjectStoreAutoConfiguration
   kafka:
     listener:
       concurrency: ${BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY:2}

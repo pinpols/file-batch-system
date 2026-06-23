@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.ApprovalCommandMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper">
 
-    <resultMap id="approvalCommandMap" type="com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity">
+    <resultMap id="approvalCommandMap" type="io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="approval_no" property="approvalNo"/>
@@ -22,7 +22,7 @@
         <result column="executed_at" property="executedAt"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity">
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity">
         insert into batch.approval_command (
             tenant_id, approval_no, approval_type, action_type, target_type, target_id,
             payload_json, approval_status, requester_id, source_trace_id, source_idempotency_key,

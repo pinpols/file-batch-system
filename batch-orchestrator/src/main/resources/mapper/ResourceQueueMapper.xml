@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.ResourceQueueMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper">
     <!--
       ResourceQueueEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
@@ -10,7 +10,7 @@
       列名按 V3 / V25 / V42 DDL。
     -->
     <resultMap id="resourceQueueMap"
-               type="com.example.batch.orchestrator.domain.entity.ResourceQueueEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>

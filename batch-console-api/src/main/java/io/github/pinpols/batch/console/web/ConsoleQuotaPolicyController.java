@@ -1,0 +1,58 @@
+package io.github.pinpols.batch.console.web;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
+import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+import io.github.pinpols.batch.console.web.request.config.QuotaPolicySaveRequest;
+import jakarta.validation.Valid;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@Validated
+@RequestMapping("/api/console/quota-policies")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@RequiredArgsConstructor
+@Idempotent
+public class ConsoleQuotaPolicyController {
+
+  private final ConsoleQuotaPolicyApplicationService quotaPolicyApplicationService;
+  private final ConsoleResponseFactory responseFactory;
+
+  @GetMapping
+  public CommonResponse<PageResponse<Map<String, Object>>> list(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam(value = "policyCode", required = false) String policyCode,
+      @RequestParam(value = "enabled", required = false) Boolean enabled,
+      @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+      @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
+    return responseFactory.success(
+        quotaPolicyApplicationService.list(tenantId, policyCode, enabled, pageNo, pageSize));
+  }
+
+  @PostMapping
+  public CommonResponse<Map<String, Object>> create(
+      @Valid @RequestBody QuotaPolicySaveRequest request) {
+    return responseFactory.success(quotaPolicyApplicationService.create(request));
+  }
+
+  @PutMapping("/{id}")
+  public CommonResponse<Map<String, Object>> update(
+      @PathVariable Long id, @Valid @RequestBody QuotaPolicySaveRequest request) {
+    return responseFactory.success(quotaPolicyApplicationService.update(id, request));
+  }
+
+  @PostMapping("/{id}/toggle")
+  public CommonResponse<Void> toggle(
+      @PathVariable Long id,
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("enabled") Boolean enabled) {
+    quotaPolicyApplicationService.toggle(id, tenantId, enabled);
+    return responseFactory.success(null);
+  }
+}

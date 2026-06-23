@@ -4,7 +4,7 @@ wire-protocol §B 将 HTTP 失败划分为四种类型,SDK 必须区分。这里
 常子类建模该分类,调用方可以 ``except AuthError:`` / ``except TransientError:``
 而不是手工判断 status code。
 
-Java 对应:``com.example.batch.sdk.internal.PlatformHttpException`` 及其
+Java 对应:``io.github.pinpols.batch.sdk.internal.PlatformHttpException`` 及其
 ``isAuthError() / isConflict() / isServerError()`` 谓词 —— Python 端把这
 些谓词折叠成类层次。
 

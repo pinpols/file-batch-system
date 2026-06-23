@@ -54,7 +54,7 @@ Expected: `2`
 - [ ] **Step 1: 写失败测试**
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -87,7 +87,7 @@ Expected: 编译失败 `cannot find symbol ExportKeysetRange`
 - [ ] **Step 3: 实现 ExportKeysetRange**
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -147,11 +147,11 @@ git commit -m "feat(export-keyset): ExportKeysetRange 等宽区间值对象"
   @org.junit.jupiter.api.Nested
   class PlannerTest {
     private java.util.Map<String, Object> snap;
-    private com.example.batch.common.plugin.ExportDataContext ctx(int no, int count, boolean optIn) {
+    private io.github.pinpols.batch.common.plugin.ExportDataContext ctx(int no, int count, boolean optIn) {
       snap = new java.util.LinkedHashMap<>();
       java.util.Map<String,Object> tc = new java.util.LinkedHashMap<>();
       if (optIn) tc.put("partition_keyset_range", true);
-      return new com.example.batch.common.plugin.ExportDataContext(
+      return new io.github.pinpols.batch.common.plugin.ExportDataContext(
           "ta","J","B","TPL", tc, snap, no, count);
     }
 
@@ -203,10 +203,10 @@ Expected: 编译失败 `cannot find symbol ExportKeysetRangePlanner`
 - [ ] **Step 3: 实现 planner**
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
-import com.example.batch.common.logging.SwallowedExceptionLogger;
-import com.example.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -285,7 +285,7 @@ git commit -m "feat(export-keyset): 激活判定 + 每分区边界缓存(只算�
 - [ ] **Step 1: 写失败测试(纯 SQL 字符串断言,不连库)**
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -370,7 +370,7 @@ public record ExportKeysetRange(
 
 ```java
   static String buildPagedSql(String baseSql, String cursorColumn, boolean hasCursor, ExportKeysetRange range) {
-    String cursorIdent = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
+    String cursorIdent = io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
     StringBuilder where = new StringBuilder();
     if (range != null && range.active()) {
       where.append("WHERE base.%s >= :__loN%n".formatted(cursorIdent));
@@ -426,7 +426,7 @@ Expected: PASS
 
   /** 算游标列 [min,max];null/非数值 → 元素 null(planner 据此退 hashtext)。复用 RLS 只读 tx。 */
   private BigDecimal[] minMax(String baseSql, Map<String, Object> baseParams) {
-    String cur = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(
+    String cur = io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(
         // cursorColumn 从外层传入更稳;此处示意,实现时把 cursorColumn 作参数传进来
         "PLACEHOLDER_REPLACED_BY_CURSOR");
     String mmSql = "SELECT min(%s) AS lo, max(%s) AS hi FROM (%s) base".formatted(cur, cur, baseSql);
@@ -475,7 +475,7 @@ git commit -m "feat(export-keyset): sql_template 接入 keyset 区间谓词 + mi
 - [ ] **Step 1: 写失败测试(buildDetailQuery range 变体,SQL 串 + args 断言)**
 
 ```java
-package com.example.batch.worker.exports.plugin;
+package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

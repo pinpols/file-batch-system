@@ -22,7 +22,7 @@
 
 ## P1 — 架构走偏 / 中期技术债(10 条)
 
-**[P1]** `ConsoleTenantConfigCopyService.java` — **`@Service` Bean 放在 `web` 包下,违反分层约定**。注入了 15 个 Mapper(`JobDefinitionMapper`、`WorkflowDefinitionMapper` 等),但其包路径是 `com.example.batch.console.web`,属于 Web 层。CLAUDE.md §架构硬约束 要求 Web 层只是薄壳。**建议**:迁移到 `infrastructure/config/DefaultConsoleTenantConfigCopyService.java`,并抽接口到 `application/config/`。
+**[P1]** `ConsoleTenantConfigCopyService.java` — **`@Service` Bean 放在 `web` 包下,违反分层约定**。注入了 15 个 Mapper(`JobDefinitionMapper`、`WorkflowDefinitionMapper` 等),但其包路径是 `io.github.pinpols.batch.console.web`,属于 Web 层。CLAUDE.md §架构硬约束 要求 Web 层只是薄壳。**建议**:迁移到 `infrastructure/config/DefaultConsoleTenantConfigCopyService.java`,并抽接口到 `application/config/`。
 
 **[P1]** `DefaultConsoleOpsApplicationService.java:44-70` — **Ops Summary 在单次请求中串行发出 9 条独立 DB 查询,无批处理**。`summary()` 按顺序发出 9 条独立 Mapper 调用(`countByStatus` × 2、`countByStatuses` × 2、各 worker/outbox 计数),且**不在同一事务**,每次都拿新连接,HikariCP 连接压力 9x。该方法还被 SSE 摘要流在每次写提交后触发,属于高频调用路径。**建议**:(1) 加 `@Transactional(readOnly = true)` 复用单连接;(2) 合并部分 count 到单 SQL(PostgreSQL `FILTER (WHERE ...)`)。
 

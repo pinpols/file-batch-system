@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.JobInstanceMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper">
     <!--
       防终态复活守护谓词(2026-06 加固):job_instance 的终态集与 DefaultStateMachine.TERMINAL_STATES /
       DefaultTaskOutcomeService.isTerminalJobInstanceStatus 严格一致——
@@ -24,7 +24,7 @@
                 ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
                  'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'))
     </sql>
-    <resultMap id="JobInstanceResultMap" type="com.example.batch.orchestrator.domain.entity.JobInstanceEntity">
+    <resultMap id="JobInstanceResultMap" type="io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_definition_id" property="jobDefinitionId"/>
@@ -112,7 +112,7 @@
         limit 1
     </select>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobInstanceEntity"
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity"
             useGeneratedKeys="true" keyProperty="id">
         with claimed_key as (
             insert into batch.job_instance_dedup_key (
@@ -474,7 +474,7 @@
            )
     </select>
 
-    <select id="selectBatchDayMetrics" resultType="com.example.batch.orchestrator.domain.entity.BatchDayInstanceMetrics">
+    <select id="selectBatchDayMetrics" resultType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceMetrics">
         select
             count(1) as total_count,
             coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING') then 1 else 0 end), 0) as active_count,

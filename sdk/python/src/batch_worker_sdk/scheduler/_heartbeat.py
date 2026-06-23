@@ -1,6 +1,6 @@
 """异步心跳调度器。
 
-对应 Java ``com.example.batch.sdk.scheduler.HeartbeatScheduler``,作为长生
+对应 Java ``io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler``,作为长生
 命周期的 ``asyncio.Task`` 由
 :class:`~batch_worker_sdk.client.client.BatchPlatformClient.start` 启动。
 

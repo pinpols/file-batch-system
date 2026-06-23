@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-worker</artifactId>
         <version>${revision}</version>
     </parent>
@@ -19,17 +19,17 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
             <classifier>tests</classifier>

@@ -1,0 +1,44 @@
+package io.github.pinpols.batch.console.domain.job.web;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
+import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/** 调度快照代理 REST：转发编排器内部接口，供控制台查看租户调度状态与历史。 */
+@RestController
+@Validated
+@RequestMapping("/api/console/scheduler")
+@PreAuthorize(
+    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@RequiredArgsConstructor
+public class ConsoleSchedulerSnapshotController {
+
+  private final ConsoleOrchestratorProxyService orchestratorProxyService;
+  private final ConsoleResponseFactory responseFactory;
+
+  /** 当前调度快照（Redis 缓存 30s，分钟级数据无需实时）。 */
+  @GetMapping("/snapshot")
+  public CommonResponse<ConsoleSchedulerSnapshotResponse> live(
+      @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(orchestratorProxyService.schedulerSnapshot(tenantId));
+  }
+
+  /** 调度快照历史。 */
+  @GetMapping("/snapshot/history")
+  public CommonResponse<List<ConsoleSchedulerSnapshotHistoryResponse>> history(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam(value = "limit", defaultValue = "20") int limit) {
+    return responseFactory.success(
+        orchestratorProxyService.schedulerSnapshotHistory(tenantId, limit));
+  }
+}
