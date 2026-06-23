@@ -12,6 +12,8 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.support.StepExecutionAdapter;
+import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
+import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
 import io.micrometer.core.instrument.Counter;
@@ -139,6 +141,11 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   @Override
   public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
     return taskExecutionClient.claim(tenantId, taskId, workerId);
+  }
+
+  @Override
+  public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
+    return taskExecutionClient.claimBatch(items);
   }
 
   @Override
