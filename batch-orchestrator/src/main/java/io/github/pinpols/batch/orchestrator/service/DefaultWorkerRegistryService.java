@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
@@ -54,6 +55,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
   private final PipelineStageProgressCache pipelineStageProgressCache;
   private final SystemParameterMapper systemParameterMapper;
+  private final WorkerRegistryProperties workerRegistryProperties;
 
   @Lazy @Autowired private DefaultWorkerRegistryService self;
 
@@ -80,6 +82,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
             : (registry == null ? null : registry.capabilityTags());
 
     if (registry == null) {
+      // 缺口②:仅对新 worker_code 做 per-tenant 数量配额校验(opt-in,默认 max<=0 不限);
+      // 幂等重注册已存在的 worker_code 走 else 分支,永不被配额拦截。
+      rejectIfTenantWorkerQuotaExceeded(request.tenantId());
       registry =
           new WorkerRegistryEntity(
               null,
@@ -120,6 +125,22 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     }
     upsertDeclaredTaskTypes(request);
     return saved;
+  }
+
+  /**
+   * 缺口②:per-tenant worker 数量配额。仅在注册<b>新</b> worker_code 时调用。{@code maxPerTenant <= 0} 视为不限(opt-in,
+   * 默认不生效);当前活跃数(非 DECOMMISSIONED)已达上限时拒绝注册,防注册风暴撑爆 worker_registry。
+   */
+  private void rejectIfTenantWorkerQuotaExceeded(String tenantId) {
+    int max = workerRegistryProperties.getMaxPerTenant();
+    if (max <= 0) {
+      return;
+    }
+    int current = workerRegistryMapper.countByTenant(tenantId);
+    if (current >= max) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR, "error.worker.too_many_workers", current, max);
+    }
   }
 
   /**

@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
 import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
@@ -30,6 +32,7 @@ class WorkerControllerTest {
 
   @Mock private WorkerRegistryServerService workerRegistryService;
   @Mock private WorkerDrainGovernanceService workerDrainGovernanceService;
+  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
 
   private MockMvc mockMvc;
 
@@ -37,7 +40,8 @@ class WorkerControllerTest {
   void setUp() {
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new WorkerController(workerRegistryService, workerDrainGovernanceService))
+                new WorkerController(
+                    workerRegistryService, workerDrainGovernanceService, tenantActionRateLimiter))
             .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
             .build();
   }
@@ -147,6 +151,41 @@ class WorkerControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.platformStatus").value("DRAINING"))
         .andExpect(jsonPath("$.shouldDrain").value(true));
+  }
+
+  // 缺口①: per-tenant worker 注册限流 (opt-in)
+
+  @Test
+  void registerAllowedWhenRateLimiterPasses() throws Exception {
+    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.WORKER_REGISTER)))
+        .thenReturn(true);
+    when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
+        .thenReturn(onlineWorker("ONLINE", 10));
+
+    mockMvc
+        .perform(
+            post("/internal/workers/register")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
+        .andExpect(status().isOk());
+
+    verify(workerRegistryService).register(any(WorkerHeartbeatDto.class));
+  }
+
+  @Test
+  void registerRejectedWith429WhenRateLimited() throws Exception {
+    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.WORKER_REGISTER)))
+        .thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/internal/workers/register")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
+        .andExpect(status().isTooManyRequests());
+
+    verify(workerRegistryService, org.mockito.Mockito.never())
+        .register(any(WorkerHeartbeatDto.class));
   }
 
   private WorkerRegistryEntity onlineWorker(String status, Integer maxConcurrent) {

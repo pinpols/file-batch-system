@@ -38,6 +38,8 @@ public class TenantActionRateLimiter {
       max = governance.rateLimit().getMaxNewRequestsPerTenantPerMinute();
     } else if (action == RateLimitAction.DISPATCH_RELEASE) {
       max = governance.rateLimit().getMaxReleaseRequestsPerTenantPerMinute();
+    } else if (action == RateLimitAction.WORKER_REGISTER) {
+      max = governance.rateLimit().getMaxRegisterRequestsPerTenantPerMinute();
     } else {
       max = 0;
     }

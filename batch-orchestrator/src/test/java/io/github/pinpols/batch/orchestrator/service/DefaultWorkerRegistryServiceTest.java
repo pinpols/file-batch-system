@@ -54,13 +54,21 @@ class DefaultWorkerRegistryServiceTest {
           new io.github.pinpols.batch.orchestrator.infrastructure.progress
               .PipelineStageProgressCache();
 
+  private final io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties
+      workerRegistryProperties =
+          new io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties();
+
   private DefaultWorkerRegistryService service;
 
   @BeforeEach
   void setUp() throws Exception {
     service =
         new DefaultWorkerRegistryService(
-            mapper, customTaskTypeRegistryMapper, progressCache, systemParameterMapper);
+            mapper,
+            customTaskTypeRegistryMapper,
+            progressCache,
+            systemParameterMapper,
+            workerRegistryProperties);
     // @Lazy self 字段注入,单元测下用反射手动指向自己 (走非事务路径)
     Field self = DefaultWorkerRegistryService.class.getDeclaredField("self");
     self.setAccessible(true);
@@ -451,6 +459,63 @@ class DefaultWorkerRegistryServiceTest {
         .hasMessageContaining("error.security.sensitive_in_payload");
 
     verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+  }
+
+  // ===== 缺口②: per-tenant worker 数量配额 (opt-in) =====
+
+  @Test
+  @DisplayName("register: max-per-tenant=2 且已有 2 个活跃 worker + 新 worker → 拒(VALIDATION_ERROR),不写入")
+  void registerNewWorkerRejectedWhenQuotaExceeded() {
+    workerRegistryProperties.setMaxPerTenant(2);
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1"))).thenReturn(null);
+    when(mapper.countByTenant("ta")).thenReturn(2);
+
+    assertThatThrownBy(() -> service.register(dto(null)))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("too_many_workers");
+
+    verify(mapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("register: max-per-tenant=2 且当前 1 个活跃 + 新 worker → 过(未达上限)")
+  void registerNewWorkerAllowedWhenUnderQuota() {
+    workerRegistryProperties.setMaxPerTenant(2);
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    when(mapper.countByTenant("ta")).thenReturn(1);
+
+    WorkerRegistryEntity result = service.register(dto(null));
+
+    verify(mapper).insert(any());
+    assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 幂等重注册已存在 worker → 不查配额、不被拦(已达上限也放行)")
+  void registerExistingWorkerBypassesQuota() {
+    workerRegistryProperties.setMaxPerTenant(1);
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(
+            entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
+            entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    service.register(dto(null));
+
+    verify(mapper).updateById(any());
+    verify(mapper, never()).countByTenant(anyString());
+  }
+
+  @Test
+  @DisplayName("register: max-per-tenant=0(默认)→ 不查配额、不限")
+  void registerDefaultQuotaUnlimited() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    service.register(dto(null));
+
+    verify(mapper).insert(any());
+    verify(mapper, never()).countByTenant(anyString());
   }
 
   // ===== updateStatus / deactivate =====
