@@ -5,6 +5,8 @@ ADR-035 租户自托管 Worker SDK 的可选 Spring Boot 适配层。
 只有 Spring Boot 租户 worker 需要依赖本模块。非 Spring 租户应直接依赖 [`batch-worker-sdk`](../core/);
 core SDK 继续保持 Spring-free。
 
+**最低环境要求**:**JDK 21+**(同 core,`maven.compiler.release=21`)+ 租户工程自带 **Spring Boot 3.x / 4.x**(starter 仅引 `spring-boot-autoconfigure`,版本随租户的 Spring Boot,不强制锁定)。
+
 ## 接入只需 3 步(零 wiring 代码)
 
 1. **依赖 starter**:
