@@ -18,6 +18,7 @@ import jakarta.annotation.PostConstruct;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,8 +30,10 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
@@ -67,15 +70,47 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   protected abstract TaskDispatchExecutor taskDispatchExecutor();
 
   /**
-   * KafkaListener 的 container id。
-   *
-   * <p>背压实现需要在运行时对 container 做 pause/resume，因此这里要求子类固定配置 listenerId， 并在 {@code @KafkaListener(id =
-   * "...")} 中保持一致。
+   * KafkaListener 的 container id。public:本类的 {@code @KafkaListener(id =
+   * "#{__listener.listenerId()}")} 经 SpEL 反射调用,要求 public。背压需运行时 pause/resume container,故 id
+   * 固定来自本方法。
    */
-  protected abstract String listenerId();
+  public abstract String listenerId();
 
   /** D-3: 子类可提供 DLQ 发布器，用于转发无法处理的"毒丸"消息。 */
   protected abstract DeadLetterPublisher deadLetterPublisher();
+
+  /**
+   * 单条消费入口(公共,所有 worker 子类共用)。id/topic/group 经 SpEL 从子类的 {@link #listenerId()}/ {@link
+   * #topicPattern()}/{@link #consumerGroupId()} 派生,无需各子类重复声明。 仅当 {@code
+   * batch.worker.batch-claim.enabled=false}(默认)时 autoStartup,与批量 listener 互斥。
+   */
+  @KafkaListener(
+      id = "#{__listener.listenerId()}",
+      topicPattern = "#{__listener.topicPattern()}",
+      groupId = "#{__listener.consumerGroupId()}",
+      autoStartup = "#{!${batch.worker.batch-claim.enabled:false}}")
+  public void consume(String payload, Acknowledgment acknowledgment) {
+    if (doConsume(payload)) {
+      acknowledgment.acknowledge();
+    }
+  }
+
+  /**
+   * ADR-046 P2 切片 2.3c:批量消费入口(公共,所有 worker 子类共用)。仅当 {@code batch.worker.batch-claim.enabled=true} 时
+   * autoStartup,用批量 container factory 一次收 K 条交 {@link #doConsumeBatch}(claim-batch + 逐 partition
+   * 执行,CLAIM 往返 O(N)→O(N/K))。
+   */
+  @KafkaListener(
+      id = "#{__listener.listenerId()}-batch",
+      topicPattern = "#{__listener.topicPattern()}",
+      groupId = "#{__listener.consumerGroupId()}",
+      containerFactory = "batchKafkaListenerContainerFactory",
+      autoStartup = "${batch.worker.batch-claim.enabled:false}")
+  public void consumeBatch(List<String> payloads, Acknowledgment acknowledgment) {
+    if (doConsumeBatch(payloads)) {
+      acknowledgment.acknowledge();
+    }
+  }
 
   /**
    * P1: 改为构造器注入(原 @Value field injection 违反 CLAUDE.md #3)。
@@ -234,6 +269,89 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       // 无论处理成功/失败/抛异常，都必须释放 permit；
       // 若之前触发过 pause，则在释放后尝试恢复消费。
       sem.release();
+      resumeContainerIfPaused();
+      BatchMdc.removeAll(
+          StructuredLogField.TENANT_ID,
+          StructuredLogField.TRACE_ID,
+          StructuredLogField.TASK_ID,
+          StructuredLogField.JOB_INSTANCE_ID,
+          StructuredLogField.WORKER_TYPE,
+          StructuredLogField.WORKER_ID,
+          StructuredLogField.RUN_MODE);
+    }
+  }
+
+  /**
+   * ADR-046 P2 切片 2.3c:批量消费 —— 一次 Kafka poll 攒 K 条 payload,经 {@code claim-batch} 一次认领、 逐 partition
+   * 独立执行(沿用 per-task 执行/上报),控制面 CLAIM 往返 O(N)→O(N/K)。由子类的**批量** {@code @KafkaListener}(仅 {@code
+   * batch.worker.batch-claim.enabled=true} 时启动)调用;flag 关时无调用方。
+   *
+   * <p>语义对齐单条 {@link #doConsume}:背压一次取 n 个 permit(取不满 → pause + 不提交,整批重投); 跨 tenant 按租户分组分别绑 RLS(单
+   * tenant 语义,严禁整批混绑);**offset 仅整批成功后提交** (返回 true);transient(5xx/网络)→ 不提交、整批重投;不可恢复 → 逐条进 DLQ 后提交。
+   * 批内**部分认领**由 {@link TaskDispatchExecutor#executeBatch} 逐项处理(没领到的跳过)。
+   *
+   * @return true=提交整批 offset;false=不提交(Kafka 重投整批,靠 partition 幂等去重已成功项)
+   */
+  protected boolean doConsumeBatch(List<String> payloads) {
+    if (payloads == null || payloads.isEmpty()) {
+      return true;
+    }
+    Semaphore sem = ensureSemaphore();
+    int n = payloads.size();
+    if (!sem.tryAcquire(n)) {
+      // 背压:实例内并发不足以吃下整批 → 暂停拉取,不提交,等容量恢复后重投。
+      pauseContainer();
+      return false;
+    }
+    try {
+      WorkerRegistration registration = workerLoop().ensureStarted();
+      // 解码 + accepts 过滤,按 tenant 分组(RLS 是单 tenant 语义,不能整批混绑)
+      Map<String, List<TaskDispatchMessage>> byTenant = new LinkedHashMap<>();
+      for (String payload : payloads) {
+        TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+        if (!accepts(message, registration)) {
+          continue;
+        }
+        byTenant.computeIfAbsent(message.tenantId(), k -> new ArrayList<>()).add(message);
+      }
+      String workerId = registration.getWorkerId();
+      for (Map.Entry<String, List<TaskDispatchMessage>> entry : byTenant.entrySet()) {
+        String tenantId = entry.getKey();
+        List<TaskDispatchMessage> group = entry.getValue();
+        if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
+          RlsTenantContextHolder.runWithTenant(
+              tenantId, () -> taskDispatchExecutor().executeBatch(group, workerId));
+        } else {
+          taskDispatchExecutor().executeBatch(group, workerId);
+        }
+      }
+      return true; // 整批成功 → 提交 offset
+    } catch (Exception ex) {
+      if (isTransientOrchestratorFailure(ex)) {
+        log.warn(
+            "{} batch transient failure (5xx/network) — NOT committing, will retry whole batch:"
+                + " size={}, error={}",
+            workerConfiguration().workerType(),
+            n,
+            ex.getMessage());
+        return false; // 不提交,整批重投(已成功 partition 靠幂等去重)
+      }
+      // 不可恢复 → 逐条进 DLQ 后提交(避免整批卡住);任一 DLQ 写失败则不提交、整批重投
+      log.error(
+          "{} batch execution failed — publishing {} payloads to DLQ: error={}",
+          workerConfiguration().workerType(),
+          n,
+          ex.getMessage(),
+          ex);
+      boolean allDlq = true;
+      for (String payload : payloads) {
+        if (!publishToDlqSafely(payload, ex.getMessage())) {
+          allDlq = false;
+        }
+      }
+      return allDlq;
+    } finally {
+      sem.release(n);
       resumeContainerIfPaused();
       BatchMdc.removeAll(
           StructuredLogField.TENANT_ID,

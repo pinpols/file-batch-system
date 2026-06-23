@@ -9,9 +9,7 @@ import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 /** 导出任务 Kafka 消费者，监听导出任务 topic 并驱动任务执行。 */
@@ -59,23 +57,7 @@ public class ExportTaskConsumer extends AbstractTaskConsumer {
   }
 
   @Override
-  protected String listenerId() {
+  public String listenerId() {
     return "export-task-consumer";
-  }
-
-  /**
-   * 消费 Kafka 消息并执行导出任务，成功处理后手动 ACK。
-   *
-   * @param payload 消息内容
-   * @param acknowledgment 手动确认句柄
-   */
-  @KafkaListener(
-      id = "export-task-consumer",
-      topicPattern = "#{__listener.topicPattern()}",
-      groupId = "#{__listener.consumerGroupId()}")
-  public void consume(String payload, Acknowledgment acknowledgment) {
-    if (doConsume(payload)) {
-      acknowledgment.acknowledge();
-    }
   }
 }
