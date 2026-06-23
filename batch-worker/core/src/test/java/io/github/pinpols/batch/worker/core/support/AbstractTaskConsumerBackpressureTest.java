@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -147,6 +149,37 @@ class AbstractTaskConsumerBackpressureTest {
     verify(container, times(1)).resume();
   }
 
+  @Test
+  void batchBackpressurePausesBatchListenerContainer() {
+    KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
+    MessageListenerContainer baseContainer = mock(MessageListenerContainer.class);
+    MessageListenerContainer batchContainer = mock(MessageListenerContainer.class);
+    when(registry.getListenerContainer("test-listener")).thenReturn(baseContainer);
+    when(registry.getListenerContainer("test-listener-batch")).thenReturn(batchContainer);
+    when(batchContainer.isPauseRequested()).thenReturn(false);
+
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    AbstractTaskConsumer consumer = buildConsumer(registry, executor, 1);
+    consumer.initSemaphore();
+
+    String msg1 =
+        JsonUtils.toJson(
+            new TaskDispatchMessage(
+                "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
+    String msg2 =
+        JsonUtils.toJson(
+            new TaskDispatchMessage(
+                "v2", "t1", 2L, null, 2L, null, null, "IMPORT", null, null, "tr", "k", null, null));
+
+    boolean result =
+        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(msg1, msg2));
+
+    assertThat(result).isFalse();
+    verify(batchContainer, times(1)).pause();
+    verify(baseContainer, never()).pause();
+    verify(executor, never()).executeBatch(any(), anyString());
+  }
+
   // P1-2.2:删除原 shouldExposeRunModeInMdcDuringConsumption 测试。
   // 原测试断言 message.payload 解析后把 run_mode 注入 MDC,P1-2.2 起 message v2 已无 payload,
   // run_mode 改由 worker CLAIM 后通过 EffectiveTaskConfig.payload → ExecutionContext.attributes
@@ -183,6 +216,58 @@ class AbstractTaskConsumerBackpressureTest {
       @Override
       public String consumerGroupId() {
         return "g";
+      }
+    };
+  }
+
+  private AbstractTaskConsumer buildConsumer(
+      KafkaListenerEndpointRegistry registry,
+      TaskDispatchExecutor executor,
+      int maxConcurrentTasks) {
+    WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
+    when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+    return new AbstractTaskConsumer(registry, meterRegistryProvider, maxConcurrentTasks) {
+      @Override
+      protected AbstractWorkerLoop workerLoop() {
+        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport) {
+          @Override
+          protected WorkerConfiguration workerConfiguration() {
+            return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+          }
+
+          @Override
+          protected String workerGroup() {
+            return "test";
+          }
+
+          @Override
+          protected int workerPort() {
+            return 0;
+          }
+        };
+      }
+
+      @Override
+      protected WorkerConfiguration workerConfiguration() {
+        return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+      }
+
+      @Override
+      protected TaskDispatchExecutor taskDispatchExecutor() {
+        return executor;
+      }
+
+      @Override
+      public String listenerId() {
+        return "test-listener";
+      }
+
+      @Override
+      protected DeadLetterPublisher deadLetterPublisher() {
+        return null;
       }
     };
   }
