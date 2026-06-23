@@ -16,6 +16,7 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
+import com.example.batch.orchestrator.config.BundleBatchClaimProperties;
 import com.example.batch.orchestrator.config.InternalAuthFilter;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.TaskController;
@@ -41,7 +42,8 @@ class TaskControllerTest {
   @BeforeEach
   void setUp() {
     TaskControllerApplicationService taskControllerApplicationService =
-        new TaskControllerApplicationService(taskExecutionService, new ObjectMapper());
+        new TaskControllerApplicationService(
+            taskExecutionService, new ObjectMapper(), new BundleBatchClaimProperties());
     mockMvc =
         MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
             .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
