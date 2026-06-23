@@ -28,7 +28,7 @@ breaking-change-gate (oasdiff vs prev)─┴─► package + smoke (TS/Py/Java/G
    - **TypeScript**:`npm run build`(tsc 编译 `src/*.ts` → `dist/*.js + *.d.ts`)→ `npm pack` 出 tarball → 新临时目录 `npm i <tarball>` + 跑最小脚本 `classifyHttp(500,1)`。
      > ⚠️ TS SDK **必须编译后发布**:Node 拒绝对 `node_modules` 下的 `.ts` 做 type-stripping,直接发原始 `.ts` 装上后 `import` 即 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`。`package.json` 的 `exports`/`main`/`types` 指向 `dist/`,`files` 只含 `dist`。
    - **Python**:`python -m build` 出 sdist + wheel → 全新 venv `pip install <wheel>` → `import batch_worker_sdk` + 引用公共 SPI(`SdkAbstractTaskHandler` / `SdkTaskResult`)。
-   - **Java**:`mvn -pl sdk/java -am install` 装到本地 m2 → 独立消费 pom 引 `io.github.pinpols.batch:batch-worker-sdk:${revision}` 编译最小 handler,证明发布 jar 的入口 + 依赖闭包能被外部工程解析。
+   - **Java**:`mvn -pl sdk/java/core -am install` 装到本地 m2 → 独立消费 pom 引 `io.github.pinpols.batch:batch-worker-sdk:${revision}` 编译最小 handler,证明发布 jar 的入口 + 依赖闭包能被外部工程解析。
    - **Go**:tag-based 无产物 → `go vet` + `go build` + `go list -m`(模块可解析)。
    - **Rust**:`cargo package --no-verify` 产 `.crate`,校验打包元数据完整。
 4. **supply-chain(best-effort,失败不挂)**:syft 生成 SBOM(SPDX-JSON,上传 artifact);oasdiff 对上个 release 生成 protocol changelog(上传 artifact)。
@@ -43,26 +43,42 @@ publish-* 每个 job 三重锁,任一不满足都不发:
    - `workflow_dispatch` 触发时第一子句即 false → **所有 publish job 被 skip**。手动触发**永远只跑校验,不发布**。
    - 真发布**只能**经 GitHub Release(published)事件触发。
 2. **`environment: release-publish`**:在仓库 Settings → Environments 配 required reviewers / wait timer / 分支限制,真发布前**人工审批**。
-3. **token 全走 `secrets.*`,本文件零明文**:npm / PyPI 优先用 OIDC(`id-token: write` + provenance / Trusted Publishing),无需明文 token;crates.io / Maven 用 `secrets.*`。
+3. **token 全走 `secrets.*`,本文件零明文**:PyPI 用 OIDC Trusted Publishing(`id-token: write`,无 token);npm 用 `NPM_TOKEN` 鉴权 + `--provenance`(sigstore OIDC 签名);crates.io / Maven Central(+GPG)用 `secrets.*`。详见 §3.1。
 
 ## 3. Ops 真发布步骤
 
 ### 3.1 一次性:配 secrets 与 environment
 
-仓库 Settings → Environments → 新建 **`release-publish`**:
-- 勾 **Required reviewers**(发布审批人);
-- 可选 wait timer;
-- 限制可部署分支为 `main` / tag。
+#### environment(✅ 已配置 2026-06-23)
 
-在 `release-publish` environment(或 repo)secrets 里按需配:
+`release-publish` environment 已建:**Required reviewers = `pinpols`**、仅允许 protected 分支部署。
+publish-* 各 job `environment: release-publish` → 真发布前必经人工 Approve。无需再手动建。
 
-| Registry | 凭据 | 说明 |
+#### secrets / OIDC(⚠️ owner 待配 —— 需各 registry 账号 token,代码侧已就绪)
+
+当前 repo **未配置任何发布 secret**;按下表配齐后才能真发布。值只有 owner 能从各 registry 账号拿到:
+
+| Registry | 凭据 | owner 动作 |
 |---|---|---|
-| **npm** | (OIDC) | 优先用 npm provenance / OIDC,无需 token。若用 token:`NPM_TOKEN`(automation token) |
-| **PyPI** | (OIDC) | 优先 [Trusted Publishing](https://docs.pypi.org/trusted-publishers/),在 PyPI 项目侧绑本仓 + workflow,无需 token |
-| **crates.io** | `CARGO_REGISTRY_TOKEN` | crates.io API token |
-| **Maven Central** | `MAVEN_USERNAME` / `MAVEN_PASSWORD` / `MAVEN_GPG_PASSPHRASE` | Central Portal 凭据 + GPG 签名口令(注:`sdk/java/pom.xml` 当前未配 `maven-gpg-plugin` / `central-publishing-plugin`,真发 Central 前需补 release profile;见 §4) |
-| **Go** | 无 | tag-based,无 registry 推送 |
+| **Maven Central**(Java) | `MAVEN_USERNAME` / `MAVEN_PASSWORD` | 在 [central.sonatype.com](https://central.sonatype.com) 用 GitHub 账号验证**认领 `io.github.pinpols` 命名空间** → 生成 publishing token |
+| **GPG 签名**(Central 强制) | `MAVEN_GPG_PRIVATE_KEY` / `MAVEN_GPG_PASSPHRASE` | 生成 GPG key、`gpg --send-keys` 发 keyserver、`gpg --export-secret-keys --armor` 导出私钥 |
+| **npm**(`@batch/worker-sdk`) | `NPM_TOKEN` | npm 建 **Automation token**(publish 权限)。注:workflow 用 `npm publish --provenance`,provenance 走 OIDC sigstore,但**鉴权仍需 `NPM_TOKEN`** |
+| **crates.io**(Rust) | `CARGO_REGISTRY_TOKEN` | crates.io 建 API token |
+| **PyPI**(Python) | 无 secret(OIDC) | 在 pypi.org 配 **[Trusted Publisher](https://docs.pypi.org/trusted-publishers/)**:repo `pinpols/file-batch-system`、workflow `sdk-python-publish.yml`、environment(可选) |
+| **Go** | 无 | tag-based,go proxy 自动,无 registry 推送 |
+
+配置命令(值自填):
+```bash
+gh secret set NPM_TOKEN
+gh secret set CARGO_REGISTRY_TOKEN
+gh secret set MAVEN_USERNAME
+gh secret set MAVEN_PASSWORD
+gh secret set MAVEN_GPG_PRIVATE_KEY < private-key.asc
+gh secret set MAVEN_GPG_PASSPHRASE
+# PyPI 无 secret:去 pypi.org 配 Trusted Publisher
+```
+
+> Java `release` profile **已就绪**(`sdk/java/core/pom.xml`:flatten-ossrh + source + javadoc + maven-gpg-plugin + central-publishing-maven-plugin);groupId 已是 Central 可发布的 `io.github.pinpols.batch`。代码侧无需再补,只差上面的凭据。
 
 ### 3.2 发布一个版本
 
@@ -87,7 +103,7 @@ Actions → `sdk-release-validation` → **Run workflow**(`workflow_dispatch`),`
 | Python | `sdk/python/src/batch_worker_sdk/_version.py`(`0.5.0a0`,hatch 读) | `python -m build` | sdist + wheel;依赖 httpx/pydantic/aiokafka |
 | Rust | `sdk/rust/Cargo.toml` `version`(`1.1.0`) | `cargo package` | 默认 zero-dep;补了 `repository`/`readme`/`keywords`/`categories` |
 | Go | git tag | (无) | module `github.com/pinpols/file-batch-system/batch-worker-sdk-go` |
-| Java | 根 pom `${revision}` | `mvn -pl sdk/java -am package` | artifactId `batch-worker-sdk`;**Central 发布 profile(gpg + central plugin)待补**,当前 `deploy` 走默认 distributionManagement |
+| Java | 根 pom `${revision}`(`1.1.0-SNAPSHOT`,发版去 `-SNAPSHOT`) | `mvn -pl sdk/java/core -am -Prelease deploy` | groupId `io.github.pinpols.batch`、artifactId `batch-worker-sdk`;**`release` profile 已就绪**(ossrh flatten + sources + javadoc + gpg 签名 + central-publishing-plugin,`autoPublish=false`) |
 
 > 发布前版本号对齐:各语言版本号目前**各自独立**,非强制与根 pom `${revision}` 同步(SDK 是松耦合的租户产物)。发版时按各语言自身的 SemVer 推进。
 
