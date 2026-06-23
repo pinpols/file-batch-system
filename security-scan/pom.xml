@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
         <relativePath>../pom.xml</relativePath>
@@ -18,7 +18,7 @@
     <description>Thin security scan orchestrator that calls existing tools only</description>
 
     <properties>
-        <main.class>com.example.batch.securityscan.SecurityScanApplication</main.class>
+        <main.class>io.github.pinpols.batch.securityscan.SecurityScanApplication</main.class>
     </properties>
 
     <dependencies>

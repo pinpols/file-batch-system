@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -17,7 +17,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-orchestrator</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -26,37 +26,37 @@
              本次仅落 scaffold + Kafka→consumer→job_instance 验证;真起 trigger fire→outbox 全链路
              留作 follow-up(双 ApplicationContext 同 JVM 装配的复杂度)。 -->
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-trigger</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-console-api</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-import</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-export</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-process</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-dispatch</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-atomic</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -65,19 +65,19 @@
              Spring context(成本 5 min 不符 < 60s 预算),走 HTTP stub 录制 register/claim/report;
              真 orchestrator Spring boot 启动版本留作 follow-up。 -->
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-sdk</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-sdk-testkit</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
             <classifier>tests</classifier>

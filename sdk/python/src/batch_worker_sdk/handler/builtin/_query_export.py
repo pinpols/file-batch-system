@@ -1,6 +1,6 @@
 """内置查询导出 handler(ADR-036 Export 形态)。
 
-对齐 Java ``com.example.batch.sdk.handler.builtin.QueryExportHandler`` /
+对齐 Java ``io.github.pinpols.batch.sdk.handler.builtin.QueryExportHandler`` /
 ``QueryExportConfig`` —— 固定查询 → 定界 / json 文件流。Python 版把 *查询
 执行* 委托给租户钩子(:meth:`QueryExportHandler._query_rows`),让 handler
 保持 DB 驱动无关(asyncpg / psycopg / SQLAlchemy / 任意自定义 fetcher)。

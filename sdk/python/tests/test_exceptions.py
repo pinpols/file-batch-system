@@ -9,7 +9,7 @@
 - ``parse_error_body`` 兼容 ``traceId`` / ``trace_id`` / ``requestId`` 三种封包,
   非 dict 返回三个 None
 
-Java 对应:``com.example.batch.sdk.internal.PlatformHttpExceptionTest`` —— 那
+Java 对应:``io.github.pinpols.batch.sdk.internal.PlatformHttpExceptionTest`` —— 那
 里以单个 ``PlatformHttpException`` + ``isXxx()`` 谓词建模,Python 端拆成子类
 层次,因此本测试按子类切分。
 """

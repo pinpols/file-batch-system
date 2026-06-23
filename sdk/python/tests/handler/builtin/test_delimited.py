@@ -5,7 +5,7 @@
 单测;这里把 parse 和 encode 的细则做点对点覆盖,避免被上层 happy-path 屏
 蔽掉。
 
-Java 对应:``com.example.batch.sdk.handler.builtin.support.DelimitedCodecTest``。
+Java 对应:``io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedCodecTest``。
 """
 
 from __future__ import annotations

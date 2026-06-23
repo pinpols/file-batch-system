@@ -1,4 +1,4 @@
-"""幂等去重子包 —— 对齐 Java ``com.example.batch.sdk.idempotent``。
+"""幂等去重子包 —— 对齐 Java ``io.github.pinpols.batch.sdk.idempotent``。
 
 声明式幂等:在 handler 类上标 :func:`idempotent`,注册时用
 :func:`wrap_idempotent` 包一层。去重存储由租户注入 :class:`SdkIdempotencyStore`

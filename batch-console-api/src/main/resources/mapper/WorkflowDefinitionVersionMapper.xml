@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper">
+<mapper namespace="io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper">
     <resultMap id="WorkflowDefinitionVersionResultMap"
-               type="com.example.batch.console.domain.workflow.entity.WorkflowDefinitionVersionEntity">
+               type="io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionVersionEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="workflow_definition_id" property="workflowDefinitionId"/>

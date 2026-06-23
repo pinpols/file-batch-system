@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.ops.mapper.ResourceQueueMapper">
+<mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper">
     <select id="selectByQuery" resultType="map">
         select
             id,
@@ -31,7 +31,7 @@
             and enabled = #{enabled}
         </if>
         order by id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
 
     <select id="countByQuery" resultType="long">
@@ -64,7 +64,7 @@
         limit 1
     </select>
 
-    <insert id="upsertResourceQueue" parameterType="com.example.batch.console.domain.param.ResourceQueueUpsertParam">
+    <insert id="upsertResourceQueue" parameterType="io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,
             max_running_jobs, max_running_partitions, max_qps,

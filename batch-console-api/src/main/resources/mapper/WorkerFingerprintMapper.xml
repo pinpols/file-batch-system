@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.ops.mapper.WorkerFingerprintMapper">
+<mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.WorkerFingerprintMapper">
 
     <resultMap id="WorkerFingerprintResultMap"
-               type="com.example.batch.console.domain.ops.entity.WorkerFingerprintRow">
+               type="io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintRow">
         <id     column="id"             property="id"/>
         <result column="tenant_id"      property="tenantId"/>
         <result column="worker_code"    property="workerCode"/>
@@ -15,7 +15,7 @@
     </resultMap>
 
     <resultMap id="WorkerFingerprintSummaryResultMap"
-               type="com.example.batch.console.domain.ops.entity.WorkerFingerprintSummaryRow">
+               type="io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintSummaryRow">
         <result column="build_id"    property="buildId"/>
         <result column="sdk_version" property="sdkVersion"/>
         <result column="count"       property="count"/>

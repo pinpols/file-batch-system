@@ -253,7 +253,7 @@ V62 migration 由本会话之前的另一过程创建（未 commit），部分 s
 
 - `import DateTimeException` 缺包名 → `import java.time.DateTimeException`
 - multi-catch `ZoneRulesException | DateTimeException` 子类重复 → 改用单 catch `DateTimeException`
-- `DefaultResourceScheduler` 缺 `import com.example.batch.common.utils.Texts`
+- `DefaultResourceScheduler` 缺 `import io.github.pinpols.batch.common.utils.Texts`
 
 ---
 

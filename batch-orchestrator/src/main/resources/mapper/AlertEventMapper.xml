@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.AlertEventMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper">
 
-    <insert id="insertOrMerge" parameterType="com.example.batch.common.persistence.entity.AlertEventEntity">
+    <insert id="insertOrMerge" parameterType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
         insert into batch.alert_event (
             tenant_id,
             service_name,
@@ -33,7 +33,7 @@
             updated_at = current_timestamp
     </insert>
 
-    <select id="selectByQuery" resultType="com.example.batch.common.persistence.entity.AlertEventEntity">
+    <select id="selectByQuery" resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
         select *
         from batch.alert_event
         where tenant_id = #{tenantId}
@@ -51,7 +51,7 @@
     </select>
 
     <select id="selectOverdueForEscalation"
-            resultType="com.example.batch.common.persistence.entity.AlertEventEntity">
+            resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
         select *
         from batch.alert_event
         where status = 'OPEN'

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayInstanceMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper">
     <!--
       BatchDayInstanceEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
@@ -10,7 +10,7 @@
       列名按 V32 + V62 DDL。
     -->
     <resultMap id="batchDayInstanceMap"
-               type="com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -37,7 +37,7 @@
     </resultMap>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity">
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity">
         insert into batch.batch_day_instance (
             tenant_id, calendar_code, biz_date, day_status,
             open_at, cutoff_at, settled_at, sla_deadline_at,
@@ -97,7 +97,7 @@
     </insert>
 
     <update id="updateWithCas"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity">
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity">
         update batch.batch_day_instance
            set day_status         = #{dayStatus},
                open_at             = #{openAt},

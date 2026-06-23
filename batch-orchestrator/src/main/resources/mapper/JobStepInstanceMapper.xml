@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.JobStepInstanceMapper">
-    <resultMap id="JobStepInstanceResultMap" type="com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper">
+    <resultMap id="JobStepInstanceResultMap" type="io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_instance_id" property="jobInstanceId"/>
@@ -24,7 +24,7 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity"
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_step_instance (
             tenant_id,

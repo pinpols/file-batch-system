@@ -17,7 +17,7 @@
             </encoder>
         </appender>
 
-        <logger name="com.example.batch.console.domain.observability.web.ConsoleTelemetryController"
+        <logger name="io.github.pinpols.batch.console.domain.observability.web.ConsoleTelemetryController"
                 level="INFO" additivity="false">
             <appender-ref ref="FRONTEND_FILE"/>
         </logger>
@@ -38,7 +38,7 @@
             </encoder>
         </appender>
 
-        <logger name="com.example.batch.console.domain.observability.web.ConsoleTelemetryController"
+        <logger name="io.github.pinpols.batch.console.domain.observability.web.ConsoleTelemetryController"
                 level="INFO" additivity="false">
             <appender-ref ref="FRONTEND_FILE"/>
         </logger>
@@ -46,7 +46,7 @@
 
     <!-- 测试环境（test / e2e profile）：前端遥测日志退化到控制台，不写文件 -->
     <springProfile name="test,e2e">
-        <logger name="com.example.batch.console.domain.observability.web.ConsoleTelemetryController"
+        <logger name="io.github.pinpols.batch.console.domain.observability.web.ConsoleTelemetryController"
                 level="INFO" additivity="false">
             <appender-ref ref="CONSOLE"/>
         </logger>

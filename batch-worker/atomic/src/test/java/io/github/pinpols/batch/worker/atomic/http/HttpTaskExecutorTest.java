@@ -1,0 +1,541 @@
+package io.github.pinpols.batch.worker.atomic.http;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.sun.net.httpserver.HttpServer;
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
+import io.github.pinpols.batch.common.spi.task.TaskContext;
+import io.github.pinpols.batch.common.spi.task.TaskResult;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+/** {@link HttpTaskExecutor} 单测 — validation / 黑白名单 / 真实 HTTP server(JDK {@link HttpServer})。 */
+class HttpTaskExecutorTest {
+
+  private HttpExecutorProperties props;
+  private HttpTaskExecutor executor;
+  private HttpServer server;
+  private int serverPort;
+
+  @BeforeEach
+  void setUp() throws Exception {
+    props = new HttpExecutorProperties();
+    props.setEnabled(true);
+    props.setDefaultTimeout(Duration.ofSeconds(3));
+    // 测试要打到 localhost:<port>,默认 blockedHostPatterns 含 localhost / 127.* → 覆盖为空
+    props.setBlockedHostPatterns(Set.of());
+    // 本类测 HTTP 机制(打 127.0.0.1 mock),非 SSRF 策略;关 blockPrivateIps,SSRF 策略另见
+    // HttpTaskExecutorIpBlockTest
+    props.setBlockPrivateIps(false);
+    executor = new HttpTaskExecutor(props);
+
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    serverPort = server.getAddress().getPort();
+    server.start();
+  }
+
+  @AfterEach
+  void tearDown() {
+    if (server != null) {
+      server.stop(0);
+    }
+  }
+
+  private TaskContext ctxWithParams(Map<String, Object> params) {
+    return new TaskContext("t1", "job-1", "ti-1", "w-1", params, Map.of());
+  }
+
+  private String url(String path) {
+    return "http://127.0.0.1:" + serverPort + path;
+  }
+
+  // ─── Validation ──────────────────────────────────────────────────────────────
+
+  @Nested
+  class Validation {
+
+    @Test
+    void rejectsMissingUrl() {
+      TaskResult r = executor.execute(ctxWithParams(Map.of()));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("parameters.url required");
+    }
+
+    @Test
+    void rejectsInvalidUrl() {
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", "not a uri @@@")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("not a valid URI");
+    }
+
+    @Test
+    void rejectsUrlWithoutHost() {
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", "file:///etc/passwd")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("URL must have host");
+    }
+
+    @Test
+    void rejectsMethodNotInWhitelist() {
+      props.setAllowedMethods(Set.of("GET"));
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(Map.of("url", "http://api.example.com", "method", "DELETE")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("not in allowedMethods");
+    }
+
+    @Test
+    void rejectsBadExpectStatusType() {
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of("url", "http://api.example.com", "expectStatus", "not-a-number")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("expectStatus must be Integer or List");
+    }
+
+    @Test
+    void rejectsBadAuthType() {
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of("url", "http://api.example.com", "auth", Map.of("type", "oauth"))));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("not in allowedAuthTypes");
+    }
+
+    @Test
+    void rejectsBearerWithoutToken() {
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of("url", "http://api.example.com", "auth", Map.of("type", "bearer"))));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("auth.token required");
+    }
+
+    @Test
+    void rejectsSensitiveCredentialInParameters_LaneC() {
+      // 顶层 password 字段(非 auth 协议)直接拒
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(Map.of("url", "http://api.example.com", "myPassword", "leak")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("SENSITIVE_DATA_IN_PARAMETERS");
+    }
+
+    @Test
+    void allowsAuthSubtreeAsHttpProtocol_LaneC() {
+      // auth.password / auth.token 是 HTTP executor 显式协议,允许通过 Lane C 闸门(继续按 protocol 走)
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of(
+                      "url",
+                      "http://api.example.com",
+                      "auth",
+                      Map.of("type", "bearer", "token", "tk"))));
+      // 这里不要求成功(URL 是假的会走真实请求),只要 Lane C 不拦即可:错误信息不含 SENSITIVE
+      assertThat(r.message()).doesNotContain("SENSITIVE_DATA_IN_PARAMETERS");
+    }
+  }
+
+  // ─── Host black/whitelist ───────────────────────────────────────────────────
+
+  @Nested
+  class HostFiltering {
+
+    @Test
+    void blocksMetadataServiceByDefault() {
+      props.setBlockedHostPatterns(Set.of("169.254.169.254", "metadata.google.internal"));
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(Map.of("url", "http://169.254.169.254/latest/meta-data/")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("host blocked");
+    }
+
+    @Test
+    void blocksLocalhostByDefault() {
+      props.setBlockedHostPatterns(Set.of("localhost", "127.*"));
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", "http://localhost:9999/foo")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("host blocked");
+    }
+
+    @Test
+    void whitelistRejectsNonMatch() {
+      props.setAllowedHostPatterns(Set.of("*.example.com"));
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", "http://api.evil.com/x")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("not in allowedHostPatterns");
+    }
+
+    @Test
+    void whitelistAllowsMatch() {
+      // 不发真请求,host 校验过 → 后面真请求会因找不到 host fail,但不是 validation fail
+      props.setAllowedHostPatterns(Set.of("*.unreachable.test"));
+      // 用很短超时避免长时间 hang
+      props.setDefaultTimeout(Duration.ofMillis(100));
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("url", "http://foo.unreachable.test/x")));
+      // 校验通过 → 真请求失败 → 错误不含 "not in allowedHostPatterns"
+      assertThat(r.message()).doesNotContain("not in allowedHostPatterns");
+    }
+
+    @Test
+    void blockedTakesPriorityOverAllowed() {
+      props.setAllowedHostPatterns(Set.of("*"));
+      props.setBlockedHostPatterns(Set.of("evil.com"));
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", "http://evil.com/x")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("host blocked");
+    }
+  }
+
+  // ─── Glob matching ─────────────────────────────────────────────────────────
+
+  @Nested
+  class GlobMatch {
+
+    @Test
+    void starMatchesNonDotSegment() {
+      assertThat(HttpTaskExecutor.matchesGlob("api.*.com", "api.foo.com")).isTrue();
+      assertThat(HttpTaskExecutor.matchesGlob("api.*.com", "api.foo.bar.com")).isFalse();
+    }
+
+    @Test
+    void plainHostMatches() {
+      assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.com")).isTrue();
+      assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.org")).isFalse();
+    }
+
+    @Test
+    void starPrefix() {
+      assertThat(HttpTaskExecutor.matchesGlob("*.example.com", "foo.example.com")).isTrue();
+      assertThat(HttpTaskExecutor.matchesGlob("*.example.com", "example.com")).isFalse();
+    }
+  }
+
+  // ─── Capability ─────────────────────────────────────────────────────────────
+
+  @Test
+  void capabilityReflectsConfig() {
+    assertThat(executor.taskType()).isEqualTo("http");
+    assertThat(executor.capability().resourceKinds()).containsExactly(ResourceKind.NET);
+    assertThat(executor.capability().idempotent()).isFalse();
+  }
+
+  // ─── Real HTTP ──────────────────────────────────────────────────────────────
+
+  @Nested
+  class RealHttp {
+
+    @Test
+    void getSuccess() {
+      server.createContext(
+          "/hello",
+          ex -> {
+            byte[] body = "world".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+          });
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/hello"))));
+
+      assertThat(r.success()).isTrue();
+      assertThat(r.output()).containsEntry("statusCode", 200);
+      assertThat(r.output().get("responseBody")).isEqualTo("world");
+    }
+
+    @Test
+    void postWithBody() {
+      AtomicInteger received = new AtomicInteger();
+      server.createContext(
+          "/echo",
+          ex -> {
+            byte[] body = ex.getRequestBody().readAllBytes();
+            received.set(body.length);
+            ex.sendResponseHeaders(201, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+          });
+
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of(
+                      "url",
+                      url("/echo"),
+                      "method",
+                      "POST",
+                      "body",
+                      "{\"foo\":\"bar\"}",
+                      "expectStatus",
+                      201)));
+
+      assertThat(r.success()).isTrue();
+      assertThat(r.output()).containsEntry("statusCode", 201);
+      assertThat(received.get()).isEqualTo(13);
+    }
+
+    @Test
+    void expectStatusMismatchFails() {
+      server.createContext(
+          "/notfound",
+          ex -> {
+            ex.sendResponseHeaders(404, -1);
+            ex.close();
+          });
+
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("url", url("/notfound"), "expectStatus", 200)));
+
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("status 404 not in expected");
+    }
+
+    @Test
+    void basicAuthHeaderInjected() {
+      AtomicInteger gotAuth = new AtomicInteger();
+      server.createContext(
+          "/auth",
+          ex -> {
+            String h = ex.getRequestHeaders().getFirst("Authorization");
+            if (h != null && h.startsWith("Basic ")) gotAuth.incrementAndGet();
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
+          });
+
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of(
+                      "url",
+                      url("/auth"),
+                      "auth",
+                      Map.of("type", "basic", "username", "u", "password", "p"))));
+
+      assertThat(r.success()).isTrue();
+      assertThat(gotAuth.get()).isEqualTo(1);
+    }
+
+    @Test
+    void bearerAuthHeaderInjected() {
+      AtomicInteger gotBearer = new AtomicInteger();
+      server.createContext(
+          "/bearer",
+          ex -> {
+            String h = ex.getRequestHeaders().getFirst("Authorization");
+            if ("Bearer xyz".equals(h)) gotBearer.incrementAndGet();
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
+          });
+
+      executor.execute(
+          ctxWithParams(
+              Map.of("url", url("/bearer"), "auth", Map.of("type", "bearer", "token", "xyz"))));
+
+      assertThat(gotBearer.get()).isEqualTo(1);
+    }
+
+    @Test
+    void truncatesLargeResponse() {
+      props.setMaxResponseBytes(10);
+      server.createContext(
+          "/big",
+          ex -> {
+            byte[] body = new byte[1000];
+            java.util.Arrays.fill(body, (byte) 'X');
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+          });
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/big"))));
+
+      assertThat(r.success()).isTrue();
+      assertThat(((String) r.output().get("responseBody")).length()).isEqualTo(10);
+      assertThat(r.output()).containsEntry("responseTruncated", true);
+    }
+
+    @Test
+    void retriesIdempotentOn5xx() {
+      props.setMaxRetries(2);
+      props.setRetryBackoff(Duration.ofMillis(10));
+      AtomicInteger calls = new AtomicInteger();
+      server.createContext(
+          "/flaky",
+          ex -> {
+            int n = calls.incrementAndGet();
+            if (n < 3) {
+              ex.sendResponseHeaders(503, -1);
+            } else {
+              byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+              ex.sendResponseHeaders(200, body.length);
+              ex.getResponseBody().write(body);
+            }
+            ex.close();
+          });
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/flaky"))));
+
+      assertThat(r.success()).isTrue();
+      assertThat(r.output()).containsEntry("attempts", 3);
+      assertThat(calls.get()).isEqualTo(3);
+    }
+
+    @Test
+    void doesNotRetryNonIdempotentOn5xx() {
+      props.setMaxRetries(2);
+      AtomicInteger calls = new AtomicInteger();
+      server.createContext(
+          "/post-fail",
+          ex -> {
+            calls.incrementAndGet();
+            ex.sendResponseHeaders(503, -1);
+            ex.close();
+          });
+
+      executor.execute(ctxWithParams(Map.of("url", url("/post-fail"), "method", "POST")));
+
+      // POST 不重试,只 1 次
+      assertThat(calls.get()).isEqualTo(1);
+    }
+
+    @Test
+    void getExhaustsAllRetriesAndFailMessageContainsAttemptCount() {
+      // GET 幂等:连接持续失败(I/O 异常)→ 用尽 maxRetries+1 次,fail message 含次数。
+      // 用一个保留为不可路由的端口(server 已起但 path 未注册不会触发 I/O 失败,故指向已关端口)。
+      props.setMaxRetries(2);
+      props.setRetryBackoff(Duration.ofMillis(5));
+      props.setDefaultTimeout(Duration.ofMillis(200));
+      // 把 server 停掉,使每次连接都被拒(ConnectException)。
+      server.stop(0);
+      server = null;
+
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("url", "http://127.0.0.1:" + serverPort + "/x")));
+
+      assertThat(r.success()).isFalse();
+      // maxRetries=2 → 首次 + 2 次重试 = 3 次尝试,fail message 报次数。
+      assertThat(r.message()).contains("http failed after 3 attempts");
+    }
+
+    @Test
+    void doesNotFollowRedirectToInternalHost() {
+      // SSRF 加固:服务端 301 指向内网/metadata,执行器禁止跟随 → 直接拿到 30x,不打内网。
+      server.createContext(
+          "/redirect",
+          ex -> {
+            ex.getResponseHeaders().add("Location", "http://169.254.169.254/latest/meta-data/");
+            ex.sendResponseHeaders(301, -1);
+            ex.close();
+          });
+
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("url", url("/redirect"), "expectStatus", 301)));
+
+      // followRedirects=NEVER:返回 301 本身(未跟随到内网);expectStatus=301 命中 → 不跟随得证。
+      assertThat(r.success()).isTrue();
+      assertThat(r.output()).containsEntry("statusCode", 301);
+    }
+  }
+
+  // ─── P2-3: 响应头脱敏 ─────────────────────────────────────────────────────────
+
+  @Nested
+  class ResponseHeaderRedaction {
+
+    @Test
+    void redactsSetCookieAndAuthorizationHeadersInOutput() {
+      // P2-3(2026-06-03):出口响应若回声 Set-Cookie / Authorization,落 task_result.output
+      // 会形成 forensic 期间凭据泄漏。executor 在写 output 前先按固定黑名单脱敏(case-insensitive)。
+      server.createContext(
+          "/echo",
+          ex -> {
+            ex.getResponseHeaders().add("Set-Cookie", "SESSION=secret-value; HttpOnly");
+            ex.getResponseHeaders().add("Authorization", "Bearer downstream-token");
+            ex.getResponseHeaders().add("X-Trace-Id", "trace-123");
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
+          });
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/echo"))));
+
+      assertThat(r.success()).isTrue();
+      @SuppressWarnings("unchecked")
+      Map<String, java.util.List<String>> hdrs =
+          (Map<String, java.util.List<String>>) r.output().get("responseHeaders");
+      // Set-Cookie / Authorization 必须被脱敏(任何大小写形态都不应残留原值)
+      hdrs.forEach(
+          (name, values) -> {
+            String lower = name.toLowerCase(Locale.ROOT);
+            if (lower.equals("set-cookie") || lower.equals("authorization")) {
+              assertThat(values).containsExactly("[REDACTED]");
+            }
+          });
+      // 非敏感头透传(用于业务可观测性)
+      boolean traceFound =
+          hdrs.entrySet().stream().anyMatch(e -> e.getKey().equalsIgnoreCase("X-Trace-Id"));
+      assertThat(traceFound).isTrue();
+    }
+
+    @Test
+    void sanitizeHelperRedactsKnownSensitiveHeadersCaseInsensitive() {
+      // 直接驱动静态 helper,避免 HTTP server 编排成本;case-insensitive 全覆盖。
+      Map<String, java.util.List<String>> in = new java.util.LinkedHashMap<>();
+      in.put("Set-Cookie", java.util.List.of("s=1"));
+      in.put("set-cookie2", java.util.List.of("legacy"));
+      in.put("AUTHORIZATION", java.util.List.of("Bearer abc"));
+      in.put("Proxy-Authorization", java.util.List.of("Basic xx"));
+      in.put("cookie", java.util.List.of("a=b"));
+      in.put("X-Trace-Id", java.util.List.of("t1"));
+
+      Map<String, java.util.List<String>> out = HttpTaskExecutor.sanitizeResponseHeaders(in);
+
+      assertThat(out)
+          .containsEntry("Set-Cookie", java.util.List.of("[REDACTED]"))
+          .containsEntry("set-cookie2", java.util.List.of("[REDACTED]"))
+          .containsEntry("AUTHORIZATION", java.util.List.of("[REDACTED]"))
+          .containsEntry("Proxy-Authorization", java.util.List.of("[REDACTED]"))
+          .containsEntry("cookie", java.util.List.of("[REDACTED]"))
+          .containsEntry("X-Trace-Id", java.util.List.of("t1"));
+    }
+
+    @Test
+    void sanitizeHelperHandlesNullAndEmpty() {
+      assertThat(HttpTaskExecutor.sanitizeResponseHeaders(null)).isEmpty();
+      assertThat(HttpTaskExecutor.sanitizeResponseHeaders(Map.of())).isEmpty();
+    }
+  }
+
+  // ─── enforce allowlist (deny-all) ────────────────────────────────────────────
+
+  @Nested
+  class EnforceAllowlist {
+
+    @Test
+    void emptyAllowlistDeniesAllWhenEnforced() {
+      // enforceAllowlist=true + 空 allowedHostPatterns → fail-closed 拒绝全部。
+      props.setEnforceAllowlist(true);
+      props.setAllowedHostPatterns(Set.of());
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/anything"))));
+
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("deny all");
+    }
+  }
+}

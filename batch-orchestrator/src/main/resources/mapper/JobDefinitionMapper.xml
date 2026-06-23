@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.JobDefinitionMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper">
     <!--
       JobDefinitionEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
@@ -13,7 +13,7 @@
       param_schema / default_params 是 JSONB；读路径通过 ::text 转字符串再走 MapJsonbTypeHandler。
     -->
     <resultMap id="jobDefinitionMap"
-               type="com.example.batch.orchestrator.domain.entity.JobDefinitionEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -37,11 +37,11 @@
             <arg column="execution_handler" javaType="java.lang.String"/>
             <arg column="param_schema_text"
                  javaType="java.util.Map"
-                 typeHandler="com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler"/>
+                 typeHandler="io.github.pinpols.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler"/>
             <arg column="priority" javaType="java.lang.Integer"/>
             <arg column="default_params_text"
                  javaType="java.util.Map"
-                 typeHandler="com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler"/>
+                 typeHandler="io.github.pinpols.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler"/>
             <arg column="version" javaType="java.lang.Integer"/>
             <arg column="enabled" javaType="java.lang.Boolean"/>
             <arg column="description" javaType="java.lang.String"/>

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.DataQualityRuleMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper">
 
     <resultMap id="DqRuleResultMap"
-               type="com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="rule_code" property="ruleCode"/>
@@ -31,7 +31,7 @@
         select * from batch.data_quality_rule where id = #{id}
     </select>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity"
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.data_quality_rule (
             tenant_id, rule_code, rule_name, rule_type, scope_business_key,
@@ -51,7 +51,7 @@
         )
     </insert>
 
-    <update id="update" parameterType="com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity">
+    <update id="update" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity">
         update batch.data_quality_rule
            set rule_name = #{ruleName},
                rule_type = #{ruleType},

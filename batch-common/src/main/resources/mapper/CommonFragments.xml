@@ -7,7 +7,7 @@
     用法:
         <select id="..." parameterType="...">
             select ... from ...
-            <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
         </select>
 
     设计取舍:
@@ -15,7 +15,7 @@
     - 21 个 mapper.xml 原本每个写 5 行 offset bind,改 1 行 include,减少 80+ LOC 重复
     - cursor 分页另起 fragment(ADR-031 阶段 1 落地)
 -->
-<mapper namespace="com.example.batch.common.mapper.CommonFragments">
+<mapper namespace="io.github.pinpols.batch.common.mapper.CommonFragments">
 
     <!--
         Offset 分页公共片段。约束:

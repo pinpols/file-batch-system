@@ -21,7 +21,7 @@ Maven:
 
 ```xml
 <dependency>
-  <groupId>com.example.batch</groupId>
+  <groupId>io.github.pinpols.batch</groupId>
   <artifactId>batch-worker-sdk</artifactId>
   <version>1.1.0</version>
 </dependency>

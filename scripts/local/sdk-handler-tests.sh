@@ -35,7 +35,7 @@ SDK_DIR="${ROOT_DIR}/sdk"
 # ── env 提取(可覆盖)────────────────────────────────────────────────────────
 : "${MVN:=mvn}"
 : "${JAVA_SDK_MODULE:=sdk/java/core}"
-: "${JAVA_TEST_FILTER:=com.example.batch.sdk.handler.**}"
+: "${JAVA_TEST_FILTER:=io.github.pinpols.batch.sdk.handler.**}"
 : "${PY_SDK_DIR:=${SDK_DIR}/python}"
 : "${PY_TEST_PATH:=tests/handler}"
 if [[ -z "${JAVA_HOME:-}" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then

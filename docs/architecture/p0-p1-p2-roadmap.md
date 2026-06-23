@@ -34,7 +34,7 @@ public record TaskContext(
 
 #### 2. 注册机制
 
-- `META-INF/services/com.example.batch.spi.BatchTaskExecutor` 标准 ServiceLoader
+- `META-INF/services/io.github.pinpols.batch.spi.BatchTaskExecutor` 标准 ServiceLoader
 - 启动期 `TaskExecutorRegistry` 扫描所有实现 → `Map<String, BatchTaskExecutor>`
 - 重复 taskType 启动期 fail-fast
 

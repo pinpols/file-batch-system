@@ -26,7 +26,7 @@
         -Dusers.peak=50
         -Dduration.seconds=180
     -->
-    <groupId>com.example.batch</groupId>
+    <groupId>io.github.pinpols.batch</groupId>
     <artifactId>batch-load-tests</artifactId>
     <!-- 独立模块（未在根 reactor 中），无法继承根 pom 的 ${revision}；用字面量，与根版本手工保持同步。
          release 时同步规则见 docs/runbook/releasing.md §release-bump-checklist。 -->

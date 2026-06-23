@@ -8,7 +8,7 @@
 
 ## 1. 已暴露的 4 个 micrometer 指标
 
-batch-trigger 在 2026-04-25 加入了观测埋点（`com.example.batch.trigger.observability`）：
+batch-trigger 在 2026-04-25 加入了观测埋点（`io.github.pinpols.batch.trigger.observability`）：
 
 | 指标 | 类型 | 说明 | 拐点信号 |
 |---|---|---|---|

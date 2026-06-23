@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayOperationAuditMapper">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.BatchDayOperationAuditMapper">
 
     <resultMap id="BatchDayOperationAuditMap"
-               type="com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -36,7 +36,7 @@
          (freeze/release/skip/reopen/close)整体 500。调用方 BatchDayOperationService#insertOperationAudit
          也不使用返回的自增 id,直接插入即可。 -->
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity">
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity">
         insert into batch.batch_day_operation_audit (
             tenant_id, calendar_code, biz_date, operation_type,
             from_status, to_status, from_frozen, to_frozen,

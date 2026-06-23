@@ -11,7 +11,7 @@ core SDK 继续保持 Spring-free。
 
    ```xml
    <dependency>
-     <groupId>com.example.batch</groupId>
+     <groupId>io.github.pinpols.batch</groupId>
      <artifactId>batch-worker-sdk-spring-boot-starter</artifactId>
      <version>1.1.0</version>
    </dependency>

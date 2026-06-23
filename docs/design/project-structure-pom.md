@@ -845,7 +845,7 @@ spring:
         <relativePath/>
     </parent>
 
-    <groupId>com.example.batch</groupId>
+    <groupId>io.github.pinpols.batch</groupId>
     <artifactId>batch-platform</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
@@ -934,7 +934,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -972,7 +972,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -981,7 +981,7 @@ spring:
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -1042,7 +1042,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -1051,7 +1051,7 @@ spring:
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -1130,7 +1130,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -1139,7 +1139,7 @@ spring:
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -1182,7 +1182,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -1191,7 +1191,7 @@ spring:
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-core</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -1252,7 +1252,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -1261,7 +1261,7 @@ spring:
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-core</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -1314,7 +1314,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -1323,7 +1323,7 @@ spring:
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-core</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -1378,7 +1378,7 @@ spring:
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -1387,12 +1387,12 @@ spring:
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-orchestrator</artifactId>
             <version>${project.version}</version>
         </dependency>

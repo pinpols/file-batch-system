@@ -1,0 +1,21 @@
+package io.github.pinpols.batch.console.domain.ops.mapper;
+
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.console.domain.ops.query.OutboxRetryLogQuery;
+import java.util.List;
+import java.util.Map;
+import org.apache.ibatis.annotations.Param;
+
+public interface OutboxRetryLogMapper {
+
+  List<Map<String, Object>> selectByQuery(OutboxRetryLogQuery query);
+
+  long countByQuery(
+      @Param("tenantId") String tenantId,
+      @Param("retryStatus") String retryStatus,
+      @Param("eventKey") String eventKey,
+      @Param("pageRequest") PageRequest pageRequest);
+
+  long countByStatuses(
+      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+}

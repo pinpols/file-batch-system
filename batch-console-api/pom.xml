@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.example.batch</groupId>
+        <groupId>io.github.pinpols.batch</groupId>
         <artifactId>batch-platform</artifactId>
         <version>${revision}</version>
     </parent>
@@ -14,12 +14,12 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
             <classifier>tests</classifier>
@@ -197,7 +197,7 @@
              与 ConsoleAtomicTaskTypeSchemaService.CATALOG 做集合对账,防 schema 漂移。
              仅 test scope,不进运行时(console-api 主代码不依赖 worker-atomic,见 ADR-029)。 -->
         <dependency>
-            <groupId>com.example.batch</groupId>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-atomic</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

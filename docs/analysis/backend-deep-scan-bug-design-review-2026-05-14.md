@@ -140,7 +140,7 @@ Orchestrator 的 `/internal/**` 会在非 bypass 模式校验 `X-Internal-Secret
 
 - `batch-common/src/main/java/org/springframework/boot/autoconfigure/web/client/RestClientAutoConfiguration.java:1`
 
-建议：迁移到 `com.example.batch.common.config` 并通过 auto-configuration imports 注册。
+建议：迁移到 `io.github.pinpols.batch.common.config` 并通过 auto-configuration imports 注册。
 
 ## 验证记录
 

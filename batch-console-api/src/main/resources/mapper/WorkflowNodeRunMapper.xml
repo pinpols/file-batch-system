@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.workflow.mapper.WorkflowNodeRunMapper">
-    <resultMap id="WorkflowNodeRunResultMap" type="com.example.batch.console.domain.workflow.entity.WorkflowNodeRunEntity">
+<mapper namespace="io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeRunMapper">
+    <resultMap id="WorkflowNodeRunResultMap" type="io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeRunEntity">
         <id column="id" property="id"/>
         <result column="workflow_run_id" property="workflowRunId"/>
         <result column="node_code" property="nodeCode"/>
@@ -45,7 +45,7 @@
             </when>
             <otherwise>
                 order by n.run_seq desc, n.id desc
-                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+                <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </otherwise>
         </choose>
     </select>

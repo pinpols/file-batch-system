@@ -56,7 +56,7 @@
 
 ### 1 处规范硬违规(必修)
 
-- **FQN 违规**:`batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java:260` 出现 `com.example.batch.common.utils.JsonUtils.fromJson(...)`,未走 import,违反 CLAUDE.md "禁止全限定类名"。修复:加 import 后用短名。
+- **FQN 违规**:`batch-worker-core/src/main/java/com/example/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java:260` 出现 `io.github.pinpols.batch.common.utils.JsonUtils.fromJson(...)`,未走 import,违反 CLAUDE.md "禁止全限定类名"。修复:加 import 后用短名。
 
 ### 4 处"重构未走完"的复制粘贴(同源)
 

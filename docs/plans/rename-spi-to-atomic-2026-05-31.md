@@ -9,7 +9,7 @@
 | 维度 | 现在 | 改为 |
 |---|---|---|
 | Maven 模块目录 / artifactId | `batch-worker-spi` | `batch-worker-atomic` |
-| Java 包根 | `com.example.batch.worker.spi.*` | `com.example.batch.worker.atomic.*` |
+| Java 包根 | `io.github.pinpols.batch.worker.spi.*` | `io.github.pinpols.batch.worker.atomic.*` |
 | 配置前缀(身份) | `batch.worker.spi.*` | `batch.worker.atomic.*` |
 | 子执行器前缀 | `batch.worker.executors.*` | **不变** |
 | `JobType` 枚举值 | `SPI` | `ATOMIC` |
@@ -28,7 +28,7 @@
 一个 PR 完成。建议用脚本 + `git mv`,改完 `mvn clean compile` + spotless。
 
 - [ ] **模块**:`git mv batch-worker-spi batch-worker-atomic`;改其 `pom.xml` `<artifactId>`;根 `pom.xml` `<modules>` 条目。
-- [ ] **包目录 + 声明**:`git mv` 包目录 `worker/spi` → `worker/atomic`(main + test);全仓 `sed` `com.example.batch.worker.spi` → `com.example.batch.worker.atomic`(package 声明 + 所有 import)。
+- [ ] **包目录 + 声明**:`git mv` 包目录 `worker/spi` → `worker/atomic`(main + test);全仓 `sed` `io.github.pinpols.batch.worker.spi` → `io.github.pinpols.batch.worker.atomic`(package 声明 + 所有 import)。
 - [ ] **类名**:按总表重命名(`BatchWorkerSpiApplication` 等);注意 `BatchWorkerSpiProperties` 在 **batch-common**,改它影响引用方,一并 sed。
 - [ ] **配置 key**:`application.yml` / `application-local.yml`(worker 模块)+ `application-e2e.yml`(e2e)里 `batch.worker.spi.*` → `batch.worker.atomic.*`;**`batch.worker.executors.*` 不动**。
 - [ ] **CLAUDE.md**:固定 10 模块清单 `batch-worker-spi` → `batch-worker-atomic`;ADR-029 注脚同步。

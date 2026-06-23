@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.job.mapper.PendingCatchUpMapper">
-    <resultMap id="PendingCatchUpResultMap" type="com.example.batch.console.domain.job.entity.PendingCatchUpEntity">
+<mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.PendingCatchUpMapper">
+    <resultMap id="PendingCatchUpResultMap" type="io.github.pinpols.batch.console.domain.job.entity.PendingCatchUpEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="request_id" property="requestId"/>
@@ -64,7 +64,7 @@
                 limit #{pageRequest.pageSize}
             </when>
             <otherwise>
-                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+                <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </otherwise>
         </choose>
     </select>

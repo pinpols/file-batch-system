@@ -1,6 +1,6 @@
 """BatchPlatformClientConfig —— Python (pydantic v2) 移植版本。
 
-字段集合 + 启动期校验完全对齐 Java ``com.example.batch.sdk.client.BatchPlatformClientConfig``。
+字段集合 + 启动期校验完全对齐 Java ``io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig``。
 Java 端用 Lombok ``@Value`` + ``@Builder``;Python 这边用 ``pydantic.BaseModel``
 加 ``model_config = ConfigDict(frozen=True)`` 保留"不可变值对象"语义。
 

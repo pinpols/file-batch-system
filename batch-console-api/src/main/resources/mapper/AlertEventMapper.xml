@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.domain.notification.mapper.AlertEventMapper">
+<mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper">
 
-    <resultMap id="AlertEventResultMap" type="com.example.batch.common.persistence.entity.AlertEventEntity">
+    <resultMap id="AlertEventResultMap" type="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="service_name" property="serviceName"/>
@@ -63,7 +63,7 @@
             </when>
             <otherwise>
                 order by last_seen_at desc
-                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+                <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </otherwise>
         </choose>
     </select>
