@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.Arrays;
@@ -22,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -36,9 +38,12 @@ import org.springframework.stereotype.Service;
  *       secret},构造一个内存版 {@link WebhookSubscriptionEntity},复用 {@link
  *       WebhookDispatcher#attemptDelivery} 的单次投递 + 同款 3 次 burst 退避重试 + DNS rebinding 防护 + HMAC
  *       签名机制。
- *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECOM/SMS):本轮不实现真实投递,但 **显式 {@code log.warn} 跳过** (带
- *       channelCode + channelType),让运维看得到「这类 channel 还没接投递」,绝不静默丢弃。
+ *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECHAT/SLACK/SMS):走可插拔 {@link NotificationSender} SPI,由
+ *       {@link NotificationSenderRegistry} 按 channelType 解析对应实现投递;无匹配 sender(如未接入的渠道)才 **显式 {@code
+ *       log.warn} 跳过**,绝不静默丢弃。
  * </ul>
+ *
+ * <p><b>安全</b>:分发前按渠道 + 按目标(收件人指纹)双层限流防轰炸 + 相同事件去重;第三方渠道 URL 经 {@code DnsResolveGuard} 防 SSRF。
  *
  * <p><b>去重</b>:若旧路({@code webhook_subscription})与本路({@code subscription_rule→WEBHOOK
  * channel})命中同一目标 URL, 两路都会各自投递,**不去重** —— 语义上是两个独立订阅(运维各自配置、各自启停),刻意不合并。
@@ -72,8 +77,19 @@ public class SubscriptionRuleWebhookDispatcher {
   private static final int QUEUE_CAPACITY = 1024;
   private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
 
+  /** 防轰炸:单渠道每分钟最大投递条数(滑窗)。超额丢弃 + 告警,挡住事件风暴/恶意触发把收件人刷爆(尤其 SMS 烧钱、邮件轰炸)。 */
+  private static final int MAX_SENDS_PER_CHANNEL_PER_MINUTE = 120;
+
+  /** 防轰炸(按目标):同一投递目标(url/to/phoneNumbers 指纹)每分钟上限,比按渠道更严——挡多规则/多渠道刷爆同一收件人。 */
+  private static final int MAX_SENDS_PER_DESTINATION_PER_MINUTE = 60;
+
+  /** 去重:相同(渠道+事件+内容)在滑窗内只发一次(limit=1),挡告警风暴重复刷屏。 */
+  private static final int DEDUP_WINDOW_LIMIT = 1;
+
   private final SubscriptionRuleMapper subscriptionRuleMapper;
   private final WebhookDispatcher webhookDispatcher;
+  private final NotificationSenderRegistry senderRegistry;
+  private final SlidingWindowRateLimiter sendRateLimiter;
 
   /**
    * 与 {@link WebhookDispatcher} 同款有界队列 + AbortPolicy:HTTP burst 投递不能跑在 Spring 事件发布线程(可能是请求/事务线程)上,
@@ -162,14 +178,49 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
 
+    // 防轰炸:单渠道每分钟投递上限,超额丢弃 + 告警(webhook 与第三方渠道同样适用)。
+    if (!withinSendRateLimit(channelCode, channelType, eventType)) {
+      return;
+    }
+    // 去重:相同(渠道+事件+内容)在滑窗内只发一次,挡风暴重复刷屏。
+    if (isDuplicateWithinWindow(channelCode, eventType, payloadJson)) {
+      return;
+    }
+    // 防轰炸(按目标):同一收件人(url/to/phoneNumbers)跨规则/渠道的更严上限。
+    if (!withinDestinationRateLimit(rule, channelCode, channelType, eventType)) {
+      return;
+    }
+
     if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
-      // 非 WEBHOOK 渠道本轮不投递,但必须显式告警跳过,绝不静默丢弃。
-      log.warn(
-          "subscription_rule matched but channel type not yet wired for delivery; skipping:"
-              + " channelCode={}, channelType={}, eventType={}",
-          channelCode,
-          channelType,
-          eventType);
+      // 非 WEBHOOK 渠道走可插拔 NotificationSender(DINGTALK/WECHAT/SLACK/EMAIL/...);无对应 sender 才显式告警跳过。
+      NotificationSender sender = senderRegistry.resolve(channelType);
+      if (sender == null) {
+        log.warn(
+            "subscription_rule matched but no sender for channel type; skipping:"
+                + " channelCode={}, channelType={}, eventType={}",
+            channelCode,
+            channelType,
+            eventType);
+        return;
+      }
+      NotificationMessage message =
+          new NotificationMessage(
+              str(rule, "tenant_id"),
+              channelCode,
+              channelType,
+              str(rule, "config_json"),
+              payload,
+              payloadJson);
+      try {
+        executor.submit(() -> deliverViaSenderWithBurstRetry(sender, message, eventType));
+      } catch (RejectedExecutionException ex) {
+        log.warn(
+            "subscription_rule {} dispatch rejected (queue full); dropped: channelCode={},"
+                + " eventType={}",
+            channelType,
+            channelCode,
+            eventType);
+      }
       return;
     }
 
@@ -241,6 +292,129 @@ public class SubscriptionRuleWebhookDispatcher {
             "subscription_rule WEBHOOK delivery exhausted: channelCode={}, attempts={},"
                 + " httpStatus={}, error={}",
             channelCode,
+            MAX_ATTEMPTS,
+            result.httpStatus(),
+            result.errorSummary());
+      }
+    }
+  }
+
+  /**
+   * 防轰炸限流:单渠道每分钟投递上限(滑窗)。超额 → false(丢弃 + 告警)。 Redis 不可达时 fail-open(放行 + 告警),避免把限流可用性故障升级为"漏发真实告警"。
+   */
+  private boolean withinSendRateLimit(String channelCode, String channelType, String eventType) {
+    try {
+      boolean allowed =
+          sendRateLimiter.tryAcquire(
+              "notify:send:" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+      if (!allowed) {
+        log.warn(
+            "notification send rate limit exceeded; dropping to prevent flooding: channelCode={},"
+                + " channelType={}, eventType={}, limitPerMin={}",
+            channelCode,
+            channelType,
+            eventType,
+            MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+      }
+      return allowed;
+    } catch (DataAccessException ex) {
+      log.warn(
+          "notification send rate limiter unavailable — fail-open: channelCode={}, cause={}",
+          channelCode,
+          ex.getMessage());
+      return true;
+    }
+  }
+
+  /**
+   * 去重:相同 (channelCode + eventType + 内容指纹) 在滑窗内出现第二次即视为重复并抑制。 复用滑窗限流器(limit=1):窗内首条放行、其余返回
+   * false。Redis 不可达 fail-open(不误抑制真实告警)。
+   */
+  private boolean isDuplicateWithinWindow(
+      String channelCode, String eventType, String payloadJson) {
+    String fingerprint = Integer.toHexString((payloadJson == null ? "" : payloadJson).hashCode());
+    String key = "notify:dedup:" + channelCode + ":" + eventType + ":" + fingerprint;
+    try {
+      boolean firstInWindow = sendRateLimiter.tryAcquire(key, DEDUP_WINDOW_LIMIT);
+      if (!firstInWindow) {
+        log.info(
+            "notification suppressed as duplicate within window: channelCode={}, eventType={}",
+            channelCode,
+            eventType);
+      }
+      return !firstInWindow;
+    } catch (DataAccessException ex) {
+      return false;
+    }
+  }
+
+  /**
+   * 防轰炸(按目标):对投递目标指纹(url/to/phoneNumbers)限流,比按渠道更严,挡多规则/多渠道刷爆同一收件人。 无法识别目标时跳过本层(按渠道限流已兜底)。Redis 不可达
+   * fail-open。
+   */
+  private boolean withinDestinationRateLimit(
+      Map<String, Object> rule, String channelCode, String channelType, String eventType) {
+    Map<String, Object> config = parseConfig(str(rule, "config_json"));
+    String dest = firstNonBlank(str(config, "url"), str(config, "to"), str(config, "phoneNumbers"));
+    if (dest == null) {
+      return true;
+    }
+    try {
+      boolean allowed =
+          sendRateLimiter.tryAcquire(
+              "notify:dest:" + Integer.toHexString(dest.hashCode()),
+              MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+      if (!allowed) {
+        log.warn(
+            "notification destination rate limit exceeded; dropping: channelCode={},"
+                + " channelType={}, eventType={}, limitPerMin={}",
+            channelCode,
+            channelType,
+            eventType,
+            MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+      }
+      return allowed;
+    } catch (DataAccessException ex) {
+      return true;
+    }
+  }
+
+  private static String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  /** 非 WEBHOOK 渠道经 {@link NotificationSender} 的 burst 重试投递(同 webhook 路径,本路无持久化补偿)。 */
+  private void deliverViaSenderWithBurstRetry(
+      NotificationSender sender, NotificationMessage message, String eventType) {
+    long backoffMillis = BACKOFF_BASE_MILLIS;
+    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      WebhookDeliveryResult result = sender.send(message);
+      if (result.success()) {
+        if (attempt > 1) {
+          log.info(
+              "subscription_rule {} delivered after retry: channelCode={}, attempt={},"
+                  + " eventType={}",
+              message.channelType(),
+              message.channelCode(),
+              attempt,
+              eventType);
+        }
+        return;
+      }
+      if (attempt < MAX_ATTEMPTS) {
+        sleep(backoffMillis);
+        backoffMillis *= 2;
+      } else {
+        log.warn(
+            "subscription_rule {} delivery exhausted: channelCode={}, attempts={}, httpStatus={},"
+                + " error={}",
+            message.channelType(),
+            message.channelCode(),
             MAX_ATTEMPTS,
             result.httpStatus(),
             result.errorSummary());
