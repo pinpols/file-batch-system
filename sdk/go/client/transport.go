@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -220,6 +223,14 @@ type HTTPTransport struct {
 	// retryBaseMs / retryAttempts tune 5xx/transport backoff (0 -> protocol defaults).
 	retryBaseMs   int
 	retryAttempts int
+	// apiKey is the worker's API key. When set it is sent as X-Batch-Api-Key on
+	// every request and used as the HMAC key when requestSigningEnabled is on.
+	apiKey string
+	// requestSigningEnabled gates request signing (方案 A, opt-in, default false).
+	// When on AND apiKey is set, write requests (POST/PUT/PATCH/DELETE) carry the
+	// X-Batch-Timestamp / X-Batch-Nonce / X-Batch-Signature headers. The platform
+	// must have batch.request-signing.enabled set to honor them.
+	requestSigningEnabled bool
 }
 
 // HTTPTransportOption configures an HTTPTransport.
@@ -241,7 +252,25 @@ func WithRetryTuning(baseMs, attempts int) HTTPTransportOption {
 	return func(t *HTTPTransport) { t.retryBaseMs = baseMs; t.retryAttempts = attempts }
 }
 
+// WithAPIKey sets the worker's API key. When set it is sent as X-Batch-Api-Key
+// on every request and used as the HMAC key for request signing.
+func WithAPIKey(apiKey string) HTTPTransportOption {
+	return func(t *HTTPTransport) { t.apiKey = apiKey }
+}
+
+// WithRequestSigning enables request signing (方案 A, opt-in, default off).
+// Signing only takes effect when an API key is also configured. Mirrors the
+// Java SDK's requestSigningEnabled flag.
+func WithRequestSigning(enabled bool) HTTPTransportOption {
+	return func(t *HTTPTransport) { t.requestSigningEnabled = enabled }
+}
+
 // NewHTTPTransport builds an HTTPTransport for the given orchestrator base URL.
+//
+// Env defaults (mirroring the Java SDK's BATCH_SDK_ prefix) are applied first,
+// then overridden by any explicit options:
+//   - BATCH_SDK_API_KEY              -> WithAPIKey
+//   - BATCH_SDK_REQUEST_SIGNING_ENABLED -> WithRequestSigning (false / 0 / no / off => off)
 func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTransport {
 	t := &HTTPTransport{
 		baseURL: baseURL,
@@ -257,21 +286,40 @@ func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTranspor
 		},
 		sleep: time.Sleep,
 	}
+	if v := os.Getenv("BATCH_SDK_API_KEY"); v != "" {
+		t.apiKey = v
+	}
+	if v := strings.TrimSpace(os.Getenv("BATCH_SDK_REQUEST_SIGNING_ENABLED")); v != "" {
+		t.requestSigningEnabled = parseSdkBool(v)
+	}
 	for _, o := range opts {
 		o(t)
 	}
 	return t
 }
 
+// parseSdkBool mirrors the Java SDK's parseBoolean: any value other than the
+// explicit off tokens (false / 0 / no / off, case-insensitive) is true.
+func parseSdkBool(raw string) bool {
+	switch strings.ToLower(raw) {
+	case "false", "0", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
+
 // doJSON performs one request attempt: marshal body, set headers, return the
 // status + raw response bytes. Transport errors return status 0.
 func (t *HTTPTransport) doJSON(ctx context.Context, method, path string, body any, idempotencyKey string) (int, []byte, error) {
 	var reader io.Reader
+	var payload []byte
 	if body != nil {
 		buf, err := json.Marshal(body)
 		if err != nil {
 			return 0, nil, fmt.Errorf("marshal %s: %w", path, err)
 		}
+		payload = buf
 		reader = bytes.NewReader(buf)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, t.baseURL+path, reader)
@@ -284,6 +332,19 @@ func (t *HTTPTransport) doJSON(ctx context.Context, method, path string, body an
 	req.Header.Set("Accept", "application/json")
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	if t.apiKey != "" {
+		req.Header.Set("X-Batch-Api-Key", t.apiKey)
+		// 请求签名(方案 A, opt-in):仅对写请求(POST/PUT/PATCH/DELETE)且开关开启
+		// 且有 api_key 时附加。timestamp/nonce/signature 与服务端逐字节一致。
+		if t.requestSigningEnabled && isWriteMethod(method) {
+			timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+			nonce := newNonce()
+			sig := signRequest(t.apiKey, method, path, timestamp, nonce, payload)
+			req.Header.Set(HeaderSignatureTimestamp, timestamp)
+			req.Header.Set(HeaderSignatureNonce, nonce)
+			req.Header.Set(HeaderSignature, sig)
+		}
 	}
 	resp, err := t.httpClient.Do(req)
 	if err != nil {

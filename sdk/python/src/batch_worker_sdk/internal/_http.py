@@ -32,12 +32,15 @@ SDK 仅支持 async(详见 ``sdk-python/README.md`` Roadmap)。
 
 from __future__ import annotations
 
+import time
+import uuid
 from types import TracebackType
 from typing import Any
 
 import httpx
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.internal import _signing
 from batch_worker_sdk.retry._retry import ClientErrorCounter, with_retry
 
 
@@ -207,6 +210,25 @@ class PlatformHttpClient:
             h["Idempotency-Key"] = idempotency_key
         return h
 
+    def _signing_headers(self, method: str, path: str, body_bytes: bytes) -> dict[str, str]:
+        """请求签名头(方案 A,opt-in)。
+
+        仅当 ``request_signing_enabled`` 开启**且**配置了 ``api_key`` 时附加
+        ``X-Batch-Timestamp / X-Batch-Nonce / X-Batch-Signature`` —— 算法与服务端 /
+        Java SDK 逐字节一致(见 internal/_signing.py)。timestamp 为 epoch 毫秒字符串,
+        nonce 为随机 uuid4,签名覆盖请求**原始 body bytes**(空 body 也算 sha256)。
+        """
+        if not (self.config.request_signing_enabled and self.config.api_key):
+            return {}
+        timestamp = str(int(time.time() * 1000))
+        nonce = str(uuid.uuid4())
+        signature = _signing.sign(self.config.api_key, method, path, timestamp, nonce, body_bytes)
+        return {
+            "X-Batch-Timestamp": timestamp,
+            "X-Batch-Nonce": nonce,
+            "X-Batch-Signature": signature,
+        }
+
     async def _post_json_raw(
         self,
         path: str,
@@ -218,7 +240,13 @@ class PlatformHttpClient:
         headers = self._headers(idempotency_key)
 
         async def factory() -> httpx.Response:
-            return await self._client.post(path, json=body or {}, headers=headers)
+            # 先构建请求拿到将要发送的**原始 body bytes**,再按需附加签名头 ——
+            # 保证签名覆盖的字节与实际发送的字节完全一致(序列化由 httpx 负责)。
+            request = self._client.build_request("POST", path, json=body or {}, headers=headers)
+            sig = self._signing_headers("POST", path, request.content)
+            if sig:
+                request.headers.update(sig)
+            return await self._client.send(request)
 
         # max_attempts=None → 默认重试预算;heartbeat/renew 传 1 走 §C no-backoff 豁免。
         attempts = max_attempts if max_attempts is not None else self.config.retry_max_attempts
