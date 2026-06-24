@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -85,6 +86,17 @@ class SelfHostedSliderVerifierTest {
     assertThat(verifier.verify("noColon", "ip").success()).isFalse();
     assertThat(verifier.verify("cid:", "ip").success()).isFalse();
     assertThat(verifier.verify("cid:abc", "ip").success()).isFalse();
+  }
+
+  @Test
+  @DisplayName("越界 position(含 Integer 极值)→ 失败,且不消费挑战(防 tainted 算术溢出)")
+  void outOfRangePosition_failsWithoutConsuming() {
+    // 超大 / 负值 / Integer 极值都应在算术前被设界拦下;此时不应触达 challengeStore（strict mock 不 stub consume）
+    assertThat(verifier.verify("cid:99999", "1.2.3.4").success()).isFalse();
+    assertThat(verifier.verify("cid:-1", "1.2.3.4").success()).isFalse();
+    assertThat(verifier.verify("cid:2147483647", "1.2.3.4").success()).isFalse();
+    assertThat(verifier.verify("cid:-2147483648", "1.2.3.4").reason()).contains("range");
+    verifyNoInteractions(challengeStore);
   }
 
   @Test

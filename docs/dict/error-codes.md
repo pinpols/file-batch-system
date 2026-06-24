@@ -2,7 +2,7 @@
 
 > **自动生成** — 由 `scripts/codegen/gen-error-codes-dict.py` 从 `batch-common/.../enums/ResultCode.java` 解析。**不要手动编辑此文件**；改错误码请改枚举源文件，重跑脚本。
 
-共 15 条。HTTP 状态码遵循 RFC 7231。
+共 16 条。HTTP 状态码遵循 RFC 7231。
 
 | code | HTTP | 中文 label | 默认 message | 触发说明 |
 |---|---|---|---|---|
@@ -16,6 +16,7 @@
 | `UNAUTHORIZED` | 401 | 未授权 | unauthorized | — |
 | `FORBIDDEN` | 403 | 禁止访问 | forbidden | — |
 | `RATE_LIMITED` | 429 | 请求过于频繁 | too many requests | — |
+| `CAPTCHA_REQUIRED` | 401 | 需要人机验证 | captcha verification required | FE 据该 code 弹验证码组件,过验证码后带 captchaToken 重试登录。 |
 | `BUSINESS_ERROR` | 422 | 业务错误 | business error | — |
 | `TENANT_SUSPENDED` | 422 | 租户已暂停 | tenant is suspended | 字符串匹配。租户被运维 / 计费侧暂停后，调度路径需识别该语义并暂停对应 Quartz job 防止日志风暴。 |
 | `NOT_IMPLEMENTED` | 501 | 未实现 | not implemented | — |

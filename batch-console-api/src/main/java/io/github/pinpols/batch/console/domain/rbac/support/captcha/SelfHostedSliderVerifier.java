@@ -27,6 +27,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SelfHostedSliderVerifier implements CaptchaVerifier {
 
+  /** 滑块位置(像素)合法上界;远大于任何前端滑块图宽,越界即视为伪造,同时杜绝整数溢出。 */
+  private static final int MAX_SLIDER_POSITION_PX = 10_000;
+
   private final CaptchaChallengeStore challengeStore;
   private final CaptchaProperties properties;
   private final BatchDateTimeSupport dateTimeSupport;
@@ -46,6 +49,11 @@ public class SelfHostedSliderVerifier implements CaptchaVerifier {
       position = Integer.parseInt(token.substring(sep + 1).trim());
     } catch (NumberFormatException ex) {
       return CaptchaResult.fail("non-numeric position");
+    }
+    // 用户可控的 position 先设界:滑块缺口落在合法像素范围内,越界直接判失败。
+    // 既挡住伪造,也避免下方 `position - gap` / Math.abs 在极值(如 Integer.MIN_VALUE)下整数溢出。
+    if (position < 0 || position > MAX_SLIDER_POSITION_PX) {
+      return CaptchaResult.fail("position out of range");
     }
 
     Optional<CaptchaChallengeStore.Consumed> consumed = challengeStore.consume(challengeId);

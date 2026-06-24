@@ -44,8 +44,8 @@ public class LoginProtectionService {
       boolean provided = captchaToken != null && !captchaToken.isBlank();
       log.warn(
           "login captcha required: user={} ip={} failures={} provider={} provided={} reason={}",
-          username,
-          clientIp,
+          sanitizeForLog(username),
+          sanitizeForLog(clientIp),
           failures,
           captchaVerifier.provider(),
           provided,
@@ -87,5 +87,14 @@ public class LoginProtectionService {
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  /** 净化用户可控值后再进日志:去除 CR/LF 防日志注入(伪造日志行),并截断防超长。 null 归一为 {@code "null"} 字面量。 */
+  private static String sanitizeForLog(String value) {
+    if (value == null) {
+      return "null";
+    }
+    String cleaned = value.replaceAll("[\\r\\n]", "_");
+    return cleaned.length() > 200 ? cleaned.substring(0, 200) + "…" : cleaned;
   }
 }
