@@ -86,7 +86,7 @@ public final class Guard {
       case NOT_FOUND -> "error.common.not_found_detail";
       case CONFLICT -> "error.common.conflict_detail";
       case STATE_CONFLICT -> "error.common.state_conflict_detail";
-      case UNAUTHORIZED -> "error.common.unauthorized_detail";
+      case UNAUTHORIZED, CAPTCHA_REQUIRED -> "error.common.unauthorized_detail";
       case FORBIDDEN -> "error.common.forbidden_detail";
       case RATE_LIMITED -> "error.common.rate_limited_detail";
       case BUSINESS_ERROR -> "error.common.business_error_detail";

@@ -88,6 +88,10 @@ public class ConsoleAuthController {
       if (decoded == null) {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
       }
+      // captchaToken 非机密、不进加密块,从外层请求带过来(解密后的 body 不含它)。
+      if (decoded.getCaptchaToken() == null) {
+        decoded.setCaptchaToken(request.getCaptchaToken());
+      }
       return decoded;
     }
     if (required) {
