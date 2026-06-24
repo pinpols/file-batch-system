@@ -35,6 +35,13 @@ import org.springframework.stereotype.Component;
 public class ApiKeyVerifier {
 
   public static final String SCOPE_WORKER_EXECUTE = "worker.execute";
+
+  /**
+   * 只读 scope:允许查询类(GET)端点,但不允许 claim/report/register 等会改状态的写操作。 {@code worker.execute}
+   * 是其超集(可写者必可读),故读端点接受二者之一。用于给监控 / 第三方集成发"只读 key"。
+   */
+  public static final String SCOPE_WORKER_READ = "worker.read";
+
   public static final String SCOPE_WILDCARD = "*";
 
   /** 明文 key 前 8 位用作索引前缀(与 console-api ConsoleApiKeyService.create 同步)。 */
@@ -87,6 +94,27 @@ public class ApiKeyVerifier {
   public Optional<ApiKeyEntity> verifyWithScope(
       String rawKey, String claimedTenantId, String requiredScope) {
     return verify(rawKey, claimedTenantId).filter(rec -> scopesAllow(rec.scopes(), requiredScope));
+  }
+
+  /**
+   * 同 {@link #verifyWithScope} 但 key 命中 {@code acceptedScopes} 中**任一**(或 {@code "*"} 通配)即放行。 读端点用
+   * {@code (SCOPE_WORKER_READ, SCOPE_WORKER_EXECUTE)} 表达"读 key 或写 key 都可读"。
+   *
+   * @return 命中且 scope 通过的 {@link ApiKeyEntity};否则空
+   */
+  public Optional<ApiKeyEntity> verifyWithAnyScope(
+      String rawKey, String claimedTenantId, String... acceptedScopes) {
+    return verify(rawKey, claimedTenantId)
+        .filter(rec -> scopesAllowAny(rec.scopes(), acceptedScopes));
+  }
+
+  /** scopes 命中 {@code acceptedScopes} 任一即真;空 accepted 视为不限制(真)。 */
+  static boolean scopesAllowAny(String scopesField, String... acceptedScopes) {
+    if (acceptedScopes == null || acceptedScopes.length == 0) return true;
+    for (String accepted : acceptedScopes) {
+      if (scopesAllow(scopesField, accepted)) return true;
+    }
+    return false;
   }
 
   /** scopes 字符串解析:逗号/空格 split,trim,去空;{@code "*"} 通配。 */

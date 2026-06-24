@@ -10,6 +10,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -98,11 +99,30 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       }
     }
 
+    // ── 4. 文件操作接口（下载/错误导出/归档/重派/到达组）：用户限流（任意方法，高水位）──────────
+    if (matchesAnyPrefix(path, properties.getFileOpPathPrefixes())) {
+      String username = resolveUsername();
+      if (Texts.hasText(username)) {
+        String key = "fileop:user:" + username;
+        if (!tryAcquireFailOpen(
+            key, properties.getFileOpUserLimitPerMinute(), "fileop", username)) {
+          log.warn("文件操作限流触发：user={} path={}", username, path);
+          responseWriter.write(
+              response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
+          return;
+        }
+      }
+    }
+
     filterChain.doFilter(request, response);
   }
 
   private boolean isExpensivePath(String path) {
-    for (String prefix : properties.getExpensiveOpPathPrefixes()) {
+    return matchesAnyPrefix(path, properties.getExpensiveOpPathPrefixes());
+  }
+
+  private static boolean matchesAnyPrefix(String path, List<String> prefixes) {
+    for (String prefix : prefixes) {
       if (path.startsWith(prefix)) {
         return true;
       }

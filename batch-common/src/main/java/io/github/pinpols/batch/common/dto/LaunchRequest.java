@@ -21,7 +21,7 @@ import lombok.Builder;
  *
  * <p>两个字段允许为 null (向后兼容: V94 之前的 trigger 不算 interval, instance 落 null, worker 业务用 bizDate 回退).
  */
-@Builder
+@Builder(toBuilder = true)
 public record LaunchRequest(
     String tenantId,
     String jobCode,
