@@ -237,6 +237,55 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
+  @DisplayName("register: 缺 workerGroup → 400 校验拒(不落库,杜绝 NOT NULL 撞 500 刷日志)")
+  void registerMissingWorkerGroupRejected() {
+    WorkerHeartbeatDto noGroup =
+        new WorkerHeartbeatDto(
+            "ta",
+            "w1",
+            null,
+            WorkerRegistryStatus.ONLINE.code(),
+            "host",
+            "1.2.3.4",
+            "pid",
+            "build-1",
+            "sdk-1",
+            Instant.now(),
+            List.of(),
+            1,
+            null,
+            null,
+            null,
+            null);
+    WorkerHeartbeatDto blankGroup =
+        new WorkerHeartbeatDto(
+            "ta",
+            "w1",
+            "  ",
+            WorkerRegistryStatus.ONLINE.code(),
+            "host",
+            "1.2.3.4",
+            "pid",
+            "build-1",
+            "sdk-1",
+            Instant.now(),
+            List.of(),
+            1,
+            null,
+            null,
+            null,
+            null);
+
+    assertThatThrownBy(() -> service.register(noGroup))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("missing_worker_group");
+    assertThatThrownBy(() -> service.register(blankGroup))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("missing_worker_group");
+    verify(mapper, never()).insert(any());
+  }
+
+  @Test
   @DisplayName("register: 支持的 protocolVersion(v2)→ 正常注册")
   void registerSupportedProtocolVersionAccepted() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
