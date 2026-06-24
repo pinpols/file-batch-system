@@ -16,6 +16,7 @@
  */
 
 import http from "node:http";
+import { randomUUID } from "node:crypto";
 import {
   classifyHttp,
   DEFAULT_RETRY_BASE_MS,
@@ -26,6 +27,10 @@ import type {
   HeartbeatResponse,
   RenewResponse,
 } from "../protocol.ts";
+import { signatureHeaders } from "./signing.ts";
+
+/** HTTP methods that carry a request body and are signed when signing is opt-in. */
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /** Effective task config returned by claim. */
 export interface ClaimResponse {
@@ -109,6 +114,23 @@ export interface HttpTransportOptions {
   sleep?: (ms: number) => Promise<void>;
   /** static headers, e.g. auth token from env */
   headers?: Record<string, string>;
+  /**
+   * Tenant API key (HMAC key for request signing + sent as `X-Batch-Api-Key`).
+   * Optional; when absent, request signing is skipped even if enabled below.
+   */
+  apiKey?: string | null;
+  /**
+   * Request signing (scheme A, opt-in). When `true` AND `apiKey` is present,
+   * every write request (POST/PUT/PATCH/DELETE) carries the three
+   * `X-Batch-{Timestamp,Nonce,Signature}` headers. Defaults to `false` — the
+   * server check is OFF by default and must be enabled in lock-step. Mirrors the
+   * Java SDK `requestSigningEnabled` / env `BATCH_SDK_REQUEST_SIGNING_ENABLED`.
+   */
+  requestSigningEnabled?: boolean;
+  /** injectable clock for signing timestamp (epoch ms); tests pin it. */
+  now?: () => number;
+  /** injectable nonce generator for signing; tests pin it. */
+  nonceGen?: () => string;
 }
 
 interface RawResponse {
@@ -128,6 +150,10 @@ export class HttpTransport implements Transport {
   #retryMaxAttempts: number;
   #sleep: (ms: number) => Promise<void>;
   #headers: Record<string, string>;
+  #apiKey: string | null;
+  #requestSigningEnabled: boolean;
+  #now: () => number;
+  #nonceGen: () => string;
   #agent: http.Agent;
   /** running count of non-auth 4xx for the fail-fast threshold (§B). */
   #clientErrorCount = 0;
@@ -141,6 +167,10 @@ export class HttpTransport implements Transport {
     this.#retryMaxAttempts = opts.retryMaxAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS;
     this.#sleep = opts.sleep ?? realSleep;
     this.#headers = opts.headers ?? {};
+    this.#apiKey = opts.apiKey ?? null;
+    this.#requestSigningEnabled = opts.requestSigningEnabled ?? false;
+    this.#now = opts.now ?? Date.now;
+    this.#nonceGen = opts.nonceGen ?? randomUUID;
     // keep-alive agent — §1.1: avoid per-call TCP+TLS handshake.
     this.#agent = new http.Agent({ keepAlive: true, maxSockets: 16 });
   }
@@ -148,6 +178,31 @@ export class HttpTransport implements Transport {
   /** Tear down pooled sockets (call on worker stop). */
   close(): void {
     this.#agent.destroy();
+  }
+
+  /**
+   * Auth + signature headers for a single request: always sends the api-key
+   * header when configured; additionally attaches the HMAC signature triplet
+   * for write methods when request signing is opted in AND an api_key exists.
+   * Signs the exact bytes sent (UTF-8 of the JSON payload, empty string for an
+   * empty body) over the request path actually placed on the wire.
+   */
+  #authHeaders(
+    method: string,
+    path: string,
+    payload: string,
+  ): Record<string, string> {
+    if (this.#apiKey == null || this.#apiKey === "") {
+      return {};
+    }
+    const headers: Record<string, string> = { "X-Batch-Api-Key": this.#apiKey };
+    if (this.#requestSigningEnabled && WRITE_METHODS.has(method.toUpperCase())) {
+      Object.assign(
+        headers,
+        signatureHeaders(this.#apiKey, method, path, payload, this.#now, this.#nonceGen),
+      );
+    }
+    return headers;
   }
 
   // --- low-level single HTTP request with timeout -------------------------
@@ -159,17 +214,19 @@ export class HttpTransport implements Transport {
   ): Promise<RawResponse> {
     return new Promise<RawResponse>((resolve) => {
       const url = new URL(path, this.#baseUrl);
+      const method = "POST";
       const payload = body === undefined ? "" : JSON.stringify(body);
       const ac = new AbortController();
       const req = http.request(
         url,
         {
-          method: "POST",
+          method,
           agent: this.#agent,
           signal: ac.signal,
           headers: {
             "content-type": "application/json",
             "content-length": Buffer.byteLength(payload),
+            ...this.#authHeaders(method, url.pathname, payload),
             ...this.#headers,
             ...extraHeaders,
           },

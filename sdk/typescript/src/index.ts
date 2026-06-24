@@ -15,6 +15,7 @@ export * from "./decide.ts";
 
 // Phase 2 — runtime engine
 export * from "./client/transport.ts";
+export * from "./client/signing.ts";
 export * from "./client/scheduler.ts";
 export * from "./client/lifecycle.ts";
 export * from "./client/consumer.ts";

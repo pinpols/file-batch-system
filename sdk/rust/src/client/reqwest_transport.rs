@@ -47,6 +47,10 @@ use crate::constants::SUPPORTED_SCHEMA_VERSIONS;
 const HEADER_TENANT_ID: &str = "x-batch-tenant-id";
 const HEADER_API_KEY: &str = "x-batch-api-key";
 const HEADER_IDEMPOTENCY_KEY: &str = "idempotency-key";
+// Request-signing headers (scheme A, opt-in), identical to the Java SDK.
+const HEADER_TIMESTAMP: &str = "x-batch-timestamp";
+const HEADER_NONCE: &str = "x-batch-nonce";
+const HEADER_SIGNATURE: &str = "x-batch-signature";
 
 /// Construction-time configuration for [`ReqwestTransport`].
 ///
@@ -67,6 +71,15 @@ pub struct ReqwestConfig {
     pub connect_timeout_ms: u64,
     /// Per-request read timeout in milliseconds (§1.1: keep < heartbeat/3).
     pub read_timeout_ms: u64,
+    /// Request signing (scheme A, opt-in). When `true` **and** an api key is
+    /// configured, every write request carries `X-Batch-Timestamp` /
+    /// `X-Batch-Nonce` / `X-Batch-Signature` (HMAC over the canonical string,
+    /// see [`crate::client::signing`]). Defaults to `false` so the SDK can be
+    /// rolled out before the server flips `batch.request-signing.enabled=true`.
+    /// Mirrors the Java SDK `requestSigningEnabled` /
+    /// env `BATCH_SDK_REQUEST_SIGNING_ENABLED`. With no api key, signing is a
+    /// no-op even when enabled (there is no HMAC key).
+    pub request_signing_enabled: bool,
 }
 
 impl ReqwestConfig {
@@ -78,12 +91,34 @@ impl ReqwestConfig {
             api_key: None,
             connect_timeout_ms: 5_000,
             read_timeout_ms: 10_000,
+            request_signing_enabled: false,
         }
     }
 
     /// Set the api key (`X-Batch-Api-Key`).
     pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
         self.api_key = Some(api_key.into());
+        self
+    }
+
+    /// Enable/disable opt-in request signing (scheme A). Effective only when an
+    /// api key is also configured. Mirrors Java `requestSigningEnabled`.
+    pub fn with_request_signing(mut self, enabled: bool) -> Self {
+        self.request_signing_enabled = enabled;
+        self
+    }
+
+    /// Apply the `BATCH_SDK_REQUEST_SIGNING_ENABLED` environment override, when
+    /// set to a truthy value (`true`/`1`/`yes`/`on`, case-insensitive). A blank
+    /// or unset variable leaves the current value untouched. Mirrors the Java
+    /// SDK env key so the same deployment knob works across languages.
+    pub fn with_request_signing_from_env(mut self) -> Self {
+        if let Ok(raw) = std::env::var("BATCH_SDK_REQUEST_SIGNING_ENABLED") {
+            let v = raw.trim().to_ascii_lowercase();
+            if !v.is_empty() {
+                self.request_signing_enabled = matches!(v.as_str(), "true" | "1" | "yes" | "on");
+            }
+        }
         self
     }
 
@@ -107,6 +142,7 @@ pub struct ReqwestTransport {
     base_url: String,
     tenant_id: String,
     api_key: Option<String>,
+    request_signing_enabled: bool,
 }
 
 /// Construction error for [`ReqwestTransport::new`] — only the one-time client
@@ -157,6 +193,7 @@ impl ReqwestTransport {
             base_url: config.base_url.trim_end_matches('/').to_string(),
             tenant_id: config.tenant_id,
             api_key: config.api_key.filter(|k| !k.is_empty()),
+            request_signing_enabled: config.request_signing_enabled,
         })
     }
 
@@ -190,6 +227,32 @@ impl ReqwestTransport {
                     req = req.header(HeaderName::from_static(HEADER_IDEMPOTENCY_KEY), value);
                 }
                 Err(_) => return HttpResponse::transport_error(),
+            }
+        }
+
+        // Request signing (scheme A, opt-in): only when enabled AND an api key
+        // is configured (the api key is the HMAC secret). Every transport op is
+        // a POST write, so the canonical method is always "POST". A malformed
+        // header value (cannot happen for our hex/uuid/decimal values) degrades
+        // to transport_error rather than sending an unsigned write that the
+        // server would reject.
+        if self.request_signing_enabled {
+            if let Some(key) = self.api_key.as_deref() {
+                let timestamp = current_epoch_millis().to_string();
+                let nonce = new_nonce();
+                let signature =
+                    super::signing::sign(key, "POST", path, &timestamp, &nonce, body.as_bytes());
+                let headers = [
+                    (HEADER_TIMESTAMP, timestamp.as_str()),
+                    (HEADER_NONCE, nonce.as_str()),
+                    (HEADER_SIGNATURE, signature.as_str()),
+                ];
+                for (name, value) in headers {
+                    match HeaderValue::from_str(value) {
+                        Ok(v) => req = req.header(HeaderName::from_static(name), v),
+                        Err(_) => return HttpResponse::transport_error(),
+                    }
+                }
             }
         }
 
@@ -239,6 +302,25 @@ fn new_idempotency_key() -> String {
         &hex[16..20],
         &hex[20..32],
     )
+}
+
+/// Epoch milliseconds for the `X-Batch-Timestamp` signing header.
+fn current_epoch_millis() -> u128 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
+/// One-shot signing nonce (uuid-shaped, std-only). Replay protection needs
+/// uniqueness, not crypto-strength — the HMAC binds the nonce. Reuses the
+/// idempotency-key generator's entropy, dropping the `rs-` prefix.
+fn new_nonce() -> String {
+    new_idempotency_key()
+        .strip_prefix("rs-")
+        .map(str::to_owned)
+        .unwrap_or_else(new_idempotency_key)
 }
 
 /// The SDK's current wire-protocol major — the last entry of

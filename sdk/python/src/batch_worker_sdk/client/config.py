@@ -67,6 +67,15 @@ class BatchPlatformClientConfig(BaseModel):
     build_id: str | None = None
     sdk_version: str = __version__
 
+    # ─── 请求签名(方案 A,opt-in) ────────────────────────────────────
+    # 开启后,写请求(POST/PUT/PATCH/DELETE)附带 ``X-Batch-Timestamp /
+    # X-Batch-Nonce / X-Batch-Signature``,以 ``api_key`` 为 HMAC 密钥(见
+    # internal/_signing.py)。须服务端 ``batch.request-signing.enabled=true``
+    # 配合;灰度时先升级 SDK 再开服务端开关。``api_key`` 为空时即便开启也不签
+    # (无密钥)。对齐 Java ``requestSigningEnabled`` /
+    # env ``BATCH_SDK_REQUEST_SIGNING_ENABLED``。
+    request_signing_enabled: bool = False
+
     http_timeout: timedelta = timedelta(seconds=10)
     heartbeat_interval: timedelta = timedelta(seconds=30)
     lease_renew_interval: timedelta = timedelta(seconds=60)
@@ -242,6 +251,17 @@ class BatchPlatformClientConfig(BaseModel):
         v_ms = getter(prefix + "RETRY_BASE_DELAY_MS")
         if v_ms is not None and v_ms.strip():
             kwargs["retry_base_delay"] = timedelta(milliseconds=int(v_ms.strip()))
+
+        # 请求签名开关(opt-in)。显式 ``true / 1 / yes / on``(忽略大小写)→ True;
+        # 其余(含未设置)保持默认 False。对齐 Java BATCH_SDK_REQUEST_SIGNING_ENABLED。
+        v_sign = getter(prefix + "REQUEST_SIGNING_ENABLED")
+        if v_sign is not None and v_sign.strip():
+            kwargs["request_signing_enabled"] = v_sign.strip().lower() in (
+                "true",
+                "1",
+                "yes",
+                "on",
+            )
 
         return cls(**kwargs)
 
