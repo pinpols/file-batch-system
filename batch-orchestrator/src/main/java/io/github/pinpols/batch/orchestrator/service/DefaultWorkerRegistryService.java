@@ -62,6 +62,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   @Override
   @Transactional
   public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
+    rejectMissingWorkerGroup(request);
     rejectUnsupportedProtocolVersion(request);
     rejectOutdatedSdkVersion(request);
     WorkerRegistryEntity registry =
@@ -140,6 +141,18 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     if (current >= max) {
       throw BizException.of(
           ResultCode.VALIDATION_ERROR, "error.worker.too_many_workers", current, max);
+    }
+  }
+
+  /**
+   * worker_group 是 {@code worker_registry} 的 NOT NULL 列、且是 SDK 自托管 worker 的选取键(ADR-035 §2)。
+   * 缺失时**入口早拒为 400**,而不是让 null 落库撞 NOT NULL 约束抛 500 —— 后者会让漏发该字段的客户端拿到 500 后无限重试、把 orchestrator
+   * 日志刷爆(契约:客户端入参缺失应 4xx 非 5xx)。heartbeat 对未注册 worker 会降级走 register,故本校验同时覆盖两条路径。
+   */
+  private void rejectMissingWorkerGroup(WorkerHeartbeatDto request) {
+    String workerGroup = request == null ? null : request.workerGroup();
+    if (workerGroup == null || workerGroup.isBlank()) {
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.worker.missing_worker_group");
     }
   }
 
