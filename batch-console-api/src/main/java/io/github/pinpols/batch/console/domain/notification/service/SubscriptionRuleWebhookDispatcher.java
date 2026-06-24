@@ -38,9 +38,12 @@ import org.springframework.stereotype.Service;
  *       secret},构造一个内存版 {@link WebhookSubscriptionEntity},复用 {@link
  *       WebhookDispatcher#attemptDelivery} 的单次投递 + 同款 3 次 burst 退避重试 + DNS rebinding 防护 + HMAC
  *       签名机制。
- *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECOM/SMS):本轮不实现真实投递,但 **显式 {@code log.warn} 跳过** (带
- *       channelCode + channelType),让运维看得到「这类 channel 还没接投递」,绝不静默丢弃。
+ *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECHAT/SLACK/SMS):走可插拔 {@link NotificationSender} SPI,由
+ *       {@link NotificationSenderRegistry} 按 channelType 解析对应实现投递;无匹配 sender(如未接入的渠道)才 **显式 {@code
+ *       log.warn} 跳过**,绝不静默丢弃。
  * </ul>
+ *
+ * <p><b>安全</b>:分发前按渠道 + 按目标(收件人指纹)双层限流防轰炸 + 相同事件去重;第三方渠道 URL 经 {@code DnsResolveGuard} 防 SSRF。
  *
  * <p><b>去重</b>:若旧路({@code webhook_subscription})与本路({@code subscription_rule→WEBHOOK
  * channel})命中同一目标 URL, 两路都会各自投递,**不去重** —— 语义上是两个独立订阅(运维各自配置、各自启停),刻意不合并。
