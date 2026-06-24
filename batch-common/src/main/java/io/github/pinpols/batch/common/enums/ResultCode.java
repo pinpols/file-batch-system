@@ -18,6 +18,9 @@ public enum ResultCode implements DictEnum {
   UNAUTHORIZED("UNAUTHORIZED", "未授权", "unauthorized", 401),
   FORBIDDEN("FORBIDDEN", "禁止访问", "forbidden", 403),
   RATE_LIMITED("RATE_LIMITED", "请求过于频繁", "too many requests", 429),
+  // 登录风控:失败次数达阈值后要求人机验证(验证码),不锁账号——规避 account-lockout DoS。
+  // FE 据该 code 弹验证码组件,过验证码后带 captchaToken 重试登录。
+  CAPTCHA_REQUIRED("CAPTCHA_REQUIRED", "需要人机验证", "captcha verification required", 401),
   BUSINESS_ERROR("BUSINESS_ERROR", "业务错误", "business error", 422),
   // R-arch-audit-2026-05-23 P1: 替代 QuartzLaunchJob 中 e.getMessage().contains("tenant is suspended")
   // 字符串匹配。租户被运维 / 计费侧暂停后，调度路径需识别该语义并暂停对应 Quartz job 防止日志风暴。

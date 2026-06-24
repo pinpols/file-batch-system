@@ -9,27 +9,28 @@ import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthToken
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class ConsoleLoginServiceTest {
 
-  private ConsoleLoginService loginService;
-  private ConsoleSessionRegistry sessionRegistry;
-  private ConsoleJwtService jwtService;
-  private ConsoleUserAccountServiceSupport userAccountService;
-  private ConsolePasswordHasher passwordHasher;
+  @Mock private ConsoleSessionRegistry sessionRegistry;
+  @Mock private ConsoleJwtService jwtService;
+  @Mock private ConsoleUserAccountServiceSupport userAccountService;
+  @Mock private ConsolePasswordHasher passwordHasher;
+  // 默认 mock:登录防护方法均 void/no-op,等效总开关关 → 既有用例行为不变。
+  @Mock private LoginProtectionService loginProtectionService;
 
-  @BeforeEach
-  void setUp() {
-    sessionRegistry = Mockito.mock(ConsoleSessionRegistry.class);
-    jwtService = Mockito.mock(ConsoleJwtService.class);
-    userAccountService = Mockito.mock(ConsoleUserAccountServiceSupport.class);
-    passwordHasher = Mockito.mock(ConsolePasswordHasher.class);
-    loginService =
-        new ConsoleLoginService(jwtService, sessionRegistry, userAccountService, passwordHasher);
-  }
+  @Mock
+  private io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver
+      requestMetadataResolver;
+
+  @InjectMocks private ConsoleLoginService loginService;
 
   @Test
   void shouldIssueJwtForSeededUser() {

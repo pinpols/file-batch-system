@@ -31,9 +31,10 @@
 四层纵深,**第 1 层已有**,本方案补 2/3/4。所有新机制走**总开关 + 默认 off**(opt-in,不破坏现状)。
 
 ### 4.1 账号 + IP 失败退避(补"分布式低速撞库")
-- 失败计数:**仅密码错时**对 `login:fail:account:<user>` 和 `login:fail:ip:<ip>` 各 +1(复用 Redis;成功登录**立即清零**该账号计数)。
+- 失败计数:**仅密码错时**对 `login:fail:account:<user>` 和 `login:fail:ip:<ip>` 各 +1(Redis ZSET 滑动窗口,`LoginFailureTracker`;成功登录**立即清零**该账号计数,IP 计数保留——IP 是共享资源)。
 - **渐进退避**:登录失败响应人为延迟 `200ms × 失败数`,**封顶 2s**。拖慢自动化吞吐,真实用户几乎无感(连错才递增)。
 - 计数窗口:15 分钟滚动。
+- **IP 维度取值** = `RemoteAddr`(与 `ConsoleJwtService` ipHash 同源,防 XFF 伪造)。**已知局限**:应用挂在共享反代/NAT 后时,所有用户共用反代 IP → IP 维度会聚合(阈值易被整体流量触发,真实客户端 IP 在 `X-Forwarded-For`)。此时**账号维度是主防线**;部署在共享出口后应调高/关掉 IP 维度阈值,或在反代层按真实 IP 限流。默认 off 让运维按拓扑调参后再开。
 
 ### 4.2 risk-based 验证码触发 —— **不硬锁,免疫 lockout DoS**
 - **关键设计**:达阈值**不锁账号**,而是"**该登录要求验证码**"。
@@ -75,7 +76,7 @@ batch.console.captcha:
   1. **能外联第三方** → **腾讯天御 / 阿里云验证码**(国内可达好、无感+滑块、厂商风控)。国内服务**按量计费但有免费额度**;console 登录是 risk-based 低频(内部运维用户),量极小,**成本≈0(大概率免费额度内)**。
   2. **Cloudflare Turnstile** 完全免费但**国内可达性不稳**,国内部署不推荐。
   3. **合规/网络禁外联** → 自建滑块 + 后端轨迹/时序校验(弱一档,~1-2 周工时 + 需持续维护;定位是"抬门槛"非"真壁垒",配合 IP 限流 + 失败退避做纵深)。
-- **通用框架让选型不阻塞**:先实现 `selfhosted`(保底,不外联) + `tencent`,上线时按环境配 `provider`。
+- **通用框架让选型不阻塞**:v1 实装 `none`(默认,等效旁路) + `selfhosted`(保底,不外联、可本地跑可测);`tencent`/`aliyun` 是**冻结的"加一个实现类"扩展点**——SPI(`CaptchaVerifier`)+ 配置(`provider` + 密钥块)已就位,接入只需新增一个实现类 + 配 `provider=tencent`,**不动既有代码**。未先实装第三方是因其需真实账号密钥 + 外联才能联调/测,留到具备条件时按 SPI 补即可,不阻塞 v1 上线。
 
 ## 6. DDoS 边界(独立线,本文不重复)
 
@@ -85,7 +86,7 @@ batch.console.captcha:
 
 ## 7. 落地范围
 
-- **后端(本仓 batch-console-api)**:失败计数 + 退避 + risk-based 触发 + `CaptchaVerifier` SPI(`none`/`selfhosted`/`tencent`)+ `/captcha/config` 端点 + 配置 + 测试。复用现成 `SlidingWindowRateLimiter` / `ConsoleRateLimitFilter` 基础设施。
+- **后端(本仓 batch-console-api)** —— **本次已落地**:`LoginFailureTracker`(失败计数 + 退避)+ `LoginProtectionService`(risk-based 触发、不锁账号)+ `CaptchaVerifier` SPI(实装 `none`/`selfhosted`,`tencent`/`aliyun` 扩展点)+ `ConsoleCaptchaController`(`/captcha/config` + `/captcha/challenge`)+ `LoginProtectionProperties`/`CaptchaProperties` 配置 + `ResultCode.CAPTCHA_REQUIRED` + 单测。集成进 `ConsoleLoginService`(密码校验前 captcha 关、失败后记数退避、成功清零)。
 - **前端(batch-console 仓)**:按 `/captcha/config` 动态渲染 widget(自建滑块组件 / 天御 SDK)。后端出接口契约。
 - **默认全关**(`login-protection.enabled=false` + `captcha.provider=none`),逐环境开启,对现有部署零影响。
 
