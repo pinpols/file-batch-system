@@ -1,7 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
+import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import java.time.Clock;
+import java.util.Map;
+import java.util.function.ToLongFunction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +25,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantActionRateLimiter {
 
+  // 规则 #9:action→配额解析改路由表(避免 if-chain)。未登记 action 走 getOrDefault → 0 → 由底层放行。
+  private static final Map<RateLimitAction, ToLongFunction<RateLimitProperties>> LIMIT_RESOLVERS =
+      Map.of(
+          RateLimitAction.LAUNCH, RateLimitProperties::getMaxNewRequestsPerTenantPerMinute,
+          RateLimitAction.DISPATCH_RELEASE,
+              RateLimitProperties::getMaxReleaseRequestsPerTenantPerMinute,
+          RateLimitAction.WORKER_REGISTER,
+              RateLimitProperties::getMaxRegisterRequestsPerTenantPerMinute,
+          RateLimitAction.TASK_CLAIM, RateLimitProperties::getMaxClaimRequestsPerTenantPerMinute,
+          RateLimitAction.TASK_REPORT, RateLimitProperties::getMaxReportRequestsPerTenantPerMinute);
+
   private final BatchOrchestratorGovernanceProperties governance;
   private final TokenBucketRateLimiter limiter;
   private final Clock clock;
@@ -33,16 +47,8 @@ public class TenantActionRateLimiter {
     if (tenantId == null || tenantId.isBlank()) {
       return true;
     }
-    long max;
-    if (action == RateLimitAction.LAUNCH) {
-      max = governance.rateLimit().getMaxNewRequestsPerTenantPerMinute();
-    } else if (action == RateLimitAction.DISPATCH_RELEASE) {
-      max = governance.rateLimit().getMaxReleaseRequestsPerTenantPerMinute();
-    } else if (action == RateLimitAction.WORKER_REGISTER) {
-      max = governance.rateLimit().getMaxRegisterRequestsPerTenantPerMinute();
-    } else {
-      max = 0;
-    }
+    long max =
+        LIMIT_RESOLVERS.getOrDefault(action, props -> 0L).applyAsLong(governance.rateLimit());
     return limiter.tryConsume(tenantId, action.name(), max, clock.millis());
   }
 }
