@@ -29,6 +29,13 @@ public class ConsoleLoginRequest {
   private String iv;
   private String ciphertext;
 
+  /**
+   * 验证码凭据(risk-based,非必填)。失败计数达阈值后登录需带此字段。<b>非机密</b>,始终走 body 顶层明文(不进加密块);加密路径下 Controller
+   * 会从外层请求把它带到解密后的请求上。形态见 {@code CaptchaVerifier}(self-hosted 为 {@code challengeId:position};第三方为其
+   * ticket/randstr)。
+   */
+  private String captchaToken;
+
   /** 当前 body 是否为加密形态。 */
   public boolean isEncrypted() {
     return encryptedKey != null && !encryptedKey.isBlank();

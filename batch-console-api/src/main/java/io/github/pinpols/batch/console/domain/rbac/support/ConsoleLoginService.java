@@ -5,7 +5,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashSet;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,33 +31,45 @@ public class ConsoleLoginService {
   private final ConsoleSessionRegistry sessionRegistry;
   private final ConsoleUserAccountServiceSupport userAccountService;
   private final ConsolePasswordHasher passwordHasher;
+  private final LoginProtectionService loginProtectionService;
+  private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   public ConsoleLoginService(
       ConsoleJwtService jwtService,
       ConsoleSessionRegistry sessionRegistry,
       ConsoleUserAccountServiceSupport userAccountService,
-      ConsolePasswordHasher passwordHasher) {
+      ConsolePasswordHasher passwordHasher,
+      LoginProtectionService loginProtectionService,
+      ConsoleRequestMetadataResolver requestMetadataResolver) {
     this.jwtService = jwtService;
     this.sessionRegistry = sessionRegistry;
     this.userAccountService = userAccountService;
     this.passwordHasher = passwordHasher;
+    this.loginProtectionService = loginProtectionService;
+    this.requestMetadataResolver = requestMetadataResolver;
   }
 
   public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
     Guard.require(request != null, "login request is required");
     Guard.requireText(request.getUsername(), "username is required");
     Guard.requireText(request.getPassword(), "password is required");
+    String username = request.getUsername();
+    String clientIp = resolveClientIp();
+    // 风控第一关:失败计数达阈值则要求验证码(不通过抛 CAPTCHA_REQUIRED);总开关关时静默放行。
+    loginProtectionService.assertCaptchaSatisfied(username, clientIp, request.getCaptchaToken());
     // 用户名全局唯一，直接按 username 查找，租户从账号记录中获取
-    ConsoleUserAccount account =
-        userAccountService
-            .findByUsername(request.getUsername())
-            .orElseThrow(this::invalidCredentials);
-    if (!account.enabled()) {
+    Optional<ConsoleUserAccount> found = userAccountService.findByUsername(username);
+    boolean credentialsValid =
+        found.isPresent()
+            && found.get().enabled()
+            && passwordHasher.matches(request.getPassword(), found.get().passwordHash());
+    if (!credentialsValid) {
+      // 记失败 + 渐进退避(总开关关时 no-op),再抛统一的 invalid credentials(防用户枚举)。
+      loginProtectionService.onLoginFailure(username, clientIp);
       throw invalidCredentials();
     }
-    if (!passwordHasher.matches(request.getPassword(), account.passwordHash())) {
-      throw invalidCredentials();
-    }
+    ConsoleUserAccount account = found.get();
+    loginProtectionService.onLoginSuccess(username);
     String tenantId = account.tenantId();
     long sessionVersion = sessionRegistry.nextSessionVersion(account.username(), tenantId);
     // 登录响应带 mustChangePassword 标记:FE 据此跳转改密页;敏感操作拦截见
@@ -67,6 +81,13 @@ public class ConsoleLoginService {
             new LinkedHashSet<>(account.authorities()),
             sessionVersion)
         .withMustChangePassword(account.mustChangePassword());
+  }
+
+  /** 从 request metadata 取客户端 IP(已按 trust-forwarded-headers 解析);非 Servlet 上下文回退空串。 */
+  private String resolveClientIp() {
+    var metadata = requestMetadataResolver.current();
+    String ip = metadata == null ? null : metadata.clientIp();
+    return ip == null ? "" : ip;
   }
 
   private BizException invalidCredentials() {
