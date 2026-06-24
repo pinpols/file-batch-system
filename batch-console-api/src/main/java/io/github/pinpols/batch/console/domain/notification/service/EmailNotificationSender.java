@@ -3,7 +3,10 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.console.config.NotificationProperties;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -40,11 +43,15 @@ public class EmailNotificationSender implements NotificationSender {
 
   private final ObjectProvider<JavaMailSender> mailSenderProvider;
   private final ObjectMapper objectMapper;
+  private final NotificationProperties notificationProperties;
 
   public EmailNotificationSender(
-      ObjectProvider<JavaMailSender> mailSenderProvider, ObjectMapper objectMapper) {
+      ObjectProvider<JavaMailSender> mailSenderProvider,
+      ObjectMapper objectMapper,
+      NotificationProperties notificationProperties) {
     this.mailSenderProvider = mailSenderProvider;
     this.objectMapper = objectMapper;
+    this.notificationProperties = notificationProperties;
   }
 
   @Override
@@ -56,9 +63,18 @@ public class EmailNotificationSender implements NotificationSender {
   public WebhookDeliveryResult send(NotificationMessage message) {
     Map<String, Object> config = parseConfig(message.configJson());
 
-    String[] recipients = parseRecipients(str(config, CONFIG_KEY_TO));
-    if (recipients.length == 0) {
+    String[] declared = parseRecipients(str(config, CONFIG_KEY_TO));
+    if (declared.length == 0) {
       return WebhookDeliveryResult.failure(null, "missing email recipients");
+    }
+    // 域名白名单:配置非空时,只向白名单域名收件人发送,挡邮件轰炸/外泄到非受信邮箱。
+    String[] recipients = filterAllowedRecipients(declared);
+    if (recipients.length == 0) {
+      log.warn(
+          "EMAIL all recipients blocked by domain allowlist; skipping: channelCode={}, declared={}",
+          message.channelCode(),
+          declared.length);
+      return WebhookDeliveryResult.failure(null, "no allowed email recipients");
     }
 
     JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
@@ -132,6 +148,31 @@ public class EmailNotificationSender implements NotificationSender {
         .map(String::trim)
         .filter(value -> !value.isBlank())
         .toArray(String[]::new);
+  }
+
+  /** 按域名白名单过滤收件人;白名单为空 = 不限制。 */
+  private String[] filterAllowedRecipients(String[] recipients) {
+    List<String> allowed = notificationProperties.getEmailAllowedDomains();
+    if (allowed == null || allowed.isEmpty()) {
+      return recipients;
+    }
+    return Arrays.stream(recipients)
+        .filter(r -> isDomainAllowed(r, allowed))
+        .toArray(String[]::new);
+  }
+
+  private static boolean isDomainAllowed(String address, List<String> allowedDomains) {
+    int at = address.lastIndexOf('@');
+    if (at < 0 || at == address.length() - 1) {
+      return false;
+    }
+    String domain = address.substring(at + 1).trim().toLowerCase(Locale.ROOT);
+    for (String allowed : allowedDomains) {
+      if (allowed != null && domain.equals(allowed.trim().toLowerCase(Locale.ROOT))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private Map<String, Object> parseConfig(String configJson) {

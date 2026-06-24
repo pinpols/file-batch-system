@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.console.config.NotificationProperties;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,9 @@ class EmailNotificationSenderTest {
 
   @BeforeEach
   void setUp() {
-    sender = new EmailNotificationSender(mailSenderProvider, objectMapper);
+    // 默认空白名单 = 不限制域名,既有用例不受影响。
+    sender =
+        new EmailNotificationSender(mailSenderProvider, objectMapper, new NotificationProperties());
   }
 
   private NotificationMessage message(String configJson) {

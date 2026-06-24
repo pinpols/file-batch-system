@@ -77,6 +77,12 @@ public class SubscriptionRuleWebhookDispatcher {
   /** 防轰炸:单渠道每分钟最大投递条数(滑窗)。超额丢弃 + 告警,挡住事件风暴/恶意触发把收件人刷爆(尤其 SMS 烧钱、邮件轰炸)。 */
   private static final int MAX_SENDS_PER_CHANNEL_PER_MINUTE = 120;
 
+  /** 防轰炸(按目标):同一投递目标(url/to/phoneNumbers 指纹)每分钟上限,比按渠道更严——挡多规则/多渠道刷爆同一收件人。 */
+  private static final int MAX_SENDS_PER_DESTINATION_PER_MINUTE = 60;
+
+  /** 去重:相同(渠道+事件+内容)在滑窗内只发一次(limit=1),挡告警风暴重复刷屏。 */
+  private static final int DEDUP_WINDOW_LIMIT = 1;
+
   private final SubscriptionRuleMapper subscriptionRuleMapper;
   private final WebhookDispatcher webhookDispatcher;
   private final NotificationSenderRegistry senderRegistry;
@@ -171,6 +177,14 @@ public class SubscriptionRuleWebhookDispatcher {
 
     // 防轰炸:单渠道每分钟投递上限,超额丢弃 + 告警(webhook 与第三方渠道同样适用)。
     if (!withinSendRateLimit(channelCode, channelType, eventType)) {
+      return;
+    }
+    // 去重:相同(渠道+事件+内容)在滑窗内只发一次,挡风暴重复刷屏。
+    if (isDuplicateWithinWindow(channelCode, eventType, payloadJson)) {
+      return;
+    }
+    // 防轰炸(按目标):同一收件人(url/to/phoneNumbers)跨规则/渠道的更严上限。
+    if (!withinDestinationRateLimit(rule, channelCode, channelType, eventType)) {
       return;
     }
 
@@ -307,6 +321,68 @@ public class SubscriptionRuleWebhookDispatcher {
           ex.getMessage());
       return true;
     }
+  }
+
+  /**
+   * 去重:相同 (channelCode + eventType + 内容指纹) 在滑窗内出现第二次即视为重复并抑制。 复用滑窗限流器(limit=1):窗内首条放行、其余返回
+   * false。Redis 不可达 fail-open(不误抑制真实告警)。
+   */
+  private boolean isDuplicateWithinWindow(
+      String channelCode, String eventType, String payloadJson) {
+    String fingerprint = Integer.toHexString((payloadJson == null ? "" : payloadJson).hashCode());
+    String key = "notify:dedup:" + channelCode + ":" + eventType + ":" + fingerprint;
+    try {
+      boolean firstInWindow = sendRateLimiter.tryAcquire(key, DEDUP_WINDOW_LIMIT);
+      if (!firstInWindow) {
+        log.info(
+            "notification suppressed as duplicate within window: channelCode={}, eventType={}",
+            channelCode,
+            eventType);
+      }
+      return !firstInWindow;
+    } catch (DataAccessException ex) {
+      return false;
+    }
+  }
+
+  /**
+   * 防轰炸(按目标):对投递目标指纹(url/to/phoneNumbers)限流,比按渠道更严,挡多规则/多渠道刷爆同一收件人。 无法识别目标时跳过本层(按渠道限流已兜底)。Redis 不可达
+   * fail-open。
+   */
+  private boolean withinDestinationRateLimit(
+      Map<String, Object> rule, String channelCode, String channelType, String eventType) {
+    Map<String, Object> config = parseConfig(str(rule, "config_json"));
+    String dest = firstNonBlank(str(config, "url"), str(config, "to"), str(config, "phoneNumbers"));
+    if (dest == null) {
+      return true;
+    }
+    try {
+      boolean allowed =
+          sendRateLimiter.tryAcquire(
+              "notify:dest:" + Integer.toHexString(dest.hashCode()),
+              MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+      if (!allowed) {
+        log.warn(
+            "notification destination rate limit exceeded; dropping: channelCode={},"
+                + " channelType={}, eventType={}, limitPerMin={}",
+            channelCode,
+            channelType,
+            eventType,
+            MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+      }
+      return allowed;
+    } catch (DataAccessException ex) {
+      return true;
+    }
+  }
+
+  private static String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value;
+      }
+    }
+    return null;
   }
 
   /** 非 WEBHOOK 渠道经 {@link NotificationSender} 的 burst 重试投递(同 webhook 路径,本路无持久化补偿)。 */
