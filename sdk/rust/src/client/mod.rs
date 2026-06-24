@@ -33,6 +33,7 @@ pub mod lifecycle;
 pub mod resilience;
 pub mod scheduler;
 pub mod sensitive;
+pub mod signing;
 pub mod testkit;
 pub mod transport;
 
@@ -63,6 +64,7 @@ pub use scheduler::{
     DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_LEASE_RENEW_INTERVAL_MS,
 };
 pub use sensitive::{SensitiveValidator, Validation};
+pub use signing::{body_sha256_hex, canonical_string, sign};
 pub use testkit::FakePlatform;
 #[allow(deprecated)] // HttpTransport is a deprecated stub re-exported to pin the trait surface
 pub use transport::{
