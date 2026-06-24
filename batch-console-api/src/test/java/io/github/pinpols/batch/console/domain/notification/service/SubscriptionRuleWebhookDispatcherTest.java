@@ -2,6 +2,8 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -9,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -26,11 +29,17 @@ class SubscriptionRuleWebhookDispatcherTest {
 
   @Mock private SubscriptionRuleMapper subscriptionRuleMapper;
   @Mock private WebhookDispatcher webhookDispatcher;
+  @Mock private NotificationSenderRegistry senderRegistry;
+  @Mock private SlidingWindowRateLimiter sendRateLimiter;
 
   private SubscriptionRuleWebhookDispatcher dispatcher;
 
   private SubscriptionRuleWebhookDispatcher newDispatcher() {
-    dispatcher = new SubscriptionRuleWebhookDispatcher(subscriptionRuleMapper, webhookDispatcher);
+    // 防轰炸限流默认放行;"超限丢弃"用例单独覆盖。
+    lenient().when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(true);
+    dispatcher =
+        new SubscriptionRuleWebhookDispatcher(
+            subscriptionRuleMapper, webhookDispatcher, senderRegistry, sendRateLimiter);
     return dispatcher;
   }
 
@@ -151,5 +160,27 @@ class SubscriptionRuleWebhookDispatcherTest {
 
     // assert
     verify(webhookDispatcher, timeout(2000)).attemptDelivery(any(), any(), any());
+  }
+
+  @Test
+  void shouldDropDelivery_whenChannelSendRateLimitExceeded() {
+    Map<String, Object> rule =
+        Map.of(
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-hook",
+            "channel_type", "WEBHOOK",
+            "event_types", "JOB_SUCCESS",
+            "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+        .thenReturn(List.of(rule));
+    // 防轰炸:限流器拒绝 → 直接丢弃,不触达投递。
+    when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(false);
+    dispatcher =
+        new SubscriptionRuleWebhookDispatcher(
+            subscriptionRuleMapper, webhookDispatcher, senderRegistry, sendRateLimiter);
+
+    dispatcher.dispatch("tenant-a", "JOB_SUCCESS", "s", "c", "data", Instant.now());
+
+    verify(webhookDispatcher, never()).attemptDelivery(any(), any(), any());
   }
 }

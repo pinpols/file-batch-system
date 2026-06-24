@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.Arrays;
@@ -22,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -72,8 +74,13 @@ public class SubscriptionRuleWebhookDispatcher {
   private static final int QUEUE_CAPACITY = 1024;
   private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
 
+  /** 防轰炸:单渠道每分钟最大投递条数(滑窗)。超额丢弃 + 告警,挡住事件风暴/恶意触发把收件人刷爆(尤其 SMS 烧钱、邮件轰炸)。 */
+  private static final int MAX_SENDS_PER_CHANNEL_PER_MINUTE = 120;
+
   private final SubscriptionRuleMapper subscriptionRuleMapper;
   private final WebhookDispatcher webhookDispatcher;
+  private final NotificationSenderRegistry senderRegistry;
+  private final SlidingWindowRateLimiter sendRateLimiter;
 
   /**
    * 与 {@link WebhookDispatcher} 同款有界队列 + AbortPolicy:HTTP burst 投递不能跑在 Spring 事件发布线程(可能是请求/事务线程)上,
@@ -162,14 +169,41 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
 
+    // 防轰炸:单渠道每分钟投递上限,超额丢弃 + 告警(webhook 与第三方渠道同样适用)。
+    if (!withinSendRateLimit(channelCode, channelType, eventType)) {
+      return;
+    }
+
     if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
-      // 非 WEBHOOK 渠道本轮不投递,但必须显式告警跳过,绝不静默丢弃。
-      log.warn(
-          "subscription_rule matched but channel type not yet wired for delivery; skipping:"
-              + " channelCode={}, channelType={}, eventType={}",
-          channelCode,
-          channelType,
-          eventType);
+      // 非 WEBHOOK 渠道走可插拔 NotificationSender(DINGTALK/WECHAT/SLACK/EMAIL/...);无对应 sender 才显式告警跳过。
+      NotificationSender sender = senderRegistry.resolve(channelType);
+      if (sender == null) {
+        log.warn(
+            "subscription_rule matched but no sender for channel type; skipping:"
+                + " channelCode={}, channelType={}, eventType={}",
+            channelCode,
+            channelType,
+            eventType);
+        return;
+      }
+      NotificationMessage message =
+          new NotificationMessage(
+              str(rule, "tenant_id"),
+              channelCode,
+              channelType,
+              str(rule, "config_json"),
+              payload,
+              payloadJson);
+      try {
+        executor.submit(() -> deliverViaSenderWithBurstRetry(sender, message, eventType));
+      } catch (RejectedExecutionException ex) {
+        log.warn(
+            "subscription_rule {} dispatch rejected (queue full); dropped: channelCode={},"
+                + " eventType={}",
+            channelType,
+            channelCode,
+            eventType);
+      }
       return;
     }
 
@@ -241,6 +275,67 @@ public class SubscriptionRuleWebhookDispatcher {
             "subscription_rule WEBHOOK delivery exhausted: channelCode={}, attempts={},"
                 + " httpStatus={}, error={}",
             channelCode,
+            MAX_ATTEMPTS,
+            result.httpStatus(),
+            result.errorSummary());
+      }
+    }
+  }
+
+  /**
+   * 防轰炸限流:单渠道每分钟投递上限(滑窗)。超额 → false(丢弃 + 告警)。 Redis 不可达时 fail-open(放行 + 告警),避免把限流可用性故障升级为"漏发真实告警"。
+   */
+  private boolean withinSendRateLimit(String channelCode, String channelType, String eventType) {
+    try {
+      boolean allowed =
+          sendRateLimiter.tryAcquire(
+              "notify:send:" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+      if (!allowed) {
+        log.warn(
+            "notification send rate limit exceeded; dropping to prevent flooding: channelCode={},"
+                + " channelType={}, eventType={}, limitPerMin={}",
+            channelCode,
+            channelType,
+            eventType,
+            MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+      }
+      return allowed;
+    } catch (DataAccessException ex) {
+      log.warn(
+          "notification send rate limiter unavailable — fail-open: channelCode={}, cause={}",
+          channelCode,
+          ex.getMessage());
+      return true;
+    }
+  }
+
+  /** 非 WEBHOOK 渠道经 {@link NotificationSender} 的 burst 重试投递(同 webhook 路径,本路无持久化补偿)。 */
+  private void deliverViaSenderWithBurstRetry(
+      NotificationSender sender, NotificationMessage message, String eventType) {
+    long backoffMillis = BACKOFF_BASE_MILLIS;
+    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      WebhookDeliveryResult result = sender.send(message);
+      if (result.success()) {
+        if (attempt > 1) {
+          log.info(
+              "subscription_rule {} delivered after retry: channelCode={}, attempt={},"
+                  + " eventType={}",
+              message.channelType(),
+              message.channelCode(),
+              attempt,
+              eventType);
+        }
+        return;
+      }
+      if (attempt < MAX_ATTEMPTS) {
+        sleep(backoffMillis);
+        backoffMillis *= 2;
+      } else {
+        log.warn(
+            "subscription_rule {} delivery exhausted: channelCode={}, attempts={}, httpStatus={},"
+                + " error={}",
+            message.channelType(),
+            message.channelCode(),
             MAX_ATTEMPTS,
             result.httpStatus(),
             result.errorSummary());
