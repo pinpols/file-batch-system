@@ -6,6 +6,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,10 +28,22 @@ public class LaunchController {
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
   @PostMapping("/launch")
-  public LaunchResponse launch(@RequestBody LaunchRequest request) {
+  public LaunchResponse launch(@RequestBody LaunchRequest request, HttpServletRequest httpRequest) {
     if (gracefulShutdown.isDraining()) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.orchestrator.draining");
     }
-    return launchApplicationService.launch(request);
+    // 租户边界守卫(与 Worker/Task 控制器一致):租户 API-Key 路径下,以 filter 解析出的真实租户
+    // 为准,与 body 声明对账,不一致即拒。legacy X-Internal-Secret 路径无解析租户时透传 body。
+    return launchApplicationService.launch(withGuardedTenant(request, httpRequest));
+  }
+
+  private static LaunchRequest withGuardedTenant(
+      LaunchRequest request, HttpServletRequest httpRequest) {
+    String declared = request == null ? null : request.tenantId();
+    String resolved = InternalRequestTenantGuard.resolveTenant(httpRequest, declared);
+    if (request == null || Objects.equals(resolved, declared)) {
+      return request;
+    }
+    return request.toBuilder().tenantId(resolved).build();
   }
 }

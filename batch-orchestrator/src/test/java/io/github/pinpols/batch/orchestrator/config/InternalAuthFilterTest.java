@@ -98,6 +98,42 @@ class InternalAuthFilterTest {
     verify(chain, never()).doFilter(any(), any());
   }
 
+  @Test
+  void getEndpointAcceptsReadOrExecuteScopeKey() throws Exception {
+    // GET 读端点用 verifyWithAnyScope(read, execute);只读 key 应放行
+    MockHttpServletRequest req =
+        new MockHttpServletRequest("GET", "/internal/workers/W1/claimed-tasks");
+    req.addHeader("X-Batch-Api-Key", "raw-key");
+    req.addHeader("X-Batch-Tenant-Id", "tx");
+    when(verifier.verifyWithAnyScope("raw-key", "tx", "worker.read", "worker.execute"))
+        .thenReturn(
+            Optional.of(
+                new ApiKeyEntity(1L, "tx", "n", "worker.read", true, null, "h", "s", "pbkdf2")));
+
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    filter.doFilterInternal(req, resp, chain);
+
+    verify(chain).doFilter(req, resp);
+    assertThat(req.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID)).isEqualTo("tx");
+  }
+
+  @Test
+  void mutationEndpointRejectsReadOnlyKey() throws Exception {
+    // POST 写端点仍走 verifyWithScope(worker.execute);只读 key 不满足 → 401
+    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/claim");
+    req.addHeader("X-Batch-Api-Key", "raw-key");
+    req.addHeader("X-Batch-Tenant-Id", "tx");
+    when(verifier.verifyWithScope("raw-key", "tx", "worker.execute")).thenReturn(Optional.empty());
+
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    filter.doFilterInternal(req, resp, chain);
+
+    assertThat(resp.getStatus()).isEqualTo(401);
+    verify(chain, never()).doFilter(any(), any());
+  }
+
   // ─── path 2: legacy secret ────────────────────────────────────────────────
 
   @Test
