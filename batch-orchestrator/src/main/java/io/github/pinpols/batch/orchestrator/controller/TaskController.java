@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.controller.request.TaskCancelRequest;
 import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchRequest;
@@ -20,11 +22,13 @@ import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 任务执行生命周期内部控制器，基础路径 {@code /internal/tasks}。 提供 Worker 与 Orchestrator 之间的任务交互端点： {@code POST
@@ -41,13 +45,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class TaskController {
 
   private final TaskControllerApplicationService taskControllerApplicationService;
+  private final TenantActionRateLimiter tenantActionRateLimiter;
 
   @PostMapping("/{taskId}/claim")
   public EffectiveTaskConfig claim(
       @PathVariable Long taskId,
       @RequestBody TaskClaimRequest request,
       HttpServletRequest httpRequest) {
-    return taskControllerApplicationService.claim(taskId, normalize(request, httpRequest));
+    TaskClaimRequest normalized = normalize(request, httpRequest);
+    rateLimit(normalized == null ? null : normalized.tenantId(), RateLimitAction.TASK_CLAIM);
+    return taskControllerApplicationService.claim(taskId, normalized);
   }
 
   @PostMapping("/{taskId}/report")
@@ -57,6 +64,7 @@ public class TaskController {
       HttpServletRequest httpRequest) {
     request.setTenantId(
         InternalRequestTenantGuard.resolveTenant(httpRequest, request.getTenantId()));
+    rateLimit(request.getTenantId(), RateLimitAction.TASK_REPORT);
     taskControllerApplicationService.report(taskId, request);
   }
 
@@ -97,6 +105,9 @@ public class TaskController {
   @PostMapping("/claim-batch")
   public TaskClaimBatchResponse claimBatch(
       @RequestBody TaskClaimBatchRequest request, HttpServletRequest httpRequest) {
+    // 批量端点按绑定 api_key 的租户限流(一次 HTTP 调用计 1 次);items 大小另由 body-size / 批量上限约束。
+    rateLimit(
+        InternalRequestTenantGuard.resolveTenant(httpRequest, null), RateLimitAction.TASK_CLAIM);
     return taskControllerApplicationService.claimBatch(normalize(request, httpRequest));
   }
 
@@ -107,7 +118,17 @@ public class TaskController {
   @PostMapping("/report-batch")
   public TaskReportBatchResponse reportBatch(
       @RequestBody TaskReportBatchRequest request, HttpServletRequest httpRequest) {
+    rateLimit(
+        InternalRequestTenantGuard.resolveTenant(httpRequest, null), RateLimitAction.TASK_REPORT);
     return taskControllerApplicationService.reportBatch(normalize(request, httpRequest));
+  }
+
+  /** 按绑定 api_key 的租户对热路径动作限流;超额即 429。tenantId 为空(无法归属)时由限流器放行。 */
+  private void rateLimit(String tenantId, RateLimitAction action) {
+    if (!tenantActionRateLimiter.tryConsume(tenantId, action)) {
+      throw new ResponseStatusException(
+          HttpStatus.TOO_MANY_REQUESTS, "rate limit exceeded: " + action);
+    }
   }
 
   private static TaskClaimRequest normalize(

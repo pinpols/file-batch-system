@@ -16,6 +16,8 @@ import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class ConsoleRateLimitFilterTest {
@@ -161,7 +165,59 @@ class ConsoleRateLimitFilterTest {
     verifyNoInteractions(rateLimiter);
   }
 
+  // ── expensive endpoint rate limit (导出/导入/Excel/报表,按用户,任意方法) ──────────
+
+  @AfterEach
+  void clearSecurityContext() {
+    SecurityContextHolder.clearContext();
+  }
+
+  @Test
+  void shouldRejectExpensiveEndpointWhenUserOverLimit() throws Exception {
+    authenticateAs("alice");
+    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
+
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/api/console/reports/excel");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(filterChain, never()).doFilter(any(), any());
+    verify(responseWriter)
+        .write(
+            any(HttpServletResponse.class),
+            eq(HttpStatus.TOO_MANY_REQUESTS),
+            eq(ResultCode.RATE_LIMITED),
+            contains("频繁"));
+  }
+
+  @Test
+  void shouldAllowExpensiveEndpointWhenUnderLimit() throws Exception {
+    authenticateAs("alice");
+    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(true);
+
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/api/console/config/sync/export");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(filterChain).doFilter(any(), any());
+  }
+
+  @Test
+  void shouldNotApplyExpensiveLimitToUnauthenticatedRequest() throws Exception {
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/api/console/reports/excel");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(filterChain).doFilter(any(), any());
+    verifyNoInteractions(rateLimiter);
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
+
+  private void authenticateAs(String username) {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(username, "n/a", List.of()));
+  }
 
   private MockHttpServletRequest loginRequest(String remoteAddr) {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/auth/login");

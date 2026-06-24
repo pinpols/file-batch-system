@@ -83,7 +83,31 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       }
     }
 
+    // ── 3. 昂贵接口（导出/导入/Excel/报表）：用户限流（任意方法，更严阈值）────────────────
+    if (isExpensivePath(path)) {
+      String username = resolveUsername();
+      if (Texts.hasText(username)) {
+        String key = "expensive:user:" + username;
+        if (!tryAcquireFailOpen(
+            key, properties.getExpensiveOpUserLimitPerMinute(), "expensive", username)) {
+          log.warn("昂贵操作限流触发：user={} path={}", username, path);
+          responseWriter.write(
+              response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
+          return;
+        }
+      }
+    }
+
     filterChain.doFilter(request, response);
+  }
+
+  private boolean isExpensivePath(String path) {
+    for (String prefix : properties.getExpensiveOpPathPrefixes()) {
+      if (path.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
