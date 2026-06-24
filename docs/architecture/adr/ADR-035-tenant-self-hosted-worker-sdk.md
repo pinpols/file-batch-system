@@ -82,7 +82,8 @@
 - 路径 2 `X-Internal-Secret`(legacy):主项目可信 worker / orchestrator 互调
 - API Key 提供但校验失败 → 401,**不 fallback** secret(防 key 泄漏后冒充)
 - 校验成功写 `request.attribute("batch.auth.resolvedTenantId")` 让 controller 防租户冒充
-- API Key scope 校验:老 key `scopes='*'` 通配通过;新 key 必须显式包含 `worker.execute` 才放行 `/internal/workers/*` 与 `/internal/tasks/*`(由 controller-side 检查或 filter 扩展)
+- API Key scope 校验:老 key `scopes='*'` 通配通过;新 key 必须显式包含 `worker.execute` 才放行 `/internal/workers/*` 与 `/internal/tasks/*`(`InternalAuthFilter` 内校验)
+- 读写分级 scope(2026-06-24):写端点(claim/report/register 等非 GET)要求 `worker.execute`;**读端点(GET 查询)接受 `worker.read` 或 `worker.execute`**(execute 是 read 超集)。据此可给监控 / 第三方集成发**只读 key**(`scopes='worker.read'`),只能轮询任务/worker 状态、不能改状态。`*` 通配仍全通,存量 key 零回归
 
 **Kafka ACL**(P3 落地):
 - topic 命名(权威): `batch.task.dispatch.{type}.{tenantId}`(对齐 orchestrator `BatchTopicResolver` + `init-tenant-topics.sh` + `per-tenant-worker-onboarding.md` §1;早期草稿写过 `batch.task.dispatch.tenant.{tenantId}.{type}` 是笔误)

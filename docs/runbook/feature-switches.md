@@ -35,6 +35,7 @@
 | `batch.rate-limit.enabled` | orchestrator | **true**（2026-06-24 起防接口盗刷；旧默认 false） | **true** | 🟢 低 | `BATCH_RATE_LIMIT_ENABLED`；按租户固定窗口限流总开关，关闸后所有 action 放行。详见 §1.2 限流防盗刷 |
 | `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | orchestrator | launch/release **3000**、register **300**、claim/report **12000** | 同 | 🟡 中 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE`；高水位只拦 runaway，<=0 关闭单项 |
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |
+| `batch.console.security.rate-limit.file-op-user-limit-per-minute` | console-api | **60** | **60** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE`；`/api/console/files/` 子树（下载/错误导出/归档/重派/到达组）按用户限流，fail-open；前缀可配 `file-op-path-prefixes` |
 | `batch.request-signing.enabled` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_REQUEST_SIGNING_ENABLED`；开后对 api_key 鉴权的 `/internal/tasks·workers` 写请求强制 HMAC 签名+ts+nonce 防重放，详见 §1.3。灰度须先升级 SDK（`BATCH_SDK_REQUEST_SIGNING_ENABLED=true`）再开服务端 |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 回退，故障自动降级。
@@ -53,6 +54,7 @@
 | orchestrator `/internal/tasks/*/claim`·`claim-batch` | `TASK_CLAIM` | 12000/min | 租户 | 热路径，**按绑定 api_key 的租户聚合**（workerId 可伪造故不按 worker）；批量按 HTTP 调用计 1 |
 | orchestrator `/internal/tasks/*/report`·`report-batch` | `TASK_REPORT` | 12000/min | 租户 | 同上 |
 | console-api 导出/导入/Excel/报表 | `expensive:user:*` | 10/min | 用户 | 前缀可配 `expensive-op-path-prefixes`；任意 HTTP 方法（导出常为 GET）；fail-open |
+| console-api 文件操作（`/api/console/files/` 下载/错误导出/归档/重派/到达组） | `fileop:user:*` | 60/min | 用户 | 防 token 直连脚本盗刷下载/导出；前缀可配 `file-op-path-prefixes`；任意 HTTP 方法；未认证 presign 下载（`fs-download`）自然跳过；fail-open |
 
 - **总开关**：orchestrator `BATCH_RATE_LIMIT_ENABLED`（默认 true）、console `batch.console.security.rate-limit.enabled`（默认 true）。
 - **超额响应**：HTTP 429；orchestrator 走 `ResponseStatusException`，console 走标准 `CommonResponse`（`ResultCode.RATE_LIMITED`）。

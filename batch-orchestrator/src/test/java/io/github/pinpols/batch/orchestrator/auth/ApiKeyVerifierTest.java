@@ -162,6 +162,50 @@ class ApiKeyVerifierTest {
   }
 
   @Test
+  void verifyWithAnyScopeAcceptsReadOnlyKeyForReadScope() {
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "worker.read", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of(rec));
+    // 只读 key 命中读 scope（read 或 execute 任一即可）
+    assertThat(
+            verifier.verifyWithAnyScope(
+                RAW_KEY,
+                "tx",
+                ApiKeyVerifier.SCOPE_WORKER_READ,
+                ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
+        .isPresent();
+    // 但只读 key 不满足纯写 scope
+    assertThat(verifier.verifyWithScope(RAW_KEY, "tx", ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
+        .isEmpty();
+  }
+
+  @Test
+  void verifyWithAnyScopeAcceptsExecuteKeyForReadScope() {
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "worker.execute", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of(rec));
+    // execute 是 read 的超集：可写者必可读
+    assertThat(
+            verifier.verifyWithAnyScope(
+                RAW_KEY,
+                "tx",
+                ApiKeyVerifier.SCOPE_WORKER_READ,
+                ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
+        .isPresent();
+  }
+
+  @Test
+  void scopesAllowAnyParser() {
+    assertThat(ApiKeyVerifier.scopesAllowAny("worker.read", "worker.read", "worker.execute"))
+        .isTrue();
+    assertThat(ApiKeyVerifier.scopesAllowAny("worker.execute", "worker.read", "worker.execute"))
+        .isTrue();
+    assertThat(ApiKeyVerifier.scopesAllowAny("*", "worker.read", "worker.execute")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllowAny("worker.read", "worker.execute")).isFalse();
+    assertThat(ApiKeyVerifier.scopesAllowAny("anything")).isTrue();
+  }
+
+  @Test
   void scopesAllowParser() {
     assertThat(ApiKeyVerifier.scopesAllow("*", "anything")).isTrue();
     assertThat(ApiKeyVerifier.scopesAllow("worker.execute,read", "worker.execute")).isTrue();

@@ -212,6 +212,49 @@ class ConsoleRateLimitFilterTest {
     verifyNoInteractions(rateLimiter);
   }
 
+  // ── file-op endpoint rate limit (下载/错误导出/归档/重派/到达组,按用户,任意方法) ──────────
+
+  @Test
+  void shouldRejectFileDownloadWhenUserOverLimit() throws Exception {
+    authenticateAs("alice");
+    when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(false);
+
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/api/console/files/F-1/download");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(filterChain, never()).doFilter(any(), any());
+    verify(responseWriter)
+        .write(
+            any(HttpServletResponse.class),
+            eq(HttpStatus.TOO_MANY_REQUESTS),
+            eq(ResultCode.RATE_LIMITED),
+            contains("频繁"));
+  }
+
+  @Test
+  void shouldAllowFileMutationWhenUnderLimit() throws Exception {
+    authenticateAs("alice");
+    when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(true);
+
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/api/console/files/archive");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(filterChain).doFilter(any(), any());
+  }
+
+  /** presign 下载（fs-download）无登录态，取不到用户名 → 文件操作限流自然跳过，不应触达 rateLimiter。 */
+  @Test
+  void shouldNotApplyFileOpLimitToUnauthenticatedPresignDownload() throws Exception {
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/api/console/files/fs-download");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(filterChain).doFilter(any(), any());
+    verifyNoInteractions(rateLimiter);
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private void authenticateAs(String username) {
