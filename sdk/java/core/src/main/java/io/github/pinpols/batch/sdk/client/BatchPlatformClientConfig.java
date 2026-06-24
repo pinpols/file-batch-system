@@ -109,6 +109,14 @@ public class BatchPlatformClientConfig {
   @Default boolean strictTimingValidation = true;
 
   /**
+   * 请求签名（HMAC + 时间戳 + nonce 防重放）开关，默认关。开启后写请求（claim/report/renew 等）附带 {@code X-Batch-Timestamp /
+   * X-Batch-Nonce / X-Batch-Signature}，以 {@link #apiKey} 为 HMAC 密钥。须服务端 {@code
+   * batch.request-signing.enabled=true} 配合；灰度时先升级 SDK 再开服务端开关。env 覆盖：{@code
+   * BATCH_SDK_REQUEST_SIGNING_ENABLED=true}。{@link #apiKey} 为空时即便开启也不签（无密钥）。
+   */
+  @Default boolean requestSigningEnabled = false;
+
+  /**
    * 从环境变量构造配置(默认前缀 {@code BATCH_SDK_})—— 租户无需在 {@code main()} 里手写一堆 {@code System.getenv}。
    *
    * <p>必填:{@code <prefix>BASE_URL / TENANT_ID / WORKER_CODE / KAFKA_BOOTSTRAP / KAFKA_TOPIC_PATTERN
@@ -172,6 +180,10 @@ public class BatchPlatformClientConfig {
     }
     // R3-4(Round-2 P0 #4):时序校验严格度开关,env 默认 true(保持 fail-fast)。
     // 仅当显式设为 false / 0 / no / off 时降级为 WARN-only。
+    String requestSigning = env.apply(prefix + "REQUEST_SIGNING_ENABLED");
+    if (requestSigning != null && !requestSigning.isBlank()) {
+      builder.requestSigningEnabled(parseBoolean(requestSigning.trim()));
+    }
     String strictTiming = env.apply(prefix + "STRICT_TIMING");
     if (strictTiming != null && !strictTiming.isBlank()) {
       builder.strictTimingValidation(parseBoolean(strictTiming.trim()));

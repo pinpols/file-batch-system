@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -89,6 +90,16 @@ public class PlatformHttpClient {
             .POST(HttpRequest.BodyPublishers.ofByteArray(payload));
     if (config.getApiKey() != null && !config.getApiKey().isBlank()) {
       req.header("X-Batch-Api-Key", config.getApiKey());
+      // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。
+      if (config.isRequestSigningEnabled()) {
+        String timestamp = Long.toString(System.currentTimeMillis());
+        String nonce = UUID.randomUUID().toString();
+        String signature =
+            RequestSigner.sign(config.getApiKey(), "POST", path, timestamp, nonce, payload);
+        req.header("X-Batch-Timestamp", timestamp)
+            .header("X-Batch-Nonce", nonce)
+            .header("X-Batch-Signature", signature);
+      }
     }
     if (idempotencyKey != null && !idempotencyKey.isBlank()) {
       req.header("Idempotency-Key", idempotencyKey);
