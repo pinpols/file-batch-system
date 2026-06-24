@@ -35,6 +35,7 @@
 | `batch.rate-limit.enabled` | orchestrator | **true**（2026-06-24 起防接口盗刷；旧默认 false） | **true** | 🟢 低 | `BATCH_RATE_LIMIT_ENABLED`；按租户固定窗口限流总开关，关闸后所有 action 放行。详见 §1.2 限流防盗刷 |
 | `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | orchestrator | launch/release **3000**、register **300**、claim/report **12000** | 同 | 🟡 中 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE`；高水位只拦 runaway，<=0 关闭单项 |
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |
+| `batch.request-signing.enabled` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_REQUEST_SIGNING_ENABLED`；开后对 api_key 鉴权的 `/internal/tasks·workers` 写请求强制 HMAC 签名+ts+nonce 防重放，详见 §1.3。灰度须先升级 SDK（`BATCH_SDK_REQUEST_SIGNING_ENABLED=true`）再开服务端 |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 回退，故障自动降级。
 >
@@ -57,6 +58,20 @@
 - **超额响应**：HTTP 429；orchestrator 走 `ResponseStatusException`，console 走标准 `CommonResponse`（`ResultCode.RATE_LIMITED`）。
 - **Redis 故障**：console 限流 fail-open（放行 + WARN，见 §1.1）；orchestrator 固定窗口计数同理不阻断业务。
 - **时钟回拨保护**：orchestrator `TokenBucketRateLimiter` 检测 ≥100ms 回拨即拒当次（防 stale 窗口叠加击穿）。
+
+### 1.3 请求签名防重放（方案 A，opt-in，2026-06-24）
+
+防接口盗刷第二层：对**自托管 SDK / 脚本类客户端**（api_key 鉴权）的写请求强制签名，挡住"裸 curl 重放/篡改"。
+
+- **方案 A**：以 api_key 本身为 HMAC 密钥（零 schema 改动）。请求头里已有 `X-Batch-Api-Key`，服务端取来重算 HMAC 验证。
+- **契约**（服务端 `RequestSignatures` 与各 SDK 唯一权威源，逐字节一致）：
+  - `canonical = UPPER(method) "\n" path "\n" timestamp "\n" nonce "\n" hex(sha256(body))`
+  - `signature = hex(hmacSha256(apiKey, canonical))`
+  - 头：`X-Batch-Timestamp`（epoch millis）、`X-Batch-Nonce`、`X-Batch-Signature`
+- **校验顺序**：缺头 → 时钟偏移（`clock-skew-seconds` 默认 300）→ 签名 → nonce 一次性（Redis SETNX，TTL=2×窗口）。签名先于 nonce，避免错签污染 nonce 空间。
+- **作用范围**：仅 api_key 鉴权 + 写方法（POST/PUT/PATCH/DELETE）；内部 `X-Internal-Secret`（可信网络）与读请求不强制。
+- **边界**：方案 A 不防 api_key 被盗后冒充（盗 key 也能签）；那由 TLS + key 轮换 + 限流覆盖。本机制职责是**防重放 + 防篡改**。
+- **灰度**：先把租户 SDK 升到带签名版本并设 `BATCH_SDK_REQUEST_SIGNING_ENABLED=true`，确认全部带签名后再开服务端 `BATCH_REQUEST_SIGNING_ENABLED=true`；否则存量 worker 写请求会被 401。
 
 ### 1.1 Fail-open 速查（代码核实，2026-04-26）
 
