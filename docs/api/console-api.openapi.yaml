@@ -166,6 +166,40 @@ paths:
                 $ref: '#/components/schemas/CommonResponseMapStringObject'
         '404':
           description: Login encryption is unavailable
+  /api/console/captcha/config:
+    get:
+      tags: [Auth]
+      summary: Get captcha provider config (public, pre-login)
+      operationId: getConsoleCaptchaConfig
+      security: []
+      description: |
+        Returns the active captcha provider, public siteKey and whether login-protection is enabled,
+        so the frontend can decide whether/which captcha widget to preload. Never returns any secret.
+      responses:
+        '200':
+          description: Captcha provider config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
+  /api/console/captcha/challenge:
+    get:
+      tags: [Auth]
+      summary: Issue a self-hosted slider captcha challenge (pre-login)
+      operationId: issueConsoleCaptchaChallenge
+      security: []
+      description: |
+        Self-hosted provider only: issues a single-use slider challenge {challengeId, gap}.
+        Returns 404 for any other provider (third-party providers handle challenges via their own SDK).
+      responses:
+        '200':
+          description: Slider challenge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
+        '404':
+          description: Captcha challenge is not available for the current provider
   /api/console/auth/token:
     post:
       tags: [Auth]
@@ -12880,6 +12914,14 @@ components:
           type: string
         password:
           type: string
+        captchaToken:
+          type: string
+          nullable: true
+          description: >
+            Optional risk-based captcha credential. Required only after the account/IP failure
+            count crosses the threshold (login-protection enabled). Non-secret; always sent as a
+            top-level plaintext field even on the encrypted login path. Format depends on the
+            provider (self-hosted: "challengeId:position"; third-party: its ticket/randstr).
       required: [username, password]
     ConsoleFileOperationResponse:
       type: object
