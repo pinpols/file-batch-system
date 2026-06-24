@@ -32,10 +32,31 @@
 | `batch.worker.import.scanner.done-file-suffix` | worker-import | **`.done`** | **`.done`** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX`；done 文件后缀可配（#569） |
 | `batch.worker.import.scanner.batch-manifest-enabled` | worker-import | **false** | **false** | 🟡 中 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED`；开后扫描期强校验批次清单（文件完整性，#570）|
 | `batch.file-governance.arrival.require-verified` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED`；开后到达组要求文件已校验通过才放行（#570）|
+| `batch.rate-limit.enabled` | orchestrator | **true**（2026-06-24 起防接口盗刷；旧默认 false） | **true** | 🟢 低 | `BATCH_RATE_LIMIT_ENABLED`；按租户固定窗口限流总开关，关闸后所有 action 放行。详见 §1.2 限流防盗刷 |
+| `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | orchestrator | launch/release **3000**、register **300**、claim/report **12000** | 同 | 🟡 中 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE`；高水位只拦 runaway，<=0 关闭单项 |
+| `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 回退，故障自动降级。
 >
 > **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读(#578/580/582/584)是模板/渠道级配置(`trailer_template` / control-total rule / `readback_verify_enabled`),归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md);本表只收全局 yml/env 开关。
+
+### 1.2 限流防盗刷（高水位，2026-06-24）
+
+防接口盗刷的第一道闸门：api_key 泄漏后靠按租户限流把"被打爆"挡在租户级。阈值都设在**远高于合法峰值**的高水位，只拦 runaway 滥用，不误伤压测/高峰；需更严按 env 下调，<=0 关闭单项。
+
+| 入口 | action / key | 默认 | 维度 | 说明 |
+|---|---|---|---|---|
+| orchestrator `/internal/triggers·launch` | `LAUNCH` | 3000/min | 租户 | launch 消费本就单线程是瓶颈，正常远到不了 |
+| orchestrator `/internal/workers/register` | `WORKER_REGISTER` | 300/min | 租户 | worker 注册低频，5/s 已是异常风暴 |
+| orchestrator dispatch release | `DISPATCH_RELEASE` | 3000/min | 租户 | — |
+| orchestrator `/internal/tasks/*/claim`·`claim-batch` | `TASK_CLAIM` | 12000/min | 租户 | 热路径，**按绑定 api_key 的租户聚合**（workerId 可伪造故不按 worker）；批量按 HTTP 调用计 1 |
+| orchestrator `/internal/tasks/*/report`·`report-batch` | `TASK_REPORT` | 12000/min | 租户 | 同上 |
+| console-api 导出/导入/Excel/报表 | `expensive:user:*` | 10/min | 用户 | 前缀可配 `expensive-op-path-prefixes`；任意 HTTP 方法（导出常为 GET）；fail-open |
+
+- **总开关**：orchestrator `BATCH_RATE_LIMIT_ENABLED`（默认 true）、console `batch.console.security.rate-limit.enabled`（默认 true）。
+- **超额响应**：HTTP 429；orchestrator 走 `ResponseStatusException`，console 走标准 `CommonResponse`（`ResultCode.RATE_LIMITED`）。
+- **Redis 故障**：console 限流 fail-open（放行 + WARN，见 §1.1）；orchestrator 固定窗口计数同理不阻断业务。
+- **时钟回拨保护**：orchestrator `TokenBucketRateLimiter` 检测 ≥100ms 回拨即拒当次（防 stale 窗口叠加击穿）。
 
 ### 1.1 Fail-open 速查（代码核实，2026-04-26）
 

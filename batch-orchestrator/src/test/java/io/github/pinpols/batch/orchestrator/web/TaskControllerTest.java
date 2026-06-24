@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -14,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
@@ -37,11 +40,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class TaskControllerTest {
 
   @Mock private TaskExecutionService taskExecutionService;
+  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
+    // 默认放行;按-租户热路径限流仅 claim/report 触发,renew/cancel 等不触发,故用 lenient 避免 strict 误报。
+    lenient().when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
     TaskControllerApplicationService taskControllerApplicationService =
         new TaskControllerApplicationService(
             taskExecutionService,
@@ -49,9 +55,40 @@ class TaskControllerTest {
             new BundleBatchClaimProperties(),
             new SimpleMeterRegistry());
     mockMvc =
-        MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
+        MockMvcBuilders.standaloneSetup(
+                new TaskController(taskControllerApplicationService, tenantActionRateLimiter))
             .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
             .build();
+  }
+
+  @Test
+  void shouldReturn429WhenClaimRateLimited() throws Exception {
+    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.TASK_CLAIM)))
+        .thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/10/claim")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .andExpect(status().isTooManyRequests());
+
+    verify(taskExecutionService, org.mockito.Mockito.never()).assignWorker(any(), any(), any());
+  }
+
+  @Test
+  void shouldReturn429WhenReportRateLimited() throws Exception {
+    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.TASK_REPORT)))
+        .thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/5/report")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"success\":true,\"resultSummary\":\"ok\"}"))
+        .andExpect(status().isTooManyRequests());
+
+    verify(taskExecutionService, org.mockito.Mockito.never()).applyTaskOutcome(any());
   }
 
   @Test
