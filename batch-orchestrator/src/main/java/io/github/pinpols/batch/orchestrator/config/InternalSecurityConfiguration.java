@@ -2,6 +2,9 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
+import io.github.pinpols.batch.orchestrator.security.RequestSignatureFilter;
+import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier;
+import io.github.pinpols.batch.orchestrator.security.RequestSigningProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +22,17 @@ public class InternalSecurityConfiguration {
     registration.setFilter(new InternalAuthFilter(securityProperties, apiKeyVerifier));
     registration.addUrlPatterns("/internal/*");
     registration.setOrder(1);
+    return registration;
+  }
+
+  /** 请求签名校验(方案 A,opt-in)order=2,排在鉴权后:此时 api_key 已校验、resolvedTenantId 已就绪。 */
+  @Bean
+  public FilterRegistrationBean<RequestSignatureFilter> requestSignatureFilter(
+      RequestSigningProperties signingProperties, RequestSignatureVerifier verifier) {
+    FilterRegistrationBean<RequestSignatureFilter> registration = new FilterRegistrationBean<>();
+    registration.setFilter(new RequestSignatureFilter(signingProperties, verifier));
+    registration.addUrlPatterns("/internal/*");
+    registration.setOrder(2);
     return registration;
   }
 
