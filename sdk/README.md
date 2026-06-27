@@ -28,7 +28,7 @@
 | 2 | **Java Spring starter**(`-spring-boot-starter`) | **JDK 21+** + 租户自带 **Spring Boot 3.x/4.x** | core + `spring-boot-autoconfigure`(版本随租户 SB,不锁定) | 仅 Spring 租户需要;非 Spring 直接用 core |
 | 3 | **Python**(`batch-worker-sdk`) | **3.12+** | `httpx>=0.27` / `pydantic` / `aiokafka` | async-only(现代 typing:`type` 语句 / PEP 695) |
 | 4 | **Go**(`batch-worker-sdk-go`) | **Go 1.25+** | 核心零依赖;Kafka 适配器 = 独立 nested module(`segmentio/kafka-go`) | 不用 Kafka 则不引该依赖 |
-| 5 | **TypeScript**(`@batch/worker-sdk`) | **Node 20+**(active LTS) | 核心零依赖;Kafka = 可选 `kafkajs`(`optionalDependencies`) | 发布产物编译为 ES2023 JS(`dist/`),非原始 `.ts` |
+| 5 | **TypeScript**(`@batch/worker-sdk`) | **Node 22**(active LTS) | 核心零依赖;Kafka = 可选 `kafkajs`(`optionalDependencies`) | 发布产物编译为 ES2023 JS(`dist/`),非原始 `.ts` |
 | 6 | **Rust**(`batch-worker-sdk` crate) | **Rust stable**(edition 2021) | 核心零依赖;`http`(reqwest+rustls)/ `kafka`(rdkafka)= 可选 feature | 默认 feature 全关 = std-only |
 
 **通用前置(所有语言)**:
