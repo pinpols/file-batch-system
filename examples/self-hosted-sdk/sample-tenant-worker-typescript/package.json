@@ -9,7 +9,7 @@
     "check": "node --check --experimental-strip-types src/main.ts"
   },
   "engines": {
-    "node": ">=25"
+    "node": ">=22 <23"
   },
   "dependencies": {
     "kafkajs": "^2.2.4"

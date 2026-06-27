@@ -2,7 +2,7 @@
 
 A tenant-facing Bring-Your-Own worker SDK for the file-batch-system platform, built as a **decision core**: a set of pure functions in `src/decide.ts` that map wire-protocol inputs (HTTP status codes, heartbeat directives, lease-renew responses, capacity and stop signals) to structured results whose fields match the closed `then.expect` vocabulary of the platform's anti-drift contract (`docs/sdk/byo-conformance-contract.md` §2, `docs/sdk/wire-protocol.md` §A/§B/§C). Constants are consumed from `docs/api/sdk-shared-constants.yaml` (never re-authored) and kept honest by a parity test; behavior is proven against the contract fixtures by a conformance runner. Real HTTP/Kafka IO wraps these pure functions in a later phase — phase 1 is the decision core plus its conformance proof. Zero runtime dependencies; tests use Node's built-in runner with native TypeScript type-stripping.
 
-**最低环境要求(消费方)**:**Node 20+**(`engines.node`)—— 发布产物是编译后的 ES2023 `dist/*.js`(非原始 `.ts`),运行时零依赖;Kafka 适配器用可选 `kafkajs`(`optionalDependencies`)。开发/跑测试用 `node --test --experimental-strip-types` 需较新 Node(22.6+ 原生 type-stripping)。
+**最低环境要求(消费方)**:**Node 22**(`engines.node`)—— 发布产物是编译后的 ES2023 `dist/*.js`(非原始 `.ts`),运行时零依赖;Kafka 适配器用可选 `kafkajs`(`optionalDependencies`)。开发/跑测试使用 Node 22 的原生 type-stripping 能力。
 
 ## Running the tests
 
