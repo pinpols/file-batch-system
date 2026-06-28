@@ -27,7 +27,7 @@
   "engines": {
     "node": ">=22 <23"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "optionalDependencies": {
     "kafkajs": "^2.2.4"
   },
