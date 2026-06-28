@@ -1534,7 +1534,7 @@ public class ConfigPackageExcelValidator {
     if (!hasText(value)) {
       return;
     }
-    if (!value.matches("^[a-zA-Z][a-zA-Z0-9_-]{0,127}$")) {
+    if (!value.matches("^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")) {
       ri.add(
           "depends_on_job_code must start with a letter and contain only letters, digits,"
               + " underscore or hyphen");

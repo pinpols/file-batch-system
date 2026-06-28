@@ -11966,7 +11966,7 @@ components:
           type: string
         dependsOnJobCode:
           type: string
-          maxLength: 128
+          maxLength: 64
           description: 上游作业编码；填写后 scheduled fire 前等待同 bizDate 上游就绪。
         timezone:
           type: string
@@ -12034,7 +12034,7 @@ components:
           type: string
         dependsOnJobCode:
           type: string
-          maxLength: 128
+          maxLength: 64
           description: 上游作业编码；填写后 scheduled fire 前等待同 bizDate 上游就绪。
         timezone:
           type: string
@@ -14467,7 +14467,7 @@ components:
         bizType: { type: string }
         scheduleType: { type: string }
         scheduleExpr: { type: string }
-        dependsOnJobCode: { type: string, maxLength: 128 }
+        dependsOnJobCode: { type: string, maxLength: 64 }
         timezone: { type: string }
         triggerMode: { type: string }
         workerGroup: { type: string }

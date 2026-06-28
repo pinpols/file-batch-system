@@ -13,9 +13,9 @@ public class JobDefinitionCreateRequest {
 
   @ValidResourceCode private String jobCode;
 
-  @Size(max = 128)
+  @Size(max = 64)
   @Pattern(
-      regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,127}$",
+      regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
       message =
           "dependsOnJobCode must start with a letter and contain only letters, digits,"
               + " underscore or hyphen")
