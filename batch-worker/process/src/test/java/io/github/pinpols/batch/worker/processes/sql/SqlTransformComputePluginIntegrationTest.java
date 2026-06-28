@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -19,7 +20,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * SqlTransformComputePlugin WAP+bookends 端到端集成测试。
@@ -40,8 +41,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
  */
 class SqlTransformComputePluginIntegrationTest {
 
-  private static final PostgreSQLContainer<?> POSTGRES =
-      new PostgreSQLContainer<>("postgres:17-alpine");
+  private static final PostgreSQLContainer POSTGRES =
+      new PostgreSQLContainer(TestContainerImages.POSTGRES);
 
   private JdbcTemplate jdbcTemplate;
   private SqlTransformComputePlugin plugin;

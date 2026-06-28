@@ -6,8 +6,8 @@ import javax.sql.DataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -21,14 +21,6 @@ import org.testcontainers.utility.DockerImageName;
 @BatchIntegrationTest
 public abstract class AbstractIntegrationTest {
 
-  // 版本需与 .env.example POSTGRES_IMAGE_TAG 保持一致
-  private static final String POSTGRES_IMAGE = "postgres:17";
-  // 版本需与 .env.example KAFKA_IMAGE_TAG 保持一致；KafkaContainer 仅支持 apache/kafka 镜像（非 Confluent）
-  private static final String KAFKA_IMAGE = "apache/kafka:4.1.2";
-  // 版本需与 .env.example VALKEY_IMAGE_TAG 保持一致
-  private static final String REDIS_IMAGE = "valkey/valkey:8.1";
-  // MinIO 版本在 ObjectStoreContainer 中维护，需与 .env.example MINIO_IMAGE_TAG 保持一致
-
   private static final String DEFAULT_DB_USER = "batch_user";
   private static final String DEFAULT_DB_PASSWORD = "batch_pass_123";
 
@@ -37,8 +29,8 @@ public abstract class AbstractIntegrationTest {
   // 破坏 MultiTenantConcurrent / OutboxForwarderRetry / ImportFailure 等依赖 outbox 状态的 IT。
   // PG 单次启动 ~3-5s,影响有限,稳妥优先。
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer<?> PLATFORM_POSTGRES =
-      new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
+  private static final PostgreSQLContainer PLATFORM_POSTGRES =
+      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
           .withDatabaseName("batch_platform")
           .withUsername(DEFAULT_DB_USER)
           .withPassword(DEFAULT_DB_PASSWORD)
@@ -47,8 +39,8 @@ public abstract class AbstractIntegrationTest {
           .withCommand("postgres", "-c", "max_connections=500");
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer<?> BUSINESS_POSTGRES =
-      new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
+  private static final PostgreSQLContainer BUSINESS_POSTGRES =
+      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
           .withDatabaseName("batch_business")
           .withUsername(DEFAULT_DB_USER)
           .withPassword(DEFAULT_DB_PASSWORD)
@@ -59,14 +51,14 @@ public abstract class AbstractIntegrationTest {
   // Kafka 不加 withReuse:OutboxPublishCircuitBreakerKafkaFailureIT 等用 stopKafka/startKafka 做
   // fault injection,reuse 容器禁止 stop。Kafka 单次启动 ~5s,影响有限。
   private static final KafkaContainer KAFKA =
-      new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));
+      new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA));
 
   @SuppressWarnings("resource")
   private static final ObjectStoreContainer MINIO = new ObjectStoreContainer().withReuse(true);
 
   @SuppressWarnings("resource")
   private static final GenericContainer<?> REDIS =
-      new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
+      new GenericContainer<>(DockerImageName.parse(TestContainerImages.VALKEY))
           .withExposedPorts(6379)
           .withCommand("redis-server", "--appendonly", "yes")
           .withReuse(true);

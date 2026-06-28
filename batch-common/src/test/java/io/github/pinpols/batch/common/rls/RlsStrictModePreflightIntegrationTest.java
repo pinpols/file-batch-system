@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.github.pinpols.batch.testing.TestContainerImages;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -46,8 +47,7 @@ import org.testcontainers.utility.DockerImageName;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RlsStrictModePreflightIntegrationTest {
 
-  private static final String POSTGRES_IMAGE = "postgres:17";
-  private static PostgreSQLContainer<?> POSTGRES;
+  private static PostgreSQLContainer POSTGRES;
   private static HikariDataSource DATASOURCE;
   private static JdbcTemplate JDBC;
   private static TransactionTemplate TX;
@@ -56,7 +56,7 @@ class RlsStrictModePreflightIntegrationTest {
   @BeforeAll
   static void startContainer() {
     POSTGRES =
-        new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
+        new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
             .withDatabaseName("batch_business")
             .withUsername("batch_user")
             .withPassword("batch_pass_123")

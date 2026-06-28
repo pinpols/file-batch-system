@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.github.pinpols.batch.testing.TestContainerImages;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -37,8 +38,7 @@ import org.testcontainers.utility.DockerImageName;
 @DisplayName("Phase A · RLS 闭世界守护")
 class RlsClosedWorldCheckIntegrationTest {
 
-  private static final String POSTGRES_IMAGE = "postgres:17";
-  private static PostgreSQLContainer<?> postgres;
+  private static PostgreSQLContainer postgres;
   private static HikariDataSource dataSource;
   private static JdbcTemplate jdbc;
 
@@ -46,7 +46,7 @@ class RlsClosedWorldCheckIntegrationTest {
   @BeforeAll
   static void startContainer() {
     postgres =
-        new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
+        new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
             .withDatabaseName("batch_business")
             .withUsername("batch_user")
             .withPassword("batch_pass_123")

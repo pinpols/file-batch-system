@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -32,8 +32,8 @@ class SqlConsistencyIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer<?> POSTGRES =
-      new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
+  private static final PostgreSQLContainer POSTGRES =
+      new PostgreSQLContainer(DockerImageName.parse("postgres:17"))
           .withDatabaseName("batch_sql_guard")
           .withUsername("batch_user")
           .withPassword("batch_pass_123");

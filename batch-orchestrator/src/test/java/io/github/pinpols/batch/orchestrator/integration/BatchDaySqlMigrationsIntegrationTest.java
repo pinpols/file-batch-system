@@ -11,9 +11,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @Tag("integration")
@@ -22,8 +22,8 @@ class BatchDaySqlMigrationsIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer<?> POSTGRES =
-      new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
+  private static final PostgreSQLContainer POSTGRES =
+      new PostgreSQLContainer(DockerImageName.parse("postgres:17"))
           .withDatabaseName("batch_day_sql_guard")
           .withUsername("batch_user")
           .withPassword("batch_pass_123");

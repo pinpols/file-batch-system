@@ -12,6 +12,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.testkit.RecordedReport;
 import io.github.pinpols.batch.sdk.testkit.TaskDispatchMessageBuilder;
+import io.github.pinpols.batch.testing.TestContainerImages;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -78,7 +79,7 @@ class SdkAgainstStubOrchestratorE2eIT {
 
   @Container
   static final KafkaContainer KAFKA =
-      new KafkaContainer(DockerImageName.parse("apache/kafka-native:3.8.0"));
+      new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA));
 
   private static StubOrchestrator stub;
   private static Producer<String, byte[]> producer;

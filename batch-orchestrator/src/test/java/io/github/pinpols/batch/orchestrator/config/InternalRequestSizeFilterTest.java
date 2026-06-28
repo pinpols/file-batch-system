@@ -42,7 +42,7 @@ class InternalRequestSizeFilterTest {
 
     filter(1024).doFilter(post("/internal/tasks/report", 4096), res, chain);
 
-    assertThat(res.getStatus()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE.value());
+    assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
     verify(chain, never())
         .doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
   }
