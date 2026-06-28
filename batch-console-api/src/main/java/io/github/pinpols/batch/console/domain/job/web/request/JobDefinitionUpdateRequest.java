@@ -1,12 +1,21 @@
 package io.github.pinpols.batch.console.domain.job.web.request;
 
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
 public class JobDefinitionUpdateRequest {
   @ValidTenantId private String tenantId;
+
+  @Size(max = 128)
+  @Pattern(
+      regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,127}$",
+      message =
+          "dependsOnJobCode must start with a letter and contain only letters, digits,"
+              + " underscore or hyphen")
+  private String dependsOnJobCode;
 
   @Size(max = 256)
   private String jobName;

@@ -36,4 +36,10 @@ class ConfigPackageExcelSchemaConsistencyTest {
     assertThat(ConfigPackageExcelWorkbookWriter.WF_EDGE_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.WorkflowEdge.COLUMNS);
   }
+
+  @Test
+  void jobDefinitionSchemaIncludesDependsOnJobCodeNearScheduleColumns() {
+    assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
+        .containsSubsequence("schedule_expr", "depends_on_job_code", "calendar_code");
+  }
 }

@@ -77,6 +77,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity entity = new JobDefinitionEntity();
     entity.setTenantId(tenantId);
     entity.setJobCode(request.getJobCode());
+    entity.setDependsOnJobCode(normalizeJobCodeRef(request.getDependsOnJobCode()));
     entity.setJobName(request.getJobName());
     entity.setJobType(request.getJobType());
     entity.setBizType(request.getBizType());
@@ -125,6 +126,10 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(tenantId);
     param.setJobCode(existing.getJobCode());
+    param.setDependsOnJobCode(
+        request.getDependsOnJobCode() != null
+            ? normalizeJobCodeRef(request.getDependsOnJobCode())
+            : existing.getDependsOnJobCode());
     param.setJobName(request.getJobName() != null ? request.getJobName() : existing.getJobName());
     param.setQueueCode(
         request.getQueueCode() != null
@@ -236,6 +241,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(resolved);
     param.setJobCode(request.getNewJobCode());
+    param.setDependsOnJobCode(copied.getDependsOnJobCode());
     param.setJobName(request.getJobName() != null ? request.getJobName() : copied.getJobName());
     param.setQueueCode(
         request.getQueueCode() != null
@@ -282,6 +288,7 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getId(),
         e.getTenantId(),
         e.getJobCode(),
+        e.getDependsOnJobCode(),
         e.getJobName(),
         e.getJobType(),
         e.getBizType(),
@@ -309,5 +316,13 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getDescription(),
         e.getCreatedAt(),
         e.getUpdatedAt());
+  }
+
+  private static String normalizeJobCodeRef(String raw) {
+    if (raw == null) {
+      return null;
+    }
+    String trimmed = raw.trim();
+    return trimmed.isEmpty() ? null : trimmed;
   }
 }

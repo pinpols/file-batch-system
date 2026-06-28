@@ -69,6 +69,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -412,7 +413,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     Row headerRow = sheet.getRow(sheet.getFirstRowNum());
     Guard.require(headerRow != null, "header row missing in sheet: " + sheetName);
     Map<String, Integer> headerIndex = buildHeaderIndex(headerRow, fmt);
-    validateSheetHeaders(sheetName, headerIndex, Set.copyOf(columns));
+    validateSheetHeaders(sheetName, headerIndex, requiredHeaders(sheetName, columns));
     List<Map<String, String>> rows = new ArrayList<>();
     for (int i = headerRow.getRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
       Row row = sheet.getRow(i);
@@ -422,6 +423,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       Map<String, String> values = new LinkedHashMap<>();
       for (String col : columns) {
         Integer colIdx = headerIndex.get(col);
+        if (colIdx == null) {
+          continue;
+        }
         values.put(col, normalize(cellText(row, colIdx, fmt)));
       }
       if (tenantId != null && !Texts.hasText(values.get(COL_TENANT_ID))) {
@@ -430,6 +434,15 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       rows.add(values);
     }
     return rows;
+  }
+
+  private static Set<String> requiredHeaders(String sheetName, List<String> columns) {
+    if (!JOB_SHEET.equals(sheetName)) {
+      return Set.copyOf(columns);
+    }
+    Set<String> required = new LinkedHashSet<>(columns);
+    required.remove(COL_DEPENDS_ON_JOB_CODE);
+    return required;
   }
 
   private List<Map<String, String>> parseOptionalSheet(
@@ -553,6 +566,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
         entity.setScheduleType(normalizeEnum(row.get(COL_SCHEDULE_TYPE)));
         entity.setScheduleExpr(normalize(row.get(COL_SCHEDULE_EXPR)));
+        entity.setDependsOnJobCode(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)));
         entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE)));
         entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_WINDOW_CODE)));
         entity.setRetryPolicy(normalizeEnum(row.get(COL_RETRY_POLICY)));
@@ -578,6 +592,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         param.setQueueCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_QUEUE_CODE)));
         param.setWorkerGroup(CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
         param.setScheduleExpr(normalize(row.get(COL_SCHEDULE_EXPR)));
+        param.setDependsOnJobCode(
+            row.containsKey(COL_DEPENDS_ON_JOB_CODE)
+                ? normalize(row.get(COL_DEPENDS_ON_JOB_CODE))
+                : existing.getDependsOnJobCode());
         param.setCalendarCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE)));
         param.setWindowCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_WINDOW_CODE)));
         param.setRetryPolicy(normalizeEnum(row.get(COL_RETRY_POLICY)));

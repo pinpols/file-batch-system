@@ -72,6 +72,7 @@ public class ConfigPackageExcelValidator {
   public static final String COL_JOB_TYPE = "job_type";
   public static final String COL_SCHEDULE_TYPE = "schedule_type";
   public static final String COL_SCHEDULE_EXPR = "schedule_expr";
+  public static final String COL_DEPENDS_ON_JOB_CODE = "depends_on_job_code";
   public static final String COL_CALENDAR_CODE = "calendar_code";
   public static final String COL_QUEUE_CODE = "queue_code";
   public static final String COL_PARAM_SCHEMA = "param_schema";
@@ -420,6 +421,7 @@ public class ConfigPackageExcelValidator {
     optionalEnum(
         normalizeEnum(row.get(COL_SHARD_STRATEGY)), "shard_strategy", SHARD_STRATEGIES, ri);
     optionalEnum(normalizeEnum(row.get(COL_EXECUTION_MODE)), "execution_mode", EXECUTION_MODES, ri);
+    validateOptionalJobCodeRef(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)), ri);
     validateJsonField(row.get(COL_PARAM_SCHEMA), "param_schema", false, ri);
     validateCronSchedule(row, ri);
     if (hasText(jobCode) && !seen.add(tenantId + KEY_SEP_HASH + jobCode)) {
@@ -906,7 +908,13 @@ public class ConfigPackageExcelValidator {
     List<WorkbookIssue> issues = new ArrayList<>();
 
     addJobDependencyIssues(
-        tenantId, validJobs, queueCodesInExcel, calendarCodesInExcel, windowCodesInExcel, issues);
+        tenantId,
+        validJobs,
+        jobCodesInExcel,
+        queueCodesInExcel,
+        calendarCodesInExcel,
+        windowCodesInExcel,
+        issues);
 
     int rowNo = 2;
     for (Map<String, String> row : allPipelineRows) {
@@ -1291,6 +1299,7 @@ public class ConfigPackageExcelValidator {
   private void addJobDependencyIssues(
       String tenantId,
       List<Map<String, String>> rows,
+      Set<String> jobCodesInExcel,
       Set<String> queueCodesInExcel,
       Set<String> calendarCodesInExcel,
       Set<String> windowCodesInExcel,
@@ -1308,6 +1317,17 @@ public class ConfigPackageExcelValidator {
                 rowNo,
                 COL_QUEUE_CODE,
                 "queue_code references unknown resource_queue: " + queueCode));
+      }
+      String dependsOnJobCode = normalize(row.get(COL_DEPENDS_ON_JOB_CODE));
+      if (hasText(dependsOnJobCode)
+          && !jobCodesInExcel.contains(dependsOnJobCode)
+          && jobDefinitionMapper.selectByUniqueKey(tenantId, dependsOnJobCode) == null) {
+        issues.add(
+            new WorkbookIssue(
+                JOB_SHEET,
+                rowNo,
+                COL_DEPENDS_ON_JOB_CODE,
+                "depends_on_job_code references unknown job definition: " + dependsOnJobCode));
       }
       String calendarCode = normalize(row.get(COL_CALENDAR_CODE));
       if (hasText(calendarCode)
@@ -1508,6 +1528,17 @@ public class ConfigPackageExcelValidator {
 
   public static boolean hasText(String value) {
     return Texts.hasText(value);
+  }
+
+  private static void validateOptionalJobCodeRef(String value, List<String> ri) {
+    if (!hasText(value)) {
+      return;
+    }
+    if (!value.matches("^[a-zA-Z][a-zA-Z0-9_-]{0,127}$")) {
+      ri.add(
+          "depends_on_job_code must start with a letter and contain only letters, digits,"
+              + " underscore or hyphen");
+    }
   }
 
   private static void addIssues(

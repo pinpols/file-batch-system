@@ -242,6 +242,7 @@ public class ConsoleJobQueryService {
         entity.getId(),
         display(entity.getTenantId()),
         display(entity.getJobCode()),
+        display(entity.getDependsOnJobCode()),
         display(entity.getJobName()),
         display(entity.getJobType()),
         display(entity.getBizType()),

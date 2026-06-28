@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.web.request.config;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.Data;
@@ -53,6 +54,14 @@ public class TenantConfigBatchInitRequest {
   public static class JobDefinitionSpec {
     @Size(max = 128)
     private String jobCode;
+
+    @Size(max = 128)
+    @Pattern(
+        regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,127}$",
+        message =
+            "dependsOnJobCode must start with a letter and contain only letters, digits,"
+                + " underscore or hyphen")
+    private String dependsOnJobCode;
 
     @Size(max = 256)
     private String jobName;

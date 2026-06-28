@@ -6,6 +6,7 @@ public record ConsoleJobDefinitionResponse(
     Long id,
     String tenantId,
     String jobCode,
+    String dependsOnJobCode,
     String jobName,
     String jobType,
     String bizType,

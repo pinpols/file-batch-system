@@ -338,6 +338,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
     jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, descriptor.getTriggerMode());
     jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
+    jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, descriptor.getDependsOnJobCode());
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
     return JobBuilder.newJob(QuartzLaunchJob.class)
