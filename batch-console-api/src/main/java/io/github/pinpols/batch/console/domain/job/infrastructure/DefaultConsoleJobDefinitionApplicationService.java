@@ -77,7 +77,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity entity = new JobDefinitionEntity();
     entity.setTenantId(tenantId);
     entity.setJobCode(request.getJobCode());
-    entity.setDependsOnJobCode(normalizeJobCodeRef(request.getDependsOnJobCode()));
+    entity.setDependsOnJobCode(CodeNormalizer.trimToNull(request.getDependsOnJobCode()));
     entity.setJobName(request.getJobName());
     entity.setJobType(request.getJobType());
     entity.setBizType(request.getBizType());
@@ -128,7 +128,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     param.setJobCode(existing.getJobCode());
     param.setDependsOnJobCode(
         request.getDependsOnJobCode() != null
-            ? normalizeJobCodeRef(request.getDependsOnJobCode())
+            ? CodeNormalizer.trimToNull(request.getDependsOnJobCode())
             : existing.getDependsOnJobCode());
     param.setJobName(request.getJobName() != null ? request.getJobName() : existing.getJobName());
     param.setQueueCode(
@@ -316,13 +316,5 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getDescription(),
         e.getCreatedAt(),
         e.getUpdatedAt());
-  }
-
-  private static String normalizeJobCodeRef(String raw) {
-    if (raw == null) {
-      return null;
-    }
-    String trimmed = raw.trim();
-    return trimmed.isEmpty() ? null : trimmed;
   }
 }
