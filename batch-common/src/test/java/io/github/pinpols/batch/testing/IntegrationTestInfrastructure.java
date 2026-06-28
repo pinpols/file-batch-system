@@ -2,8 +2,8 @@ package io.github.pinpols.batch.testing;
 
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 集成测试属性注册的统一入口。
@@ -19,8 +19,8 @@ final class IntegrationTestInfrastructure {
 
   static void registerDynamicProperties(
       DynamicPropertyRegistry registry,
-      PostgreSQLContainer<?> platformPostgres,
-      PostgreSQLContainer<?> businessPostgres,
+      PostgreSQLContainer platformPostgres,
+      PostgreSQLContainer businessPostgres,
       KafkaContainer kafka,
       ObjectStoreContainer objectStore,
       GenericContainer<?> redis) {
@@ -33,7 +33,7 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerPlatformDatabaseProperties(
-      DynamicPropertyRegistry registry, PostgreSQLContainer<?> postgres) {
+      DynamicPropertyRegistry registry, PostgreSQLContainer postgres) {
     registry.add("spring.datasource.url", postgres::getJdbcUrl);
     registry.add("spring.datasource.username", postgres::getUsername);
     registry.add("spring.datasource.password", postgres::getPassword);
@@ -51,7 +51,7 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerBusinessDatabaseProperties(
-      DynamicPropertyRegistry registry, PostgreSQLContainer<?> postgres) {
+      DynamicPropertyRegistry registry, PostgreSQLContainer postgres) {
     registry.add("batch.datasource.business.url", postgres::getJdbcUrl);
     registry.add("batch.datasource.business.username", postgres::getUsername);
     registry.add("batch.datasource.business.password", postgres::getPassword);

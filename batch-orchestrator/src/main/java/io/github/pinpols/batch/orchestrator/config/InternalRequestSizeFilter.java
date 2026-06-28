@@ -70,7 +70,7 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
   }
 
   private static void writePayloadTooLarge(HttpServletResponse response) throws IOException {
-    response.setStatus(HttpStatus.PAYLOAD_TOO_LARGE.value());
+    response.setStatus(HttpStatus.CONTENT_TOO_LARGE.value());
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response.setHeader(HttpHeaders.CONNECTION, "close");
     response.getWriter().write(PAYLOAD_TOO_LARGE_BODY);

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.config.RoutingHints;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.TestContainerImages;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Collection;
@@ -24,7 +25,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -61,8 +62,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
   private static final String REPLICA_DB_NAME = "batch_replica";
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer<?> REPLICA_PG =
-      new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
+  private static final PostgreSQLContainer REPLICA_PG =
+      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
           .withDatabaseName(REPLICA_DB_NAME)
           .withUsername("batch_user")
           .withPassword("batch_pass_123")

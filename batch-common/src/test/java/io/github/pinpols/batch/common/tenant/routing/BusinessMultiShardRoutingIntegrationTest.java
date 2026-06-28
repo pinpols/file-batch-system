@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.testing.TestContainerImages;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -16,7 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -29,17 +30,17 @@ import org.testcontainers.utility.DockerImageName;
  */
 class BusinessMultiShardRoutingIntegrationTest {
 
-  private static final DockerImageName PG = DockerImageName.parse("postgres:17");
+  private static final DockerImageName PG = DockerImageName.parse(TestContainerImages.POSTGRES);
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer<?> SHARD0 =
-      new PostgreSQLContainer<>(PG)
+  private static final PostgreSQLContainer SHARD0 =
+      new PostgreSQLContainer(PG)
           .withDatabaseName("batch_business")
           .withUrlParam("sslmode", "disable");
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer<?> SHARD1 =
-      new PostgreSQLContainer<>(PG)
+  private static final PostgreSQLContainer SHARD1 =
+      new PostgreSQLContainer(PG)
           .withDatabaseName("batch_business")
           .withUrlParam("sslmode", "disable");
 
@@ -150,7 +151,7 @@ class BusinessMultiShardRoutingIntegrationTest {
     };
   }
 
-  private static HikariDataSource hikari(PostgreSQLContainer<?> pg) {
+  private static HikariDataSource hikari(PostgreSQLContainer pg) {
     HikariConfig cfg = new HikariConfig();
     cfg.setJdbcUrl(pg.getJdbcUrl());
     cfg.setUsername(pg.getUsername());
