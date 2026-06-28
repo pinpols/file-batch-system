@@ -29,6 +29,10 @@ import org.springframework.http.MediaType;
 class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String createBody(String jobCode) {
+    return createBody(jobCode, null);
+  }
+
+  private String createBody(String jobCode, String dependsOnJobCode) {
     return "{"
         + "\"tenantId\":\"int-ta\","
         + "\"jobCode\":\""
@@ -37,6 +41,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         + "\"jobName\":\"integration test\","
         + "\"jobType\":\"GENERAL\","
         + "\"scheduleType\":\"MANUAL\""
+        + (dependsOnJobCode == null ? "" : ",\"dependsOnJobCode\":\"" + dependsOnJobCode + "\"")
         + "}";
   }
 
@@ -174,5 +179,59 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
 
     // 清理
     jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);
+  }
+
+  @Test
+  void shouldCreateAndUpdateDependsOnJobCode() {
+    String jobCode = "int_test_dep_" + System.currentTimeMillis();
+    try {
+      client
+          .post()
+          .uri("/api/console/job-definitions")
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cd-" + jobCode)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(createBody(jobCode, "UPSTREAM_JOB"))
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .value(
+              body -> {
+                assertThat(body).contains("\"code\":\"SUCCESS\"");
+                assertThat(body).contains("\"dependsOnJobCode\":\"UPSTREAM_JOB\"");
+              });
+
+      Long id =
+          jdbcTemplate.queryForObject(
+              "SELECT id FROM batch.job_definition WHERE job_code = ?", Long.class, jobCode);
+      assertThat(id).isNotNull();
+      String createdDepends =
+          jdbcTemplate.queryForObject(
+              "SELECT depends_on_job_code FROM batch.job_definition WHERE id = ?",
+              String.class,
+              id);
+      assertThat(createdDepends).isEqualTo("UPSTREAM_JOB");
+
+      client
+          .put()
+          .uri("/api/console/job-definitions/" + id)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ud-" + jobCode)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue("{\"tenantId\":\"int-ta\",\"dependsOnJobCode\":\"NEXT_UPSTREAM\"}")
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .value(body -> assertThat(body).contains("\"dependsOnJobCode\":\"NEXT_UPSTREAM\""));
+
+      String updatedDepends =
+          jdbcTemplate.queryForObject(
+              "SELECT depends_on_job_code FROM batch.job_definition WHERE id = ?",
+              String.class,
+              id);
+      assertThat(updatedDepends).isEqualTo("NEXT_UPSTREAM");
+    } finally {
+      jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);
+    }
   }
 }

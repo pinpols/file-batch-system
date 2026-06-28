@@ -1217,6 +1217,10 @@ public class ConfigPackageExcelWorkbookWriter {
                 // CRON / FIXED_RATE / MANUAL（不再包含历史值 EVENT / ONE_TIME，validator 已拒收）
                 SCHEDULE_TYPE_DROPDOWN)),
         Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
+        Map.entry(
+            COL_DEPENDS_ON_JOB_CODE,
+            optionalColumn(
+                "上游作业编码；填写后 scheduled fire 前会等待同 bizDate 上游就绪。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
         Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
         Map.entry(

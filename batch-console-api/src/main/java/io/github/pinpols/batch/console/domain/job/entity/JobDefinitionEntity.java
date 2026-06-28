@@ -9,6 +9,7 @@ public class JobDefinitionEntity {
   private Long id;
   private String tenantId;
   private String jobCode;
+  private String dependsOnJobCode;
   private String jobName;
   private String jobType;
   private String bizType;

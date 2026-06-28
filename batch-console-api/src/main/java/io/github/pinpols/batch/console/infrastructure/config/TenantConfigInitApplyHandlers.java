@@ -242,6 +242,7 @@ public class TenantConfigInitApplyHandlers {
     JobDefinitionEntity entity = new JobDefinitionEntity();
     entity.setTenantId(tenantId);
     entity.setJobCode(spec.getJobCode());
+    entity.setDependsOnJobCode(CodeNormalizer.trimToNull(spec.getDependsOnJobCode()));
     entity.setJobName(spec.getJobName());
     entity.setJobType(spec.getJobType());
     entity.setBizType(spec.getBizType());
@@ -274,6 +275,9 @@ public class TenantConfigInitApplyHandlers {
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(existing.getTenantId());
     param.setJobCode(existing.getJobCode());
+    param.setDependsOnJobCode(
+        Nullables.coalesce(
+            CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode()));
     param.setJobName(Nullables.coalesce(spec.getJobName(), existing.getJobName()));
     param.setQueueCode(
         Nullables.coalesce(

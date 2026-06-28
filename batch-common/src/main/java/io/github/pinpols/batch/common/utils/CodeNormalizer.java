@@ -90,7 +90,8 @@ public final class CodeNormalizer {
     return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT).replace('-', '_');
   }
 
-  private static String trimToNull(String raw) {
+  /** 纯归一:trim + 空白→null,不改大小写。供大小写敏感的码引用(如 job_code 引用)复用。 */
+  public static String trimToNull(String raw) {
     if (raw == null) {
       return null;
     }

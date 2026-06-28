@@ -7,6 +7,7 @@ public class JobDefinitionMaintenanceUpdateParam {
 
   private String tenantId;
   private String jobCode;
+  private String dependsOnJobCode;
   private String jobName;
   private String queueCode;
   private String workerGroup;

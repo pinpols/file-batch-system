@@ -78,6 +78,7 @@ class QuartzLaunchJobTest {
     assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
     assertThat(captor.getValue().descriptor().getCatchUpPolicy())
         .isEqualTo(CatchUpPolicyType.AUTO.code());
+    assertThat(captor.getValue().descriptor().getDependsOnJobCode()).isEqualTo("UPSTREAM_JOB");
     verify(triggerService, never()).createPendingCatchUp(any());
     verify(misfireHandler).handle("t1:IMPORT_JOB");
   }
@@ -125,6 +126,7 @@ class QuartzLaunchJobTest {
     jobDataMap.put(QuartzLaunchJob.TIMEZONE, "UTC");
     jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, "SCHEDULED");
     jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, "BIZ_CAL");
+    jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, "UPSTREAM_JOB");
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, catchUpPolicy);
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, catchUpMaxDays);
     return jobDataMap;

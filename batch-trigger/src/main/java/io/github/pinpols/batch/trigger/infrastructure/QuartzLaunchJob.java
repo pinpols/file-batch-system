@@ -51,6 +51,7 @@ public class QuartzLaunchJob implements Job {
   public static final String TIMEZONE = "timezone";
   public static final String TRIGGER_MODE = "triggerMode";
   public static final String CALENDAR_CODE = "calendarCode";
+  public static final String DEPENDS_ON_JOB_CODE = "dependsOnJobCode";
   public static final String CATCH_UP_POLICY = "catchUpPolicy";
   public static final String CATCH_UP_MAX_DAYS = "catchUpMaxDays";
 
@@ -70,6 +71,7 @@ public class QuartzLaunchJob implements Job {
     descriptor.setTimezone(jobDataMap.getString(TIMEZONE));
     descriptor.setTriggerMode(jobDataMap.getString(TRIGGER_MODE));
     descriptor.setCalendarCode(jobDataMap.getString(CALENDAR_CODE));
+    descriptor.setDependsOnJobCode(jobDataMap.getString(DEPENDS_ON_JOB_CODE));
     descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
     descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
     descriptor.setEnabled(true);

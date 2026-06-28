@@ -42,11 +42,10 @@ class TriggerSchedulerFacadeTest {
 
   @Test
   void shouldScheduleEnabledCronDefinitionsWithCatchUpMetadata() throws Exception {
+    TriggerDescriptor dependentCron = cronDescriptor("t1", "JOB_CRON", true);
+    dependentCron.setDependsOnJobCode("UPSTREAM_JOB");
     when(triggerDefinitionLoader.loadAll())
-        .thenReturn(
-            List.of(
-                cronDescriptor("t1", "JOB_CRON", true),
-                cronDescriptor("t1", "JOB_DISABLED", false)));
+        .thenReturn(List.of(dependentCron, cronDescriptor("t1", "JOB_DISABLED", false)));
 
     facade.registerAll();
 
@@ -59,6 +58,7 @@ class TriggerSchedulerFacadeTest {
     assertThat(jobDetail.getKey().getGroup()).isEqualTo(TriggerSchedulerFacade.JOB_GROUP);
     assertThat(jobDetail.getJobDataMap())
         .containsEntry(QuartzLaunchJob.CALENDAR_CODE, "BIZ_CAL")
+        .containsEntry(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, "UPSTREAM_JOB")
         .containsEntry(QuartzLaunchJob.CATCH_UP_POLICY, CatchUpPolicyType.AUTO.code())
         .containsEntry(QuartzLaunchJob.CATCH_UP_MAX_DAYS, 3);
     assertThat(triggerCaptor.getValue().getCronExpression()).isEqualTo("0 0 1 * * ?");

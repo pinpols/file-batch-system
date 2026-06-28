@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -54,7 +55,7 @@ class ParseStepFixtureTest {
 
     ImportStageResult result = parseStep.execute(ctx);
 
-    assertThat(result.success()).isTrue();
+    assertThat(result.success()).as(result.message()).isTrue();
     assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(10L);
   }
 
@@ -67,7 +68,7 @@ class ParseStepFixtureTest {
 
     ImportStageResult result = parseStep.execute(ctx);
 
-    assertThat(result.success()).isTrue();
+    assertThat(result.success()).as(result.message()).isTrue();
     assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(5L);
   }
 
@@ -238,7 +239,7 @@ class ParseStepFixtureTest {
 
     ImportStageResult result = parseStep.execute(ctx);
 
-    assertThat(result.success()).isTrue();
+    assertThat(result.success()).as(result.toString()).isTrue();
     assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(2L);
     assertThat(ctx.getAttributes().get("declaredRecordCount")).isEqualTo(2L);
     assertThat(String.valueOf(ctx.getAttributes().get("declaredControlTotal"))).isEqualTo("30.00");
@@ -256,18 +257,55 @@ class ParseStepFixtureTest {
     assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
   }
 
+  @Test
+  void shouldFailWhenTrailerTemplatePresentForBinaryPayload() {
+    String content = "id,name,amount\n1,Alice,10.00\nT,1,10.00\n";
+    ImportJobContext ctx =
+        buildContextBase64(
+            Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8)),
+            "DELIMITED",
+            1);
+    withTrailerTemplate(ctx);
+
+    ImportStageResult result = parseStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("trailer control record is not supported");
+  }
+
+  @Test
+  void shouldFailWhenTrailerTemplatePresentForSpoolPayload() throws Exception {
+    Path spool = Files.createTempFile("parse-step-trailer-spool", ".csv");
+    Files.writeString(spool, "id,name,amount\n1,Alice,10.00\nT,1,10.00\n", StandardCharsets.UTF_8);
+    ImportJobContext ctx = buildContext("", "DELIMITED", ",", 1, null);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, StandardCharsets.UTF_8);
+    withTrailerTemplate(ctx);
+
+    ImportStageResult result = parseStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("trailer control record is not supported");
+  }
+
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private String loadFixture(String resourcePath) throws IOException {
-    URL url = getClass().getClassLoader().getResource(resourcePath);
-    assertThat(url).as("Fixture not found: %s", resourcePath).isNotNull();
-    return Files.readString(Path.of(url.getPath()), StandardCharsets.UTF_8);
+    return Files.readString(fixturePath(resourcePath), StandardCharsets.UTF_8);
   }
 
   private byte[] loadFixtureBytes(String resourcePath) throws IOException {
+    return Files.readAllBytes(fixturePath(resourcePath));
+  }
+
+  private Path fixturePath(String resourcePath) throws IOException {
     URL url = getClass().getClassLoader().getResource(resourcePath);
     assertThat(url).as("Fixture not found: %s", resourcePath).isNotNull();
-    return Files.readAllBytes(Path.of(url.getPath()));
+    try {
+      return Path.of(url.toURI());
+    } catch (URISyntaxException ex) {
+      throw new IOException("Invalid fixture URI: " + resourcePath, ex);
+    }
   }
 
   private ImportJobContext buildContext(

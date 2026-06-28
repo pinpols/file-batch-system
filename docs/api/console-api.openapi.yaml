@@ -11964,6 +11964,10 @@ components:
           type: string
         scheduleExpr:
           type: string
+        dependsOnJobCode:
+          type: string
+          maxLength: 64
+          description: 上游作业编码；填写后 scheduled fire 前等待同 bizDate 上游就绪。
         timezone:
           type: string
         triggerMode:
@@ -12028,6 +12032,10 @@ components:
           type: string
         scheduleExpr:
           type: string
+        dependsOnJobCode:
+          type: string
+          maxLength: 64
+          description: 上游作业编码；填写后 scheduled fire 前等待同 bizDate 上游就绪。
         timezone:
           type: string
         triggerMode:
@@ -12082,6 +12090,8 @@ components:
           type: string
         jobCode:
           type: string
+        dependsOnJobCode:
+          type: string
         jobName:
           type: string
         jobType:
@@ -12128,7 +12138,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, jobCode, jobName, jobType, queueCode, workerGroup, scheduleType, scheduleExpr, calendarCode, windowCode, retryPolicy, retryMaxCount, timeoutSeconds, shardStrategy, executionMode, executionHandler, paramSchema, defaultParams, enabled, createdAt, updatedAt]
+      required: [id, tenantId, jobCode, dependsOnJobCode, jobName, jobType, queueCode, workerGroup, scheduleType, scheduleExpr, calendarCode, windowCode, retryPolicy, retryMaxCount, timeoutSeconds, shardStrategy, executionMode, executionHandler, paramSchema, defaultParams, enabled, createdAt, updatedAt]
     ConsoleJobInstanceResponse:
       type: object
       properties:
@@ -14457,6 +14467,7 @@ components:
         bizType: { type: string }
         scheduleType: { type: string }
         scheduleExpr: { type: string }
+        dependsOnJobCode: { type: string, maxLength: 64 }
         timezone: { type: string }
         triggerMode: { type: string }
         workerGroup: { type: string }

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
+import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -164,7 +166,11 @@ class ImportPreprocessPipelineRsaTest {
   private static String loadResource(String resourcePath) throws Exception {
     URL url = ImportPreprocessPipelineRsaTest.class.getClassLoader().getResource(resourcePath);
     assertThat(url).as("Resource not found: %s", resourcePath).isNotNull();
-    return Files.readString(Path.of(url.getPath()));
+    try {
+      return Files.readString(Path.of(url.toURI()));
+    } catch (URISyntaxException ex) {
+      throw new IOException("Invalid resource URI: " + resourcePath, ex);
+    }
   }
 
   /**

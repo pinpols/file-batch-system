@@ -132,6 +132,7 @@ public class DelimitedFormatParser implements FormatParser {
     settings.getFormat().setDelimiter(delimiter.isEmpty() ? ',' : delimiter.charAt(0));
     settings.getFormat().setQuote('"');
     settings.getFormat().setQuoteEscape('"');
+    settings.setLineSeparatorDetectionEnabled(true);
     // headerRows / footerRows / schema fields 由本层按行逻辑处理，不让 Univocity 自动抽 header
     settings.setHeaderExtractionEnabled(false);
     settings.setSkipEmptyLines(true);

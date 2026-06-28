@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -111,6 +112,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   @Test
   void batchInit_createsJobDefinitionWhenNotExists() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.getJobDefinitions().get(0).setDependsOnJobCode("upstream-job");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
@@ -118,7 +120,12 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     assertThat(response.successTenants()).isEqualTo(1);
     assertThat(response.results().get(0).jobDefinitions().created()).isEqualTo(1);
     assertThat(response.results().get(0).jobDefinitions().skipped()).isEqualTo(0);
-    verify(jobDefinitionMapper).insert(any(JobDefinitionEntity.class));
+    verify(jobDefinitionMapper)
+        .insert(
+            argThat(
+                entity ->
+                    "upstream-job".equals(entity.getDependsOnJobCode())
+                        && "t1".equals(entity.getTenantId())));
   }
 
   @Test
@@ -138,6 +145,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   @Test
   void batchInit_updatesJobDefinitionWhenExistsInUpsertMode() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.getJobDefinitions().get(0).setDependsOnJobCode("next-upstream");
     request.setMode(InitMode.UPSERT);
     JobDefinitionEntity existing = new JobDefinitionEntity();
     existing.setJobCode("job-1");
@@ -147,7 +155,9 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
     assertThat(response.results().get(0).jobDefinitions().updated()).isEqualTo(1);
-    verify(jobDefinitionMapper).updateJobDefinitionMaintenance(any());
+    verify(jobDefinitionMapper)
+        .updateJobDefinitionMaintenance(
+            argThat(param -> "next-upstream".equals(param.getDependsOnJobCode())));
   }
 
   // ------------------------------------------------------------------ file channels

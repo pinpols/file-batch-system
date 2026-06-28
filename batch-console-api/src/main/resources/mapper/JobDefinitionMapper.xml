@@ -5,6 +5,7 @@
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_code" property="jobCode"/>
+        <result column="depends_on_job_code" property="dependsOnJobCode"/>
         <result column="job_name" property="jobName"/>
         <result column="job_type" property="jobType"/>
         <result column="biz_type" property="bizType"/>
@@ -112,14 +113,14 @@
     -->
     <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity" useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_definition (
-            tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
+            tenant_id, job_code, depends_on_job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
             timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,
             dag_enabled, shard_strategy, execution_mode, watermark_field,
             retry_policy, retry_max_count, timeout_seconds,
             execution_handler, param_schema, default_params, priority, enabled, description,
             created_by, updated_by
         ) values (
-            #{tenantId}, #{jobCode}, #{jobName}, #{jobType}, #{bizType}, #{scheduleType}, #{scheduleExpr},
+            #{tenantId}, #{jobCode}, #{dependsOnJobCode}, #{jobName}, #{jobType}, #{bizType}, #{scheduleType}, #{scheduleExpr},
             <choose><when test="timezone != null and timezone != ''">#{timezone}</when><otherwise>'Asia/Shanghai'</otherwise></choose>,
             #{workerGroup}, #{queueCode}, #{calendarCode}, #{windowCode},
             <choose><when test="triggerMode != null and triggerMode != ''">#{triggerMode}</when><otherwise>'SCHEDULED'</otherwise></choose>,
@@ -140,6 +141,7 @@
     <update id="updateJobDefinitionMaintenance">
         update batch.job_definition
         set job_name = #{jobName},
+            depends_on_job_code = #{dependsOnJobCode},
             queue_code = #{queueCode},
             worker_group = #{workerGroup},
             schedule_expr = #{scheduleExpr},
@@ -180,14 +182,14 @@
 
     <insert id="copyJobDefinition">
         insert into batch.job_definition (
-            tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
+            tenant_id, job_code, depends_on_job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
             timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,
             dag_enabled, shard_strategy, execution_mode, watermark_field,
             retry_policy, retry_max_count, timeout_seconds,
             execution_handler, param_schema, default_params, priority, enabled, description,
             created_by, updated_by
         )
-        select tenant_id, #{newJobCode}, concat(job_name, ' (copy)'), job_type, biz_type, schedule_type, schedule_expr,
+        select tenant_id, #{newJobCode}, depends_on_job_code, concat(job_name, ' (copy)'), job_type, biz_type, schedule_type, schedule_expr,
                timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,
                dag_enabled, shard_strategy, execution_mode, watermark_field,
                retry_policy, retry_max_count, timeout_seconds,

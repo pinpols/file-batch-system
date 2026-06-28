@@ -233,11 +233,8 @@ public class ParseStep implements ImportStageStep {
     }
     if (resolveSpoolPath(context) != null
         || attrs.get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD) != null) {
-      log.warn(
-          "trailer peel skipped for spool/binary payload: tenantId={}, fileId={}",
-          context.getTenantId(),
-          attrs.get(PipelineRuntimeKeys.FILE_ID));
-      return payloadText;
+      throw new IllegalArgumentException(
+          "trailer control record is not supported for spool/binary payload");
     }
     if (!Texts.hasText(payloadText)) {
       return payloadText;

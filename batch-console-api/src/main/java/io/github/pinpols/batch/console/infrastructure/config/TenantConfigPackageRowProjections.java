@@ -4,6 +4,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONDITION_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEFAULT_PARAMS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DESCRIPTION;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EDGE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_ENABLED;
@@ -84,6 +85,7 @@ public class TenantConfigPackageRowProjections {
               m.put(COL_WORKER_GROUP, e.getWorkerGroup());
               m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
               m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
+              m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
               m.put(COL_CALENDAR_CODE, e.getCalendarCode());
               m.put(COL_WINDOW_CODE, e.getWindowCode());
               m.put(COL_RETRY_POLICY, e.getRetryPolicy());
