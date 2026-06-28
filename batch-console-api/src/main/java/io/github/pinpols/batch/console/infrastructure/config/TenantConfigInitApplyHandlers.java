@@ -277,8 +277,7 @@ public class TenantConfigInitApplyHandlers {
     param.setJobCode(existing.getJobCode());
     param.setDependsOnJobCode(
         Nullables.coalesce(
-            CodeNormalizer.trimToNull(spec.getDependsOnJobCode()),
-            existing.getDependsOnJobCode()));
+            CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode()));
     param.setJobName(Nullables.coalesce(spec.getJobName(), existing.getJobName()));
     param.setQueueCode(
         Nullables.coalesce(

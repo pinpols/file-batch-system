@@ -41,9 +41,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         + "\"jobName\":\"integration test\","
         + "\"jobType\":\"GENERAL\","
         + "\"scheduleType\":\"MANUAL\""
-        + (dependsOnJobCode == null
-            ? ""
-            : ",\"dependsOnJobCode\":\"" + dependsOnJobCode + "\"")
+        + (dependsOnJobCode == null ? "" : ",\"dependsOnJobCode\":\"" + dependsOnJobCode + "\"")
         + "}";
   }
 
