@@ -45,7 +45,7 @@
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <awssdk.version>2.31.78</awssdk.version>
-        <testcontainers.version>1.21.4</testcontainers.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
         <!-- okhttp 升 5.0.0-alpha.16(2026-05-23 决策):虽然 Maven Central 上 5.x 仍只有 alpha
@@ -353,6 +353,10 @@
                         <exclude>**/BatchIntegrationTest.class</exclude>
                     </excludes>
                     <systemPropertyVariables>
+                        <!-- Docker Engine 29+ / Docker Desktop 4.52+ requires Docker API >= 1.44.
+                             Keep this at the root so all module-level Testcontainers IT share the same probe behavior,
+                             not only batch-e2e-tests. -->
+                        <api.version>1.44</api.version>
                         <testcontainers.reuse.enable>true</testcontainers.reuse.enable>
                     </systemPropertyVariables>
                 </configuration>
