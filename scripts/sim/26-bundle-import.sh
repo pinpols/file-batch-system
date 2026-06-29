@@ -4,7 +4,7 @@
 #
 #   投 2 个数据文件 + 1 个 .batch.json v2 清单到 MinIO ingress/ta/ →
 #   ImportIngressScanner 扫到、按清单 fileMapping 给每文件 file_record 落
-#   bundleTemplateCode + bundleJobCode → 到达组凑齐 → BundleArrivalLauncher 发
+#   bundleTemplateCode + bundleJobCode → 到达组满足完整性条件 → BundleArrivalLauncher 发
 #   TA_BUNDLE_IMPORT(BUNDLE_IMPORT)launch → DefaultSchedulePlanBuilder 展 2 个
 #   绑定异构 partition → import worker 各自复用 file_record 按模板导入 biz.customer_account。
 #
@@ -227,7 +227,7 @@ upload(f"{prefix}/{f1}", data1)
 upload(f"{prefix}/{f2}", data2)
 upload(f"{prefix}/{GROUP}.batch.json", json.dumps(manifest, ensure_ascii=False))
 
-# 2) 轮询:扫描器登记 → 到达组凑齐 → BUNDLE_IMPORT launch → 分区展开
+# 2) 轮询:扫描器登记 → 到达组满足完整性条件 → BUNDLE_IMPORT launch → 分区展开
 print(f"==> 等待 scanner→到达组→BUNDLE_IMPORT launch(group={GROUP})")
 instance_id = None
 deadline = time.time() + 180

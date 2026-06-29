@@ -1,6 +1,6 @@
 # file-batch-system
 
-批量任务编排控制面 + 文件 / 任务交付闭环。9 模块 Maven multi-module:trigger 触发 → orchestrator 派发 → workers 执行 → console-api 控制面。
+批量任务编排控制面 + 文件 / 任务交付闭环。根 Maven reactor 是 9 个 module path；平台运行时固定 10 个逻辑模块：trigger 触发 → orchestrator 派发 → workers 执行 → console-api 控制面。
 
 > **维护规则**:本文件只装「不能从代码推断的约束」+「高频违反的红线」+「关键路径指针」。细节去 `docs/`。
 >
@@ -8,14 +8,14 @@
 
 ## 模块
 
-固定 10 个,不可擅自增删:
+平台运行时固定 10 个逻辑模块,不可擅自增删:
 `batch-common` · `batch-trigger` · `batch-orchestrator` · `batch-worker-core` · `batch-worker-import` · `batch-worker-export` · `batch-worker-process` · `batch-worker-dispatch` · `batch-worker-atomic` · `batch-console-api`
 
 > **目录布局**:6 个 worker 模块(core/import/export/process/dispatch/atomic)归在 `batch-worker/` 父目录下(`batch-worker/{core,import,...}`,对齐 `sdk/java/{core,spring,testkit}` 嵌套范式),由 `batch-worker/pom.xml` aggregator 聚合并作为它们的 Maven parent。**artifactId 全不变**(仍是 `batch-worker-core` 等),依赖坐标/模块身份不受影响;只是目录从根迁到 `batch-worker/` 下。`-pl` 用路径形式(如 `-pl batch-worker/import`),Dockerfile 构建用 `MODULE_DIR`(路径)+ `MODULE`(jar 名/artifactId)双参数。
 
 > `batch-worker-atomic` = 专用 Task SPI worker,独占 shell/sql/stored-proc/http 原子执行器(dual-use RCE 隔离),不带文件 pipeline。见 ADR-029。2026-05-30 由 9 增至 10,破"固定模块"规则的理由(安全特权隔离)记于 ADR-029。
 >
-> `batch-worker-sdk` / `batch-worker-sdk-testkit` / `batch-worker-sdk-spring-boot-starter` 是 ADR-035 的租户自托管 SDK 发布/测试/可选 Spring 适配模块,不属于平台运行时固定 10 模块;core SDK 保持 Spring-free,starter 是独立可选模块。
+> Java SDK 三件套位于 `sdk/java/{core,spring,testkit}` 并纳入根 Maven reactor,但它们是 ADR-035 的租户自托管 SDK 发布/测试/可选 Spring 适配模块,不属于平台运行时固定 10 模块;core SDK 保持 Spring-free,starter 是独立可选模块。Go / Python / Rust / TypeScript SDK 是独立语言工具链。
 
 `load-tests` 是独立 reactor(未纳入根 reactor),版本字面量与根版本手工同步。
 

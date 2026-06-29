@@ -25,7 +25,7 @@ Options:
   --skip-build       Skip mvn package and run the existing jar directly
   --skip-tests       Pass -DskipTests to mvn package (security-scan 子模块单测
                      纯内部 orchestrator/options 逻辑,与扫描业务正确性无关;
-                     Java 25 + mockito javaagent 偶发 fork JVM crash 会让 PR 误挂)
+                     Mockito javaagent 偶发 fork JVM crash 会让 PR 误挂)
   --help             Show this message
 
 Examples:

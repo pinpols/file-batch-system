@@ -15,7 +15,7 @@
 #   bash scripts/local/sdk-handler-tests.sh python     # 只跑 Python
 #
 # 环境变量(均有默认,可覆盖):
-#   JAVA_HOME        Java 25 home(缺省自动探测 /usr/libexec/java_home -v 25)
+#   JAVA_HOME        Java 21 home(缺省自动探测 /usr/libexec/java_home -v 21)
 #   MVN              maven 可执行(默认 mvn)
 #   JAVA_SDK_MODULE  Java SDK 模块(默认 sdk/java/core)
 #   JAVA_TEST_FILTER surefire -Dtest 过滤(默认 handler 包)
@@ -39,7 +39,7 @@ SDK_DIR="${ROOT_DIR}/sdk"
 : "${PY_SDK_DIR:=${SDK_DIR}/python}"
 : "${PY_TEST_PATH:=tests/handler}"
 if [[ -z "${JAVA_HOME:-}" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then
-  JAVA_HOME="$(/usr/libexec/java_home -v 25 2>/dev/null || true)"
+  JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
 fi
 export JAVA_HOME
 if [[ -z "${PYTEST:-}" ]]; then

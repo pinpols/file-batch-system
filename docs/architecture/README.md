@@ -2,14 +2,14 @@
 
 工程向运行态架构：系统流程、模块通信、扩展性评估、ADR 决策。
 
-> **第一次接触系统？** 直接看 [`system-flow-overview.md`](./system-flow-overview.md)。
+> **第一次接触系统？** 先看 [`project-structure.md`](./project-structure.md) 确认工程边界，再看 [`system-flow-overview.md`](./system-flow-overview.md) 理解端到端链路。
 
 ## 文件清单（编号即推荐阅读顺序）
 
 | # | 文件 | 作用 | 何时看 |
 |---|---|---|---|
-| 01 | [system-flow-overview.md](./system-flow-overview.md) | 端到端业务流程总览（10+ Mermaid 图，含 BFF / 观测栈 / Workflow DAG / DLQ 子图） | 入门必看 |
-| 02 | [architecture-truth.md](./architecture-truth.md) | 当前真实架构基线 + 与设计的差距清单 | 想知道"现在长什么样" |
+| 01 | [project-structure.md](./project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK、文档与脚本目录边界 | 入门 / 加模块 / 查目录归属 |
+| 02 | [system-flow-overview.md](./system-flow-overview.md) | 端到端业务流程总览（10+ Mermaid 图，含 BFF / 观测栈 / Workflow DAG / DLQ 子图） | 入门必看 |
 | 03 | [core-model.md](./core-model.md) | 实例 / 状态 / 上下文 / 恢复模型的单一权威定义 | 写 orchestrator 状态机相关代码前 |
 | 04 | [runtime-module-communication.md](./runtime-module-communication.md) | trigger / orchestrator / worker / console-api 模块间运行时通信拓扑 | 排查跨模块调用问题 |
 | 05 | [kafka-topic-plan.md](./kafka-topic-plan.md) | Kafka Topic 命名 / 分区 / PATTERN 订阅规范 | 加新 topic 前 |
@@ -22,7 +22,8 @@
 | 12 | [pipeline-vs-workflow-boundary.md](./pipeline-vs-workflow-boundary.md) | `pipeline_*` 与 `workflow_*` 职责边界（命名相似但不重叠） | 看到 pipeline / workflow 表名困惑时 |
 | 13 | [governance-tables-boundary.md](./governance-tables-boundary.md) | `config_approval` vs `approval_command` / `subscription_rule` vs `alert_routing_config` 职责边界 | 看到 governance 表对疑似重叠时 |
 | 14 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
-| 15 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
+| 15 | [architecture-truth.md](./architecture-truth.md) | 2026-04-09 架构快照（已过期，仅保留历史对照） | 审计历史判断来源 |
+| 16 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
 
 ## 角色路径
 

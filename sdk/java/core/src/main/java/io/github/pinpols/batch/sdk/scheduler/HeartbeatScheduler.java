@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HeartbeatScheduler implements AutoCloseable {
 
-  /** Lane I:hint 回退下限 — orch 配错(如 0 / 100ms)会把心跳刷爆,强制至少 1s。 */
+  /** Lane I:hint 回退下限 — orch 配错(如 0 / 100ms)会让心跳过载,强制至少 1s。 */
   static final long MIN_HINT_MS = 1_000L;
 
   /** Lane I:hint 回退上限倍率 — hint 不得超过 baseline 的 10 倍,避免 orch 配错把心跳拖死。 */

@@ -4,14 +4,14 @@
 
 跑在租户自己机房 / Kubernetes / VM 上的 worker 进程,经 HTTP `/internal/*` + Kafka `batch.task.dispatch.<tenant>.*` 跟平台通信。**数据 0 出域**,平台只当调度面。
 
-> Python 对等实现见 [`batch-worker-sdk-python/`](../../python/);Spring Boot 自动装配见 [`batch-worker-sdk-spring-boot-starter/`](../spring/);测试 fake 见 [`batch-worker-sdk-testkit/`](../testkit/)。
+> Python 对等实现见 [`sdk/python`](../../python/);Spring Boot 自动装配见 [`batch-worker-sdk-spring-boot-starter`](../spring/);测试 fake 见 [`batch-worker-sdk-testkit`](../testkit/)。
 
 ## 形态
 
 - 单一 jar(目标 < 2 MB),依赖只 4 个:`jackson-databind` / `kafka-clients` / `slf4j-api` / `lombok(provided)`
 - **不依赖** Spring / batch-common / 任何 framework
-- **JDK 21+**(编译目标 `maven.compiler.release=21`,本模块 override 不随平台 25;租户在 LTS 上即可跑)
-- 通信协议权威源:[`docs/sdk/wire-protocol.md`](../docs/sdk/wire-protocol.md) + [`docs/api/sdk-contract-fixtures/`](../docs/api/sdk-contract-fixtures/) 12 个 JSON 用例
+- **JDK 21+**(编译目标 `maven.compiler.release=21`,本模块固定 LTS 基线;租户在 LTS 上即可跑)
+- 通信协议权威源:[`docs/sdk/wire-protocol.md`](../../../docs/sdk/wire-protocol.md) + [`docs/api/sdk-contract-fixtures/`](../../../docs/api/sdk-contract-fixtures/) 12 个 JSON 用例
 
 ## 快速接入(5 分钟)
 
@@ -30,7 +30,7 @@ Maven:
 未发到中央仓时本地安装:
 
 ```bash
-mvn -pl batch-worker-sdk -am install -DskipTests
+mvn -pl sdk/java/core -am install -DskipTests
 ```
 
 ### 2. 实现 handler
@@ -73,7 +73,7 @@ client.start();
 Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSeconds(30))));
 ```
 
-完整可跑示范:[`examples/sample-tenant-worker/`](../examples/sample-tenant-worker/)。
+完整可跑示范:[`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../../examples/self-hosted-sdk/sample-tenant-worker-java/)。
 
 ## 公共 API
 
@@ -101,7 +101,7 @@ Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSec
 
 ### Descriptor 上报(SDK Phase 3 M3.1)
 
-`SdkTaskHandler.descriptor()` 重写后,handler 启动时随 register 上报到平台 `custom_task_type_registry`,console 用 `inputSchema` 渲染表单 / `defaults` 三级合并预填。详见 [`examples/sample-tenant-worker/README.md`](../examples/sample-tenant-worker/README.md) 的 descriptor 端到端章节。
+`SdkTaskHandler.descriptor()` 重写后,handler 启动时随 register 上报到平台 `custom_task_type_registry`,console 用 `inputSchema` 渲染表单 / `defaults` 三级合并预填。详见 [`examples/self-hosted-sdk/sample-tenant-worker-java/README.md`](../../../examples/self-hosted-sdk/sample-tenant-worker-java/README.md) 的 descriptor 端到端章节。
 
 ```java
 @Override public SdkTaskTypeDescriptor descriptor() {
@@ -160,22 +160,22 @@ SDK 自动应用,**租户业务代码不用感知**。
 ## 测试
 
 ```bash
-mvn -pl batch-worker-sdk test
+mvn -pl sdk/java/core test
 ```
 
 无 Spring / 无 Testcontainers,本地 5s 内跑完。当前覆盖:8,859 行测试 / 56 测试类(test/main = 1.41,反映对外发布契约的覆盖强度)。
 
-跨 SDK 契约测见 [`docs/api/sdk-contract-fixtures/`](../docs/api/sdk-contract-fixtures/) 的 12 个 JSON 用例(Lane P drift guard),Java + Python SDK 都跑同一份 fixture。
+跨 SDK 契约测见 [`docs/api/sdk-contract-fixtures/`](../../../docs/api/sdk-contract-fixtures/) 的 12 个 JSON 用例(Lane P drift guard),Java + Python SDK 都跑同一份 fixture。
 
 ## 文档索引
 
-- [`docs/sdk/quickstart.md`](../docs/sdk/quickstart.md) —— 5 分钟起跑
-- [`docs/sdk/onboarding-journey.md`](../docs/sdk/onboarding-journey.md) —— 从 0 到第一个 task 完整 checklist
-- [`docs/sdk/wire-protocol.md`](../docs/sdk/wire-protocol.md) —— 通讯协议 + 故障感知矩阵
-- [`docs/sdk/troubleshooting.md`](../docs/sdk/troubleshooting.md) —— 排障速查
-- [`docs/sdk/byo-sdk-guide.md`](../docs/sdk/byo-sdk-guide.md) —— 自带 SDK(Bring-Your-Own-SDK)指南
-- [`docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md`](../docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) —— 定位 ADR
+- [`docs/sdk/quickstart.md`](../../../docs/sdk/quickstart.md) —— 5 分钟起跑
+- [`docs/sdk/onboarding-journey.md`](../../../docs/sdk/onboarding-journey.md) —— 从 0 到第一个 task 完整 checklist
+- [`docs/sdk/wire-protocol.md`](../../../docs/sdk/wire-protocol.md) —— 通讯协议 + 故障感知矩阵
+- [`docs/sdk/troubleshooting.md`](../../../docs/sdk/troubleshooting.md) —— 排障速查
+- [`docs/sdk/byo-sdk-guide.md`](../../../docs/sdk/byo-sdk-guide.md) —— 自带 SDK(Bring-Your-Own-SDK)指南
+- [`docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md`](../../../docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) —— 定位 ADR
 
 ## License
 
-Apache-2.0,与主仓一致。见 [`LICENSE`](../LICENSE) + [`NOTICE`](../NOTICE)。
+Apache-2.0,与主仓一致。见 [`LICENSE`](../../../LICENSE) + [`NOTICE`](../../../NOTICE)。

@@ -81,7 +81,7 @@
 
 | 阶段 | 目标 | 主要动作 | 输出 |
 |---|---|---|---|
-| 0. 盘点与固化矩阵 | 避免重复造轮子 | 汇总 `scripts/sim`、`scripts/sim-4day`、`load-tests`、`batch-e2e-tests` 已有覆盖;形成 worker × 业务分支矩阵 | 更新本文档覆盖表 |
+| 0. 盘点与固化矩阵 | 避免重复建设 | 汇总 `scripts/sim`、`scripts/sim-4day`、`load-tests`、`batch-e2e-tests` 已有覆盖;形成 worker × 业务分支矩阵 | 更新本文档覆盖表 |
 | 1. 复跑现有 sim 基线 | 证明现有模拟器基础不坏 | 跑 `01-init-biz.sh`、`02-start-sim.sh`、`03-import-tenants.sh`、`04-seed-source-data.sh`、`05-load.sh`、`06-verify.sh`、`07-atomic-load.sh` | 现有 sim 覆盖报告 |
 | 2. Import 补齐 | 补 worker-import 业务分支 | 已完成 XML/FIXED_WIDTH、validation error、APPEND、UPSERT、LOAD failure、分区 COPY 正/负、bad-record skip 阈值、checkpoint 崩溃续跑 | import 业务分支结果表 |
 | 3. Export 补齐 | 补 worker-export 格式/存储/分片分支 | 已完成 DELIMITED/JSON/FIXED_WIDTH/EXCEL、单片/4/8 分片、keyset-range、bad SQL、requestId replay、多租户小混压；multipart abort/retry 和真实 S3 待故障注入 | export 业务分支结果表 |

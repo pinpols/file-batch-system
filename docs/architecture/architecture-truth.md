@@ -1,5 +1,5 @@
 
-> 注:本文为 2026-04-09 时点快照,部分内容已被后续实现取代(如调度器默认已切为 wheel),以代码与 ADR 为准。
+> **历史快照**：本文为 2026-04-09 时点记录，保留用于审计当时的差距判断。当前项目结构以 [`project-structure.md`](./project-structure.md) 为准；当前技术栈以根 [`../../pom.xml`](../../pom.xml)、[`.env.example`](../../.env.example) 和部署文档为准。文中 Java 25、Spring Boot 4.0.3、PostgreSQL 16、Flyway V122、Quartz 默认调度等信息均已过期。
 
 # 架构基线文档（Architecture Truth）
 

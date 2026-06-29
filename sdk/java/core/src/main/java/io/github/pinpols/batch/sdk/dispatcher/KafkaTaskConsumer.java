@@ -71,7 +71,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
 
   /**
    * 未知 schema 大版本被拒后走 RETRY_LATER(§A 不提交 offset)→ seek+pause,分区 resume 后会反复重读重拒; 节流该 WARN(同 key 60s
-   * 一条),避免一条 v3 poison 把日志刷爆。
+   * 一条),避免一条 v3 poison 造成日志过载。
    */
   private final ThrottledLogger throttledLog = ThrottledLogger.create(log, Duration.ofSeconds(60));
 

@@ -2,7 +2,7 @@
 
 这里说明本地开发、联调和验证所需的基础依赖，默认通过 Docker Compose 启动：
 
-- PostgreSQL 16
+- PostgreSQL 17
 - Kafka 4.1.2（KRaft 单节点）
 - MinIO
 - Redis

@@ -19,7 +19,7 @@
 | 05 | [logging-architecture.md](./logging-architecture.md) | 日志架构（MDC / 结构化 / Loki 分发） | 加日志埋点前 |
 | 06 | [delete-strategy.md](./delete-strategy.md) | 删除策略（job_instance / file_record / outbox archive 等）| 删数据前 |
 | 07 | [capability-assessment.md](./capability-assessment.md) | 系统能力矩阵评估 | PD 问"我们能做 X 吗" |
-| 08 | [project-structure-pom.md](./project-structure-pom.md) | 模块结构 / POM 依赖关系 | 加新模块前 |
+| 08 | [project-structure-pom.md](./project-structure-pom.md) | 早期模块结构 / POM 设计稿（当前事实以 architecture/project-structure 为准） | 查历史设计背景 |
 | 09 | [runtime-default-parameters.md](./runtime-default-parameters.md) | 运行时默认参数基线（pool / timeout / batch size 等）| 调参前看默认值 |
 | 10 | [console-sidebar-menu-tree.md](./console-sidebar-menu-tree.md) | 控制台侧边栏菜单树 + 角色可见性 | 加 console 页面 |
 | 11 | [api-gap-analysis.md](./api-gap-analysis.md) | Console API 设计与实现差距分析 | 补接口前 |
@@ -49,3 +49,5 @@
 | 技术栈 / 合规 | 12 tech-stack-and-principles | [`../architecture/adr/ADR-001-dual-orm.md`](../architecture/adr/ADR-001-dual-orm.md) | [`../runbook/security-scan.md`](../runbook/security-scan.md) |
 | SLA / 质量 | 13 sla-and-quality | — | [`../runbook/incident-response.md`](../runbook/incident-response.md) |
 | 多租户 / 安全 | 14 multi-tenant-and-security | — | [`../runbook/feature-switches.md`](../runbook/feature-switches.md) |
+
+> 加新模块、调整 Maven reactor、确认 SDK 与运行时模块边界时，以 [`../architecture/project-structure.md`](../architecture/project-structure.md) 为权威入口。

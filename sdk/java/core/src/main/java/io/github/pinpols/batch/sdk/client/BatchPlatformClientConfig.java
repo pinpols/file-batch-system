@@ -232,7 +232,7 @@ public class BatchPlatformClientConfig {
    * <p>规则(均为务实经验值,运维问题里高频出现的):
    *
    * <ul>
-   *   <li>{@code heartbeatInterval >= 1s} — 防止极端配置刷爆 orch
+   *   <li>{@code heartbeatInterval >= 1s} — 防止极端配置压垮 orchestrator
    *   <li>{@code leaseRenewInterval >= 5s} — 同上
    *   <li>{@code leaseRenewInterval <= heartbeatInterval × 3} — 避免 lease 续约比心跳还少,task 半路被 orch
    *       误判租约过期回收。注意:server 端真正的 lease TTL SDK 不知道,这里用 heartbeatInterval × 3 做"代理上限",经验上 orch 默认

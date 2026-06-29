@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * phoneNumbers}(逗号分隔手机号),按 {@code batch.console.sms.provider} 委托给对应 {@link SmsProvider}
  * (aliyun/tencent/twilio)。未配 provider 或无对应实现 → 显式 failure(不静默)。
  *
- * <p>防轰炸/去重在 {@link SubscriptionRuleWebhookDispatcher} 分发层已统一拦截;本类只管"解析 + 委托"。日志净化:不打手机号明文。
+ * <p>限流/去重在 {@link SubscriptionRuleWebhookDispatcher} 分发层已统一拦截;本类只管"解析 + 委托"。日志净化:不打手机号明文。
  */
 @Slf4j
 @Component

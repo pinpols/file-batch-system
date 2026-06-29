@@ -38,7 +38,7 @@
 | Quartz 集群模式(多实例 + DB JobStore) | 0.3 人月 | 生产级 | 还是 Quartz,瓶颈未除 |
 | Quartz 独立库(Galaxy 等) | 2 人月 | 中 | **中间过渡,不推荐** |
 | **Netty HashedWheelTimer**(本 ADR) | **1.5-2 人月开发 + 1 人月灰度** | **生产级**(Pulsar / Dubbo / Curator) | ✅ 一步到位 |
-| 自研时间轮 | 4+ 人月 | 低 | 重造轮子,拒 |
+| 自研时间轮 | 4+ 人月 | 低 | 重复实现成熟组件,不采用 |
 
 ---
 

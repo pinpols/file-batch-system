@@ -53,10 +53,9 @@
     </scm>
 
     <properties>
-        <!-- 租户自托管 SDK 面向租户环境:编译目标锁 Java 21(LTS,广泛部署),
-             不继承根 pom 的 release=25(那是平台运行时)。否则 jar 是 bytecode 25,
-             租户只能在 JDK 25 上跑,违背 BYO「在自己环境跑」的初衷,且与 quickstart
-             「JDK 21+」矛盾。core 零依赖,可独立降 target;无 >21 语法。 -->
+        <!-- 租户自托管 SDK 面向租户环境:编译目标显式锁 Java 21(LTS,广泛部署)。
+             该设置避免未来平台运行时 JDK 升级时意外抬高 SDK bytecode 门槛,保持
+             quickstart 声明的「JDK 21+」兼容性。core 零依赖,不使用 >21 语法。 -->
         <maven.compiler.release>21</maven.compiler.release>
     </properties>
 
@@ -175,8 +174,8 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
                         <configuration>
-                            <!-- Central 只要求附带 javadoc jar,不要求零警告。JDK 25 doclint
-                                 严格(缺 @param/@return 等会报),这里关 doclint + 不因
+                            <!-- Central 只要求附带 javadoc jar,不要求零警告。doclint 对
+                                 @param/@return 等完整性要求较严格,这里关 doclint + 不因
                                  warning/error 挂构建,保证发布 jar 能产出。 -->
                             <doclint>none</doclint>
                             <failOnError>false</failOnError>

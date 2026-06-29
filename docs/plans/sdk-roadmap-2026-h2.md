@@ -635,7 +635,7 @@ mvn verify                                 # 跑所有单测 + IT(failsafe)
 mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 # 3. 跑 SDK 自身测试
-mvn -pl batch-worker-sdk test
+mvn -pl sdk/java/core test
 
 # 4. 跑 e2e 冒烟(如有覆盖本 phase 改动的)
 mvn -pl e2e-tests verify -Dgroups=smoke    # e2e 用 verify 不用 install
@@ -1028,7 +1028,7 @@ agent 立刻:
 | 完全手动(每 phase 开新对话) | 高,每 phase 都陪跑 | 6 周 | 低 |
 | 多窗口手动并行(§15.2) | 中,review × N 窗口 | 4 周 | 中 |
 | **本模式(单对话连续 + checkpoint)** | **低,3 次 checkpoint review** | **1-2 天 dev + 部署观察 2-4 周** | **中**(上下文压缩) |
-| /schedule routines | 中低,merge 时机分散 | 4-5 周 | 中(routine 不擅长意外) |
+| /schedule 定时任务 | 中低,merge 时机分散 | 4-5 周 | 中(定时任务不适合处理意外分支) |
 | /loop 单对话自动 | 中,对话要一直开 | 4 周 | 高(对话挂 = 中断) |
 
 #### H. 适用 / 不适用
@@ -1162,5 +1162,5 @@ agent 立刻:
 - [worker-deployment-models](../design/worker-deployment-models.md)
 - [sdk-industry-benchmark](../design/sdk-industry-benchmark.md)
 - [sdk-task-type-configuration](../design/sdk-task-type-configuration.md)
-- [ADR-035 租户自托管 SDK](../adr/ADR-035-tenant-self-hosted-sdk.md)
+- [ADR-035 租户自托管 SDK](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
 - [multi-tenant-isolation-plan](./multi-tenant-isolation-plan-2026-05-31.md)(姊妹 plan)

@@ -9,8 +9,8 @@ import java.util.Map;
  * Excel 表头样式与分组合并表头的<b>可选</b>声明,从 {@code template_config.header_style} / {@code
  * template_config.header_groups} 解析。全部未配置时 {@link #styled()} 为 {@code false},导出走历史「裸值无样式」路径。
  *
- * <p>解析逻辑借 {@link AbstractExportFormat} 的 {@code toMap / firstNonNull / integerValue / textValue}
- * 工具复用,不重复造轮子,也不污染 AbstractExportFormat 的公共 API。
+ * <p>解析逻辑复用 {@link AbstractExportFormat} 的 {@code toMap / firstNonNull / integerValue / textValue}
+ * 工具方法,避免重复实现,也不污染 AbstractExportFormat 的公共 API。
  */
 record ExcelStyleOptions(
     boolean bold,

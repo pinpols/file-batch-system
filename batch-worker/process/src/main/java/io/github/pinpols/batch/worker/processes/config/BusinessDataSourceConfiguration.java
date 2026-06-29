@@ -116,7 +116,7 @@ public class BusinessDataSourceConfiguration {
    * false=不阻断启动,只靠 health DOWN 可见),且上下文里有 business datasource。复用 health indicator 同一套闭世界检查逻辑。
    *
    * <p>{@code @ConditionalOnBean(processBusinessDataSource)} 守门:无 biz datasource 的上下文不装配本副作用
-   * bean,避免牵连其他 worker 启动失败(踩过的坑)。
+   * bean,避免牵连其他 worker 启动失败。
    */
   @Bean(name = "rlsStartupFailFastCheck")
   @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true")

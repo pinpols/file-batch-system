@@ -350,7 +350,7 @@ P1.5 后 SDK 核心闭环已通,对照同形态开源系统(control plane + tena
 | End-to-end cancel(Temporal/Zeebe job cancel)| 运维 cancel — **lease 超时自动回收够用**;真需要时 server 加 Kafka cancel topic;`SdkTaskHandler.cancel(taskId)` 已有默认 no-op 占位 |
 | Server-side retry policy(Temporal RetryPolicy)| SDK 本地 `fixed(3, 2s)` + server lease 回退 — **目前足够**,集中配置是大规模治理需要,我们 1~N 个租户先不上 |
 | Capability tags 完整路由(Temporal Task Queue / GHA labels)| 已部分有(register 上报 `capabilityTags`),**没真"按 tag 派单"诉求**(都按 worker_type 路由够用);扩了用不上 |
-| `SdkTestEngine` 测试框架(Zeebe `ZeebeTestEngine`)| 框架级测试工具 — **目前 0 个真租户**,先看 1-2 个早期租户怎么写测试再决定要不要造轮子,过早抽象跟真需求脱节 |
+| `SdkTestEngine` 测试框架(Zeebe `ZeebeTestEngine`)| 框架级测试工具 — **目前 0 个真租户**,先看 1-2 个早期租户怎么写测试再决定是否自建框架,过早抽象跟真需求脱节 |
 
 #### P2 — 不做
 
