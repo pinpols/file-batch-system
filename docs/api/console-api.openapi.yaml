@@ -13614,10 +13614,16 @@ components:
         maxRunningJobs:
           type: integer
           format: int32
+        maxRunningPartitions:
+          type: integer
+          format: int32
         burstLimit:
           type: integer
           format: int32
         effectiveMaxRunningJobs:
+          type: integer
+          format: int32
+        effectiveMaxRunningPartitions:
           type: integer
           format: int32
         quotaResetPolicy:
@@ -13640,7 +13646,42 @@ components:
         activeJobs:
           type: integer
           format: int64
-      required: [queueCode, fairShareGroup, fairShareWeight, maxRunningJobs, burstLimit, effectiveMaxRunningJobs, quotaResetPolicy, quotaBurstPeakBorrowed, quotaBurstRemaining, quotaResetWindowStartedAt, quotaResetWindowExpiresAt, groupSharedMaxRunningJobs, activeJobs]
+        createdPartitions:
+          type: integer
+          format: int64
+        waitingPartitions:
+          type: integer
+          format: int64
+        readyPartitions:
+          type: integer
+          format: int64
+        runningPartitions:
+          type: integer
+          format: int64
+        retryingPartitions:
+          type: integer
+          format: int64
+        queuedPartitions:
+          type: integer
+          format: int64
+        activePartitions:
+          type: integer
+          format: int64
+        oldestWaitingSeconds:
+          type: integer
+          format: int64
+        tenantWaitingSharePermille:
+          type: integer
+          format: int32
+          description: 当前租户内该队列 WAITING partition 占全部 WAITING partition 的千分比。
+        partitionSaturationPermille:
+          type: integer
+          format: int32
+          description: activePartitions / maxRunningPartitions 的千分比；无分区上限时为 0。
+        bottleneckReason:
+          type: string
+          enum: [NONE, QUEUE_JOB_LIMIT, QUEUE_PARTITION_LIMIT, NO_ONLINE_WORKER, WAITING_DISPATCH_BACKLOG]
+      required: [queueCode, fairShareGroup, fairShareWeight, maxRunningJobs, maxRunningPartitions, burstLimit, effectiveMaxRunningJobs, effectiveMaxRunningPartitions, quotaResetPolicy, quotaBurstPeakBorrowed, quotaBurstRemaining, quotaResetWindowStartedAt, quotaResetWindowExpiresAt, groupSharedMaxRunningJobs, activeJobs, createdPartitions, waitingPartitions, readyPartitions, runningPartitions, retryingPartitions, queuedPartitions, activePartitions, oldestWaitingSeconds, tenantWaitingSharePermille, partitionSaturationPermille, bottleneckReason]
     ConsoleSchedulerWorkerLoadSnapshot:
       type: object
       properties:
