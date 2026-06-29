@@ -554,3 +554,30 @@ trigger
 - worker claim/report 协议显式暴露分片级 outputs 与 verifierFailures。
 - join aggregator 明确 SUCCESS / PARTIAL_FAILED / FAILED 规则,并防止提前 promote result_version。
 - 4/8/16/32 分片小规模 IT 与 1000w import/export 基准复验。
+
+### 2026-06-30 P0-2 第二刀:分片 outputs 聚合与 result_version 防覆盖
+
+已做:
+
+- worker report 成功路径已把 `outputs` 与 `verifierFailures` 写入 `job_partition.output_summary`,不再只保留 task 的文本摘要。
+- `workflow_node_run.output` 不再直接使用最后一个 report 的 `outputs`;节点终态时按当前 workflow node 的 SUCCESS 分片聚合。
+- `result_version.payload_json` 不再直接使用最后一个 report 的 `outputs`;实例终态时按实例 SUCCESS 分片聚合。
+- 聚合兼容旧消费者:
+  - 单个成功分片保持原始 `outputs` 形状。
+  - 多个成功分片包装为 `partitionedOutputs`,每项带 `partitionId/partitionNo/partitionKey/outputs`。
+- 失败分片不进入成功产物集合,但多分片包装保留 `failedPartitionCount`,终态仍由 `SUCCESS / PARTIAL_FAILED / FAILED` 状态机表达。
+
+本地验证:
+
+- `TaskOutcomeSummaryBuilderTest` 覆盖:
+  - `output_summary` 持久化 `outputs/verifierFailures`
+  - 单分片输出形状兼容
+  - 多分片 `partitionedOutputs` 包装
+  - workflow node 分片过滤
+- `DefaultTaskOutcomeServiceTest` 回归 workflow node run 并发幂等。
+
+还未做:
+
+- claim response 的 effective config 是否需要显式展开 `partitionPlanVersion/shardIndex/shardTotal/range` 到顶层 DTO,目前 worker 可从 partition snapshot 读取。
+- 分片失败后的 `retry failed shards` Console/API 运维入口。
+- 4/8/16/32 分片服务 IT 与 1000w import/export 基准复验。

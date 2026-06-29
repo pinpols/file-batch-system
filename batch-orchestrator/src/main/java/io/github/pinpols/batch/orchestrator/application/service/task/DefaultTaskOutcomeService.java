@@ -473,6 +473,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
               .workflowRun(workflowRun)
               .currentNodeCode(currentNodeCode)
               .nodeProgress(nodeProgress)
+              .nodeOutputs(
+                  TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+                      TaskOutcomeSummaryBuilder.filterPartitionsByIds(
+                          partitions, nodeProgress.partitionIds()),
+                      command))
               .activeNodes(activeNodes)
               .finishedAt(finishedAt)
               .build();
@@ -561,7 +566,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           .jobInstanceTerminalChildStateReconciler()
           .reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
       // ADR-017 Stage 2: SUCCESS / PARTIAL_FAILED → 落 result_version (writer 自身做幂等 + 非成功类终态 skip)
-      collaborators.resultVersionWriter().writeOnTerminal(jobInstance, command.outputs());
+      collaborators
+          .resultVersionWriter()
+          .writeOnTerminal(
+              jobInstance,
+              TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(partitions, command));
       // ADR-020 Stage 5: replay-driven 实例 → 反查 entry 推进 entry / session 状态
       if (jobInstance.getReplaySessionId() != null) {
         collaborators
@@ -631,7 +640,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     ctx.workflowRun().getStartedAt(),
                     ctx.finishedAt()))
             .finishedAt(ctx.finishedAt())
-            .outputJson(TaskOutcomeSummaryBuilder.serializeOutputs(ctx.command().outputs()))
+            .outputJson(TaskOutcomeSummaryBuilder.serializeOutputs(ctx.nodeOutputs()))
             .build();
     NodeRunKey currentKey =
         new NodeRunKey(
@@ -852,7 +861,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       String nodeCode,
       WorkflowRunEntity workflowRun) {
     if (nodeCode == null || nodeCode.isBlank()) {
-      return new NodePartitionProgress(0, 0, 0);
+      return new NodePartitionProgress(0, 0, 0, Set.of());
     }
     Map<Long, JobPartitionEntity> partitionsById = new LinkedHashMap<>();
     for (JobPartitionEntity partition : partitions) {
@@ -884,7 +893,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         nodeFailedCount++;
       }
     }
-    return new NodePartitionProgress(nodePartitionIds.size(), nodeSuccessCount, nodeFailedCount);
+    return new NodePartitionProgress(
+        nodePartitionIds.size(), nodeSuccessCount, nodeFailedCount, nodePartitionIds);
   }
 
   private String resolveTaskNodeCode(
@@ -1014,7 +1024,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return current == null || current.getRunSeq() == null ? 1 : current.getRunSeq() + 1;
   }
 
-  private record NodePartitionProgress(int partitionCount, long successCount, long failedCount) {
+  private record NodePartitionProgress(
+      int partitionCount, long successCount, long failedCount, Set<Long> partitionIds) {
 
     private boolean allFinished() {
       return partitionCount > 0 && successCount + failedCount == partitionCount;
@@ -1029,6 +1040,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       WorkflowRunEntity workflowRun,
       String currentNodeCode,
       NodePartitionProgress nodeProgress,
+      Map<String, Object> nodeOutputs,
       Set<String> activeNodes,
       Instant finishedAt) {}
 }
