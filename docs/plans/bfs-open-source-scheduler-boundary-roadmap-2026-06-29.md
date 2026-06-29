@@ -607,3 +607,28 @@ trigger
 
 - 分片失败后的 `retry failed shards` Console/API 运维入口。
 - 4/8/16/32 分片服务 IT 与 1000w import/export 基准复验。
+
+### 2026-06-30 P0-3 第一刀:asset partition readiness facade
+
+已做:
+
+- 新增 `AssetPartitionService` / `AssetPartitionSnapshot`,把现有 `result_version.business_key=job:{jobCode}:{bizDate}` 投影为 job asset partition。
+- 当前第一阶段不新增 `data_asset / asset_partition` 物理表,避免把 P0 变成大迁移；EFFECTIVE 链仍由 ADR-017 的 `result_version` 保证。
+- `ReadinessService` 不再直接读 `job_instance` 最新状态,改为只认 asset partition 当前 EFFECTIVE result_version。
+- readiness 语义收紧:
+  - DQ BLOCKED → result_version PENDING → not ready。
+  - dry-run → result_version DRY_RUN → not ready。
+  - FAILED / PARTIAL_FAILED 且未 EFFECTIVE → not ready。
+  - 缺失 EFFECTIVE → not ready。
+
+本地验证:
+
+- `AssetPartitionServiceTest` 覆盖 result_version → asset partition 投影、非法输入短路、无 EFFECTIVE 不 ready。
+- `ReadinessServiceTest` 覆盖 readiness 基于 asset partition EFFECTIVE 放行/阻断。
+- `ResultVersionQueryServiceTest` / `CrossDayDependencyResolverTest` 回归 EFFECTIVE 查询与跨日依赖解析。
+
+还未做:
+
+- 物理 `data_asset / asset_partition` 表与 materialization event。
+- freshness policy: `expectedBy / staleAfter / missing alert`。
+- Console asset partition 查询页和 readiness drill-down。

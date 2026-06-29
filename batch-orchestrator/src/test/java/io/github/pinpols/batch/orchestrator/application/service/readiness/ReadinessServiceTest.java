@@ -7,7 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,18 +20,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("上游就绪查询服务")
 class ReadinessServiceTest {
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
+  @Mock private AssetPartitionService assetPartitionService;
 
   @InjectMocks private ReadinessService readinessService;
 
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 6, 20);
 
   @Test
-  @DisplayName("上游该批次日最新 attempt 为 SUCCESS → ready")
-  void shouldBeReady_whenLatestAttemptSuccess() {
+  @DisplayName("上游该批次日 asset partition 有 EFFECTIVE 版本 → ready")
+  void shouldBeReady_whenAssetPartitionEffective() {
     // arrange
-    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE))
-        .thenReturn("SUCCESS");
+    when(assetPartitionService.isJobPartitionReady("t1", "UP_JOB", BIZ_DATE)).thenReturn(true);
 
     // act
     ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
@@ -42,47 +41,45 @@ class ReadinessServiceTest {
   }
 
   @Test
-  @DisplayName("先成功后 rerun 失败:最新 attempt=FAILED → not ready(不被过期成功误放行)")
-  void shouldNotBeReady_whenLatestAttemptFailedAfterEarlierSuccess() {
-    // arrange —— selectLatestStatusByBizDate 已按 run_attempt desc 取最新,返回 rerun 的 FAILED
-    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE))
-        .thenReturn("FAILED");
+  @DisplayName("无 EFFECTIVE 版本 → not ready(不消费 PENDING / DRY_RUN / 失败产物)")
+  void shouldNotBeReady_whenAssetPartitionNotEffective() {
+    // arrange
+    when(assetPartitionService.isJobPartitionReady("t1", "UP_JOB", BIZ_DATE)).thenReturn(false);
 
     // act
     ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
 
     // assert
     assertThat(result.ready()).isFalse();
-    assertThat(result.reason()).isEqualTo("upstream-job-not-success");
+    assertThat(result.reason()).isEqualTo("asset-partition-not-effective");
   }
 
   @Test
-  @DisplayName("rerun 正在跑:最新 attempt=RUNNING → not ready")
-  void shouldNotBeReady_whenLatestAttemptRunning() {
+  @DisplayName("rerun 正在跑且新版本未 EFFECTIVE → not ready")
+  void shouldNotBeReady_whenRerunNotEffective() {
     // arrange
-    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE))
-        .thenReturn("RUNNING");
+    when(assetPartitionService.isJobPartitionReady("t1", "UP_JOB", BIZ_DATE)).thenReturn(false);
 
     // act
     ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
 
     // assert
     assertThat(result.ready()).isFalse();
-    assertThat(result.reason()).isEqualTo("upstream-job-not-success");
+    assertThat(result.reason()).isEqualTo("asset-partition-not-effective");
   }
 
   @Test
-  @DisplayName("该批次日无任何实例:返回 null → not ready")
-  void shouldNotBeReady_whenNoInstance() {
+  @DisplayName("该批次日没有 asset partition → not ready")
+  void shouldNotBeReady_whenNoAssetPartition() {
     // arrange
-    when(jobInstanceMapper.selectLatestStatusByBizDate("t1", "UP_JOB", BIZ_DATE)).thenReturn(null);
+    when(assetPartitionService.isJobPartitionReady("t1", "UP_JOB", BIZ_DATE)).thenReturn(false);
 
     // act
     ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
 
     // assert
     assertThat(result.ready()).isFalse();
-    assertThat(result.reason()).isEqualTo("upstream-job-not-success");
+    assertThat(result.reason()).isEqualTo("asset-partition-not-effective");
   }
 
   @Test
@@ -94,7 +91,7 @@ class ReadinessServiceTest {
     // assert
     assertThat(result.ready()).isFalse();
     assertThat(result.reason()).isEqualTo("invalid-readiness-query");
-    verify(jobInstanceMapper, never()).selectLatestStatusByBizDate(any(), any(), any());
+    verify(assetPartitionService, never()).isJobPartitionReady(any(), any(), any());
   }
 
   @Test
@@ -105,6 +102,6 @@ class ReadinessServiceTest {
 
     // assert
     assertThat(result.ready()).isFalse();
-    verify(jobInstanceMapper, never()).selectLatestStatusByBizDate(eq("t1"), eq("UP_JOB"), any());
+    verify(assetPartitionService, never()).isJobPartitionReady(eq("t1"), eq("UP_JOB"), any());
   }
 }
