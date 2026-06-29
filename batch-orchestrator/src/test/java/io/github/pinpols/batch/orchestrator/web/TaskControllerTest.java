@@ -137,6 +137,12 @@ class TaskControllerTest {
             1,
             1,
             "JOB-X:2026-05-01:1",
+            1,
+            0,
+            1,
+            0L,
+            100L,
+            100L,
             null,
             null,
             null);
@@ -153,6 +159,12 @@ class TaskControllerTest {
         .andExpect(jsonPath("$.executionMode").value("INCREMENTAL"))
         .andExpect(jsonPath("$.retryMaxCount").value(5))
         .andExpect(jsonPath("$.timeoutSeconds").value(600))
+        .andExpect(jsonPath("$.partitionPlanVersion").value(1))
+        .andExpect(jsonPath("$.shardIndex").value(0))
+        .andExpect(jsonPath("$.shardTotal").value(1))
+        .andExpect(jsonPath("$.rangeStartInclusive").value(0))
+        .andExpect(jsonPath("$.rangeEndExclusive").value(100))
+        .andExpect(jsonPath("$.expectedRows").value(100))
         .andExpect(jsonPath("$.highWaterMarkIn").value("wm-1"));
   }
 

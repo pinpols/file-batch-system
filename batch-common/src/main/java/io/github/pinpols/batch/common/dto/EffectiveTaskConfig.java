@@ -69,6 +69,18 @@ public record EffectiveTaskConfig(
      * 由 orchestrator 生成,业务可在 plan-build 阶段覆盖为机构号 / hash 桶等)。Worker 端按业务字段切分时读它。
      */
     String partitionKey,
+    /** 分区计划契约版本，当前为 1；null 表示旧平台或非标准分区计划。 */
+    Integer partitionPlanVersion,
+    /** 当前分片的 0-based 下标，worker 按半开 range 或自定义策略切分时优先使用。 */
+    Integer shardIndex,
+    /** 本次分片总数，语义等同 partitionCount，但与 shardIndex 组成 0-based worker 契约。 */
+    Integer shardTotal,
+    /** 半开行号范围起点；仅当平台拿到 expectedRows/recordCount 等总量提示时填充。 */
+    Long rangeStartInclusive,
+    /** 半开行号范围终点；仅当平台拿到 expectedRows/recordCount 等总量提示时填充。 */
+    Long rangeEndExclusive,
+    /** 当前分片预期行数；无总量提示时为 null。 */
+    Long expectedRows,
     /**
      * V94: data_interval 半开区间起点 (Airflow 风格). null 表示 trigger 没算 / API 没传, worker 业务用 bizDate 回退退化为
      * {@code [bizDate.atStartOfDay, bizDate+1.atStartOfDay)}.

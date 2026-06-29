@@ -149,5 +149,23 @@ public final class PipelineRuntimeKeys {
    */
   public static final String PARTITION_KEY = "partitionKey";
 
+  /** 分区计划契约版本；当前为 1，null 表示旧平台或非标准计划。 */
+  public static final String PARTITION_PLAN_VERSION = "partitionPlanVersion";
+
+  /** 当前分片 0-based 下标；与 {@link #SHARD_TOTAL} 配合给 worker/plugin 做稳定切分。 */
+  public static final String SHARD_INDEX = "shardIndex";
+
+  /** 本次分片总数；语义等同 partitionCount，但与 shardIndex 组成 0-based worker 契约。 */
+  public static final String SHARD_TOTAL = "shardTotal";
+
+  /** 半开范围起点；仅平台拿到 expectedRows/recordCount 等总量提示时存在。 */
+  public static final String RANGE_START_INCLUSIVE = "rangeStartInclusive";
+
+  /** 半开范围终点；仅平台拿到 expectedRows/recordCount 等总量提示时存在。 */
+  public static final String RANGE_END_EXCLUSIVE = "rangeEndExclusive";
+
+  /** 当前分片预期行数；无总量提示时不存在。 */
+  public static final String EXPECTED_ROWS = "expectedRows";
+
   private PipelineRuntimeKeys() {}
 }

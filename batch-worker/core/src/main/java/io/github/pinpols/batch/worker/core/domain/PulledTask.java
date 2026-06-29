@@ -43,6 +43,24 @@ public class PulledTask {
   /** partition 业务标识(claim 拿,源头 job_partition.partition_key)。 */
   private String partitionKey;
 
+  /** 分区计划契约版本(claim 拿,源头 job_partition.input_snapshot.partitionPlanVersion)。 */
+  private Integer partitionPlanVersion;
+
+  /** 当前分片 0-based 下标(claim 拿,源头 job_partition.input_snapshot.shardIndex)。 */
+  private Integer shardIndex;
+
+  /** 本次分片总数(claim 拿,源头 job_partition.input_snapshot.shardTotal)。 */
+  private Integer shardTotal;
+
+  /** 当前分片半开范围起点(claim 拿,源头 job_partition.input_snapshot.rangeStartInclusive)。 */
+  private Long rangeStartInclusive;
+
+  /** 当前分片半开范围终点(claim 拿,源头 job_partition.input_snapshot.rangeEndExclusive)。 */
+  private Long rangeEndExclusive;
+
+  /** 当前分片预期行数(claim 拿,源头 job_partition.input_snapshot.expectedRows)。 */
+  private Long expectedRows;
+
   /** ADR-014: partition 认领 invocation id（claim 返回的 EffectiveTaskConfig 快照）。 */
   private String partitionInvocationId;
 

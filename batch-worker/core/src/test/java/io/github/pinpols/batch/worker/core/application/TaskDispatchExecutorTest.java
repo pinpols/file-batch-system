@@ -76,6 +76,12 @@ class TaskDispatchExecutorTest {
             1,
             1,
             "FRESH_JOB:2026-05-01:1",
+            1,
+            0,
+            1,
+            0L,
+            100L,
+            100L,
             null,
             null,
             "inv-fresh");
@@ -102,6 +108,12 @@ class TaskDispatchExecutorTest {
     assertThat(task.getTaskSeq()).isEqualTo(99);
     assertThat(task.getPayload()).isEqualTo("FRESH_PAYLOAD");
     assertThat(task.getHighWaterMarkIn()).isEqualTo("fresh-watermark");
+    assertThat(task.getPartitionPlanVersion()).isEqualTo(1);
+    assertThat(task.getShardIndex()).isZero();
+    assertThat(task.getShardTotal()).isEqualTo(1);
+    assertThat(task.getRangeStartInclusive()).isZero();
+    assertThat(task.getRangeEndExclusive()).isEqualTo(100L);
+    assertThat(task.getExpectedRows()).isEqualTo(100L);
     assertThat(task.getPartitionInvocationId()).isEqualTo("inv-fresh");
   }
 
@@ -166,6 +178,12 @@ class TaskDispatchExecutorTest {
         1,
         1,
         "FRESH_JOB:2026-05-01:1",
+        1,
+        0,
+        1,
+        0L,
+        100L,
+        100L,
         null,
         null,
         "inv-fresh");

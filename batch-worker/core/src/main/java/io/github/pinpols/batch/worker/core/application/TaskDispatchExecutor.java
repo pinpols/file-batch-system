@@ -109,6 +109,12 @@ public class TaskDispatchExecutor {
     task.setPartitionNo(effective.partitionNo());
     task.setPartitionCount(effective.partitionCount());
     task.setPartitionKey(effective.partitionKey());
+    task.setPartitionPlanVersion(effective.partitionPlanVersion());
+    task.setShardIndex(effective.shardIndex());
+    task.setShardTotal(effective.shardTotal());
+    task.setRangeStartInclusive(effective.rangeStartInclusive());
+    task.setRangeEndExclusive(effective.rangeEndExclusive());
+    task.setExpectedRows(effective.expectedRows());
     task.setPartitionInvocationId(effective.partitionInvocationId());
     task.setTimeoutSeconds(effective.timeoutSeconds());
     // V94: data_interval 透传给 worker, 业务 SQL 拼时间窗
