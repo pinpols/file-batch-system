@@ -64,6 +64,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     plan.setDefaultWorkerType(resolveDefaultWorkerType(jobDefinition));
     plan.setPriority(jobDefinition == null ? 5 : jobDefinition.priority());
     plan.setPartitionCount(resolvePartitionCount(jobDefinition, planParams));
+    plan.setTotalExpectedRows(resolveTotalExpectedRows(planParams));
 
     WorkerRouteModel route = new WorkerRouteModel();
     route.setWorkerType(plan.getDefaultWorkerType());
@@ -115,6 +116,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       partitionPlans.add(partitionPlan);
     }
     plan.setPartitions(partitionPlans);
+    plan.normalizePartitionContract();
     return plan;
   }
 
@@ -241,5 +243,34 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       }
     }
     return 0;
+  }
+
+  private Long resolveTotalExpectedRows(Map<String, Object> params) {
+    return firstNonNegativeLong(
+        params.get("expectedRows"),
+        params.get("totalExpectedRows"),
+        params.get("totalRowsHint"),
+        params.get("recordCount"),
+        params.get("estimatedItemCount"));
+  }
+
+  private Long firstNonNegativeLong(Object... values) {
+    for (Object value : values) {
+      if (value instanceof Number number && number.longValue() >= 0) {
+        return number.longValue();
+      }
+      if (value != null) {
+        try {
+          long parsed = Long.parseLong(String.valueOf(value).trim());
+          if (parsed >= 0) {
+            return parsed;
+          }
+        } catch (NumberFormatException ignored) {
+          SwallowedExceptionLogger.info(
+              DefaultSchedulePlanBuilder.class, "catch:NumberFormatException", ignored);
+        }
+      }
+    }
+    return null;
   }
 }
