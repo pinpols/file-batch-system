@@ -5,7 +5,9 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
 import io.github.pinpols.batch.console.domain.file.web.query.FileTemplateQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateCreateRequest;
+import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateMappingDraftRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateUpdateRequest;
+import io.github.pinpols.batch.console.domain.file.web.response.FileTemplateMappingDraftResponse;
 import io.github.pinpols.batch.console.domain.job.web.request.EnabledPatchRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -58,6 +60,16 @@ public class ConsoleFileTemplateController {
   public CommonResponse<Map<String, Object>> create(
       @Valid @RequestBody FileTemplateCreateRequest request) {
     return responseFactory.success(fileTemplateApplicationService.create(request));
+  }
+
+  /** 生成字段映射草案，供前端向导带入文件模板创建/更新表单。 */
+  @PostMapping("/mapping-draft")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  public CommonResponse<FileTemplateMappingDraftResponse> draftMapping(
+      @Valid @RequestBody FileTemplateMappingDraftRequest request) {
+    return responseFactory.success(
+        FileTemplateMappingDraftResponse.from(
+            fileTemplateApplicationService.draftMapping(request.toCommand())));
   }
 
   /** 更新文件模板。 */

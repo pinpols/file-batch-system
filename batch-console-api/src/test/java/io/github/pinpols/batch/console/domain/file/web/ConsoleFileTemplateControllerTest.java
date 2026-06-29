@@ -17,9 +17,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -113,5 +115,30 @@ class ConsoleFileTemplateControllerTest {
                 .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
+  }
+
+  @Test
+  void shouldReturn200WhenDraftMapping() throws Exception {
+    when(applicationService.draftMapping(any()))
+        .thenReturn(
+            new FileTemplateMappingDraftResult(
+                "IMPORT",
+                "[{\"name\":\"orderNo\"}]",
+                "{\"jdbcMappedImport\":{}}",
+                null,
+                List.of()));
+
+    mockMvc
+        .perform(
+            post("/api/console/file-templates/mapping-draft")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {"tenantId":"t1","direction":"IMPORT","fields":[{"sourceColumn":"orderNo"}]}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.direction").value("IMPORT"))
+        .andExpect(jsonPath("$.data.fieldMappingsJson").value("[{\"name\":\"orderNo\"}]"));
   }
 }

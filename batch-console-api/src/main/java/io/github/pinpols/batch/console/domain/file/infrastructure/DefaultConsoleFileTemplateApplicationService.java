@@ -1,11 +1,17 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
+import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
@@ -15,8 +21,12 @@ import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateUpdat
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,13 +45,16 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleFileTemplateApplicationService
     implements ConsoleFileTemplateApplicationService {
 
+  private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
   private final FileTemplateConfigMapper mapper;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
+  private final ObjectMapper objectMapper;
 
   @Override
   public PageResponse<Map<String, Object>> list(FileTemplateQueryRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+    String tenantId = resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     FileTemplateConfigQuery query =
         new FileTemplateConfigQuery(
@@ -60,13 +73,13 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public Map<String, Object> get(Long id, String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
+    String resolved = resolveTenant(tenantId);
     return Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
   }
 
   @Override
   public Map<String, Object> create(FileTemplateCreateRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+    String tenantId = resolveTenant(request.getTenantId());
     int version = request.getVersion() != null ? request.getVersion() : 1;
     Map<String, Object> existing =
         mapper.selectByUniqueKey(tenantId, request.getTemplateCode(), version);
@@ -83,7 +96,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public Map<String, Object> update(Long id, FileTemplateUpdateRequest request) {
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+    String tenantId = resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
     String operator = requestMetadataResolver.current().operatorId();
@@ -99,11 +112,22 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public void toggle(Long id, String tenantId, Boolean enabled) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
+    String resolved = resolveTenant(tenantId);
     int rows = mapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file_template.not_found", id);
     }
+  }
+
+  @Override
+  public FileTemplateMappingDraftResult draftMapping(FileTemplateMappingDraftCommand command) {
+    resolveTenant(command.tenantId());
+    String direction = normalizeDirection(command.direction());
+    return "EXPORT".equals(direction) ? draftExportMapping(command) : draftImportMapping(command);
+  }
+
+  private String resolveTenant(String tenantId) {
+    return tenantGuard.resolveTenant(tenantId);
   }
 
   private FileTemplateConfigUpsertParam buildCreateParam(
@@ -167,6 +191,7 @@ public class DefaultConsoleFileTemplateApplicationService
             .maskingRuleSet(request.getMaskingRuleSet())
             .build();
     param.setSecurity(securityOptions(securityInput));
+    param.setPluginRefs(pluginRefs(request.getLoadTargetRef(), request.getExportDataRef()));
     param.setAudit(auditOptions(operator, operator));
     return param;
   }
@@ -186,6 +211,7 @@ public class DefaultConsoleFileTemplateApplicationService
     param.setQuery(buildQueryForUpdate(request, existing));
     param.setRuntime(buildRuntimeForUpdate(request, existing));
     param.setSecurity(securityOptions(buildSecurityInputForUpdate(request, existing)));
+    param.setPluginRefs(buildPluginRefsForUpdate(request, existing));
     param.setAudit(auditOptions(operator, operator));
     return param;
   }
@@ -281,6 +307,212 @@ public class DefaultConsoleFileTemplateApplicationService
             .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
             .build();
     return securityInput;
+  }
+
+  private FileTemplateConfigUpsertParam.PluginRefs buildPluginRefsForUpdate(
+      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+    return pluginRefs(
+        coalesceString(req.getLoadTargetRef(), existing, "load_target_ref"),
+        coalesceString(req.getExportDataRef(), existing, "export_data_ref"));
+  }
+
+  private FileTemplateConfigUpsertParam.PluginRefs pluginRefs(
+      String loadTargetRef, String exportDataRef) {
+    FileTemplateConfigUpsertParam.PluginRefs pluginRefs =
+        new FileTemplateConfigUpsertParam.PluginRefs();
+    pluginRefs.setLoadTargetRef(blankToNull(loadTargetRef));
+    pluginRefs.setExportDataRef(blankToNull(exportDataRef));
+    return pluginRefs;
+  }
+
+  private FileTemplateMappingDraftResult draftImportMapping(
+      FileTemplateMappingDraftCommand command) {
+    List<String> warnings = new ArrayList<>();
+    List<Map<String, Object>> fieldMappings = new ArrayList<>();
+    List<Map<String, Object>> columnMappings = new ArrayList<>();
+    for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
+      if (field == null) {
+        warnings.add("存在空字段配置,已跳过");
+        continue;
+      }
+      String sourceColumn = firstText(field.sourceColumn(), field.targetColumn());
+      String targetColumn = firstText(field.targetColumn(), sourceColumn);
+      if (!Texts.hasText(sourceColumn)) {
+        warnings.add("存在未填写 sourceColumn/targetColumn 的字段,已跳过");
+        continue;
+      }
+      Map<String, Object> mapping = new LinkedHashMap<>();
+      mapping.put("name", sourceColumn);
+      putIfText(mapping, "targetColumn", targetColumn);
+      putIfText(mapping, "type", field.type());
+      putIfNotNull(mapping, "required", field.required());
+      putIfNotNull(mapping, "persist", field.persist());
+      putIfText(mapping, "format", field.format());
+      fieldMappings.add(mapping);
+
+      if (!Boolean.FALSE.equals(field.persist()) && Texts.hasText(targetColumn)) {
+        Map<String, Object> columnMapping = new LinkedHashMap<>();
+        columnMapping.put("from", sourceColumn);
+        columnMapping.put("to", targetColumn);
+        columnMappings.add(columnMapping);
+      }
+    }
+
+    Map<String, Object> jdbcMappedImport = new LinkedHashMap<>();
+    putIfText(jdbcMappedImport, "schema", command.schemaName());
+    putIfText(jdbcMappedImport, "table", command.tableName());
+    jdbcMappedImport.put("tenantColumn", firstText(command.tenantColumn(), "tenant_id"));
+    if (!columnMappings.isEmpty()) {
+      jdbcMappedImport.put("columnMappings", columnMappings);
+    }
+    if (command.conflictColumns() != null && !command.conflictColumns().isEmpty()) {
+      jdbcMappedImport.put("conflictColumns", command.conflictColumns());
+    }
+    if (Boolean.TRUE.equals(command.standardAuditBindings())) {
+      jdbcMappedImport.put("standardAuditBindings", true);
+    }
+    if (!Texts.hasText(command.tableName())) {
+      warnings.add("未填写 tableName,保存前需要补齐 jdbcMappedImport.table");
+    }
+    Map<String, Object> queryParamSchema = new LinkedHashMap<>();
+    queryParamSchema.put("jdbcMappedImport", jdbcMappedImport);
+    return new FileTemplateMappingDraftResult(
+        "IMPORT",
+        writeJson(fieldMappings),
+        writeJson(queryParamSchema),
+        blankToNull(command.defaultQuerySql()),
+        warnings);
+  }
+
+  private FileTemplateMappingDraftResult draftExportMapping(
+      FileTemplateMappingDraftCommand command) {
+    List<String> warnings = new ArrayList<>();
+    List<Map<String, Object>> fieldMappings = new ArrayList<>();
+    List<String> selectedColumns = new ArrayList<>();
+    for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
+      if (field == null) {
+        warnings.add("存在空字段配置,已跳过");
+        continue;
+      }
+      String sourceColumn = firstText(field.sourceColumn(), field.targetColumn());
+      if (!Texts.hasText(sourceColumn)) {
+        warnings.add("存在未填写 sourceColumn/targetColumn 的字段,已跳过");
+        continue;
+      }
+      Map<String, Object> mapping = new LinkedHashMap<>();
+      mapping.put("sourceColumn", sourceColumn);
+      mapping.put("header", firstText(field.header(), sourceColumn));
+      putIfText(mapping, "type", field.type());
+      putIfText(mapping, "format", field.format());
+      fieldMappings.add(mapping);
+      selectedColumns.add(sourceColumn);
+    }
+
+    Map<String, Object> sqlTemplateExport = new LinkedHashMap<>();
+    putIfText(sqlTemplateExport, "schema", command.schemaName());
+    putIfText(sqlTemplateExport, "table", command.tableName());
+    if (!selectedColumns.isEmpty()) {
+      sqlTemplateExport.put("columns", selectedColumns);
+    }
+    sqlTemplateExport.put("cursorColumn", "id");
+    Map<String, Object> queryParamSchema = new LinkedHashMap<>();
+    queryParamSchema.put("export_data_ref", WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
+    queryParamSchema.put("sqlTemplateExport", sqlTemplateExport);
+
+    String defaultQuerySql = blankToNull(command.defaultQuerySql());
+    if (defaultQuerySql == null && Texts.hasText(command.tableName())) {
+      if (canGenerateDefaultExportSql(command, selectedColumns)) {
+        defaultQuerySql = defaultExportSql(command, selectedColumns);
+      } else {
+        warnings.add("schemaName/tableName/tenantColumn/sourceColumn 存在非 SQL 标识符,已跳过默认 SQL 生成");
+      }
+    }
+    if (defaultQuerySql == null) {
+      warnings.add("未填写 defaultQuerySql/tableName,保存前需要补齐导出 SQL");
+    }
+    return new FileTemplateMappingDraftResult(
+        "EXPORT", writeJson(fieldMappings), writeJson(queryParamSchema), defaultQuerySql, warnings);
+  }
+
+  private String defaultExportSql(FileTemplateMappingDraftCommand command, List<String> columns) {
+    String selectColumns = columns.isEmpty() ? "id" : String.join(", ", columns);
+    String tableRef =
+        Texts.hasText(command.schemaName())
+            ? command.schemaName() + "." + command.tableName()
+            : command.tableName();
+    String tenantColumn = firstText(command.tenantColumn(), "tenant_id");
+    return "select "
+        + selectColumns
+        + " from "
+        + tableRef
+        + " where "
+        + tenantColumn
+        + " = :tenantId";
+  }
+
+  private boolean canGenerateDefaultExportSql(
+      FileTemplateMappingDraftCommand command, List<String> columns) {
+    if (Texts.hasText(command.schemaName()) && !isSqlIdentifier(command.schemaName())) {
+      return false;
+    }
+    if (!isSqlIdentifier(command.tableName())) {
+      return false;
+    }
+    if (!isSqlIdentifier(firstText(command.tenantColumn(), "tenant_id"))) {
+      return false;
+    }
+    return columns.stream().allMatch(DefaultConsoleFileTemplateApplicationService::isSqlIdentifier);
+  }
+
+  private static boolean isSqlIdentifier(String value) {
+    return Texts.hasText(value) && SQL_IDENTIFIER.matcher(value.trim()).matches();
+  }
+
+  private String writeJson(Object value) {
+    try {
+      return objectMapper.writeValueAsString(value);
+    } catch (JsonProcessingException e) {
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.common.system_error_detail",
+          "file template json draft failed");
+    }
+  }
+
+  private String normalizeDirection(String direction) {
+    if (!Texts.hasText(direction)) {
+      return "IMPORT";
+    }
+    String normalized = direction.trim().toUpperCase(Locale.ROOT);
+    Guard.require(
+        "IMPORT".equals(normalized) || "EXPORT".equals(normalized),
+        "direction must be IMPORT or EXPORT");
+    return normalized;
+  }
+
+  private static List<FileTemplateMappingDraftCommand.Field> fieldsOf(
+      FileTemplateMappingDraftCommand command) {
+    return command.fields() == null ? List.of() : command.fields();
+  }
+
+  private static void putIfText(Map<String, Object> map, String key, String value) {
+    if (Texts.hasText(value)) {
+      map.put(key, value.trim());
+    }
+  }
+
+  private static void putIfNotNull(Map<String, Object> map, String key, Object value) {
+    if (value != null) {
+      map.put(key, value);
+    }
+  }
+
+  private static String firstText(String preferred, String fallback) {
+    return Texts.hasText(preferred) ? preferred.trim() : blankToNull(fallback);
+  }
+
+  private static String blankToNull(String value) {
+    return Texts.hasText(value) ? value.trim() : null;
   }
 
   private static Boolean coalesceFalse(Boolean v) {

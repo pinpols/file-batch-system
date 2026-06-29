@@ -7355,6 +7355,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/file-templates/mapping-draft:
+    post:
+      tags: [FileTemplates]
+      summary: Generate file template mapping draft
+      operationId: draftFileTemplateMapping
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileTemplateMappingDraftRequest'
+      responses:
+        '200':
+          description: Generated mapping JSON draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseFileTemplateMappingDraftResponse'
   /api/console/file-templates/{id}:
     get:
       tags: [FileTemplates]
@@ -10005,6 +10027,13 @@ components:
           properties:
             data:
               nullable: true
+    CommonResponseFileTemplateMappingDraftResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/FileTemplateMappingDraftResponse'
     DagValidationFinding:
       type: object
       description: 工作流 DAG 静态校验的单条发现条目。`nodeCode` 与 `edgeId` 至多一个非空。
@@ -11771,6 +11800,12 @@ components:
         description:
           type: string
           maxLength: 512
+        loadTargetRef:
+          type: string
+          maxLength: 128
+        exportDataRef:
+          type: string
+          maxLength: 128
     FileTemplateUpdateRequest:
       type: object
       description: 更新文件模板(字段可选)。与 BE Java DTO `FileTemplateUpdateRequest` 对齐。
@@ -11885,6 +11920,79 @@ components:
         exportDataRef:
           type: string
           maxLength: 128
+    FileTemplateMappingDraftField:
+      type: object
+      description: 文件模板字段映射草案中的单字段输入。
+      properties:
+        sourceColumn:
+          type: string
+          maxLength: 128
+        targetColumn:
+          type: string
+          maxLength: 128
+        header:
+          type: string
+          maxLength: 128
+        type:
+          type: string
+          maxLength: 32
+        required:
+          type: boolean
+        persist:
+          type: boolean
+        format:
+          type: string
+          maxLength: 64
+    FileTemplateMappingDraftRequest:
+      type: object
+      description: 文件模板映射草案请求。把向导式字段输入转换成现有 field_mappings / query_param_schema JSON。
+      properties:
+        tenantId:
+          type: string
+        direction:
+          type: string
+          maxLength: 16
+          enum: [IMPORT, EXPORT]
+          description: 缺省按 IMPORT 生成。
+        schemaName:
+          type: string
+          maxLength: 64
+        tableName:
+          type: string
+          maxLength: 128
+        tenantColumn:
+          type: string
+          maxLength: 128
+        conflictColumns:
+          type: array
+          items:
+            type: string
+        standardAuditBindings:
+          type: boolean
+        defaultQuerySql:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileTemplateMappingDraftField'
+    FileTemplateMappingDraftResponse:
+      type: object
+      description: 文件模板字段映射草案。前端可直接带入 FileTemplateCreate/UpdateRequest。
+      properties:
+        direction:
+          type: string
+          enum: [IMPORT, EXPORT]
+        fieldMappingsJson:
+          type: string
+        queryParamSchemaJson:
+          type: string
+        defaultQuerySql:
+          type: string
+          nullable: true
+        warnings:
+          type: array
+          items:
+            type: string
     FileChannelCreateRequest:
       type: object
       description: 创建文件渠道。与 BE Java DTO `FileChannelCreateRequest` 对齐。
