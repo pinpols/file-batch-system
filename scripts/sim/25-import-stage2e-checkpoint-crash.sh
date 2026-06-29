@@ -29,7 +29,17 @@ restart_import_with_checkpoint() {
   BATCH_WORKER_CHECKPOINT_ENABLED=true \
   JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.checkpoint.enabled=true" \
     bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
+  __RESTARTED_IMPORT_WITH_CHECKPOINT=1
 }
+
+__RESTARTED_IMPORT_WITH_CHECKPOINT=0
+restore_import_default() {
+  if [[ "$__RESTARTED_IMPORT_WITH_CHECKPOINT" == "1" && "${RESTORE_IMPORT_AFTER_CHECKPOINT:-1}" == "1" ]]; then
+    echo "==> restore worker-import default config"
+    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null || true
+  fi
+}
+trap restore_import_default EXIT
 
 # 灌入 bootstrap + checkpoint 测试夹具
 echo "==> apply bootstrap + checkpoint fixture"
@@ -44,6 +54,9 @@ if [[ "${RESTART_IMPORT_WITH_CHECKPOINT:-1}" == "1" ]]; then
   restart_import_with_checkpoint
 else
   echo "==> skip restart; expecting existing worker-import has batch.worker.checkpoint.enabled=true"
+  # 后续故障注入会在 Python 编排里再次以 checkpoint enabled 重启 worker-import。
+  # 即使跳过初始重启,退出时也应恢复默认配置,避免污染后续 sim 场景。
+  __RESTARTED_IMPORT_WITH_CHECKPOINT=1
 fi
 
 export EXPECTED_ROWS="${EXPECTED_ROWS:-5000}"
@@ -174,7 +187,7 @@ def state_row(rid):
         f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
         "order by oe.id desc nulls last, p.id desc limit 1"
     )
-    out = (psql(os.environ["PG_PLATFORM_DB"], sql, tuples=True).stdout or "").strip()
+    out = (psql(os.environ["PG_PLATFORM_DB"], sql, tuples=True).stdout or "").rstrip("\n")
     if not out:
         return None
     parts = out.split("\x1f")

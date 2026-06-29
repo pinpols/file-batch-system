@@ -541,13 +541,20 @@ public class PlatformFileRuntimeRepository {
     if (fileId == null || !Texts.hasText(fileStatus)) {
       return;
     }
-    String currentStatus = platformFileRuntimeMapper.selectFileStatus(params(KEY_FILE_ID, fileId));
+    String currentStatus = currentFileStatus(fileId);
     if (!Texts.hasText(currentStatus)) {
       return;
     }
     FileStateMachine.assertTransition(currentStatus, fileStatus);
     platformFileRuntimeMapper.updateFileRecordStatus(
         params(KEY_FILE_ID, fileId, "fileStatus", fileStatus, "metadataJson", toJson(metadata)));
+  }
+
+  public String currentFileStatus(Long fileId) {
+    if (fileId == null) {
+      return null;
+    }
+    return platformFileRuntimeMapper.selectFileStatus(params(KEY_FILE_ID, fileId));
   }
 
   public void updateFileMetadata(Long fileId, Object metadata) {

@@ -42,6 +42,7 @@ batch_load_default_env() {
   export POSTGRES_USER="${POSTGRES_USER:-batch_user}"
   export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-batch_pass_123}"
   export BUSINESS_DB_NAME="${BUSINESS_DB_NAME:-batch_business}"
+  export PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
   export BATCH_DEFAULT_TENANT_ID="${BATCH_DEFAULT_TENANT_ID:-default-tenant}"
   export BATCH_DEV_FIXTURE_TENANTS="${BATCH_DEV_FIXTURE_TENANTS:-ta,tb,tc,tx,default-tenant}"
 

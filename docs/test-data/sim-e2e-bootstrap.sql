@@ -438,6 +438,73 @@ FROM (
 WHERE batch.job_definition.tenant_id = m.tenant_id
   AND batch.job_definition.job_code = m.job_code;
 
+UPDATE batch.workflow_node AS wn
+SET node_params = m.params,
+    updated_at = CURRENT_TIMESTAMP
+FROM batch.workflow_definition wd,
+     (VALUES
+       ('NODE_EXPORT',
+        jsonb_build_object('templateCode', 'TC_EXPORT_RISK_ALERT_TPL')),
+       ('NODE_DISPATCH',
+        jsonb_build_object(
+          'fileId', '$.nodes.NODE_EXPORT.output.fileId',
+          'channelCode', 'tc_api_risk_push'))
+     ) AS m(node_code, params)
+WHERE wd.id = wn.workflow_definition_id
+  AND wd.tenant_id = 'tc'
+  AND wd.workflow_code = 'TC_WF_RISK_PIPELINE'
+  AND wn.node_code = m.node_code;
+
+UPDATE batch.workflow_node AS wn
+SET node_params = m.params,
+    updated_at = CURRENT_TIMESTAMP
+FROM batch.workflow_definition wd,
+     (VALUES
+       ('BRANCH_B',
+        jsonb_build_object(
+          'branch', 'B',
+          'templateCode', 'TC_EXPORT_RISK_ALERT_TPL')),
+       ('BRANCH_C',
+        jsonb_build_object(
+          'branch', 'C',
+          'fileId', '$.nodes.BRANCH_B.output.fileId',
+          'channelCode', 'tc_api_risk_push')),
+       ('FALLBACK',
+        jsonb_build_object(
+          'branch', 'fallback',
+          'fileId', '$.nodes.BRANCH_B.output.fileId',
+          'channelCode', 'tc_api_risk_push'))
+     ) AS m(node_code, params)
+WHERE wd.id = wn.workflow_definition_id
+  AND wd.tenant_id = 'tc'
+  AND wd.workflow_code IN ('TC_WF_GATEWAY_ALL', 'TC_WF_GATEWAY_N_OF')
+  AND wn.node_code = m.node_code;
+
+DELETE FROM batch.workflow_edge e
+USING batch.workflow_definition wd
+WHERE wd.id = e.workflow_definition_id
+  AND wd.tenant_id = 'tc'
+  AND wd.workflow_code IN ('TC_WF_GATEWAY_ALL', 'TC_WF_GATEWAY_N_OF')
+  AND e.from_node_code = 'FORK'
+  AND e.to_node_code = 'BRANCH_C';
+
+INSERT INTO batch.workflow_edge (
+    workflow_definition_id, from_node_code, to_node_code, edge_type,
+    condition_expr, enabled, created_at, updated_at, tenant_id
+)
+SELECT wd.id, 'BRANCH_B', 'BRANCH_C', 'SUCCESS',
+       NULL, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, wd.tenant_id
+FROM batch.workflow_definition wd
+WHERE wd.tenant_id = 'tc'
+  AND wd.workflow_code IN ('TC_WF_GATEWAY_ALL', 'TC_WF_GATEWAY_N_OF')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM batch.workflow_edge e
+      WHERE e.workflow_definition_id = wd.id
+        AND e.from_node_code = 'BRANCH_B'
+        AND e.to_node_code = 'BRANCH_C'
+  );
+
 UPDATE batch.pipeline_step_definition AS psd
 SET step_order = m.step_order,
     updated_at = CURRENT_TIMESTAMP

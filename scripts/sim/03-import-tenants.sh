@@ -7,8 +7,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
-# shellcheck source=scripts/lib/env-common.sh
-source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
 
 FIXTURE_DIR="$ROOT/docs/test-data/test-full-coverage-import-suite"
 
