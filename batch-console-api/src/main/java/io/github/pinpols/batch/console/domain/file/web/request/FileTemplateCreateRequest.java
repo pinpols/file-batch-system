@@ -90,4 +90,10 @@ public class FileTemplateCreateRequest {
 
   @Size(max = 512)
   private String description;
+
+  @Size(max = 128)
+  private String loadTargetRef;
+
+  @Size(max = 128)
+  private String exportDataRef;
 }

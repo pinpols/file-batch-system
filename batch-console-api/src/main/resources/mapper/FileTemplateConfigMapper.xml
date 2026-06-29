@@ -42,6 +42,8 @@
             encryption_key_ref,
             download_requires_approval,
             masking_rule_set,
+            load_target_ref,
+            export_data_ref,
             enabled,
             version,
             description,
@@ -171,7 +173,7 @@
             fetch_size, chunk_size, preview_masking_enabled, error_line_masking_enabled,
             log_masking_enabled, content_encryption_enabled, encryption_key_ref,
             download_requires_approval, masking_rule_set, enabled, version, description,
-            created_by, updated_by, created_at, updated_at
+            load_target_ref, export_data_ref, created_by, updated_by, created_at, updated_at
         ) values (
             #{p.tenantId}, #{p.templateCode}, #{p.basicInfo.templateName}, #{p.basicInfo.templateType}, #{p.basicInfo.bizType}, #{p.format.fileFormatType},
             #{p.format.charset}, #{p.format.targetCharset}, #{p.format.withBom}, #{p.format.lineSeparator}, #{p.format.delimiter}, #{p.format.quoteChar}, #{p.format.escapeChar},
@@ -182,7 +184,7 @@
             #{p.runtime.streamingEnabled}, #{p.runtime.pageSize}, #{p.runtime.fetchSize}, #{p.runtime.chunkSize}, #{p.security.previewMaskingEnabled},
             #{p.security.errorLineMaskingEnabled}, #{p.security.logMaskingEnabled}, #{p.security.contentEncryptionEnabled}, #{p.security.encryptionKeyRef},
             #{p.security.downloadRequiresApproval}, #{p.security.maskingRuleSet}, #{p.basicInfo.enabled}, #{p.basicInfo.version}, #{p.basicInfo.description},
-            #{p.audit.createdBy}, #{p.audit.updatedBy}, current_timestamp, current_timestamp
+            #{p.pluginRefs.loadTargetRef}, #{p.pluginRefs.exportDataRef}, #{p.audit.createdBy}, #{p.audit.updatedBy}, current_timestamp, current_timestamp
         )
         on conflict (tenant_id, template_code, version) do update set
             template_name = excluded.template_name,
@@ -221,6 +223,8 @@
             encryption_key_ref = excluded.encryption_key_ref,
             download_requires_approval = excluded.download_requires_approval,
             masking_rule_set = excluded.masking_rule_set,
+            load_target_ref = excluded.load_target_ref,
+            export_data_ref = excluded.export_data_ref,
             enabled = excluded.enabled,
             description = excluded.description,
             updated_by = excluded.updated_by,

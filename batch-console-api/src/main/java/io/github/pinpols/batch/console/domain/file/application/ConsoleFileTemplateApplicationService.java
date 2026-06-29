@@ -18,4 +18,6 @@ public interface ConsoleFileTemplateApplicationService {
   Map<String, Object> update(Long id, FileTemplateUpdateRequest request);
 
   void toggle(Long id, String tenantId, Boolean enabled);
+
+  FileTemplateMappingDraftResult draftMapping(FileTemplateMappingDraftCommand command);
 }

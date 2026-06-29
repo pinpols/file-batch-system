@@ -12,6 +12,7 @@ public class FileTemplateConfigUpsertParam {
   private QueryOptions query;
   private RuntimeOptions runtime;
   private SecurityOptions security;
+  private PluginRefs pluginRefs;
   private AuditOptions audit;
 
   @Data
@@ -71,6 +72,12 @@ public class FileTemplateConfigUpsertParam {
     private String encryptionKeyRef;
     private Boolean downloadRequiresApproval;
     private String maskingRuleSet;
+  }
+
+  @Data
+  public static class PluginRefs {
+    private String loadTargetRef;
+    private String exportDataRef;
   }
 
   @Data
