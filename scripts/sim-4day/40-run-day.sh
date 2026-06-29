@@ -61,7 +61,7 @@ for t in "${TENANTS[@]}"; do
         'for i in $(seq 1 '"$ROWS"'); do printf "%s-C-%s-%06d,企业%s号-%s,ENTERPRISE,9100%09d,139%08d,c%s%s@ex.com,ACTIVE\n" "'"$t"'" "'"$BDC"'" $i "$i" "'"$BDC"'" $i $i "'"$t"'" $i; done' && ok=$((ok+1))
       total=$((total+1)); launch "$t" TA_EXPORT_REPORT "$BD" "{\"templateCode\":\"TA_EXPORT_REPORT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
       total=$((total+1)); dispatch_latest "$t" TA_DISPATCH_ORDER ta_local_archive && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TA_WF_SETTLEMENT "$BD" "{}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch "$t" TA_WF_SETTLEMENT "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
     bank)
       IMPORT_JOB=TB_IMPORT_TRANSACTION
       total=$((total+1)); import_content "$t" TB_IMPORT_TRANSACTION_TPL \
@@ -69,7 +69,7 @@ for t in "${TENANTS[@]}"; do
         'for i in $(seq 1 '"$ROWS"'); do printf "%s-T-%s-%08d,ACC%010d,DEPOSIT,%d.00,CNY,%s,auto-%s-%d\n" "'"$t"'" "'"$BDC"'" $i $i $((100+i)) "'"$BD"'" "'"$BDC"'" $i; done' && ok=$((ok+1))
       total=$((total+1)); launch "$t" TB_EXPORT_STATEMENT "$BD" "{\"templateCode\":\"TB_EXPORT_STATEMENT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
       total=$((total+1)); dispatch_latest "$t" TB_DISPATCH_SETTLE tb_api_push && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TB_WF_RECONCILE "$BD" "{}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch "$t" TB_WF_RECONCILE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
     risk)
       IMPORT_JOB=TC_IMPORT_RISK_SCORE
       total=$((total+1)); import_content "$t" TC_IMPORT_RISK_SCORE_TPL \
@@ -77,7 +77,7 @@ for t in "${TENANTS[@]}"; do
         'for i in $(seq 1 '"$ROWS"'); do b=$(( i%3==0 ? 1 : 0 )); printf "%s-E-%s-%06d,CUSTOMER,%d,%s,%s\n" "'"$t"'" "'"$BDC"'" $i $((i%100)) "$([ $b -eq 1 ] && echo HIGH || echo LOW)" "'"$BD"'"; done' && ok=$((ok+1))
       total=$((total+1)); launch "$t" TC_EXPORT_RISK_ALERT "$BD" "{\"templateCode\":\"TC_EXPORT_RISK_ALERT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
       total=$((total+1)); dispatch_latest "$t" TC_DISPATCH_REVIEW tc_api_risk_push && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TC_WF_RISK_PIPELINE "$BD" "{}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch "$t" TC_WF_RISK_PIPELINE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
   esac
   echo
 done

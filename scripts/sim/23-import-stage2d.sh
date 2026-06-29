@@ -26,6 +26,27 @@ source "$ROOT/scripts/sim/env-common.sh"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
+__RESTARTED_IMPORT_WITH_SKIP=0
+restore_import_default() {
+  if [[ "$__RESTARTED_IMPORT_WITH_SKIP" == "1" && "${RESTORE_IMPORT_AFTER_SKIP:-1}" == "1" ]]; then
+    echo "==> restore worker-import default config"
+    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null || true
+  fi
+}
+trap restore_import_default EXIT
+
+if [[ "${RESTART_IMPORT_WITH_SKIP:-1}" == "1" ]]; then
+  echo "==> restart worker-import with bad-record skip enabled"
+  COMPOSE_ENV_FILE=/dev/null \
+  BATCH_WORKER_IMPORT_SKIP_ENABLED=true \
+  BATCH_WORKER_IMPORT_SKIP_THRESHOLD_MODE=ABSOLUTE \
+  BATCH_WORKER_IMPORT_SKIP_MAX_SKIP_COUNT=1 \
+  BATCH_WORKER_IMPORT_ERROR_SINK_TYPE=ERROR_TABLE \
+  JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.error-sink-type=ERROR_TABLE" \
+    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
+  __RESTARTED_IMPORT_WITH_SKIP=1
+fi
+
 echo "==> apply bootstrap(XML import runtime config)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null

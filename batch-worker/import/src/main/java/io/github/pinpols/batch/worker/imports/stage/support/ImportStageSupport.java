@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.imports.stage.support;
 
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -108,8 +109,9 @@ public final class ImportStageSupport {
   }
 
   /**
-   * RECOVER 重放会重新经过 PREPROCESS/PARSE/VALIDATE 来重建本地临时文件，但平台 file_record 可能已推进到 LOADING
-   * 甚至更后。此时不能把状态回退到 PARSING/PARSED/VALIDATED；对这类状态冲突按幂等恢复处理。NORMAL 模式仍保持严格状态机。
+   * RECOVER 重放和分片导入都会重新经过 PREPROCESS/PARSE/VALIDATE 来重建当前 task 的本地临时文件，但平台 file_record 是全局记录，可能已被其他
+   * task 推进到更后状态。此时不能把状态回退到 PARSING/PARSED/VALIDATED；对"当前状态已达到或超过目标状态"的冲突按幂等处理。NORMAL
+   * 非分片模式仍保持严格状态机。
    */
   public static void updateFileStatusRecoverAware(
       PlatformFileRuntimeRepository runtimeRepository,
@@ -121,11 +123,13 @@ public final class ImportStageSupport {
     try {
       runtimeRepository.updateFileStatus(fileId, targetStatus, metadata);
     } catch (BizException exception) {
-      if (!isRecoverMode(context) || exception.getCode() != ResultCode.STATE_CONFLICT) {
+      if (exception.getCode() != ResultCode.STATE_CONFLICT
+          || (!isRecoverMode(context) && !isPartitionedImport(context))
+          || !fileStatusAlreadyAtOrAfter(runtimeRepository, fileId, targetStatus)) {
         throw exception;
       }
       log.info(
-          "skip file status rollback during import recover: tenantId={}, fileId={},"
+          "skip file status rollback during import replay: tenantId={}, fileId={},"
               + " targetStatus={}, cause={}",
           context.getTenantId(),
           fileId,
@@ -140,5 +144,35 @@ public final class ImportStageSupport {
     }
     Object runMode = context.getAttributes().get(PipelineRuntimeKeys.RUN_MODE);
     return runMode != null && "RECOVER".equalsIgnoreCase(String.valueOf(runMode));
+  }
+
+  private static boolean isPartitionedImport(ImportJobContext context) {
+    if (context == null) {
+      return false;
+    }
+    return numberValue(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT)) > 1L;
+  }
+
+  private static boolean fileStatusAlreadyAtOrAfter(
+      PlatformFileRuntimeRepository runtimeRepository, Long fileId, String targetStatus) {
+    FileStatus current = FileStatus.fromCode(runtimeRepository.currentFileStatus(fileId));
+    FileStatus target = FileStatus.fromCode(targetStatus);
+    int currentRank = importPipelineRank(current);
+    int targetRank = importPipelineRank(target);
+    return currentRank > 0 && targetRank > 0 && currentRank >= targetRank;
+  }
+
+  private static int importPipelineRank(FileStatus status) {
+    if (status == null) {
+      return -1;
+    }
+    return switch (status) {
+      case RECEIVED -> 0;
+      case PARSING -> 1;
+      case PARSED -> 2;
+      case VALIDATED -> 3;
+      case LOADED -> 4;
+      default -> -1;
+    };
   }
 }

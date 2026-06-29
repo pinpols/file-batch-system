@@ -29,10 +29,10 @@ PG_BIZ_U="${PG_BUSINESS_USER:-batch_user}"
 PG_BIZ_D="${PG_BUSINESS_DB:-batch_business}"
 
 # 平台运行态(分区父表 TRUNCATE 自动级联子分区;Citus 下 sequential 防分片死锁;CASCADE 兜 FK 依赖)
-PLAT_TABLES="batch.job_instance, batch.job_task, batch.job_partition, batch.job_step_instance,
+PLAT_TABLES="batch.job_instance, batch.job_instance_dedup_key, batch.job_task, batch.job_partition, batch.job_step_instance,
   batch.job_execution_log, batch.pipeline_instance, batch.pipeline_progress, batch.pipeline_step_run,
   batch.trigger_request, batch.trigger_outbox_event, batch.trigger_misfire_pending, batch.trigger_runtime_state,
-  batch.outbox_event, batch.event_outbox_retry, batch.event_delivery_log,
+  batch.outbox_event, batch.outbox_event_dedup_key, batch.event_outbox_retry, batch.event_delivery_log,
   batch.file_record, batch.file_dispatch_record, batch.file_error_record, batch.file_channel_health, batch.file_audit_log,
   batch.custom_task_type_registry, batch.worker_registry, batch.worker_report_outbox,
   batch.dead_letter_task, batch.process_staging,

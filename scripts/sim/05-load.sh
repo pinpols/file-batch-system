@@ -207,7 +207,7 @@ for t in TENANTS:
             errors.append(msg)
             print(f"  [DISPATCH] {t}/{job}: ✗ {msg}")
     for job in WORKFLOWS.get(t, []):
-        run("WORKFLOW", t, job, {"batchNo": BATCH})
+        run("WORKFLOW", t, job, {"batchNo": f"{BATCH}-wf"})
 
 print(f"\n==> 完成:total={tot} succ={ok}")
 print("提示:worker 真正写 MinIO/biz.* 需 60~120s,建议 sleep 120 后跑 06-verify.sh")
