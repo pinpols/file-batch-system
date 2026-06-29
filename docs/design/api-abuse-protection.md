@@ -23,7 +23,7 @@
 |---|---|---|
 | 越权：调到别租户数据 / 高于自身角色的接口 | 服务端 `@PreAuthorize` + 全表 `tenant_id` + biz RLS + `InternalAuthFilter` 绑定 api_key→tenant | 已有 |
 | 越权：curl 时多塞 `tenantId`/`role`/`status` 等字段冒充 | 服务端字段白名单接收、忽略客户端越权字段（如 `InternalRequestTenantGuard` 用解析出的 tenant 覆盖 body 声明） | 已有 / 持续核 |
-| 越量：刷爆接口 / 超配额 / api_key 泄漏后被打爆 | 限流（按租户高水位）+ per-tenant quota | **P0（本轮）** |
+| 越量：接口过载 / 超配额 / api_key 泄漏后被高频调用 | 限流（按租户高水位）+ per-tenant quota | **P0（本轮）** |
 | 重放 / 传输篡改（非浏览器脚本最现实） | 请求签名 HMAC + 时间戳窗口 + nonce 一次性 | **P1.4（本轮）** |
 | 慢速 / 拟人滥用（低频绕过限流） | 行为风控打分（alert-only 起步） | P1.5（规划） |
 | 暴力 / 爬虫 / CC | 验证码（风险触发）+ WAF / 网关 | P2（规划） |

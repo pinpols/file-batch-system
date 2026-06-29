@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * evict* 方法，否则 orchestrator 在 launch 热路径上读到的 Redis 配置缓存会留陈旧值。
  *
  * <p>背景：之前用 {@code @InvalidatesConsoleCache} 注解 + {@code ConsoleCacheInvalidationAspect} AOP
- * 切面声明式兜底， 现已删除（没人用），缓存失效完全走 service 内 <b>手动</b>调用 {@code
+ * 切面声明式兜底， 现已删除（无调用方），缓存失效完全走 service 内 <b>手动</b>调用 {@code
  * cacheInvalidationService.evict*}。手动调用最大的风险是 "有人加了新写路径方法却忘了清缓存" —— 本测试就是这道护栏：新写方法一旦写 mapper 而漏
  * evict，surefire 阶段即红，无需等评审。
  *

@@ -202,7 +202,7 @@ SDK 启动期对 4 条时序规则做 cross-field 校验,违反默认 `IllegalSt
 
 | # | 规则 | 默认值 | 违反含义 |
 |---|---|---|---|
-| 1 | `heartbeatInterval >= 1s` | 30s | 防止极端配置刷爆 orch |
+| 1 | `heartbeatInterval >= 1s` | 30s | 防止极端配置压垮 orchestrator |
 | 2 | `leaseRenewInterval >= 5s` | 60s | 同上 |
 | 3 | `leaseRenewInterval <= heartbeatInterval × 3` | 60s ≤ 90s | lease 续约比心跳慢 → in-flight task 被 orch 误判租约过期回收 |
 | 4 | `httpTimeout <= heartbeatInterval / 2` | 10s ≤ 15s | 心跳超时排队后 backlog 拖死 scheduler |

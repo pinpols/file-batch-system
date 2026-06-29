@@ -35,7 +35,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   private SubscriptionRuleWebhookDispatcher dispatcher;
 
   private SubscriptionRuleWebhookDispatcher newDispatcher() {
-    // 防轰炸限流默认放行;"超限丢弃"用例单独覆盖。
+    // 限流默认放行;"超限丢弃"用例单独覆盖。
     lenient().when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(true);
     dispatcher =
         new SubscriptionRuleWebhookDispatcher(
@@ -173,7 +173,7 @@ class SubscriptionRuleWebhookDispatcherTest {
             "config_json", "{\"url\":\"https://hook.example.com/in\"}");
     when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
         .thenReturn(List.of(rule));
-    // 防轰炸:限流器拒绝 → 直接丢弃,不触达投递。
+    // 限流器拒绝 → 直接丢弃,不触达投递。
     when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(false);
     dispatcher =
         new SubscriptionRuleWebhookDispatcher(

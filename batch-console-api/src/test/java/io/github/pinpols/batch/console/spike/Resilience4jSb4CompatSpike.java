@@ -21,8 +21,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * SPIKE:Resilience4j 2.3.0(targets Spring Boot 3 / Spring Framework 6)在 Spring Boot 4.0.6 (Spring
- * Framework 7)+ JDK 25 上的兼容验证。
+ * SPIKE:Resilience4j 2.3.0(targets Spring Boot 3 / Spring Framework 6)在 Spring Boot 4.x (Spring
+ * Framework 7)+ JDK 21 基线上的兼容验证。
  *
  * <p>验收点(对齐 docs/runbook/downstream-degradation.md 升级清单):
  *

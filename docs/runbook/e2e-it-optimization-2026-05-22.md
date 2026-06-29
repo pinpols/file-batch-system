@@ -121,7 +121,7 @@ E2E 22 个完整明细(降序):
 ## 环境前提 / 约束
 
 ### 本地(macOS)
-- **JVM**:Java 25.0.2 (Homebrew openjdk)
+- **JVM**:Java 21（跟根 pom `<java.version>` 对齐）
 - **Docker Desktop 内存**:7.75 GB
 - **必须**:`~/.testcontainers.properties` 含 `testcontainers.reuse.enable=true`(MinIO/Redis reuse 才生效)
 - **本地不推荐 forkCount>1**:7.75GB 内存 + docker-compose dev 服务(若开)= 约 4-6GB 可用,跑 2 fork 必 OOM

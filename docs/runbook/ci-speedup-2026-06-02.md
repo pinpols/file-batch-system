@@ -24,7 +24,7 @@
 
 新增 `changes` job 用 `dorny/paths-filter@v3` 判定 docs-only:
 
-- **触发 code path**(任一命中 => 跑 unit):`batch-*/**` / `batch-worker-sdk-python/**` /
+- **触发 code path**(任一命中 => 跑 unit):`batch-*/**` / `sdk/python/**` /
   `db/migration/**` / `scripts/**` / `pom.xml` / `**/pom.xml` /
   `.github/workflows/**` / `.github/actions/**`。
 - **不触发**(纯文档 / 示例 / 配置):`docs/**` / `*.md` /

@@ -99,7 +99,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
   }
 
   @Test
-  @DisplayName("hint < 1s → 回退到 1s(防 orch 配错刷爆心跳)")
+  @DisplayName("hint < 1s → 回退到 1s(防 orch 配错导致心跳过载)")
   void shouldClampToMinFloor_whenHintTooSmall() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     // hint=0 秒 → raw=0ms, clamp 到 1000ms

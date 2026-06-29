@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-06-29
+- **CLAUDE.md §模块 边界表述澄清**：把开头的"9 模块 Maven multi-module"改为"根 Maven reactor 9 个 module path + 平台运行时固定 10 个逻辑模块"，避免把 Maven 聚合路径数、worker 子模块数、SDK 三件套与运行时服务边界混在一起。明确 `sdk/java/{core,spring,testkit}` 已纳入根 reactor，但属于 ADR-035 SDK 发布 / 测试 / Spring 适配模块，不属于平台运行时固定 10 模块；Go / Python / Rust / TypeScript SDK 仍是独立语言工具链。
+
 ### 2026-06-14
 - **CLAUDE.md §分支用途 改写:`citus` 分支冻结为只读参考**。原"2 条常驻活分支(main + citus 并排活跃轨道,定期 main→citus 同步)"改为"唯一常驻活分支 = main;citus 冻结(reference-only,停止同步,不再开发)"。决策依据:多租峰值流量单机压测(`docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md`)实测瓶颈在控制面分层并发(launch 消费 + worker 认领,已修 20→62/s),**PG 写有 10-15× 余量、零锁争用 → Citus 解决的是未来才有的写墙,当前非杠杆**;且 biz 分区先于 biz 分片、真要上有 Azure 托管 Citus 路径 B。citus 降级为"时间点 POC + 薄保险",快照 tag `citus-poc-2026-06-14`;耐久学习资产在 `docs/{backlog,analysis,runbook,design}` + `scripts/db/citus/01-distribute.sql`,不在活分支。新增**解冻流程**(重审 main delta Citus 正确性 + 重跑 distribute + 重跑 sim)。`citus → main` 永不合(一直如此,不变)。main 的「新多租大表复合 PK 前瞻」规则继续生效以压低将来解冻成本。
 

@@ -48,7 +48,7 @@ REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
 # 用户可在外部 export LOCAL_FAST_JVM_OPTS="" 禁用；JAVA_OPTS 追加在后面，同 flag 以后者为准。
 LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off}"
 
-# AppCDS：JDK 25 + Spring Boot 4 下 dump/runtime 的 jdk.module.enable.native.access 状态会错位，
+# AppCDS：当前本地启动栈下 dump/runtime 的 native-access 状态可能错位，
 # 导致 MyBatis ExceptionUtil / Spring MVC PartialMatchHelper / Tomcat RequestUtil 等内部类
 # 运行时 NoClassDefFoundError。统一关 CDS 规避；待 JDK / Spring Boot 修复后再恢复。
 SKIP_CDS="${SKIP_CDS:-1}"
@@ -171,7 +171,7 @@ start_java() {
 
   warm_cds "$name" "$jar"
 
-  # Java 25+：Netty 等会调用 System::loadLibrary；显式允许 unnamed 模块原生访问，避免启动期 WARNING
+  # JDK 21+：Netty 等会调用 System::loadLibrary；显式允许 unnamed 模块原生访问，避免启动期 WARNING
   nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${__CDS_FLAG} ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
   printf '%s\t%s\t%s\n' "$name" "$pid" "$jar" >>"$PID_FILE_NEW"

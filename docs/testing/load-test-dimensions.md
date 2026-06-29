@@ -50,7 +50,7 @@
 - **目的**：直接压 orchestrator 内部任务生命周期接口：`POST /internal/tasks/{taskId}/claim` → 可选 pause → `POST /internal/tasks/{taskId}/report`。
 - **验收关注点**：claim/report 延迟、冲突率、错误率；配合 DB sampler 看 `jt_ready` 下降和 `jt_success` 上升速度。
 - **前置**：必须提供 `task.lifecycle.csv`，header 为 `taskId,tenantId,workerId`；这些 task 必须处于 `READY`，并且不被真实 Worker 同时消费。
-- **风险边界**：该场景会真实推进任务终态，不适合对共享开发库随手运行。
+- **风险边界**：该场景会真实推进任务终态，不适合在共享开发库直接运行。
 
 ---
 

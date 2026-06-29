@@ -1,8 +1,8 @@
 # Release Flow / 版本发布流程
 
-> 适用：本仓库 `batch-platform` 9 模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch} / batch-console-api）。共享配置基线 `batch-defaults.yml` 位于 `batch-common/src/main/resources/`,详见 ADR-029 修订版。
+> 适用：本仓库 `batch-platform` 根 Maven reactor。平台运行时固定 10 个逻辑模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch,atomic} / batch-console-api），Java SDK 三件套位于 `sdk/java/{core,spring,testkit}` 并纳入根 reactor。共享配置基线 `batch-defaults.yml` 位于 `batch-common/src/main/resources/`,详见 ADR-029 修订版。
 >
-> 维护规则：发布操作 = 改 `<revision>` + 打 git tag + 更新 `CHANGELOG.md`。Maven 版本入口在根 pom 单点 `<revision>`，所有模块共版（CI-friendly placeholder + flatten-maven-plugin）。
+> 维护规则：发布操作 = `scripts/ci/bump-version.sh <version>` + 通过 `scripts/ci/check-version-alignment.sh` + 打 git tag。Maven 版本入口在根 pom 单点 `<revision>`，所有根 reactor 模块共版（CI-friendly placeholder + flatten-maven-plugin）。
 
 ## 0. 运行时硬性前提
 
@@ -11,7 +11,7 @@
 | **PostgreSQL** | **≥ 11** | V100+ 多个 Flyway 迁移依赖 PG 11 的"`ADD COLUMN ... DEFAULT 常量`不重写行"优化；< 11 会触发全表 rewrite + 长时间 AccessExclusiveLock |
 | **Kafka** | ≥ 3.5（推荐 4.x） | KRaft / ZK 都兼容；ADR-010 trigger outbox topic 需要支持 idempotent producer |
 | **Redis** | ≥ 6.2 | quota Lua / ShedLock / cache pub-sub 用到的命令均在此版本可用 |
-| **JDK** | 25 | 见根 pom `<java.version>` |
+| **JDK** | 21 | 见根 pom `<java.version>` / `<maven.compiler.release>` |
 
 ## 0.1 V124 上线前置检查（partial unique 改造）
 
@@ -80,7 +80,7 @@ V119 把 `job_execution_log` / `job_step_instance` 的 FK 改为 `ON DELETE CASC
 **主要不抄 Spring Cloud (CalVer + Release Train) 的原因**：
 - 单 repo 单 PR 单部署 → 无需 BOM 协调多仓
 - 无外部团队 import 你的 BOM
-- 9 模块共 `${revision}` 自然一致，不需要"列车"
+- 根 reactor 共 `${revision}` 自然一致，不需要"列车"
 
 ## 2. 标准发布 flow（main 分支）
 
@@ -99,17 +99,16 @@ PR 合并到 main 不动版本号。`-SNAPSHOT` 状态会一直累积新功能 /
 确认 main 测试全部通过 + 当前 `<revision>` 是 `X.Y.0-SNAPSHOT`，准备发 `X.Y.0`：
 
 ```bash
-# 1) 改 pom 去掉 -SNAPSHOT
-sed -i '' 's|<revision>X.Y.0-SNAPSHOT</revision>|<revision>X.Y.0</revision>|' pom.xml
+# 1) 统一升级版本落点：pom / load-tests / Helm / OpenAPI / SDK docs / CHANGELOG
+bash scripts/ci/bump-version.sh X.Y.0
 
 # 2) 验证
+scripts/ci/check-version-alignment.sh
 mvn -DskipTests clean package
 mvn test
 
-# 3) 更新 CHANGELOG.md：把 [Unreleased] 段重命名为 [X.Y.0] - YYYY-MM-DD
-
 # 4) 提交 release commit
-git add pom.xml CHANGELOG.md
+git add pom.xml load-tests/pom.xml helm docs CHANGELOG.md scripts
 git commit -m "release: X.Y.0"
 
 # 5) 打 tag（annotated tag，描述发布内容）
@@ -181,7 +180,7 @@ git commit -am "chore: back to 1.2.0-SNAPSHOT after RC.1"
 
 | 文件 | 字段 | 语义 | release 时何时改 |
 |---|---|---|---|
-| `pom.xml` `<revision>` | 主 reactor 单点（9 模块） | 当前开发 / release 版本 | §2.2 步骤 1 |
+| `pom.xml` `<revision>` | 根 reactor 单点 | 当前开发 / release 版本 | `scripts/ci/bump-version.sh` |
 | `load-tests/pom.xml` `<version>` | 独立模块（未入 reactor） | 跟主 reactor 一致（永远 = 当前 main 的 `${revision}`） | §2.2 步骤 1 同时改 |
 | `helm/batch-platform/Chart.yaml` `appVersion` | helm chart 默认 image tag | **= 上一次 GA**（不跟 SNAPSHOT，部署侧重稳定） | §2.2 步骤 4 之后，发了 `vX.Y.Z` 才改成 `X.Y.Z` |
 | `helm/values-prod.yaml` `image.tag` | 生产环境镜像 tag override | **= 当前生产部署版本** | 部署到生产时改（SRE 触发，不在代码 release flow 内强制） |

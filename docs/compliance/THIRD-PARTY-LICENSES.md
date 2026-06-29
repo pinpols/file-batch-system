@@ -3,7 +3,7 @@
 **Product**: `batch-platform`  
 **Version**: `${revision}` (默认 `1.1.0`,CI-friendly)  
 **Generated**: `2026-06-03`  
-**Source**: curated from the current `pom.xml` / module POM files + `batch-worker-sdk-python/pyproject.toml`;Maven 部分以 `mvn -P compliance` 输出为底(266+ transitive 依赖见 `sbom.json`)。
+**Source**: curated from the current `pom.xml` / module POM files + `sdk/python/pyproject.toml`;Maven 部分以 `mvn -P compliance` 输出为底(266+ transitive 依赖见 `sbom.json`)。
 
 This document is a human-readable snapshot of the third-party components referenced by the repository at the time of generation.
 Internal modules under `io.github.pinpols.batch:*` are excluded.
@@ -11,7 +11,7 @@ Internal modules under `io.github.pinpols.batch:*` are excluded.
 **变更摘要(2026-06-03 vs 2026-04-26)**:
 - 新增模块 `batch-worker-sdk` / `batch-worker-sdk-spring-boot-starter` / `batch-worker-sdk-testkit`(详见 `Used By` 列)
 - 新增 Python SDK 依赖区块(详见 §Python SDK Runtime Dependencies)
-- Project Lombok 升 1.18.42 → 1.18.46(JDK 25 适配)
+- Project Lombok 升 1.18.42 → 1.18.46（保持当前 JDK 21 与后续 JDK 升级兼容性）
 - MyBatis Spring Boot Starter 4.0.0 → 4.0.1
 - 其余直接依赖版本不变
 
@@ -111,7 +111,7 @@ These packages are used in test or build tooling and are not shipped as producti
 
 ## Python SDK Runtime Dependencies
 
-`batch-worker-sdk-python/pyproject.toml`(独立工具链,不进 Maven reactor;PyPI 名 `batch-worker-sdk`,import 名 `batch_worker_sdk`):
+`sdk/python/pyproject.toml`(独立工具链,不进 Maven reactor;PyPI 名 `batch-worker-sdk`,import 名 `batch_worker_sdk`):
 
 | Component | Version | License | Scope | Used By | Notes |
 |---|---|---|---|---|---|
@@ -139,4 +139,3 @@ mvn dependency:tree -Dverbose
 ```
 
 4. If you need the machine-generated third-party report, regenerate it with the `compliance` Maven profile and use the output under `target/generated-sources/license/`.
-

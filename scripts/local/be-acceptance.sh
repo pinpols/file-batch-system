@@ -419,7 +419,7 @@ step_10_backlog() {
 > 由 \`scripts/local/be-acceptance.sh\` 自动生成。请补充失败明细后归档。
 
 ## 工具链 / 环境(不修主代码)
-- [ ] (e.g. Mockito 5.20 + JDK 25 mock interface 失败)
+- [ ] (e.g. Mockito javaagent / fork JVM 失败)
 - [ ] (e.g. ReadReplicaIT 缺 docker compose replica)
 
 ## 他人 commit 引入违约(交给作者)

@@ -43,7 +43,7 @@ import org.springframework.stereotype.Service;
  *       log.warn} 跳过**,绝不静默丢弃。
  * </ul>
  *
- * <p><b>安全</b>:分发前按渠道 + 按目标(收件人指纹)双层限流防轰炸 + 相同事件去重;第三方渠道 URL 经 {@code DnsResolveGuard} 防 SSRF。
+ * <p><b>安全</b>:分发前按渠道 + 按目标(收件人指纹)双层限流 + 相同事件去重;第三方渠道 URL 经 {@code DnsResolveGuard} 防 SSRF。
  *
  * <p><b>去重</b>:若旧路({@code webhook_subscription})与本路({@code subscription_rule→WEBHOOK
  * channel})命中同一目标 URL, 两路都会各自投递,**不去重** —— 语义上是两个独立订阅(运维各自配置、各自启停),刻意不合并。
@@ -77,10 +77,10 @@ public class SubscriptionRuleWebhookDispatcher {
   private static final int QUEUE_CAPACITY = 1024;
   private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
 
-  /** 防轰炸:单渠道每分钟最大投递条数(滑窗)。超额丢弃 + 告警,挡住事件风暴/恶意触发把收件人刷爆(尤其 SMS 烧钱、邮件轰炸)。 */
+  /** 单渠道每分钟最大投递条数(滑窗)。超额丢弃 + 告警,限制事件风暴或恶意触发对收件人的影响(尤其 SMS 计费、邮件批量投递)。 */
   private static final int MAX_SENDS_PER_CHANNEL_PER_MINUTE = 120;
 
-  /** 防轰炸(按目标):同一投递目标(url/to/phoneNumbers 指纹)每分钟上限,比按渠道更严——挡多规则/多渠道刷爆同一收件人。 */
+  /** 目标级限流:同一投递目标(url/to/phoneNumbers 指纹)每分钟上限,比按渠道更严,限制多规则/多渠道同时命中同一收件人。 */
   private static final int MAX_SENDS_PER_DESTINATION_PER_MINUTE = 60;
 
   /** 去重:相同(渠道+事件+内容)在滑窗内只发一次(limit=1),挡告警风暴重复刷屏。 */
@@ -178,7 +178,7 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
 
-    // 防轰炸:单渠道每分钟投递上限,超额丢弃 + 告警(webhook 与第三方渠道同样适用)。
+    // 单渠道每分钟投递上限,超额丢弃 + 告警(webhook 与第三方渠道同样适用)。
     if (!withinSendRateLimit(channelCode, channelType, eventType)) {
       return;
     }
@@ -186,7 +186,7 @@ public class SubscriptionRuleWebhookDispatcher {
     if (isDuplicateWithinWindow(channelCode, eventType, payloadJson)) {
       return;
     }
-    // 防轰炸(按目标):同一收件人(url/to/phoneNumbers)跨规则/渠道的更严上限。
+    // 目标级限流:同一收件人(url/to/phoneNumbers)跨规则/渠道的更严上限。
     if (!withinDestinationRateLimit(rule, channelCode, channelType, eventType)) {
       return;
     }
@@ -299,9 +299,7 @@ public class SubscriptionRuleWebhookDispatcher {
     }
   }
 
-  /**
-   * 防轰炸限流:单渠道每分钟投递上限(滑窗)。超额 → false(丢弃 + 告警)。 Redis 不可达时 fail-open(放行 + 告警),避免把限流可用性故障升级为"漏发真实告警"。
-   */
+  /** 单渠道限流:每分钟投递上限(滑窗)。超额 → false(丢弃 + 告警)。 Redis 不可达时 fail-open(放行 + 告警),避免把限流可用性故障升级为"漏发真实告警"。 */
   private boolean withinSendRateLimit(String channelCode, String channelType, String eventType) {
     try {
       boolean allowed =
@@ -349,7 +347,7 @@ public class SubscriptionRuleWebhookDispatcher {
   }
 
   /**
-   * 防轰炸(按目标):对投递目标指纹(url/to/phoneNumbers)限流,比按渠道更严,挡多规则/多渠道刷爆同一收件人。 无法识别目标时跳过本层(按渠道限流已兜底)。Redis 不可达
+   * 目标级限流:对投递目标指纹(url/to/phoneNumbers)限流,比按渠道更严,避免多规则/多渠道同时压垮同一收件人。 无法识别目标时跳过本层(按渠道限流已覆盖)。Redis 不可达
    * fail-open。
    */
   private boolean withinDestinationRateLimit(

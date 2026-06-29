@@ -25,7 +25,7 @@ class BatchPlatformClientConfigValidationTest {
 
   // ─── heartbeatInterval >= 1s ───────────────────────────────────────────────
   @Test
-  @DisplayName("heartbeatInterval < 1s → IllegalStateException(防刷爆 orch)")
+  @DisplayName("heartbeatInterval < 1s → IllegalStateException(防 orchestrator 心跳过载)")
   void shouldRejectHeartbeatTooSmall() {
     BatchPlatformClientConfig c = valid().heartbeatInterval(Duration.ofMillis(500)).build();
     assertThatThrownBy(c::validate)

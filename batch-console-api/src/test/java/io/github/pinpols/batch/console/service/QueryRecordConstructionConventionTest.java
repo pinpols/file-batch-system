@@ -51,7 +51,7 @@ class QueryRecordConstructionConventionTest {
           "/domain/governance/query/DeadLetterTaskQuery.java",
           "/domain/ops/query/RetryScheduleQuery.java",
           "/domain/file/query/FileErrorRecordQuery.java",
-          // follow-up:复杂 record(8/11 字段)+ E2E support 临时豁免,留 QF 后续 sprint 处理
+          // follow-up:复杂 record(8/11 字段)+ E2E support 暂行豁免,纳入后续 sprint 处理
           "/test/java/io/github/pinpols/batch/console/integration/JobInstanceQueryIntegrationTest.java",
           "/test/java/io/github/pinpols/batch/console/integration/ConsoleAiAuditServiceIntegrationTest.java",
           "/test/java/io/github/pinpols/batch/e2e/support/E2eOutboxPublishSupport.java",

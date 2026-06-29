@@ -1,6 +1,6 @@
 # file-batch-system 项目结构
 
-> 2026-06-03 整理。批量任务编排控制面 + 文件 / 任务交付闭环。平台模块 Maven multi-module(worker 已聚合为 `batch-worker` 下的 6 个子模块)+ 多语言 SDK + 独立 reactor。
+> 2026-06-29 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分三件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 9 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库。
 
 ## 顶层结构
 
@@ -18,13 +18,14 @@ file-batch-system/
 │   └── atomic/                             专用 Task SPI(shell/sql/stored-proc/http 隔离,ADR-029)
 ├── batch-console-api/                      控制面 REST API(运维/查询/审批)
 ├── sdk/
-│   ├── java/{core,spring,testkit}/         Java SDK:核心(Spring-free,ADR-035)+ Spring 适配 + testkit(FakeBatchPlatform)
-│   ├── go/                                 Go SDK
-│   ├── python/                             Python SDK(httpx + pydantic + aiokafka)
-│   ├── rust/                               Rust SDK
-│   └── typescript/                         TypeScript SDK
-├── batch-e2e-tests/                        BE 端到端测试(独立 reactor 节点)
-├── load-tests/                             压测(独立 reactor,不入主 reactor)
+│   ├── java/{core,spring,testkit}/         Java SDK(纳入根 Maven reactor):核心 + Spring 适配 + testkit
+│   ├── go/                                 Go SDK(独立工具链)
+│   ├── python/                             Python SDK(httpx + pydantic + aiokafka,独立工具链)
+│   ├── rust/                               Rust SDK(独立工具链)
+│   └── typescript/                         TypeScript SDK(独立工具链)
+├── batch-e2e-tests/                        BE 端到端测试(根 reactor 内)
+├── load-tests/                             压测(独立 reactor,不入根 reactor)
+├── security-scan/                          安全扫描编排工具(独立模块,不入根 reactor)
 │
 ├── db/migration/                           Flyway PostgreSQL migrations(V1 起,当前到 V184)
 ├── docs/                                   全文档体系(见下)
@@ -38,7 +39,27 @@ file-batch-system/
 └── AGENTS.md                               Agent / SDK 协议总览
 ```
 
-## 平台模块(固定,不可擅自增删;worker 已聚合到 `batch-worker` 下)
+配对前端仓库不在本仓内；前后端联调时使用 sibling repo `../batch-console`，约定见根目录 [`../../AGENTS.md`](../../AGENTS.md)。
+
+## Maven reactor 边界
+
+根 [`../../pom.xml`](../../pom.xml) 当前纳入 9 个 module path：
+
+```text
+batch-common
+batch-trigger
+batch-orchestrator
+batch-worker                  # aggregator;内部聚合 6 个 worker 子模块
+sdk/java/core
+sdk/java/spring
+sdk/java/testkit
+batch-console-api
+batch-e2e-tests
+```
+
+`load-tests`、`security-scan`、`sdk/{go,python,rust,typescript}` 是独立 reactor / 独立语言工具链，不按根 Maven reactor 统计。
+
+## 平台运行时模块(固定,不可擅自增删;worker 已聚合到 `batch-worker` 下)
 
 > `batch-worker` 是聚合器(aggregator + parent),其下 6 个子模块的 artifactId 保持不变(仍为 `batch-worker-core` / `batch-worker-import` 等)。
 
@@ -55,13 +76,13 @@ file-batch-system/
 | `batch-worker/atomic`(artifactId `batch-worker-atomic`) | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛) |
 | `batch-console-api` | `console/{domain,application,controller,...}` | 控制面 REST + 审批 + 运维操作(唯一允许走读写分离的模块) |
 
-## SDK 模块(多语言,不属固定平台模块)
+## SDK 模块(多语言,不属平台运行时固定模块)
 
 | 模块 | 类型 | 用途 |
 |---|---|---|
-| `sdk/java/core` | Java(Spring-free) | 租户在自有进程里跑 worker 的核心 SDK(ADR-035) |
-| `sdk/java/spring` | Java(可选) | SDK 的 Spring Boot 自动装配 starter |
-| `sdk/java/testkit` | Java(test-scope) | `FakeBatchPlatform` 端到端测试工具 |
+| `sdk/java/core` | Java(Spring-free;根 reactor 内) | 租户在自有进程里跑 worker 的核心 SDK(ADR-035) |
+| `sdk/java/spring` | Java(可选;根 reactor 内) | SDK 的 Spring Boot 自动装配 starter |
+| `sdk/java/testkit` | Java(test-scope;根 reactor 内) | `FakeBatchPlatform` 端到端测试工具 |
 | `sdk/go` | Go | 与 Java SDK 对齐的 Go 实现 |
 | `sdk/python` | Python | 与 Java SDK 对齐的 Python 实现(httpx + pydantic + aiokafka) |
 | `sdk/rust` | Rust | 与 Java SDK 对齐的 Rust 实现 |
@@ -82,7 +103,6 @@ file-batch-system/
 ```
 docs/
 ├── README.md                文档总入口(新人从这里)
-├── CLAUDE.md → ../CLAUDE.md 红线 + 关键路径(根目录的 CLAUDE.md 是权威)
 ├── changelog.md             架构约束 / CLAUDE.md 变更日志(日期倒序)
 ├── coding-conventions.md    Java 编码细则 + 反例表(CLAUDE.md §Java 红线展开)
 ├── agent-baseline.md        Agent / 自动化协作基线
@@ -117,8 +137,13 @@ scripts/
 ├── db/        DB 工具(migration check / schema dump)
 ├── dev/       本地开发(start-stack / reset)
 ├── docker/    Docker compose 辅助
+├── ha/        高可用 / DR 演练脚本
+├── lib/       脚本共享函数库
 ├── local/     本地特定(pre-push-sdk-checks.sh / be-acceptance.sh / sdk-handler-tests.sh)
 ├── ops/       运维(prod 巡检 / 一次性脚本)
+├── ps1/       PowerShell / Windows 兼容辅助
+├── sim/       场景模拟脚本
+├── sim-4day/  四日链路模拟脚本
 └── tools/     杂项工具
 ```
 
