@@ -238,17 +238,27 @@ public class DefaultLaunchService implements LaunchService {
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("errorCode", "DISPATCH_REJECTED");
     summary.put("messageKey", dispatchFailure.getMessageKey());
-    summary.put("reason", firstMessageArg(dispatchFailure));
+    summary.put("reasonCode", dispatchRejectReasonCode(dispatchFailure));
+    summary.put("reason", dispatchRejectReasonMessage(dispatchFailure));
     summary.put("source", "partition_dispatch");
     return JsonUtils.toJson(summary);
   }
 
-  private String firstMessageArg(BizException dispatchFailure) {
+  private String dispatchRejectReasonCode(BizException dispatchFailure) {
     Object[] args = dispatchFailure.getMessageArgs();
-    if (args == null || args.length == 0 || args[0] == null) {
-      return dispatchFailure.getMessage();
+    if (args == null || args.length < 2 || args[0] == null) {
+      return "DISPATCH_REJECTED";
     }
     return String.valueOf(args[0]);
+  }
+
+  private String dispatchRejectReasonMessage(BizException dispatchFailure) {
+    Object[] args = dispatchFailure.getMessageArgs();
+    if (args == null || args.length == 0) {
+      return dispatchFailure.getMessage();
+    }
+    Object messageArg = args.length >= 2 ? args[1] : args[0];
+    return messageArg == null ? dispatchFailure.getMessage() : String.valueOf(messageArg);
   }
 
   private void appendDispatchRejectedAudit(

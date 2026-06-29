@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrot
 import io.github.pinpols.batch.orchestrator.application.scheduler.PriorityScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WorkerSelector;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
@@ -92,6 +93,7 @@ class DefaultResourceSchedulerTest {
         .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT", "max running reached"));
 
     ResourceSchedulingDecision d = scheduler.schedule(req());
+    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getReasonCode()).isEqualTo("CONCURRENCY_LIMIT");
     verify(partitionThrottle, never()).check(any(), any());
@@ -106,6 +108,7 @@ class DefaultResourceSchedulerTest {
         .thenReturn(ResourceCheck.waitForCapacity("PARTITION_THROTTLE", "throttled"));
 
     ResourceSchedulingDecision d = scheduler.schedule(req());
+    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getReasonCode()).isEqualTo("PARTITION_THROTTLE");
     verify(workerSelector, never()).select(any(), any(), any());
@@ -119,6 +122,7 @@ class DefaultResourceSchedulerTest {
     when(workerSelector.select(any(), any(), any())).thenReturn(null);
 
     ResourceSchedulingDecision d = scheduler.schedule(req());
+    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getReasonCode()).isEqualTo("NO_AVAILABLE_WORKER");
   }
@@ -148,6 +152,7 @@ class DefaultResourceSchedulerTest {
     when(workerSelector.select(any(), any(), any())).thenReturn(route);
 
     ResourceSchedulingDecision d = scheduler.schedule(req());
+    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.ACCEPT);
     assertThat(d.isDispatchable()).isTrue();
     assertThat(d.getPriority()).isEqualTo(5);
     assertThat(d.getPriorityBand()).isEqualTo("MEDIUM");
@@ -166,6 +171,19 @@ class DefaultResourceSchedulerTest {
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getPriority()).isEqualTo(1);
     assertThat(d.getPriorityBand()).isEqualTo("LOW");
+  }
+
+  @Test
+  @DisplayName("failFast block → admissionAction=REJECT")
+  void failFastBlockBecomesRejectAdmission() {
+    when(concurrencyLimiter.check(any(), any()))
+        .thenReturn(ResourceCheck.reject("TENANT_JOB_LIMIT", "tenant quota exceeded"));
+
+    ResourceSchedulingDecision d = scheduler.schedule(req());
+
+    assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.REJECT);
+    assertThat(d.isFailFast()).isTrue();
+    assertThat(d.getReasonCode()).isEqualTo("TENANT_JOB_LIMIT");
   }
 
   @Test

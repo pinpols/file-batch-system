@@ -49,7 +49,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
         .sorted(
             Comparator.comparing(
-                    (ResourceQueueEntity queue) -> !"MIXED".equalsIgnoreCase(queue.queueType()))
+                    (ResourceQueueEntity queue) -> "MIXED".equalsIgnoreCase(queue.queueType()))
                 .thenComparing(
                     queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
                 .thenComparing(

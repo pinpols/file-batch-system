@@ -529,6 +529,7 @@ class DefaultLaunchServiceTest {
             BizException.of(
                 ResultCode.BUSINESS_ERROR,
                 "error.partition.dispatch_business_error",
+                "TENANT_JOB_LIMIT",
                 "tenant quota exceeded"))
         .when(partitionDispatchService)
         .dispatch(any());
@@ -549,6 +550,7 @@ class DefaultLaunchServiceTest {
     assertThat(progress.getResultSummary())
         .contains("DISPATCH_REJECTED")
         .contains("error.partition.dispatch_business_error")
+        .contains("TENANT_JOB_LIMIT")
         .contains("tenant quota exceeded");
     verify(triggerRequestMapper)
         .updateAcceptance("t1", "req-dispatch-reject", BatchStatusConstants.REJECTED, 501L);

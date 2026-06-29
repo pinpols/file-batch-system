@@ -22,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
@@ -147,10 +148,11 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                 effectiveParams));
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
-    if (decision.isFailFast()) {
+    if (isRejected(decision)) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
           "error.partition.dispatch_business_error",
+          decision.getReasonCode(),
           decision.getReasonMessage());
     }
     applySchedulingDecision(plan, decision);
@@ -162,6 +164,12 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             new TaskExecutionContext(request, effectiveParams, traceId, jobInstance),
             new TaskSchedulingContext(plan, partitions, decision)));
     return new DispatchOutcome(partitions.size(), decision.isDispatchable());
+  }
+
+  private boolean isRejected(ResourceSchedulingDecision decision) {
+    return decision != null
+        && (ResourceAdmissionAction.REJECT == decision.getAdmissionAction()
+            || decision.isFailFast());
   }
 
   // C-2.4: 重新读取 jobInstance 获取最新 version，避免并发创建分区/任务后 version 漂移导致 markRunning CAS 失败

@@ -462,3 +462,29 @@ trigger
 7. 是否把 Console 变成通用日志、APM、AI、数据治理入口。
 
 如果答案为是,默认不做;确需做也必须先证明它仍属于批量运行控制面或文件/任务交付闭环。
+
+## 9. 执行记录
+
+### 2026-06-29 P0-1 第一刀:资源准入语义显式化
+
+已做:
+
+- `ResourceSchedulingDecision` 增加显式 `admissionAction=ACCEPT/DEFER/REJECT`。
+- `DefaultResourceScheduler` 将原有 `dispatchable/failFast` 判定映射为三态准入语义:
+  - `ACCEPT`:可立即派发,写 outbox。
+  - `DEFER`:资源/窗口/worker 暂不可用,创建 WAITING 分区和 CREATED task,等待后续 tick。
+  - `REJECT`:策略要求 fail-fast,launch 反向收敛为 `FAILED/REJECTED`。
+- 普通 job dispatch 与 workflow node dispatch 共用同一 `REJECT` 识别,避免 DAG 节点绕过资源拒绝语义。
+- dispatch reject 审计摘要增加机器可读 `reasonCode`,保留人可读 `reason`,便于 Console/诊断 API 后续按原因聚合。
+- 修复资源池解析排序:未显式指定 `queueCode` 时,workerType 专用队列优先于 `MIXED` 回退队列,避免专用导入/导出池被高权重混合池抢走。
+
+本地验证:
+
+- `mvn -q -pl batch-orchestrator -DskipTests spotless:apply`
+- `mvn -q -pl batch-orchestrator -am -Dtest=DefaultResourceSchedulerTest,DefaultResourceQueueManagerTest,DefaultLaunchServiceTest,DefaultWorkflowNodeDispatchServiceTest -Dsurefire.failIfNoSpecifiedTests=false test`
+
+还未做:
+
+- queue depth / wait age / tenant fairness 指标和 Console query。
+- 1k / 10k launch storm 服务 IT 与多租户 sim 复验。
+- stuck diagnosis API 对 `DEFER/REJECT` reasonCode 的聚合展示。
