@@ -1,7 +1,9 @@
 # 对标业界开源批量调度的能力差距分析
 
-> 日期:2026-05-30。对标对象:Apache DolphinScheduler / Apache Airflow / XXL-Job / Temporal / Argo Workflows / Kestra。
+> 日期:2026-05-30(2026-06-29 复核更新)。对标对象:Apache DolphinScheduler / Apache Airflow / XXL-Job / Temporal / Argo Workflows / Kestra。
 > 方法:实际 grep + 读代码核实,非凭印象。每条给证据文件。
+> 后续实施边界与验证计划见 [roadmap](../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md)。
+> **2026-06-29 复核**:原 §三 6 条短板中 #1 日志查看 / #2 Lineage / #4 DAG 编辑 / #6 多语言 SDK 已落地,移入 §二;仅 #3 YAML 与 #5 动态 fan-out 仍缺。
 
 ## 一、定位
 
@@ -25,22 +27,24 @@ file-batch-system = **批量运行控制面 + 文件/任务交付闭环**(见 CL
 | Outbox + 强一致状态机 | 主链 DB→Outbox→Kafka→CLAIM→EXECUTE→REPORT | ✅ 竞品常见的"task 状态丢失"你天然没有 |
 | 多租 UNIQUE 守护 + ArchUnit | `MultiTenantIsolationIntegrationTest` / MapperXmlTenantGuardArchTest | ✅ 竞品几乎没有这层静态守护 |
 | archive 冷表对齐 + drift check | `ArchiveSchemaDriftCheck` 启动期 fail-fast | ✅ 竞品归档多为手工 |
+| 任务级在线日志查看(2026-06 补) | 后端 `ConsoleQueryController` `/execution-logs` + `/job-execution-logs`;前端 `ExecutionLog.vue` / `ExecutionLogsTab.vue` / `MExecutionLog.vue` | ✅ 原 §三 Gap#1 已落地,运维无需 SSH 翻文件 |
+| 数据血缘 Lineage(2026-06 补) | `OpenLineageEmitter` + `OpenLineageProperties`,接入 `WorkflowTerminalOutboxService` 终态发射 | ✅ 原 §三 Gap#2 已落地,接 OpenLineage 标准 emitter |
+| DAG 可视化编排(2026-06 补) | `WorkflowDesigner.vue` + `designer/inspector/{JobNodeForm,FileStepNodeForm,GatewayNodeForm}.vue`(自研画布,非 @vue-flow) | ✅ 原 §三 Gap#4 已从只读升级为可编排 |
+| 多语言 task SDK(2026-06 补) | `sdk/{go,java,python,rust,typescript}` 五语言契约核 + 运行时引擎 | ✅ 原 §三 Gap#6 已落地,五语言全链路实测绿 |
 
 ## 三、真实短板(核实存在,值得补)
+
+> 2026-06-29 复核:原 6 条短板中 #1 日志查看 / #2 Lineage / #4 DAG 编辑器 / #6 多语言 SDK **均已落地**(上移到 §二)。下表只保留经 origin/main 核实仍缺的两项。
 
 ### 真缺
 | # | 缺口 | 证据(缺失) | 影响 | 建议 |
 |---|---|---|---|---|
-| 1 | **任务级在线日志查看** | 无 LogController / logContent API | 运维要 SSH 翻文件 / staging 表,定位慢 | **P0,~1 周**,console 嵌 log viewer,最高 ROI |
-| 2 | **数据血缘 Lineage** | 无 OpenLineage / lineage 代码 | 故障定位 / 合规追溯缺"这 job 碰了哪些数据" | P1,已有 nodeOutput + OTel 做基础,接 emitter 成本低 |
 | 3 | **GitOps / YAML workflow** | workflow 定义仅在 `batch.workflow_definition` 表 | 不能 Git diff / PR 改流程 | 谨慎,见 §四:做 export/import 而非 source-of-truth |
 
 ### 半成品
 | # | 缺口 | 现状证据 | 差距 | 建议 |
 |---|---|---|---|---|
-| 4 | **DAG 拖拽编辑器** | `WorkflowMermaidViewer.vue` 只读;无 @vue-flow 依赖 | 只能看不能拖拽编排 | P0,Vue Flow(已在 P2 roadmap) |
-| 5 | **动态 fan-out** | `DefaultPartitionDispatchService` 是资源驱动定态 1:N 分区 | ≠ Airflow `dynamic task mapping`(按上游输出生成 N task) | P1,真实表达力差距 |
-| 6 | **多语言 task 原生 SDK** | `Shell/Http/Sql/StoredProc` 4 executor;HTTP 可调任意语言服务 | 无 Python/Node 原生薄壳 | P1,基于 HTTP executor 扩 Python SDK |
+| 5 | **动态 fan-out** | `DefaultPartitionDispatchService` 是资源驱动定态 1:N 分区 | ≠ Airflow `dynamic task mapping`(按上游输出生成 N task) | P0,真实表达力差距;已被 [roadmap §2.3](../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) 接管 |
 
 ## 四、范围边界外(不算缺陷,坚持不做)
 
@@ -59,14 +63,14 @@ file-batch-system = **批量运行控制面 + 文件/任务交付闭环**(见 CL
 
 ## 六、行动建议(按 ROI)
 
-**P0(2-3 月,补了立刻能用):**
-- 任务级 log viewer(~1 周)
-- DAG 拖拽编辑 Vue Flow(已规划)
+**已完成(2026-06 落地,见 §二):**
+- ~~任务级 log viewer~~ ✅ `/execution-logs` + 前端 ExecutionLog
+- ~~DAG 可视化编排~~ ✅ WorkflowDesigner(自研画布)
+- ~~OpenLineage emitter~~ ✅ OpenLineageEmitter
+- ~~多语言 task SDK~~ ✅ 五语言(go/java/python/rust/typescript)
 
-**P1(6 月,补表达力 / 可观测):**
-- 动态 fan-out(dynamic task mapping)
-- OpenLineage emitter(复用 nodeOutput + OTel)
-- Python task SDK 薄壳(基于 HTTP executor)
+**仍待补(剩余真实短板):**
+- 动态 fan-out(dynamic task mapping)— P0,已被 [roadmap §2.3](../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) 接管
 
 **不做:**
 - K8s 原生 executor(ADR-027 边界)
