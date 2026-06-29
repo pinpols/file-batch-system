@@ -16,6 +16,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
@@ -123,6 +124,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
               "NO_AVAILABLE_WORKER", "no online worker matches current route"));
     }
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+    decision.setAdmissionAction(ResourceAdmissionAction.ACCEPT);
     decision.setDispatchable(true);
     decision.setFailFast(false);
     decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
@@ -148,6 +150,8 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     Integer effectivePriority = degraded ? 1 : priority;
     String effectiveBand = degraded ? "LOW" : priorityBand;
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+    decision.setAdmissionAction(
+        check.failFast() ? ResourceAdmissionAction.REJECT : ResourceAdmissionAction.DEFER);
     decision.setDispatchable(false);
     decision.setFailFast(check.failFast());
     decision.setReasonCode(check.reasonCode());

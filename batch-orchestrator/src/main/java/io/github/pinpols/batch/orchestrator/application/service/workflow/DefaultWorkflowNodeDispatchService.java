@@ -29,6 +29,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import java.time.Instant;
@@ -303,6 +304,13 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // N 个分区都参与 worker 路由)。复用现有 partition 派发 + 聚合(N partition 终态聚合成节点终态),不另造状态机。
     FanOutPlan fanOut = prepareFanOut(workflowNode, workflowRun, node.nodeCode(), plan);
     ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
+    if (isRejected(decision)) {
+      throw BizException.of(
+          ResultCode.BUSINESS_ERROR,
+          "error.partition.dispatch_business_error",
+          decision.getReasonCode(),
+          decision.getReasonMessage());
+    }
     applySchedulingDecision(plan, decision);
     List<JobPartitionEntity> existingPartitions =
         jobMappers.jobPartitionMapper.selectByQuery(
@@ -549,6 +557,12 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         partitionPlan.setWorkerRoute(decision.getRoute());
       }
     }
+  }
+
+  private boolean isRejected(ResourceSchedulingDecision decision) {
+    return decision != null
+        && (ResourceAdmissionAction.REJECT == decision.getAdmissionAction()
+            || decision.isFailFast());
   }
 
   private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {

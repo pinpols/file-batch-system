@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -10,8 +11,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
@@ -22,6 +25,8 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -30,6 +35,8 @@ import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -105,6 +112,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     JobInstanceEntity j = new JobInstanceEntity();
     j.setId(100L);
     j.setTenantId("ta");
+    j.setJobCode("WF_JOB");
+    j.setBizDate(LocalDate.of(2026, 6, 29));
     return j;
   }
 
@@ -266,5 +275,40 @@ class DefaultWorkflowNodeDispatchServiceTest {
         .isZero();
     verify(childJobLaunchSupport, never())
         .dispatchJobNode(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("TASK 节点资源准入 REJECT → 抛业务拒绝且不创建分区")
+  void taskNodeAdmissionRejectThrowsBusinessError() {
+    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
+    when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
+        .thenReturn(true);
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setNodeCode("n1");
+    node.setNodeType("TASK");
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
+        .thenReturn(node);
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("ta");
+    plan.setJobCode("WF_JOB");
+    plan.setBizDate("2026-06-29");
+    plan.setDefaultWorkerType("IMPORT");
+    plan.setPartitionCount(1);
+    plan.setPartitions(List.of(new SchedulePlan.PartitionPlan()));
+    when(schedulePlanBuilder.build(any())).thenReturn(plan);
+    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+    decision.setAdmissionAction(ResourceAdmissionAction.REJECT);
+    decision.setFailFast(true);
+    decision.setReasonCode("TENANT_JOB_LIMIT");
+    decision.setReasonMessage("tenant quota exceeded");
+    when(resourceScheduler.schedule(any())).thenReturn(decision);
+
+    assertThatThrownBy(
+            () ->
+                service.dispatchNode(
+                    instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), "{}", "trace"))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.partition.dispatch_business_error");
+    verify(partitionLifecycleService, never()).createPartitions(any(), any(), any());
   }
 }

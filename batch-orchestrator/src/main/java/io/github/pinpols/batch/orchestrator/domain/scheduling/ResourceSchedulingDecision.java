@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class ResourceSchedulingDecision {
 
+  private ResourceAdmissionAction admissionAction;
   private boolean dispatchable;
   private boolean failFast;
   private String reasonCode;
