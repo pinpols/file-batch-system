@@ -61,6 +61,10 @@ class WorkflowFanOutSupportTest {
 
     List<SchedulePlan.PartitionPlan> expanded = WorkflowFanOutSupport.expandPartitions(plan, 3);
     assertThat(expanded).hasSize(3);
+    assertThat(expanded.get(0).getShardIndex()).isZero();
+    assertThat(expanded.get(0).getShardTotal()).isEqualTo(3);
+    assertThat(expanded.get(2).getShardIndex()).isEqualTo(2);
+    assertThat(expanded.get(2).getShardTotal()).isEqualTo(3);
     assertThat(expanded)
         .allSatisfy(
             p -> {

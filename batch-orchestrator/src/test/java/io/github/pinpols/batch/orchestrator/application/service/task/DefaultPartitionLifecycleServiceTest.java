@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
@@ -21,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -236,6 +239,42 @@ class DefaultPartitionLifecycleServiceTest {
     assertThat(p.getVersion()).isEqualTo(1L);
     assertThat(t.getTaskStatus()).isEqualTo(TaskStatus.READY.code());
     assertThat(t.getVersion()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("createPartitions: input_snapshot 固化 partition plan contract")
+  @SuppressWarnings("unchecked")
+  void createPartitionsPersistsPartitionPlanContractInInputSnapshot() {
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("ta");
+    plan.setJobCode("JOB_A");
+    plan.setBizDate("2026-06-30");
+    plan.setQueueCode("import_queue");
+    plan.setWorkerGroup("IMPORT");
+    plan.setWindowCode("default_window");
+    SchedulePlan.PartitionPlan partitionPlan = new SchedulePlan.PartitionPlan();
+    partitionPlan.setPartitionNo(1);
+    partitionPlan.setPartitionKey("JOB_A:2026-06-30:1");
+    partitionPlan.setBusinessKey("JOB_A:2026-06-30");
+    partitionPlan.setShardIndex(0);
+    partitionPlan.setShardTotal(2);
+    partitionPlan.setRangeStartInclusive(0L);
+    partitionPlan.setRangeEndExclusive(50L);
+    partitionPlan.setExpectedRows(50L);
+    plan.setPartitions(List.of(partitionPlan));
+
+    service.createPartitions(plan, 900L, PartitionStatus.CREATED.code());
+
+    ArgumentCaptor<JobPartitionEntity> cap = ArgumentCaptor.forClass(JobPartitionEntity.class);
+    verify(jobPartitionMapper).insert(cap.capture());
+    Map<String, Object> snapshot =
+        (Map<String, Object>) JsonUtils.fromJson(cap.getValue().getInputSnapshot(), Object.class);
+    assertThat(snapshot.get("partitionPlanVersion")).isEqualTo(1);
+    assertThat(snapshot.get("shardIndex")).isEqualTo(0);
+    assertThat(snapshot.get("shardTotal")).isEqualTo(2);
+    assertThat(snapshot.get("rangeStartInclusive")).isEqualTo(0);
+    assertThat(snapshot.get("rangeEndExclusive")).isEqualTo(50);
+    assertThat(snapshot.get("expectedRows")).isEqualTo(50);
   }
 
   // ===== fixtures =====

@@ -224,6 +224,15 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     snapshot.put("partitionNo", partitionPlan == null ? null : partitionPlan.getPartitionNo());
     snapshot.put("partitionKey", partitionPlan == null ? null : partitionPlan.getPartitionKey());
     snapshot.put("businessKey", partitionPlan == null ? null : partitionPlan.getBusinessKey());
+    snapshot.put("partitionPlanVersion", 1);
+    snapshot.put("shardIndex", partitionPlan == null ? null : partitionPlan.getShardIndex());
+    snapshot.put("shardTotal", partitionPlan == null ? null : partitionPlan.getShardTotal());
+    snapshot.put(
+        "rangeStartInclusive",
+        partitionPlan == null ? null : partitionPlan.getRangeStartInclusive());
+    snapshot.put(
+        "rangeEndExclusive", partitionPlan == null ? null : partitionPlan.getRangeEndExclusive());
+    snapshot.put("expectedRows", partitionPlan == null ? null : partitionPlan.getExpectedRows());
     snapshot.put(
         "workerRoute",
         partitionPlan == null || partitionPlan.getWorkerRoute() == null

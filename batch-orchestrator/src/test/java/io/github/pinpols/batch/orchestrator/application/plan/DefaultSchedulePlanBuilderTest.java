@@ -220,6 +220,30 @@ class DefaultSchedulePlanBuilderTest {
     assertThat(plan.getPartitions().get(0).getBusinessKey()).isEqualTo("JOB_001:2026-01-01");
   }
 
+  @Test
+  void shouldPopulateDeterministicPartitionContractFromExpectedRows() {
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(jobDef("STATIC", 5, null));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    SchedulePlan plan = builder.build(command(Map.of("partitionCount", 3, "expectedRows", 10)));
+
+    assertThat(plan.getTotalExpectedRows()).isEqualTo(10L);
+    assertThat(plan.getPartitions()).hasSize(3);
+    SchedulePlan.PartitionPlan first = plan.getPartitions().get(0);
+    assertThat(first.getShardIndex()).isZero();
+    assertThat(first.getShardTotal()).isEqualTo(3);
+    assertThat(first.getRangeStartInclusive()).isZero();
+    assertThat(first.getRangeEndExclusive()).isEqualTo(3L);
+    assertThat(first.getExpectedRows()).isEqualTo(3L);
+    SchedulePlan.PartitionPlan last = plan.getPartitions().get(2);
+    assertThat(last.getShardIndex()).isEqualTo(2);
+    assertThat(last.getShardTotal()).isEqualTo(3);
+    assertThat(last.getRangeStartInclusive()).isEqualTo(6L);
+    assertThat(last.getRangeEndExclusive()).isEqualTo(10L);
+    assertThat(last.getExpectedRows()).isEqualTo(4L);
+  }
+
   // --- priority inheritance ---
 
   @Test

@@ -68,6 +68,8 @@ public final class WorkflowFanOutSupport {
       p.setPartitionStatus(template.getPartitionStatus());
       expanded.add(p);
     }
+    plan.setPartitions(expanded);
+    plan.normalizePartitionContract();
     return expanded;
   }
 

@@ -527,3 +527,30 @@ trigger
 - 1k / 10k launch storm 服务 IT 与多租户 sim 复验。
 - stuck diagnosis API 对 `DEFER/REJECT` reasonCode 与队列 bottleneck 的聚合展示。
 - P1 priority aging / anti-starvation / pool SLA。
+
+### 2026-06-30 P0-2 第一刀:partition plan contract 固化
+
+已做:
+
+- `SchedulePlan` 增加 `totalExpectedRows`。
+- `SchedulePlan.PartitionPlan` 增加可持久化的分区计划契约字段:
+  - `shardIndex`
+  - `shardTotal`
+  - `rangeStartInclusive`
+  - `rangeEndExclusive`
+  - `expectedRows`
+- `DefaultSchedulePlanBuilder` 从运行参数读取 `expectedRows / totalExpectedRows / totalRowsHint / recordCount / estimatedItemCount`,并按 `shardIndex/shardTotal` 均分为半开范围。
+- `WorkflowFanOutSupport.expandPartitions` 展开后复用同一个 `normalizePartitionContract()` 口径,动态 fan-out 分区也带 `shardIndex/shardTotal`。
+- `DefaultPartitionLifecycleService` 将 `partitionPlanVersion=1` 与上述字段写入 `job_partition.input_snapshot`,让 worker、运维诊断和重放都能读到同一份计划。
+
+本地验证:
+
+- `DefaultSchedulePlanBuilderTest` 覆盖 10 行 / 3 分片的范围均分与 expectedRows。
+- `WorkflowFanOutSupportTest` 覆盖 fan-out 展开后的 shardIndex/shardTotal。
+- `DefaultPartitionLifecycleServiceTest` 覆盖 input_snapshot 持久化字段。
+
+还未做:
+
+- worker claim/report 协议显式暴露分片级 outputs 与 verifierFailures。
+- join aggregator 明确 SUCCESS / PARTIAL_FAILED / FAILED 规则,并防止提前 promote result_version。
+- 4/8/16/32 分片小规模 IT 与 1000w import/export 基准复验。
