@@ -91,7 +91,8 @@ public class HttpTaskExecutionClient
   private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG =
       new EffectiveTaskConfig(
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null);
 
   @Override
   public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {

@@ -356,6 +356,26 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (task.getPartitionKey() != null) {
       executionContext.put(PipelineRuntimeKeys.PARTITION_KEY, task.getPartitionKey());
     }
+    if (task.getPartitionPlanVersion() != null) {
+      executionContext.put(
+          PipelineRuntimeKeys.PARTITION_PLAN_VERSION, task.getPartitionPlanVersion());
+    }
+    if (task.getShardIndex() != null) {
+      executionContext.put(PipelineRuntimeKeys.SHARD_INDEX, task.getShardIndex());
+    }
+    if (task.getShardTotal() != null) {
+      executionContext.put(PipelineRuntimeKeys.SHARD_TOTAL, task.getShardTotal());
+    }
+    if (task.getRangeStartInclusive() != null) {
+      executionContext.put(
+          PipelineRuntimeKeys.RANGE_START_INCLUSIVE, task.getRangeStartInclusive());
+    }
+    if (task.getRangeEndExclusive() != null) {
+      executionContext.put(PipelineRuntimeKeys.RANGE_END_EXCLUSIVE, task.getRangeEndExclusive());
+    }
+    if (task.getExpectedRows() != null) {
+      executionContext.put(PipelineRuntimeKeys.EXPECTED_ROWS, task.getExpectedRows());
+    }
     return executionContext;
   }
 

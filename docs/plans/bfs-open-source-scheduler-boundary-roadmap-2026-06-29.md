@@ -578,6 +578,32 @@ trigger
 
 还未做:
 
-- claim response 的 effective config 是否需要显式展开 `partitionPlanVersion/shardIndex/shardTotal/range` 到顶层 DTO,目前 worker 可从 partition snapshot 读取。
+- 分片失败后的 `retry failed shards` Console/API 运维入口。
+- 4/8/16/32 分片服务 IT 与 1000w import/export 基准复验。
+
+### 2026-06-30 P0-2 第三刀:claim typed 分区计划透传
+
+已做:
+
+- `EffectiveTaskConfig` 增加 typed 分区计划字段:
+  - `partitionPlanVersion`
+  - `shardIndex`
+  - `shardTotal`
+  - `rangeStartInclusive`
+  - `rangeEndExclusive`
+  - `expectedRows`
+- orchestrator claim 时从 `job_partition.input_snapshot` 读取上述字段；历史空快照或坏 JSON 降级为 null，不阻断 claim。
+- worker-core `PulledTask` 增加对应字段，并在 `DefaultTaskExecutionWrapper` 写入 execution context，key 与 snapshot 字段同名。
+- 旧 worker/plugin 仍可继续用 `partitionNo/partitionCount/partitionKey`；新插件可优先用 typed range/shard 字段。
+
+本地验证:
+
+- `DefaultTaskAssignmentServiceTest` 覆盖 input_snapshot → `EffectiveTaskConfig` typed 字段。
+- `TaskControllerTest` 覆盖 claim response JSON 字段。
+- `TaskDispatchExecutorTest` 覆盖 claim typed 字段进入 `PulledTask`。
+- `DefaultTaskExecutionWrapperTest` 覆盖 typed 字段进入 execution context。
+
+还未做:
+
 - 分片失败后的 `retry failed shards` Console/API 运维入口。
 - 4/8/16/32 分片服务 IT 与 1000w import/export 基准复验。

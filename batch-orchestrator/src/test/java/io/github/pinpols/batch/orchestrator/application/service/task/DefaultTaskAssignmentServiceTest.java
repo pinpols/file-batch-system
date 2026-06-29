@@ -9,10 +9,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -291,6 +294,63 @@ class DefaultTaskAssignmentServiceTest {
   void requestCancelNoMatch() {
     when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(0);
     assertThat(service.requestCancel("ta", 100L)).isFalse();
+  }
+
+  // ===== loadEffectiveConfig =====
+
+  @Test
+  @DisplayName("loadEffectiveConfig: 从 partition input_snapshot 暴露 typed 分区计划契约")
+  void loadEffectiveConfigExposesPartitionPlanContract() {
+    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+    t.setJobInstanceId(10L);
+    t.setJobPartitionId(50L);
+    t.setTaskType("IMPORT");
+    t.setTaskSeq(1);
+    t.setTaskPayload("{}");
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
+
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(10L);
+    instance.setTenantId("ta");
+    instance.setJobDefinitionId(20L);
+    instance.setInstanceNo("INST-1");
+    instance.setJobCode("JOB_A");
+    instance.setExpectedPartitionCount(4);
+    instance.setTraceId("trace-1");
+    when(jobInstanceMapper.selectById("ta", 10L)).thenReturn(instance);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(50L);
+    partition.setPartitionNo(3);
+    partition.setPartitionKey("JOB_A:2026-06-30:3");
+    partition.setBusinessKey("biz-key");
+    partition.setIdempotencyKey("idem-key");
+    partition.setCurrentInvocationId("inv-1");
+    partition.setInputSnapshot(
+        """
+        {"partitionPlanVersion":1,"shardIndex":2,"shardTotal":4,
+         "rangeStartInclusive":500,"rangeEndExclusive":750,"expectedRows":250}
+        """);
+    when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
+    when(jobDefinitionMapper.selectById(20L))
+        .thenReturn(
+            JobDefinitionEntity.builder()
+                .id(20L)
+                .executionMode("FULL")
+                .retryPolicy("NONE")
+                .build());
+
+    EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 100L);
+
+    assertThat(config.partitionPlanVersion()).isEqualTo(1);
+    assertThat(config.shardIndex()).isEqualTo(2);
+    assertThat(config.shardTotal()).isEqualTo(4);
+    assertThat(config.rangeStartInclusive()).isEqualTo(500L);
+    assertThat(config.rangeEndExclusive()).isEqualTo(750L);
+    assertThat(config.expectedRows()).isEqualTo(250L);
+    assertThat(config.partitionNo()).isEqualTo(3);
+    assertThat(config.partitionCount()).isEqualTo(4);
+    assertThat(config.partitionInvocationId()).isEqualTo("inv-1");
   }
 
   // ===== updateTaskStatus =====

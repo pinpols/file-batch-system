@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.IdGenerator;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
@@ -38,6 +39,7 @@ import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -313,6 +315,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         partition != null && partition.getIdempotencyKey() != null
             ? partition.getIdempotencyKey()
             : null;
+    Map<String, Object> partitionSnapshot = parsePartitionSnapshot(partition);
     return new EffectiveTaskConfig(
         tenantId,
         taskId,
@@ -337,10 +340,57 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         partition == null ? null : partition.getPartitionNo(),
         instance.getExpectedPartitionCount(),
         partition == null ? null : partition.getPartitionKey(),
+        intValue(partitionSnapshot.get("partitionPlanVersion")),
+        intValue(partitionSnapshot.get("shardIndex")),
+        intValue(partitionSnapshot.get("shardTotal")),
+        longValue(partitionSnapshot.get("rangeStartInclusive")),
+        longValue(partitionSnapshot.get("rangeEndExclusive")),
+        longValue(partitionSnapshot.get("expectedRows")),
         // V94: data_interval 透传 — 创建 instance 时已落到 job_instance, claim 时实时读
         instance.getDataIntervalStart(),
         instance.getDataIntervalEnd(),
         partition == null ? null : partition.getCurrentInvocationId());
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> parsePartitionSnapshot(JobPartitionEntity partition) {
+    if (partition == null
+        || partition.getInputSnapshot() == null
+        || partition.getInputSnapshot().isBlank()) {
+      return Map.of();
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(partition.getInputSnapshot(), Object.class);
+      if (parsed instanceof Map<?, ?> snapshot) {
+        return (Map<String, Object>) snapshot;
+      }
+    } catch (IllegalArgumentException badSnapshot) {
+      log.warn(
+          "partition input_snapshot parse failed, skip typed partition plan fields: partitionId={}",
+          partition.getId(),
+          badSnapshot);
+    }
+    return Map.of();
+  }
+
+  private Integer intValue(Object value) {
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    if (value instanceof String text && !text.isBlank()) {
+      return Integer.valueOf(text);
+    }
+    return null;
+  }
+
+  private Long longValue(Object value) {
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    if (value instanceof String text && !text.isBlank()) {
+      return Long.valueOf(text);
+    }
+    return null;
   }
 
   /**

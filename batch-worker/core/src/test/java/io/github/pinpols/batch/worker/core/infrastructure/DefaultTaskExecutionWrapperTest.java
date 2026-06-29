@@ -112,6 +112,12 @@ class DefaultTaskExecutionWrapperTest {
             "JOB:2026-05-01:1",
             null,
             null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.of(sample));
 
@@ -301,6 +307,33 @@ class DefaultTaskExecutionWrapperTest {
             invocation -> {
               StepExecutionRequest req = invocation.getArgument(0);
               assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
+              return StepExecutionResponse.successResponse();
+            });
+
+    wrapper.execute(task);
+  }
+
+  @Test
+  void shouldExposePartitionPlanContractInExecutionContext() {
+    PulledTask task = sampleTask("1013", "t1", "w1");
+    task.setPartitionPlanVersion(1);
+    task.setShardIndex(2);
+    task.setShardTotal(4);
+    task.setRangeStartInclusive(500L);
+    task.setRangeEndExclusive(750L);
+    task.setExpectedRows(250L);
+
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              StepExecutionRequest req = invocation.getArgument(0);
+              assertThat(req.context())
+                  .containsEntry(PipelineRuntimeKeys.PARTITION_PLAN_VERSION, 1)
+                  .containsEntry(PipelineRuntimeKeys.SHARD_INDEX, 2)
+                  .containsEntry(PipelineRuntimeKeys.SHARD_TOTAL, 4)
+                  .containsEntry(PipelineRuntimeKeys.RANGE_START_INCLUSIVE, 500L)
+                  .containsEntry(PipelineRuntimeKeys.RANGE_END_EXCLUSIVE, 750L)
+                  .containsEntry(PipelineRuntimeKeys.EXPECTED_ROWS, 250L);
               return StepExecutionResponse.successResponse();
             });
 
