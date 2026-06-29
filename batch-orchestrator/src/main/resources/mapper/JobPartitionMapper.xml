@@ -33,6 +33,19 @@
         <result column="target_ref" property="targetRef"/>
     </resultMap>
 
+    <resultMap id="QueuePartitionBacklogStatsMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats">
+        <constructor>
+            <arg column="queue_code" javaType="java.lang.String"/>
+            <arg column="created_partitions" javaType="long"/>
+            <arg column="waiting_partitions" javaType="long"/>
+            <arg column="ready_partitions" javaType="long"/>
+            <arg column="running_partitions" javaType="long"/>
+            <arg column="retrying_partitions" javaType="long"/>
+            <arg column="oldest_waiting_seconds" javaType="long"/>
+        </constructor>
+    </resultMap>
+
     <select id="selectByQuery" resultMap="JobPartitionResultMap">
         select *
         from batch.job_partition
@@ -326,6 +339,56 @@
         where tenant_id = #{tenantId}
           and worker_group = #{workerGroup}
           and partition_status in (#{readyStatus}, #{runningStatus}, #{retryingStatus})
+    </select>
+
+    <select id="summarizeQueueBacklogByTenantAndQueueCodes" resultMap="QueuePartitionBacklogStatsMap">
+        select effective_queue_code as queue_code,
+               count(1) filter (where partition_status = #{createdStatus}) as created_partitions,
+               count(1) filter (where partition_status = #{waitingStatus}) as waiting_partitions,
+               count(1) filter (where partition_status = #{readyStatus}) as ready_partitions,
+               count(1) filter (where partition_status = #{runningStatus}) as running_partitions,
+               count(1) filter (where partition_status = #{retryingStatus}) as retrying_partitions,
+               coalesce(
+                   max(extract(epoch from (current_timestamp - created_at)))
+                       filter (where partition_status = #{waitingStatus}),
+                   0
+               )::bigint as oldest_waiting_seconds
+        from (
+            select p.partition_status,
+                   p.created_at,
+                   coalesce(nullif(p.input_snapshot -&gt;&gt; 'queueCode', ''), ji.queue_code) as effective_queue_code
+            from batch.job_partition p
+            join batch.job_instance ji
+              on ji.tenant_id = p.tenant_id
+             and ji.id = p.job_instance_id
+            where p.tenant_id = #{tenantId}
+              and p.partition_status in (
+                  #{createdStatus}, #{waitingStatus}, #{readyStatus}, #{runningStatus}, #{retryingStatus}
+              )
+        ) s
+        where effective_queue_code in
+            <foreach collection="queueCodes" item="q" open="(" separator="," close=")">
+                #{q}
+            </foreach>
+        group by effective_queue_code
+    </select>
+
+    <select id="summarizeGlobalQueueBacklog" resultMap="QueuePartitionBacklogStatsMap">
+        select 'ALL' as queue_code,
+               count(1) filter (where partition_status = #{createdStatus}) as created_partitions,
+               count(1) filter (where partition_status = #{waitingStatus}) as waiting_partitions,
+               count(1) filter (where partition_status = #{readyStatus}) as ready_partitions,
+               count(1) filter (where partition_status = #{runningStatus}) as running_partitions,
+               count(1) filter (where partition_status = #{retryingStatus}) as retrying_partitions,
+               coalesce(
+                   max(extract(epoch from (current_timestamp - created_at)))
+                       filter (where partition_status = #{waitingStatus}),
+                   0
+               )::bigint as oldest_waiting_seconds
+        from batch.job_partition
+        where partition_status in (
+            #{createdStatus}, #{waitingStatus}, #{readyStatus}, #{runningStatus}, #{retryingStatus}
+        )
     </select>
 
     <!-- 启动审计：与 selectExpiredLeasesGlobal 一致（仅 READY/RUNNING）；终态 SUCCESS 等残留 lease 不计 -->

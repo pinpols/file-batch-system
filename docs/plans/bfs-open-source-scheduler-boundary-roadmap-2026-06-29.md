@@ -488,3 +488,42 @@ trigger
 - queue depth / wait age / tenant fairness 指标和 Console query。
 - 1k / 10k launch storm 服务 IT 与多租户 sim 复验。
 - stuck diagnosis API 对 `DEFER/REJECT` reasonCode 的聚合展示。
+
+### 2026-06-30 P0-1 第二刀:队列积压观测闭环
+
+已做:
+
+- `SchedulerSnapshotResponse.QueueSnapshot` / `ConsoleSchedulerSnapshotResponse.QueueSnapshot` 增加队列积压字段:
+  - `created/waiting/ready/running/retrying/queued/activePartitions`
+  - `oldestWaitingSeconds`
+  - `tenantWaitingSharePermille`
+  - `partitionSaturationPermille`
+  - `bottleneckReason`
+- 队列积压统计口径与 WAITING 重派保持一致:优先读 `job_partition.input_snapshot.queueCode`,缺失再回退 `job_instance.queue_code`,避免 workflow 子任务被错误归到 workflow 自身队列。
+- `bottleneckReason` 首版枚举:
+  - `NONE`
+  - `QUEUE_JOB_LIMIT`
+  - `QUEUE_PARTITION_LIMIT`
+  - `NO_ONLINE_WORKER`
+  - `WAITING_DISPATCH_BACKLOG`
+- 新增全局低基数 Micrometer gauge:
+  - `batch.orchestrator.scheduler.queue.created.partitions`
+  - `batch.orchestrator.scheduler.queue.waiting.partitions`
+  - `batch.orchestrator.scheduler.queue.ready.partitions`
+  - `batch.orchestrator.scheduler.queue.running.partitions`
+  - `batch.orchestrator.scheduler.queue.retrying.partitions`
+  - `batch.orchestrator.scheduler.queue.queued.partitions`
+  - `batch.orchestrator.scheduler.queue.oldest_wait.seconds`
+- 租户/队列明细不打 Prometheus tag,只通过 Console snapshot 查询,避免 tenant/queue 维度膨胀。
+- Console OpenAPI 已补充新增响应字段。
+
+本地验证:
+
+- `TenantSchedulerSnapshotServiceTest` 覆盖队列积压、等待年龄、饱和度、无在线 worker 瓶颈原因。
+- `SchedulerQueueBacklogMetricsSchedulerTest` 覆盖 gauge 采样更新。
+
+还未做:
+
+- 1k / 10k launch storm 服务 IT 与多租户 sim 复验。
+- stuck diagnosis API 对 `DEFER/REJECT` reasonCode 与队列 bottleneck 的聚合展示。
+- P1 priority aging / anti-starvation / pool SLA。

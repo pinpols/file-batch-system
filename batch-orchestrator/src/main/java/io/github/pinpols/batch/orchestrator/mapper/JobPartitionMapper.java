@@ -2,9 +2,11 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.QueueBacklogQueryParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import java.time.Instant;
@@ -96,6 +98,16 @@ public interface JobPartitionMapper {
       @Param("retryingStatus") String retryingStatus);
 
   long countActiveByTenantAndWorkerGroup(CountActiveByGroupParam param);
+
+  List<QueuePartitionBacklogStats> summarizeQueueBacklogByTenantAndQueueCodes(
+      QueueBacklogQueryParam param);
+
+  QueuePartitionBacklogStats summarizeGlobalQueueBacklog(
+      @Param("createdStatus") String createdStatus,
+      @Param("waitingStatus") String waitingStatus,
+      @Param("readyStatus") String readyStatus,
+      @Param("runningStatus") String runningStatus,
+      @Param("retryingStatus") String retryingStatus);
 
   /**
    * 启动审计：统计 {@link PartitionStatus#READY}/{@link PartitionStatus#RUNNING} 且 lease 已过期、与 {@link
