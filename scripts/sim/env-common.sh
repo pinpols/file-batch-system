@@ -22,3 +22,15 @@ export PG_PLATFORM_DB="${PG_PLATFORM_DB:-$POSTGRES_DB}"
 export PG_PLATFORM_USER="${PG_PLATFORM_USER:-${POSTGRES_USER:-batch_user}}"
 export PG_BUSINESS_DB="${PG_BUSINESS_DB:-$BUSINESS_DB_NAME}"
 mkdir -p "$REPORT_DIR"
+
+# 按起始 BIZ_DATE 计算第 N 轮的业务日期(base + N-1 天),供多轮 sim 错开 bizDate、
+# 避免同 job+bizDate 被幂等去重撞掉。调用方需保证 python3 可用。
+biz_date_for_round() {
+  python3 - "$BIZ_DATE" "$1" <<'PY'
+import datetime as dt
+import sys
+
+base = dt.date.fromisoformat(sys.argv[1])
+print((base + dt.timedelta(days=int(sys.argv[2]) - 1)).isoformat())
+PY
+}

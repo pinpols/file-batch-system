@@ -42,15 +42,7 @@ ATOMIC_JOBS=(atomic_shell_demo atomic_sql_demo atomic_stored_proc_demo)
 
 total=0; succ=0
 REQUEST_IDS=()
-biz_date_for_round() {
-  python3 - "$BIZ_DATE" "$1" <<'PY'
-import datetime as dt
-import sys
-
-base = dt.date.fromisoformat(sys.argv[1])
-print((base + dt.timedelta(days=int(sys.argv[2]) - 1)).isoformat())
-PY
-}
+# biz_date_for_round() 已抽到 scripts/sim/env-common.sh(共享 helper),此处直接调用。
 
 echo "==> 原子任务负载:${ROUNDS} 轮 × ${#ATOMIC_JOBS[@]} job(tenant=${ATOMIC_TENANT}, startBizDate=${BIZ_DATE})"
 START=$(date +%s)
