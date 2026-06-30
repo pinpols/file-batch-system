@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -49,7 +50,19 @@ public class DispatchChannelGateway {
       return new DispatchResult(
           false, null, null, false, false, "channel_type missing in channel_config", null);
     }
-    String channelType = String.valueOf(rawChannelType);
+    String requestedChannelType = String.valueOf(rawChannelType);
+    String channelType = DispatchChannelTypePolicy.normalize(requestedChannelType).orElse(null);
+    if (channelType == null) {
+      deliveryMetrics.recordDelivery(requestedChannelType, false, false);
+      return new DispatchResult(
+          false,
+          null,
+          null,
+          false,
+          false,
+          "unsupported channel type: " + requestedChannelType,
+          null);
+    }
     String channelCode =
         channelConfig == null || channelConfig.get("channel_code") == null
             ? DispatchGatewayConstants.DEFAULT_CHANNEL_CODE
@@ -88,7 +101,12 @@ public class DispatchChannelGateway {
     if (rawChannelType == null || !Texts.hasText(String.valueOf(rawChannelType))) {
       return OptionalLong.empty();
     }
-    DispatchChannelAdapter adapter = resolveAdapter(String.valueOf(rawChannelType));
+    Optional<String> channelType =
+        DispatchChannelTypePolicy.normalize(String.valueOf(rawChannelType));
+    if (channelType.isEmpty()) {
+      return OptionalLong.empty();
+    }
+    DispatchChannelAdapter adapter = resolveAdapter(channelType.get());
     if (adapter instanceof DispatchReadbackCapable capable) {
       return capable.readbackSize(command);
     }

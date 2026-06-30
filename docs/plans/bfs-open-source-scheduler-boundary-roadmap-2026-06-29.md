@@ -767,3 +767,37 @@ trigger
 - Prometheus 专用规则与告警路由模板补充;当前先复用 `alert_event` 查询/升级链路。
 - 告警自动恢复关闭语义;需要先设计 `alert_event` 的 recovery contract,不能本轮局部硬关。
 - FILE/TABLE asset freshness 扩展;当前仍限定 JOB 产物。
+
+### 2026-06-30 P1-3 第一刀:dispatch adapter 官方类型白名单
+
+已做:
+
+- 新增 `DispatchChannelTypePolicy`,集中声明官方 dispatch adapter 类型:
+  - `API`
+  - `API_PUSH`
+  - `LOCAL`
+  - `NAS`
+  - `OSS`
+  - `SFTP`
+  - `EMAIL`
+- `DispatchChannelGateway` 在健康门控、熔断和 adapter 查找前先做类型归一与 allowlist 校验:
+  - 小写/带空格的官方类型归一为 canonical uppercase。
+  - 非官方类型直接返回明确业务失败 `unsupported channel type: <type>`。
+  - 官方类型但当前 worker 未装配 adapter 仍保留 `IllegalStateException`,这是部署/装配错误,不吞掉。
+- 启动审计输出 `officialChannelTypes`,让运维能看到该 worker 认可的官方 adapter 边界。
+
+边界:
+
+- 本轮不是开放插件市场,也不允许自定义 adapter 通过 `supports()` 暗中接入新渠道类型。
+- 新渠道类型必须先进入 `DispatchChannelTypePolicy`、补安全属性、补测试和文档,再接 adapter 实现。
+
+本地验证:
+
+- `DispatchChannelTypePolicyTest` 覆盖 allowlist 闭集、canonical normalize、未知类型拒绝。
+- `DispatchChannelGatewayTest` 覆盖未知类型在 adapter lookup 前被拒绝,以及官方类型大小写归一。
+
+还未做:
+
+- 每类 adapter 的强制安全属性矩阵(timeout / SSRF / path escape / manifest / readback / credential handling)机器化。
+- SDK 五语言 adapter conformance;当前 dispatch worker 是平台内置 adapter,不等于 BYO SDK adapter 契约。
+- Console 对非官方 channel_type 的配置期校验。
