@@ -7,6 +7,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,5 +49,11 @@ public class ConsoleClusterDiagnosticController {
   public CommonResponse<Map<String, Object>> terminalChildrenHealth(
       @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(diagnosticService.terminalChildrenHealth(tenantId));
+  }
+
+  @GetMapping("/instances/{id}")
+  public CommonResponse<Map<String, Object>> instanceDiagnosis(
+      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(diagnosticService.instanceDiagnosis(tenantId, id));
   }
 }

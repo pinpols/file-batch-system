@@ -7905,6 +7905,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cluster-diagnostic/instances/{id}:
+    get:
+      tags: [ClusterDiagnostic]
+      summary: Diagnose why one job instance is stuck
+      description: |-
+        只读诊断单个 job_instance 的卡住原因。返回 `healthy`、`instance` 摘要、`summary`
+        聚合计数以及 `findings[]`。每条 finding 包含 `severity`、机器可读 `reasonCode`、
+        人读 `message`、`suggestedActions[]` 和可扩展 `evidence`。
+        当前覆盖:活跃实例无 partition/task、终态实例仍有活跃子节点、workerGroup 无在线 worker、
+        活跃任务 worker/心跳异常、实例相关 outbox 事件未终结。
+      operationId: diagnoseJobInstance
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Instance stuck diagnosis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/tenants:
     get:
       tags: [Tenants]

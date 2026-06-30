@@ -10,7 +10,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
-import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.observability.view.cluster.DeliveryStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
@@ -27,7 +26,6 @@ class ConsoleClusterDiagnosticServiceTest {
   private ConsoleTenantGuard tenantGuard;
   private ConsoleClusterDiagnosticMapper diagnosticMapper;
   private WorkerRegistryMapper workerRegistryMapper;
-  private JobInstanceMapper jobInstanceMapper;
   private ConsoleQueryCacheService cacheService;
   private ConsoleClusterDiagnosticService service;
 
@@ -36,11 +34,10 @@ class ConsoleClusterDiagnosticServiceTest {
     tenantGuard = mock(ConsoleTenantGuard.class);
     diagnosticMapper = mock(ConsoleClusterDiagnosticMapper.class);
     workerRegistryMapper = mock(WorkerRegistryMapper.class);
-    jobInstanceMapper = mock(JobInstanceMapper.class);
     cacheService = passThroughCache();
     service =
         new ConsoleClusterDiagnosticService(
-            tenantGuard, diagnosticMapper, workerRegistryMapper, jobInstanceMapper, cacheService);
+            tenantGuard, diagnosticMapper, workerRegistryMapper, cacheService);
   }
 
   private static ConsoleQueryCacheService passThroughCache() {
@@ -60,7 +57,8 @@ class ConsoleClusterDiagnosticServiceTest {
         .thenReturn(0L);
     when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
         .thenReturn(1L);
-    when(jobInstanceMapper.countByStatuses("tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
+    when(diagnosticMapper.countJobInstancesByStatuses(
+            "tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
         .thenReturn(5L);
 
     Map<String, Object> result = service.workerConsistency("tenant-a");
@@ -79,7 +77,8 @@ class ConsoleClusterDiagnosticServiceTest {
         .thenReturn(0L);
     when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.OFFLINE.code()))
         .thenReturn(2L);
-    when(jobInstanceMapper.countByStatuses("tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
+    when(diagnosticMapper.countJobInstancesByStatuses(
+            "tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
         .thenReturn(3L);
 
     Map<String, Object> result = service.workerConsistency("tenant-a");
@@ -153,7 +152,72 @@ class ConsoleClusterDiagnosticServiceTest {
     assertThat(result.get("healthy")).isEqualTo(false);
   }
 
+  @Test
+  @SuppressWarnings("unchecked")
+  void shouldDiagnoseActiveInstanceWithNoChildren() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    Map<String, Object> instance = instance(7L, JobInstanceStatus.CREATED.code());
+    when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 7L)).thenReturn(instance);
+    when(diagnosticMapper.partitionStatusCounts("tenant-a", 7L)).thenReturn(List.of());
+    when(diagnosticMapper.taskStatusCounts("tenant-a", 7L)).thenReturn(List.of());
+    when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 7L)).thenReturn(List.of());
+    when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 7L, 120L)).thenReturn(List.of());
+    when(diagnosticMapper.countOnlineWorkersForGroup("tenant-a", "IMPORT")).thenReturn(1L);
+
+    Map<String, Object> result = service.instanceDiagnosis("tenant-a", 7L);
+
+    assertThat(result.get("healthy")).isEqualTo(false);
+    List<Map<String, Object>> findings = (List<Map<String, Object>>) result.get("findings");
+    assertThat(findings)
+        .extracting(row -> row.get("reasonCode"))
+        .contains("INSTANCE_HAS_NO_CHILDREN");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void shouldDiagnoseWorkerAndOutboxIssues() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    Map<String, Object> instance = instance(8L, JobInstanceStatus.RUNNING.code());
+    when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 8L)).thenReturn(instance);
+    when(diagnosticMapper.partitionStatusCounts("tenant-a", 8L))
+        .thenReturn(List.of(Map.of("status", "RUNNING", "count", 1L)));
+    when(diagnosticMapper.taskStatusCounts("tenant-a", 8L))
+        .thenReturn(List.of(Map.of("status", "RUNNING", "count", 1L)));
+    when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 8L))
+        .thenReturn(List.of(Map.of("status", "FAILED", "count", 2L)));
+    when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 8L, 120L))
+        .thenReturn(
+            List.of(
+                Map.of(
+                    "taskId", 99L,
+                    "reasonCode", "RUNNING_TASK_HEARTBEAT_STALE",
+                    "assignedWorkerCode", "w1")));
+
+    Map<String, Object> result = service.instanceDiagnosis("tenant-a", 8L);
+
+    List<Map<String, Object>> findings = (List<Map<String, Object>>) result.get("findings");
+    assertThat(findings)
+        .extracting(row -> row.get("reasonCode"))
+        .contains("OUTBOX_EVENTS_NOT_TERMINAL", "RUNNING_TASK_HEARTBEAT_STALE");
+  }
+
   private static DeliveryStatusCountView deliveryView(String status, long cnt) {
     return new DeliveryStatusCountView(status, cnt);
+  }
+
+  private static Map<String, Object> instance(long id, String status) {
+    return Map.of(
+        "id",
+        id,
+        "tenantId",
+        "tenant-a",
+        "instanceNo",
+        "JI-" + id,
+        "jobCode",
+        "import_daily",
+        "instanceStatus",
+        status,
+        "workerGroup",
+        "IMPORT");
   }
 }

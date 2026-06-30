@@ -676,3 +676,34 @@ trigger
 
 - Console asset partition 查询页和 readiness drill-down。
 - freshness policy: `expectedBy / staleAfter / missing alert`。
+
+### 2026-06-30 P0-4 第一刀:实例级 stuck diagnosis API
+
+已做:
+
+- 在既有 cluster diagnostic 下新增只读端点:
+  - `GET /api/console/ops/cluster-diagnostic/instances/{id}?tenantId=...`
+- 响应结构统一为:
+  - `healthy`:是否未发现阻塞问题。
+  - `instance`:实例摘要,含 `instanceNo/jobCode/status/queueCode/workerGroup/traceId/deadlineAt`。
+  - `summary`:partition/task/outbox 状态聚合与当前 workerGroup 在线数。
+  - `findings[]`:机器可读诊断项,统一包含 `severity/reasonCode/message/suggestedActions/evidence`。
+- 首批覆盖 5 类高频卡住原因:
+  - 活跃实例没有 partition/task(`INSTANCE_HAS_NO_CHILDREN`)。
+  - 终态实例仍有活跃 partition/task(`TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN`)。
+  - workerGroup 没有 ONLINE worker(`NO_ONLINE_WORKER_FOR_GROUP`)。
+  - 活跃 task 的 worker 未注册/不可用/心跳过期。
+  - 实例相关 outbox 事件仍处于 `NEW/PUBLISHING/FAILED/GIVE_UP`。
+- 边界:本端点只诊断,不直接修复；恢复动作仍走既有 retry/cancel/outbox republish 等受控 API。
+
+本地验证:
+
+- `ConsoleClusterDiagnosticServiceTest` 覆盖活跃实例无子任务、worker/outbox 异常 findings。
+- `ConsoleClusterDiagnosticControllerTest` 覆盖新路由。
+- `check-console-openapi-paths.py` 覆盖 Controller 与 OpenAPI 路径一致。
+
+还未做:
+
+- 前端聚合页展示 findings 并一跳到实例/Outbox/Worker 详情。
+- 诊断结果接入告警 drill-down。
+- replay impact preview。

@@ -58,4 +58,17 @@ class ConsoleClusterDiagnosticControllerTest {
         .andExpect(jsonPath("$.data.status").value("healthy"))
         .andExpect(jsonPath("$.data.nodeCount").value(3));
   }
+
+  @Test
+  void shouldReturnInstanceDiagnosis() throws Exception {
+    when(diagnosticService.instanceDiagnosis("t1", 7L))
+        .thenReturn(Map.of("healthy", false, "jobInstanceId", 7L));
+
+    mockMvc
+        .perform(get("/api/console/ops/cluster-diagnostic/instances/7").param("tenantId", "t1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.healthy").value(false))
+        .andExpect(jsonPath("$.data.jobInstanceId").value(7));
+  }
 }
