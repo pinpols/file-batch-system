@@ -26,6 +26,12 @@ paths = [
     '''batch-common/src/test/java/io/github/pinpols/batch/common/storage/FilesystemObjectStoreTest\.java''',
     '''batch-common/src/test/java/io/github/pinpols/batch/common/storage/EncryptingObjectStoreTest\.java''',
     '''batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFilesystemPresignDownloadControllerTest\.java''',
+    # 同一测试 fixture 的历史包名路径(gitleaks 全历史扫描会命中旧提交)
+    '''batch-common/src/test/java/com/example/batch/common/storage/FilesystemObjectStoreTest\.java''',
+    '''batch-common/src/test/java/com/example/batch/common/storage/EncryptingObjectStoreTest\.java''',
+    '''batch-console-api/src/test/java/com/example/batch/console/domain/file/web/ConsoleFilesystemPresignDownloadControllerTest\.java''',
+    '''batch-console-api/src/test/java/com/example/batch/console/domain/rbac/support/ConsoleJwtServiceTest\.java''',
+    '''batch-console-api/src/test/java/com/example/batch/console/support/auth/ConsoleJwtServiceTest\.java''',
 ]
 regexes = [
     # 幂等键 header value(`idem-*` 形态),不是 API key,被 generic-api-key 规则误报。

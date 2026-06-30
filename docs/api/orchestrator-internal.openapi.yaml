@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Orchestrator Internal API (SDK ↔ Orch protocol)
   version: 1.1.0
-  x-last-updated: "2026-06-09"
+  x-last-updated: "2026-06-30"
   x-changelog:
+    - date: "2026-06-30"
+      summary: "[Readiness] 登记 /internal/readiness/job,响应在 ready/reason 兼容字段之外追加 asset partition 与 result_version 明细。"
     - date: "2026-06-09"
       summary: "[File Governance] 补充 APP_MANAGED 上传会话与确认到达 internal-only 端点,供 console BFF 走对象存储托管上传。"
     - date: "2026-06-02"
@@ -30,6 +32,8 @@ tags:
     description: 任务认领 / 上报 / 续租(`TaskController`)
   - name: file-governance
     description: Console BFF 调用的内部文件治理接口(`FileGovernanceController`)
+  - name: readiness
+    description: Trigger 调用的上游 asset partition 就绪查询(`OrchestratorReadinessController`)
 
 paths:
   # ─── x-protocol-stability 含义 ────────────────────────────────────────────────
@@ -491,6 +495,36 @@ paths:
         '409': {$ref: '#/components/responses/Conflict'}
         '5XX': {$ref: '#/components/responses/ServerError'}
 
+  /internal/readiness/job:
+    x-protocol-stability: internal-only
+    get:
+      tags: [readiness]
+      summary: 查上游 JOB 在指定 bizDate 的 asset partition 是否已 EFFECTIVE
+      operationId: checkJobReadiness
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: jobCode
+          required: true
+          schema: {type: string}
+        - in: query
+          name: bizDate
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: 就绪查询结果;trigger 只要求解析 ready/reason,其它字段为运维定位明细
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResult'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
 components:
   responses:
     Unauthorized:
@@ -707,6 +741,23 @@ components:
         code: {type: string, nullable: true, description: "业务错误码(可选)"}
         message: {type: string, nullable: true}
         traceId: {type: string, nullable: true}
+
+    ReadinessResult:
+      type: object
+      description: 上游 JOB asset partition 就绪结果;ready/reason 是兼容字段,其余字段用于日志和运维 drill-down。
+      properties:
+        ready: {type: boolean}
+        reason: {type: string, nullable: true, description: "未就绪原因码;ready=true 时为 null"}
+        assetCode: {type: string, nullable: true, description: "JOB asset 编码;当前等于 jobCode"}
+        bizDate: {type: string, format: date, nullable: true}
+        partitionKey: {type: string, nullable: true, description: "JOB 类型第一阶段为 bizDate ISO 字符串"}
+        businessKey: {type: string, nullable: true, description: "result_version.business_key"}
+        freshnessStatus: {type: string, nullable: true, description: "当前只返回 EFFECTIVE 或 null"}
+        versionNo: {type: integer, nullable: true, description: "当前 EFFECTIVE result_version.version_no"}
+        jobInstanceId: {type: integer, format: int64, nullable: true}
+        payloadStorage: {type: string, nullable: true}
+        payloadRef: {type: string, nullable: true}
+      required: [ready]
 
     TaskHeartbeatRequest:
       type: object

@@ -25,9 +25,9 @@ public class OrchestratorReadinessController {
   private final ReadinessService readinessService;
 
   /**
-   * 查上游 job 在指定批次日是否就绪(已 SUCCESS)。
+   * 查上游 job 在指定批次日是否就绪(已有 EFFECTIVE asset partition)。
    *
-   * @return {@link ReadinessResult},{@code ready=true} 表示上游该批次日已成功
+   * @return {@link ReadinessResult},{@code ready=true} 表示上游该批次日结果版本已生效,响应同时带 asset/version 明细
    */
   @GetMapping("/job")
   public ReadinessResult checkJob(

@@ -658,3 +658,21 @@ trigger
 - freshness policy: `expectedBy / staleAfter / missing alert`。
 - Console asset partition 查询页和 readiness drill-down。
 - 文件资产/表资产类型扩展；当前边界仍是 JOB 产物 readiness。
+
+### 2026-06-30 P0-3 第三刀:readiness 返回 asset/version 明细
+
+已做:
+
+- `/internal/readiness/job` 继续保留 `ready/reason` 字段,向后兼容 trigger 现有调用。
+- ready 响应新增 `assetCode/bizDate/partitionKey/businessKey/freshnessStatus/versionNo/jobInstanceId/payloadStorage/payloadRef`。
+- `ReadinessService` 直接消费 `AssetPartitionService.findEffectiveJobPartition`,避免 boolean 判断后再二次查。
+- trigger 端 `ReadinessResponse` 已显式 `@JsonIgnoreProperties(ignoreUnknown=true)`,新增字段不会破坏旧 trigger。
+
+本地验证:
+
+- `ReadinessServiceTest` 覆盖 ready 响应带 result_version / attempt 明细,not-ready 响应带 reason 和查询维度。
+
+还未做:
+
+- Console asset partition 查询页和 readiness drill-down。
+- freshness policy: `expectedBy / staleAfter / missing alert`。

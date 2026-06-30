@@ -35,8 +35,10 @@ public class ReadinessService {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
       return ReadinessResult.ofNotReady("invalid-readiness-query");
     }
-    return assetPartitionService.isJobPartitionReady(tenantId, jobCode, bizDate)
-        ? ReadinessResult.ofReady()
-        : ReadinessResult.ofNotReady("asset-partition-not-effective");
+    return assetPartitionService
+        .findEffectiveJobPartition(tenantId, jobCode, bizDate)
+        .map(ReadinessResult::ofReady)
+        .orElseGet(
+            () -> ReadinessResult.ofNotReady("asset-partition-not-effective", jobCode, bizDate));
   }
 }
