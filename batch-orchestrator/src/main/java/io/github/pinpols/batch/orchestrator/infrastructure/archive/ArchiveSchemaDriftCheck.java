@@ -49,6 +49,8 @@ public class ArchiveSchemaDriftCheck {
           "job_step_instance",
           "pipeline_instance",
           "pipeline_step_run",
+          // V188 (P1-4 lineage cold evidence) — file_record 冷表镜像;补齐历史文件证据链。
+          "file_record",
           "file_dispatch_record",
           "workflow_run",
           "workflow_node_run",

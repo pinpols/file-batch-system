@@ -195,6 +195,89 @@
         on conflict (id) do nothing
     </insert>
 
+    <insert id="archiveFileRecordsByInstanceIds">
+        insert into archive.file_record_archive (
+            id,
+            tenant_id,
+            file_code,
+            biz_type,
+            file_category,
+            file_name,
+            original_file_name,
+            file_ext,
+            file_format_type,
+            charset,
+            mime_type,
+            file_size_bytes,
+            checksum_type,
+            checksum_value,
+            storage_type,
+            storage_path,
+            storage_bucket,
+            file_version,
+            file_generation_no,
+            is_latest,
+            source_type,
+            source_ref,
+            file_status,
+            biz_date,
+            trace_id,
+            metadata_json,
+            created_at,
+            updated_at
+        )
+        select distinct
+            fr.id,
+            fr.tenant_id,
+            fr.file_code,
+            fr.biz_type,
+            fr.file_category,
+            fr.file_name,
+            fr.original_file_name,
+            fr.file_ext,
+            fr.file_format_type,
+            fr.charset,
+            fr.mime_type,
+            fr.file_size_bytes,
+            fr.checksum_type,
+            fr.checksum_value,
+            fr.storage_type,
+            fr.storage_path,
+            fr.storage_bucket,
+            fr.file_version,
+            fr.file_generation_no,
+            fr.is_latest,
+            fr.source_type,
+            fr.source_ref,
+            fr.file_status,
+            fr.biz_date,
+            fr.trace_id,
+            fr.metadata_json,
+            fr.created_at,
+            fr.updated_at
+        from batch.file_record fr
+        where fr.id in (
+            select ji.related_file_id
+            from batch.job_instance ji
+            where ji.id in
+            <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+              and ji.related_file_id is not null
+            union
+            select pi.file_id
+            from batch.pipeline_instance pi
+            where pi.related_job_instance_id in
+            <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+              and pi.file_id is not null
+            union
+            select fdr.file_id
+            from batch.file_dispatch_record fdr
+            join batch.pipeline_instance pi on pi.id = fdr.pipeline_instance_id
+            where pi.related_job_instance_id in
+            <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        )
+        on conflict (id) do nothing
+    </insert>
+
     <insert id="archiveFileDispatchRecordsByInstanceIds">
         insert into archive.file_dispatch_record_archive (
             id, tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target, dispatch_status,

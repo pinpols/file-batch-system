@@ -928,7 +928,7 @@ trigger
   - `HOT`
   - `ARCHIVE`
   - `NONE`
-- `file_record` 仍只查热表;当前没有 `archive.file_record_archive`,缺失时通过 `knownGaps` 明确说明,不伪造成完整冷链。
+- 第三刀仍不补 `file_record` 冷表镜像;文件证据缺失时通过 `knownGaps` 明确说明,不伪造成完整冷链。
 
 边界:
 
@@ -940,8 +940,32 @@ trigger
 
 - `LineageEvidenceServiceTest` 覆盖 archive result_version/job_instance/pipeline_instance/dispatch fallback 与 `coverage.sources`。
 
+### 2026-06-30 P1-4 第四刀:file_record archive mirror
+
+已做:
+
+- 新增 `archive.file_record_archive`,按 `batch.file_record` 当前结构建立冷表镜像和查询索引。
+- `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 登记 `file_record`,后续热表加列必须同步冷表。
+- `SuccessInstanceArchiveService` 在归档 job_instance 树时先复制相关 `file_record`:
+  - `job_instance.related_file_id`
+  - `pipeline_instance.file_id`
+  - `file_dispatch_record.file_id`
+- `LineageEvidenceService` 在热表 `file_record` 未命中时回退 `archive.file_record_archive`。
+- `coverage.sources.fileRecords` 可返回 `ARCHIVE`;`knownGaps` 改为声明 hot/archive 均未命中。
+
+边界:
+
+- 不改变 `GET /api/console/lineage/**` path 或响应顶层结构。
+- 不删除热表 `file_record`;对象存储生命周期仍由 MinIO/S3 lifecycle 和 file governance 单独管理。
+- 不补字段级/记录级 lineage,不解析业务表 SQL。
+
+本地验证:
+
+- `LineageEvidenceServiceTest` 覆盖 archive file_record fallback。
+- `SuccessInstanceArchiveServiceTest` 覆盖 file_record 先复制再删运行态树的归档顺序。
+- `SuccessInstanceArchiveMapperXmlTest` 覆盖归档 mapper XML 可解析。
+
 还未做:
 
 - 前端 lineage drill-down 页面。
-- `file_record` archive mirror 设计和迁移。
 - START 事件、节点级血缘、业务表 dataset。

@@ -61,6 +61,7 @@ class LineageEvidenceServiceTest {
     when(resultVersionMapper.selectById("ta", 8L)).thenReturn(version);
     when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
     when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 99L)).thenReturn(List.of());
+    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 99L)).thenReturn(List.of());
     when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(List.of());
 
     Map<String, Object> evidence = service.evidenceForResultVersion("ta", 8L);
@@ -69,8 +70,8 @@ class LineageEvidenceServiceTest {
     assertThat((List<String>) coverage.get("knownGaps"))
         .contains(
             "job_instance not found in hot or archive tables",
-            "payload_ref file_record not found in hot tables",
-            "no related file_record found in hot tables; file_record has no archive mirror",
+            "payload_ref file_record not found in hot or archive tables",
+            "no related file_record found in hot or archive tables",
             "no dispatch receipt found in hot or archive tables");
     assertThat(coverage).containsEntry("payloadFileResolved", false);
   }
@@ -109,12 +110,44 @@ class LineageEvidenceServiceTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void evidenceShouldFallbackToArchiveFileRecords() {
+    ResultVersionEntity version = version(11L, "FILE_RECORD", "file_record:11");
+    when(resultVersionMapper.selectById("ta", 11L)).thenReturn(null);
+    when(resultVersionMapper.selectArchivedById("ta", 11L)).thenReturn(version);
+    when(lineageEvidenceMapper.selectJobInstance("ta", 101L)).thenReturn(null);
+    when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
+        .thenReturn(Map.of("id", 101L, "job_code", "daily"));
+    when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
+    when(lineageEvidenceMapper.selectArchivedPipelineInstances("ta", 101L))
+        .thenReturn(List.of(Map.of("id", 21L, "file_id", 11L)));
+    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L)).thenReturn(List.of());
+    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
+        .thenReturn(List.of(Map.of("id", 11L, "file_name", "archived.csv")));
+    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
+        .thenReturn(List.of());
+    when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
+        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", "SUCCESS")));
+
+    Map<String, Object> evidence = service.evidenceForResultVersion("ta", 11L);
+
+    Map<String, Object> coverage = (Map<String, Object>) evidence.get("coverage");
+    assertThat(coverage)
+        .containsEntry("scope", "BFS_HOT_AND_ARCHIVE")
+        .containsEntry("payloadFileResolved", true);
+    Map<String, Object> sources = (Map<String, Object>) coverage.get("sources");
+    assertThat(sources).containsEntry("fileRecords", "ARCHIVE");
+    assertThat((List<String>) coverage.get("knownGaps")).isEmpty();
+  }
+
+  @Test
   void evidenceForEffectiveShouldUseResultVersionQueryService() {
     ResultVersionEntity version = version(9L, "INLINE_JSON", null);
     when(resultVersionQueryService.findEffective("ta", "job:daily:2026-06-30"))
         .thenReturn(Optional.of(version));
     when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
     when(lineageEvidenceMapper.selectFileRecords("ta", 101L, null)).thenReturn(List.of());
+    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, null)).thenReturn(List.of());
     when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(List.of());
 
     service.evidenceForEffective("ta", "job:daily:2026-06-30");

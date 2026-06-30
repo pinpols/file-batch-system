@@ -131,6 +131,50 @@
         order by fr.id asc
     </select>
 
+    <select id="selectArchivedFileRecords" resultType="map">
+        select distinct fr.id,
+               fr.tenant_id,
+               fr.file_code,
+               fr.biz_type,
+               fr.file_category,
+               fr.file_name,
+               fr.file_format_type,
+               fr.file_size_bytes,
+               fr.checksum_type,
+               fr.checksum_value,
+               fr.storage_type,
+               fr.storage_bucket,
+               fr.storage_path,
+               fr.file_status,
+               fr.biz_date,
+               fr.trace_id,
+               fr.metadata_json,
+               fr.created_at,
+               fr.updated_at
+        from archive.file_record_archive fr
+        where fr.tenant_id = #{tenantId}
+          and (
+              fr.id in (
+                  select ji.related_file_id
+                  from archive.job_instance_archive ji
+                  where ji.tenant_id = #{tenantId}
+                    and ji.id = #{jobInstanceId}
+                    and ji.related_file_id is not null
+              )
+              or fr.id in (
+                  select pi.file_id
+                  from archive.pipeline_instance_archive pi
+                  where pi.tenant_id = #{tenantId}
+                    and pi.related_job_instance_id = #{jobInstanceId}
+                    and pi.file_id is not null
+              )
+              <if test="payloadFileId != null">
+              or fr.id = #{payloadFileId}
+              </if>
+          )
+        order by fr.id asc
+    </select>
+
     <select id="selectDispatchRecords" resultType="map">
         select distinct fdr.id,
                fdr.tenant_id,
