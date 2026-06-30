@@ -47,7 +47,9 @@ class DispatchChannelStartupAuditContributorTest {
     assertThat(profiles.keySet())
         .containsExactlyInAnyOrder("API", "API_PUSH", "LOCAL", "NAS", "OSS", "SFTP", "EMAIL");
     assertThat(profiles.get("EMAIL").toString())
-        .contains("SMTP dispatch has no explicit socket timeout properties");
+        .contains("TIMEOUT_BOUND")
+        .doesNotContain("SMTP dispatch has no explicit socket timeout properties");
+    assertThat(profiles.get("LOCAL").toString()).contains("FILESYSTEM_SANDBOX", "SIDECAR_MANIFEST");
   }
 
   @Test

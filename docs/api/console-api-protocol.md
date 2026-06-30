@@ -561,12 +561,14 @@ Deployment note:
 
 - `POST /api/console/instances/{id}/cancel`
 - `POST /api/console/instances/{id}/terminate`
+- `POST /api/console/instances/{id}/partitions/retry-failed`
 - `POST /api/console/instances/partitions/{id}/cancel`
 - `POST /api/console/instances/partitions/{id}/retry`
 - `cancel` on an instance is allowed only for `CREATED`, `WAITING`, or `READY` states.
 - `terminate` on an instance is allowed only for `RUNNING` state.
 - `cancel` on a partition follows the same allowed states as instance cancel.
 - `retry` on a partition is allowed only for `FAILED` state; `retryCount` is incremented.
+- `retry-failed` on an instance retries all current `FAILED` partitions and returns `requested/retried/conflicts/partitionIds`; each partition still uses optimistic locking.
 - All operations use optimistic locking via `version`.
 
 ### Triggers

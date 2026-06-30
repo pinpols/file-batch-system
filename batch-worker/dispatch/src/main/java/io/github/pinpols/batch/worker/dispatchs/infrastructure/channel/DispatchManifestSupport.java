@@ -53,23 +53,24 @@ final class DispatchManifestSupport {
       String receiptCode,
       PayloadDigest payloadDigest,
       String manifestRef) {
+    Map<String, Object> fileRecord = command.fileRecord() == null ? Map.of() : command.fileRecord();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("schemaVersion", "dispatch-sidecar-manifest-v1");
     body.put("generatedAt", BatchDateTimeSupport.utcNow().toString());
     body.put("tenantId", command.tenantId());
     body.put("traceId", command.traceId());
-    body.put("fileId", command.fileRecord().get("id"));
+    body.put("fileId", fileRecord.get("id"));
     body.put("fileName", fileName);
     body.put("targetRef", targetRef);
     body.put("sizeBytes", payloadDigest.sizeBytes());
     body.put("checksumType", CHECKSUM_TYPE);
     body.put("checksumValue", payloadDigest.sha256());
-    body.put("sourceChecksumType", text(command.fileRecord().get("checksum_type")));
-    body.put("sourceChecksumValue", text(command.fileRecord().get("checksum_value")));
+    body.put("sourceChecksumType", text(fileRecord.get("checksum_type")));
+    body.put("sourceChecksumValue", text(fileRecord.get("checksum_value")));
     body.put("externalRequestId", externalRequestId);
     body.put("receiptCode", receiptCode);
-    body.put("bizDate", command.fileRecord().get("biz_date"));
-    body.put("channelCode", command.payload().channelCode());
+    body.put("bizDate", fileRecord.get("biz_date"));
+    body.put("channelCode", command.payload() == null ? null : command.payload().channelCode());
     body.put("manifestRef", manifestRef);
     byte[] bytes = JsonUtils.toJson(body).getBytes(StandardCharsets.UTF_8);
     PayloadDigest manifestDigest = digest(bytes);

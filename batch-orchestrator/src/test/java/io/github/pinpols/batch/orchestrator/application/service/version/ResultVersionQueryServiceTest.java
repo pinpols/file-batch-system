@@ -54,19 +54,58 @@ class ResultVersionQueryServiceTest {
   @Test
   void findEffectiveByJobDerivesBusinessKey() {
     ResultVersionEntity row =
-        ResultVersionEntity.builder().id(1L).businessKey("job:JOB_A:2026-05-04").build();
-    when(mapper.selectEffective("t1", "job:JOB_A:2026-05-04")).thenReturn(row);
+        ResultVersionEntity.builder()
+            .id(1L)
+            .businessKey("job:JOB_A:2026-05-04")
+            .status("EFFECTIVE")
+            .build();
+    when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
+        .thenReturn(List.of(row));
 
     var found = service.findEffectiveByJob("t1", "JOB_A", LocalDate.of(2026, 5, 4));
 
     assertThat(found).isPresent();
-    verify(mapper).selectEffective("t1", "job:JOB_A:2026-05-04");
+    verify(mapper).listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1);
+  }
+
+  @Test
+  void findEffectiveByJobReturnsEmptyWhenLatestAttemptPending() {
+    ResultVersionEntity row =
+        ResultVersionEntity.builder()
+            .id(2L)
+            .businessKey("job:JOB_A:2026-05-04")
+            .status("PENDING")
+            .build();
+    when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
+        .thenReturn(List.of(row));
+
+    var found = service.findEffectiveByJob("t1", "JOB_A", LocalDate.of(2026, 5, 4));
+
+    assertThat(found).isEmpty();
   }
 
   @Test
   void findEffectiveByJobReturnsEmptyOnNullBizDate() {
     assertThat(service.findEffectiveByJob("t1", "JOB_A", null)).isEmpty();
     verify(mapper, never()).selectEffective(eq("t1"), eq("any"));
+  }
+
+  @Test
+  void findLatestByJobReturnsLatestVersionByBusinessKey() {
+    ResultVersionEntity row =
+        ResultVersionEntity.builder()
+            .id(2L)
+            .businessKey("job:JOB_A:2026-05-04")
+            .versionNo(4)
+            .status("PENDING")
+            .build();
+    when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
+        .thenReturn(List.of(row));
+
+    var found = service.findLatestByJob("t1", "JOB_A", LocalDate.of(2026, 5, 4));
+
+    assertThat(found).contains(row);
+    verify(mapper).listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1);
   }
 
   @Test

@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
-import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,31 +28,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class DataQualityRuleController {
 
-  private final DataQualityRuleMapper ruleMapper;
+  private final DataQualityRuleApplicationService ruleService;
 
   /** 按 (tenantId, businessKey 前缀) 列出 enabled 规则。 */
   @GetMapping
   public CommonResponse<List<DataQualityRuleEntity>> list(
       @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    return CommonResponse.success(ruleMapper.selectEnabledByBusinessKey(tenantId, businessKey));
+    return CommonResponse.success(ruleService.listEnabledByBusinessKey(tenantId, businessKey));
   }
 
   @GetMapping("/{id}")
   public CommonResponse<DataQualityRuleEntity> get(@PathVariable("id") Long id) {
-    return CommonResponse.success(ruleMapper.selectById(id));
+    return CommonResponse.success(ruleService.get(id));
   }
 
   @PostMapping
   public CommonResponse<DataQualityRuleEntity> create(@RequestBody DataQualityRuleEntity rule) {
-    ruleMapper.insert(rule);
-    return CommonResponse.success(rule);
+    return CommonResponse.success(ruleService.create(rule));
   }
 
   @PutMapping("/{id}")
   public CommonResponse<DataQualityRuleEntity> update(
       @PathVariable("id") Long id, @RequestBody DataQualityRuleEntity rule) {
-    rule.setId(id);
-    ruleMapper.update(rule);
-    return CommonResponse.success(rule);
+    return CommonResponse.success(ruleService.update(id, rule));
   }
 }

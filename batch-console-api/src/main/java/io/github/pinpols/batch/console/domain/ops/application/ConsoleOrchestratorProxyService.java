@@ -29,6 +29,8 @@ public interface ConsoleOrchestratorProxyService {
 
   Map<String, Object> partitionAction(Long id, String tenantId, String action);
 
+  Map<String, Object> retryFailedPartitions(Long instanceId, String tenantId);
+
   Map<String, Object> workflowRunAction(Long id, String tenantId, String action);
 
   Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode);

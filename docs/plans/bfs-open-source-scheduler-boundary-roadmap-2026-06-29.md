@@ -532,7 +532,28 @@ trigger
 
 - 1k / 10k launch storm 服务 IT 与多租户 sim 复验。
 - stuck diagnosis API 对 `DEFER/REJECT` reasonCode 与队列 bottleneck 的聚合展示。
-- P1 priority aging / anti-starvation / pool SLA。
+- pool SLA 策略表达与验收报表。
+
+### 2026-06-30 P0-1 第三刀:priority aging / anti-starvation
+
+已做:
+
+- `ResourceSchedulingRequest` 增加 `waitingSince`,WAITING 分片由 `WaitingPartitionDispatchScheduler` 传入等待起点。
+- `DefaultResourceScheduler` 在原 fairnessScore 上叠加 aging bonus:
+  - `batch.resource-scheduler.priority-aging-enabled`
+  - `batch.resource-scheduler.priority-aging-step-seconds`
+  - `batch.resource-scheduler.priority-aging-bonus-per-step`
+  - `batch.resource-scheduler.priority-aging-max-bonus`
+- aging 默认开启,但有上限,避免极老低优先级任务永久压过显式高优先级任务。
+
+本地验证:
+
+- `DefaultResourceSchedulerTest` 覆盖等待更久的 WAITING 分片获得更高 fairnessScore。
+
+还未做:
+
+- 1k / 10k launch storm 与多租户混压复验,确认小租户 p95 wait 不失控。
+- pool SLA 报表与灰度阈值。
 
 ### 2026-06-30 P0-2 第一刀:partition plan contract 固化
 
@@ -584,7 +605,6 @@ trigger
 
 还未做:
 
-- 分片失败后的 `retry failed shards` Console/API 运维入口。
 - 4/8/16/32 分片服务 IT 与 1000w import/export 基准复验。
 
 ### 2026-06-30 P0-2 第三刀:claim typed 分区计划透传
@@ -611,7 +631,34 @@ trigger
 
 还未做:
 
-- 分片失败后的 `retry failed shards` Console/API 运维入口。
+- 4/8/16/32 分片服务 IT 与 1000w import/export 基准复验。
+
+### 2026-06-30 P0-2 第四刀:retry failed shards 后端入口
+
+已做:
+
+- Console 新增 `POST /api/console/instances/{id}/partitions/retry-failed`。
+- orchestrator 新增 `POST /internal/instances/{id}/partitions/retry-failed`。
+- 服务端按实例筛选当前 `FAILED` 分片,逐个复用现有 `RetryGovernanceService.retryPartition` 重派闭环:
+  - partition/task reset 到 `READY`。
+  - 同事务写 task dispatch outbox。
+  - `eventKey=tenant:manual-partition-retry:{partitionId}:{version}` 保证手工重派幂等边界清晰。
+- API 返回:
+  - `requested`
+  - `retried`
+  - `conflicts`
+  - `partitionIds`
+- 单个分片并发状态变化或重派冲突不会吞掉其他已接受分片；冲突计入 `conflicts` 供运维复查。
+
+本地验证:
+
+- `ConsoleInstanceControllerTest` 覆盖 Console 路由透传。
+- `InstanceManagementPauseResumeTest` 覆盖实例级 failed shards 批量 retry 统计。
+- 2026-06-30 后端审查补强:修正早期只 `markRetrying` 不写 outbox 的半闭环问题,避免手工 retry 后产生 `RETRYING` 死态。
+
+还未做:
+
+- 前端分片明细页的一键 retry failed shards 按钮。
 - 4/8/16/32 分片服务 IT 与 1000w import/export 基准复验。
 
 ### 2026-06-30 P0-3 第一刀:asset partition readiness facade
@@ -620,18 +667,19 @@ trigger
 
 - 新增 `AssetPartitionService` / `AssetPartitionSnapshot`,把现有 `result_version.business_key=job:{jobCode}:{bizDate}` 投影为 job asset partition。
 - 当前第一阶段不新增 `data_asset / asset_partition` 物理表,避免把 P0 变成大迁移；EFFECTIVE 链仍由 ADR-017 的 `result_version` 保证。
-- `ReadinessService` 不再直接读 `job_instance` 最新状态,改为只认 asset partition 当前 EFFECTIVE result_version。
+- `ReadinessService` 不再直接读 `job_instance` 最新状态,改为只认 asset partition / result_version 最新 attempt 的 EFFECTIVE 版本。
 - readiness 语义收紧:
   - DQ BLOCKED → result_version PENDING → not ready。
   - dry-run → result_version DRY_RUN → not ready。
   - FAILED / PARTIAL_FAILED 且未 EFFECTIVE → not ready。
   - 缺失 EFFECTIVE → not ready。
+  - 同一 `business_key` 存在更新的 `PENDING` attempt 时,旧 `EFFECTIVE` 不再放行。
 
 本地验证:
 
 - `AssetPartitionServiceTest` 覆盖 result_version → asset partition 投影、非法输入短路、无 EFFECTIVE 不 ready。
 - `ReadinessServiceTest` 覆盖 readiness 基于 asset partition EFFECTIVE 放行/阻断。
-- `ResultVersionQueryServiceTest` / `CrossDayDependencyResolverTest` 回归 EFFECTIVE 查询与跨日依赖解析。
+- `ResultVersionQueryServiceTest` / `CrossDayDependencyResolverTest` 回归最新 attempt EFFECTIVE 查询与跨日依赖解析。
 
 还未做:
 
@@ -650,12 +698,13 @@ trigger
 - `ResultVersionWriter` 在 AUTO_LATEST 成功写入 `result_version.status=EFFECTIVE` 后刷新 asset partition。
 - `ResultVersionPromoteService` 在人工/OUTPUTS_ONLY promote 成功后刷新 asset partition。
 - `PENDING / DRY_RUN / FAILED / CANCELLED / TERMINATED` 不写入 asset partition,避免下游误消费未生效结果。
-- `AssetPartitionService` 查询优先读物化表；历史旧数据或迁移前未物化数据回退到 `result_version` 当前 EFFECTIVE 投影。
+- `AssetPartitionService` 查询优先用 `result_version` 判断同一 `business_key` 的最新 attempt；最新是 `EFFECTIVE` 时才返回物化表或投影,历史旧数据或迁移前未物化数据可回退到最新 EFFECTIVE 投影。
 - 独立文档见 `docs/design/asset-partition-readiness.md`。
 
 本地验证:
 
 - `AssetPartitionServiceTest` 覆盖物化表优先、result_version fallback、EFFECTIVE 物化和非 EFFECTIVE 跳过。
+- 2026-06-30 后端审查补强:新增旧 EFFECTIVE + 新 PENDING 时 not ready 的保护,堵住 rerun 中下游误读旧产物。
 - `ResultVersionWriterTest` 覆盖 EFFECTIVE 写入触发物化,`PENDING / DRY_RUN / 幂等重复 report` 不触发物化。
 - `ResultVersionPromoteServiceTest` 覆盖人工 promote 后触发物化,失败/拒绝路径不触发。
 
@@ -723,17 +772,19 @@ trigger
 - 响应返回:
   - `entries`:将要重跑的 job/source instance,或 OUTPUTS_ONLY 将 promote 的 result_version。
   - `resultVersionImpacts`:区分 `CREATE_NEW_RESULT_VERSION` 与 `PROMOTE_EXISTING_VERSION`。
+  - `assetPartitionImpacts`:按 businessKey 展开当前命中的 asset partition。
+  - `dispatchImpacts`:按 source instance 聚合热表/冷表 dispatch 记录数量、失败数和 pending receipt 数。
   - `warnings`:无候选时返回 `NO_CANDIDATES`,提交路径仍保持无候选即拒绝。
 - 修正 replay entry 唯一键:旧 `(session_id, tenant_id, job_code)` 会吞掉同 session 同 jobCode 多来源 entry;新约束按 `source_instance_id` / `result_version_id` 做 partial unique,保证 preview 与真实物化范围一致。
 
 本地验证:
 
-- `BatchDayReplayServiceTest` 覆盖 preview 不写 session/entry、无候选 warning、OUTPUTS_ONLY promote impact。
+- `BatchDayReplayServiceTest` 覆盖 preview 不写 session/entry、无候选 warning、OUTPUTS_ONLY promote impact、asset partition / dispatch 二级影响。
 
 还未做:
 
 - Console 前端接入确认页。
-- replay impact 对下游 asset partition / dispatch 投递对象的二级影响展开。
+- replay impact 对下游 job 链路的更深层 DAG 级传播展开。
 
 ### 2026-06-30 P1-2 第一刀:freshness policy + alert
 
@@ -827,9 +878,14 @@ trigger
 - 启动审计输出 `officialChannelTypes` 与 `channelSafetyProfiles`,运维启动时即可看到:
   - 哪些 adapter 是平台官方认可的。
   - 每类 adapter 的安全能力和缺口。
-- 矩阵如实记录两个当前缺口:
-  - `LOCAL`: `target_endpoint` 还没有 sandbox-bound,filesystem envelope 也没有 sidecar manifest。
-  - `EMAIL`: SMTP dispatch 还没有显式 socket timeout properties。
+- `LOCAL` 已具备可选沙箱边界与 sidecar manifest:
+  - `batch.dispatch.local-sandbox-root` 配置后强制 `target_endpoint` 落在沙箱内。
+  - envelope 文件名会净化 path segment,并为 envelope 生成 `.chk` sidecar manifest。
+- `EMAIL` 已设置显式 JavaMail timeout:
+  - `smtp_connection_timeout_millis`
+  - `smtp_timeout_millis`
+  - `smtp_write_timeout_millis`
+  - 缺省均为 30000ms。
 
 边界:
 
@@ -843,13 +899,16 @@ trigger
   - safety profiles 必须覆盖全部官方类型。
   - `API/API_PUSH` 声明 timeout + SSRF guard。
   - `NAS` 声明路径净化、沙箱、sidecar manifest。
-  - `LOCAL/EMAIL` 的已知缺口不会被误声明成能力。
+  - `LOCAL` 声明路径净化、沙箱、sidecar manifest。
+  - `EMAIL` 声明显式 timeout、附件大小上限、TLS identity 和 header injection guard。
 - `DispatchChannelStartupAuditContributorTest` 覆盖启动审计包含 `channelSafetyProfiles`。
 - `ConsoleFileChannelMutationIntegrationTest` 覆盖非官方 `channel_type` 在 Console 写入前被拒绝。
+- `LocalOutboxDispatchSupportTest` 覆盖 LOCAL 沙箱拒绝和 sidecar manifest 生成。
+- `SmtpEmailDispatchChannelAdapterTest` 覆盖 JavaMail timeout properties。
+- 2026-06-30 后端审查补强:保持 `DispatchResult.evidenceRef` 仍为 envelope 路径,sidecar manifest 单独落盘,不破坏既有证据引用契约。
 
 还未做:
 
-- 针对 `LOCAL target_endpoint sandbox` 与 `EMAIL SMTP timeout` 的兼容性收敛方案。
 - SDK 五语言 adapter conformance;当前矩阵只覆盖平台内置 adapter。
 
 ### 2026-06-30 P1-4 第一刀:lineage 最小证据链查询

@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrot
 import io.github.pinpols.batch.orchestrator.application.scheduler.PriorityScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WorkerSelector;
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
@@ -22,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,12 +55,14 @@ class DefaultResourceSchedulerTest {
   @Mock private JobPartitionMapper jobPartitionMapper;
   @Mock private BatchTimezoneProvider timezoneProvider;
   @Mock private BatchDateTimeSupport dateTimeSupport;
+  private ResourceSchedulerProperties resourceSchedulerProperties;
 
   private DefaultResourceScheduler scheduler;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
+    resourceSchedulerProperties = new ResourceSchedulerProperties();
     scheduler =
         new DefaultResourceScheduler(
             queueManager,
@@ -70,11 +74,13 @@ class DefaultResourceSchedulerTest {
             jobInstanceMapper,
             jobPartitionMapper,
             timezoneProvider,
-            dateTimeSupport);
+            dateTimeSupport,
+            resourceSchedulerProperties);
 
     when(queueManager.resolveQueue(any())).thenReturn(null);
     when(priorityScheduler.resolvePriority(any(), any())).thenReturn(5);
     when(priorityScheduler.resolvePriorityBand(any())).thenReturn("MEDIUM");
+    when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-06-30T03:00:00Z"));
   }
 
   private ResourceSchedulingRequest req() {
@@ -171,6 +177,28 @@ class DefaultResourceSchedulerTest {
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getPriority()).isEqualTo(1);
     assertThat(d.getPriorityBand()).isEqualTo("LOW");
+  }
+
+  @Test
+  @DisplayName("WAITING 分片等待越久 → fairnessScore 获得 aging bonus")
+  void waitingAgeAddsFairnessBonus() {
+    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+    WorkerRouteModel route = new WorkerRouteModel();
+    route.setAvailable(true);
+    when(workerSelector.select(any(), any(), any())).thenReturn(route);
+    resourceSchedulerProperties.setPriorityAgingStepSeconds(60);
+    resourceSchedulerProperties.setPriorityAgingBonusPerStep(100);
+
+    ResourceSchedulingRequest fresh = req();
+    fresh.setWaitingSince(Instant.parse("2026-06-30T02:59:30Z"));
+    ResourceSchedulingRequest aged = req();
+    aged.setWaitingSince(Instant.parse("2026-06-30T02:50:00Z"));
+
+    long freshScore = scheduler.schedule(fresh).getFairnessScore();
+    long agedScore = scheduler.schedule(aged).getFairnessScore();
+
+    assertThat(agedScore).isGreaterThan(freshScore);
   }
 
   @Test

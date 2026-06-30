@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrot
 import io.github.pinpols.batch.orchestrator.application.scheduler.PriorityScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WorkerSelector;
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
@@ -77,7 +78,8 @@ class BatchWindowGateTest {
             mock(JobInstanceMapper.class),
             mock(JobPartitionMapper.class),
             timezoneProvider,
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
+            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+            new ResourceSchedulerProperties());
   }
 
   /** in-window：当前时间在窗口内，schedule 不被门禁挡住（allow 路径，可能后续被并发 / worker 等其他门禁挡，但不是 batch_window 挡的）。 */

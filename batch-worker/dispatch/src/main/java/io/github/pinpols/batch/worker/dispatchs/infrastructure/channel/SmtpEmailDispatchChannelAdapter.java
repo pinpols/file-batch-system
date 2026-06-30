@@ -43,6 +43,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   /** S-1.7：附件大小硬上限 25MB，覆盖大多数企业 SMTP 服务器的消息上限。 */
   private static final long MAX_ATTACHMENT_BYTES = 25L * 1024L * 1024L;
 
+  private static final int DEFAULT_SMTP_TIMEOUT_MILLIS = 30_000;
+
   private final DispatchFileContentResolver fileContentResolver;
   private final Environment environment;
 
@@ -57,6 +59,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       String smtpUser,
       String smtpPass,
       boolean startTls,
+      int connectTimeoutMillis,
+      int readTimeoutMillis,
+      int writeTimeoutMillis,
       String from,
       String to) {}
 
@@ -122,6 +127,13 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     String smtpUser = stringProp(channelConfig, "smtp_username");
     String smtpPass = stringProp(channelConfig, "smtp_password");
     boolean startTls = boolProp(channelConfig, "smtp_starttls", true);
+    int connectTimeoutMillis =
+        positiveIntProp(
+            channelConfig, "smtp_connection_timeout_millis", DEFAULT_SMTP_TIMEOUT_MILLIS);
+    int readTimeoutMillis =
+        positiveIntProp(channelConfig, "smtp_timeout_millis", DEFAULT_SMTP_TIMEOUT_MILLIS);
+    int writeTimeoutMillis =
+        positiveIntProp(channelConfig, "smtp_write_timeout_millis", DEFAULT_SMTP_TIMEOUT_MILLIS);
     // S-1.7：prod profile 强制 STARTTLS，覆盖渠道"关掉 TLS"的配置；dev/local 允许关闭
     if (isProductionProfile()) {
       startTls = true;
@@ -134,7 +146,17 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     if (!Texts.hasText(from) || !Texts.hasText(to)) {
       return null;
     }
-    return new MailConfig(host, port, smtpUser, smtpPass, startTls, from, to);
+    return new MailConfig(
+        host,
+        port,
+        smtpUser,
+        smtpPass,
+        startTls,
+        connectTimeoutMillis,
+        readTimeoutMillis,
+        writeTimeoutMillis,
+        from,
+        to);
   }
 
   /** S-1.7：剥离 CR/LF 防 header 注入；长度截断到 RFC 5322 header 常见上限 998。 */
@@ -160,6 +182,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     props.put("mail.smtp.host", mailConfig.host());
     props.put("mail.smtp.port", String.valueOf(mailConfig.port()));
     props.put("mail.smtp.auth", "true");
+    props.put("mail.smtp.connectiontimeout", String.valueOf(mailConfig.connectTimeoutMillis()));
+    props.put("mail.smtp.timeout", String.valueOf(mailConfig.readTimeoutMillis()));
+    props.put("mail.smtp.writetimeout", String.valueOf(mailConfig.writeTimeoutMillis()));
     // S-1.7：避免 MIME 长参数被 jakarta.mail 拆行后编码歧义
     props.put("mail.mime.splitlongparameters", "false");
     if (mailConfig.startTls()) {
@@ -262,6 +287,11 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       return Integer.parseInt(String.valueOf(v).trim());
     }
     return def;
+  }
+
+  private static int positiveIntProp(Map<String, Object> map, String key, int def) {
+    int value = intProp(map, key, def);
+    return value > 0 ? value : def;
   }
 
   private static boolean boolProp(Map<String, Object> map, String key, boolean def) {

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Texts;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +15,9 @@ import java.util.UUID;
  * 将分发命令写入文件系统 outbox 目录（LOCAL 渠道及存根远程渠道）。 存根渠道符合设计意图：持久化载荷供运维核查，但不执行真实的 NAS/OSS/SFTP/EMAIL 传输协议。
  */
 final class LocalOutboxDispatchSupport {
+
+  private static final String LOCAL_SANDBOX_ROOT_PROP = "batch.dispatch.local-sandbox-root";
+  private static final String DEFAULT_CHANNEL_CODE = "channel";
 
   private LocalOutboxDispatchSupport() {}
 
@@ -43,9 +47,10 @@ final class LocalOutboxDispatchSupport {
       if (endpoint == null || endpoint.isBlank()) {
         endpoint = System.getProperty("java.io.tmpdir") + "/batch-dispatch-outbox";
       }
-      Path directory = Path.of(endpoint);
-      Files.createDirectories(directory);
-      String channelCode = String.valueOf(channelConfig.getOrDefault("channel_code", "channel"));
+      Path directory = resolveLocalDirectory(endpoint);
+      String channelCode =
+          sanitizeFileSegment(
+              String.valueOf(channelConfig.getOrDefault("channel_code", DEFAULT_CHANNEL_CODE)));
       Path envelopePath = directory.resolve(channelCode + "-" + externalRequestId + ".json");
 
       Map<String, Object> envelope = new LinkedHashMap<>();
@@ -64,7 +69,24 @@ final class LocalOutboxDispatchSupport {
         envelope.put("transportStub", Boolean.TRUE);
         envelope.put("transportStubDetail", stubDetail == null ? "" : stubDetail);
       }
-      Files.writeString(envelopePath, JsonUtils.toJson(envelope), StandardCharsets.UTF_8);
+      byte[] envelopeBytes = JsonUtils.toJson(envelope).getBytes(StandardCharsets.UTF_8);
+      Files.write(envelopePath, envelopeBytes);
+      DispatchManifestSupport.ManifestPayload manifest = null;
+      if (DispatchManifestSupport.enabled(channelConfig)) {
+        Path manifestPath =
+            directory.resolve(
+                envelopePath.getFileName() + DispatchManifestSupport.suffix(channelConfig));
+        manifest =
+            DispatchManifestSupport.manifestPayload(
+                command,
+                envelopePath.toString(),
+                envelopePath.getFileName().toString(),
+                externalRequestId,
+                receiptCode,
+                DispatchManifestSupport.digest(envelopeBytes),
+                manifestPath.toString());
+        Files.write(manifestPath, manifest.bytes());
+      }
 
       String message =
           transportStub
@@ -83,5 +105,31 @@ final class LocalOutboxDispatchSupport {
 
       return new DispatchResult(false, null, null, false, false, ex.getMessage(), null);
     }
+  }
+
+  private static Path resolveLocalDirectory(String endpoint) throws Exception {
+    Path directory = Path.of(endpoint).toAbsolutePath().normalize();
+    Files.createDirectories(directory);
+    Path realDirectory = directory.toRealPath();
+    String sandboxRootRaw = System.getProperty(LOCAL_SANDBOX_ROOT_PROP);
+    if (Texts.hasText(sandboxRootRaw)) {
+      Path sandboxRoot = Path.of(sandboxRootRaw).toAbsolutePath().normalize().toRealPath();
+      if (!realDirectory.startsWith(sandboxRoot)) {
+        throw new SecurityException(
+            "LOCAL dispatch target_endpoint escapes sandbox root: real="
+                + realDirectory
+                + ", sandboxRoot="
+                + sandboxRoot);
+      }
+    }
+    return realDirectory;
+  }
+
+  private static String sanitizeFileSegment(String raw) {
+    if (!Texts.hasText(raw)) {
+      return DEFAULT_CHANNEL_CODE;
+    }
+    String cleaned = raw.trim().replaceAll("[^A-Za-z0-9._-]", "_");
+    return cleaned.isBlank() ? DEFAULT_CHANNEL_CODE : cleaned;
   }
 }

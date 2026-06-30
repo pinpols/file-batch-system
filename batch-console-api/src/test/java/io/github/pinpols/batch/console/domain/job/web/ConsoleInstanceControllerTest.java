@@ -88,4 +88,15 @@ class ConsoleInstanceControllerTest {
     verify(proxy).partitionAction(5L, "ta", "cancel");
     verify(proxy).partitionAction(5L, "ta", "retry");
   }
+
+  @Test
+  void retryFailedPartitionsShouldRouteToInstanceBatchAction() throws Exception {
+    when(proxy.retryFailedPartitions(3L, "ta")).thenReturn(Map.of("requested", 2, "retried", 2));
+
+    mockMvc
+        .perform(post("/api/console/instances/3/partitions/retry-failed").param("tenantId", "ta"))
+        .andExpect(status().isOk());
+
+    verify(proxy).retryFailedPartitions(3L, "ta");
+  }
 }

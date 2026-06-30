@@ -12,6 +12,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.PrioritySchedu
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WorkerSelector;
+import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -23,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
+import java.time.Duration;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -94,6 +96,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   private final JobPartitionMapper jobPartitionMapper;
   private final BatchTimezoneProvider timezoneProvider;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final ResourceSchedulerProperties resourceSchedulerProperties;
 
   /** 资源调度统一收敛在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
   @Override
@@ -233,6 +236,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
                     tenantActivePartitions,
                     queueActiveJobs,
                     queueActivePartitions)));
+    fairnessScore += resolveAgingBonus(request);
     decision.setTenantWeight(tenantWeight);
     decision.setQueueWeight(queueWeight);
     decision.setTenantActiveJobs(tenantActiveJobs);
@@ -366,5 +370,22 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         + (long) weights.tenantWeight() * 100L
         + (long) weights.queueWeight() * 10L
         - loadPenalty;
+  }
+
+  private long resolveAgingBonus(ResourceSchedulingRequest request) {
+    if (request == null
+        || request.getWaitingSince() == null
+        || resourceSchedulerProperties == null
+        || !resourceSchedulerProperties.isPriorityAgingEnabled()) {
+      return 0L;
+    }
+    long waitedSeconds =
+        Math.max(
+            0L,
+            Duration.between(request.getWaitingSince(), dateTimeSupport.nowInstant()).toSeconds());
+    long stepSeconds = Math.max(1L, resourceSchedulerProperties.getPriorityAgingStepSeconds());
+    long steps = waitedSeconds / stepSeconds;
+    long bonus = steps * Math.max(0L, resourceSchedulerProperties.getPriorityAgingBonusPerStep());
+    return Math.min(bonus, Math.max(0L, resourceSchedulerProperties.getPriorityAgingMaxBonus()));
   }
 }

@@ -71,6 +71,24 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
+  public Map<String, Object> retryFailedPartitions(Long instanceId, String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "retry-failed-partitions",
+        () ->
+            orchestratorInternalRestClient
+                .build()
+                .post()
+                .uri(
+                    "/internal/instances/{id}/partitions/retry-failed?tenantId={tenantId}",
+                    instanceId,
+                    resolved)
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+  }
+
+  @Override
   public Map<String, Object> workflowRunAction(Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> response =

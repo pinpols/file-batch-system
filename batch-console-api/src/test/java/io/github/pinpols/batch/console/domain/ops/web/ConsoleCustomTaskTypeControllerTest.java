@@ -7,8 +7,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
-import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -20,8 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleCustomTaskTypeControllerTest {
 
-  @Mock private CustomTaskTypeMapper mapper;
-  @Mock private ConsoleTenantGuard tenantGuard;
+  @Mock private ConsoleCustomTaskTypeQueryService queryService;
   @Mock private ConsoleResponseFactory responseFactory;
 
   @InjectMocks private ConsoleCustomTaskTypeController controller;
@@ -35,9 +33,8 @@ class ConsoleCustomTaskTypeControllerTest {
 
   @Test
   void listResolvesTenantAndQueriesActiveOnly() {
-    when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
     CustomTaskTypeEntity e = entity("tenant_tx_import");
-    when(mapper.selectActiveByTenant("tx")).thenReturn(List.of(e));
+    when(queryService.listActive("tx")).thenReturn(List.of(e));
     when(responseFactory.success(List.of(e))).thenReturn(CommonResponse.success(List.of(e)));
 
     CommonResponse<List<CustomTaskTypeEntity>> resp = controller.list("tx");
@@ -50,8 +47,7 @@ class ConsoleCustomTaskTypeControllerTest {
 
   @Test
   void countReturnsMapperResult() {
-    when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
-    when(mapper.countActiveByTenant("tx")).thenReturn(3L);
+    when(queryService.countActive("tx")).thenReturn(3L);
     when(responseFactory.success(3L)).thenReturn(CommonResponse.success(3L));
 
     assertThat(controller.count("tx").data()).isEqualTo(3L);
@@ -59,9 +55,8 @@ class ConsoleCustomTaskTypeControllerTest {
 
   @Test
   void detailReturnsEntityWhenFound() {
-    when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
     CustomTaskTypeEntity e = entity("tenant_tx_import");
-    when(mapper.selectByTenantAndCode("tx", "tenant_tx_import")).thenReturn(e);
+    when(queryService.detail("tx", "tenant_tx_import")).thenReturn(e);
     when(responseFactory.success(e)).thenReturn(CommonResponse.success(e));
 
     assertThat(controller.detail("tenant_tx_import", "tx").data().getTaskTypeCode())
@@ -70,8 +65,7 @@ class ConsoleCustomTaskTypeControllerTest {
 
   @Test
   void detailThrowsNotFoundWhenMissing() {
-    when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
-    when(mapper.selectByTenantAndCode("tx", "missing")).thenReturn(null);
+    when(queryService.detail("tx", "missing")).thenThrow(BizException.class);
 
     assertThatThrownBy(() -> controller.detail("missing", "tx")).isInstanceOf(BizException.class);
   }

@@ -52,4 +52,10 @@ public class InstanceManagementController {
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.retryPartition(tenantId, id);
   }
+
+  @PostMapping("/{id}/partitions/retry-failed")
+  public Map<String, Object> retryFailedPartitions(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return instanceManagementApplicationService.retryFailedPartitions(tenantId, id);
+  }
 }

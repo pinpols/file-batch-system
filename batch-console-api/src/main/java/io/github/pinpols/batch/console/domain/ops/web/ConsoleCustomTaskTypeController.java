@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
-import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
@@ -28,8 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleCustomTaskTypeController {
 
-  private final CustomTaskTypeMapper mapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final ConsoleCustomTaskTypeQueryService queryService;
   private final ConsoleResponseFactory responseFactory;
 
   /**
@@ -39,16 +36,14 @@ public class ConsoleCustomTaskTypeController {
   @GetMapping
   public CommonResponse<List<CustomTaskTypeEntity>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(mapper.selectActiveByTenant(resolved));
+    return responseFactory.success(queryService.listActive(tenantId));
   }
 
   /** GET /api/console/custom-task-types/count?tenantId=xxx — 本租户 ACTIVE 自定义 taskType 计数。 */
   @GetMapping("/count")
   public CommonResponse<Long> count(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(mapper.countActiveByTenant(resolved));
+    return responseFactory.success(queryService.countActive(tenantId));
   }
 
   /**
@@ -59,11 +54,6 @@ public class ConsoleCustomTaskTypeController {
   public CommonResponse<CustomTaskTypeEntity> detail(
       @PathVariable("taskTypeCode") String taskTypeCode,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CustomTaskTypeEntity entity = mapper.selectByTenantAndCode(resolved, taskTypeCode);
-    if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", taskTypeCode);
-    }
-    return responseFactory.success(entity);
+    return responseFactory.success(queryService.detail(tenantId, taskTypeCode));
   }
 }

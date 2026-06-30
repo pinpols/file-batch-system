@@ -70,13 +70,14 @@ final class DispatchChannelTypePolicy {
         "LOCAL",
         profile(
             "LOCAL",
-            Set.of(DispatchChannelSafetyAttribute.OFFICIAL_TYPE_ALLOWLIST),
+            Set.of(
+                DispatchChannelSafetyAttribute.OFFICIAL_TYPE_ALLOWLIST,
+                DispatchChannelSafetyAttribute.PATH_SANITIZED,
+                DispatchChannelSafetyAttribute.FILESYSTEM_SANDBOX,
+                DispatchChannelSafetyAttribute.SIDECAR_MANIFEST),
             "no remote credential",
             READBACK_NONE,
-            Set.of(
-                "target_endpoint is not sandbox-bound",
-                "envelope file path is not covered by sidecar manifest",
-                "no dispatch destination readback verification")));
+            Set.of("sandbox root is optional unless batch.dispatch.local-sandbox-root is set")));
     profiles.put(
         "NAS",
         profile(
@@ -125,13 +126,14 @@ final class DispatchChannelTypePolicy {
             "EMAIL",
             Set.of(
                 DispatchChannelSafetyAttribute.OFFICIAL_TYPE_ALLOWLIST,
+                DispatchChannelSafetyAttribute.TIMEOUT_BOUND,
                 DispatchChannelSafetyAttribute.PAYLOAD_SIZE_BOUND,
                 DispatchChannelSafetyAttribute.TLS_IDENTITY_CHECK,
                 DispatchChannelSafetyAttribute.HEADER_INJECTION_GUARD,
                 DispatchChannelSafetyAttribute.CREDENTIAL_FROM_CHANNEL_CONFIG),
             "smtp_username/smtp_password are read from channel_config",
             READBACK_NONE,
-            Set.of("SMTP dispatch has no explicit socket timeout properties")));
+            Set.of("no dispatch destination readback verification")));
     if (!profiles.keySet().equals(OFFICIAL_TYPES)) {
       throw new IllegalStateException("dispatch safety profiles must cover every official type");
     }

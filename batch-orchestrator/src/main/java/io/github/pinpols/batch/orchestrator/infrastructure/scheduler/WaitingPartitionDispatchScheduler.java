@@ -102,7 +102,7 @@ public class WaitingPartitionDispatchScheduler {
     DefaultResourceScheduler.openTickCache();
     try {
       for (JobPartitionEntity partition : waitingPartitions) {
-        WaitingDispatchCandidate candidate;
+        WaitingDispatchCandidate candidate = null;
         // R3-P2-3：@Scheduled 后台线程默认 MDC 空，多 tenant 循环里的 log 行不带 tenantId/traceId
         // 字段，无法按 tenant 过滤。每个 per-tenant 迭代用 BatchMdc.withTenantAndTrace 套一层。
         // partition 持有 tenantId；jobInstance.traceId 此处暂未取，传 null（BatchMdc 会跳过空值）。
@@ -129,13 +129,14 @@ public class WaitingPartitionDispatchScheduler {
               partition == null ? null : partition.getTenantId(),
               partition == null ? null : partition.getId(),
               exception.getMessage());
-          continue;
+        } finally {
+          // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick；
+          // 包括 buildCandidate 抛异常的分支。
+          BatchMdc.remove(StructuredLogField.TENANT_ID);
         }
         if (candidate != null) {
           candidates.add(candidate);
         }
-        // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick
-        BatchMdc.remove(StructuredLogField.TENANT_ID);
       }
     } finally {
       DefaultResourceScheduler.closeTickCache();
@@ -341,6 +342,8 @@ public class WaitingPartitionDispatchScheduler {
     request.setWorkerType(task.getTaskType());
     request.setPriority(jobInstance.getPriority());
     request.setRequestedPartitionCount(1);
+    request.setWaitingSince(
+        partition.getUpdatedAt() == null ? partition.getCreatedAt() : partition.getUpdatedAt());
     // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition
     String partitionWindowCode = extractInputField(partition, "windowCode");
     request.setWindowCode(
