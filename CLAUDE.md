@@ -155,6 +155,12 @@ CI `pr-gate` 拦截漂移。
 
 系统定位:**批量运行控制面 + 文件 / 任务交付闭环**。**不扩张**为企业数据治理 / 容器资源编排 / 合规审计平台。
 
+BFS 新增"批量调度 / 运维闭环 / 依赖可信 / 容量画像"能力时,必须先对照 [`docs/plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md`](docs/plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) §1.1 的决策表:
+
+- 默认只补**已有后端能力的产品闭环和验证证据**:retry failed shards、replay confirm、stuck diagnosis、asset freshness/readiness、1000w import/export 复验、轻量 capacity profile。
+- 谨慎项只能做轻量闭环:deadline/window-aware 只做 late/at-risk/missed-window 标记和告警;FILE/TABLE asset 只服务 readiness/freshness;fault injection profile 只留在 sim/测试层。
+- 默认 reject 通用 workflow/saga 引擎、通用 lineage/catalog/治理平台、自研 K8s 调度、复杂成本核算、business-domain quota 预置扩张。
+
 4 个最高越界风险 ADR 实施 PR 必须先在描述里**答出 ADR 文档顶部「范围边界」判定提问** + 引用「❌ 不做」清单,评审者发现越界(即使代码正确)必须 reject:
 
 | ADR | 一句话边界 |

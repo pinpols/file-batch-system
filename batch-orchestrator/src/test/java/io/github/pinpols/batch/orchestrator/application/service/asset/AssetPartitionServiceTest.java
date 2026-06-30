@@ -48,13 +48,61 @@ class AssetPartitionServiceTest {
     when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
         .thenReturn(snapshot);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
-        .thenReturn(Optional.empty());
+        .thenReturn(
+            Optional.of(
+                ResultVersionEntity.builder()
+                    .tenantId("t1")
+                    .businessKey("job:JOB_A:2026-06-30")
+                    .versionNo(4)
+                    .jobInstanceId(101L)
+                    .status("EFFECTIVE")
+                    .build()));
 
     Optional<AssetPartitionSnapshot> found =
         service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
 
     assertThat(found).contains(snapshot);
     verify(resultVersionQueryService, never()).findEffectiveByJob("t1", "JOB_A", bizDate);
+  }
+
+  @Test
+  void findEffectiveJobPartitionIgnoresStaleMaterializedPartitionWhenLatestEffectiveIsNewer() {
+    LocalDate bizDate = LocalDate.of(2026, 6, 30);
+    AssetPartitionSnapshot stale =
+        new AssetPartitionSnapshot(
+            "t1",
+            "JOB_A",
+            bizDate,
+            "2026-06-30",
+            "job:JOB_A:2026-06-30",
+            "EFFECTIVE",
+            4,
+            101L,
+            "INLINE_JSON",
+            "{\"rows\":20}",
+            null);
+    ResultVersionEntity latest =
+        ResultVersionEntity.builder()
+            .tenantId("t1")
+            .businessKey("job:JOB_A:2026-06-30")
+            .versionNo(5)
+            .jobInstanceId(102L)
+            .status("EFFECTIVE")
+            .payloadStorage("INLINE_JSON")
+            .payloadJson("{\"rows\":30}")
+            .build();
+    when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
+        .thenReturn(Optional.of(latest));
+    when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
+        .thenReturn(stale);
+
+    Optional<AssetPartitionSnapshot> found =
+        service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
+
+    assertThat(found).isPresent();
+    assertThat(found.get().versionNo()).isEqualTo(5);
+    assertThat(found.get().jobInstanceId()).isEqualTo(102L);
+    assertThat(found.get().payloadJson()).isEqualTo("{\"rows\":30}");
   }
 
   @Test

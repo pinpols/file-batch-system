@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -756,7 +757,7 @@ public class ImportIngressScanner {
   }
 
   private String resolveFileFormatType(String fileName) {
-    String lower = fileName == null ? "" : fileName.toLowerCase();
+    String lower = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
     // 仅 .xlsx(OOXML)映射 EXCEL;旧二进制 .xls(OLE2/HSSF)不再假映射成 EXCEL ——
     // ExcelFormatParser 走纯 OOXML 的 OPCPackage.open(),喂 OLE2 字节必崩当坏文件。
     // .xls 落 BINARY,真正解析时由 ExcelFormatParser/上游格式路由给出明确报错(转 .xlsx 提示),

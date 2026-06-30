@@ -254,9 +254,13 @@
                count(1) as "count",
                min(created_at) as "oldest",
                max(updated_at) as "newest"
-          from batch.outbox_event
-         where tenant_id = #{tenantId}
-           and aggregate_id = #{jobInstanceId}
+          from batch.outbox_event oe
+          join batch.job_task jt
+            on jt.tenant_id = oe.tenant_id
+           and jt.id = oe.aggregate_id
+         where oe.tenant_id = #{tenantId}
+           and oe.aggregate_type = 'JOB_TASK'
+           and jt.job_instance_id = #{jobInstanceId}
          group by publish_status
          order by publish_status
     </select>

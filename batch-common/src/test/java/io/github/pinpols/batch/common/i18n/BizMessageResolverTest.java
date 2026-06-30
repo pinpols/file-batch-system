@@ -22,6 +22,21 @@ class BizMessageResolverTest {
   }
 
   @Test
+  void resolveDispatchBusinessErrorRendersCodeAndHumanMessage() {
+    BizException ex =
+        BizException.of(
+            ResultCode.BUSINESS_ERROR,
+            "error.partition.dispatch_business_error",
+            "POOL_EXHAUSTED",
+            "worker pool exhausted");
+
+    assertThat(resolver.resolve(ex, Locale.SIMPLIFIED_CHINESE))
+        .isEqualTo("[POOL_EXHAUSTED] worker pool exhausted");
+    assertThat(resolver.resolve(ex, Locale.ENGLISH))
+        .isEqualTo("[POOL_EXHAUSTED] worker pool exhausted");
+  }
+
+  @Test
   void resolve_messageKey_missing_falls_back_to_literal_message() {
     // messageKey 写错 / 资源不存在,回退到 super.message(本例 = key 本身,
     // BizMessageResolver 检测 literal == key 时进一步回退到 ResultCode.label())

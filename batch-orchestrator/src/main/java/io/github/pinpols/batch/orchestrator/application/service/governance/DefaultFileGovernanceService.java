@@ -35,6 +35,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -657,7 +658,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     String ext = "";
     int dot = fileName.lastIndexOf('.');
     if (dot >= 0 && dot < fileName.length() - 1) {
-      ext = fileName.substring(dot + 1).toLowerCase();
+      ext = fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
     return switch (ext) {
       case "csv", "txt", "tsv" -> "DELIMITED";

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
@@ -70,7 +71,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
       return SensorProbeResult.error(
           "error.workflow.sensor_spec_invalid", List.of("DB_ROW_EXISTS", "schema/sql required"));
     }
-    if (!props.getDbAllowedSchemas().contains(schema.toLowerCase())) {
+    if (!props.getDbAllowedSchemas().contains(schema.toLowerCase(Locale.ROOT))) {
       return SensorProbeResult.error(
           "error.workflow.sensor_spec_invalid",
           List.of("DB_ROW_EXISTS", "schema not in allowlist: " + schema));

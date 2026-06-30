@@ -19,6 +19,7 @@ import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -348,7 +349,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     if (key == null) {
       return false;
     }
-    String lower = key.toLowerCase();
-    return SENSITIVE_KEYS.stream().anyMatch(s -> lower.contains(s.toLowerCase()));
+    String lower = key.toLowerCase(Locale.ROOT);
+    return SENSITIVE_KEYS.stream().anyMatch(s -> lower.contains(s.toLowerCase(Locale.ROOT)));
   }
 }

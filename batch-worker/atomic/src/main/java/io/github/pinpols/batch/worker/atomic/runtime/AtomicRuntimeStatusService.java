@@ -12,6 +12,7 @@ import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProper
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.Locale;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -114,7 +115,7 @@ public class AtomicRuntimeStatusService {
       if ("prod".equalsIgnoreCase(p.trim())) {
         return true;
       }
-      for (String token : p.toLowerCase().split("[\\-_,]")) {
+      for (String token : p.toLowerCase(Locale.ROOT).split("[\\-_,]")) {
         if ("prod".equals(token)) {
           return true;
         }

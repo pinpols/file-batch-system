@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** P2 cost profile:基于热表做近似容量画像，不做账单治理或财务成本分摊。 */
 @Service
@@ -26,6 +27,7 @@ public class CapacityProfileService {
 
   private final CapacityProfileMapper capacityProfileMapper;
 
+  @Transactional(readOnly = true)
   public CapacityProfileReport query(
       String tenantId, Instant from, Instant to, CapacityProfileGroupBy groupBy, Integer limit) {
     Guard.requireText(tenantId, "tenantId is required");

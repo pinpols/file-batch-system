@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -165,7 +166,7 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
    */
   static String buildCanonicalRequest(String host, String payload) {
     String canonicalHeaders =
-        "content-type:" + CONTENT_TYPE + "\n" + "host:" + host.toLowerCase() + "\n";
+        "content-type:" + CONTENT_TYPE + "\n" + "host:" + host.toLowerCase(Locale.ROOT) + "\n";
     String hashedPayload = CaptchaCrypto.sha256Hex(payload);
     return "POST\n" + "/\n" + "\n" + canonicalHeaders + "content-type;host\n" + hashedPayload;
   }

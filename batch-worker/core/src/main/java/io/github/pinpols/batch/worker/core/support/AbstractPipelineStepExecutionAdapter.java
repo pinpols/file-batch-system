@@ -18,6 +18,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRep
 import io.micrometer.core.annotation.Timed;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
@@ -301,7 +302,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   }
 
   protected String pipelineWorkerGroup() {
-    return "worker-" + pipelineType().toLowerCase();
+    return "worker-" + pipelineType().toLowerCase(Locale.ROOT);
   }
 
   protected String resolveInitialStage(List<PipelineStepDefinition> pipelineSteps) {
@@ -317,7 +318,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     String traceId = resolveText(attributes, PipelineRuntimeKeys.TRACE_ID, "sourceTraceId");
     return Texts.hasText(traceId)
         ? traceId
-        : pipelineType().toLowerCase() + "-" + UUID.randomUUID();
+        : pipelineType().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
   }
 
   protected String resolveJobCode(StepExecutionRequest request, Map<String, Object> attributes) {

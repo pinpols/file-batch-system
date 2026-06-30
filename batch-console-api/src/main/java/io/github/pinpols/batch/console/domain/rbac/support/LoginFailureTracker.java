@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -103,6 +104,6 @@ public class LoginFailureTracker {
   }
 
   private static String normalize(String raw) {
-    return raw == null ? "" : raw.trim().toLowerCase();
+    return raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
   }
 }

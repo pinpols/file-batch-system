@@ -1434,6 +1434,135 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAssetPartitionReadiness'
+  /api/console/asset-freshness-policies:
+    get:
+      tags: [Ops]
+      summary: 查询 JOB asset freshness policy
+      description: |-
+        管理 BFS 最小 asset freshness SLA 策略。当前只支持 `assetType=JOB`，
+        用于 orchestrator 扫描 `asset_freshness_policy` 并产生 `ASSET_FRESHNESS_MISSING/STALE`
+        告警；不扩展为数据目录、字段级 lineage 或通用治理平台。
+      operationId: listAssetFreshnessPolicies
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: assetCode
+          required: false
+          schema: { type: string, maxLength: 128 }
+        - in: query
+          name: enabled
+          required: false
+          schema: { type: boolean }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, format: int32, default: 100, minimum: 1, maximum: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseAssetFreshnessPolicyList'
+    post:
+      tags: [Ops]
+      summary: 创建或按 tenant/asset upsert JOB asset freshness policy
+      operationId: createAssetFreshnessPolicy
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetFreshnessPolicyUpsertRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/asset-freshness-policies/{id}:
+    get:
+      tags: [Ops]
+      summary: 查询单条 JOB asset freshness policy
+      operationId: getAssetFreshnessPolicy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseAssetFreshnessPolicy'
+    put:
+      tags: [Ops]
+      summary: 按 id 更新 JOB asset freshness policy
+      operationId: updateAssetFreshnessPolicy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetFreshnessPolicyUpsertRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/asset-freshness-policies/{id}/enabled:
+    patch:
+      tags: [Ops]
+      summary: 启用或停用 JOB asset freshness policy
+      operationId: toggleAssetFreshnessPolicy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetFreshnessPolicyToggleRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
   /api/console/lineage/result-versions/{id}:
     get:
       tags: [Ops]
@@ -10217,6 +10346,125 @@ components:
           properties:
             data:
               nullable: true
+    AssetFreshnessPolicy:
+      type: object
+      description: JOB asset freshness SLA 策略。只服务 readiness/freshness 告警，不表达数据目录或业务正确性裁定。
+      required:
+        - id
+        - tenantId
+        - assetCode
+        - assetType
+        - expectedByLocalTime
+        - timezone
+        - staleAfterSeconds
+        - lookbackDays
+        - severity
+        - enabled
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        assetCode:
+          type: string
+          description: JOB 类型下等于 jobCode。
+        assetType:
+          type: string
+          enum: [JOB]
+        expectedByLocalTime:
+          type: string
+          format: time
+          description: 该 JOB asset 在策略时区内每天应完成的本地时间。
+        timezone:
+          type: string
+          example: Asia/Shanghai
+        staleAfterSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+        lookbackDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 31
+        severity:
+          type: string
+          enum: [INFO, WARN, ERROR, CRITICAL]
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+    AssetFreshnessPolicyUpsertRequest:
+      type: object
+      required: [assetCode, expectedByLocalTime]
+      properties:
+        assetCode:
+          type: string
+          maxLength: 128
+        assetType:
+          type: string
+          enum: [JOB]
+          nullable: true
+          default: JOB
+        expectedByLocalTime:
+          type: string
+          format: time
+        timezone:
+          type: string
+          maxLength: 64
+          nullable: true
+          default: Asia/Shanghai
+        staleAfterSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          nullable: true
+          default: 0
+        lookbackDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 31
+          nullable: true
+          default: 1
+        severity:
+          type: string
+          enum: [INFO, WARN, ERROR, CRITICAL]
+          nullable: true
+          default: WARN
+        enabled:
+          type: boolean
+          nullable: true
+          default: true
+    AssetFreshnessPolicyToggleRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    CommonResponseAssetFreshnessPolicy:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AssetFreshnessPolicy'
+    CommonResponseAssetFreshnessPolicyList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AssetFreshnessPolicy'
     AssetPartitionReadiness:
       type: object
       description: 作业账期 readiness 裁决及命中的 EFFECTIVE asset_partition 快照。

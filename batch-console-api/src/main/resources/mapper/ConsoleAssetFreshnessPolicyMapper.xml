@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.mapper.ConsoleAssetFreshnessPolicyMapper">
+    <resultMap id="assetFreshnessPolicyMap"
+               type="io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="asset_code" javaType="java.lang.String"/>
+            <arg column="asset_type" javaType="java.lang.String"/>
+            <arg column="expected_by_local_time" javaType="java.time.LocalTime"/>
+            <arg column="timezone" javaType="java.lang.String"/>
+            <arg column="stale_after_seconds" javaType="java.lang.Integer"/>
+            <arg column="lookback_days" javaType="java.lang.Integer"/>
+            <arg column="severity" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id,
+        tenant_id,
+        asset_code,
+        asset_type,
+        expected_by_local_time,
+        timezone,
+        stale_after_seconds,
+        lookback_days,
+        severity,
+        enabled,
+        created_at,
+        updated_at
+    </sql>
+
+    <select id="findByTenant" resultMap="assetFreshnessPolicyMap">
+        select <include refid="BaseColumns"/>
+          from batch.asset_freshness_policy
+         where tenant_id = #{tenantId}
+           and asset_type = 'JOB'
+        <if test="assetCode != null and assetCode != ''">
+           and asset_code = #{assetCode}
+        </if>
+        <if test="enabled != null">
+           and enabled = #{enabled}
+        </if>
+         order by enabled desc, asset_code asc
+         limit #{limit}
+    </select>
+
+    <select id="findById" resultMap="assetFreshnessPolicyMap">
+        select <include refid="BaseColumns"/>
+          from batch.asset_freshness_policy
+         where tenant_id = #{tenantId}
+           and id = #{id}
+         limit 1
+    </select>
+
+    <insert id="upsert">
+        insert into batch.asset_freshness_policy (
+            tenant_id,
+            asset_code,
+            asset_type,
+            expected_by_local_time,
+            timezone,
+            stale_after_seconds,
+            lookback_days,
+            severity,
+            enabled
+        ) values (
+            #{p.tenantId},
+            #{p.assetCode},
+            #{p.assetType},
+            #{p.expectedByLocalTime},
+            #{p.timezone},
+            #{p.staleAfterSeconds},
+            #{p.lookbackDays},
+            #{p.severity},
+            #{p.enabled}
+        )
+        on conflict (tenant_id, asset_code, asset_type) do update
+            set expected_by_local_time = excluded.expected_by_local_time,
+                timezone               = excluded.timezone,
+                stale_after_seconds    = excluded.stale_after_seconds,
+                lookback_days          = excluded.lookback_days,
+                severity               = excluded.severity,
+                enabled                = excluded.enabled,
+                updated_at             = current_timestamp
+    </insert>
+
+    <update id="updateById">
+        update batch.asset_freshness_policy
+           set asset_code             = #{p.assetCode},
+               asset_type             = #{p.assetType},
+               expected_by_local_time = #{p.expectedByLocalTime},
+               timezone               = #{p.timezone},
+               stale_after_seconds    = #{p.staleAfterSeconds},
+               lookback_days          = #{p.lookbackDays},
+               severity               = #{p.severity},
+               enabled                = #{p.enabled},
+               updated_at             = current_timestamp
+         where tenant_id = #{p.tenantId}
+           and id = #{p.id}
+    </update>
+
+    <update id="updateEnabled">
+        update batch.asset_freshness_policy
+           set enabled = #{enabled},
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId}
+           and id = #{id}
+    </update>
+</mapper>

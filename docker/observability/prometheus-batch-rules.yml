@@ -34,6 +34,28 @@ groups:
           summary: "Batch alert events are still being emitted"
           description: "Alert event total increased over the last 10 minutes."
 
+      - alert: BatchAssetFreshnessMissing
+        expr: increase(batch_alert_events_total{alert_type="ASSET_FRESHNESS_MISSING"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: freshness
+        annotations:
+          summary: "Batch asset freshness missing"
+          description: "A JOB asset missed expectedBy but is still within staleAfter. Check Console asset freshness policies and upstream readiness."
+
+      - alert: BatchAssetFreshnessStale
+        expr: increase(batch_alert_events_total{alert_type="ASSET_FRESHNESS_STALE"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: freshness
+        annotations:
+          summary: "Batch asset freshness stale"
+          description: "A JOB asset is still not EFFECTIVE after expectedBy + staleAfter. Treat the dependent batch window as at risk and inspect readiness drill-down."
+
       - alert: BatchJobDefinitionFailingRepeatedly
         # 同一 (tenant, jobCode) 1h 内失败 >= 5 次 → 配置异常 / 模板坏 / 资源缺,
         # 持续 trigger 只会生成异常 job_instance + 污染日志,人工介入禁用或修

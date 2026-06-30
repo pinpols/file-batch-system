@@ -55,7 +55,7 @@ final class TaskOutcomeSummaryBuilder {
     summary.put("jobInstanceId", jobInstance == null ? null : jobInstance.getId());
     summary.put("lastTaskId", command == null ? null : command.taskId());
     summary.put("successPartitions", countByStatus(partitions, PartitionStatus.SUCCESS.code()));
-    summary.put("failedPartitions", countByStatus(partitions, PartitionStatus.FAILED.code()));
+    summary.put("failedPartitions", countFailedPartitions(partitions));
     summary.put("lastErrorCode", command == null ? null : command.errorCode());
     summary.put("lastErrorMessage", command == null ? null : command.errorMessage());
     summary.put("updatedAt", BatchDateTimeSupport.utcNow().toString());
@@ -100,8 +100,7 @@ final class TaskOutcomeSummaryBuilder {
     aggregated.put("partitioned", true);
     aggregated.put("partitionCount", partitions == null ? 0 : partitions.size());
     aggregated.put("successPartitionCount", successful.size());
-    aggregated.put(
-        "failedPartitionCount", countByStatus(partitions, PartitionStatus.FAILED.code()));
+    aggregated.put("failedPartitionCount", countFailedPartitions(partitions));
     List<Map<String, Object>> partitionedOutputs = new ArrayList<>(successful.size());
     for (JobPartitionEntity partition : successful) {
       Map<String, Object> item = new LinkedHashMap<>();
@@ -138,6 +137,20 @@ final class TaskOutcomeSummaryBuilder {
       return 0L;
     }
     return partitions.stream().filter(p -> status.equals(p.getPartitionStatus())).count();
+  }
+
+  private static long countFailedPartitions(List<JobPartitionEntity> partitions) {
+    if (partitions == null) {
+      return 0L;
+    }
+    Set<String> failedStatuses =
+        Set.of(
+            PartitionStatus.FAILED.code(),
+            PartitionStatus.CANCELLED.code(),
+            PartitionStatus.TERMINATED.code());
+    return partitions.stream()
+        .filter(p -> p != null && failedStatuses.contains(p.getPartitionStatus()))
+        .count();
   }
 
   private static List<JobPartitionEntity> successfulPartitions(

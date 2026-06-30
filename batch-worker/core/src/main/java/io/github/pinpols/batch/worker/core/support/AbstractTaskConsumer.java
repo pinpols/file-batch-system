@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
@@ -641,7 +642,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   }
 
   private String resolveTopicByWorkerCode(String workerCode) {
-    String wc = workerCode == null ? "" : workerCode.toLowerCase();
+    String wc = workerCode == null ? "" : workerCode.toLowerCase(Locale.ROOT);
     return WORKER_CODE_KEYWORD_TOPIC.entrySet().stream()
         .filter(entry -> wc.contains(entry.getKey()))
         .map(Map.Entry::getValue)
