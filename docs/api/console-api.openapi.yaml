@@ -1365,6 +1365,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObjectArray'
+  /api/console/capacity-profile:
+    get:
+      tags: [Ops]
+      summary: P2 容量画像 / cost profile 只读聚合
+      description: |-
+        Console BFF 转发到 orchestrator `GET /internal/orchestrator/capacity-profile`。
+        仅基于 BFS 热表聚合 tenant/job/worker 维度的耗时、任务数、文件字节数和 pipeline_progress 记录数，
+        用于容量画像和调参建议；不表达云账单、财务成本分摊或业务金额裁定。
+      operationId: getCapacityProfile
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: from
+          required: false
+          schema: { type: string, format: date-time }
+          description: ISO-8601 起始时间；缺省为 to 前 24 小时。
+        - in: query
+          name: to
+          required: false
+          schema: { type: string, format: date-time }
+          description: ISO-8601 结束时间；缺省为服务端当前时间。
+        - in: query
+          name: groupBy
+          required: false
+          schema: { type: string, enum: [TENANT, JOB, WORKER], default: TENANT }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, format: int32, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/asset-partitions/readiness:
     get:
       tags: [Ops]
