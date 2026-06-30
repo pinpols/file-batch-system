@@ -894,4 +894,33 @@ trigger
 
 - 前端 lineage drill-down 页面。
 - archive 冷表证据链补充。
-- OpenLineage 输入/输出 dataset facets 深度集成。
+
+### 2026-06-30 P1-4 第二刀:OpenLineage 文件级 dataset facets
+
+已做:
+
+- `OpenLineageEmitter` 的 `inputs/outputs` 不再固定为空,会从 BFS 热表推导文件级 dataset:
+  - `workflow_run.related_job_instance_id` → `job_instance.related_file_id`
+  - 同 job instance 的 `pipeline_instance.file_id`
+  - 同 `trace_id` 的 `file_record`
+- `file_category=INPUT` 进入 `inputs`,其它 BFS 文件产物进入 `outputs`。
+- dataset 带 `bfsFile` facet,包含 fileId、tenantId、category、format、size、checksum、status、traceId。
+- dataset 查询异常降级为空 dataset,并记录 `openlineage.emit{outcome=dataset_error}`,不阻塞 workflow 终态提交。
+
+边界:
+
+- 仍不引入 openlineage-java client。
+- 仍不做字段级 / 记录级 lineage。
+- 仍不解析业务表 SQL 为 DB dataset。
+- 仍不做可靠投递;OpenLineage 继续是 fire-and-forget observability。
+
+本地验证:
+
+- `OpenLineageEmitterTest` 覆盖 input/output dataset 分类、namespace/name、`bfsFile` facet。
+- `OpenLineageDatasetMapperXmlTest` 覆盖 mapper XML 可解析。
+
+还未做:
+
+- 前端 lineage drill-down 页面。
+- archive 冷表证据链补充。
+- START 事件、节点级血缘、业务表 dataset。

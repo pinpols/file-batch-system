@@ -13,6 +13,11 @@
 - `run.runId`:由 workflow_run id 确定性派生(name-based UUID),将来补 START 事件时与 COMPLETE 同 runId 成对
 - `job.namespace`:配置的 namespace;`job.name`:`workflow.<tenant>.def<definitionId>`
 - run facet `nominalTime`(startedAt / finishedAt);job facet `documentation`(workflow_run / tenant / bizDate / traceId)
+- `inputs` / `outputs`:基于 BFS 热表推导文件级 dataset:
+  - `file_category=INPUT` → `inputs`
+  - 其它 BFS 文件产物(`OUTPUT` / `INTERMEDIATE` / `ARCHIVE`) → `outputs`
+  - dataset 来源覆盖 `workflow_run.related_job_instance_id` 关联的 `job_instance.related_file_id`、`pipeline_instance.file_id`、同 `trace_id` 的 `file_record`
+- dataset facet `bfsFile`:包含 `fileId/tenantId/fileCategory/fileFormatType/fileStatus/fileSizeBytes/checksum/traceId`
 
 ## 设计要点
 
@@ -20,8 +25,10 @@
   HttpClient 发即可,零新依赖(同 P1-B 不贸然引 Resilience4j 的教训)。
 - **绝不阻塞主链**:挂在 `WorkflowTerminalOutboxService.writeTerminalEvent` 的 `afterCommit` 同步里
   (终态真提交才发,回滚不发假血缘);emit 提交到独立 daemon 线程池,池满即丢,所有异常 swallow。
+- **dataset 查询失败不影响 emit**:dataset mapper 异常只记录 `openlineage.emit{outcome=dataset_error}` 并降级为
+  `inputs=[]/outputs=[]`。
 - **可观测**:counter `openlineage.emit{outcome, status}`,outcome ∈ success / http_error / error /
-  rejected / interrupted。
+  rejected / interrupted / dataset_error。
 
 ## 配置(默认全关)
 
@@ -39,11 +46,10 @@ batch:
 
 启用:置 `batch.openlineage.enabled=true` + 填 `endpoint`。endpoint 空时即使 enabled 也 no-op。
 
-## v0.1 不做的(后续升级路径)
+## v0.2 不做的(后续升级路径)
 
-- **inputs / outputs 数据集**:当前 `inputs=[]` `outputs=[]`。下一步从 job_instance.relatedFileId /
-  file_record(trace_id 反查)/ jdbc_mapped_import/export 的 schema.table / node output 填真实数据集,
-  这是血缘图的核心价值。
+- **字段级 / 记录级血缘**:当前只承诺 BFS 文件级 dataset,不展开字段映射、SQL column lineage 或逐行追踪。
+- **业务表 dataset**:当前不解析 `jdbc_mapped_import/export` 的 `schema.table` 为数据库 dataset;后续可在模板契约稳定后补。
 - **START 事件**:当前只发终态。补 RUNNING 钩子(WaitingPartitionDispatchScheduler.markRunning)发
   START,让 Marquez 算 duration。runId 已确定性派生,成对没问题。
 - **节点级血缘**:当前 workflow_run 粒度。可下钻到 workflow_node_run(每个 node 一个 job)。

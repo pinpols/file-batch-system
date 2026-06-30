@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper">
+    <resultMap id="OpenLineageDatasetRowMap"
+               type="io.github.pinpols.batch.orchestrator.infrastructure.lineage.OpenLineageDatasetRow">
+        <constructor>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_category" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="file_format_type" javaType="java.lang.String"/>
+            <arg column="file_size_bytes" javaType="java.lang.Long"/>
+            <arg column="checksum_type" javaType="java.lang.String"/>
+            <arg column="checksum_value" javaType="java.lang.String"/>
+            <arg column="storage_type" javaType="java.lang.String"/>
+            <arg column="storage_bucket" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectWorkflowDatasets" resultMap="OpenLineageDatasetRowMap">
+        select distinct fr.id as file_id,
+               fr.tenant_id,
+               fr.file_category,
+               fr.file_name,
+               fr.file_format_type,
+               fr.file_size_bytes,
+               fr.checksum_type,
+               fr.checksum_value,
+               fr.storage_type,
+               fr.storage_bucket,
+               fr.storage_path,
+               fr.file_status,
+               fr.trace_id
+        from batch.file_record fr
+        where fr.tenant_id = #{tenantId}
+          and (
+              (
+                  #{relatedJobInstanceId} is not null
+                  and fr.id in (
+                      select ji.related_file_id
+                      from batch.job_instance ji
+                      where ji.tenant_id = #{tenantId}
+                        and ji.id = #{relatedJobInstanceId}
+                        and ji.related_file_id is not null
+                      union
+                      select pi.file_id
+                      from batch.pipeline_instance pi
+                      where pi.tenant_id = #{tenantId}
+                        and pi.related_job_instance_id = #{relatedJobInstanceId}
+                        and pi.file_id is not null
+                  )
+              )
+              or (
+                  #{traceId} is not null
+                  and #{traceId} &lt;&gt; ''
+                  and fr.trace_id = #{traceId}
+              )
+          )
+        order by fr.id asc
+        limit 100
+    </select>
+</mapper>
