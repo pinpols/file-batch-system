@@ -4,7 +4,9 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
+import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -15,7 +17,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -50,13 +55,17 @@ public class OpenLineageEmitter {
 
   private final OpenLineageProperties props;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+  private final ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider;
   private final HttpClient httpClient;
   private final ExecutorService executor;
 
   public OpenLineageEmitter(
-      OpenLineageProperties props, ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      OpenLineageProperties props,
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider) {
     this.props = props;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.datasetMapperProvider = datasetMapperProvider;
     if (props.isEnabled() && !props.getEndpoint().isBlank()) {
       this.httpClient =
           HttpClient.newBuilder()
@@ -104,7 +113,8 @@ public class OpenLineageEmitter {
 
   private void sendQuietly(WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
     try {
-      String body = JsonUtils.toJson(buildRunEvent(run, terminalStatus, finishedAt));
+      String body =
+          JsonUtils.toJson(buildRunEvent(run, terminalStatus, finishedAt, datasetsFor(run)));
       HttpRequest request =
           HttpRequest.newBuilder()
               .uri(URI.create(props.getEndpoint()))
@@ -133,6 +143,15 @@ public class OpenLineageEmitter {
   /** 构建 spec-compliant OpenLineage RunEvent(COMPLETE / FAIL)。 */
   Map<String, Object> buildRunEvent(
       WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
+    return buildRunEvent(run, terminalStatus, finishedAt, List.of());
+  }
+
+  /** 构建 spec-compliant OpenLineage RunEvent(COMPLETE / FAIL)。 */
+  Map<String, Object> buildRunEvent(
+      WorkflowRunEntity run,
+      String terminalStatus,
+      Instant finishedAt,
+      List<OpenLineageDatasetRow> datasets) {
     boolean success =
         WorkflowRunStatus.SUCCESS.code().equals(terminalStatus)
             || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(terminalStatus);
@@ -189,11 +208,92 @@ public class OpenLineageEmitter {
     event.put("eventTime", eventTime.toString());
     event.put("run", runNode);
     event.put("job", jobNode);
-    event.put("inputs", List.of());
-    event.put("outputs", List.of());
+    event.put("inputs", buildDatasets(datasets, true));
+    event.put("outputs", buildDatasets(datasets, false));
     event.put("producer", props.getProducer());
     event.put("schemaURL", SCHEMA_URL);
     return event;
+  }
+
+  private List<OpenLineageDatasetRow> datasetsFor(WorkflowRunEntity run) {
+    OpenLineageDatasetMapper mapper = datasetMapperProvider.getIfAvailable();
+    if (mapper == null || run == null || !Texts.hasText(run.getTenantId())) {
+      return List.of();
+    }
+    try {
+      return mapper.selectWorkflowDatasets(
+          run.getTenantId(), run.getRelatedJobInstanceId(), run.getTraceId());
+    } catch (RuntimeException ex) {
+      record("dataset_error", run.getRunStatus());
+      SwallowedExceptionLogger.warn(OpenLineageEmitter.class, "catch:datasetLookup", ex);
+      return List.of();
+    }
+  }
+
+  private List<Map<String, Object>> buildDatasets(List<OpenLineageDatasetRow> rows, boolean input) {
+    if (rows == null || rows.isEmpty()) {
+      return List.of();
+    }
+    List<Map<String, Object>> result = new ArrayList<>();
+    LinkedHashSet<Long> seen = new LinkedHashSet<>();
+    for (OpenLineageDatasetRow row : rows) {
+      if (row == null || row.fileId() == null || seen.contains(row.fileId())) {
+        continue;
+      }
+      boolean isInput = "INPUT".equals(row.fileCategory());
+      if (input != isInput) {
+        continue;
+      }
+      seen.add(row.fileId());
+      result.add(buildDataset(row));
+    }
+    return Collections.unmodifiableList(result);
+  }
+
+  private Map<String, Object> buildDataset(OpenLineageDatasetRow row) {
+    Map<String, Object> dataset = new LinkedHashMap<>();
+    dataset.put("namespace", datasetNamespace(row));
+    dataset.put("name", datasetName(row));
+    dataset.put("facets", Map.of("bfsFile", bfsFileFacet(row)));
+    return dataset;
+  }
+
+  private String datasetNamespace(OpenLineageDatasetRow row) {
+    String storageType =
+        Texts.hasText(row.storageType()) ? row.storageType().toLowerCase() : "file";
+    if (Texts.hasText(row.storageBucket())) {
+      return storageType + "://" + row.storageBucket();
+    }
+    String tenantId = Texts.hasText(row.tenantId()) ? row.tenantId() : "unknown";
+    return props.getNamespace() + "/tenant/" + tenantId + "/" + storageType;
+  }
+
+  private String datasetName(OpenLineageDatasetRow row) {
+    if (Texts.hasText(row.storagePath())) {
+      return row.storagePath();
+    }
+    if (Texts.hasText(row.fileName())) {
+      return row.fileName();
+    }
+    return "file_record:" + row.fileId();
+  }
+
+  private Map<String, Object> bfsFileFacet(OpenLineageDatasetRow row) {
+    Map<String, Object> facet = new LinkedHashMap<>();
+    facet.put("_producer", props.getProducer());
+    facet.put(
+        "_schemaURL",
+        "https://github.com/pinpols/file-batch-system/openlineage/facets/BfsFileDatasetFacet.json");
+    facet.put("fileId", row.fileId());
+    facet.put("tenantId", row.tenantId());
+    facet.put("fileCategory", row.fileCategory());
+    facet.put("fileFormatType", row.fileFormatType());
+    facet.put("fileStatus", row.fileStatus());
+    facet.put("fileSizeBytes", row.fileSizeBytes() == null ? 0L : row.fileSizeBytes());
+    facet.put("checksumType", row.checksumType());
+    facet.put("checksumValue", row.checksumValue());
+    facet.put("traceId", row.traceId());
+    return facet;
   }
 
   private String jobName(WorkflowRunEntity run) {
