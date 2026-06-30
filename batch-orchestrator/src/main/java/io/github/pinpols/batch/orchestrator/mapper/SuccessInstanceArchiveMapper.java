@@ -14,7 +14,7 @@ import org.apache.ibatis.annotations.Param;
  *   <li>job_task → job_instance
  *   <li>pipeline_step_run → pipeline_instance
  *   <li>pipeline_instance.file_id = NULL（解 FK 引用）
- *   <li>file_dispatch_record → pipeline_instance
+ *   <li>file_dispatch_record → pipeline_instance（file_record 已先复制到 archive）
  *   <li>pipeline_instance → job_instance
  *   <li>job_partition → job_instance
  *   <li>workflow_node_run → workflow_run
@@ -44,6 +44,8 @@ public interface SuccessInstanceArchiveMapper {
   int archivePipelineInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
 
   int archivePipelineStepRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveFileRecordsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
 
   int archiveFileDispatchRecordsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
 

@@ -75,6 +75,7 @@ class SuccessInstanceArchiveServiceTest {
     order.verify(mapper).archiveJobStepInstancesByInstanceIds(ids);
     order.verify(mapper).archivePipelineInstancesByInstanceIds(ids);
     order.verify(mapper).archivePipelineStepRunsByInstanceIds(ids);
+    order.verify(mapper).archiveFileRecordsByInstanceIds(ids);
     order.verify(mapper).archiveFileDispatchRecordsByInstanceIds(ids);
     order.verify(mapper).archiveWorkflowRunsByInstanceIds(ids);
     order.verify(mapper).archiveWorkflowNodeRunsByInstanceIds(ids);

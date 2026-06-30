@@ -45,6 +45,7 @@ public class SuccessInstanceArchiveService {
     long archivedStepInstances = archiveMapper.archiveJobStepInstancesByInstanceIds(ids);
     long archivedPipelineInstances = archiveMapper.archivePipelineInstancesByInstanceIds(ids);
     long archivedPipelineStepRuns = archiveMapper.archivePipelineStepRunsByInstanceIds(ids);
+    long archivedFileRecords = archiveMapper.archiveFileRecordsByInstanceIds(ids);
     long archivedFileDispatchRecords = archiveMapper.archiveFileDispatchRecordsByInstanceIds(ids);
     long archivedWorkflowRuns = archiveMapper.archiveWorkflowRunsByInstanceIds(ids);
     long archivedWorkflowNodeRuns = archiveMapper.archiveWorkflowNodeRunsByInstanceIds(ids);
@@ -71,11 +72,12 @@ public class SuccessInstanceArchiveService {
     log.info(
         "success-instance archive tick: cutoff={}, retention={}d, archivedInstances={},"
             + " archivedPartitions={}, archivedStepInstances={}, archivedJobTasks={},"
-            + " archivedPipelineInstances={}, archivedPipelineStepRuns={}, archivedFileDispatch={},"
-            + " archivedWorkflowRuns={}, archivedWorkflowNodeRuns={}, archivedExecutionLogs={},"
-            + " archivedCompensations={}, instances={}, partitions={}, stepInstances={},"
-            + " jobTasks={}, pipelineInstances={}, pipelineStepRuns={}, fileDispatch={},"
-            + " workflowRuns={}, workflowNodeRuns={}, executionLogs={}, compensations={}",
+            + " archivedPipelineInstances={}, archivedPipelineStepRuns={}, archivedFileRecords={},"
+            + " archivedFileDispatch={}, archivedWorkflowRuns={}, archivedWorkflowNodeRuns={},"
+            + " archivedExecutionLogs={}, archivedCompensations={}, instances={}, partitions={},"
+            + " stepInstances={}, jobTasks={}, pipelineInstances={}, pipelineStepRuns={},"
+            + " fileDispatch={}, workflowRuns={}, workflowNodeRuns={}, executionLogs={},"
+            + " compensations={}",
         cutoff,
         retention,
         archivedInstances,
@@ -84,6 +86,7 @@ public class SuccessInstanceArchiveService {
         archivedJobTasks,
         archivedPipelineInstances,
         archivedPipelineStepRuns,
+        archivedFileRecords,
         archivedFileDispatchRecords,
         archivedWorkflowRuns,
         archivedWorkflowNodeRuns,

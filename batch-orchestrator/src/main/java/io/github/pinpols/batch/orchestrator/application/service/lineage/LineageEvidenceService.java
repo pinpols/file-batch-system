@@ -74,6 +74,13 @@ public class LineageEvidenceService {
     List<Map<String, Object>> fileRecords =
         lineageEvidenceMapper.selectFileRecords(
             version.tenantId(), version.jobInstanceId(), payloadFileId);
+    String fileSource = HOT;
+    if (fileRecords == null || fileRecords.isEmpty()) {
+      fileRecords =
+          lineageEvidenceMapper.selectArchivedFileRecords(
+              version.tenantId(), version.jobInstanceId(), payloadFileId);
+      fileSource = ARCHIVE;
+    }
     List<Map<String, Object>> files = nullToEmpty(fileRecords);
     List<Long> fileIds =
         files.stream().map(row -> longValue(row.get("id"))).filter(Objects::nonNull).toList();
@@ -106,6 +113,7 @@ public class LineageEvidenceService {
                 pipelineInstances,
                 pipelineSource,
                 fileRecords,
+                fileSource,
                 dispatchRecords,
                 dispatchSource)));
     return evidence;
@@ -141,11 +149,10 @@ public class LineageEvidenceService {
     if (input.payloadFileId() != null
         && files.stream()
             .noneMatch(row -> input.payloadFileId().equals(longValue(row.get("id"))))) {
-      knownGaps.add("payload_ref file_record not found in hot tables");
+      knownGaps.add("payload_ref file_record not found in hot or archive tables");
     }
     if (files.isEmpty()) {
-      knownGaps.add(
-          "no related file_record found in hot tables; file_record has no archive mirror");
+      knownGaps.add("no related file_record found in hot or archive tables");
     }
     if (dispatches.isEmpty()) {
       knownGaps.add("no dispatch receipt found in hot or archive tables");
@@ -157,6 +164,7 @@ public class LineageEvidenceService {
         ARCHIVE.equals(input.resultVersionSource())
             || (jobFound && ARCHIVE.equals(input.jobInstanceSource()))
             || (!pipelines.isEmpty() && ARCHIVE.equals(input.pipelineSource()))
+            || (!files.isEmpty() && ARCHIVE.equals(input.fileSource()))
             || (!dispatches.isEmpty() && ARCHIVE.equals(input.dispatchSource()));
     coverage.put("scope", archiveUsed ? "BFS_HOT_AND_ARCHIVE" : "BFS_HOT_TABLES");
     coverage.put("resultVersionId", input.version().id());
@@ -170,7 +178,7 @@ public class LineageEvidenceService {
             "pipelineInstances",
             pipelines.isEmpty() ? "NONE" : input.pipelineSource(),
             "fileRecords",
-            files.isEmpty() ? "NONE" : HOT,
+            files.isEmpty() ? "NONE" : input.fileSource(),
             "dispatchRecords",
             dispatches.isEmpty() ? "NONE" : input.dispatchSource()));
     coverage.put("jobInstanceFound", jobFound);
@@ -233,6 +241,7 @@ public class LineageEvidenceService {
       List<Map<String, Object>> pipelineInstances,
       String pipelineSource,
       List<Map<String, Object>> fileRecords,
+      String fileSource,
       List<Map<String, Object>> dispatchRecords,
       String dispatchSource) {}
 }

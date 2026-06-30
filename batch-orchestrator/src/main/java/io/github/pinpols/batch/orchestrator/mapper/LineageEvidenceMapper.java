@@ -23,6 +23,11 @@ public interface LineageEvidenceMapper {
       @Param("jobInstanceId") Long jobInstanceId,
       @Param("payloadFileId") Long payloadFileId);
 
+  List<Map<String, Object>> selectArchivedFileRecords(
+      @Param("tenantId") String tenantId,
+      @Param("jobInstanceId") Long jobInstanceId,
+      @Param("payloadFileId") Long payloadFileId);
+
   List<Map<String, Object>> selectDispatchRecords(
       @Param("tenantId") String tenantId,
       @Param("jobInstanceId") Long jobInstanceId,
