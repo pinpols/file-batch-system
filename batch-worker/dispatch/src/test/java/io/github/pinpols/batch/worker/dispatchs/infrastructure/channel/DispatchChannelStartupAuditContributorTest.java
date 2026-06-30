@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor.WorkerStartupAuditResult;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class DispatchChannelStartupAuditContributorTest {
@@ -28,6 +29,25 @@ class DispatchChannelStartupAuditContributorTest {
     assertThat(result.healthy()).isFalse();
     assertThat(result.details()).containsEntry("unhealthyChannels", 1L);
     assertThat(result.details()).containsEntry("pendingFirstProbe", false);
+  }
+
+  @Test
+  void auditExposesOfficialChannelSafetyProfiles() {
+    DispatchChannelHealthRepository repository = mock(DispatchChannelHealthRepository.class);
+    DispatchChannelStartupAuditContributor contributor =
+        new DispatchChannelStartupAuditContributor(
+            repository, new DispatchChannelHealthProperties());
+
+    WorkerStartupAuditResult result = contributor.audit();
+
+    assertThat(result.details()).containsKey("channelSafetyProfiles");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> profiles =
+        (Map<String, Object>) result.details().get("channelSafetyProfiles");
+    assertThat(profiles.keySet())
+        .containsExactlyInAnyOrder("API", "API_PUSH", "LOCAL", "NAS", "OSS", "SFTP", "EMAIL");
+    assertThat(profiles.get("EMAIL").toString())
+        .contains("SMTP dispatch has no explicit socket timeout properties");
   }
 
   @Test

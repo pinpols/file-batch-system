@@ -801,3 +801,47 @@ trigger
 - 每类 adapter 的强制安全属性矩阵(timeout / SSRF / path escape / manifest / readback / credential handling)机器化。
 - SDK 五语言 adapter conformance;当前 dispatch worker 是平台内置 adapter,不等于 BYO SDK adapter 契约。
 - Console 对非官方 channel_type 的配置期校验。
+
+### 2026-06-30 P1-3 第二刀:dispatch adapter 安全属性矩阵
+
+已做:
+
+- 新增 `DispatchChannelSafetyProfile`,把官方 adapter 的安全事实收敛为代码级矩阵:
+  - `attributes`:已具备的安全能力,如 timeout、SSRF DNS guard、路径净化、sidecar manifest、host key、TLS identity、附件/对象大小上限。
+  - `credentialHandling`:凭据来源和处理方式。
+  - `readbackSupport`:当前平台内置 adapter 的回读验证状态。
+  - `knownGaps`:不能假装已经具备的缺口。
+- `DispatchChannelTypePolicy` 现在同时维护:
+  - 官方类型闭集,类型来源复用 `batch-common` 的 `FileChannelType`。
+  - 官方类型到安全 profile 的一一映射。
+  - 启动审计可读的 `channelSafetyProfiles`。
+- Console `file_channel_config` create/update 写入前复用 `FileChannelType` 做配置期校验:
+  - 支持大小写/空格归一到 canonical code。
+  - 非官方 `channel_type` 提前返回 `INVALID_ARGUMENT`,不再等 DB constraint 或 worker 运行期失败。
+- 启动审计输出 `officialChannelTypes` 与 `channelSafetyProfiles`,运维启动时即可看到:
+  - 哪些 adapter 是平台官方认可的。
+  - 每类 adapter 的安全能力和缺口。
+- 矩阵如实记录两个当前缺口:
+  - `LOCAL`: `target_endpoint` 还没有 sandbox-bound,filesystem envelope 也没有 sidecar manifest。
+  - `EMAIL`: SMTP dispatch 还没有显式 socket timeout properties。
+
+边界:
+
+- 这一步只把平台内置 dispatch adapter 的安全契约机器化,不开放第三方 adapter 插件。
+- `READBACK` 当前不伪造能力:内置 adapter 还未实现 `DispatchReadbackCapable`,矩阵统一记录为未实现。
+- 这一步不改变运行时行为,避免在没有灰度参数的情况下突然拒绝历史配置。
+
+本地验证:
+
+- `DispatchChannelTypePolicyTest` 覆盖:
+  - safety profiles 必须覆盖全部官方类型。
+  - `API/API_PUSH` 声明 timeout + SSRF guard。
+  - `NAS` 声明路径净化、沙箱、sidecar manifest。
+  - `LOCAL/EMAIL` 的已知缺口不会被误声明成能力。
+- `DispatchChannelStartupAuditContributorTest` 覆盖启动审计包含 `channelSafetyProfiles`。
+- `ConsoleFileChannelMutationIntegrationTest` 覆盖非官方 `channel_type` 在 Console 写入前被拒绝。
+
+还未做:
+
+- 针对 `LOCAL target_endpoint sandbox` 与 `EMAIL SMTP timeout` 的兼容性收敛方案。
+- SDK 五语言 adapter conformance;当前矩阵只覆盖平台内置 adapter。

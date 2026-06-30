@@ -26,13 +26,19 @@ import org.springframework.http.MediaType;
 class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
+    return body(code, "SFTP");
+  }
+
+  private String body(String code, String channelType) {
     return "{"
         + "\"tenantId\":\"int-fc-ta\","
         + "\"channelCode\":\""
         + code
         + "\","
         + "\"channelName\":\"integration test channel\","
-        + "\"channelType\":\"SFTP\","
+        + "\"channelType\":\""
+        + channelType
+        + "\","
         + "\"targetEndpoint\":\"sftp://example.com:22/inbox\","
         + "\"authType\":\"PASSWORD\","
         + "\"receiptPolicy\":\"NONE\","
@@ -100,6 +106,30 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .exchange()
         .expectStatus()
         .isBadRequest();
+  }
+
+  @Test
+  void shouldRejectUnsupportedChannelTypeBeforeDatabaseWrite() {
+    String code = "int_fc_bad_type_" + System.currentTimeMillis();
+
+    client
+        .post()
+        .uri("/api/console/file-channels")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-bad-type-" + code)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(body(code, "WEBHOOK_RAW"))
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectBody(String.class)
+        .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
+
+    Long cnt =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?",
+            Long.class,
+            code);
+    assertThat(cnt).isZero();
   }
 
   @Test
