@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper">
+
+    <select id="selectJobInstance" resultType="map">
+        select id,
+               tenant_id,
+               job_code,
+               biz_date,
+               instance_status,
+               run_attempt,
+               trace_id,
+               related_file_id,
+               parent_instance_id,
+               replay_session_id,
+               started_at,
+               finished_at,
+               created_at,
+               updated_at
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and id = #{jobInstanceId}
+    </select>
+
+    <select id="selectPipelineInstances" resultType="map">
+        select id,
+               tenant_id,
+               pipeline_definition_id,
+               job_code,
+               pipeline_type,
+               file_id,
+               related_job_instance_id,
+               current_stage,
+               last_success_stage,
+               run_status,
+               trace_id,
+               started_at,
+               finished_at,
+               created_at,
+               updated_at
+        from batch.pipeline_instance
+        where tenant_id = #{tenantId}
+          and related_job_instance_id = #{jobInstanceId}
+        order by id asc
+    </select>
+
+    <select id="selectFileRecords" resultType="map">
+        select distinct fr.id,
+               fr.tenant_id,
+               fr.file_code,
+               fr.biz_type,
+               fr.file_category,
+               fr.file_name,
+               fr.file_format_type,
+               fr.file_size_bytes,
+               fr.checksum_type,
+               fr.checksum_value,
+               fr.storage_type,
+               fr.storage_bucket,
+               fr.storage_path,
+               fr.file_status,
+               fr.biz_date,
+               fr.trace_id,
+               fr.metadata_json,
+               fr.created_at,
+               fr.updated_at
+        from batch.file_record fr
+        where fr.tenant_id = #{tenantId}
+          and (
+              fr.id in (
+                  select ji.related_file_id
+                  from batch.job_instance ji
+                  where ji.tenant_id = #{tenantId}
+                    and ji.id = #{jobInstanceId}
+                    and ji.related_file_id is not null
+              )
+              or fr.id in (
+                  select pi.file_id
+                  from batch.pipeline_instance pi
+                  where pi.tenant_id = #{tenantId}
+                    and pi.related_job_instance_id = #{jobInstanceId}
+                    and pi.file_id is not null
+              )
+              <if test="payloadFileId != null">
+              or fr.id = #{payloadFileId}
+              </if>
+          )
+        order by fr.id asc
+    </select>
+
+    <select id="selectDispatchRecords" resultType="map">
+        select distinct fdr.id,
+               fdr.tenant_id,
+               fdr.file_id,
+               fdr.pipeline_instance_id,
+               fdr.channel_code,
+               fdr.dispatch_target,
+               fdr.dispatch_status,
+               fdr.dispatch_attempt,
+               fdr.receipt_code,
+               fdr.receipt_status,
+               fdr.external_request_id,
+               fdr.error_code,
+               fdr.error_message,
+               fdr.dispatched_at,
+               fdr.ack_at,
+               fdr.created_at,
+               fdr.updated_at
+        from batch.file_dispatch_record fdr
+        left join batch.pipeline_instance pi
+          on pi.tenant_id = fdr.tenant_id
+         and pi.id = fdr.pipeline_instance_id
+        where fdr.tenant_id = #{tenantId}
+          and (
+              pi.related_job_instance_id = #{jobInstanceId}
+              <if test="fileIds != null and fileIds.size() > 0">
+              or fdr.file_id in
+              <foreach collection="fileIds" item="fileId" open="(" separator="," close=")">
+                  #{fileId}
+              </foreach>
+              </if>
+          )
+        order by fdr.id desc
+        limit 100
+    </select>
+</mapper>

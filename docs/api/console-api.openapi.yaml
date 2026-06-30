@@ -1395,6 +1395,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAssetPartitionReadiness'
+  /api/console/lineage/result-versions/{id}:
+    get:
+      tags: [Ops]
+      summary: BFS lineage 最小证据链（按 result_version id）
+      description: |-
+        Console BFF 转发到 orchestrator `GET /internal/orchestrator/lineage/result-versions/{id}`。
+        返回 `resultVersion/jobInstance/pipelineInstances/fileRecords/dispatchRecords/coverage`。
+        范围限定为 BFS hot tables forensic 查询，不做字段级/记录级 lineage 或外部 catalog。
+      operationId: getLineageEvidenceByResultVersion
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/lineage/effective:
+    get:
+      tags: [Ops]
+      summary: BFS lineage 最小证据链（按当前 EFFECTIVE businessKey）
+      description: |-
+        Console BFF 转发到 orchestrator `GET /internal/orchestrator/lineage/effective`。
+        先按 `businessKey` 解析当前 EFFECTIVE result_version，再返回 BFS hot-table 证据链。
+      operationId: getLineageEvidenceByEffectiveBusinessKey
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: businessKey
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/result-versions/effective:
     get:
       tags: [Ops]
