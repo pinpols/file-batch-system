@@ -4,12 +4,16 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +42,7 @@ public class InstanceManagementApplicationService {
   private final JobTaskMapper jobTaskMapper;
   private final JobInstanceTerminalStatusApplicationService
       jobInstanceTerminalStatusApplicationService;
+  private final RetryGovernanceService retryGovernanceService;
 
   public Map<String, Object> cancel(String tenantId, Long id) {
     JobInstanceEntity instance =
@@ -119,17 +124,67 @@ public class InstanceManagementApplicationService {
           "error.common.state_conflict_detail",
           "can only retry FAILED partitions, current: " + partition.getPartitionStatus());
     }
-    int rows =
-        jobPartitionMapper.markRetrying(
-            tenantId, id, partition.getRetryCount() + 1, "RETRYING", partition.getVersion());
-    if (rows == 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+    retryGovernanceService.retryPartition(tenantId, id, manualRetryEventKey(tenantId, partition));
+    return Map.of("id", id, "status", "READY");
+  }
+
+  public Map<String, Object> retryFailedPartitions(String tenantId, Long instanceId) {
+    JobInstanceEntity instance =
+        Guard.requireFound(
+            jobInstanceMapper.selectById(tenantId, instanceId), "job instance not found");
+    List<JobPartitionEntity> failedPartitions =
+        jobPartitionMapper.selectByQuery(
+            new JobPartitionQuery(tenantId, instanceId, "FAILED", null));
+    if (failedPartitions == null || failedPartitions.isEmpty()) {
+      return Map.of(
+          "id",
+          instanceId,
+          "instanceNo",
+          instance.getInstanceNo(),
+          "requested",
+          0,
+          "retried",
+          0,
+          "conflicts",
+          0,
+          "partitionIds",
+          List.of());
     }
-    return Map.of("id", id, "status", "RETRYING");
+    int retried = 0;
+    int conflicts = 0;
+    List<Long> accepted = new ArrayList<>();
+    for (JobPartitionEntity partition : failedPartitions) {
+      try {
+        retryGovernanceService.retryPartition(
+            tenantId, partition.getId(), manualRetryEventKey(tenantId, partition));
+        retried++;
+        accepted.add(partition.getId());
+      } catch (RuntimeException retryFailure) {
+        conflicts++;
+      }
+    }
+    return Map.of(
+        "id",
+        instanceId,
+        "instanceNo",
+        instance.getInstanceNo(),
+        "requested",
+        failedPartitions.size(),
+        "retried",
+        retried,
+        "conflicts",
+        conflicts,
+        "partitionIds",
+        accepted);
   }
 
   private JobPartitionEntity findPartition(String tenantId, Long id) {
     return Guard.requireFound(jobPartitionMapper.selectById(tenantId, id), "partition not found");
+  }
+
+  private String manualRetryEventKey(String tenantId, JobPartitionEntity partition) {
+    Long version = partition.getVersion() == null ? 0L : partition.getVersion();
+    return tenantId + ":manual-partition-retry:" + partition.getId() + ":" + version;
   }
 
   private Map<String, Object> transition(

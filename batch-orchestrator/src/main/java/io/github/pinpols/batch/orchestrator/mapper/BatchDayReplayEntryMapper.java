@@ -2,7 +2,9 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /** ADR-020 batch_day_replay_entry MyBatis 映射。 */
@@ -48,4 +50,11 @@ public interface BatchDayReplayEntryMapper {
 
   /** 用于 session 完成判断：每个状态各有多少 entry。 */
   long countBySessionAndStatus(@Param("sessionId") Long sessionId, @Param("status") String status);
+
+  List<Map<String, Object>> selectAssetPartitionImpacts(
+      @Param("tenantId") String tenantId, @Param("businessKeys") Collection<String> businessKeys);
+
+  List<Map<String, Object>> selectDispatchImpacts(
+      @Param("tenantId") String tenantId,
+      @Param("sourceInstanceIds") Collection<Long> sourceInstanceIds);
 }

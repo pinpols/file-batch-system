@@ -8,10 +8,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +32,7 @@ class InstanceManagementPauseResumeTest {
   @Mock private JobPartitionMapper jobPartitionMapper;
   @Mock private JobTaskMapper jobTaskMapper;
   @Mock private JobInstanceTerminalStatusApplicationService terminalStatusApplicationService;
+  @Mock private RetryGovernanceService retryGovernanceService;
 
   @InjectMocks private InstanceManagementApplicationService service;
 
@@ -84,5 +90,36 @@ class InstanceManagementPauseResumeTest {
     when(jobInstanceMapper.updateLifecycleStatus("t1", 1L, "PAUSED", 3L)).thenReturn(0);
 
     assertThatThrownBy(() -> service.pause("t1", 1L)).isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("实例级 retry failed shards 只接受 FAILED 分片并返回统计")
+  void shouldRetryFailedPartitionsForInstance() {
+    when(jobInstanceMapper.selectById("t1", 1L)).thenReturn(instance("PARTIAL_FAILED"));
+    JobPartitionEntity p1 = partition(10L, 0, 1L);
+    JobPartitionEntity p2 = partition(11L, 2, 3L);
+    when(jobPartitionMapper.selectByQuery(new JobPartitionQuery("t1", 1L, "FAILED", null)))
+        .thenReturn(List.of(p1, p2));
+
+    Map<String, Object> result = service.retryFailedPartitions("t1", 1L);
+
+    assertThat(result)
+        .containsEntry("requested", 2)
+        .containsEntry("retried", 2)
+        .containsEntry("conflicts", 0);
+    assertThat(result.get("partitionIds")).isEqualTo(List.of(10L, 11L));
+    verify(retryGovernanceService).retryPartition("t1", 10L, "t1:manual-partition-retry:10:1");
+    verify(retryGovernanceService).retryPartition("t1", 11L, "t1:manual-partition-retry:11:3");
+  }
+
+  private static JobPartitionEntity partition(Long id, Integer retryCount, Long version) {
+    JobPartitionEntity entity = new JobPartitionEntity();
+    entity.setId(id);
+    entity.setTenantId("t1");
+    entity.setJobInstanceId(1L);
+    entity.setPartitionStatus("FAILED");
+    entity.setRetryCount(retryCount);
+    entity.setVersion(version);
+    return entity;
   }
 }

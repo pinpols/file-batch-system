@@ -9,10 +9,13 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.audit.application.OperationAuditQueryService;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleFileQueryService;
+import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.web.query.JobExecutionLogQueryRequest;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleOpsQueryService;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
+import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeRunQueryRequest;
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
 import java.util.List;
@@ -31,6 +34,9 @@ class DefaultConsoleQueryApplicationServiceTest {
   @Mock private ConsoleWorkflowQueryService workflowQueryService;
   @Mock private ConsoleOpsQueryService opsQueryService;
   @Mock private OperationAuditQueryService operationAuditQueryService;
+  @Mock private JobDefinitionMapper jobDefinitionMapper;
+  @Mock private PipelineDefinitionMapper pipelineDefinitionMapper;
+  @Mock private ConsoleTenantGuard tenantGuard;
 
   private DefaultConsoleQueryApplicationService service;
 
@@ -42,7 +48,10 @@ class DefaultConsoleQueryApplicationServiceTest {
             fileQueryService,
             workflowQueryService,
             opsQueryService,
-            operationAuditQueryService);
+            operationAuditQueryService,
+            jobDefinitionMapper,
+            pipelineDefinitionMapper,
+            tenantGuard);
   }
 
   @Test

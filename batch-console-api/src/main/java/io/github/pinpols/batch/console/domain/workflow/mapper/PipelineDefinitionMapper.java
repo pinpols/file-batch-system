@@ -39,8 +39,7 @@ public interface PipelineDefinitionMapper {
   /**
    * BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, pipelineName)。
    */
-  List<io.github.pinpols.batch.console.domain.workflow.web.response.CodeNameOption>
-      selectActiveCodeNames(@Param("tenantId") String tenantId);
+  List<Map<String, Object>> selectActiveCodeNames(@Param("tenantId") String tenantId);
 
   /**
    * MVP DAG 回退校验:FILE_STEP.related_pipeline_code 是否在同租户 pipeline_definition 存在(任意 enabled)。

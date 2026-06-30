@@ -6881,6 +6881,33 @@ paths:
                 $ref: '#/components/schemas/CommonResponseString'
 
   # ─── P2: Partition operations ─────────────────────────────────────────────────
+  /api/console/instances/{id}/partitions/retry-failed:
+    post:
+      tags: [Instances]
+      summary: Retry all failed partitions under one job instance
+      operationId: retryFailedJobInstancePartitions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/instances/partitions/{id}/cancel:
     post:
       tags: [Instances]
@@ -11122,10 +11149,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BatchDayReplayResultVersionImpact'
+        assetPartitionImpacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchDayReplayAssetPartitionImpact'
+        dispatchImpacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchDayReplayDispatchImpact'
         warnings:
           type: array
           items: { type: string }
-      required: [tenantId, calendarCode, bizDate, scope, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, warnings]
+      required: [tenantId, calendarCode, bizDate, scope, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, assetPartitionImpacts, dispatchImpacts, warnings]
     BatchDayReplayPreviewEntry:
       type: object
       properties:
@@ -11150,6 +11185,24 @@ components:
           type: string
           enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
       required: [businessKey, action, resultPolicy]
+    BatchDayReplayAssetPartitionImpact:
+      type: object
+      properties:
+        businessKey: { type: string }
+        assetCode: { type: string }
+        partitionKey: { type: string }
+        currentResultVersionId: { type: integer, format: int64, nullable: true }
+        freshnessStatus: { type: string }
+      required: [businessKey, assetCode, partitionKey, freshnessStatus]
+    BatchDayReplayDispatchImpact:
+      type: object
+      properties:
+        sourceInstanceId: { type: integer, format: int64, nullable: true }
+        recordCount: { type: integer, format: int64 }
+        sentCount: { type: integer, format: int64 }
+        failedCount: { type: integer, format: int64 }
+        pendingReceiptCount: { type: integer, format: int64 }
+      required: [recordCount, sentCount, failedCount, pendingReceiptCount]
     CommonResponseBatchDayReplayPreview:
       type: object
       properties:

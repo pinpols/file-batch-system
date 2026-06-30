@@ -106,6 +106,12 @@ public interface ConsoleQueryApplicationService {
   /** 查询作业定义。 */
   PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request);
 
+  /** 查询 ACTIVE 作业定义下拉。 */
+  List<Map<String, Object>> jobDefinitionCodes(String tenantId);
+
+  /** 查询 ACTIVE 文件流水线定义下拉。 */
+  List<Map<String, Object>> pipelineDefinitionCodes(String tenantId);
+
   /** 查询 Outbox 重试日志。 */
   PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
 

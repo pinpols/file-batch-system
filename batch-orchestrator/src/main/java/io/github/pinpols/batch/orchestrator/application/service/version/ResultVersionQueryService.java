@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.version;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
@@ -43,16 +45,26 @@ public class ResultVersionQueryService {
   }
 
   /**
-   * 按 (tenant, jobCode, bizDate) 派生 business_key 后查 EFFECTIVE。便捷入口，等价于：
+   * 按 (tenant, jobCode, bizDate) 查询可消费版本。
    *
-   * <pre>findEffective(tenantId, "job:" + jobCode + ":" + bizDate)</pre>
+   * <p>这里 intentionally 使用「最新版本必须是 EFFECTIVE」语义：同一账期 rerun 已产生 PENDING / FAILED 最新 attempt 时，不能继续把旧
+   * EFFECTIVE 暴露给 readiness / 跨账期依赖消费。
    */
   public Optional<ResultVersionEntity> findEffectiveByJob(
+      String tenantId, String jobCode, LocalDate bizDate) {
+    return findLatestByJob(tenantId, jobCode, bizDate)
+        .filter(row -> "EFFECTIVE".equals(row.status()));
+  }
+
+  /** 按 (tenant, jobCode, bizDate) 查询最新版本；用于 readiness 阻断旧 EFFECTIVE 被新 attempt 覆盖前误消费。 */
+  public Optional<ResultVersionEntity> findLatestByJob(
       String tenantId, String jobCode, LocalDate bizDate) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
       return Optional.empty();
     }
-    return findEffective(tenantId, "job:" + jobCode + ":" + bizDate);
+    List<ResultVersionEntity> versions =
+        listVersions(tenantId, jobBusinessKey(jobCode, bizDate), 1);
+    return versions.isEmpty() ? Optional.empty() : Optional.of(versions.get(0));
   }
 
   /** 列出某 business_key 的所有版本（按 version_no desc，含 PENDING / EFFECTIVE / SUPERSEDED / ARCHIVED）。 */
@@ -61,5 +73,21 @@ public class ResultVersionQueryService {
       return Collections.emptyList();
     }
     return resultVersionMapper.listVersionsByBusinessKey(tenantId, businessKey, limit);
+  }
+
+  /** 按租户和版本 id 查询详情；Controller 不直接触碰 Mapper，避免绕过应用层的不变量。 */
+  public ResultVersionEntity getByIdOrThrow(String tenantId, Long id) {
+    if (!Texts.hasText(tenantId) || id == null) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.result_version.invalid_argument");
+    }
+    ResultVersionEntity entity = resultVersionMapper.selectById(tenantId, id);
+    if (entity == null) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
+    }
+    return entity;
+  }
+
+  private String jobBusinessKey(String jobCode, LocalDate bizDate) {
+    return "job:" + jobCode + ":" + bizDate;
   }
 }

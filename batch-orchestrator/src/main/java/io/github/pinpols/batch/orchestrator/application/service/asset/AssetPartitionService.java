@@ -6,6 +6,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
 import java.time.LocalDate;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,14 +34,23 @@ public class AssetPartitionService {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
       return Optional.empty();
     }
+    Optional<ResultVersionEntity> latest =
+        resultVersionQueryService.findLatestByJob(tenantId, jobCode, bizDate);
+    if (latest.isPresent() && !FRESHNESS_EFFECTIVE.equals(latest.get().status())) {
+      return Optional.empty();
+    }
     AssetPartitionSnapshot materialized =
         assetPartitionMapper.selectEffectiveJobPartition(
             tenantId, jobCode, toPartitionKey(bizDate));
-    if (materialized != null) {
+    if (materialized != null && latest.isEmpty()) {
       return Optional.of(materialized);
     }
-    return resultVersionQueryService
-        .findEffectiveByJob(tenantId, jobCode, bizDate)
+    if (materialized != null
+        && Objects.equals(latest.get().versionNo(), materialized.versionNo())) {
+      return Optional.of(materialized);
+    }
+    return latest
+        .filter(row -> FRESHNESS_EFFECTIVE.equals(row.status()))
         .map(row -> toJobPartition(tenantId, jobCode, bizDate, row));
   }
 

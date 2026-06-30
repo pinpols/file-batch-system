@@ -24,6 +24,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecor
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
 import io.github.pinpols.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
+import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.web.query.BatchDayQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.query.BatchDayWindowQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.query.JobDefinitionQueryRequest;
@@ -51,7 +52,9 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRetr
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
+import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeQueryRequest;
@@ -91,6 +94,9 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   private final ConsoleWorkflowQueryService workflowQueryService;
   private final ConsoleOpsQueryService opsQueryService;
   private final OperationAuditQueryService operationAuditQueryService;
+  private final JobDefinitionMapper jobDefinitionMapper;
+  private final PipelineDefinitionMapper pipelineDefinitionMapper;
+  private final ConsoleTenantGuard tenantGuard;
 
   @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
@@ -314,6 +320,18 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
       JobDefinitionQueryRequest request) {
     return jobQueryService.jobDefinitions(request);
+  }
+
+  @Override
+  public List<Map<String, Object>> jobDefinitionCodes(String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return jobDefinitionMapper.selectActiveCodeNames(resolved);
+  }
+
+  @Override
+  public List<Map<String, Object>> pipelineDefinitionCodes(String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return pipelineDefinitionMapper.selectActiveCodeNames(resolved);
   }
 
   @Override

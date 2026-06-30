@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.scheduling;
 
+import java.time.Instant;
 import lombok.Data;
 
 @Data
@@ -13,4 +14,5 @@ public class ResourceSchedulingRequest {
   private String windowCode;
   private Integer priority;
   private int requestedPartitionCount = 1;
+  private Instant waitingSince;
 }

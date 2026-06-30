@@ -25,7 +25,6 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecor
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
 import io.github.pinpols.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
-import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.web.query.BatchDayQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.query.BatchDayWindowQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.query.JobDefinitionQueryRequest;
@@ -52,8 +51,6 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRetr
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeQueryRequest;
@@ -103,9 +100,6 @@ public class ConsoleQueryController {
   private final io.github.pinpols.batch.console.domain.ops.application
           .ConsoleOrchestratorProxyService
       orchestratorProxy;
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final PipelineDefinitionMapper pipelineDefinitionMapper;
-  private final ConsoleTenantGuard tenantGuard;
 
   /**
    * GET /pipeline-progress?pipelineInstanceId=... — 拉取单个 pipeline instance 的 step 行级进度。
@@ -215,8 +209,8 @@ public class ConsoleQueryController {
   @GetMapping("/job-definitions/codes")
   public CommonResponse<List<CodeNameOption>> jobDefinitionCodes(
       @RequestParam("tenantId") String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(jobDefinitionMapper.selectActiveCodeNames(resolved));
+    return responseFactory.success(
+        toCodeNameOptions(applicationService.jobDefinitionCodes(tenantId)));
   }
 
   /**
@@ -228,8 +222,18 @@ public class ConsoleQueryController {
   @GetMapping("/pipeline-definitions/codes")
   public CommonResponse<List<CodeNameOption>> pipelineDefinitionCodes(
       @RequestParam("tenantId") String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(pipelineDefinitionMapper.selectActiveCodeNames(resolved));
+    return responseFactory.success(
+        toCodeNameOptions(applicationService.pipelineDefinitionCodes(tenantId)));
+  }
+
+  private List<CodeNameOption> toCodeNameOptions(List<Map<String, Object>> rows) {
+    return rows.stream()
+        .map(row -> new CodeNameOption(text(row.get("code")), text(row.get("name"))))
+        .toList();
+  }
+
+  private String text(Object value) {
+    return value == null ? null : String.valueOf(value);
   }
 
   /** GET /outbox-retries — Outbox 重试日志。 */

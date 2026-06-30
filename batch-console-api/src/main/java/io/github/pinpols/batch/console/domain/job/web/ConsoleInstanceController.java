@@ -93,4 +93,15 @@ public class ConsoleInstanceController {
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(orchestratorProxyService.partitionAction(id, tenantId, "retry"));
   }
+
+  @PostMapping("/{id}/partitions/retry-failed")
+  @AuditAction(
+      action = "partition.retry_failed_shards",
+      aggregateType = "job_instance",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
+  public CommonResponse<Map<String, Object>> retryFailedPartitions(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(orchestratorProxyService.retryFailedPartitions(id, tenantId));
+  }
 }

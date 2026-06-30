@@ -15,6 +15,8 @@ public record BatchDayReplayPreviewResponse(
     int totalCount,
     List<PreviewEntry> entries,
     List<ResultVersionImpact> resultVersionImpacts,
+    List<AssetPartitionImpact> assetPartitionImpacts,
+    List<DispatchImpact> dispatchImpacts,
     List<String> warnings) {
 
   public record PreviewEntry(
@@ -30,4 +32,18 @@ public record BatchDayReplayPreviewResponse(
       Long resultVersionId,
       String action,
       String resultPolicy) {}
+
+  public record AssetPartitionImpact(
+      String businessKey,
+      String assetCode,
+      String partitionKey,
+      Long currentResultVersionId,
+      String freshnessStatus) {}
+
+  public record DispatchImpact(
+      Long sourceInstanceId,
+      long recordCount,
+      long sentCount,
+      long failedCount,
+      long pendingReceiptCount) {}
 }

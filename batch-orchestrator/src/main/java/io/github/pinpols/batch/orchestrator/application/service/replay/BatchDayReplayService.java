@@ -164,6 +164,10 @@ public class BatchDayReplayService {
             .toList();
     List<BatchDayReplayPreviewResponse.ResultVersionImpact> impacts =
         previewEntries.stream().map(entry -> toResultVersionImpact(entry, resultPolicy)).toList();
+    List<BatchDayReplayPreviewResponse.AssetPartitionImpact> assetPartitionImpacts =
+        loadAssetPartitionImpacts(command.tenantId(), previewEntries);
+    List<BatchDayReplayPreviewResponse.DispatchImpact> dispatchImpacts =
+        loadDispatchImpacts(command.tenantId(), previewEntries);
     List<String> warnings = entries.isEmpty() ? List.of("NO_CANDIDATES") : List.of();
     return new BatchDayReplayPreviewResponse(
         command.tenantId(),
@@ -176,7 +180,24 @@ public class BatchDayReplayService {
         entries.size(),
         previewEntries,
         impacts,
+        assetPartitionImpacts,
+        dispatchImpacts,
         warnings);
+  }
+
+  /** 查询 replay session 详情，统一复用应用层租户和存在性校验。 */
+  @Transactional(readOnly = true)
+  public BatchDayReplaySessionEntity getSession(String tenantId, Long sessionId) {
+    return loadOrThrow(tenantId, sessionId);
+  }
+
+  /** 查询 replay entry 进度列表；Controller 只负责 HTTP 参数，查询约束留在应用层。 */
+  @Transactional(readOnly = true)
+  public List<BatchDayReplayEntryEntity> listEntries(Long sessionId, String status, int limit) {
+    if (sessionId == null || limit <= 0) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
+    }
+    return entryMapper.selectBySessionAndStatus(sessionId, status, limit);
   }
 
   /** PENDING_APPROVAL → RUNNING；记录 approver。 */
@@ -454,6 +475,61 @@ public class BatchDayReplayService {
         resultPolicy);
   }
 
+  private List<BatchDayReplayPreviewResponse.AssetPartitionImpact> loadAssetPartitionImpacts(
+      String tenantId, List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries) {
+    List<String> businessKeys =
+        previewEntries.stream()
+            .map(BatchDayReplayPreviewResponse.PreviewEntry::businessKey)
+            .filter(Texts::hasText)
+            .distinct()
+            .toList();
+    if (businessKeys.isEmpty()) {
+      return List.of();
+    }
+    List<Map<String, Object>> rows =
+        entryMapper.selectAssetPartitionImpacts(tenantId, businessKeys);
+    if (rows == null || rows.isEmpty()) {
+      return List.of();
+    }
+    return rows.stream()
+        .map(
+            row ->
+                new BatchDayReplayPreviewResponse.AssetPartitionImpact(
+                    text(row.get("business_key")),
+                    text(row.get("asset_code")),
+                    text(row.get("partition_key")),
+                    longValue(row.get("current_result_version_id")),
+                    text(row.get("freshness_status"))))
+        .toList();
+  }
+
+  private List<BatchDayReplayPreviewResponse.DispatchImpact> loadDispatchImpacts(
+      String tenantId, List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries) {
+    List<Long> sourceInstanceIds =
+        previewEntries.stream()
+            .map(BatchDayReplayPreviewResponse.PreviewEntry::sourceInstanceId)
+            .filter(id -> id != null && id > 0)
+            .distinct()
+            .toList();
+    if (sourceInstanceIds.isEmpty()) {
+      return List.of();
+    }
+    List<Map<String, Object>> rows = entryMapper.selectDispatchImpacts(tenantId, sourceInstanceIds);
+    if (rows == null || rows.isEmpty()) {
+      return List.of();
+    }
+    return rows.stream()
+        .map(
+            row ->
+                new BatchDayReplayPreviewResponse.DispatchImpact(
+                    longValue(row.get("source_instance_id")),
+                    longValueOrZero(row.get("record_count")),
+                    longValueOrZero(row.get("sent_count")),
+                    longValueOrZero(row.get("failed_count")),
+                    longValueOrZero(row.get("pending_receipt_count"))))
+        .toList();
+  }
+
   private Map<Long, String> loadVersionBusinessKeys(
       BatchDayReplaySubmitCommand command, String scope) {
     if (!SCOPE_OUTPUTS_ONLY.equals(scope)
@@ -468,6 +544,25 @@ public class BatchDayReplayService {
       businessKeys.put(version.id(), version.businessKey());
     }
     return businessKeys;
+  }
+
+  private static String text(Object value) {
+    return value == null ? null : String.valueOf(value);
+  }
+
+  private static Long longValue(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    return Long.parseLong(String.valueOf(value));
+  }
+
+  private static long longValueOrZero(Object value) {
+    Long parsed = longValue(value);
+    return parsed == null ? 0L : parsed;
   }
 
   private boolean isCancellable(String status) {

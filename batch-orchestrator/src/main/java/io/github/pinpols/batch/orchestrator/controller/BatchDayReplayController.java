@@ -6,8 +6,6 @@ import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayR
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplaySubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
-import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
-import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,8 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class BatchDayReplayController {
 
   private final BatchDayReplayService replayService;
-  private final BatchDayReplaySessionMapper sessionMapper;
-  private final BatchDayReplayEntryMapper entryMapper;
 
   @PostMapping("/sessions")
   public CommonResponse<BatchDayReplaySessionEntity> submit(
@@ -62,7 +58,7 @@ public class BatchDayReplayController {
   @GetMapping("/sessions/{sessionId}")
   public CommonResponse<BatchDayReplaySessionEntity> detail(
       @PathVariable("sessionId") Long sessionId, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(sessionMapper.selectById(tenantId, sessionId));
+    return CommonResponse.success(replayService.getSession(tenantId, sessionId));
   }
 
   /** entries 进度查询 — 给 UI 展示每条 instance / version 的执行状态。 */
@@ -71,6 +67,6 @@ public class BatchDayReplayController {
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
-    return CommonResponse.success(entryMapper.selectBySessionAndStatus(sessionId, status, limit));
+    return CommonResponse.success(replayService.listEntries(sessionId, status, limit));
   }
 }

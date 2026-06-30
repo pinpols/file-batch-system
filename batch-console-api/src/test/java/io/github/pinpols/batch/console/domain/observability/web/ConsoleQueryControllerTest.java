@@ -57,12 +57,10 @@ class ConsoleQueryControllerTest {
     validator.afterPropertiesSet();
 
     // ConsoleQueryController 构造参数:applicationService / responseFactory /
-    // operationAuditQueryService / orchestratorProxy / jobDefinitionMapper /
-    // pipelineDefinitionMapper / tenantGuard。本测试只覆盖 query 路径,其余 null。
+    // operationAuditQueryService / orchestratorProxy。本测试只覆盖 query 路径,其余 null。
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleQueryController(
-                    queryApplicationService, responseFactory, null, null, null, null, null))
+                new ConsoleQueryController(queryApplicationService, responseFactory, null, null))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();

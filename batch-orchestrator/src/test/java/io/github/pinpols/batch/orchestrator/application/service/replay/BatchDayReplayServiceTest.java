@@ -30,6 +30,7 @@ import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
@@ -116,7 +117,57 @@ class BatchDayReplayServiceTest {
     assertThat(result.resultVersionImpacts())
         .extracting(BatchDayReplayPreviewResponse.ResultVersionImpact::action)
         .containsOnly("CREATE_NEW_RESULT_VERSION");
-    verifyNoInteractions(sessionMapper, entryMapper);
+    verifyNoInteractions(sessionMapper);
+    verify(entryMapper, never()).insertBatch(anyList());
+  }
+
+  @Test
+  void previewShouldIncludeAssetPartitionAndDispatchImpacts() {
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+        .thenReturn(List.of(jobInstance(101L, "JOB_A")));
+    when(entryMapper.selectAssetPartitionImpacts(eq("t1"), any()))
+        .thenReturn(
+            List.of(
+                Map.of(
+                    "business_key", "job:JOB_A:2026-05-04",
+                    "asset_code", "JOB_A",
+                    "partition_key", "2026-05-04",
+                    "current_result_version_id", 11L,
+                    "freshness_status", "EFFECTIVE")));
+    when(entryMapper.selectDispatchImpacts(eq("t1"), any()))
+        .thenReturn(
+            List.of(
+                Map.of(
+                    "source_instance_id", 101L,
+                    "record_count", 3L,
+                    "sent_count", 2L,
+                    "failed_count", 1L,
+                    "pending_receipt_count", 1L)));
+
+    BatchDayReplayPreviewResponse result =
+        service.preview(
+            BatchDayReplaySubmitCommand.builder()
+                .tenantId("t1")
+                .calendarCode("CAL")
+                .bizDate(LocalDate.of(2026, 5, 4))
+                .scope("ALL_FAILED")
+                .reason("upstream backfill")
+                .requestedBy("ops")
+                .build());
+
+    assertThat(result.assetPartitionImpacts())
+        .singleElement()
+        .extracting(BatchDayReplayPreviewResponse.AssetPartitionImpact::assetCode)
+        .isEqualTo("JOB_A");
+    assertThat(result.dispatchImpacts())
+        .singleElement()
+        .satisfies(
+            impact -> {
+              assertThat(impact.sourceInstanceId()).isEqualTo(101L);
+              assertThat(impact.recordCount()).isEqualTo(3L);
+              assertThat(impact.failedCount()).isEqualTo(1L);
+            });
   }
 
   @Test
@@ -138,7 +189,8 @@ class BatchDayReplayServiceTest {
 
     assertThat(result.totalCount()).isZero();
     assertThat(result.warnings()).containsExactly("NO_CANDIDATES");
-    verifyNoInteractions(sessionMapper, entryMapper);
+    verifyNoInteractions(sessionMapper);
+    verify(entryMapper, never()).insertBatch(anyList());
   }
 
   @Test
@@ -261,7 +313,8 @@ class BatchDayReplayServiceTest {
         .singleElement()
         .extracting(BatchDayReplayPreviewResponse.ResultVersionImpact::action)
         .isEqualTo("PROMOTE_EXISTING_VERSION");
-    verifyNoInteractions(sessionMapper, entryMapper);
+    verifyNoInteractions(sessionMapper);
+    verify(entryMapper, never()).insertBatch(anyList());
   }
 
   @Test

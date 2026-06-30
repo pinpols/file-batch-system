@@ -34,8 +34,7 @@ public interface JobDefinitionMapper {
   int copyJobDefinition(String tenantId, Long sourceId, String newJobCode, String createdBy);
 
   /** BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, jobName)。 */
-  List<io.github.pinpols.batch.console.domain.workflow.web.response.CodeNameOption>
-      selectActiveCodeNames(@Param("tenantId") String tenantId);
+  List<Map<String, Object>> selectActiveCodeNames(@Param("tenantId") String tenantId);
 
   /** 租户就绪自检专用:返回 enabled job 的 (jobCode, queueCode),供判定 queue_code 是否悬空。只读。 */
   List<Map<String, Object>> selectEnabledJobQueueRefs(@Param("tenantId") String tenantId);

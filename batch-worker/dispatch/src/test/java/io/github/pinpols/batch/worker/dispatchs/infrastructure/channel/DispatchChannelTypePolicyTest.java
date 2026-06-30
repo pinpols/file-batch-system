@@ -49,18 +49,18 @@ class DispatchChannelTypePolicyTest {
             DispatchChannelSafetyAttribute.FILESYSTEM_SANDBOX,
             DispatchChannelSafetyAttribute.SIDECAR_MANIFEST);
     assertThat(DispatchChannelTypePolicy.safetyProfiles().get("LOCAL").knownGaps())
-        .contains("target_endpoint is not sandbox-bound");
+        .contains("sandbox root is optional unless batch.dispatch.local-sandbox-root is set");
   }
 
   @Test
-  void emailProfileDoesNotPretendSocketTimeoutExists() {
+  void emailProfileDeclaresSocketTimeout() {
     assertThat(DispatchChannelTypePolicy.safetyProfiles().get("EMAIL").attributes())
-        .doesNotContain(DispatchChannelSafetyAttribute.TIMEOUT_BOUND)
         .contains(
+            DispatchChannelSafetyAttribute.TIMEOUT_BOUND,
             DispatchChannelSafetyAttribute.PAYLOAD_SIZE_BOUND,
             DispatchChannelSafetyAttribute.TLS_IDENTITY_CHECK,
             DispatchChannelSafetyAttribute.HEADER_INJECTION_GUARD);
     assertThat(DispatchChannelTypePolicy.safetyProfiles().get("EMAIL").knownGaps())
-        .contains("SMTP dispatch has no explicit socket timeout properties");
+        .doesNotContain("SMTP dispatch has no explicit socket timeout properties");
   }
 }

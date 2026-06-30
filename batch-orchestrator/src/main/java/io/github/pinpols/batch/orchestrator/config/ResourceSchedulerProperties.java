@@ -27,4 +27,16 @@ public class ResourceSchedulerProperties {
    * / 共享 dev 环境，生产不设置。 空值（默认）禁用 fallback，严格保留 CLAUDE.md §多租户隔离 的原语义。
    */
   private String sharedTenantFallback = "";
+
+  /** WAITING 分片公平调度 aging 开关。开启后等待越久 fairnessScore 越高，避免长期饥饿。 */
+  private boolean priorityAgingEnabled = true;
+
+  /** 每等待多少秒增加一次 aging 分数。值 <= 0 时回退为 60 秒。 */
+  private long priorityAgingStepSeconds = 60;
+
+  /** 每个 aging step 增加的 fairnessScore。 */
+  private long priorityAgingBonusPerStep = 250;
+
+  /** 单个分片 aging 加分上限，防止极老任务永久压过显式高优先级任务。 */
+  private long priorityAgingMaxBonus = 20_000;
 }

@@ -47,6 +47,8 @@ class AssetPartitionServiceTest {
             null);
     when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
         .thenReturn(snapshot);
+    when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
+        .thenReturn(Optional.empty());
 
     Optional<AssetPartitionSnapshot> found =
         service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
@@ -70,7 +72,7 @@ class AssetPartitionServiceTest {
             .build();
     when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
         .thenReturn(null);
-    when(resultVersionQueryService.findEffectiveByJob("t1", "JOB_A", bizDate))
+    when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(version));
 
     Optional<AssetPartitionSnapshot> found =
@@ -89,16 +91,43 @@ class AssetPartitionServiceTest {
     assertThat(service.findEffectiveJobPartition("t1", " ", LocalDate.of(2026, 6, 30))).isEmpty();
     assertThat(service.findEffectiveJobPartition("t1", "JOB_A", null)).isEmpty();
     verify(assetPartitionMapper, never()).selectEffectiveJobPartition(null, null, null);
-    verify(resultVersionQueryService, never()).findEffectiveByJob(null, null, null);
+    verify(resultVersionQueryService, never()).findLatestByJob(null, null, null);
   }
 
   @Test
   void isJobPartitionReadyRequiresEffectiveVersion() {
     LocalDate bizDate = LocalDate.of(2026, 6, 30);
-    when(resultVersionQueryService.findEffectiveByJob("t1", "JOB_A", bizDate))
-        .thenReturn(Optional.empty());
+    when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
+        .thenReturn(
+            Optional.of(
+                ResultVersionEntity.builder()
+                    .tenantId("t1")
+                    .businessKey("job:JOB_A:2026-06-30")
+                    .versionNo(4)
+                    .status("PENDING")
+                    .build()));
 
     assertThat(service.isJobPartitionReady("t1", "JOB_A", bizDate)).isFalse();
+  }
+
+  @Test
+  void findEffectiveJobPartitionBlocksOldEffectiveWhenLatestAttemptPending() {
+    LocalDate bizDate = LocalDate.of(2026, 6, 30);
+    when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
+        .thenReturn(
+            Optional.of(
+                ResultVersionEntity.builder()
+                    .tenantId("t1")
+                    .businessKey("job:JOB_A:2026-06-30")
+                    .versionNo(5)
+                    .status("PENDING")
+                    .build()));
+
+    Optional<AssetPartitionSnapshot> found =
+        service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
+
+    assertThat(found).isEmpty();
+    verify(assetPartitionMapper, never()).selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30");
   }
 
   @Test

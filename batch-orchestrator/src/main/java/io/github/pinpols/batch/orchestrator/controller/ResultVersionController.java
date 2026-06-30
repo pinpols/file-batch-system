@@ -1,12 +1,9 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
-import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,7 +35,6 @@ public class ResultVersionController {
 
   private final ResultVersionQueryService queryService;
   private final ResultVersionPromoteService promoteService;
-  private final ResultVersionMapper resultVersionMapper;
 
   @GetMapping
   public CommonResponse<List<ResultVersionEntity>> list(
@@ -57,11 +53,7 @@ public class ResultVersionController {
   @GetMapping("/{id}")
   public CommonResponse<ResultVersionEntity> detail(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    ResultVersionEntity entity = resultVersionMapper.selectById(tenantId, id);
-    if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
-    }
-    return CommonResponse.success(entity);
+    return CommonResponse.success(queryService.getByIdOrThrow(tenantId, id));
   }
 
   @PostMapping("/{id}/promote")

@@ -96,4 +96,57 @@
         where session_id = #{sessionId} and status = #{status}
     </select>
 
+    <select id="selectAssetPartitionImpacts" resultType="map">
+        select business_key,
+               asset_code,
+               partition_key,
+               result_version_id as current_result_version_id,
+               freshness_status
+        from batch.asset_partition
+        where tenant_id = #{tenantId}
+          and business_key in
+          <foreach collection="businessKeys" item="businessKey" open="(" separator="," close=")">
+              #{businessKey}
+          </foreach>
+        order by business_key asc, asset_code asc, partition_key asc
+    </select>
+
+    <select id="selectDispatchImpacts" resultType="map">
+        select source_instance_id,
+               count(1)::bigint as record_count,
+               count(1) filter (where dispatch_status in ('SENT', 'ACKED'))::bigint as sent_count,
+               count(1) filter (where dispatch_status = 'FAILED')::bigint as failed_count,
+               count(1) filter (where receipt_status = 'PENDING')::bigint as pending_receipt_count
+        from (
+            select pi.related_job_instance_id as source_instance_id,
+                   fdr.dispatch_status,
+                   fdr.receipt_status
+            from batch.file_dispatch_record fdr
+            join batch.pipeline_instance pi
+              on pi.tenant_id = fdr.tenant_id
+             and pi.id = fdr.pipeline_instance_id
+            where fdr.tenant_id = #{tenantId}
+              and pi.related_job_instance_id in
+              <foreach collection="sourceInstanceIds" item="sourceInstanceId" open="(" separator="," close=")">
+                  #{sourceInstanceId}
+              </foreach>
+            union all
+            select pi.related_job_instance_id as source_instance_id,
+                   fdr.dispatch_status,
+                   fdr.receipt_status
+            from archive.file_dispatch_record_archive fdr
+            join archive.pipeline_instance_archive pi
+              on pi.tenant_id = fdr.tenant_id
+             and pi.id = fdr.pipeline_instance_id
+            where fdr.tenant_id = #{tenantId}
+              and pi.related_job_instance_id in
+              <foreach collection="sourceInstanceIds" item="sourceInstanceId" open="(" separator="," close=")">
+                  #{sourceInstanceId}
+              </foreach>
+        ) s
+        where source_instance_id is not null
+        group by source_instance_id
+        order by source_instance_id asc
+    </select>
+
 </mapper>
