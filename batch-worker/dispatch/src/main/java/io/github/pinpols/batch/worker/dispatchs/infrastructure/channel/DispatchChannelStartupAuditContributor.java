@@ -29,6 +29,7 @@ public class DispatchChannelStartupAuditContributor implements WorkerStartupAudi
     details.put("maxBackoffMillis", properties.getMaxBackoffMillis());
     details.put("probeChannelTypes", properties.getProbeChannelTypes());
     details.put("officialChannelTypes", DispatchChannelTypePolicy.allowedTypes());
+    details.put("channelSafetyProfiles", DispatchChannelTypePolicy.safetyProfilesForAudit());
     if (!properties.isEnabled()) {
       return WorkerStartupAuditResult.healthy(details);
     }

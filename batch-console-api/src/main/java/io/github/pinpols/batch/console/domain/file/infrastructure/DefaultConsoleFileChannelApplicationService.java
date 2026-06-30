@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
@@ -67,7 +69,7 @@ public class DefaultConsoleFileChannelApplicationService
     param.setTenantId(tenantId);
     param.setChannelCode(request.getChannelCode());
     param.setChannelName(request.getChannelName());
-    param.setChannelType(request.getChannelType());
+    param.setChannelType(normalizeChannelType(request.getChannelType()));
     param.setTargetEndpoint(request.getTargetEndpoint());
     param.setAuthType(request.getAuthType());
     // DB 这两列 NOT NULL,FE 不传时给安全默认
@@ -100,7 +102,7 @@ public class DefaultConsoleFileChannelApplicationService
             : (String) existing.get("channel_name"));
     param.setChannelType(
         request.getChannelType() != null
-            ? request.getChannelType()
+            ? normalizeChannelType(request.getChannelType())
             : (String) existing.get("channel_type"));
     param.setTargetEndpoint(
         request.getTargetEndpoint() != null
@@ -125,6 +127,18 @@ public class DefaultConsoleFileChannelApplicationService
     param.setUpdatedBy(operator);
     mapper.updateFileChannelConfig(param);
     return mapper.selectById(tenantId, id);
+  }
+
+  private static String normalizeChannelType(String channelType) {
+    FileChannelType matched = DictEnum.fromCode(FileChannelType.class, channelType);
+    if (matched == null) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.file_channel.unsupported_channel_type",
+          channelType,
+          DictEnum.codeList(FileChannelType.class));
+    }
+    return matched.code();
   }
 
   @Override
