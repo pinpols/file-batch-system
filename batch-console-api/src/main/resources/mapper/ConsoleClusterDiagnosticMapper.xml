@@ -112,6 +112,33 @@
            )
     </select>
 
+    <select id="countJobInstancesByStatuses" resultType="java.lang.Long">
+        select count(1)
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and instance_status in
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
+    </select>
+
+    <select id="selectJobInstanceSummary" resultType="map">
+        select id as "id",
+               tenant_id as "tenantId",
+               instance_no as "instanceNo",
+               job_code as "jobCode",
+               biz_date as "bizDate",
+               instance_status as "instanceStatus",
+               queue_code as "queueCode",
+               worker_group as "workerGroup",
+               trace_id as "traceId",
+               started_at as "startedAt",
+               deadline_at as "deadlineAt"
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and id = #{jobInstanceId}
+    </select>
+
     <select id="countTerminalInstancesWithActiveChildren" resultType="java.lang.Long">
         select count(distinct ji.id)
           from batch.job_instance ji
@@ -148,5 +175,89 @@
          where tenant_id = #{tenantId}
          group by worker_group
          order by worker_group
+    </select>
+
+    <select id="partitionStatusCounts" resultType="map">
+        select partition_status as "status",
+               count(1) as "count"
+          from batch.job_partition
+         where tenant_id = #{tenantId}
+           and job_instance_id = #{jobInstanceId}
+         group by partition_status
+         order by partition_status
+    </select>
+
+    <select id="taskStatusCounts" resultType="map">
+        select task_status as "status",
+               count(1) as "count"
+          from batch.job_task
+         where tenant_id = #{tenantId}
+           and job_instance_id = #{jobInstanceId}
+         group by task_status
+         order by task_status
+    </select>
+
+    <select id="activeTaskWorkerIssues" resultType="map">
+        select jt.id as "taskId",
+               jt.job_partition_id as "jobPartitionId",
+               jt.task_status as "taskStatus",
+               jt.assigned_worker_code as "assignedWorkerCode",
+               jt.heartbeat_at as "heartbeatAt",
+               wr.status as "workerStatus",
+               wr.heartbeat_at as "workerHeartbeatAt",
+               case
+                 when jt.assigned_worker_code is null then 'TASK_NOT_ASSIGNED'
+                 when wr.id is null then 'WORKER_NOT_REGISTERED'
+                 when wr.status not in ('ONLINE', 'DRAINING') then 'WORKER_NOT_AVAILABLE'
+                 when jt.task_status = 'RUNNING'
+                      and (jt.heartbeat_at is null
+                           or jt.heartbeat_at &lt; current_timestamp - (#{heartbeatTimeoutSeconds} * interval '1 second'))
+                   then 'RUNNING_TASK_HEARTBEAT_STALE'
+                 else null
+               end as "reasonCode"
+          from batch.job_task jt
+          left join batch.worker_registry wr
+            on wr.tenant_id = jt.tenant_id
+           and wr.worker_code = jt.assigned_worker_code
+         where jt.tenant_id = #{tenantId}
+           and jt.job_instance_id = #{jobInstanceId}
+           and jt.task_status in ('CREATED', 'READY', 'RUNNING')
+           and (
+             jt.assigned_worker_code is null
+             or wr.id is null
+             or wr.status not in ('ONLINE', 'DRAINING')
+             or (
+               jt.task_status = 'RUNNING'
+               and (
+                 jt.heartbeat_at is null
+                 or jt.heartbeat_at &lt; current_timestamp - (#{heartbeatTimeoutSeconds} * interval '1 second')
+               )
+             )
+           )
+         order by jt.id
+         limit 20
+    </select>
+
+    <select id="countOnlineWorkersForGroup" resultType="java.lang.Long">
+        select count(1)
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and status = 'ONLINE'
+           and (
+             (#{workerGroup} is null and worker_group is null)
+             or worker_group = #{workerGroup}
+           )
+    </select>
+
+    <select id="outboxStatusCountsForInstance" resultType="map">
+        select publish_status as "status",
+               count(1) as "count",
+               min(created_at) as "oldest",
+               max(updated_at) as "newest"
+          from batch.outbox_event
+         where tenant_id = #{tenantId}
+           and aggregate_id = #{jobInstanceId}
+         group by publish_status
+         order by publish_status
     </select>
 </mapper>

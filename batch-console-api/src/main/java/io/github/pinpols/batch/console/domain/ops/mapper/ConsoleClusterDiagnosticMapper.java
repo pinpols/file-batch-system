@@ -43,7 +43,30 @@ public interface ConsoleClusterDiagnosticMapper {
 
   Long countInvalidCapabilityTags(@Param("tenantId") String tenantId);
 
+  Long countJobInstancesByStatuses(
+      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+
+  Map<String, Object> selectJobInstanceSummary(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
   Long countTerminalInstancesWithActiveChildren(@Param("tenantId") String tenantId);
 
   List<Map<String, Object>> workerGroupCapacity(@Param("tenantId") String tenantId);
+
+  List<Map<String, Object>> partitionStatusCounts(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
+  List<Map<String, Object>> taskStatusCounts(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
+  List<Map<String, Object>> activeTaskWorkerIssues(
+      @Param("tenantId") String tenantId,
+      @Param("jobInstanceId") Long jobInstanceId,
+      @Param("heartbeatTimeoutSeconds") long heartbeatTimeoutSeconds);
+
+  Long countOnlineWorkersForGroup(
+      @Param("tenantId") String tenantId, @Param("workerGroup") String workerGroup);
+
+  List<Map<String, Object>> outboxStatusCountsForInstance(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 }
