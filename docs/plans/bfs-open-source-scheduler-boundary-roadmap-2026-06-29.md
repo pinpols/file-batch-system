@@ -845,3 +845,47 @@ trigger
 
 - 针对 `LOCAL target_endpoint sandbox` 与 `EMAIL SMTP timeout` 的兼容性收敛方案。
 - SDK 五语言 adapter conformance;当前矩阵只覆盖平台内置 adapter。
+
+### 2026-06-30 P1-4 第一刀:lineage 最小证据链查询
+
+已做:
+
+- 新增 orchestrator 只读证据链查询:
+  - `GET /internal/orchestrator/lineage/result-versions/{id}?tenantId=...`
+  - `GET /internal/orchestrator/lineage/effective?tenantId=...&businessKey=...`
+- 新增 Console BFF:
+  - `GET /api/console/lineage/result-versions/{id}?tenantId=...`
+  - `GET /api/console/lineage/effective?tenantId=...&businessKey=...`
+- 证据链返回 BFS 管辖热表范围内的最小闭环:
+  - `resultVersion`
+  - `jobInstance`
+  - `pipelineInstances`
+  - `fileRecords`
+  - `dispatchRecords`
+  - `coverage`
+- `coverage` 明确声明:
+  - `scope=BFS_HOT_TABLES`
+  - 命中的 pipeline/file/dispatch 数量。
+  - `payload_ref=file_record:{id}` 是否解析成功。
+  - `knownGaps`:如 job_instance 已归档、file_record 未命中、dispatch receipt 未命中。
+
+边界:
+
+- 本轮不新增 lineage 存储表,不做字段级 lineage、记录级 lineage、外部 catalog 或 OpenLineage facets 扩展。
+- OpenLineage emitter 仍保持 workflow terminal observability 外发;P1-4 证据链是 Console/运维 forensic 查询,两者不混用。
+- 证据链只承诺 BFS 热表;历史归档链路后续可在 archive 查询能力成熟后再扩展。
+
+本地验证:
+
+- `LineageEvidenceServiceTest` 覆盖:
+  - `FILE_RECORD` payload_ref 可解析到 file_record。
+  - pipeline/file/dispatch 证据聚合。
+  - 缺失热表证据时通过 `knownGaps` 暴露,不伪造成完整链。
+  - effective businessKey 入口复用 `ResultVersionQueryService`。
+- `ConsoleLineageEvidenceControllerTest` 覆盖 Console 租户解析、orchestrator 转发和拒绝跨租请求。
+
+还未做:
+
+- 前端 lineage drill-down 页面。
+- archive 冷表证据链补充。
+- OpenLineage 输入/输出 dataset facets 深度集成。
