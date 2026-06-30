@@ -62,6 +62,9 @@ public interface ResultVersionMapper {
   /** 按 (tenantId, id) 反查；console / promote 入口用。 */
   ResultVersionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
+  /** 按 (tenantId, id) 从 archive.result_version_archive 反查；lineage forensic 冷链补证用。 */
+  ResultVersionEntity selectArchivedById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
   /**
    * R7-A3-P1：批量按 (tenantId, ids) 反查；替代 N+1 单条循环（BatchDayReplay materialize 等）。
    *

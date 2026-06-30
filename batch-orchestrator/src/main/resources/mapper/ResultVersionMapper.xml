@@ -133,6 +133,13 @@
           and id = #{id}
     </select>
 
+    <select id="selectArchivedById" resultMap="ResultVersionResultMap">
+        select *
+        from archive.result_version_archive
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
     <!-- R7-A3-P1: 批量按 (tenant, ids) 取，替代 BatchDayReplay materialize N+1。 -->
     <select id="selectByIds" resultMap="ResultVersionResultMap">
         select *

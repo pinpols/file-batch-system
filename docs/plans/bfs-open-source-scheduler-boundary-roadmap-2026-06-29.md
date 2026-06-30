@@ -877,9 +877,9 @@ trigger
 
 边界:
 
-- 本轮不新增 lineage 存储表,不做字段级 lineage、记录级 lineage、外部 catalog 或 OpenLineage facets 扩展。
-- OpenLineage emitter 仍保持 workflow terminal observability 外发;P1-4 证据链是 Console/运维 forensic 查询,两者不混用。
-- 证据链只承诺 BFS 热表;历史归档链路后续可在 archive 查询能力成熟后再扩展。
+- 第一刀不新增 lineage 存储表,不做字段级 lineage、记录级 lineage 或外部 catalog。
+- 第一刀只承诺 BFS 热表;archive 冷表补证在后续小刀独立补齐。
+- Console/运维 forensic 查询与 OpenLineage observability 外发仍是两条链路,不混成一个强事务链路。
 
 本地验证:
 
@@ -889,11 +889,6 @@ trigger
   - 缺失热表证据时通过 `knownGaps` 暴露,不伪造成完整链。
   - effective businessKey 入口复用 `ResultVersionQueryService`。
 - `ConsoleLineageEvidenceControllerTest` 覆盖 Console 租户解析、orchestrator 转发和拒绝跨租请求。
-
-还未做:
-
-- 前端 lineage drill-down 页面。
-- archive 冷表证据链补充。
 
 ### 2026-06-30 P1-4 第二刀:OpenLineage 文件级 dataset facets
 
@@ -919,8 +914,34 @@ trigger
 - `OpenLineageEmitterTest` 覆盖 input/output dataset 分类、namespace/name、`bfsFile` facet。
 - `OpenLineageDatasetMapperXmlTest` 覆盖 mapper XML 可解析。
 
+### 2026-06-30 P1-4 第三刀:lineage archive 冷表补证
+
+已做:
+
+- `GET /api/console/lineage/result-versions/{id}` 的证据链在热表未命中时,回退读取:
+  - `archive.result_version_archive`
+  - `archive.job_instance_archive`
+  - `archive.pipeline_instance_archive`
+  - `archive.file_dispatch_record_archive`
+- `coverage.scope` 命中冷表时返回 `BFS_HOT_AND_ARCHIVE`。
+- `coverage.sources` 标明 `resultVersion/jobInstance/pipelineInstances/fileRecords/dispatchRecords` 各自来源:
+  - `HOT`
+  - `ARCHIVE`
+  - `NONE`
+- `file_record` 仍只查热表;当前没有 `archive.file_record_archive`,缺失时通过 `knownGaps` 明确说明,不伪造成完整冷链。
+
+边界:
+
+- 不新增 archive 表。
+- 不补字段级/记录级 lineage。
+- 不改变 Console path 或响应顶层结构。
+
+本地验证:
+
+- `LineageEvidenceServiceTest` 覆盖 archive result_version/job_instance/pipeline_instance/dispatch fallback 与 `coverage.sources`。
+
 还未做:
 
 - 前端 lineage drill-down 页面。
-- archive 冷表证据链补充。
+- `file_record` archive mirror 设计和迁移。
 - START 事件、节点级血缘、业务表 dataset。

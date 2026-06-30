@@ -68,11 +68,44 @@ class LineageEvidenceServiceTest {
     Map<String, Object> coverage = (Map<String, Object>) evidence.get("coverage");
     assertThat((List<String>) coverage.get("knownGaps"))
         .contains(
-            "job_instance not found or archived outside hot tables",
-            "payload_ref file_record not found",
-            "no related file_record found in hot tables",
-            "no dispatch receipt found in hot tables");
+            "job_instance not found in hot or archive tables",
+            "payload_ref file_record not found in hot tables",
+            "no related file_record found in hot tables; file_record has no archive mirror",
+            "no dispatch receipt found in hot or archive tables");
     assertThat(coverage).containsEntry("payloadFileResolved", false);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void evidenceShouldFallbackToArchiveTables() {
+    ResultVersionEntity version = version(10L, "FILE_RECORD", "file_record:11");
+    when(resultVersionMapper.selectById("ta", 10L)).thenReturn(null);
+    when(resultVersionMapper.selectArchivedById("ta", 10L)).thenReturn(version);
+    when(lineageEvidenceMapper.selectJobInstance("ta", 101L)).thenReturn(null);
+    when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
+        .thenReturn(Map.of("id", 101L, "job_code", "daily"));
+    when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
+    when(lineageEvidenceMapper.selectArchivedPipelineInstances("ta", 101L))
+        .thenReturn(List.of(Map.of("id", 21L, "file_id", 11L)));
+    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
+        .thenReturn(List.of(Map.of("id", 11L, "file_name", "out.csv")));
+    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
+        .thenReturn(List.of());
+    when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
+        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", "SUCCESS")));
+
+    Map<String, Object> evidence = service.evidenceForResultVersion("ta", 10L);
+
+    Map<String, Object> coverage = (Map<String, Object>) evidence.get("coverage");
+    assertThat(coverage).containsEntry("scope", "BFS_HOT_AND_ARCHIVE");
+    Map<String, Object> sources = (Map<String, Object>) coverage.get("sources");
+    assertThat(sources)
+        .containsEntry("resultVersion", "ARCHIVE")
+        .containsEntry("jobInstance", "ARCHIVE")
+        .containsEntry("pipelineInstances", "ARCHIVE")
+        .containsEntry("fileRecords", "HOT")
+        .containsEntry("dispatchRecords", "ARCHIVE");
+    assertThat((List<String>) coverage.get("knownGaps")).isEmpty();
   }
 
   @Test
