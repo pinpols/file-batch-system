@@ -60,6 +60,22 @@ public class ConsoleBatchDayReplayController {
     return responseFactory.forwardOrchestrator(resp);
   }
 
+  @PostMapping("/sessions/preview")
+  public CommonResponse<Map<String, Object>> preview(@RequestBody Map<String, Object> command) {
+    Object bodyTenant = command == null ? null : command.get("tenantId");
+    String resolved = tenantGuard.resolveTenant(bodyTenant == null ? null : bodyTenant.toString());
+    Map<String, Object> sanitized = new LinkedHashMap<>(command == null ? Map.of() : command);
+    sanitized.put("tenantId", resolved);
+    Map<String, Object> resp =
+        proxyClient()
+            .post()
+            .uri("/internal/orchestrator/batch-day-replay/sessions/preview")
+            .body(sanitized)
+            .retrieve()
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
+  }
+
   @PostMapping("/sessions/{sessionId}/approve")
   @Idempotent
   public CommonResponse<Map<String, Object>> approve(

@@ -1222,6 +1222,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/batch-day-replay/sessions/preview:
+    post:
+      tags: [Ops]
+      summary: ADR-020 批次日重放影响预览（只读）
+      description: |-
+        转发到 orchestrator `POST /internal/orchestrator/batch-day-replay/sessions/preview`。
+        复用 submit 的候选解析和 scope 校验，但不创建 session / entry，不触发审批；用于提交前确认会重跑哪些 job、影响哪些 result_version。
+      operationId: previewBatchDayReplayImpact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDayReplaySubmitRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplayPreview'
   /api/console/ops/batch-day-replay/sessions/{sessionId}/approve:
     post:
       tags: [Ops]
@@ -10987,6 +11008,69 @@ components:
         autoApprove:     { type: boolean, description: 'true 直接 RUNNING；false PENDING_APPROVAL（默认）' }
         traceId:         { type: string }
       required: [tenantId, calendarCode, bizDate, scope, reason, requestedBy]
+    BatchDayReplayPreview:
+      type: object
+      description: ADR-020 批次日重放影响预览；只读解析候选，不创建 session。
+      properties:
+        tenantId: { type: string }
+        calendarCode: { type: string }
+        bizDate: { type: string, format: date }
+        scope:
+          type: string
+          enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+        configVersionPolicy:
+          type: string
+          enum: [USE_ORIGINAL_CONFIG, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+        configVersion: { type: integer, format: int32, nullable: true }
+        totalCount: { type: integer, format: int32 }
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchDayReplayPreviewEntry'
+        resultVersionImpacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchDayReplayResultVersionImpact'
+        warnings:
+          type: array
+          items: { type: string }
+      required: [tenantId, calendarCode, bizDate, scope, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, warnings]
+    BatchDayReplayPreviewEntry:
+      type: object
+      properties:
+        jobCode: { type: string }
+        sourceInstanceId: { type: integer, format: int64, nullable: true }
+        resultVersionId: { type: integer, format: int64, nullable: true }
+        action:
+          type: string
+          enum: [RERUN_INSTANCE, PROMOTE_RESULT_VERSION]
+        businessKey: { type: string }
+      required: [jobCode, action, businessKey]
+    BatchDayReplayResultVersionImpact:
+      type: object
+      properties:
+        businessKey: { type: string }
+        sourceInstanceId: { type: integer, format: int64, nullable: true }
+        resultVersionId: { type: integer, format: int64, nullable: true }
+        action:
+          type: string
+          enum: [CREATE_NEW_RESULT_VERSION, PROMOTE_EXISTING_VERSION]
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+      required: [businessKey, action, resultPolicy]
+    CommonResponseBatchDayReplayPreview:
+      type: object
+      properties:
+        success: { type: boolean }
+        code: { type: string }
+        message: { type: string }
+        data:
+          $ref: '#/components/schemas/BatchDayReplayPreview'
+      required: [success, code, message, data]
     DryRunPlanRequest:
       type: object
       description: ADR-026 演练计划请求

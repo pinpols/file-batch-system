@@ -147,6 +147,38 @@ public class BatchDayReplayService {
     return persisted;
   }
 
+  /** 只读预览 replay 影响范围：复用 submit 的候选解析,但不写 session/entry、不触发审批。 */
+  @Transactional(readOnly = true)
+  public BatchDayReplayPreviewResponse preview(BatchDayReplaySubmitCommand command) {
+    validateCommand(command);
+    Instant now = dateTimeSupport.nowInstant();
+    String scope = normalizeScope(command.scope());
+    List<BatchDayReplayEntryEntity> entries = materializeEntries(command, scope, now);
+    String resultPolicy = defaultIfBlank(command.resultPolicy(), "CREATE_NEW_VERSION");
+    String configVersionPolicy =
+        defaultIfBlank(command.configVersionPolicy(), "USE_ORIGINAL_CONFIG");
+    Map<Long, String> versionBusinessKeys = loadVersionBusinessKeys(command, scope);
+    List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries =
+        entries.stream()
+            .map(entry -> toPreviewEntry(command, scope, entry, versionBusinessKeys))
+            .toList();
+    List<BatchDayReplayPreviewResponse.ResultVersionImpact> impacts =
+        previewEntries.stream().map(entry -> toResultVersionImpact(entry, resultPolicy)).toList();
+    List<String> warnings = entries.isEmpty() ? List.of("NO_CANDIDATES") : List.of();
+    return new BatchDayReplayPreviewResponse(
+        command.tenantId(),
+        command.calendarCode(),
+        command.bizDate(),
+        scope,
+        resultPolicy,
+        configVersionPolicy,
+        command.configVersion(),
+        entries.size(),
+        previewEntries,
+        impacts,
+        warnings);
+  }
+
   /** PENDING_APPROVAL → RUNNING；记录 approver。 */
   @Transactional
   public BatchDayReplaySessionEntity approve(String tenantId, Long sessionId, String approver) {
@@ -394,6 +426,48 @@ public class BatchDayReplayService {
       payload.put("versionIds", command.versionIds());
     }
     return payload.isEmpty() ? null : JsonUtils.toJson(payload);
+  }
+
+  private BatchDayReplayPreviewResponse.PreviewEntry toPreviewEntry(
+      BatchDayReplaySubmitCommand command,
+      String scope,
+      BatchDayReplayEntryEntity entry,
+      Map<Long, String> versionBusinessKeys) {
+    String action = SCOPE_OUTPUTS_ONLY.equals(scope) ? "PROMOTE_RESULT_VERSION" : "RERUN_INSTANCE";
+    String businessKey =
+        SCOPE_OUTPUTS_ONLY.equals(scope)
+            ? versionBusinessKeys.getOrDefault(entry.resultVersionId(), "")
+            : "job:" + entry.jobCode() + ":" + command.bizDate();
+    return new BatchDayReplayPreviewResponse.PreviewEntry(
+        entry.jobCode(), entry.sourceInstanceId(), entry.resultVersionId(), action, businessKey);
+  }
+
+  private BatchDayReplayPreviewResponse.ResultVersionImpact toResultVersionImpact(
+      BatchDayReplayPreviewResponse.PreviewEntry entry, String resultPolicy) {
+    String action =
+        entry.resultVersionId() == null ? "CREATE_NEW_RESULT_VERSION" : "PROMOTE_EXISTING_VERSION";
+    return new BatchDayReplayPreviewResponse.ResultVersionImpact(
+        entry.businessKey(),
+        entry.sourceInstanceId(),
+        entry.resultVersionId(),
+        action,
+        resultPolicy);
+  }
+
+  private Map<Long, String> loadVersionBusinessKeys(
+      BatchDayReplaySubmitCommand command, String scope) {
+    if (!SCOPE_OUTPUTS_ONLY.equals(scope)
+        || command.versionIds() == null
+        || command.versionIds().isEmpty()) {
+      return Map.of();
+    }
+    List<ResultVersionEntity> versions =
+        resultVersionMapper.selectByIds(command.tenantId(), command.versionIds());
+    Map<Long, String> businessKeys = new HashMap<>(versions.size() * 2);
+    for (ResultVersionEntity version : versions) {
+      businessKeys.put(version.id(), version.businessKey());
+    }
+    return businessKeys;
   }
 
   private boolean isCancellable(String status) {

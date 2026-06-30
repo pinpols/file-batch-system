@@ -707,3 +707,24 @@ trigger
 - 前端聚合页展示 findings 并一跳到实例/Outbox/Worker 详情。
 - 诊断结果接入告警 drill-down。
 - replay impact preview。
+
+### 2026-06-30 P1-1 第一刀:replay impact preview
+
+已做:
+
+- 新增只读 `POST /api/console/ops/batch-day-replay/sessions/preview`,请求体复用提交命令。
+- preview 复用 orchestrator `BatchDayReplayService` 的 scope 校验与候选解析,但不写 `batch_day_replay_session` / `batch_day_replay_entry`,不触发审批。
+- 响应返回:
+  - `entries`:将要重跑的 job/source instance,或 OUTPUTS_ONLY 将 promote 的 result_version。
+  - `resultVersionImpacts`:区分 `CREATE_NEW_RESULT_VERSION` 与 `PROMOTE_EXISTING_VERSION`。
+  - `warnings`:无候选时返回 `NO_CANDIDATES`,提交路径仍保持无候选即拒绝。
+- 修正 replay entry 唯一键:旧 `(session_id, tenant_id, job_code)` 会吞掉同 session 同 jobCode 多来源 entry;新约束按 `source_instance_id` / `result_version_id` 做 partial unique,保证 preview 与真实物化范围一致。
+
+本地验证:
+
+- `BatchDayReplayServiceTest` 覆盖 preview 不写 session/entry、无候选 warning、OUTPUTS_ONLY promote impact。
+
+还未做:
+
+- Console 前端接入确认页。
+- replay impact 对下游 asset partition / dispatch 投递对象的二级影响展开。
