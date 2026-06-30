@@ -5,8 +5,8 @@ import java.time.LocalDate;
 /**
  * BFS 最小 asset partition 读模型。
  *
- * <p>当前第一阶段不新增物理表，直接把 {@code result_version.business_key=job:{jobCode}:{bizDate}} 投影为 asset
- * partition。后续若引入 {@code data_asset/asset_partition} 表，本 record 的调用契约不变。
+ * <p>物化表 {@code data_asset/asset_partition} 是查询优化和 readiness 统一口径；权威版本链仍是 {@code
+ * result_version.business_key=job:{jobCode}:{bizDate}} 的当前 EFFECTIVE 行。
  */
 public record AssetPartitionSnapshot(
     String tenantId,

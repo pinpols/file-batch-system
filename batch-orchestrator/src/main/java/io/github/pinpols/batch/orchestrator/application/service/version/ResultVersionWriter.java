@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityCheckExecutor;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -51,6 +52,7 @@ public class ResultVersionWriter {
 
   private final ResultVersionMapper resultVersionMapper;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final AssetPartitionService assetPartitionService;
 
   /**
    * ADR-021 DQ gate 执行器（可选注入）：BLOCKER 失败 → 强制 promotion_policy=MANUAL_APPROVAL；缺省 / NO_RULES →
@@ -151,6 +153,12 @@ public class ResultVersionWriter {
             .updatedAt(now)
             .build();
     resultVersionMapper.insert(newVersion);
+    if (STATUS_EFFECTIVE.equals(status)) {
+      ResultVersionEntity persisted =
+          resultVersionMapper.selectByJobInstanceId(tenantId, instance.getId());
+      assetPartitionService.materializeEffectiveJobPartition(
+          instance, persisted == null ? newVersion : persisted);
+    }
 
     log.info(
         "result_version written: tenantId={}, businessKey={}, versionNo={}, status={},"

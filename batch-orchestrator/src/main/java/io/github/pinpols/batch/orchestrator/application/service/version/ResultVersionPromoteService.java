@@ -4,7 +4,10 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ResultVersionPromoteService {
 
   private final ResultVersionMapper resultVersionMapper;
+  private final JobInstanceMapper jobInstanceMapper;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final AssetPartitionService assetPartitionService;
 
   /** 把 PENDING 版本推到 EFFECTIVE。同事务内把同 business_key 旧 EFFECTIVE 推到 SUPERSEDED。 */
   @Transactional
@@ -55,13 +60,15 @@ public class ResultVersionPromoteService {
               + versionId
               + ", expected status=PENDING");
     }
+    ResultVersionEntity promoted = loadOrThrow(tenantId, versionId);
+    materializePromotedVersion(promoted);
     log.info(
         "result_version promoted: tenantId={}, id={}, businessKey={}, versionNo={}",
         tenantId,
         versionId,
         target.businessKey(),
         target.versionNo());
-    return loadOrThrow(tenantId, versionId);
+    return promoted;
   }
 
   /** 拒绝 PENDING 版本（直接 ARCHIVED），不影响其它版本。 */
@@ -95,5 +102,25 @@ public class ResultVersionPromoteService {
       throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
     }
     return row;
+  }
+
+  private void materializePromotedVersion(ResultVersionEntity promoted) {
+    if (promoted == null
+        || promoted.jobInstanceId() == null
+        || !"EFFECTIVE".equals(promoted.status())) {
+      return;
+    }
+    JobInstanceEntity instance =
+        jobInstanceMapper.selectById(promoted.tenantId(), promoted.jobInstanceId());
+    if (instance == null) {
+      log.warn(
+          "asset partition materialization skipped after promote: job_instance missing,"
+              + " tenantId={}, resultVersionId={}, jobInstanceId={}",
+          promoted.tenantId(),
+          promoted.id(),
+          promoted.jobInstanceId());
+      return;
+    }
+    assetPartitionService.materializeEffectiveJobPartition(instance, promoted);
   }
 }

@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
@@ -27,6 +28,7 @@ import org.mockito.ArgumentCaptor;
 class ResultVersionWriterTest {
 
   private ResultVersionMapper mapper;
+  private AssetPartitionService assetPartitionService;
   private ResultVersionWriter writer;
 
   private io.github.pinpols.batch.orchestrator.application.service.dataquality
@@ -36,6 +38,7 @@ class ResultVersionWriterTest {
   @BeforeEach
   void setUp() {
     mapper = mock(ResultVersionMapper.class);
+    assetPartitionService = mock(AssetPartitionService.class);
     BatchDateTimeSupport dateTimeSupport =
         new BatchDateTimeSupport(
             Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
@@ -53,7 +56,7 @@ class ResultVersionWriterTest {
         .thenReturn(
             io.github.pinpols.batch.orchestrator.application.service.dataquality
                 .DataQualityGateOutcome.noRules());
-    writer = new ResultVersionWriter(mapper, dateTimeSupport, dqProvider);
+    writer = new ResultVersionWriter(mapper, dateTimeSupport, assetPartitionService, dqProvider);
   }
 
   @Test
@@ -76,6 +79,7 @@ class ResultVersionWriterTest {
     assertThat(inserted.promotionPolicy()).isEqualTo("AUTO_LATEST");
     verify(mapper).lockBusinessKey("t1", "job:DAILY_PNL:2026-05-04");
     verify(mapper).supersedePriorEffective(eq("t1"), eq("job:DAILY_PNL:2026-05-04"), any());
+    verify(assetPartitionService).materializeEffectiveJobPartition(eq(instance), any());
   }
 
   @Test
@@ -116,6 +120,7 @@ class ResultVersionWriterTest {
     assertThat(captor.getValue().promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
     verify(mapper).lockBusinessKey("t1", "job:DAILY_PNL:2026-05-04");
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test
@@ -149,6 +154,7 @@ class ResultVersionWriterTest {
     verify(mapper).lockBusinessKey("t1", "job:JOB_A:2026-05-04");
     verify(mapper, never()).insert(any());
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test
@@ -209,6 +215,7 @@ class ResultVersionWriterTest {
     assertThat(captor.getValue().versionNo()).isEqualTo(4);
     verify(mapper).lockBusinessKey("t1", "job:DAILY_PNL:2026-05-04");
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test
@@ -241,6 +248,7 @@ class ResultVersionWriterTest {
     assertThat(captor.getValue().promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
     assertThat(captor.getValue().dqGateStatus()).isEqualTo("BLOCKED");
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test
