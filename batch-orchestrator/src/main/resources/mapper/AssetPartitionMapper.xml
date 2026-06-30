@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper">
+
+    <resultMap id="AssetPartitionSnapshotResultMap"
+               type="io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot">
+        <constructor>
+            <arg column="tenant_id"        javaType="java.lang.String"/>
+            <arg column="asset_code"       javaType="java.lang.String"/>
+            <arg column="biz_date"         javaType="java.time.LocalDate"/>
+            <arg column="partition_key"    javaType="java.lang.String"/>
+            <arg column="business_key"     javaType="java.lang.String"/>
+            <arg column="freshness_status" javaType="java.lang.String"/>
+            <arg column="version_no"       javaType="java.lang.Integer"/>
+            <arg column="job_instance_id"  javaType="java.lang.Long"/>
+            <arg column="payload_storage"  javaType="java.lang.String"/>
+            <arg column="payload_json"     javaType="java.lang.String"/>
+            <arg column="payload_ref"      javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="upsertDataAsset">
+        insert into batch.data_asset (
+            tenant_id,
+            asset_code,
+            asset_type,
+            display_name,
+            owner_job_code
+        ) values (
+            #{tenantId},
+            #{assetCode},
+            #{assetType},
+            #{displayName},
+            #{ownerJobCode}
+        )
+        on conflict (tenant_id, asset_code, asset_type)
+        do update set
+            display_name   = excluded.display_name,
+            owner_job_code = excluded.owner_job_code,
+            updated_at     = current_timestamp
+    </insert>
+
+    <select id="selectDataAssetId" resultType="java.lang.Long">
+        select id
+        from batch.data_asset
+        where tenant_id = #{tenantId}
+          and asset_code = #{assetCode}
+          and asset_type = #{assetType}
+    </select>
+
+    <insert id="upsertEffectiveJobPartition">
+        insert into batch.asset_partition (
+            tenant_id,
+            asset_id,
+            asset_code,
+            partition_key,
+            biz_date,
+            freshness_status,
+            result_version_id,
+            business_key,
+            job_instance_id,
+            effective_at,
+            payload_storage,
+            payload_ref
+        ) values (
+            #{tenantId},
+            #{assetId},
+            #{assetCode},
+            #{partitionKey},
+            #{bizDate},
+            'EFFECTIVE',
+            #{resultVersionId},
+            #{businessKey},
+            #{jobInstanceId},
+            #{effectiveAt},
+            #{payloadStorage},
+            #{payloadRef}
+        )
+        on conflict (tenant_id, asset_code, partition_key)
+        do update set
+            asset_id           = excluded.asset_id,
+            biz_date           = excluded.biz_date,
+            freshness_status   = excluded.freshness_status,
+            result_version_id  = excluded.result_version_id,
+            business_key       = excluded.business_key,
+            job_instance_id    = excluded.job_instance_id,
+            effective_at       = excluded.effective_at,
+            payload_storage    = excluded.payload_storage,
+            payload_ref        = excluded.payload_ref,
+            updated_at         = current_timestamp
+    </insert>
+
+    <select id="selectEffectiveJobPartition" resultMap="AssetPartitionSnapshotResultMap">
+        select
+            ap.tenant_id,
+            ap.asset_code,
+            ap.biz_date,
+            ap.partition_key,
+            ap.business_key,
+            ap.freshness_status,
+            rv.version_no,
+            ap.job_instance_id,
+            ap.payload_storage,
+            rv.payload_json::text as payload_json,
+            ap.payload_ref
+        from batch.asset_partition ap
+        left join batch.result_version rv
+          on rv.tenant_id = ap.tenant_id
+         and rv.id = ap.result_version_id
+        where ap.tenant_id = #{tenantId}
+          and ap.asset_code = #{assetCode}
+          and ap.partition_key = #{partitionKey}
+          and ap.freshness_status = 'EFFECTIVE'
+        limit 1
+    </select>
+</mapper>

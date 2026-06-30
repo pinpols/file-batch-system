@@ -632,3 +632,29 @@ trigger
 - 物理 `data_asset / asset_partition` 表与 materialization event。
 - freshness policy: `expectedBy / staleAfter / missing alert`。
 - Console asset partition 查询页和 readiness drill-down。
+
+### 2026-06-30 P0-3 第二刀:asset partition 物化读模型
+
+已做:
+
+- 新增 `batch.data_asset` / `batch.asset_partition` 最小物理表:
+  - `data_asset` 当前只允许 `asset_type=JOB`。
+  - `asset_partition` 当前只物化 `freshness_status=EFFECTIVE`。
+  - 唯一键 `(tenant_id, asset_code, partition_key)` 保证同一 JOB 批次分区只有一条当前新鲜度记录。
+- `ResultVersionWriter` 在 AUTO_LATEST 成功写入 `result_version.status=EFFECTIVE` 后刷新 asset partition。
+- `ResultVersionPromoteService` 在人工/OUTPUTS_ONLY promote 成功后刷新 asset partition。
+- `PENDING / DRY_RUN / FAILED / CANCELLED / TERMINATED` 不写入 asset partition,避免下游误消费未生效结果。
+- `AssetPartitionService` 查询优先读物化表；历史旧数据或迁移前未物化数据回退到 `result_version` 当前 EFFECTIVE 投影。
+- 独立文档见 `docs/design/asset-partition-readiness.md`。
+
+本地验证:
+
+- `AssetPartitionServiceTest` 覆盖物化表优先、result_version fallback、EFFECTIVE 物化和非 EFFECTIVE 跳过。
+- `ResultVersionWriterTest` 覆盖 EFFECTIVE 写入触发物化,`PENDING / DRY_RUN / 幂等重复 report` 不触发物化。
+- `ResultVersionPromoteServiceTest` 覆盖人工 promote 后触发物化,失败/拒绝路径不触发。
+
+还未做:
+
+- freshness policy: `expectedBy / staleAfter / missing alert`。
+- Console asset partition 查询页和 readiness drill-down。
+- 文件资产/表资产类型扩展；当前边界仍是 JOB 产物 readiness。

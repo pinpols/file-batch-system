@@ -13,9 +13,13 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Clock;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -23,15 +27,21 @@ import org.springframework.dao.OptimisticLockingFailureException;
 class ResultVersionPromoteServiceTest {
 
   private ResultVersionMapper mapper;
+  private JobInstanceMapper jobInstanceMapper;
+  private AssetPartitionService assetPartitionService;
   private ResultVersionPromoteService service;
 
   @BeforeEach
   void setUp() {
     mapper = mock(ResultVersionMapper.class);
+    jobInstanceMapper = mock(JobInstanceMapper.class);
+    assetPartitionService = mock(AssetPartitionService.class);
     BatchDateTimeSupport dateTimeSupport =
         new BatchDateTimeSupport(
             Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    service = new ResultVersionPromoteService(mapper, dateTimeSupport);
+    service =
+        new ResultVersionPromoteService(
+            mapper, jobInstanceMapper, dateTimeSupport, assetPartitionService);
   }
 
   @Test
@@ -50,16 +60,24 @@ class ResultVersionPromoteServiceTest {
             .tenantId("t1")
             .businessKey("job:JOB:2026-05-04")
             .versionNo(2)
+            .jobInstanceId(200L)
             .status("EFFECTIVE")
             .build();
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setTenantId("t1");
+    instance.setId(200L);
+    instance.setJobCode("JOB");
+    instance.setBizDate(LocalDate.of(2026, 5, 4));
     when(mapper.selectById("t1", 2L)).thenReturn(pending, promoted);
     when(mapper.promoteToEffective(eq("t1"), eq(2L), any())).thenReturn(1);
+    when(jobInstanceMapper.selectById("t1", 200L)).thenReturn(instance);
 
     var result = service.promote("t1", 2L);
 
     assertThat(result.status()).isEqualTo("EFFECTIVE");
     verify(mapper).supersedePriorEffective(eq("t1"), eq("job:JOB:2026-05-04"), any());
     verify(mapper).promoteToEffective(eq("t1"), eq(2L), any());
+    verify(assetPartitionService).materializeEffectiveJobPartition(instance, promoted);
   }
 
   @Test
@@ -76,6 +94,7 @@ class ResultVersionPromoteServiceTest {
 
     assertThatThrownBy(() -> service.promote("t1", 1L)).isInstanceOf(BizException.class);
     verify(mapper, never()).promoteToEffective(eq("t1"), eq(1L), any());
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test
@@ -92,6 +111,7 @@ class ResultVersionPromoteServiceTest {
 
     assertThatThrownBy(() -> service.promote("t1", 3L))
         .isInstanceOf(OptimisticLockingFailureException.class);
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test
@@ -117,6 +137,7 @@ class ResultVersionPromoteServiceTest {
 
     assertThat(result.status()).isEqualTo("ARCHIVED");
     verify(mapper, never()).supersedePriorEffective(eq("t1"), eq("job:JOB:2026-05-04"), any());
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test
