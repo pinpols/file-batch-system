@@ -1344,6 +1344,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObjectArray'
+  /api/console/asset-partitions/readiness:
+    get:
+      tags: [Ops]
+      summary: 查询作业账期的资产分区就绪明细
+      description: |-
+        Console BFF 转发到 orchestrator `GET /internal/readiness/job`。
+        返回 readiness 裁决及其命中的 EFFECTIVE asset_partition 明细，用于前端 drill-down 展示
+        `ready/reason/assetCode/bizDate/partitionKey/businessKey/freshnessStatus/versionNo/jobInstanceId/payloadStorage/payloadRef`。
+        Console 只负责租户边界校验与统一响应包装，裁决语义以 orchestrator 为准。
+      operationId: getAssetPartitionReadiness
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: jobCode
+          required: true
+          schema: { type: string }
+        - in: query
+          name: bizDate
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseAssetPartitionReadiness'
   /api/console/result-versions/effective:
     get:
       tags: [Ops]
@@ -10027,6 +10057,63 @@ components:
           properties:
             data:
               nullable: true
+    AssetPartitionReadiness:
+      type: object
+      description: 作业账期 readiness 裁决及命中的 EFFECTIVE asset_partition 快照。
+      required: [ready]
+      properties:
+        ready:
+          type: boolean
+          description: 该 jobCode 在 bizDate 是否满足依赖就绪条件。
+        reason:
+          type: string
+          description: 稳定原因码，例如 READY / UPSTREAM_NOT_READY。
+        assetCode:
+          type: string
+          nullable: true
+          description: 命中的资产编码；未就绪或尚未产出时为空。
+        bizDate:
+          type: string
+          format: date
+          nullable: true
+          description: 被检查的业务日期。
+        partitionKey:
+          type: string
+          nullable: true
+          description: 资产分区键，通常为 bizDate 或账期派生键。
+        businessKey:
+          type: string
+          nullable: true
+          description: result_version 业务键，例如 job:{jobCode}:{bizDate}。
+        freshnessStatus:
+          type: string
+          nullable: true
+          description: asset_partition 当前新鲜度状态，EFFECTIVE 表示可被下游读取。
+        versionNo:
+          type: integer
+          format: int32
+          nullable: true
+          description: 命中的 result_version 版本号。
+        jobInstanceId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 产出该 EFFECTIVE 分区的 job_instance id。
+        payloadStorage:
+          type: string
+          nullable: true
+          description: payload 存储类型，例如 JSON / OBJECT_STORE / TABLE。
+        payloadRef:
+          type: string
+          nullable: true
+          description: payload 引用地址或对象键。
+    CommonResponseAssetPartitionReadiness:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AssetPartitionReadiness'
     CommonResponseFileTemplateMappingDraftResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
