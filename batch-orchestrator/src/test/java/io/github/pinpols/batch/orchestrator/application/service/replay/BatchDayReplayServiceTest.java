@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
@@ -87,6 +88,57 @@ class BatchDayReplayServiceTest {
 
     assertThat(result.status()).isEqualTo("RUNNING");
     verify(entryMapper).insertBatch(anyList());
+  }
+
+  @Test
+  void previewAllFailedScopeReturnsImpactWithoutWritingSession() {
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+        .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
+
+    BatchDayReplayPreviewResponse result =
+        service.preview(
+            BatchDayReplaySubmitCommand.builder()
+                .tenantId("t1")
+                .calendarCode("CAL")
+                .bizDate(LocalDate.of(2026, 5, 4))
+                .scope("ALL_FAILED")
+                .resultPolicy("CREATE_NEW_VERSION")
+                .configVersionPolicy("USE_ORIGINAL_CONFIG")
+                .reason("upstream backfill")
+                .requestedBy("ops")
+                .build());
+
+    assertThat(result.totalCount()).isEqualTo(2);
+    assertThat(result.entries())
+        .extracting(BatchDayReplayPreviewResponse.PreviewEntry::action)
+        .containsOnly("RERUN_INSTANCE");
+    assertThat(result.resultVersionImpacts())
+        .extracting(BatchDayReplayPreviewResponse.ResultVersionImpact::action)
+        .containsOnly("CREATE_NEW_RESULT_VERSION");
+    verifyNoInteractions(sessionMapper, entryMapper);
+  }
+
+  @Test
+  void previewWithoutCandidatesReturnsWarningInsteadOfCreatingEmptySession() {
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+        .thenReturn(List.of());
+
+    BatchDayReplayPreviewResponse result =
+        service.preview(
+            BatchDayReplaySubmitCommand.builder()
+                .tenantId("t1")
+                .calendarCode("CAL")
+                .bizDate(LocalDate.of(2026, 5, 4))
+                .scope("ALL_FAILED")
+                .reason("precheck")
+                .requestedBy("ops")
+                .build());
+
+    assertThat(result.totalCount()).isZero();
+    assertThat(result.warnings()).containsExactly("NO_CANDIDATES");
+    verifyNoInteractions(sessionMapper, entryMapper);
   }
 
   @Test
@@ -179,6 +231,37 @@ class BatchDayReplayServiceTest {
     verify(entryMapper).insertBatch(anyList());
     verify(jobInstanceMapper, never())
         .selectBatchDayCandidates(anyString(), anyString(), any(), anyList(), anyList());
+  }
+
+  @Test
+  void previewOutputsOnlyShowsPromotedResultVersions() {
+    when(resultVersionMapper.selectByIds(eq("t1"), any()))
+        .thenReturn(List.of(resultVersion(11L, "job:JOB_A:2026-05-04", 100L)));
+
+    BatchDayReplayPreviewResponse result =
+        service.preview(
+            BatchDayReplaySubmitCommand.builder()
+                .tenantId("t1")
+                .calendarCode("CAL")
+                .bizDate(LocalDate.of(2026, 5, 4))
+                .scope("OUTPUTS_ONLY")
+                .versionIds(List.of(11L))
+                .reason("regulatory restate")
+                .requestedBy("ops")
+                .build());
+
+    assertThat(result.entries())
+        .singleElement()
+        .satisfies(
+            entry -> {
+              assertThat(entry.action()).isEqualTo("PROMOTE_RESULT_VERSION");
+              assertThat(entry.resultVersionId()).isEqualTo(11L);
+            });
+    assertThat(result.resultVersionImpacts())
+        .singleElement()
+        .extracting(BatchDayReplayPreviewResponse.ResultVersionImpact::action)
+        .isEqualTo("PROMOTE_EXISTING_VERSION");
+    verifyNoInteractions(sessionMapper, entryMapper);
   }
 
   @Test

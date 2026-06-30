@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayPreviewResponse;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplaySubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
@@ -36,6 +37,12 @@ public class BatchDayReplayController {
   public CommonResponse<BatchDayReplaySessionEntity> submit(
       @RequestBody BatchDayReplaySubmitCommand command) {
     return CommonResponse.success(replayService.submit(command));
+  }
+
+  @PostMapping("/sessions/preview")
+  public CommonResponse<BatchDayReplayPreviewResponse> preview(
+      @RequestBody BatchDayReplaySubmitCommand command) {
+    return CommonResponse.success(replayService.preview(command));
   }
 
   @PostMapping("/sessions/{sessionId}/approve")

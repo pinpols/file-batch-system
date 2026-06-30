@@ -5,6 +5,8 @@ info:
   x-last-updated: "2026-06-30"
   x-changelog:
     - date: "2026-06-30"
+      summary: "[Batch Day Replay] 登记 /internal/orchestrator/batch-day-replay/sessions 与 /sessions/preview,供 Console BFF 提交和只读影响预览。"
+    - date: "2026-06-30"
       summary: "[Readiness] 登记 /internal/readiness/job,响应在 ready/reason 兼容字段之外追加 asset partition 与 result_version 明细。"
     - date: "2026-06-09"
       summary: "[File Governance] 补充 APP_MANAGED 上传会话与确认到达 internal-only 端点,供 console BFF 走对象存储托管上传。"
@@ -34,6 +36,8 @@ tags:
     description: Console BFF 调用的内部文件治理接口(`FileGovernanceController`)
   - name: readiness
     description: Trigger 调用的上游 asset partition 就绪查询(`OrchestratorReadinessController`)
+  - name: batch-day-replay
+    description: Console BFF 调用的批次日重放内部接口(`BatchDayReplayController`)
 
 paths:
   # ─── x-protocol-stability 含义 ────────────────────────────────────────────────
@@ -525,6 +529,53 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '5XX': {$ref: '#/components/responses/ServerError'}
 
+  /internal/orchestrator/batch-day-replay/sessions:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 提交批次日重放 session
+      operationId: submitBatchDayReplayInternal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDayReplaySubmitCommand'
+      responses:
+        '200':
+          description: 创建成功;返回 CommonResponse envelope, data 为 session 投影
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/batch-day-replay/sessions/preview:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 只读预览批次日重放影响范围
+      operationId: previewBatchDayReplayImpactInternal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDayReplaySubmitCommand'
+      responses:
+        '200':
+          description: 预览成功;不创建 session / entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplayPreview'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
 components:
   responses:
     Unauthorized:
@@ -559,6 +610,112 @@ components:
             $ref: '#/components/schemas/ErrorBody'
 
   schemas:
+    CommonResponseObject:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          type: object
+          additionalProperties: true
+      required: [success, code, message]
+
+    CommonResponseBatchDayReplayPreview:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          $ref: '#/components/schemas/BatchDayReplayPreview'
+      required: [success, code, message, data]
+
+    BatchDayReplaySubmitCommand:
+      type: object
+      description: ADR-020 批次日重放提交/预览命令。
+      properties:
+        tenantId: {type: string}
+        calendarCode: {type: string}
+        bizDate: {type: string, format: date}
+        scope:
+          type: string
+          enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
+        jobCodes:
+          type: array
+          items: {type: string}
+          description: SUBSET_JOB_CODES 时必填。
+        versionIds:
+          type: array
+          items: {type: integer, format: int64}
+          description: OUTPUTS_ONLY 时必填。
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+        configVersionPolicy:
+          type: string
+          enum: [USE_ORIGINAL_CONFIG, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+        configVersion: {type: integer, format: int32}
+        reason: {type: string}
+        requestedBy: {type: string}
+        autoApprove: {type: boolean}
+        traceId: {type: string}
+      required: [tenantId, calendarCode, bizDate, scope, reason, requestedBy]
+
+    BatchDayReplayPreview:
+      type: object
+      properties:
+        tenantId: {type: string}
+        calendarCode: {type: string}
+        bizDate: {type: string, format: date}
+        scope:
+          type: string
+          enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+        configVersionPolicy:
+          type: string
+          enum: [USE_ORIGINAL_CONFIG, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+        configVersion: {type: integer, format: int32, nullable: true}
+        totalCount: {type: integer, format: int32}
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/BatchDayReplayPreviewEntry'}
+        resultVersionImpacts:
+          type: array
+          items: {$ref: '#/components/schemas/BatchDayReplayResultVersionImpact'}
+        warnings:
+          type: array
+          items: {type: string}
+      required: [tenantId, calendarCode, bizDate, scope, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, warnings]
+
+    BatchDayReplayPreviewEntry:
+      type: object
+      properties:
+        jobCode: {type: string}
+        sourceInstanceId: {type: integer, format: int64, nullable: true}
+        resultVersionId: {type: integer, format: int64, nullable: true}
+        action:
+          type: string
+          enum: [RERUN_INSTANCE, PROMOTE_RESULT_VERSION]
+        businessKey: {type: string}
+      required: [jobCode, action, businessKey]
+
+    BatchDayReplayResultVersionImpact:
+      type: object
+      properties:
+        businessKey: {type: string}
+        sourceInstanceId: {type: integer, format: int64, nullable: true}
+        resultVersionId: {type: integer, format: int64, nullable: true}
+        action:
+          type: string
+          enum: [CREATE_NEW_RESULT_VERSION, PROMOTE_EXISTING_VERSION]
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+      required: [businessKey, action, resultPolicy]
+
     WorkerHeartbeatDto:
       type: object
       description: 同一 schema 用于 register / heartbeat / deactivate / updateStatus

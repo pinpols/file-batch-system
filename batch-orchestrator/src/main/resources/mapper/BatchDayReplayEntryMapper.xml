@@ -33,7 +33,7 @@
             #{status}, #{failureReason}, #{startedAt}, #{finishedAt}, #{resultVersionId},
             #{createdAt}, #{updatedAt}
         )
-        on conflict (session_id, tenant_id, job_code) do nothing
+        on conflict do nothing
     </insert>
 
     <insert id="insertBatch" parameterType="java.util.List">
@@ -49,7 +49,7 @@
                 #{r.createdAt}, #{r.updatedAt}
             )
         </foreach>
-        on conflict (session_id, tenant_id, job_code) do nothing
+        on conflict do nothing
     </insert>
 
     <select id="selectBySessionId" resultMap="ReplayEntryResultMap">
