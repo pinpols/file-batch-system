@@ -728,3 +728,42 @@ trigger
 
 - Console 前端接入确认页。
 - replay impact 对下游 asset partition / dispatch 投递对象的二级影响展开。
+
+### 2026-06-30 P1-2 第一刀:freshness policy + alert
+
+已做:
+
+- 新增 `batch.asset_freshness_policy` 最小策略表,当前只支持 `asset_type=JOB`。
+- 策略字段覆盖:
+  - `expected_by_local_time`
+  - `timezone`
+  - `stale_after_seconds`
+  - `lookback_days`
+  - `severity`
+  - `enabled`
+- 新增 orchestrator 定时扫描器,受 `batch.asset-freshness.enabled / scan-interval-millis / batch-limit` 控制,并接入 graceful shutdown drain。
+- 扫描器只读 `AssetPartitionService.isJobPartitionReady`,即只认当前 EFFECTIVE asset partition:
+  - expectedBy 之前不动作。
+  - expectedBy 已过但宽限期未过,写 `ASSET_FRESHNESS_MISSING`。
+  - expectedBy + staleAfter 已过仍无 EFFECTIVE,写 `ASSET_FRESHNESS_STALE`。
+  - 已有 EFFECTIVE,不写告警。
+- 告警 detail 包含 `tenantId/assetCode/assetType/bizDate/expectedAt/staleAt/breachType/policyId`,resourceKey 固定为 `tenantId:assetCode:bizDate`。
+- 不改变 `asset_partition.freshness_status` 语义;该字段仍只表达 EFFECTIVE 可消费状态。
+- 不自动 close 旧告警。平台当前告警模型没有自动恢复关闭契约,本轮避免误关运维告警。
+
+本地验证:
+
+- `AssetFreshnessPolicyServiceTest` 覆盖:
+  - expectedBy 后发 MISSING。
+  - staleAfter 后发 STALE 且 severity 至少 ERROR。
+  - expectedBy 前不查 readiness。
+  - 已 ready 的 partition 不告警。
+  - lookbackDays 可覆盖多账期。
+  - policyLimit 非法时短路。
+
+还未做:
+
+- Console policy CRUD 与 asset freshness 聚合页。
+- Prometheus 专用规则与告警路由模板补充;当前先复用 `alert_event` 查询/升级链路。
+- 告警自动恢复关闭语义;需要先设计 `alert_event` 的 recovery contract,不能本轮局部硬关。
+- FILE/TABLE asset freshness 扩展;当前仍限定 JOB 产物。

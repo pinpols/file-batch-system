@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.AssetFreshnessPolicyMapper">
+
+    <resultMap id="AssetFreshnessPolicyResultMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyRecord">
+        <constructor>
+            <idArg column="id"                     javaType="java.lang.Long"/>
+            <arg   column="tenant_id"              javaType="java.lang.String"/>
+            <arg   column="asset_code"             javaType="java.lang.String"/>
+            <arg   column="asset_type"             javaType="java.lang.String"/>
+            <arg   column="expected_by_local_time" javaType="java.time.LocalTime"/>
+            <arg   column="timezone"               javaType="java.lang.String"/>
+            <arg   column="stale_after_seconds"    javaType="java.lang.Integer"/>
+            <arg   column="lookback_days"          javaType="java.lang.Integer"/>
+            <arg   column="severity"               javaType="java.lang.String"/>
+            <arg   column="enabled"                javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectEnabledPolicies" resultMap="AssetFreshnessPolicyResultMap">
+        select id,
+               tenant_id,
+               asset_code,
+               asset_type,
+               expected_by_local_time,
+               timezone,
+               stale_after_seconds,
+               lookback_days,
+               severity,
+               enabled
+          from batch.asset_freshness_policy
+         where enabled = true
+           and asset_type = 'JOB'
+         order by tenant_id, asset_code
+         limit #{limit}
+    </select>
+</mapper>
