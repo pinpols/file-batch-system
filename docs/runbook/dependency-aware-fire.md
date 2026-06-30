@@ -7,11 +7,11 @@
 `job_definition.depends_on_job_code`(可空)声明本触发器 fire 前需就绪的上游 job。scheduled fire 路径(`DefaultTriggerService.launchScheduled`)在 bizDate 解析后、persist 前插一道闸:
 
 - `depends_on_job_code` 为空(绝大多数存量触发器)→ 直接放行,**行为完全不变**。
-- 非空 → 经 orchestrator 只读 API `GET /internal/readiness/job` 查上游同 bizDate **最新一次 attempt** 是否 `SUCCESS`(`UpstreamReadinessChecker` → `ReadinessService`):
+- 非空 → 经 orchestrator 只读 API `GET /internal/readiness/job` 查上游同 bizDate 是否已有 **EFFECTIVE asset partition**(`UpstreamReadinessChecker` → `ReadinessService`):
   - 就绪 → 正常 fire。
   - 未就绪 → `launchScheduled` 抛 `UpstreamNotReadyException`,wheel 调度器走 **readiness defer**(见下),**不丢批**。
 
-> **就绪口径=最新 attempt**:用"该 bizDate 最新 run_attempt 是否 SUCCESS"而非"存在任意 SUCCESS"。先成功后 rerun 失败 / rerun 正在跑时,最新 attempt 非 SUCCESS → not ready,避免下游按已被推翻的过期结果启动(结算级)。
+> **就绪口径=当前 EFFECTIVE 结果版本**:只认 `result_version.status=EFFECTIVE` 物化出的 asset partition。PENDING、DRY_RUN、失败产物、旧 SUPERSEDED 版本都不放行,避免下游按未生效或已被推翻的过期结果启动(结算级)。ready 响应会带 `businessKey/versionNo/jobInstanceId` 供日志和运维定位。
 
 > trigger **不直连** orchestrator 状态表(读写分离 + 模块边界),就绪判定一律经 orchestrator 暴露的只读 internal API(携 `X-Internal-Secret`)。orchestrator 仍是唯一状态主机。
 
