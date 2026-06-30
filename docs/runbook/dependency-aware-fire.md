@@ -28,6 +28,18 @@
 
 就绪查询失败(orchestrator 不可达 / 超时 / 5xx)时,`UpstreamReadinessChecker` **不放行 fire**(返回未就绪)并记 `ERROR`。宁可不 fire 也不基于不确定状态盲 fire——结算链路要求。运维应对 ERROR 告警快速介入(多为 orchestrator 连通性 / secret 漂移)。
 
+## freshness policy 告警
+
+readiness defer 解决的是"依赖上游未就绪时不要盲 fire"。资产新鲜度策略解决的是"上游到了业务 SLA 还没产出时要显性告警"。
+
+orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expected_by_local_time / timezone / stale_after_seconds / lookback_days / severity`。定时扫描器只读当前 `EFFECTIVE asset_partition`:
+
+- expectedBy 已过但宽限期未过,发 `ASSET_FRESHNESS_MISSING`。
+- expectedBy + staleAfter 已过仍无 EFFECTIVE,发 `ASSET_FRESHNESS_STALE`。
+- 已有 EFFECTIVE,不发告警。
+
+这个告警不改变 trigger readiness 语义,也不把旧结果标为可消费。下游能否 fire 仍只由 `EFFECTIVE asset_partition` 决定。
+
 ## 配置
 
 | 键 | 默认 | 说明 |
@@ -36,6 +48,9 @@
 | `batch.trigger.readiness-gate.enabled` | `true` | 全局 emergency switch;设 `false` 时一律放行(等价关闭依赖感知,应急用) |
 | `batch.trigger.wheel.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口;超窗放弃本 bizDate(`WAITING_READINESS_TIMEOUT` + ERROR/metric) |
 | `batch.trigger.wheel.readiness-recheck-interval-seconds` | `30` | 未就绪时的重检间隔;须 `<` `misfire-threshold-seconds`(默认 60)防重检被误判 misfire |
+| `batch.asset-freshness.enabled` | `true` | asset freshness SLA 扫描开关 |
+| `batch.asset-freshness.scan-interval-millis` | `60000` | freshness policy 扫描间隔 |
+| `batch.asset-freshness.batch-limit` | `500` | 单轮最多扫描的策略数 |
 
 ## 边界 / 后续(v1 范围)
 

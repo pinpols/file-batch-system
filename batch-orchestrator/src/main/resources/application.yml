@@ -90,6 +90,13 @@ batch:
     worker-cache:
       enabled: ${BATCH_SCHEDULER_WORKER_CACHE_ENABLED:true}
       ttl-millis: ${BATCH_SCHEDULER_WORKER_CACHE_TTL_MILLIS:5000}
+  asset-freshness:
+    # JOB asset 新鲜度策略扫描。只发告警，不改变 asset_partition 的 EFFECTIVE 可消费语义。
+    enabled: ${BATCH_ASSET_FRESHNESS_ENABLED:true}
+    # 扫描间隔（毫秒）
+    scan-interval-millis: ${BATCH_ASSET_FRESHNESS_SCAN_INTERVAL_MILLIS:60000}
+    # 单轮最多扫描的策略数
+    batch-limit: ${BATCH_ASSET_FRESHNESS_BATCH_LIMIT:500}
   trigger:
     launch:
       created-recovery:
