@@ -113,6 +113,28 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  void shouldRejectNonOfficialChannelTypeBeforeAdapterLookup() {
+    DispatchResult result = gateway.dispatch(command("t1", "WEBHOOK_RAW", "ch-1"));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).isEqualTo("unsupported channel type: WEBHOOK_RAW");
+    verify(httpAdapter, never()).supports("WEBHOOK_RAW");
+    verify(httpAdapter, never()).dispatch(any());
+    verify(deliveryMetrics).recordDelivery("WEBHOOK_RAW", false, false);
+  }
+
+  @Test
+  void shouldNormalizeOfficialChannelTypeBeforeAdapterLookup() {
+    DispatchResult success = new DispatchResult(true, "req-1", null, true, false, "ok", null);
+    when(httpAdapter.dispatch(any())).thenReturn(success);
+
+    DispatchResult result = gateway.dispatch(command("t1", "api", "ch-1"));
+
+    assertThat(result.success()).isTrue();
+    verify(deliveryMetrics).recordDelivery("API", true, false);
+  }
+
+  @Test
   void shouldRecordHealthOutcomeAfterDispatch() {
     DispatchResult success = new DispatchResult(true, "req-1", null, true, false, "ok", null);
     when(httpAdapter.dispatch(any())).thenReturn(success);
