@@ -281,6 +281,12 @@
 | P2-2 | K8s 部署规范 | 部署层可水平扩 worker,但 BFS 不接管扩容 |
 | P2-3 | 更多 adapter 模板 | 降低接入成本,不放宽安全边界 |
 
+2026-06-30 收口状态:
+
+- P2-1 已落代码:新增 `GET /api/console/capacity-profile`,按 `TENANT/JOB/WORKER` 聚合热表容量画像。返回 `scope=BFS_HOT_TABLES`、`rows/totals/coverage`,明确 known gaps 和 rejected scopes。
+- P2-2 已落文档:见 `docs/runbook/k8s-worker-scaling-boundary.md`。边界是 K8s 管副本和 HPA,BFS 管 worker drain/lease/幂等;不接管 K8s replicas。
+- P2-3 已落文档:见 `docs/runbook/dispatch-adapter-template.md`。新增 adapter 必须先进入官方类型、安全画像、配置校验和测试;不开放动态插件市场。
+
 ## 6. 验证分层
 
 | 层级 | 验证内容 | 必须覆盖 |

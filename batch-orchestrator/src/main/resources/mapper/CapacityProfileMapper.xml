@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.CapacityProfileMapper">
+    <resultMap id="CapacityProfileRowMap"
+               type="io.github.pinpols.batch.orchestrator.application.service.capacity.CapacityProfileRow">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="worker_code" javaType="java.lang.String"/>
+            <arg column="worker_group" javaType="java.lang.String"/>
+            <arg column="instance_count" javaType="long"/>
+            <arg column="task_count" javaType="long"/>
+            <arg column="success_count" javaType="long"/>
+            <arg column="failure_count" javaType="long"/>
+            <arg column="total_duration_ms" javaType="long"/>
+            <arg column="avg_duration_ms" javaType="long"/>
+            <arg column="p95_duration_ms" javaType="long"/>
+            <arg column="total_file_bytes" javaType="long"/>
+            <arg column="processed_records" javaType="long"/>
+            <arg column="records_per_second" javaType="double"/>
+            <arg column="mb_per_second" javaType="double"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="InstanceBase">
+        instance_base as (
+            select ji.tenant_id,
+                   ji.id,
+                   ji.job_code,
+                   ji.worker_group,
+                   ji.related_file_id,
+                   ji.instance_status,
+                   greatest(
+                       extract(epoch from (
+                           coalesce(ji.finished_at, ji.updated_at, ji.created_at)
+                           - coalesce(ji.started_at, ji.created_at)
+                       )) * 1000,
+                       0
+                   )::bigint as duration_ms
+            from batch.job_instance ji
+            where ji.tenant_id = #{tenantId}
+              and coalesce(ji.finished_at, ji.updated_at, ji.created_at) &gt;= #{from}
+              and coalesce(ji.finished_at, ji.updated_at, ji.created_at) &lt; #{to}
+        ),
+        file_by_instance as (
+            select f.job_instance_id,
+                   count(distinct f.file_id)::bigint as file_count,
+                   coalesce(sum(f.file_size_bytes), 0)::bigint as total_file_bytes
+            from (
+                select distinct i.id as job_instance_id,
+                                fr.id as file_id,
+                                fr.file_size_bytes
+                from instance_base i
+                         join batch.file_record fr
+                              on fr.tenant_id = i.tenant_id
+                             and fr.id = i.related_file_id
+                union
+                select distinct pi.related_job_instance_id as job_instance_id,
+                                fr.id as file_id,
+                                fr.file_size_bytes
+                from instance_base i
+                         join batch.pipeline_instance pi
+                              on pi.tenant_id = i.tenant_id
+                             and pi.related_job_instance_id = i.id
+                         join batch.file_record fr
+                              on fr.tenant_id = pi.tenant_id
+                             and fr.id = pi.file_id
+                where pi.related_job_instance_id is not null
+            ) f
+            group by f.job_instance_id
+        ),
+        progress_by_instance as (
+            select pi.related_job_instance_id as job_instance_id,
+                   coalesce(sum(pp.processed_count), 0)::bigint as processed_records
+            from instance_base i
+                     join batch.pipeline_instance pi
+                          on pi.tenant_id = i.tenant_id
+                         and pi.related_job_instance_id = i.id
+                     join batch.pipeline_progress pp
+                          on pp.tenant_id = pi.tenant_id
+                         and pp.pipeline_instance_id = pi.id
+            where pi.related_job_instance_id is not null
+            group by pi.related_job_instance_id
+        ),
+        instance_enriched as (
+            select i.*,
+                   coalesce(f.total_file_bytes, 0)::bigint as total_file_bytes,
+                   coalesce(p.processed_records, 0)::bigint as processed_records
+            from instance_base i
+                     left join file_by_instance f on f.job_instance_id = i.id
+                     left join progress_by_instance p on p.job_instance_id = i.id
+        )
+    </sql>
+
+    <select id="selectTenantProfile" resultMap="CapacityProfileRowMap">
+        with <include refid="InstanceBase"/>
+        select tenant_id,
+               null::varchar as job_code,
+               null::varchar as worker_code,
+               null::varchar as worker_group,
+               count(1)::bigint as instance_count,
+               0::bigint as task_count,
+               count(1) filter (where instance_status in ('SUCCESS', 'SUCCESS_DRY_RUN'))::bigint as success_count,
+               count(1) filter (
+                   where instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED', 'FAILED_DRY_RUN')
+               )::bigint as failure_count,
+               coalesce(sum(duration_ms), 0)::bigint as total_duration_ms,
+               coalesce(avg(duration_ms), 0)::bigint as avg_duration_ms,
+               coalesce(percentile_cont(0.95) within group (order by duration_ms), 0)::bigint as p95_duration_ms,
+               coalesce(sum(total_file_bytes), 0)::bigint as total_file_bytes,
+               coalesce(sum(processed_records), 0)::bigint as processed_records,
+               0.0::double precision as records_per_second,
+               0.0::double precision as mb_per_second
+        from instance_enriched
+        group by tenant_id
+        order by total_duration_ms desc
+        limit #{limit}
+    </select>
+
+    <select id="selectJobProfile" resultMap="CapacityProfileRowMap">
+        with <include refid="InstanceBase"/>
+        select tenant_id,
+               job_code,
+               null::varchar as worker_code,
+               max(worker_group)::varchar as worker_group,
+               count(1)::bigint as instance_count,
+               0::bigint as task_count,
+               count(1) filter (where instance_status in ('SUCCESS', 'SUCCESS_DRY_RUN'))::bigint as success_count,
+               count(1) filter (
+                   where instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED', 'FAILED_DRY_RUN')
+               )::bigint as failure_count,
+               coalesce(sum(duration_ms), 0)::bigint as total_duration_ms,
+               coalesce(avg(duration_ms), 0)::bigint as avg_duration_ms,
+               coalesce(percentile_cont(0.95) within group (order by duration_ms), 0)::bigint as p95_duration_ms,
+               coalesce(sum(total_file_bytes), 0)::bigint as total_file_bytes,
+               coalesce(sum(processed_records), 0)::bigint as processed_records,
+               0.0::double precision as records_per_second,
+               0.0::double precision as mb_per_second
+        from instance_enriched
+        group by tenant_id, job_code
+        order by total_duration_ms desc, job_code asc
+        limit #{limit}
+    </select>
+
+    <select id="selectWorkerProfile" resultMap="CapacityProfileRowMap">
+        with <include refid="InstanceBase"/>,
+        task_base as (
+            select ji.tenant_id,
+                   ji.id as job_instance_id,
+                   ji.job_code,
+                   ji.worker_group,
+                   jt.assigned_worker_code as worker_code,
+                   jt.task_status,
+                   greatest(
+                       extract(epoch from (
+                           coalesce(jt.finished_at, jt.updated_at, jt.created_at)
+                           - coalesce(jt.started_at, jt.created_at)
+                       )) * 1000,
+                       0
+                   )::bigint as duration_ms
+            from batch.job_task jt
+                     join batch.job_instance ji
+                          on ji.tenant_id = jt.tenant_id
+                         and ji.id = jt.job_instance_id
+            where jt.tenant_id = #{tenantId}
+              and jt.assigned_worker_code is not null
+              and coalesce(jt.finished_at, jt.updated_at, jt.created_at) &gt;= #{from}
+              and coalesce(jt.finished_at, jt.updated_at, jt.created_at) &lt; #{to}
+        ),
+        worker_instance as (
+            select distinct tenant_id, worker_code, job_instance_id
+            from task_base
+        ),
+        worker_payload as (
+            select wi.tenant_id,
+                   wi.worker_code,
+                   coalesce(sum(ie.total_file_bytes), 0)::bigint as total_file_bytes,
+                   coalesce(sum(ie.processed_records), 0)::bigint as processed_records
+            from worker_instance wi
+                     join instance_enriched ie
+                          on ie.tenant_id = wi.tenant_id
+                         and ie.id = wi.job_instance_id
+            group by wi.tenant_id, wi.worker_code
+        )
+        select tb.tenant_id,
+               null::varchar as job_code,
+               tb.worker_code,
+               max(tb.worker_group)::varchar as worker_group,
+               count(distinct tb.job_instance_id)::bigint as instance_count,
+               count(1)::bigint as task_count,
+               count(1) filter (where tb.task_status = 'SUCCESS')::bigint as success_count,
+               count(1) filter (where tb.task_status in ('FAILED', 'CANCELLED', 'TERMINATED'))::bigint as failure_count,
+               coalesce(sum(tb.duration_ms), 0)::bigint as total_duration_ms,
+               coalesce(avg(tb.duration_ms), 0)::bigint as avg_duration_ms,
+               coalesce(percentile_cont(0.95) within group (order by tb.duration_ms), 0)::bigint as p95_duration_ms,
+               max(coalesce(wp.total_file_bytes, 0))::bigint as total_file_bytes,
+               max(coalesce(wp.processed_records, 0))::bigint as processed_records,
+               0.0::double precision as records_per_second,
+               0.0::double precision as mb_per_second
+        from task_base tb
+                 left join worker_payload wp
+                           on wp.tenant_id = tb.tenant_id
+                          and wp.worker_code = tb.worker_code
+        group by tb.tenant_id, tb.worker_code
+        order by total_duration_ms desc, tb.worker_code asc
+        limit #{limit}
+    </select>
+</mapper>
