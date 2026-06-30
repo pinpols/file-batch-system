@@ -23,6 +23,26 @@
           and id = #{jobInstanceId}
     </select>
 
+    <select id="selectArchivedJobInstance" resultType="map">
+        select id,
+               tenant_id,
+               job_code,
+               biz_date,
+               instance_status,
+               run_attempt,
+               trace_id,
+               related_file_id,
+               parent_instance_id,
+               replay_session_id,
+               started_at,
+               finished_at,
+               created_at,
+               updated_at
+        from archive.job_instance_archive
+        where tenant_id = #{tenantId}
+          and id = #{jobInstanceId}
+    </select>
+
     <select id="selectPipelineInstances" resultType="map">
         select id,
                tenant_id,
@@ -40,6 +60,28 @@
                created_at,
                updated_at
         from batch.pipeline_instance
+        where tenant_id = #{tenantId}
+          and related_job_instance_id = #{jobInstanceId}
+        order by id asc
+    </select>
+
+    <select id="selectArchivedPipelineInstances" resultType="map">
+        select id,
+               tenant_id,
+               pipeline_definition_id,
+               job_code,
+               pipeline_type,
+               file_id,
+               related_job_instance_id,
+               current_stage,
+               last_success_stage,
+               run_status,
+               trace_id,
+               started_at,
+               finished_at,
+               created_at,
+               updated_at
+        from archive.pipeline_instance_archive
         where tenant_id = #{tenantId}
           and related_job_instance_id = #{jobInstanceId}
         order by id asc
@@ -109,6 +151,42 @@
                fdr.updated_at
         from batch.file_dispatch_record fdr
         left join batch.pipeline_instance pi
+          on pi.tenant_id = fdr.tenant_id
+         and pi.id = fdr.pipeline_instance_id
+        where fdr.tenant_id = #{tenantId}
+          and (
+              pi.related_job_instance_id = #{jobInstanceId}
+              <if test="fileIds != null and fileIds.size() > 0">
+              or fdr.file_id in
+              <foreach collection="fileIds" item="fileId" open="(" separator="," close=")">
+                  #{fileId}
+              </foreach>
+              </if>
+          )
+        order by fdr.id desc
+        limit 100
+    </select>
+
+    <select id="selectArchivedDispatchRecords" resultType="map">
+        select distinct fdr.id,
+               fdr.tenant_id,
+               fdr.file_id,
+               fdr.pipeline_instance_id,
+               fdr.channel_code,
+               fdr.dispatch_target,
+               fdr.dispatch_status,
+               fdr.dispatch_attempt,
+               fdr.receipt_code,
+               fdr.receipt_status,
+               fdr.external_request_id,
+               fdr.error_code,
+               fdr.error_message,
+               fdr.dispatched_at,
+               fdr.ack_at,
+               fdr.created_at,
+               fdr.updated_at
+        from archive.file_dispatch_record_archive fdr
+        left join archive.pipeline_instance_archive pi
           on pi.tenant_id = fdr.tenant_id
          and pi.id = fdr.pipeline_instance_id
         where fdr.tenant_id = #{tenantId}
