@@ -21,6 +21,7 @@
 # 允许的双许可路径(grep 出现时不报警,因为我们已在 NOTICE / license-risk 中声明走 OR 的另一边):
 #   - JSqlParser: LGPL-2.1 OR Apache-2.0 → 走 Apache-2.0
 #   - Logback: EPL-2.0 OR LGPL-2.1 → 走 EPL-2.0(并保持库未修改)
+#   - RocksDB JNI: Apache-2.0 OR GPL-2.0 → 走 Apache-2.0(并保持库未修改)
 
 set -euo pipefail
 
@@ -49,7 +50,7 @@ if [[ ! -f "$REPORT_FILE" ]]; then
 fi
 
 # 已知双许可白名单 — 这些组件即使报告里出现 LGPL/EPL 关键字也不算红线(见脚本头部说明)
-ALLOW_DUAL_LICENSE='(JSQLParser|Logback Classic Module|Logback Core Module|jakarta\.|Angus Mail|JUnit|Eclipse Public License - v 2\.0|EPL 2\.0)'
+ALLOW_DUAL_LICENSE='(JSQLParser|Logback Classic Module|Logback Core Module|RocksDB JNI|jakarta\.|Angus Mail|JUnit|Eclipse Public License - v 2\.0|EPL 2\.0)'
 
 # 红线 license 模式
 RED_LINE_PATTERNS=(

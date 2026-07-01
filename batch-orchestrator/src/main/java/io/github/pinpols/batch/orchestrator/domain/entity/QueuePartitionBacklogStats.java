@@ -15,11 +15,33 @@ public record QueuePartitionBacklogStats(
     long retryingPartitions,
     long oldestWaitingSeconds) {
 
+  public QueuePartitionBacklogStats(
+      String queueCode,
+      Long createdPartitions,
+      Long waitingPartitions,
+      Long readyPartitions,
+      Long runningPartitions,
+      Long retryingPartitions,
+      Long oldestWaitingSeconds) {
+    this(
+        queueCode,
+        zeroIfNull(createdPartitions),
+        zeroIfNull(waitingPartitions),
+        zeroIfNull(readyPartitions),
+        zeroIfNull(runningPartitions),
+        zeroIfNull(retryingPartitions),
+        zeroIfNull(oldestWaitingSeconds));
+  }
+
   public long queuedPartitions() {
     return createdPartitions + waitingPartitions + readyPartitions + retryingPartitions;
   }
 
   public long activePartitions() {
     return readyPartitions + runningPartitions + retryingPartitions;
+  }
+
+  private static long zeroIfNull(Long value) {
+    return value == null ? 0L : value;
   }
 }

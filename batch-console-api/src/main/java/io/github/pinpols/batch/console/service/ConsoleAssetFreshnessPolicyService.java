@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleAssetFreshnessPolicyService {
 
   private static final String ASSET_TYPE_JOB = "JOB";
+  private static final String ERROR_INVALID_ARGUMENT_DETAIL =
+      "error.common.invalid_argument_detail";
   private static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
   private static final String DEFAULT_SEVERITY = "WARN";
   private static final int DEFAULT_STALE_AFTER_SECONDS = 0;
@@ -75,7 +77,7 @@ public class ConsoleAssetFreshnessPolicyService {
     if (param == null || param.expectedByLocalTime() == null) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ERROR_INVALID_ARGUMENT_DETAIL,
           "expectedByLocalTime is required");
     }
     String tenantId = tenantGuard.resolveTenant(param.tenantId());
@@ -85,7 +87,7 @@ public class ConsoleAssetFreshnessPolicyService {
     if (!ASSET_TYPE_JOB.equals(assetType)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ERROR_INVALID_ARGUMENT_DETAIL,
           "assetType only supports JOB");
     }
     String timezone = Texts.hasText(param.timezone()) ? param.timezone().trim() : DEFAULT_TIMEZONE;
@@ -95,14 +97,14 @@ public class ConsoleAssetFreshnessPolicyService {
     if (staleAfterSeconds < 0) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ERROR_INVALID_ARGUMENT_DETAIL,
           "staleAfterSeconds must be >= 0");
     }
     int lookbackDays = param.lookbackDays() == null ? DEFAULT_LOOKBACK_DAYS : param.lookbackDays();
     if (lookbackDays < 1 || lookbackDays > 31) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ERROR_INVALID_ARGUMENT_DETAIL,
           "lookbackDays must be between 1 and 31");
     }
     String severity =
@@ -112,7 +114,7 @@ public class ConsoleAssetFreshnessPolicyService {
     if (!VALID_SEVERITIES.contains(severity)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ERROR_INVALID_ARGUMENT_DETAIL,
           "severity must be one of: " + VALID_SEVERITIES);
     }
     return AssetFreshnessPolicyUpsertParam.builder()
@@ -131,8 +133,7 @@ public class ConsoleAssetFreshnessPolicyService {
 
   private static String requireText(String value, String message) {
     if (!Texts.hasText(value)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", message);
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ERROR_INVALID_ARGUMENT_DETAIL, message);
     }
     return value.trim();
   }
@@ -143,7 +144,7 @@ public class ConsoleAssetFreshnessPolicyService {
     } catch (DateTimeException ex) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ERROR_INVALID_ARGUMENT_DETAIL,
           "timezone is invalid: " + timezone);
     }
   }
