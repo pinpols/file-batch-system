@@ -237,10 +237,13 @@ outbox_published = wait_int(
     lambda v: v >= OUTBOX_COUNT,
     timeout=180,
 )
-outbox_instances = int(scalar(
+outbox_instances = wait_int(
+    "outbox-launched",
     "select count(distinct related_job_instance_id) from batch.trigger_request "
-    f"where tenant_id='ta' and request_id like '{BATCH}-outbox-%'"
-) or "0")
+    f"where tenant_id='ta' and request_id like '{BATCH}-outbox-%'",
+    lambda v: v >= OUTBOX_COUNT,
+    timeout=180,
+)
 if outbox_instances != OUTBOX_COUNT:
     raise RuntimeError(f"outbox retry duplicated/lost instances: {outbox_instances}/{OUTBOX_COUNT}")
 

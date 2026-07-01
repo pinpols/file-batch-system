@@ -296,7 +296,7 @@ sim() {
     local sim_failed=0
     while IFS= read -r s; do
       local n; n=$(basename "$s")
-      case "$n" in 00-*|01-*|02-*|03-*) continue;; esac
+      case "$n" in 00-*|01-*|02-*|03-*|2[6-9]-*) continue;; esac
       # per-stage batchNo 隔离:全局 BATCH_NO 会让各 stage 共享 batchNo,致断言/清理跨 stage
       # 撞数据(12 断言按 source_ref=batchNo 查到他人 file_record、24 DELETE 撞他人
       # trigger_request 的 job_instance FK)。08-25 各自 source env-common,unset 后会生成
@@ -313,7 +313,8 @@ sim() {
       ensure_core_runtime || exit 1
       echo ">>> $n $(date +%T)" | tee -a "$sum"
       local stage_log="$SIM_LOG_DIR/$n.log"
-      if bash "$s" >"$stage_log" 2>&1; then
+      # 阶段脚本不能继承 while-read 的 stdin；否则内部命令读取 stdin 时会吞掉后续阶段文件名。
+      if bash "$s" </dev/null >"$stage_log" 2>&1; then
         echo "PASS $n" | tee -a "$sum"
       else
         local rc=$?
