@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
@@ -148,6 +149,82 @@ class ConsoleAssetFreshnessPolicyServiceTest {
             ex ->
                 assertThat(((BizException) ex).getMessageArgs())
                     .anyMatch(a -> a != null && a.toString().contains("timezone is invalid")));
+  }
+
+  @Test
+  void upsert_rejects_whenStaleAfterSecondsNegative() {
+    AssetFreshnessPolicyUpsertParam input =
+        AssetFreshnessPolicyUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .expectedByLocalTime(LocalTime.of(2, 0))
+            .timezone("UTC")
+            .staleAfterSeconds(-1)
+            .build();
+
+    assertThatThrownBy(() -> service.upsert(input))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void upsert_rejects_whenLookbackDaysBelowMin() {
+    AssetFreshnessPolicyUpsertParam input =
+        AssetFreshnessPolicyUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .expectedByLocalTime(LocalTime.of(2, 0))
+            .timezone("UTC")
+            .staleAfterSeconds(0)
+            .lookbackDays(0)
+            .build();
+
+    assertThatThrownBy(() -> service.upsert(input))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void upsert_rejects_whenLookbackDaysAboveMax() {
+    AssetFreshnessPolicyUpsertParam input =
+        AssetFreshnessPolicyUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .expectedByLocalTime(LocalTime.of(2, 0))
+            .timezone("UTC")
+            .staleAfterSeconds(0)
+            .lookbackDays(32)
+            .build();
+
+    assertThatThrownBy(() -> service.upsert(input))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void upsert_rejects_whenSeverityInvalid() {
+    AssetFreshnessPolicyUpsertParam input =
+        AssetFreshnessPolicyUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .expectedByLocalTime(LocalTime.of(2, 0))
+            .timezone("UTC")
+            .staleAfterSeconds(0)
+            .lookbackDays(1)
+            .severity("FATAL")
+            .build();
+
+    assertThatThrownBy(() -> service.upsert(input))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
   }
 
   @Test

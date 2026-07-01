@@ -8,17 +8,17 @@
             <arg column="job_code" javaType="java.lang.String"/>
             <arg column="worker_code" javaType="java.lang.String"/>
             <arg column="worker_group" javaType="java.lang.String"/>
-            <arg column="instance_count" javaType="long"/>
-            <arg column="task_count" javaType="long"/>
-            <arg column="success_count" javaType="long"/>
-            <arg column="failure_count" javaType="long"/>
-            <arg column="total_duration_ms" javaType="long"/>
-            <arg column="avg_duration_ms" javaType="long"/>
-            <arg column="p95_duration_ms" javaType="long"/>
-            <arg column="total_file_bytes" javaType="long"/>
-            <arg column="processed_records" javaType="long"/>
-            <arg column="records_per_second" javaType="double"/>
-            <arg column="mb_per_second" javaType="double"/>
+            <arg column="instance_count" javaType="_long"/>
+            <arg column="task_count" javaType="_long"/>
+            <arg column="success_count" javaType="_long"/>
+            <arg column="failure_count" javaType="_long"/>
+            <arg column="total_duration_ms" javaType="_long"/>
+            <arg column="avg_duration_ms" javaType="_long"/>
+            <arg column="p95_duration_ms" javaType="_long"/>
+            <arg column="total_file_bytes" javaType="_long"/>
+            <arg column="processed_records" javaType="_long"/>
+            <arg column="records_per_second" javaType="_double"/>
+            <arg column="mb_per_second" javaType="_double"/>
         </constructor>
     </resultMap>
 

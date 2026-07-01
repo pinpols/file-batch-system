@@ -133,6 +133,48 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   @Test
+  void shouldRejectUnsupportedChannelTypeOnUpdate() {
+    String code = "int_fc_upd_bad_type_" + System.currentTimeMillis();
+
+    // arrange: create a valid channel first (channelType=SFTP)
+    client
+        .post()
+        .uri("/api/console/file-channels")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-upd-" + code)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(body(code))
+        .exchange()
+        .expectStatus()
+        .isOk();
+
+    Long id =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM batch.file_channel_config WHERE channel_code = ?", Long.class, code);
+
+    // act: PUT changing channelType to an unknown value → must reject
+    String updateBody =
+        "{" + "\"tenantId\":\"int-fc-ta\"," + "\"channelType\":\"WEBHOOK_RAW\"" + "}";
+    client
+        .put()
+        .uri("/api/console/file-channels/" + id)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(updateBody)
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectBody(String.class)
+        .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
+
+    // assert: stored channel_type unchanged
+    String channelType =
+        jdbcTemplate.queryForObject(
+            "SELECT channel_type FROM batch.file_channel_config WHERE id = ?", String.class, id);
+    assertThat(channelType).isEqualTo("SFTP");
+
+    jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE channel_code = ?", code);
+  }
+
+  @Test
   void shouldRejectDuplicateChannelCode() {
     String code = "int_fc_dup_" + System.currentTimeMillis();
     client

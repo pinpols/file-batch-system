@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerPro
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -121,6 +122,24 @@ class DispatchChannelGatewayTest {
     verify(httpAdapter, never()).supports("WEBHOOK_RAW");
     verify(httpAdapter, never()).dispatch(any());
     verify(deliveryMetrics).recordDelivery("WEBHOOK_RAW", false, false);
+  }
+
+  @Test
+  void readbackSize_rejectsUnknownChannelType_beforeAdapterLookup() {
+    OptionalLong result = gateway.readbackSize(command("t1", "WEBHOOK_RAW", "ch-1"));
+
+    assertThat(result).isEmpty();
+    verify(httpAdapter, never()).supports(anyString());
+    verify(httpAdapter, never()).dispatch(any());
+  }
+
+  @Test
+  void readbackSize_rejectsBlankChannelType() {
+    OptionalLong result = gateway.readbackSize(command("t1", "   ", "ch-1"));
+
+    assertThat(result).isEmpty();
+    verify(httpAdapter, never()).supports(anyString());
+    verify(httpAdapter, never()).dispatch(any());
   }
 
   @Test

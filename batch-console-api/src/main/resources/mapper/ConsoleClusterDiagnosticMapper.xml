@@ -250,10 +250,10 @@
     </select>
 
     <select id="outboxStatusCountsForInstance" resultType="map">
-        select publish_status as "status",
+        select oe.publish_status as "status",
                count(1) as "count",
-               min(created_at) as "oldest",
-               max(updated_at) as "newest"
+               min(oe.created_at) as "oldest",
+               max(oe.updated_at) as "newest"
           from batch.outbox_event oe
           join batch.job_task jt
             on jt.tenant_id = oe.tenant_id
