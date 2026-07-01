@@ -296,7 +296,10 @@ sim() {
     local sim_failed=0
     while IFS= read -r s; do
       local n; n=$(basename "$s")
-      case "$n" in 00-*|01-*|02-*|03-*|2[6-9]-*) continue;; esac
+      # 00-03 是前置(reset/seed/租户导入),harness 单独跑,遍历跳过。
+      # 26+(bundle-import 等)保留在遍历里:各自带 opt-in 门(如 RUN_BUNDLE_SIM=1),
+      # 未开启时脚本内自跳 exit 0,对标准 sim 零影响;开启后 sim() 全量才能带上它们。
+      case "$n" in 00-*|01-*|02-*|03-*) continue;; esac
       # per-stage batchNo 隔离:全局 BATCH_NO 会让各 stage 共享 batchNo,致断言/清理跨 stage
       # 撞数据(12 断言按 source_ref=batchNo 查到他人 file_record、24 DELETE 撞他人
       # trigger_request 的 job_instance FK)。08-25 各自 source env-common,unset 后会生成
