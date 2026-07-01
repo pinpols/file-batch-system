@@ -141,6 +141,25 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  void shouldArchiveFile_whenReasonNull_withoutNpe() {
+    // 回归:reason 为 null 时,changeFileStatus 内构造审计 detail 的 Map.of 曾 NPE,
+    // 把干净的业务流程/错误掩盖成 500。见 DefaultFileGovernanceService#changeFileStatus。
+    FileGovernanceCommand cmd = baseCommand().reason(null).build();
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L))
+        .thenReturn(Map.of("file_status", "LOADED"));
+    when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
+    when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
+    when(fileGovernanceRepository.updateFileStatus(
+            eq("t1"), eq(1L), eq("LOADED"), eq("ARCHIVED"), any()))
+        .thenReturn(1);
+    when(fileGovernanceRepository.operationDetail(anyString(), anyString(), any(), any()))
+        .thenReturn(Map.of());
+
+    // arrange 完成,act + assert:不再抛 NPE,正常返回 ARCHIVED
+    assertThat(service.archiveFile(cmd)).isEqualTo("ARCHIVED");
+  }
+
+  @Test
   void shouldDeleteFile_whenArchivedToDeletedTransitionAllowed() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))

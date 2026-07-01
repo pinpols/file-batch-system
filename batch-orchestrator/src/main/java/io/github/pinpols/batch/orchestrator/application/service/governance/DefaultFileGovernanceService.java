@@ -37,6 +37,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -490,8 +491,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
               nextStatus,
               Map.of(
                   "governanceOperation", operationType,
-                  "reason", command.reason(),
-                  "operatorId", command.operatorId()));
+                  "reason", Objects.requireNonNullElse(command.reason(), ""),
+                  "operatorId", Objects.requireNonNullElse(command.operatorId(), "")));
       if (updated <= 0) {
         throw BizException.of(
             ResultCode.STATE_CONFLICT,
@@ -522,13 +523,14 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
               command.traceId(),
               Map.of(
                   "currentStatus",
-                  currentStatus,
+                  Objects.requireNonNullElse(currentStatus, ""),
                   "nextStatus",
-                  nextStatus,
+                  Objects.requireNonNullElse(nextStatus, ""),
                   "reason",
-                  command.reason(),
+                  Objects.requireNonNullElse(command.reason(), ""),
                   "errorMessage",
-                  exception.getMessage())));
+                  Objects.requireNonNullElse(
+                      exception.getMessage(), exception.getClass().getSimpleName()))));
       throw exception;
     }
   }
