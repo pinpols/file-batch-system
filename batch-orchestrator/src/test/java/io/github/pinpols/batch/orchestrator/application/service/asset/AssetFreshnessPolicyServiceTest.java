@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -115,6 +116,38 @@ class AssetFreshnessPolicyServiceTest {
     int emitted = service.scanDuePolicies(10);
 
     assertThat(emitted).isEqualTo(2);
+  }
+
+  @Test
+  void freshnessAlert_usesStableDedupKey_soRescanDoesNotStorm() {
+    // arrange: same stale asset (same tenant/assetCode/bizDate), scan runs twice ~60s apart
+    AssetFreshnessPolicyRecord policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+    when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, 6, 30)))
+        .thenReturn(false);
+
+    // act: re-scan the same still-stale asset (mirrors the ~60s scheduled scan re-firing)
+    int firstEmitted = service.scanDuePolicies(10);
+    int secondEmitted = service.scanDuePolicies(10);
+
+    // assert: each scan emits, but the dedup fingerprint is IDENTICAL so the downstream
+    // UPSERT merges instead of creating duplicate alert rows.
+    assertThat(firstEmitted).isEqualTo(1);
+    assertThat(secondEmitted).isEqualTo(1);
+    ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    verify(alertEventService, times(2)).emit(captor.capture());
+    List<AlertEmitRequest> emissions = captor.getAllValues();
+    String firstKey = emissions.get(0).resourceKey();
+    String secondKey = emissions.get(1).resourceKey();
+    assertThat(firstKey).isEqualTo(secondKey);
+    // deterministic composite of the stable identifiers: tenant:assetCode:bizDate
+    assertThat(firstKey)
+        .isEqualTo("t1:JOB_A:2026-06-30")
+        .contains("t1")
+        .contains("JOB_A")
+        .contains("2026-06-30");
+    // alertType is likewise stable across re-scans (same dedup class)
+    assertThat(emissions.get(0).alertType()).isEqualTo(emissions.get(1).alertType());
   }
 
   @Test

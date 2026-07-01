@@ -134,10 +134,15 @@ final class DispatchChannelTypePolicy {
             "smtp_username/smtp_password are read from channel_config",
             READBACK_NONE,
             Set.of("no dispatch destination readback verification")));
-    if (!profiles.keySet().equals(OFFICIAL_TYPES)) {
+    requireFullCoverage(profiles.keySet(), OFFICIAL_TYPES);
+    return Map.copyOf(profiles);
+  }
+
+  // 抽出以便负向单测:profile 集合必须恰好覆盖官方类型,缺项/多项即启动 fail-fast。
+  static void requireFullCoverage(Set<String> profileKeys, Set<String> officialTypes) {
+    if (!profileKeys.equals(officialTypes)) {
       throw new IllegalStateException("dispatch safety profiles must cover every official type");
     }
-    return Map.copyOf(profiles);
   }
 
   private static DispatchChannelSafetyProfile profile(
