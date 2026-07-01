@@ -125,6 +125,50 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   }
 
   @Test
+  void create_returns400_whenLookbackDaysOutOfRange() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/console/asset-freshness-policies")
+                .param("tenantId", "t1")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "assetCode":"JOB_A",
+                      "expectedByLocalTime":"02:00:00",
+                      "timezone":"Asia/Shanghai",
+                      "staleAfterSeconds":300,
+                      "lookbackDays":99,
+                      "severity":"WARN",
+                      "enabled":true
+                    }
+                    """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void create_returns400_whenAssetCodeBlank() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/console/asset-freshness-policies")
+                .param("tenantId", "t1")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "assetCode":"",
+                      "expectedByLocalTime":"02:00:00",
+                      "timezone":"Asia/Shanghai",
+                      "staleAfterSeconds":300,
+                      "lookbackDays":2,
+                      "severity":"WARN",
+                      "enabled":true
+                    }
+                    """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void shouldTogglePolicy() throws Exception {
     mockMvc
         .perform(
