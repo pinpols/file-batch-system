@@ -174,7 +174,7 @@ cloudflared tunnel create batch-console
 cloudflared tunnel route dns batch-console fe.<your-domain>
 cat > ~/.cloudflared/config.yml <<YAML
 tunnel: batch-console
-credentials-file: /Users/<you>/.cloudflared/<uuid>.json
+credentials-file: $HOME/.cloudflared/<uuid>.json
 ingress:
   - hostname: fe.<your-domain>
     service: http://localhost:5173

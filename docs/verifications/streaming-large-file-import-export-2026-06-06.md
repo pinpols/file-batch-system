@@ -41,7 +41,7 @@ params  = { templateCode: WIDE_DEMO_TPL,
 ```
 PreprocessStep - import preprocess streamed object to spool (no heap buffering):
   bucket=batch-dev, object=ingress/ta/wide-1m-20260606.csv, bytes=845781334,
-  spool=/var/folders/.../batch-preprocess-obj-*.raw
+  spool=<os-temp-dir>/batch-preprocess-obj-*.raw
 ```
 
 - 走 `PreprocessStep.streamObjectToSpoolAndReturn`(`Files.copy(InputStream, Path)` 8K 缓冲),**不分配整文件 byte[]**

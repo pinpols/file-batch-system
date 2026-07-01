@@ -409,18 +409,18 @@ Ops 大屏 TopN 触发类型/Worker 加载分布有可能 >7 类,需要扩到 10
 
 ## 附录 A:关键文件清单
 
-- `/Users/dengchao/Downloads/batch-console/src/styles/tokens.css`(token 单一来源)
-- `/Users/dengchao/Downloads/batch-console/src/styles/element-override.css`(EP 桥接 + `:focus-visible` baseline)
-- `/Users/dengchao/Downloads/batch-console/src/styles/app.css`(布局 + reduced-motion)
-- `/Users/dengchao/Downloads/batch-console/src/constants/theme.ts`(主题决议 + ViewTransition)
-- `/Users/dengchao/Downloads/batch-console/src/stores/app.ts`(主题状态 + matchMedia 监听)
-- `/Users/dengchao/Downloads/batch-console/src/charts/echarts.ts`(ECharts 主题)
-- `/Users/dengchao/Downloads/batch-console/src/views/ops/composables/useOpsSummary.ts`(P0/P1 重灾区)
-- `/Users/dengchao/Downloads/batch-console/src/views/workflow/WorkflowMermaidViewer.vue`(Mermaid 硬编码)
-- `/Users/dengchao/Downloads/batch-console/src/components/workflow/WorkflowMiniDag.vue`
-- `/Users/dengchao/Downloads/batch-console/src/layout-mobile/styles/mobile-common.css`(P0 — mobile 调色板独立)
-- `/Users/dengchao/Downloads/batch-console/src/layout-mobile/MobileAppBar.vue` / `MobileTabBar.vue`
-- `/Users/dengchao/Downloads/batch-console/src/components/common/StatusTag.vue` + `statusTagResolve.ts`
+- `../batch-console/src/styles/tokens.css`(token 单一来源)
+- `../batch-console/src/styles/element-override.css`(EP 桥接 + `:focus-visible` baseline)
+- `../batch-console/src/styles/app.css`(布局 + reduced-motion)
+- `../batch-console/src/constants/theme.ts`(主题决议 + ViewTransition)
+- `../batch-console/src/stores/app.ts`(主题状态 + matchMedia 监听)
+- `../batch-console/src/charts/echarts.ts`(ECharts 主题)
+- `../batch-console/src/views/ops/composables/useOpsSummary.ts`(P0/P1 重灾区)
+- `../batch-console/src/views/workflow/WorkflowMermaidViewer.vue`(Mermaid 硬编码)
+- `../batch-console/src/components/workflow/WorkflowMiniDag.vue`
+- `../batch-console/src/layout-mobile/styles/mobile-common.css`(P0 — mobile 调色板独立)
+- `../batch-console/src/layout-mobile/MobileAppBar.vue` / `MobileTabBar.vue`
+- `../batch-console/src/components/common/StatusTag.vue` + `statusTagResolve.ts`
 
 ## 附录 B:扫描方法快照
 

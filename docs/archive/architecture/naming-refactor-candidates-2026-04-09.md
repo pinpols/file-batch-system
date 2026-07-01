@@ -28,8 +28,8 @@
 ### 2.1 `ExecutionContext`
 
 现状：
-- orchestrator 侧：[`ExecutionContext.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)
-- worker-core 侧：[`ExecutionContext.java`](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
+- orchestrator 侧：[`ExecutionContext.java`](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)
+- worker-core 侧：[`ExecutionContext.java`](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
 - 旧名 `PipelineContext` 已转为历史检索词，不再保留独立类型
 
 问题：
@@ -129,7 +129,7 @@
 ### 5.2 当前进度
 
 - P0 的**口径统一与边界固化**已完成：
-  - [`core-model.md`](/Users/dengchao/Downloads/file-batch-system/docs/architecture/core-model.md)
+  - [`core-model.md`](<repo-root>/docs/architecture/core-model.md)
   - 设计说明书关键章节引用已补齐
   - 关键 `ExecutionContext` / `PipelineRuntimeKeys` 类注释已明确边界
 - 数据库层面的结论已经收敛：`run_mode` 写入数据库查询继续 deferred，物理列统一重命名明确冻结，不进入本轮
@@ -153,9 +153,9 @@
 
 ## 6. 参考文档
 
-- [core-model.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/core-model.md)
-- [architecture-truth.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/architecture-truth.md)
-- [design-gap-audit.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/design-gap-audit.md)
+- [core-model.md](<repo-root>/docs/architecture/core-model.md)
+- [architecture-truth.md](<repo-root>/docs/architecture/architecture-truth.md)
+- [design-gap-audit.md](<repo-root>/docs/architecture/design-gap-audit.md)
 
 ---
 
@@ -183,9 +183,9 @@
 
 - 现状：`core-model.md` 已将其定义为上下文意图，而不是状态；当前代码已在运行时 payload / worker context 中统一写入 `run_mode`。
 - 当前判断：现在不做是低风险且合理的；本轮统一口径已经达到目标，不需要把数据库拉进来。
-- 查询面现状：当前真正已有查询面是命令侧，而不是主运行态；控制台已有 [`ApprovalCommandQuery.java`](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/query/ApprovalCommandQuery.java) 和 [`ApprovalCommandMapper.xml`](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/ApprovalCommandMapper.xml)。
-- 现有承载：[`V27__approval_command.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V27__approval_command.sql) 已有 `payload_json` 可承载上下文；[`V13__create_compensation_and_step_runtime.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V13__create_compensation_and_step_runtime.sql) 的 `compensation_command` 没有统一上下文 JSON，如果未来真要查，更适合新增显式列。
-- 审计边界：[`V7__create_ops_tables.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V7__create_ops_tables.sql) 的 `job_execution_log` 和 [`V6__create_file_tables.sql`](/Users/dengchao/Downloads/file-batch-system/db/migration/V6__create_file_tables.sql) 的 `file_audit_log` 可以承载审计信息，但不建议作为主查询面。
+- 查询面现状：当前真正已有查询面是命令侧，而不是主运行态；控制台已有 [`ApprovalCommandQuery.java`](<repo-root>/batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/query/ApprovalCommandQuery.java) 和 [`ApprovalCommandMapper.xml`](<repo-root>/batch-console-api/src/main/resources/mapper/ApprovalCommandMapper.xml)。
+- 现有承载：[`V27__approval_command.sql`](<repo-root>/db/migration/V27__approval_command.sql) 已有 `payload_json` 可承载上下文；[`V13__create_compensation_and_step_runtime.sql`](<repo-root>/db/migration/V13__create_compensation_and_step_runtime.sql) 的 `compensation_command` 没有统一上下文 JSON，如果未来真要查，更适合新增显式列。
+- 审计边界：[`V7__create_ops_tables.sql`](<repo-root>/db/migration/V7__create_ops_tables.sql) 的 `job_execution_log` 和 [`V6__create_file_tables.sql`](<repo-root>/db/migration/V6__create_file_tables.sql) 的 `file_audit_log` 可以承载审计信息，但不建议作为主查询面。
 - 何时改表：只有当产品要求按 `run_mode` 做筛选、统计、报表或审计检索时，才进入正式写入数据库评估。
 
 建议落点：
@@ -197,15 +197,15 @@
 
 以下字段已经存在于数据库中，且被多个 mapper 直接引用：
 
-- `publish_attempt`：见 [V7__create_ops_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V7__create_ops_tables.sql#L63) 和 [OutboxEventMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)
-- `run_seq`：见 [V5__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V5__create_runtime_tables.sql#L124) 和 [V6__create_file_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V6__create_file_tables.sql#L106)
-- `retry_count`：见 [V5__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V5__create_runtime_tables.sql#L59) 、[V7__create_ops_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V7__create_ops_tables.sql#L21) 和 [V13__create_compensation_and_step_runtime.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V13__create_compensation_and_step_runtime.sql#L25)
-- `job_code` / `workflow_code` / `worker_code` / `worker_group`：分别分布在 [V4__create_definition_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V4__create_definition_tables.sql#L5) 、[V3__create_config_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V3__create_config_tables.sql#L99) 和 [V5__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V5__create_runtime_tables.sql#L25)
+- `publish_attempt`：见 [V7__create_ops_tables.sql](<repo-root>/db/migration/V7__create_ops_tables.sql#L63) 和 [OutboxEventMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)
+- `run_seq`：见 [V5__create_runtime_tables.sql](<repo-root>/db/migration/V5__create_runtime_tables.sql#L124) 和 [V6__create_file_tables.sql](<repo-root>/db/migration/V6__create_file_tables.sql#L106)
+- `retry_count`：见 [V5__create_runtime_tables.sql](<repo-root>/db/migration/V5__create_runtime_tables.sql#L59) 、[V7__create_ops_tables.sql](<repo-root>/db/migration/V7__create_ops_tables.sql#L21) 和 [V13__create_compensation_and_step_runtime.sql](<repo-root>/db/migration/V13__create_compensation_and_step_runtime.sql#L25)
+- `job_code` / `workflow_code` / `worker_code` / `worker_group`：分别分布在 [V4__create_definition_tables.sql](<repo-root>/db/migration/V4__create_definition_tables.sql#L5) 、[V3__create_config_tables.sql](<repo-root>/db/migration/V3__create_config_tables.sql#L99) 和 [V5__create_runtime_tables.sql](<repo-root>/db/migration/V5__create_runtime_tables.sql#L25)
 
 当前判断：
 - 这项现在不建议做，而且风险明显高于收益；本轮明确 freeze，不进入执行范围。
 - 风险不只在“改几张表”，而在于这些列同时散在 schema、MyBatis XML、测试种子 SQL、系统测试数据和文档 SQL 里。
-- 迁移治理：平台 DDL 以 `db/migration/` 为唯一源；[`sql-script-usage-scenarios.md`](../sql/sql-script-usage-scenarios.md) 与 [`docs/sql/flyway/README.md`](../sql/flyway/README.md) 为说明；运行侧另有 [`schema.sql`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/schema.sql)（勿与 Flyway 重复演进同一结构）。
+- 迁移治理：平台 DDL 以 `db/migration/` 为唯一源；[`sql-script-usage-scenarios.md`](../sql/sql-script-usage-scenarios.md) 与 [`docs/sql/flyway/README.md`](../sql/flyway/README.md) 为说明；运行侧另有 [`schema.sql`](<repo-root>/batch-orchestrator/src/main/resources/schema.sql)（勿与 Flyway 重复演进同一结构）。
 - 在这种前提下硬做 rename，最容易出现“文档改了、测试改了、真实迁移没改全”的分叉。
 
 如果要做真正的物理列重命名，需要同时处理：
@@ -226,13 +226,13 @@
 这个项已经按“只改代码、不改表”完成。当前 `run_mode` 统一由运行时链路写入，覆盖了正常 launch、系统 retry、lease reclaim recover 和补偿 redispatch 几条主路径；如未来要支持筛选 / 报表，再单独评估写入数据库。
 
 文件级范围：
-- [batch-common/src/main/java/io/github/pinpols/batch/common/enums/RunMode.java](/Users/dengchao/Downloads/file-batch-system/batch-common/src/main/java/io/github/pinpols/batch/common/enums/RunMode.java)
-- [batch-common/src/main/java/io/github/pinpols/batch/common/context/RunModeSupport.java](/Users/dengchao/Downloads/file-batch-system/batch-common/src/main/java/io/github/pinpols/batch/common/context/RunModeSupport.java)
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java)
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultRetryGovernanceService.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultRetryGovernanceService.java)
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/lease/PartitionLeaseReclaimScheduler.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/lease/PartitionLeaseReclaimScheduler.java)
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultFileGovernanceService.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultFileGovernanceService.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java)
+- [batch-common/src/main/java/io/github/pinpols/batch/common/enums/RunMode.java](<repo-root>/batch-common/src/main/java/io/github/pinpols/batch/common/enums/RunMode.java)
+- [batch-common/src/main/java/io/github/pinpols/batch/common/context/RunModeSupport.java](<repo-root>/batch-common/src/main/java/io/github/pinpols/batch/common/context/RunModeSupport.java)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultRetryGovernanceService.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultRetryGovernanceService.java)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/lease/PartitionLeaseReclaimScheduler.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/lease/PartitionLeaseReclaimScheduler.java)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultFileGovernanceService.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultFileGovernanceService.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java)
 
 #### `PipelineContext` -> `ExecutionContext`
 
@@ -243,10 +243,10 @@
 - 注释和测试断言
 
 文件级范围：
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
-- [batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/infrastructure/ExportStepExecutionAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/infrastructure/ExportStepExecutionAdapter.java)
-- [batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportStepExecutionAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportStepExecutionAdapter.java)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
+- [batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/infrastructure/ExportStepExecutionAdapter.java](<repo-root>/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/infrastructure/ExportStepExecutionAdapter.java)
+- [batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportStepExecutionAdapter.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportStepExecutionAdapter.java)
 
 #### `jobCode` / `pipelineCode` / `flowCode`
 
@@ -257,18 +257,18 @@
 
 说明：
 - 当前仍保留少量 `pipelineCode` 兼容访问器或兼容读取，这是刻意保留的兼容层，不视为漏改。
-- 典型落点见 [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java)、[batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)。
+- 典型落点见 [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java)、[batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)。
 
 文件级范围：
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRuntimeRepository.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRuntimeRepository.java)
-- [batch-console-api/src/main/java/io/github/pinpols/batch/console/web/response/ConsoleFilePipelineResponse.java](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/io/github/pinpols/batch/console/web/response/ConsoleFilePipelineResponse.java)
-- [batch-console-api/src/main/java/io/github/pinpols/batch/console/support/WorkflowExcelImportStore.java](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/io/github/pinpols/batch/console/support/WorkflowExcelImportStore.java)
-- [batch-console-api/src/main/java/io/github/pinpols/batch/console/support/JobDefinitionExcelImportStore.java](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/io/github/pinpols/batch/console/support/JobDefinitionExcelImportStore.java)
-- [batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml)
-- [batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml)
-- [batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml)
-- [batch-orchestrator/src/main/resources/mapper/WorkflowNodeMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/WorkflowNodeMapper.xml)
-- [batch-orchestrator/src/main/resources/mapper/CompensationCommandMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/CompensationCommandMapper.xml)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRuntimeRepository.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRuntimeRepository.java)
+- [batch-console-api/src/main/java/io/github/pinpols/batch/console/web/response/ConsoleFilePipelineResponse.java](<repo-root>/batch-console-api/src/main/java/io/github/pinpols/batch/console/web/response/ConsoleFilePipelineResponse.java)
+- [batch-console-api/src/main/java/io/github/pinpols/batch/console/support/WorkflowExcelImportStore.java](<repo-root>/batch-console-api/src/main/java/io/github/pinpols/batch/console/support/WorkflowExcelImportStore.java)
+- [batch-console-api/src/main/java/io/github/pinpols/batch/console/support/JobDefinitionExcelImportStore.java](<repo-root>/batch-console-api/src/main/java/io/github/pinpols/batch/console/support/JobDefinitionExcelImportStore.java)
+- [batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml](<repo-root>/batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml)
+- [batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml](<repo-root>/batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml)
+- [batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml)
+- [batch-orchestrator/src/main/resources/mapper/WorkflowNodeMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/WorkflowNodeMapper.xml)
+- [batch-orchestrator/src/main/resources/mapper/CompensationCommandMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/CompensationCommandMapper.xml)
 
 #### `retry_count` / `attemptNo` / `publishAttempt` / `run_seq`
 
@@ -281,14 +281,14 @@
 这类问题优先改 mapper、DTO、日志和文档，不直接改表。
 
 文件级范围：
-- [batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/DefaultScheduleForwarder.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/DefaultScheduleForwarder.java)
-- [batch-orchestrator/src/main/resources/mapper/WorkflowNodeRunMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/WorkflowNodeRunMapper.xml)
-- [batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml)
-- [batch-orchestrator/src/main/resources/mapper/JobStepInstanceMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/JobStepInstanceMapper.xml)
-- [batch-console-api/src/main/resources/mapper/WorkflowNodeRunMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/WorkflowNodeRunMapper.xml)
-- [batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml)
-- [batch-worker-core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml)
+- [batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/DefaultScheduleForwarder.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/DefaultScheduleForwarder.java)
+- [batch-orchestrator/src/main/resources/mapper/WorkflowNodeRunMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/WorkflowNodeRunMapper.xml)
+- [batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml)
+- [batch-orchestrator/src/main/resources/mapper/JobStepInstanceMapper.xml](<repo-root>/batch-orchestrator/src/main/resources/mapper/JobStepInstanceMapper.xml)
+- [batch-console-api/src/main/resources/mapper/WorkflowNodeRunMapper.xml](<repo-root>/batch-console-api/src/main/resources/mapper/WorkflowNodeRunMapper.xml)
+- [batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml](<repo-root>/batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml)
+- [batch-worker-core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml](<repo-root>/batch-worker-core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml)
 
 #### `workerId` / `workerCode` / `workerGroup`
 
@@ -300,31 +300,31 @@
 建议先统一接口、DTO、日志字段名，再决定是否需要进一步写入数据库。
 
 文件级范围：
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/domain/WorkerRegistration.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/domain/WorkerRegistration.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultHeartbeatService.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultHeartbeatService.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultWorkerLifecycleManager.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultWorkerLifecycleManager.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpWorkerRegistryClient.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpWorkerRegistryClient.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java)
-- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerRuntimeState.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerRuntimeState.java)
-- [batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/domain/ExportJobContext.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/domain/ExportJobContext.java)
-- [batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/domain/ImportJobContext.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/domain/ImportJobContext.java)
-- [batch-common/src/main/java/io/github/pinpols/batch/common/logging/StructuredLogField.java](/Users/dengchao/Downloads/file-batch-system/batch-common/src/main/java/io/github/pinpols/batch/common/logging/StructuredLogField.java)
-- [batch-common/src/main/java/io/github/pinpols/batch/common/model/WorkerRouteModel.java](/Users/dengchao/Downloads/file-batch-system/batch-common/src/main/java/io/github/pinpols/batch/common/model/WorkerRouteModel.java)
-- [batch-console-api/src/main/resources/mapper/WorkerRegistryMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/WorkerRegistryMapper.xml)
-- [batch-console-api/src/main/java/io/github/pinpols/batch/console/web/query/WorkerRegistryQueryRequest.java](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/io/github/pinpols/batch/console/web/query/WorkerRegistryQueryRequest.java)
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingRequest.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingRequest.java)
-- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingDecision.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingDecision.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/domain/WorkerRegistration.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/domain/WorkerRegistration.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultHeartbeatService.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultHeartbeatService.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultWorkerLifecycleManager.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultWorkerLifecycleManager.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpWorkerRegistryClient.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpWorkerRegistryClient.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java)
+- [batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerRuntimeState.java](<repo-root>/batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerRuntimeState.java)
+- [batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/domain/ExportJobContext.java](<repo-root>/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/domain/ExportJobContext.java)
+- [batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/domain/ImportJobContext.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/domain/ImportJobContext.java)
+- [batch-common/src/main/java/io/github/pinpols/batch/common/logging/StructuredLogField.java](<repo-root>/batch-common/src/main/java/io/github/pinpols/batch/common/logging/StructuredLogField.java)
+- [batch-common/src/main/java/io/github/pinpols/batch/common/model/WorkerRouteModel.java](<repo-root>/batch-common/src/main/java/io/github/pinpols/batch/common/model/WorkerRouteModel.java)
+- [batch-console-api/src/main/resources/mapper/WorkerRegistryMapper.xml](<repo-root>/batch-console-api/src/main/resources/mapper/WorkerRegistryMapper.xml)
+- [batch-console-api/src/main/java/io/github/pinpols/batch/console/web/query/WorkerRegistryQueryRequest.java](<repo-root>/batch-console-api/src/main/java/io/github/pinpols/batch/console/web/query/WorkerRegistryQueryRequest.java)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingRequest.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingRequest.java)
+- [batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingDecision.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/scheduler/ResourceSchedulingDecision.java)
 
 ### 7.4 已固化文档项归档
 
 #### `Step` / `Stage`
 
-数据库里同时存在 `step_code`、`stage_code`、`step_status` 等字段，但它们不构成一套新的持久化模型。边界定义以 [core-model.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/core-model.md) 3.6 为准；本文只保留候选清单和落点，不重复展开。
+数据库里同时存在 `step_code`、`stage_code`、`step_status` 等字段，但它们不构成一套新的持久化模型。边界定义以 [core-model.md](<repo-root>/docs/architecture/core-model.md) 3.6 为准；本文只保留候选清单和落点，不重复展开。
 
 #### 命令对象边界
 
-`CompensationSubmitCommand` / `ApprovalCommand` 不需要先改表，先把“谁触发、何时执行、是否审批、是否可重放”写清楚，避免误把命令当状态或运行态对象。边界定义以 [core-model.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/core-model.md) 6.2 / 6.4 为准；本文只保留候选和落点。
+`CompensationSubmitCommand` / `ApprovalCommand` 不需要先改表，先把“谁触发、何时执行、是否审批、是否可重放”写清楚，避免误把命令当状态或运行态对象。边界定义以 [core-model.md](<repo-root>/docs/architecture/core-model.md) 6.2 / 6.4 为准；本文只保留候选和落点。
 
 ### 7.5 剩余工作建议
 

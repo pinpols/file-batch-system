@@ -13,7 +13,7 @@
 | 2 | `/bin/sh` shebang (init-kafka / init-minio) | 真 POSIX,无需改 ✅ |
 | 3 | docker-path.sh 只搜 macOS 路径 | ✅ 加了 Linux / WSL / Rancher Desktop / NixOS 等 8 个候选 |
 | 4 | run-full-regression.sh 写死 macOS 路径 | ✅ docker + kubectl resolve 都扩到 8/6 候选 |
-| 5 | `/Users/dengchao` 个人路径 (be / fe acceptance) | ✅ 改 `$ROOT_DIR/../sibling-repo` 相对路径 |
+| 5 | `<home>` 个人路径 (be / fe acceptance) | ✅ 改 `$ROOT_DIR/../sibling-repo` 相对路径 |
 | **6** | docker 容器名硬写(`batch-postgres-primary` 等) | ⏸ **本文档备忘**,见下方 D-2 |
 | **7** | `localhost:PORT` 在 ops 脚本 | ⏸ **本文档备忘**,见下方 D-1 |
 | 8 | `lsof -ti tcp:PORT` BSD 风味 | macOS / Linux 都接受,真兼容 ✅ |

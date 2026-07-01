@@ -3,8 +3,8 @@
 ## 审查基线
 
 - 审查时间：2026-06-08 20:53 CST。
-- 后端仓库：`/Users/dengchao/Downloads/file-batch-system`
-- 前端仓库：`/Users/dengchao/Downloads/batch-console`
+- 后端仓库：`<repo-root>`
+- 前端仓库：`../batch-console`
 - 后端本地基线：`main` @ `fef75e1ed feat: improve trace diagnostics and governance handling (#437)`。
 - 注意：审查时 `origin/main` 已前进到 `20b114a52 fix: harden scheduled task redis startup handling (#438)`，本报告未纳入该远端新提交的差异。
 - 前端本地基线：`main` @ `ec5f174 Merge pull request #79 from pinpols/feature/trace-diagnostics-ui-20260608-bugfixed`。

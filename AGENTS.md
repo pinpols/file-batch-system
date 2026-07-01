@@ -8,7 +8,7 @@
 ../batch-console
 ```
 
-绝对路径示例：`/Users/dengchao/Downloads/batch-console`
+仓库根目录相对路径：`../batch-console`
 
 ### 关键目录
 

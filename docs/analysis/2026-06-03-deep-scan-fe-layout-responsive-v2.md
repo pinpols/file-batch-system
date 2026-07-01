@@ -1,7 +1,7 @@
 # 前端布局 + 响应式 深度扫描报告 v2(补扫)
 
 - 日期:2026-06-03
-- 扫描仓:`/Users/dengchao/Downloads/batch-console`(Vue 3 + TS + Pinia + Element Plus + ECharts + Mermaid)
+- 扫描仓:`../batch-console`(Vue 3 + TS + Pinia + Element Plus + ECharts + Mermaid)
 - v1 基线:`docs/analysis/2026-06-03-deep-scan-fe-layout-responsive.md`(P0×6 / P1×11 / P2+P3×15)
 - 本次范围:**死角专攻** —— 性能(CLS/LCP)、滚动嵌套、Element Plus 边界、i18n 长度爆破、resize 监听、暗色切换闪烁、滚动条 OS 差异、z-index 治理、图表 size、@media print、iframe、safe-area、命令面板、三态可视化基线。
 - 模式:只读;**不**重复 v1 已记录的缝隙(出现时只引用 ID + 补充)。
@@ -409,20 +409,20 @@ sandbox 属性:                    0 (iframe 无 sandbox = D-SEC-01)
 ```
 
 文件清单(本次复扫新增参考):
-- `/Users/dengchao/Downloads/batch-console/index.html`(viewport / theme-init / startup-image)
-- `/Users/dengchao/Downloads/batch-console/src/components/common/DocsDrawer.vue`(唯一 iframe)
-- `/Users/dengchao/Downloads/batch-console/src/components/common/CommandPalette.vue`(快捷键 + focus)
-- `/Users/dengchao/Downloads/batch-console/src/constants/theme.ts`(view-transition)
-- `/Users/dengchao/Downloads/batch-console/src/stores/app.ts`(matchMedia 监听)
-- `/Users/dengchao/Downloads/batch-console/src/utils/logger.ts`(RO 错误吞没)
-- `/Users/dengchao/Downloads/batch-console/src/charts/echarts.ts`(canvas + dpr)
-- `/Users/dengchao/Downloads/batch-console/src/composables/useMobileTracker.ts`(隐式键盘 - 未处理)
-- `/Users/dengchao/Downloads/batch-console/src/layout/DefaultLayout.vue`(滚动 / scrollbar-gutter / focus-fab z-index)
-- `/Users/dengchao/Downloads/batch-console/src/layout-mobile/MobileLayout.vue`(100dvh ✅)
-- `/Users/dengchao/Downloads/batch-console/src/styles/{tokens,app,element-override}.css`(z-index / transition / scrollbar)
-- `/Users/dengchao/Downloads/batch-console/src/layout-mobile/styles/mobile-common.css`(m-overlay z-index 2000/2001)
-- `/Users/dengchao/Downloads/batch-console/src/views/ops/components/{OpsTrendPanel,OpsDistPanel}.vue`(VChart autoresize)
-- `/Users/dengchao/Downloads/batch-console/src/views/workflow/WorkflowMermaidViewer.vue`(setTimeout resize)
+- `../batch-console/index.html`(viewport / theme-init / startup-image)
+- `../batch-console/src/components/common/DocsDrawer.vue`(唯一 iframe)
+- `../batch-console/src/components/common/CommandPalette.vue`(快捷键 + focus)
+- `../batch-console/src/constants/theme.ts`(view-transition)
+- `../batch-console/src/stores/app.ts`(matchMedia 监听)
+- `../batch-console/src/utils/logger.ts`(RO 错误吞没)
+- `../batch-console/src/charts/echarts.ts`(canvas + dpr)
+- `../batch-console/src/composables/useMobileTracker.ts`(隐式键盘 - 未处理)
+- `../batch-console/src/layout/DefaultLayout.vue`(滚动 / scrollbar-gutter / focus-fab z-index)
+- `../batch-console/src/layout-mobile/MobileLayout.vue`(100dvh ✅)
+- `../batch-console/src/styles/{tokens,app,element-override}.css`(z-index / transition / scrollbar)
+- `../batch-console/src/layout-mobile/styles/mobile-common.css`(m-overlay z-index 2000/2001)
+- `../batch-console/src/views/ops/components/{OpsTrendPanel,OpsDistPanel}.vue`(VChart autoresize)
+- `../batch-console/src/views/workflow/WorkflowMermaidViewer.vue`(setTimeout resize)
 
 ---
 

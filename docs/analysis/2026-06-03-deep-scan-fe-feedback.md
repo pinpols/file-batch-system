@@ -1,6 +1,6 @@
 # 深度扫描:前端反馈系统(Loading / Error / Toast / 通知 / Confirm / 进度)
 
-- **范围**:`/Users/dengchao/Downloads/batch-console`(Vue 3 + Element Plus + TanStack Query)
+- **范围**:`../batch-console`(Vue 3 + Element Plus + TanStack Query)
 - **日期**:2026-06-03
 - **方法**:静态阅读 + grep 计数 + 关键路径回溯;不跑 e2e。
 - **聚焦面**:Loading 状态层级、Error 翻译/Trace 暴露、Toast 一致性、空态分类、Import/Export 进度、维护/降级 banner、离线 / 网络恢复、TanStack 乐观更新、Web Push、Bell 红点、Confirmation 弹窗与误操作、进度条可信度。
