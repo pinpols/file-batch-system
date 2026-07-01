@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import lombok.Builder;
@@ -214,9 +215,9 @@ public class CrossDayDependencyResolver {
       return "t_" + sign + Math.abs(n);
     }
     if (Texts.hasText(spec.bizDateRange())) {
-      return spec.bizDateRange().toLowerCase();
+      return spec.bizDateRange().toLowerCase(Locale.ROOT);
     }
-    return spec.jobCode().toLowerCase();
+    return spec.jobCode().toLowerCase(Locale.ROOT);
   }
 
   private String missingReason(String alias, CrossDayDependencySpec spec, String detail) {

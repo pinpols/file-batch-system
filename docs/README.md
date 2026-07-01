@@ -24,7 +24,7 @@
 | 06 | [analysis/](./analysis/README.md) | 演进向：问题 / 修复 / 加固三件套 + 长期治理方案 + 项目评估 | `deep-issue-analysis.md` |
 | 07 | [dict/](./dict/README.md) | **Reference dict**（错误码 / 配置键，自动生成）| `error-codes.md` + `config-keys.md` |
 | 08 | [compliance/](./compliance/README.md) | 第三方依赖许可 + SBOM | `THIRD-PARTY-LICENSES.md` |
-| 09 | [audit/](./audit/) | 专项审计报告 | 后端 / trigger / worker 架构审计 |
+| 09 | [audit/](./audit/) | 专项审计报告 + 漂移防护总账 | [convention-drift-guard-index.md](./audit/convention-drift-guard-index.md) |
 | 10 | [backlog/](./backlog/) | 待办与加固路线 | hardening / throughput / ADR follow-up |
 | 11 | [plans/](./plans/README.md) | 阶段计划 | SDK roadmap / HA / 多租隔离计划 |
 | 12 | [review/](./review/README.md) | 评审结论 | code review / project deep review |
@@ -46,6 +46,7 @@
 | 救火值班 | 04 runbook (`incident-response.md` → `troubleshooting-decision-tree.md`) |
 | 上线评审 | 05 testing (`release-gate.md`) → 04 runbook (`docker-deployment.md` 或 `feature-switches.md`)|
 | 架构改动 | 01 architecture (`project-structure.md` / adr) → 顶层 03 changelog 追规范 |
+| 规范复扫 / PR 审核 | 09 audit (`convention-drift-guard-index.md`) → 根目录 `CLAUDE.md` → 顶层 02 coding-conventions → `scripts/ci/README.md` |
 | AI 协作 | 顶层 01 agent-baseline → 02 coding-conventions |
 
 ## 维护约束（来自 CLAUDE.md）

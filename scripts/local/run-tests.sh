@@ -55,6 +55,8 @@ declare -a CORE_TEST_MODULES=(
   batch-worker/process
   batch-worker/dispatch
   batch-worker/atomic
+  sdk/java/core
+  sdk/java/testkit
   batch-console-api
 )
 

@@ -188,6 +188,12 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   @Test
+  @DisplayName("④a __shard_identity 是分片识别元数据表,默认豁免 RLS 闭世界检查")
+  void shardIdentity_defaultExempted() {
+    assertThat(new RlsProperties().getExemptTables()).contains("__shard_identity");
+  }
+
+  @Test
   @DisplayName("④ 把漏配表加进豁免清单 → health 回 UP")
   void exemptedTable_healthUp() {
     createPlainTableWithRls("customer_account");

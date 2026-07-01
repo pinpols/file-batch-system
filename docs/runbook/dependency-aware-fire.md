@@ -12,6 +12,8 @@
   - 未就绪 → `launchScheduled` 抛 `UpstreamNotReadyException`,wheel 调度器走 **readiness defer**(见下),**不丢批**。
 
 > **就绪口径=当前 EFFECTIVE 结果版本**:只认 `result_version.status=EFFECTIVE` 物化出的 asset partition。PENDING、DRY_RUN、失败产物、旧 SUPERSEDED 版本都不放行,避免下游按未生效或已被推翻的过期结果启动(结算级)。ready 响应会带 `businessKey/versionNo/jobInstanceId` 供日志和运维定位。
+>
+> 2026-07-01 起,orchestrator 读取物化 `asset_partition` 时还会校验它指向的是同 `businessKey` 的最新 EFFECTIVE 版本,写入物化行时也按 `version_no` 单调更新。这个守卫用于防止重跑产生更高版本后,旧 EFFECTIVE 物化行继续让下游误判 ready。
 
 > trigger **不直连** orchestrator 状态表(读写分离 + 模块边界),就绪判定一律经 orchestrator 暴露的只读 internal API(携 `X-Internal-Secret`)。orchestrator 仍是唯一状态主机。
 
@@ -58,3 +60,4 @@ orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expe
 - 超窗 give-up 目前是"推进到下一 cron + ERROR/metric 告警 + 人工 replay",未自动落 `trigger_misfire_pending` 走 misfire 策略(ADR §6.4 列的 misfire 路由)——留作后续增强;当前语义更简单且不会无限 catch-up 循环。
 - 只 gate `launchScheduled`(正常调度 fire);catch-up / 手动 fire 不走此闸。
 - 不裁定上游业务对错(ADR-021 红线),只问"上游这个 job 这个批次日跑成功了没"。
+- 不做通用 deadline/window-aware 优化调度器。后续最多补 late/at-risk/missed-window 标记和告警,不得把 trigger 扩成 Airflow/Temporal 类通用编排器。

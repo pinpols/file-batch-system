@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -217,7 +218,7 @@ public class AdminTestDataCleanupRepository {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
     for (String id : tenantIds) {
-      if (PROTECTED_TENANT_IDS.contains(id.toLowerCase())) {
+      if (PROTECTED_TENANT_IDS.contains(id.toLowerCase(Locale.ROOT))) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT, "error.tenant.protected_cannot_delete", id);
       }

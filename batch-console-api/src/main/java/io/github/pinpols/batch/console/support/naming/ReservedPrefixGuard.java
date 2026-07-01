@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.List;
+import java.util.Locale;
 import lombok.experimental.UtilityClass;
 
 /**
@@ -56,7 +57,7 @@ public class ReservedPrefixGuard {
    */
   public static void checkTenantId(String tenantId, boolean productionMode) {
     if (tenantId == null || tenantId.isBlank()) return;
-    String lower = tenantId.toLowerCase();
+    String lower = tenantId.toLowerCase(Locale.ROOT);
 
     // 永远拒:RESERVED_TENANT_IDS(system / default / admin)
     if (RESERVED_TENANT_IDS.contains(lower)) {

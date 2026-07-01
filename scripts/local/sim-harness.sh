@@ -38,6 +38,7 @@ WORKER_DISPATCH_PORT="${WORKER_DISPATCH_PORT:-${BATCH_WORKER_DISPATCH_PORT:-1808
 WORKER_PROCESS_PORT="${WORKER_PROCESS_PORT:-${BATCH_WORKER_PROCESS_PORT:-18086}}"
 WORKER_ATOMIC_PORT="${WORKER_ATOMIC_PORT:-${BATCH_WORKER_ATOMIC_PORT:-18087}}"
 CONSOLE="${CONSOLE_BASE:-http://localhost:${CONSOLE_API_PORT}}"
+SIM_JAVA_OPTS="${SIM_JAVA_OPTS:--Xmx384m -XX:MaxMetaspaceSize=256m}"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-batch-kafka}"
 MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
@@ -227,6 +228,32 @@ verify_data() {
   bash scripts/local/verify-biz-shard.sh
 }
 
+# sim 会长时间跑多阶段,本地 Docker/IDE/浏览器共存时 Java 进程可能被系统回收。
+# 每个阶段前做一次轻量健康检查;若核心服务不健康,用本地小堆参数拉起,避免后续
+# import worker 只看到 Kafka 但注册不到 orchestrator 而空转。
+ensure_core_runtime() {
+  local ports=("$ORCHESTRATOR_PORT" "$CONSOLE_API_PORT" "$TRIGGER_PORT" "$WORKER_EXPORT_PORT" "$WORKER_DISPATCH_PORT" "$WORKER_PROCESS_PORT" "$WORKER_ATOMIC_PORT")
+  local p code unhealthy=0
+  for p in "${ports[@]}"; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:$p/actuator/health" 2>/dev/null || true)
+    [[ "$code" == 200 ]] || { unhealthy=1; break; }
+  done
+  [[ "$unhealthy" == 0 ]] && return 0
+
+  local log="$SIM_LOG_DIR/restart-core-$(date +%Y%m%d%H%M%S).log"
+  echo "  [core-runtime] unhealthy(:$p health=${code:-000}), restart core services → $log"
+  JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS}" SKIP_CDS=1 \
+    bash scripts/local/restart.sh trigger orchestrator console worker-export worker-process worker-dispatch worker-atomic >"$log" 2>&1
+  for p in "${ports[@]}"; do
+    for _ in $(seq 1 90); do
+      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:$p/actuator/health" 2>/dev/null || true)
+      [[ "$code" == 200 ]] && break
+      sleep 2
+    done
+    [[ "$code" == 200 ]] || { echo "  [core-runtime] :$p NOT ready(health=$code), see $log" >&2; return 1; }
+  done
+}
+
 # ---------------------------------------------------------
 # sim:全量阶段 04→25
 # restart_import:为特定 stage 切换 worker-import 互斥配置。
@@ -246,8 +273,9 @@ restart_import() {
     for _ in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
     kill -0 "$pid" 2>/dev/null && kill -9 "$pid"
   fi
+  local java_opts="${JAVA_OPTS:-$SIM_JAVA_OPTS}"
   # shellcheck disable=SC2086
-  nohup java --enable-native-access=ALL-UNNAMED -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off $extra \
+  nohup java --enable-native-access=ALL-UNNAMED -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off $java_opts $extra \
     -jar build/runtime-jars/worker-import.jar --spring.profiles.active=local >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1 &
   disown
   for _ in $(seq 1 40); do
@@ -262,12 +290,13 @@ sim() {
   echo "== sim:全量 04→25 =="
   clean_stale_env
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
+    ensure_core_runtime
     restart_import default   # 基线 worker:checkpoint=false(17 REPLACE 需要) + no skip
     local sum="$SIM_LOG_DIR/sim-summary.txt"; : > "$sum"
     local sim_failed=0
     while IFS= read -r s; do
       local n; n=$(basename "$s")
-      case "$n" in 00-*|01-*|02-*|03-*) continue;; esac
+      case "$n" in 00-*|01-*|02-*|03-*|2[6-9]-*) continue;; esac
       # per-stage batchNo 隔离:全局 BATCH_NO 会让各 stage 共享 batchNo,致断言/清理跨 stage
       # 撞数据(12 断言按 source_ref=batchNo 查到他人 file_record、24 DELETE 撞他人
       # trigger_request 的 job_instance FK)。08-25 各自 source env-common,unset 后会生成
@@ -281,9 +310,11 @@ sim() {
         23-*) restart_import skip ;;        # skip-profile
         25-*) restart_import checkpoint ;;  # checkpoint=true
       esac
+      ensure_core_runtime || exit 1
       echo ">>> $n $(date +%T)" | tee -a "$sum"
       local stage_log="$SIM_LOG_DIR/$n.log"
-      if bash "$s" >"$stage_log" 2>&1; then
+      # 阶段脚本不能继承 while-read 的 stdin；否则内部命令读取 stdin 时会吞掉后续阶段文件名。
+      if bash "$s" </dev/null >"$stage_log" 2>&1; then
         echo "PASS $n" | tee -a "$sum"
       else
         local rc=$?

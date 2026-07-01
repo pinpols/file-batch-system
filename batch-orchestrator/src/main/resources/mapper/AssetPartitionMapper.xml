@@ -50,7 +50,7 @@
     </select>
 
     <insert id="upsertEffectiveJobPartition">
-        insert into batch.asset_partition (
+        insert into batch.asset_partition as ap (
             tenant_id,
             asset_id,
             asset_code,
@@ -89,6 +89,23 @@
             payload_storage    = excluded.payload_storage,
             payload_ref        = excluded.payload_ref,
             updated_at         = current_timestamp
+        where exists (
+            select 1
+            from batch.result_version next_rv
+            left join batch.result_version current_rv
+              on current_rv.tenant_id = ap.tenant_id
+             and current_rv.id = ap.result_version_id
+            where next_rv.tenant_id = excluded.tenant_id
+              and next_rv.id = excluded.result_version_id
+              and next_rv.status = 'EFFECTIVE'
+              and (
+                current_rv.id is null
+                or (
+                  current_rv.business_key = next_rv.business_key
+                  and next_rv.version_no &gt;= current_rv.version_no
+                )
+              )
+        )
     </insert>
 
     <select id="selectEffectiveJobPartition" resultMap="AssetPartitionSnapshotResultMap">
@@ -105,13 +122,21 @@
             rv.payload_json::text as payload_json,
             ap.payload_ref
         from batch.asset_partition ap
-        left join batch.result_version rv
+        join batch.result_version rv
           on rv.tenant_id = ap.tenant_id
          and rv.id = ap.result_version_id
         where ap.tenant_id = #{tenantId}
           and ap.asset_code = #{assetCode}
           and ap.partition_key = #{partitionKey}
           and ap.freshness_status = 'EFFECTIVE'
+          and rv.status = 'EFFECTIVE'
+          and not exists (
+              select 1
+              from batch.result_version newer
+              where newer.tenant_id = rv.tenant_id
+                and newer.business_key = rv.business_key
+                and newer.version_no &gt; rv.version_no
+          )
         limit 1
     </select>
 </mapper>

@@ -13,6 +13,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
@@ -174,7 +175,7 @@ public abstract class AbstractWorkerLoop {
       return cfg.workerCode();
     }
     if (Texts.hasText(cfg.workerType())) {
-      return cfg.workerType().toLowerCase() + "-" + UUID.randomUUID();
+      return cfg.workerType().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
     }
     return workerGroup() + "-" + UUID.randomUUID();
   }

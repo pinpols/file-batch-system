@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -260,7 +261,7 @@ public class OpenLineageEmitter {
 
   private String datasetNamespace(OpenLineageDatasetRow row) {
     String storageType =
-        Texts.hasText(row.storageType()) ? row.storageType().toLowerCase() : "file";
+        Texts.hasText(row.storageType()) ? row.storageType().toLowerCase(Locale.ROOT) : "file";
     if (Texts.hasText(row.storageBucket())) {
       return storageType + "://" + row.storageBucket();
     }

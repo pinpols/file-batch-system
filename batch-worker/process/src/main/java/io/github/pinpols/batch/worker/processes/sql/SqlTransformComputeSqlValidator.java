@@ -48,7 +48,7 @@ public class SqlTransformComputeSqlValidator {
     Statement statement = parse(sql);
     List<String> tableNames = List.copyOf(new TablesNamesFinder<Void>().getTables(statement));
     for (String tableName : tableNames) {
-      if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase())) {
+      if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase(Locale.ROOT))) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
             ERR_KEY,
@@ -276,7 +276,7 @@ public class SqlTransformComputeSqlValidator {
             "sqlTransformCompute requires fully-qualified table names (schema.table), found: "
                 + name);
       }
-      String schema = name.substring(0, dot).toLowerCase();
+      String schema = name.substring(0, dot).toLowerCase(Locale.ROOT);
       if (!allowedSchemas.contains(schema)) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,

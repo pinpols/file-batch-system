@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.List;
+import java.util.Locale;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
@@ -88,7 +89,7 @@ public final class SensorSqlValidator {
         throw new IllegalArgumentException(
             "sensor SQL requires fully-qualified schema.table, found: " + name);
       }
-      String schema = name.substring(0, dot).toLowerCase();
+      String schema = name.substring(0, dot).toLowerCase(Locale.ROOT);
       if (!allowedSchemas.contains(schema)) {
         throw new IllegalArgumentException(
             "sensor SQL references disallowed schema '"

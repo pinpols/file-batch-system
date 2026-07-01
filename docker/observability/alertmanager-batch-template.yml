@@ -18,6 +18,9 @@ route:
         - alert_group="sla"
       receiver: batch-sla
     - matchers:
+        - alert_group="freshness"
+      receiver: batch-freshness
+    - matchers:
         - alert_group="capacity"
       receiver: batch-sre
 
@@ -37,6 +40,10 @@ receivers:
   - name: batch-sla
     webhook_configs:
       - url: http://host.docker.internal:19001/sla
+        send_resolved: true
+  - name: batch-freshness
+    webhook_configs:
+      - url: http://host.docker.internal:19001/freshness
         send_resolved: true
   - name: batch-sre
     webhook_configs:

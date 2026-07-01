@@ -6,6 +6,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -92,9 +93,9 @@ public class SqlTemplateExportSqlValidator {
    * SqlTransformComputeSqlValidator 同语义,保持 Export 与 Process 两条 SQL 路径一致守护。
    */
   private static void checkNoForbiddenFunctions(String sql, List<String> forbidden) {
-    String lower = sql.toLowerCase();
+    String lower = sql.toLowerCase(Locale.ROOT);
     for (String fn : forbidden) {
-      String needle = fn.toLowerCase();
+      String needle = fn.toLowerCase(Locale.ROOT);
       int idx = 0;
       while ((idx = lower.indexOf(needle, idx)) >= 0) {
         int after = idx + needle.length();
@@ -198,7 +199,7 @@ public class SqlTemplateExportSqlValidator {
                 + name
                 + "'");
       }
-      String schema = name.substring(0, dot).toLowerCase();
+      String schema = name.substring(0, dot).toLowerCase(Locale.ROOT);
       if (!allowedSchemas.contains(schema)) {
         throw new IllegalArgumentException(
             "sql_template_export references disallowed schema '"

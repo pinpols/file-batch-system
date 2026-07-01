@@ -28,3 +28,5 @@
 - [docs/testing/README.md](../testing/README.md)
 - [helm/README.md](../../helm/README.md)
 - [helm/batch-platform/README.md](../../helm/batch-platform/README.md)
+
+本目录的 `prometheus-batch-rules.yml` / `alertmanager-batch-template.yml` 是本地观测栈模板;`../../helm/batch-platform/files/prometheus-batch-rules.yml` 是 Helm 发布侧同步规则模板。

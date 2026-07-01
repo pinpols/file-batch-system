@@ -25,6 +25,8 @@ batch:
             - { title: 运维诊断, path: /ops/diagnostic, icon: Tools, minRole: ADMIN }
             - { title: 分片目录, path: /ops/shard-catalog, icon: Connection, minRole: ADMIN }
             - { title: 租户分片, path: /ops/tenant-placements, icon: Collection, minRole: ADMIN }
+            - { title: 容量画像, path: /ops/capacity-profile, icon: PieChart, minRole: VIEWER }
+            - { title: 资产新鲜度策略, path: /ops/asset-freshness, icon: Timer, minRole: TENANT_ADMIN }
         - key: config
           title: 配置与发布
           icon: Operation
@@ -68,6 +70,7 @@ batch:
             - { title: 审计, path: /observability/audits, icon: Memo, minRole: VIEWER }
             - { title: 操作审计, path: /observability/operation-audits, icon: Document, minRole: VIEWER }
             - { title: Trace 诊断, path: /observability/trace, icon: Search, minRole: VIEWER }
+            - { title: 血缘证据, path: /observability/lineage, icon: Connection, minRole: VIEWER }
             - { title: Outbox, path: /observability/outbox, icon: Box, minRole: TENANT_ADMIN }
             - { title: 可观测性查询, path: /observability/queries, icon: Search, minRole: VIEWER }
             - { title: 事件目录, path: /system/event-catalog, icon: Collection, minRole: VIEWER }

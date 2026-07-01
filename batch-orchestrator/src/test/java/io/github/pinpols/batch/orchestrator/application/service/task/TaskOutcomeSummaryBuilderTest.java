@@ -90,6 +90,27 @@ class TaskOutcomeSummaryBuilderTest {
   }
 
   @Test
+  @DisplayName("failed partition count: FAILED/CANCELLED/TERMINATED 都计入失败分片")
+  void failedPartitionCountIncludesCancelledAndTerminated() {
+    JobPartitionEntity success =
+        partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
+    JobPartitionEntity secondSuccess =
+        partition(5L, 5, "p5", PartitionStatus.SUCCESS.code(), Map.of("rows", 200));
+    JobPartitionEntity failed = partition(2L, 2, "p2", PartitionStatus.FAILED.code(), Map.of());
+    JobPartitionEntity cancelled =
+        partition(3L, 3, "p3", PartitionStatus.CANCELLED.code(), Map.of());
+    JobPartitionEntity terminated =
+        partition(4L, 4, "p4", PartitionStatus.TERMINATED.code(), Map.of());
+
+    Map<String, Object> aggregated =
+        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+            List.of(success, secondSuccess, failed, cancelled, terminated),
+            commandOutputs(Map.of()));
+
+    assertThat(aggregated).containsEntry("failedPartitionCount", 3L);
+  }
+
+  @Test
   @DisplayName("filterPartitionsByIds: 只保留当前 workflow node 的分片")
   void filterPartitionsByIdsSelectsCurrentNodePartitions() {
     JobPartitionEntity first = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());

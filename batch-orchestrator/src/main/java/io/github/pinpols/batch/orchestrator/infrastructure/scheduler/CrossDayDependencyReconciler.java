@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -212,7 +213,7 @@ public class CrossDayDependencyReconciler {
             .serviceName("batch-orchestrator")
             .alertType(ALERT_TYPE_TIMEOUT)
             .severity("ERROR")
-            .title("workflow cross-day dependency " + reason.toLowerCase())
+            .title("workflow cross-day dependency " + reason.toLowerCase(Locale.ROOT))
             .detailJson(JsonUtils.toJson(detail))
             .resourceKey(resourceKey)
             .traceId(workflowRun.getTraceId())

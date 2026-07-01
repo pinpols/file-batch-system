@@ -12,6 +12,30 @@
 | 降级表达 | K8s 执行、Temporal-like saga、lineage/catalog、cost profile、calendar 能力 | 只做与批量交付闭环直接相关的最小闭环,不扩成平台 |
 | 明确不做 | 自研 K8s 调度器、完整数据湖/数据治理、实时流处理、业务正确性裁判、通用 workflow/saga 引擎 | 写入边界守护,评审时直接拒绝 |
 
+### 1.1 2026-07-01 决策收口:补什么、不补什么
+
+本节是后续 PR 的判定表。默认结论是:补**已有后端能力的产品闭环和验证证据**,不继续堆通用调度/治理/成本核算模式。
+
+| 能力 | 当前决定 | 后端状态 | 后续允许范围 | 禁止扩张 |
+|---|---|---|---|---|
+| 分片 IT / 1000w import/export 复验 | 要做 | 动态 fan-out、分片 retry、partition outputs 聚合已落 | 补 4/8/16/32 小规模 IT、1000w import/export benchmark 复验、报告留档 | 不做通用 MapReduce/Spark 替代 |
+| Console retry failed shards | 要做 | `POST /api/console/instances/{id}/partitions/retry-failed` 已落后端 | 前端加按钮、审计展示、失败原因说明 | 不允许绕过 orchestrator 直接改 partition/task 表 |
+| replay confirm / impact preview | 要做 | preview/submit/approve/cancel 后端已落;V189 修 OUTPUTS_ONLY 多版本不被吞 | 前端确认页、1-2 层影响数量预估 | 不做完整 DAG 血缘治理或任意 rollback SQL |
+| stuck diagnosis | 要做 | `GET /api/console/ops/cluster-diagnostic/instances/{id}` 已落;V189 修 outbox 诊断口径 | 前端聚合页、告警 drill-down、DEFER/REJECT/NO_TASK 原因归因 | 不做通用 APM/SIEM/工单系统 |
+| asset freshness / readiness | 要做 | asset partition、readiness BFF、freshness policy + alert、Console policy CRUD 已落;V189 加最新 EFFECTIVE 守卫;Prometheus/Alertmanager freshness 模板已落 | asset freshness 页、运维 drill-down 体验打磨 | 不做企业数据目录、字段级/记录级 lineage |
+| capacity profile 基础趋势 | 可以做 | `GET /api/console/capacity-profile` 已落,scope=`BFS_HOT_TABLES` | 前端趋势展示、benchmark 对比、DB WAL/IO 手工报告引用 | 不做云账单分摊、跨平台 FinOps、业务金额成本裁定 |
+| deadline/window-aware | 谨慎做轻量版 | deadline_at、SLA 查询/报表已有基础 | 只加 late/at-risk/missed-window 标记和告警 | 不做复杂优化调度器 |
+| FILE/TABLE asset 扩展 | 谨慎做 | 当前 `asset_type=JOB` | 仅限 readiness/freshness,需 ADR 或本文件更新后实施 | 不扩成 catalog/MDM/数据治理 |
+| fault injection profile | 保留测试层 | sim/IT/脚本已有部分 profile | 继续放在 sim/测试框架和 runbook | 不 Console 化成故障平台 |
+| business-domain quota | 现在不做 | ADR-019 accepted but gated,未启动 | 只有真实多事业部公平性问题出现且 tenant/job/queue quota 不足时才启动 | 不提前引入 business_domain quota 维度 |
+| 通用 workflow / saga / lineage / K8s 调度 | 不做 | 无 | 如确需做,先新 ADR 证明仍属于 BFS 控制面 | 默认 reject |
+
+评审规则:
+
+1. PR 新增能力若落在"禁止扩张"列,即使代码正确也应 reject。
+2. PR 若声称实现上表"要做"项,必须说明它补的是产品闭环、验证证据还是后端缺口,不能混成新平台能力。
+3. 未列入本表的新模式默认不做;确需纳入,先更新本节并给出验证方案和越界风险。
+
 判断标准:
 
 1. 是否在回答「何时跑、跑哪个、谁来跑、怎么切分、失败怎么办、结果是否完整、如何追溯」。
@@ -286,6 +310,14 @@
 - P2-1 已落代码:新增 `GET /api/console/capacity-profile`,按 `TENANT/JOB/WORKER` 聚合热表容量画像。返回 `scope=BFS_HOT_TABLES`、`rows/totals/coverage`,明确 known gaps 和 rejected scopes。
 - P2-2 已落文档:见 `docs/runbook/k8s-worker-scaling-boundary.md`。边界是 K8s 管副本和 HPA,BFS 管 worker drain/lease/幂等;不接管 K8s replicas。
 - P2-3 已落文档:见 `docs/runbook/dispatch-adapter-template.md`。新增 adapter 必须先进入官方类型、安全画像、配置校验和测试;不开放动态插件市场。
+
+2026-07-01 收口修正:
+
+- readiness / asset partition 增加前向迁移 `V189__readiness_replay_diagnostic_guards.sql` 与 mapper 守卫:物化读必须关联 `result_version.status='EFFECTIVE'` 且不存在更高 `version_no`;upsert 只允许 EFFECTIVE 且版本号不倒退,防止旧 EFFECTIVE 在 rerun PENDING/FAILED 时被下游误消费。
+- replay OUTPUTS_ONLY 修正同 source instance 多版本 entry 被 `ON CONFLICT DO NOTHING` 静默吞的问题:source instance 唯一键只约束 `result_version_id is null`,OUTPUTS_ONLY 由 `result_version_id` 去重。
+- stuck diagnosis outbox 口径修正为 `aggregate_type='JOB_TASK'` 并按 instance 下的 `job_task` 关联统计,避免 aggregate_id 跨类型碰撞误报。
+- asset freshness policy 补 Console 最小 CRUD:`GET/POST/GET by id/PUT/PATCH enabled /api/console/asset-freshness-policies`,只支持 `assetType=JOB`,用于 freshness 告警策略管理,不扩成数据目录/治理平台。
+- P2 小修:dispatch business error 文案输出机器码+人话、失败分片计数纳入 `FAILED/CANCELLED/TERMINATED`、capacity profile 只读事务、生产代码 locale-stable lower-case。
 
 ## 6. 验证分层
 
@@ -807,6 +839,9 @@ trigger
 - 告警 detail 包含 `tenantId/assetCode/assetType/bizDate/expectedAt/staleAt/breachType/policyId`,resourceKey 固定为 `tenantId:assetCode:bizDate`。
 - 不改变 `asset_partition.freshness_status` 语义;该字段仍只表达 EFFECTIVE 可消费状态。
 - 不自动 close 旧告警。平台当前告警模型没有自动恢复关闭契约,本轮避免误关运维告警。
+- Console policy CRUD 已落在 `/api/console/asset-freshness-policies`,前端最小管理页落在 `/ops/asset-freshness`。
+- Prometheus 规则模板已补 `BatchAssetFreshnessMissing` / `BatchAssetFreshnessStale`,Alertmanager 已补 `freshness` 路由。
+- 以上只承接 JOB readiness/freshness SLA,不扩成 FILE/TABLE catalog、lineage、MDM 或通用告警平台。
 
 本地验证:
 
@@ -820,7 +855,7 @@ trigger
 
 还未做:
 
-- Console policy CRUD 与 asset freshness 聚合页。
+- asset freshness 聚合页和告警 drill-down 体验打磨。
 - Prometheus 专用规则与告警路由模板补充;当前先复用 `alert_event` 查询/升级链路。
 - 告警自动恢复关闭语义;需要先设计 `alert_event` 的 recovery contract,不能本轮局部硬关。
 - FILE/TABLE asset freshness 扩展;当前仍限定 JOB 产物。

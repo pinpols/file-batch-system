@@ -11,6 +11,7 @@ import io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,7 +85,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
     if (!Texts.hasText(channelCode)) {
       return null;
     }
-    String lower = channelCode.toLowerCase();
+    String lower = channelCode.toLowerCase(Locale.ROOT);
     if (lower.startsWith("sftp")) {
       return "SFTP";
     }

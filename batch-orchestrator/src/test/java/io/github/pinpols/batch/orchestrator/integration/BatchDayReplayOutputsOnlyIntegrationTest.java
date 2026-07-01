@@ -79,8 +79,24 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
             .createdAt(Instant.parse("2026-05-04T11:00:00Z"))
             .updatedAt(Instant.parse("2026-05-04T11:00:00Z"))
             .build();
+    ResultVersionEntity v3 =
+        ResultVersionEntity.builder()
+            .tenantId(TENANT)
+            .businessKey(BUSINESS_KEY)
+            .versionNo(3)
+            .jobInstanceId(secondInstanceId)
+            .status("PENDING")
+            .payloadStorage("INLINE_JSON")
+            .payloadJson("{\"recordCount\":180}")
+            .generatedAt(Instant.parse("2026-05-04T11:05:00Z"))
+            .generatedBy("test")
+            .promotionPolicy("MANUAL_APPROVAL")
+            .createdAt(Instant.parse("2026-05-04T11:05:00Z"))
+            .updatedAt(Instant.parse("2026-05-04T11:05:00Z"))
+            .build();
     resultVersionMapper.insert(v1);
     resultVersionMapper.insert(v2);
+    resultVersionMapper.insert(v3);
     Long v2Id =
         jdbcTemplate.queryForObject(
             "select id from batch.result_version where tenant_id=? and business_key=? and"
@@ -90,6 +106,15 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
             BUSINESS_KEY,
             2);
     assertThat(v2Id).isNotNull();
+    Long v3Id =
+        jdbcTemplate.queryForObject(
+            "select id from batch.result_version where tenant_id=? and business_key=? and"
+                + " version_no=?",
+            Long.class,
+            TENANT,
+            BUSINESS_KEY,
+            3);
+    assertThat(v3Id).isNotNull();
 
     // Step 2: 提交 OUTPUTS_ONLY session，autoApprove 直接 RUNNING
     BatchDayReplaySessionEntity session =
@@ -99,7 +124,7 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
                 .calendarCode(CALENDAR)
                 .bizDate(BIZ_DATE)
                 .scope("OUTPUTS_ONLY")
-                .versionIds(List.of(v2Id))
+                .versionIds(List.of(v2Id, v3Id))
                 .resultPolicy("MANUAL_CONFIRM_EFFECTIVE")
                 .configVersionPolicy("USE_ORIGINAL_CONFIG")
                 .reason("regulatory restate IT")
@@ -107,28 +132,29 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
                 .autoApprove(true)
                 .build());
     assertThat(session.status()).isEqualTo("RUNNING");
-    assertThat(session.totalCount()).isEqualTo(1);
-    assertThat(entryMapper.selectBySessionId(session.id())).hasSize(1);
+    assertThat(session.totalCount()).isEqualTo(2);
+    assertThat(entryMapper.selectBySessionId(session.id()))
+        .extracting("resultVersionId")
+        .containsExactly(v2Id, v3Id);
 
-    // Step 3: 同步执行 OUTPUTS_ONLY → promote v2，supersede v1
+    // Step 3: 同步执行 OUTPUTS_ONLY → 同 source_instance_id 的 v2/v3 都不能被唯一键吞掉，最终 v3 生效
     BatchDayReplaySessionEntity completed = replayService.executeOutputsOnly(TENANT, session.id());
 
     // Step 4: 校验 result_version 状态翻转 + session/entry 终态
     assertThat(completed.status()).isEqualTo("SUCCEEDED");
-    assertThat(completed.succeededCount()).isEqualTo(1);
+    assertThat(completed.succeededCount()).isEqualTo(2);
     assertThat(completed.failedCount()).isZero();
     var v2After = resultVersionMapper.selectById(TENANT, v2Id);
-    assertThat(v2After.status()).isEqualTo("EFFECTIVE");
+    assertThat(v2After.status()).isEqualTo("SUPERSEDED");
+    var v3After = resultVersionMapper.selectById(TENANT, v3Id);
+    assertThat(v3After.status()).isEqualTo("EFFECTIVE");
     var v1After = resultVersionMapper.selectEffective(TENANT, BUSINESS_KEY);
-    assertThat(v1After.versionNo()).isEqualTo(2);
+    assertThat(v1After.versionNo()).isEqualTo(3);
     var entries = entryMapper.selectBySessionId(session.id());
     assertThat(entries)
-        .singleElement()
-        .satisfies(
-            e -> {
-              assertThat(e.status()).isEqualTo("SUCCEEDED");
-              assertThat(e.resultVersionId()).isEqualTo(v2Id);
-            });
+        .allSatisfy(e -> assertThat(e.status()).isEqualTo("SUCCEEDED"))
+        .extracting("resultVersionId")
+        .containsExactly(v2Id, v3Id);
 
     // 守护：partial unique index 约束没破坏（同 business_key 仍至多 1 EFFECTIVE）
     Long effectiveCount =

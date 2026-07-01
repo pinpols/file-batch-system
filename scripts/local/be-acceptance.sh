@@ -270,19 +270,16 @@ step_1_build_restart() {
     mv ~/.local/bin/mvnd ~/.local/bin/mvnd.bak
     note "mvnd 临时禁用(Step 9 会恢复)"
   fi
-  # 用 mvn 退出码判成功,不用 jar mtime(mvn -q 见无改动时 no-op,jar 不会重新打包)
-  # 用 package(不是 install):batch-e2e-tests 是纯测试模块(maven-jar-plugin skipIfEmpty=true,
-  # 无 main 源码不产 artifact),走 install lifecycle 时 maven-install-plugin 报
-  # "did not assign a file to the build artifact" 直接失败。
-  # 改成 package:lifecycle 停在 package 不触发 install-plugin,e2e-tests 也能编译通过;
-  # 上游模块(orchestrator/trigger/worker-*/console-api/common)的 target/ jar 由 package 产生,
-  # Step 2/3/4 实际仍由 m2 旧 SNAPSHOT 解析跨模块依赖 —— 这是本地 acceptance 的 trade-off:
-  # 接受"上次 install 后的 m2 stale"风险,CI full-ci-gate 强制 fresh install 回退
-  # (2026-05-24 那次 stale 暴露问题靠 CI 抓住,本地 acceptance 不重复 CI 职责)。
-  # restart.sh 从 target/ 直接拷 console.jar 到 build/runtime-jars/,不走 m2,所以 package 足够。
-  # -pl batch-e2e-tests -am 反向拉齐所有上游依赖(等价于 batch-console-api + 全 worker 模块 + orchestrator + trigger + common)。
-  if ! mvn package -DskipTests -pl batch-e2e-tests -am -q > "$LOG_DIR/01-build-maven.log" 2>&1; then
-    ng "mvn package 失败(看 $LOG_DIR/01-build-maven.log)"
+  # 用 mvn 退出码判成功,不用 jar mtime(mvn -q 见无改动时 no-op,jar 不会重新打包)。
+  # Step 2/3/4 通过 run-tests --skip-build 按单模块 -pl 隔离执行,不会用 -am 扩大测试范围;
+  # 因此 Step 1 必须先 install 本仓可发布模块,让 batch-common test-jar / worker / sdk
+  # testkit 等跨模块依赖都能从本地 Maven 仓库解析到最新产物。
+  # batch-e2e-tests 是纯测试模块(maven-jar-plugin skipIfEmpty=true,无 main 源码不产 artifact),
+  # 不能进入 install lifecycle,否则 maven-install-plugin 会报 did not assign a file。
+  local test_modules
+  test_modules="batch-common,batch-trigger,batch-orchestrator,batch-worker/core,batch-worker/import,batch-worker/export,batch-worker/process,batch-worker/dispatch,batch-worker/atomic,sdk/java/core,sdk/java/testkit,batch-console-api"
+  if ! mvn install -DskipTests -pl "$test_modules" -am -q > "$LOG_DIR/01-build-maven.log" 2>&1; then
+    ng "mvn install 失败(看 $LOG_DIR/01-build-maven.log)"
     return 1
   fi
   local jar; jar=$(find batch-console-api/target -name "*-exec.jar" | head -1)
