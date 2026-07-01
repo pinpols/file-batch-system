@@ -129,6 +129,35 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  void batchInit_passesThroughExecutionModeAndWatermarkField() {
+    // 回归:bundle/init 的 JobDefinitionSpec 曾漏 executionMode/watermarkField,
+    // 致向导填 INCREMENTAL + 水位字段被静默丢弃、落库退化为 FULL。
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.getJobDefinitions().get(0).setExecutionMode("INCREMENTAL");
+    request.getJobDefinitions().get(0).setWatermarkField("updated_at");
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
+
+    service.batchInit(request, "admin", "batch-test-inc");
+
+    verify(jobDefinitionMapper)
+        .insert(
+            argThat(
+                entity ->
+                    "INCREMENTAL".equals(entity.getExecutionMode())
+                        && "updated_at".equals(entity.getWatermarkField())));
+  }
+
+  @Test
+  void batchInit_defaultsExecutionModeToFullWhenSpecOmitsIt() {
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
+
+    service.batchInit(request, "admin", "batch-test-full");
+
+    verify(jobDefinitionMapper).insert(argThat(entity -> "FULL".equals(entity.getExecutionMode())));
+  }
+
+  @Test
   void batchInit_skipsJobDefinitionWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.setMode(InitMode.SKIP_EXISTING);

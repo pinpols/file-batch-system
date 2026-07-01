@@ -87,6 +87,11 @@ public class TenantConfigBatchInitRequest {
     private Integer priority;
     private Boolean enabled;
     private String description;
+
+    /** ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,缺省 FULL。INCREMENTAL 须配合 watermarkField。 */
+    private String executionMode;
+
+    private String watermarkField;
   }
 
   @Data
