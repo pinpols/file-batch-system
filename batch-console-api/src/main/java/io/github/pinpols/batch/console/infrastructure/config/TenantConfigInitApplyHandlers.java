@@ -265,6 +265,8 @@ public class TenantConfigInitApplyHandlers {
     entity.setPriority(Nullables.coalesce(spec.getPriority(), 5));
     entity.setEnabled(spec.getEnabled() != null && spec.getEnabled());
     entity.setDescription(spec.getDescription());
+    entity.setExecutionMode(Nullables.coalesce(spec.getExecutionMode(), "FULL"));
+    entity.setWatermarkField(spec.getWatermarkField());
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);
     jobDefinitionMapper.insert(entity);
@@ -301,6 +303,10 @@ public class TenantConfigInitApplyHandlers {
         Nullables.coalesce(spec.getShardStrategy(), existing.getShardStrategy()));
     param.setEnabled(Nullables.coalesce(spec.getEnabled(), existing.getEnabled()));
     param.setDescription(Nullables.coalesce(spec.getDescription(), existing.getDescription()));
+    param.setExecutionMode(
+        Nullables.coalesce(spec.getExecutionMode(), existing.getExecutionMode()));
+    param.setWatermarkField(
+        Nullables.coalesce(spec.getWatermarkField(), existing.getWatermarkField()));
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
   }

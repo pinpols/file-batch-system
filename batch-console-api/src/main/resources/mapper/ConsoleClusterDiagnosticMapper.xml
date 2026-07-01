@@ -261,7 +261,7 @@
          where oe.tenant_id = #{tenantId}
            and oe.aggregate_type = 'JOB_TASK'
            and jt.job_instance_id = #{jobInstanceId}
-         group by publish_status
-         order by publish_status
+         group by oe.publish_status
+         order by oe.publish_status
     </select>
 </mapper>

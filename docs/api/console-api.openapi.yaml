@@ -15218,6 +15218,8 @@ components:
         priority: { type: integer, nullable: true }
         enabled: { type: boolean, nullable: true }
         description: { type: string }
+        executionMode: { type: string, description: "FULL / INCREMENTAL / CDC,缺省 FULL" }
+        watermarkField: { type: string }
 
     WorkflowDefinitionSpec:
       type: object
