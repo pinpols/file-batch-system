@@ -88,7 +88,7 @@ done
 # 18080(BE) / 5173(FE) 占用是正常,其它 worker 端口需 start-all.sh 起齐
 
 # 3) 磁盘空间(测试 + log 需要 ~3GB)
-df -h /Users/dengchao/Downloads/file-batch-system | tail -1 | awk '{print "free:", $4}'
+df -h "$(git rev-parse --show-toplevel)" | tail -1 | awk '{print "free:", $4}'
 
 # 4) tunnel(可选)
 pgrep -fl cloudflared && echo "tunnel: running" || echo "tunnel: not active(隧道验证段跳过)"

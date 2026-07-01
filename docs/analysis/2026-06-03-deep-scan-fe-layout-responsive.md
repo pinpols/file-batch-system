@@ -1,7 +1,7 @@
 # 前端布局 + 响应式 深度扫描报告
 
 - 日期:2026-06-03
-- 扫描仓:`/Users/dengchao/Downloads/batch-console`(Vue 3 + TS + Pinia + Element Plus)
+- 扫描仓:`../batch-console`(Vue 3 + TS + Pinia + Element Plus)
 - 范围:布局体系 / 栅格 + 间距 / 响应式 / 滚动 / 空态 + 骨架 / a11y / i18n 长度 / 核心页 + 新功能页
 - 模式:**只读**,不修改 batch-console;报告写入 file-batch-system。
 - 扫描时长:>= 40min。
@@ -347,15 +347,15 @@ el-form 总出现                 29 files
 ```
 
 文件清单(本次主要参考):
-- `/Users/dengchao/Downloads/batch-console/src/layout/DefaultLayout.vue`
-- `/Users/dengchao/Downloads/batch-console/src/layout-mobile/MobileLayout.vue`
-- `/Users/dengchao/Downloads/batch-console/src/styles/tokens.css`
-- `/Users/dengchao/Downloads/batch-console/src/styles/app.css`
-- `/Users/dengchao/Downloads/batch-console/src/constants/breakpoints.ts`
-- `/Users/dengchao/Downloads/batch-console/src/components/common/{PageContainer,PageHeader,SectionCard,EmptyState,DataState}.vue`
-- `/Users/dengchao/Downloads/batch-console/src/components/table/{ProTable,ListPageQueryBar,TableSkeleton}.vue`
-- `/Users/dengchao/Downloads/batch-console/src/views/workflow/WorkflowMermaidViewer.vue`
-- `/Users/dengchao/Downloads/batch-console/src/views/monitor/JobInstanceList.vue`
-- `/Users/dengchao/Downloads/batch-console/src/views/ops/OpsSummary.vue`
-- `/Users/dengchao/Downloads/batch-console/src/views-mobile/{MJobInstances,MOpsSummary}.vue`
-- `/Users/dengchao/Downloads/batch-console/index.html`
+- `../batch-console/src/layout/DefaultLayout.vue`
+- `../batch-console/src/layout-mobile/MobileLayout.vue`
+- `../batch-console/src/styles/tokens.css`
+- `../batch-console/src/styles/app.css`
+- `../batch-console/src/constants/breakpoints.ts`
+- `../batch-console/src/components/common/{PageContainer,PageHeader,SectionCard,EmptyState,DataState}.vue`
+- `../batch-console/src/components/table/{ProTable,ListPageQueryBar,TableSkeleton}.vue`
+- `../batch-console/src/views/workflow/WorkflowMermaidViewer.vue`
+- `../batch-console/src/views/monitor/JobInstanceList.vue`
+- `../batch-console/src/views/ops/OpsSummary.vue`
+- `../batch-console/src/views-mobile/{MJobInstances,MOpsSummary}.vue`
+- `../batch-console/index.html`

@@ -72,7 +72,7 @@ CREATE TABLE biz.wide_10m_copy_20260607
 import preprocess streamed object to spool (no heap buffering):
 bucket=batch-dev, object=ingress/ta/import-10m-near-g.csv,
 bytes=1008890025,
-spool=/var/folders/.../batch-preprocess-obj-13797254203766878630.raw
+spool=<os-temp-dir>/batch-preprocess-obj-13797254203766878630.raw
 ```
 
 LOAD 证据：

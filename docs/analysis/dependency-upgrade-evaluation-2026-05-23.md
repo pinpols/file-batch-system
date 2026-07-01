@@ -151,6 +151,6 @@
 ### 5.5 回退命令
 
 ```bash
-cd /Users/dengchao/Downloads/file-batch-system
+cd "$(git rev-parse --show-toplevel)"
 git checkout -- pom.xml .env.example docker-compose.yml
 ```

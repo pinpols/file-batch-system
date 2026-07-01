@@ -32,15 +32,15 @@
   - 其他高级资源公平与容量评估项仍按后续轮次继续补齐
 - **已补齐（原审计误记为缺失）**：Worker **排空超时与扫描间隔** 由 Orchestrator 配置 **`batch.worker.drain.default-timeout-seconds`**、**`check-interval-millis`**（环境变量 `BATCH_WORKER_DRAIN_TIMEOUT_SECONDS`、`BATCH_WORKER_DRAIN_CHECK_INTERVAL_MILLIS`）及 Flyway **`V19__worker_registry_drain.sql`**（`drain_started_at` / `drain_deadline_at`）承载；控制台代理 **`/api/console/workers/{code}/drain|force-offline|claimed-tasks`**。**新任务派发**仅选 `worker_registry.status=ONLINE`（见 `DefaultWorkerSelector`），`DRAINING` 节点不会接收新路由。
 - 代码证据：
-  - [DefaultResourceScheduler.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultResourceScheduler.java)
-  - [DefaultConcurrencyLimiter.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultConcurrencyLimiter.java)
-  - [DefaultPartitionThrottle.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultPartitionThrottle.java)
-  - [DefaultWorkerSelector.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultWorkerSelector.java)
-  - [TenantSchedulerSnapshotService.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/snapshot/TenantSchedulerSnapshotService.java)
-  - [SchedulerSnapshotController.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/SchedulerSnapshotController.java)
-  - [ConsoleSchedulerSnapshotController.java](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleSchedulerSnapshotController.java)
-  - Flyway [V16__scheduler_fair_share_snapshot_load.sql](/Users/dengchao/Downloads/file-batch-system/db/migration/V16__scheduler_fair_share_snapshot_load.sql)
-  - Worker 排空：[WorkerDrainGovernanceService](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceService.java)、[WorkerDrainTimeoutScheduler](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/WorkerDrainTimeoutScheduler.java)、[docs/runbook/rolling-upgrade-workers.md](/Users/dengchao/Downloads/file-batch-system/docs/runbook/rolling-upgrade-workers.md)
+  - [DefaultResourceScheduler.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultResourceScheduler.java)
+  - [DefaultConcurrencyLimiter.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultConcurrencyLimiter.java)
+  - [DefaultPartitionThrottle.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultPartitionThrottle.java)
+  - [DefaultWorkerSelector.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultWorkerSelector.java)
+  - [TenantSchedulerSnapshotService.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/snapshot/TenantSchedulerSnapshotService.java)
+  - [SchedulerSnapshotController.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/SchedulerSnapshotController.java)
+  - [ConsoleSchedulerSnapshotController.java](<repo-root>/batch-console-api/src/main/java/io/github/pinpols/batch/console/web/ConsoleSchedulerSnapshotController.java)
+  - Flyway [V16__scheduler_fair_share_snapshot_load.sql](<repo-root>/db/migration/V16__scheduler_fair_share_snapshot_load.sql)
+  - Worker 排空：[WorkerDrainGovernanceService](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceService.java)、[WorkerDrainTimeoutScheduler](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/scheduler/WorkerDrainTimeoutScheduler.java)、[docs/runbook/rolling-upgrade-workers.md](<repo-root>/docs/runbook/rolling-upgrade-workers.md)
 
 ### 9. 文件处理链路
 
@@ -51,18 +51,18 @@
   - **中间表示**：通用 **`jdbc_mapped`** 路径的 PARSE / VALIDATE / LOAD 已保留 **`Map<String,Object>`** 逻辑行，适合任意列名导入；部分存量示例模板仍可继续落到 **`CustomerImportPayload`**（Jackson），用于字段强绑定场景。
   - **`LOAD`**：**`ImportLoadPlugin`**（含 **`jdbc_mapped`**、`batchUpdate`）；说明书 **「仅中间表 + 异步合并」** 非内置，需 staging + 下游作业或专用插件。
 - 代码证据：
-  - [ImportPreprocessPipeline.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/preprocess/ImportPreprocessPipeline.java)
-  - [PreprocessStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStep.java)
-  - [ParseStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java)
-  - [LoadStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java)
+  - [ImportPreprocessPipeline.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/preprocess/ImportPreprocessPipeline.java)
+  - [PreprocessStep.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStep.java)
+  - [ParseStep.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java)
+  - [LoadStep.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java)
 
 - 导出链路（相对说明书 §9.4）：
   - **GENERATE**：当前输出 **`JSON` / `DELIMITED` / `EXCEL` / `FIXED_WIDTH`**；DELIMITED 使用 **`csv()`**，并支持模板级 **`delimiter` / `quotePolicy` / `escapePolicy` / `headerRows`**；Excel 与定长格式也已补齐。
   - **STORE**：已实现 **`.part` 临时对象 → 摘要校验 → `copy` 转正 → 删临时**（见 `StoreStep` + `MinioExportStorage`），与说明书「临时对象、校验、晋升」**方向一致**。
   - **快照元数据**：`PrepareStep` / `GenerateStep` 已写入 **`snapshotMode` / `snapshotTs` 等**导出上下文（见 `PrepareStep`）；与说明书「跨分片一致读、`sourcePartitions` 强语义」的**完全对齐**仍待验收。
 - 代码证据：
-  - [GenerateStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java)
-  - [StoreStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java)
+  - [GenerateStep.java](<repo-root>/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java)
+  - [StoreStep.java](<repo-root>/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java)
 
 - 分发链路（相对说明书文件分发章节）：
   - **`API` / `API_PUSH`**：**`HttpDispatchChannelAdapter`**（OkHttp POST；`API_PUSH` 可配 `api_push_api_key` / `authorization` 头）。
@@ -75,17 +75,17 @@
   - **异步回执轮询**：**`DispatchReceiptPollScheduler`** 轮询 `receipt_poll_url`（合并自 `config_json`），条件：`file_dispatch_record` 为 `SENT` + `PENDING`。
   - **仍缺**：SFTP / EMAIL / HTTP 的主动健康探测与更复杂的分级退避策略仍可继续增强。
 - 代码证据：
-  - [DispatchChannelGateway.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelGateway.java)
-  - [HttpDispatchChannelAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/HttpDispatchChannelAdapter.java)
-  - [SftpDispatchChannelAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java)
-  - [SmtpEmailDispatchChannelAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java)
-  - [LocalDispatchChannelAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/LocalDispatchChannelAdapter.java)
-  - [NasDispatchChannelAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/NasDispatchChannelAdapter.java)
-  - [OssDispatchChannelAdapter.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/OssDispatchChannelAdapter.java)
-  - [DispatchChannelHealthService.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthService.java)
-  - [DispatchChannelHealthScheduler.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthScheduler.java)
-  - [DispatchChannelHealthRepository.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthRepository.java)
-  - [DispatchReceiptPollScheduler.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/DispatchReceiptPollScheduler.java)
+  - [DispatchChannelGateway.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelGateway.java)
+  - [HttpDispatchChannelAdapter.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/HttpDispatchChannelAdapter.java)
+  - [SftpDispatchChannelAdapter.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java)
+  - [SmtpEmailDispatchChannelAdapter.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java)
+  - [LocalDispatchChannelAdapter.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/LocalDispatchChannelAdapter.java)
+  - [NasDispatchChannelAdapter.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/NasDispatchChannelAdapter.java)
+  - [OssDispatchChannelAdapter.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/OssDispatchChannelAdapter.java)
+  - [DispatchChannelHealthService.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthService.java)
+  - [DispatchChannelHealthScheduler.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthScheduler.java)
+  - [DispatchChannelHealthRepository.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthRepository.java)
+  - [DispatchReceiptPollScheduler.java](<repo-root>/batch-worker-dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/DispatchReceiptPollScheduler.java)
 
 ### 9.12 边查边写与禁止全量加载
 
@@ -93,11 +93,11 @@
 - **导入**：PARSE → VALIDATE → LOAD 可走 **NDJSON 临时文件**流式链路；通用 **`jdbc_mapped`** 已能在主路径保留 **`Map<String,Object>`** 逻辑行并按 chunk + **`batchUpdate`** 入库。存量示例模板仍可能使用 **`CustomerImportPayload`**，但不再是通用导入的硬约束。
 - **导出**：明细 **分页查询 + 按页写文件**，避免单次加载全表；JSON snapshot 仍是按上下文对象序列化，不再额外做整表聚合。
 - 代码证据：
-  - [ParseStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java)
-  - [ValidateStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java)
-  - [LoadStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java)
-  - [ImportDataQualityService.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportDataQualityService.java)
-  - [GenerateStep.java](/Users/dengchao/Downloads/file-batch-system/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java)
+  - [ParseStep.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java)
+  - [ValidateStep.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java)
+  - [LoadStep.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java)
+  - [ImportDataQualityService.java](<repo-root>/batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportDataQualityService.java)
+  - [GenerateStep.java](<repo-root>/batch-worker-export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java)
 
 ### 12. 补偿、状态机与任务实例
 
@@ -105,7 +105,7 @@
 - 仍有缺口：
   - 审批列表页、批量审批、审批 SLA 与告警联动仍可继续产品化。
 - 代码证据：
-  - [DefaultCompensationService.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultCompensationService.java)
+  - [DefaultCompensationService.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/DefaultCompensationService.java)
 
 ### 15. 多租户与安全
 
@@ -118,13 +118,13 @@
 
 ### 16. 可观测性与运行手册
 
-- 已实现：actuator 暴露、部分 Micrometer 指标、SLA/file governance 定时检查；**告警写入数据库**（`batch.alert_event`，Flyway **`V18__alert_event.sql`**）；**结构化日志 pattern** 在 console/import 等模块 `application.yml` 中已统一字段占位；仓库内已有 **runbook**（[`docs/runbook/`](/Users/dengchao/Downloads/file-batch-system/docs/runbook)）、**Prometheus/Grafana 基线**（[`docs/observability/prometheus-grafana-baseline.md`](/Users/dengchao/Downloads/file-batch-system/docs/observability/prometheus-grafana-baseline.md)、`grafana-dashboard-batch.json`）；**第 7 轮补齐**了 [`prometheus-batch-rules.yml`](/Users/dengchao/Downloads/file-batch-system/docs/observability/prometheus-batch-rules.yml)、[`alertmanager-batch-template.yml`](/Users/dengchao/Downloads/file-batch-system/docs/observability/alertmanager-batch-template.yml)、[`structured-logging-pipeline.md`](/Users/dengchao/Downloads/file-batch-system/docs/observability/structured-logging-pipeline.md)、[`scripts/ops/inspect-observability.sh`](/Users/dengchao/Downloads/file-batch-system/scripts/ops/inspect-observability.sh)。
+- 已实现：actuator 暴露、部分 Micrometer 指标、SLA/file governance 定时检查；**告警写入数据库**（`batch.alert_event`，Flyway **`V18__alert_event.sql`**）；**结构化日志 pattern** 在 console/import 等模块 `application.yml` 中已统一字段占位；仓库内已有 **runbook**（[`docs/runbook/`](<repo-root>/docs/runbook)）、**Prometheus/Grafana 基线**（[`docs/observability/prometheus-grafana-baseline.md`](<repo-root>/docs/observability/prometheus-grafana-baseline.md)、`grafana-dashboard-batch.json`）；**第 7 轮补齐**了 [`prometheus-batch-rules.yml`](<repo-root>/docs/observability/prometheus-batch-rules.yml)、[`alertmanager-batch-template.yml`](<repo-root>/docs/observability/alertmanager-batch-template.yml)、[`structured-logging-pipeline.md`](<repo-root>/docs/observability/structured-logging-pipeline.md)、[`scripts/ops/inspect-observability.sh`](<repo-root>/scripts/ops/inspect-observability.sh)。
 - 仍有缺口：
   - 集中式日志管道如果要对接 ELK / OpenTelemetry，可在现有示例上继续补生产侧接入细节。
   - Kafka lag 若要接入平台统一告警，仍建议再补 Kafka exporter 或 Prometheus adapter。
 - 代码/仓库证据：
-  - [JobSlaScheduler.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/JobSlaScheduler.java)、[FileGovernanceScheduler.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java)
-  - [docs/runbook/daily-inspection.md](/Users/dengchao/Downloads/file-batch-system/docs/runbook/daily-inspection.md)、[docs/runbook/incident-response.md](/Users/dengchao/Downloads/file-batch-system/docs/runbook/incident-response.md)
+  - [JobSlaScheduler.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/JobSlaScheduler.java)、[FileGovernanceScheduler.java](<repo-root>/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java)
+  - [docs/runbook/daily-inspection.md](<repo-root>/docs/runbook/daily-inspection.md)、[docs/runbook/incident-response.md](<repo-root>/docs/runbook/incident-response.md)
 
 ### 17 / 18 / 19 / 20.11 实施交付面
 
@@ -135,8 +135,8 @@
   - 自动巡检/自愈脚本（runbook 已有可执行说明，脚本化仍可加强）
   - `THIRD-PARTY-LICENSES.md / NOTICE / SBOM`
 - 仓库证据：
-  - [docker-compose.yml](/Users/dengchao/Downloads/file-batch-system/docker-compose.yml)、[scripts/local/](/Users/dengchao/Downloads/file-batch-system/scripts/local)
-  - [docs/runbook/rolling-upgrade-workers.md](/Users/dengchao/Downloads/file-batch-system/docs/runbook/rolling-upgrade-workers.md)
+  - [docker-compose.yml](<repo-root>/docker-compose.yml)、[scripts/local/](<repo-root>/scripts/local)
+  - [docs/runbook/rolling-upgrade-workers.md](<repo-root>/docs/runbook/rolling-upgrade-workers.md)
 
 ### 测试与质量门禁
 
@@ -164,7 +164,7 @@
 - **已治理（第 22 轮）**：原重复的 `V11__create_event_outbox_logs`、`V12__create_config_release_and_secret_version`、`V14__file_channel_type_api_push` 已分别重编号为 **`V20` / `V21` / `V22`**，版本序列可与 Flyway 唯一校验兼容。新增 **`V24__batch_runtime_default_parameter.sql`** 承载默认参数目录表与种子数据。
 - **后续扩展（V27–V40，跳过 V31）**：ShedLock 表（V30）、批处理日（V32）、乐观锁版本字段（V33）、控制台用户账户（V34–V35）、多个 CHECK 约束扩展（V36–V37、V39–V40）、幂等记录表（V38，供 `DatabaseIdempotencyGuard` 使用）。当前最新版本为 **V40**。
 - **升级注意**：若某环境曾在旧命名下只执行过重复版本中的**一部分**，需对照 `flyway_schema_history` 人工核对后再迁移（详见 [runtime-default-parameters.md](./runtime-default-parameters.md)）。
-- [README.md](/Users/dengchao/Downloads/file-batch-system/README.md) 已指向设计说明书、审计文档与补全对话；模块细节仍以代码与 `docs/` 为准。
+- [README.md](<repo-root>/README.md) 已指向设计说明书、审计文档与补全对话；模块细节仍以代码与 `docs/` 为准。
 
 ## 当前优先级（截至 2026-04-08）
 

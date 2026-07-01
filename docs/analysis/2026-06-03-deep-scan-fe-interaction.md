@@ -1,7 +1,7 @@
 # 深扫 FE 交互层 — batch-console (Vue3 + TS + Pinia + Element Plus)
 
 - 日期: 2026-06-03
-- 范围: `/Users/dengchao/Downloads/batch-console` 整仓只读扫描,聚焦 **交互层** (表单 / 键盘 / 筛选排序分页 / 批量 / 拖拽 / 复制粘贴 / 撤销 / 错误恢复 / Toast / 模态 / 核心场景)
+- 范围: `../batch-console` 整仓只读扫描,聚焦 **交互层** (表单 / 键盘 / 筛选排序分页 / 批量 / 拖拽 / 复制粘贴 / 撤销 / 错误恢复 / Toast / 模态 / 核心场景)
 - 方法: grep + 阅读关键 view/composable/util 源码; 不跑 build/test
 - 输出形式: 问题清单(P0/P1/P2) + 一致性观察 + 验证脚本建议
 - 文档约定: 路径全部相对 batch-console 仓根
