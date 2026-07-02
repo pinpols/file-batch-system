@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.redis.RedisConnectionFailureException;
 
 /** T-1: OutboxPublishCircuitBreaker 测试——验证 CLOSED → OPEN → HALF_OPEN → CLOSED 状态机。 */
 @ExtendWith(MockitoExtension.class)
@@ -128,5 +130,25 @@ class OutboxPublishCircuitBreakerTest {
 
     // Should be open again
     assertThat(breaker.allowNow()).isFalse();
+  }
+
+  @Test
+  void allowNow_shouldFailOpen_whenRedisConnectionFails() {
+    // Redis 不可达(慢速路径 evalLong 抛连接异常)→ 无本地已知开态时 fail-open 放行。
+    // outbox 事件已与状态同事务落 PG,熔断器不应把 Redis 故障放大成投递停摆。
+    when(redis.evalLong(anyString(), anyString(), anyString()))
+        .thenThrow(new RedisConnectionFailureException("redis down"));
+
+    assertThat(breaker.allowNow()).isTrue();
+  }
+
+  @Test
+  void onAdvanceResult_shouldNotThrow_whenRedisConnectionFails() {
+    // best-effort:Redis 不可达时本轮跳过集群态更新,绝不把异常抛回 OutboxPollScheduler
+    // (否则每轮栽在 Redis 上,outbox→Kafka 投递停摆)。
+    when(redis.evalLong(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenThrow(new RedisConnectionFailureException("redis down"));
+
+    assertThatCode(() -> breaker.onAdvanceResult(2)).doesNotThrowAnyException();
   }
 }
