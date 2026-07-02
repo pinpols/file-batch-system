@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
@@ -265,7 +267,15 @@ public class TenantConfigInitApplyHandlers {
     entity.setPriority(Nullables.coalesce(spec.getPriority(), 5));
     entity.setEnabled(spec.getEnabled() != null && spec.getEnabled());
     entity.setDescription(spec.getDescription());
-    entity.setExecutionMode(Nullables.coalesce(spec.getExecutionMode(), "FULL"));
+    String executionMode = Nullables.coalesce(spec.getExecutionMode(), "FULL");
+    if ("INCREMENTAL".equals(executionMode)
+        && (spec.getWatermarkField() == null || spec.getWatermarkField().isBlank())) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "watermarkField is required when executionMode=INCREMENTAL for job " + spec.getJobCode());
+    }
+    entity.setExecutionMode(executionMode);
     entity.setWatermarkField(spec.getWatermarkField());
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);

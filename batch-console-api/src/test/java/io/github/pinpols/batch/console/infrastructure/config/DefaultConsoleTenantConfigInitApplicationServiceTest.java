@@ -158,6 +158,18 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  void batchInit_rejectsIncrementalWithoutWatermark() {
+    // 回归:INCREMENTAL 缺 watermarkField 的 spec 应被拒(不 insert),避免建出跑不起来的增量作业。
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.getJobDefinitions().get(0).setExecutionMode("INCREMENTAL");
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
+
+    service.batchInit(request, "admin", "batch-test-inc-nowm");
+
+    verify(jobDefinitionMapper, never()).insert(any());
+  }
+
+  @Test
   void batchInit_skipsJobDefinitionWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.setMode(InitMode.SKIP_EXISTING);
