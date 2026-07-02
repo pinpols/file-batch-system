@@ -6,6 +6,9 @@ import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,6 +27,7 @@ import org.springframework.stereotype.Component;
  *       circuitBreakerCooldownMillis}；任一成功轮清零计数。
  * </ul>
  */
+@Slf4j
 @Component
 public class OutboxPublishCircuitBreaker {
 
@@ -107,10 +111,21 @@ public class OutboxPublishCircuitBreaker {
       return true;
     }
     // 慢速路径：查询 Redis，原子发布新快照
-    Long openUntilMs =
-        redis.evalLong(ALLOW_SCRIPT, BatchRedisKeys.outboxCircuit(), FIELD_OPEN_UNTIL_MS);
-    // 区分 Redis 返回 0(正常关闭) 与 null(Redis 不可达):
-    // null 时使用上次缓存的 state，避免 Redis 故障期间强制关闭熔断从而失去保护
+    Long openUntilMs;
+    try {
+      openUntilMs =
+          redis.evalLong(ALLOW_SCRIPT, BatchRedisKeys.outboxCircuit(), FIELD_OPEN_UNTIL_MS);
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      // Redis 不可达时 fail-open：outbox 事件本就与状态同事务落 PG 不丢,熔断器是纯保护性基础设施,
+      // 不应把 Redis 故障放大成投递停摆(与 quota 限流器一致的 fail-open 语义)。回落上次缓存态:
+      // 本地已知熔断开→继续拒;否则放行,Redis 恢复后 evalLong 自然重新同步集群态。
+      log.warn(
+          "Outbox 熔断器:Redis 不可达,allowNow fail-open 回落缓存态(openUntilMs={}):{}",
+          snapshot.openUntilMs(),
+          ex.getMessage());
+      return snapshot.openUntilMs() <= now;
+    }
+    // 区分 Redis 返回 0(正常关闭) 与 null(Lua 脚本返回 nil):null 时使用上次缓存的 state
     if (openUntilMs == null) {
       return snapshot.openUntilMs() <= now;
     }
@@ -126,17 +141,26 @@ public class OutboxPublishCircuitBreaker {
     }
     long now = BatchDateTimeSupport.utcEpochMillis();
     long ttlMillis = Math.max(outboxProperties.getCircuitBreakerCooldownMillis(), 60_000L);
-    Long openUntilMs =
-        redis.evalLong(
-            ADVANCE_SCRIPT,
-            BatchRedisKeys.outboxCircuit(),
-            FIELD_FAILED_POLLS,
-            FIELD_OPEN_UNTIL_MS,
-            String.valueOf(Math.max(publishFailed, 0)),
-            String.valueOf(outboxProperties.getCircuitBreakerFailureThresholdConsecutivePolls()),
-            String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
-            String.valueOf(now),
-            String.valueOf(ttlMillis));
+    Long openUntilMs;
+    try {
+      openUntilMs =
+          redis.evalLong(
+              ADVANCE_SCRIPT,
+              BatchRedisKeys.outboxCircuit(),
+              FIELD_FAILED_POLLS,
+              FIELD_OPEN_UNTIL_MS,
+              String.valueOf(Math.max(publishFailed, 0)),
+              String.valueOf(outboxProperties.getCircuitBreakerFailureThresholdConsecutivePolls()),
+              String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
+              String.valueOf(now),
+              String.valueOf(ttlMillis));
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      // Redis 不可达时 best-effort：本轮不更新集群熔断态,保留本地 state,重置半开标记避免泄漏,
+      // 不向 OutboxPollScheduler 抛异常(否则每轮栽在 Redis 上,把 Redis 故障放大成投递停摆)。
+      log.warn("Outbox 熔断器:Redis 不可达,onAdvanceResult 跳过集群态更新:{}", ex.getMessage());
+      halfOpenProbing.compareAndSet(true, false);
+      return;
+    }
     // T-2：原子发布新快照
     long resolvedOpen = openUntilMs != null ? openUntilMs : 0L;
     state = new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis());
