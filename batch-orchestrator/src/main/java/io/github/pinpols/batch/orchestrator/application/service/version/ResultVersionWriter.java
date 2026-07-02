@@ -111,9 +111,24 @@ public class ResultVersionWriter {
             case NO_RULES -> null;
           };
       boolean dqBlocked = dqOutcome.status() == DataQualityGateOutcome.GateStatus.BLOCKED;
-      if (dqBlocked || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy)) {
+      // PARTIAL_FAILED（部分分片失败）不得自动进 EFFECTIVE：否则下游 readiness/asset_partition 会把不
+      // 完整结果当完整消费（违反 roadmap §2.2「PARTIAL_FAILED 不得被静默消费」）。强制 PENDING +
+      // MANUAL_APPROVAL,由运维重跑失败分片（→ 全 SUCCESS → EFFECTIVE）或人工确认后才可用;
+      // 且不 supersede 旧 EFFECTIVE（部分失败的重跑不得把上一版好结果降级）。
+      boolean partialFailed =
+          JobInstanceStatus.PARTIAL_FAILED.code().equals(instance.getInstanceStatus());
+      if (dqBlocked || partialFailed || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy)) {
         status = STATUS_PENDING;
         effectiveAt = null;
+        if (partialFailed) {
+          promotionPolicy = PROMOTION_MANUAL_APPROVAL;
+          log.warn(
+              "PARTIAL_FAILED terminal → result_version 落 PENDING（不自动 EFFECTIVE,防部分结果被下游"
+                  + "静默消费）: tenantId={}, businessKey={}, jobInstanceId={}",
+              tenantId,
+              businessKey,
+              instance.getId());
+        }
         if (dqBlocked) {
           promotionPolicy = PROMOTION_MANUAL_APPROVAL;
           log.warn(
