@@ -67,18 +67,21 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
     ApprovalRecordResponse recordResponse = loadApproval(tenantId, approvalNo);
     ApprovalRecord record = recordResponse.getRecord();
-    // 同动作幂等:已 APPROVED 再 approve 直接返回;反动作冲突:已 REJECTED 不可再 approve → 409。
-    if ("APPROVED".equalsIgnoreCase(record.getApprovalStatus())) {
+    String status = record.getApprovalStatus();
+    // EXECUTED:已完成,幂等返回。REJECTED:反动作冲突 → 409。
+    if ("EXECUTED".equalsIgnoreCase(status)) {
       return approvalNo;
     }
-    if (!"PENDING".equalsIgnoreCase(record.getApprovalStatus())) {
+    if ("REJECTED".equalsIgnoreCase(status)) {
       throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.approval.not_pending_for_action",
-          approvalNo,
-          record.getApprovalStatus());
+          ResultCode.STATE_CONFLICT, "error.approval.not_pending_for_action", approvalNo, status);
     }
-    approveRemote(tenantId, approvalNo, operatorId, reason);
+    // 原子性/可重试补偿:approveRemote(→APPROVED)与 markExecutedRemote(→EXECUTED)之间,
+    // 若 side-effect 失败则状态停在 APPROVED(非 EXECUTED),异常抛给调用方且不卡死——
+    // 重试同一 approvalNo 时命中 APPROVED:跳过重复推进,直接重跑 side-effect。只有 PENDING 才需推进。
+    if ("PENDING".equalsIgnoreCase(status)) {
+      approveRemote(tenantId, approvalNo, operatorId, reason);
+    }
     String actionType = record.getActionType();
     String result =
         switch (actionType) {
