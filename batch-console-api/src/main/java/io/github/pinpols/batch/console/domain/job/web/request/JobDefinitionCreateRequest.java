@@ -2,10 +2,12 @@ package io.github.pinpols.batch.console.domain.job.web.request;
 
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import org.springframework.scheduling.support.CronExpression;
 
 @Data
 public class JobDefinitionCreateRequest {
@@ -72,4 +74,26 @@ public class JobDefinitionCreateRequest {
   private Integer priority;
   private Boolean enabled;
   private String description;
+
+  /** scheduleType=CRON 时 scheduleExpr 必须是合法 cron(Spring 6 段;5 段前补秒位),防止垃圾表达式入库运行期才炸。 */
+  @AssertTrue(message = "scheduleExpr must be a valid cron expression when scheduleType=CRON")
+  public boolean isScheduleExprValidForCron() {
+    if (!"CRON".equals(scheduleType) || scheduleExpr == null || scheduleExpr.isBlank()) {
+      return true;
+    }
+    try {
+      String value = scheduleExpr.trim();
+      CronExpression.parse(value.split("\\s+").length == 5 ? "0 " + value : value);
+      return true;
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  /** executionMode=INCREMENTAL 时 watermarkField 必填,否则增量作业无水位跑不起来。 */
+  @AssertTrue(message = "watermarkField is required when executionMode=INCREMENTAL")
+  public boolean isWatermarkPresentForIncremental() {
+    return !"INCREMENTAL".equals(executionMode)
+        || (watermarkField != null && !watermarkField.isBlank());
+  }
 }
