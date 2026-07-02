@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,6 +76,28 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private static final String KEY_TENANT_ID = "tenantId";
   private static final String KEY_GRAY_SCOPE_JSON = "grayScopeJson";
   private static final String KEY_RELEASE_ID = "releaseId";
+
+  /**
+   * 配置发布状态机合法转换（nextStatus → 允许的当前状态集合）。 只挡明确非法的转换:① ROLLED_BACK 是终态,不可再 publish/gray「复活」;②
+   * rollback 只能作用于已上线(PUBLISHED/GRAY)的发布,对 DRAFT/PENDING_APPROVAL
+   * 无可回滚内容。直发(DRAFT→PUBLISHED)、灰度、幂等重发等既有合法路径不受影响。
+   */
+  private static final Map<String, Set<String>> ALLOWED_RELEASE_TRANSITIONS =
+      Map.of(
+          ConfigLifecycleStatus.PUBLISHED.code(),
+              Set.of(
+                  ConfigLifecycleStatus.DRAFT.code(),
+                  ConfigLifecycleStatus.PENDING_APPROVAL.code(),
+                  ConfigLifecycleStatus.GRAY.code(),
+                  ConfigLifecycleStatus.PUBLISHED.code()),
+          ConfigLifecycleStatus.GRAY.code(),
+              Set.of(
+                  ConfigLifecycleStatus.DRAFT.code(),
+                  ConfigLifecycleStatus.PENDING_APPROVAL.code(),
+                  ConfigLifecycleStatus.PUBLISHED.code(),
+                  ConfigLifecycleStatus.GRAY.code()),
+          ConfigLifecycleStatus.ROLLED_BACK.code(),
+              Set.of(ConfigLifecycleStatus.PUBLISHED.code(), ConfigLifecycleStatus.GRAY.code()));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConfigReleaseMapper configReleaseMapper;
@@ -274,6 +297,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
       Long releaseId, ConfigReleaseActionRequest request, String nextStatus, String changeAction) {
     String tenantId = resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    validateReleaseTransition(release.getConfigStatus(), nextStatus);
     // publishedAt / rolledBackAt 仅在对应状态转换时打时间戳，其他状态传 null（保留历史值）；
     // 时间戳一旦写入不再清除，回滚后仍可查到最近一次发布时间以供审计。
     Map<String, Object> params =
@@ -312,6 +336,14 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                 release.getConfigType(), release.getConfigKey(), release.getVersionNo()),
             new ChangeLogChange(changeAction, "SUCCESS", Map.of("nextStatus", nextStatus))));
     return nextStatus;
+  }
+
+  /** 校验配置发布状态转换合法性，非法转换抛 STATE_CONFLICT(409),避免绕过审批门禁/复活已回滚/重复发布。 */
+  private void validateReleaseTransition(String current, String next) {
+    if (!ALLOWED_RELEASE_TRANSITIONS.getOrDefault(next, Set.of()).contains(current)) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.config.release_transition_illegal", current, next);
+    }
   }
 
   private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {

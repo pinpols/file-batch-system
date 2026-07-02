@@ -185,8 +185,36 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
-  void shouldRollbackConfigRelease_andSetRolledBackAt() {
+  void shouldReject_whenPublishRolledBackRelease() {
+    // 回归:ROLLED_BACK 是终态,不可再 publish「复活」。
+    ConfigReleaseEntity rolledBack = release(10L, "JOB", "k", 1);
+    rolledBack.setConfigStatus(ConfigLifecycleStatus.ROLLED_BACK.code());
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(rolledBack);
+
+    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.STATE_CONFLICT);
+    verify(configReleaseMapper, org.mockito.Mockito.never()).updateConfigReleaseStatus(anyMap());
+  }
+
+  @Test
+  void shouldReject_whenRollbackDraftRelease() {
+    // 回归:rollback 只能作用于已上线发布,DRAFT 无可回滚内容。release() 默认 DRAFT。
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
+
+    assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.STATE_CONFLICT);
+  }
+
+  @Test
+  void shouldRollbackConfigRelease_andSetRolledBackAt() {
+    // rollback 只能作用于已上线发布(状态机守卫),用 PUBLISHED release。
+    ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
+    published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
 
     ConfigReleaseActionRequest req = actionRequest();
     String status = service.rollbackConfigRelease(10L, req);
