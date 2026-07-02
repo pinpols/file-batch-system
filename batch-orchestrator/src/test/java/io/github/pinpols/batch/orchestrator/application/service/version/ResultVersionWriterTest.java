@@ -188,7 +188,9 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void partialFailedTerminalAlsoWrites() {
+  void partialFailedTerminalWritesPendingNotEffective() {
+    // PARTIAL_FAILED（部分分片失败）不得自动进 EFFECTIVE：否则下游 readiness/asset_partition 会把不
+    // 完整结果当完整消费。落 PENDING/MANUAL_APPROVAL、不 supersede 旧 EFFECTIVE、不物化 readiness。
     JobInstanceEntity instance = success("t1", 303L, "JOB_A", LocalDate.of(2026, 5, 4), null);
     instance.setInstanceStatus("PARTIAL_FAILED");
     when(mapper.selectByJobInstanceId("t1", 303L)).thenReturn(null);
@@ -196,7 +198,15 @@ class ResultVersionWriterTest {
 
     writer.writeOnTerminal(instance, Map.of("partial", true));
 
-    verify(mapper, times(1)).insert(any());
+    ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
+    verify(mapper, times(1)).insert(captor.capture());
+    ResultVersionEntity inserted = captor.getValue();
+    assertThat(inserted.status()).isEqualTo("PENDING");
+    assertThat(inserted.promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
+    assertThat(inserted.effectiveAt()).isNull();
+    // 不得降级上一版好结果,也不得让下游 readiness 变 READY
+    verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
+    verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
   @Test

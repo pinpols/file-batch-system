@@ -101,6 +101,17 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     // assert:分区计数如实反映 join 结果(2 成功 / 1 失败),不把失败分片吞成成功。
     assertThat(successPartitionCount(fannedOut.instanceId())).isEqualTo(2);
     assertThat(failedPartitionCount(fannedOut.instanceId())).isEqualTo(1);
+
+    // assert(结算级契约):PARTIAL_FAILED 不得产出 EFFECTIVE result_version —— 否则下游 readiness
+    // 会把不完整结果当完整消费(roadmap §2.2「PARTIAL_FAILED 不得被静默消费」)。
+    Integer effectiveVersions =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.result_version"
+                + " where tenant_id = ? and job_instance_id = ? and status = 'EFFECTIVE'",
+            Integer.class,
+            TENANT,
+            fannedOut.instanceId());
+    assertThat(effectiveVersions).isZero();
   }
 
   @Test
