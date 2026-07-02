@@ -7,8 +7,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.RedisConnectionFailureException;
-import org.springframework.data.redis.RedisSystemException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -115,7 +114,7 @@ public class OutboxPublishCircuitBreaker {
     try {
       openUntilMs =
           redis.evalLong(ALLOW_SCRIPT, BatchRedisKeys.outboxCircuit(), FIELD_OPEN_UNTIL_MS);
-    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+    } catch (DataAccessException ex) {
       // Redis 不可达时 fail-open：outbox 事件本就与状态同事务落 PG 不丢,熔断器是纯保护性基础设施,
       // 不应把 Redis 故障放大成投递停摆(与 quota 限流器一致的 fail-open 语义)。回落上次缓存态:
       // 本地已知熔断开→继续拒;否则放行,Redis 恢复后 evalLong 自然重新同步集群态。
@@ -154,7 +153,7 @@ public class OutboxPublishCircuitBreaker {
               String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
               String.valueOf(now),
               String.valueOf(ttlMillis));
-    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+    } catch (DataAccessException ex) {
       // Redis 不可达时 best-effort：本轮不更新集群熔断态,保留本地 state,重置半开标记避免泄漏,
       // 不向 OutboxPollScheduler 抛异常(否则每轮栽在 Redis 上,把 Redis 故障放大成投递停摆)。
       log.warn("Outbox 熔断器:Redis 不可达,onAdvanceResult 跳过集群态更新:{}", ex.getMessage());
