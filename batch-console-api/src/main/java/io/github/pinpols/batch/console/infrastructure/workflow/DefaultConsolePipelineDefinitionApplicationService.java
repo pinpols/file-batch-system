@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleMetaQueryService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -22,8 +23,10 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoField;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +50,31 @@ public class DefaultConsolePipelineDefinitionApplicationService
   private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher realtimeEventPublisher;
+  private final ConsoleMetaQueryService metaQueryService;
+
+  /** 校验每个 step 的 stageCode 属于该 pipelineType 允许集、implCode 已在 step 注册表登记(FE 下拉之外的越界拦截)。 */
+  private void validateSteps(
+      String pipelineType, List<PipelineDefinitionSaveRequest.StepItem> steps) {
+    if (steps == null || steps.isEmpty()) {
+      return;
+    }
+    List<String> allowedStages =
+        metaQueryService.pipelineStages().getOrDefault(pipelineType, List.of());
+    Set<String> registeredImpls = new HashSet<>(metaQueryService.stepImpls(null));
+    for (PipelineDefinitionSaveRequest.StepItem step : steps) {
+      if (!allowedStages.contains(step.getStageCode())) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.pipeline.stage_not_allowed_for_type",
+            step.getStageCode(),
+            pipelineType);
+      }
+      if (!registeredImpls.contains(step.getImplCode())) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.pipeline.impl_not_registered", step.getImplCode());
+      }
+    }
+  }
 
   @Override
   public PageResponse<Map<String, Object>> list(
@@ -85,6 +113,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
     params.put("version", 1);
     params.put(KEY_ENABLED, request.getEnabled() != null ? request.getEnabled() : true);
     params.put(KEY_DESCRIPTION, request.getDescription());
+    validateSteps(request.getPipelineType(), request.getSteps());
     pipelineDefinitionMapper.insert(params);
     Long defId = ((Number) params.get(KEY_ID)).longValue();
 
@@ -131,6 +160,11 @@ public class DefaultConsolePipelineDefinitionApplicationService
         request.getDescription() != null
             ? request.getDescription()
             : existing.get(KEY_DESCRIPTION));
+    String effectiveType =
+        request.getPipelineType() != null
+            ? request.getPipelineType()
+            : (String) existing.get(KEY_PIPELINE_TYPE);
+    validateSteps(effectiveType, request.getSteps());
     pipelineDefinitionMapper.update(params);
 
     pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
