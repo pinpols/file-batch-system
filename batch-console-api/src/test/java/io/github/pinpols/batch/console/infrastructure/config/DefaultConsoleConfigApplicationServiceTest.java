@@ -211,7 +211,10 @@ class DefaultConsoleConfigApplicationServiceTest {
 
   @Test
   void shouldRollbackConfigRelease_andSetRolledBackAt() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
+    // rollback 只能作用于已上线发布(状态机守卫),用 PUBLISHED release。
+    ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
+    published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
 
     ConfigReleaseActionRequest req = actionRequest();
     String status = service.rollbackConfigRelease(10L, req);
