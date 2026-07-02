@@ -67,8 +67,16 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
     ApprovalRecordResponse recordResponse = loadApproval(tenantId, approvalNo);
     ApprovalRecord record = recordResponse.getRecord();
-    if (!"PENDING".equalsIgnoreCase(record.getApprovalStatus())) {
+    // 同动作幂等:已 APPROVED 再 approve 直接返回;反动作冲突:已 REJECTED 不可再 approve → 409。
+    if ("APPROVED".equalsIgnoreCase(record.getApprovalStatus())) {
       return approvalNo;
+    }
+    if (!"PENDING".equalsIgnoreCase(record.getApprovalStatus())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.approval.not_pending_for_action",
+          approvalNo,
+          record.getApprovalStatus());
     }
     approveRemote(tenantId, approvalNo, operatorId, reason);
     String actionType = record.getActionType();
@@ -151,6 +159,19 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   @Override
   public String reject(String tenantId, String approvalNo, String operatorId, String reason) {
+    // 同动作幂等:已 REJECTED 再 reject 直接返回;反动作冲突:已 APPROVED 不可再 reject → 409
+    // (此前 reject 无守卫,对已 APPROVED 委托远端静默忽略、返 200 却不改状态,误导操作员)。
+    ApprovalRecord record = loadApproval(tenantId, approvalNo).getRecord();
+    if ("REJECTED".equalsIgnoreCase(record.getApprovalStatus())) {
+      return approvalNo;
+    }
+    if (!"PENDING".equalsIgnoreCase(record.getApprovalStatus())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.approval.not_pending_for_action",
+          approvalNo,
+          record.getApprovalStatus());
+    }
     rejectRemote(tenantId, approvalNo, operatorId, reason);
     return approvalNo;
   }
