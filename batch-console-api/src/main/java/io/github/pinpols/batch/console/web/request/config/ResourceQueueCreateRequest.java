@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.web.request.config;
 
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -26,8 +27,13 @@ public class ResourceQueueCreateRequest {
   @Size(max = 32)
   private String queueType;
 
+  @Min(value = 0, message = "maxRunningJobs must be >= 0")
   private Integer maxRunningJobs;
+
+  @Min(value = 0, message = "maxRunningPartitions must be >= 0")
   private Integer maxRunningPartitions;
+
+  @Min(value = 0, message = "maxQps must be >= 0")
   private Integer maxQps;
 
   @Size(max = 128)
@@ -39,7 +45,9 @@ public class ResourceQueueCreateRequest {
   @Size(max = 32)
   private String priorityPolicy;
 
+  @Min(value = 1, message = "fairShareWeight must be >= 1")
   private Integer fairShareWeight;
+
   private Boolean enabled;
 
   @Size(max = 512)

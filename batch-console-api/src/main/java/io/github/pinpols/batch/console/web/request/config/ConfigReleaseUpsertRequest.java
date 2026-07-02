@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.web.request.config;
 
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -16,6 +17,10 @@ public class ConfigReleaseUpsertRequest {
 
   @NotBlank
   @Size(max = 128, message = "configKey too long (max 128)")
+  @Pattern(
+      regexp = "^[a-zA-Z][a-zA-Z0-9._-]{0,127}$",
+      message =
+          "configKey must start with a letter and contain only letters, digits, '.', '_' or '-'")
   private String configKey;
 
   @NotBlank

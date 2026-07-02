@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.domain.job.web.request;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -66,12 +68,21 @@ public class JobDefinitionCreateRequest {
   private String watermarkField;
 
   private String retryPolicy;
+
+  @Min(value = 0, message = "retryMaxCount must be >= 0")
   private Integer retryMaxCount;
+
+  @Min(value = 0, message = "timeoutSeconds must be >= 0")
   private Integer timeoutSeconds;
+
   private String executionHandler;
   private String paramSchema;
   private String defaultParams;
+
+  @Min(value = 1, message = "priority must be between 1 and 9")
+  @Max(value = 9, message = "priority must be between 1 and 9")
   private Integer priority;
+
   private Boolean enabled;
   private String description;
 
