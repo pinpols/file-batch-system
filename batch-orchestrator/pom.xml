@@ -143,6 +143,13 @@
             <artifactId>testcontainers-kafka</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 混沌测试(OutboxCircuitBreakerRedisDownIntegrationTest 经 AbstractChaosIntegrationTest 用
+             Toxiproxy 注入 Redis 全断);传递带出 eu.rekawek.toxiproxy 客户端。 -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-toxiproxy</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
