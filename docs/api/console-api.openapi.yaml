@@ -3774,6 +3774,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseFileRecordList'
+  /api/console/queries/files/summary:
+    get:
+      tags: [Queries]
+      summary: File list domain summary cards (arrived today / pending / processed / failed)
+      operationId: queryFileSummary
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File summary counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseFileSummary'
   /api/console/queries/job-definitions:
     get:
       tags: [Queries]
@@ -10775,6 +10789,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    CommonResponseFileSummary:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileSummaryResponse'
     CommonResponseJobDefinitionList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12090,6 +12111,27 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, bizType, fileName, fileStatus, bizDate, traceId, createdAt, updatedAt]
+    ConsoleFileSummaryResponse:
+      type: object
+      description: File list domain summary counts (all derived from existing file_record columns).
+      properties:
+        arrivedToday:
+          type: integer
+          format: int64
+          description: Files whose created_at falls on the current day.
+        pending:
+          type: integer
+          format: int64
+          description: Files with file_status = RECEIVED.
+        processed:
+          type: integer
+          format: int64
+          description: Files with file_status = LOADED.
+        failed:
+          type: integer
+          format: int64
+          description: Files with file_status = FAILED.
+      required: [arrivedToday, pending, processed, failed]
     ResourceQueueCreateRequest:
       type: object
       description: 创建资源队列。与 BE Java DTO `ResourceQueueCreateRequest` 对齐。

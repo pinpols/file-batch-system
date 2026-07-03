@@ -1028,6 +1028,7 @@ Notes:
 - `GET /api/console/queries/alerts`
 - `GET /api/console/queries/approvals`
 - `GET /api/console/queries/files`
+- `GET /api/console/queries/files/summary` — 文件列表页领域汇总卡:`arrivedToday`(created_at 今日)/ `pending`(RECEIVED)/ `processed`(LOADED)/ `failed`(FAILED),均取自 file_record 现有列
 - `GET /api/console/queries/job-definitions`
 - `GET /api/console/queries/outbox-retries`
 - `GET /api/console/queries/outbox-deliveries`

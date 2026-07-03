@@ -17,4 +17,6 @@ public interface FileRecordMapper {
 
   Map<String, Object> selectFileRecordById(
       @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
+
+  Map<String, Object> selectSummary(@Param("tenantId") String tenantId);
 }

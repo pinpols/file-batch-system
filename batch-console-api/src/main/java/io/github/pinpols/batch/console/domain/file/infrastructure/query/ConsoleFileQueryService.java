@@ -36,6 +36,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepProgressResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.TenantScope;
@@ -84,6 +85,22 @@ public class ConsoleFileQueryService {
     List<FileRecordEntity> rows = fileMappers.fileRecordMapper.selectByQuery(query);
     long total = fileMappers.fileRecordMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toFileRecordResponse);
+  }
+
+  /** 文件列表页领域汇总卡:今日到达 / 待处理 / 已处理 / 失败。 */
+  public ConsoleFileSummaryResponse fileSummary(String requestTenantId) {
+    String tenantId = resolveTenant(tenantGuard, requestTenantId);
+    Map<String, Object> row = fileMappers.fileRecordMapper.selectSummary(tenantId);
+    return new ConsoleFileSummaryResponse(
+        longValue(row, "arrived_today"),
+        longValue(row, "pending"),
+        longValue(row, "processed"),
+        longValue(row, "failed"));
+  }
+
+  private static long longValue(Map<String, Object> row, String key) {
+    Object value = row == null ? null : row.get(key);
+    return value instanceof Number number ? number.longValue() : 0L;
   }
 
   public PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {

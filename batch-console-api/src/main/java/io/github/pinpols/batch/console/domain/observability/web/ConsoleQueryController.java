@@ -22,6 +22,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
 import io.github.pinpols.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
@@ -191,6 +192,13 @@ public class ConsoleQueryController {
   public CommonResponse<PageResponse<ConsoleFileRecordResponse>> files(
       @Valid @ModelAttribute FileChainQueryRequest request) {
     return responseFactory.success(applicationService.fileChains(request));
+  }
+
+  /** GET /files/summary — 文件列表页领域汇总卡(今日到达 / 待处理 / 已处理 / 失败)。 */
+  @GetMapping("/files/summary")
+  public CommonResponse<ConsoleFileSummaryResponse> fileSummary(
+      @RequestParam(value = "tenantId", required = false) String tenantId) {
+    return responseFactory.success(applicationService.fileSummary(tenantId));
   }
 
   /** GET /job-definitions — 作业定义。 */
