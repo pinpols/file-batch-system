@@ -91,4 +91,14 @@
         where tenant_id = #{tenantId}
           and id = #{fileId}
     </select>
+
+    <select id="selectSummary" resultType="map">
+        select
+            count(1) filter (where created_at &gt;= date_trunc('day', now())) as arrived_today,
+            count(1) filter (where file_status = 'RECEIVED')                  as pending,
+            count(1) filter (where file_status = 'LOADED')                    as processed,
+            count(1) filter (where file_status = 'FAILED')                    as failed
+        from batch.file_record
+        where tenant_id = #{tenantId}
+    </select>
 </mapper>

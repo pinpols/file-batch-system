@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
 import io.github.pinpols.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
@@ -82,6 +83,9 @@ public interface ConsoleQueryApplicationService {
 
   /** 查询文件链路（文件记录链）列表。 */
   PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request);
+
+  /** 文件列表页领域汇总卡:今日到达 / 待处理 / 已处理 / 失败。 */
+  ConsoleFileSummaryResponse fileSummary(String tenantId);
 
   /** 查询文件流水线列表。 */
   PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request);

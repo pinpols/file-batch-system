@@ -21,6 +21,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
 import io.github.pinpols.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
@@ -249,6 +250,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   @Override
   public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
     return fileQueryService.fileChains(request);
+  }
+
+  @Override
+  public ConsoleFileSummaryResponse fileSummary(String tenantId) {
+    return fileQueryService.fileSummary(tenantId);
   }
 
   @Override
