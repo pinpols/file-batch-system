@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
@@ -20,6 +19,9 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOpera
 import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
@@ -28,10 +30,7 @@ import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -58,6 +57,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class DefaultConsoleFileApplicationService implements ConsoleFileApplicationService {
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
+  private final OrchestratorApprovalClient approvalClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
   // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
@@ -127,7 +127,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
       return submitApproval(approvalCtx);
     }
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    requireApprovedApproval(tenantId, request.getApprovalId());
+    // 审批二次校验绑定到本次下载的 fileId（targetType=FILE），与提交侧写入的 targetId 对称，
+    // 消灭"任一已 APPROVED 的下载审批单解锁任意加密文件"的同租越权（此前 File 版漏了该绑定）。
+    approvalClient.requireApprovedApproval(
+        tenantId, request.getApprovalId(), ApprovalTargetBinding.file(request.getFileId()));
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
     FileDownloadResponse response =
@@ -307,50 +310,20 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   }
 
   private ConsolePresignDownloadResponse submitApproval(ApprovalSubmitContext ctx) {
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
-    ApprovalResponse response =
-        restClient
-            .post()
-            .uri("/internal/approvals")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-            .body(
-                ApprovalRequest.of(
-                    new ApprovalTarget(
-                        extractTenantId(ctx.payload()),
-                        ctx.approvalType(),
-                        ctx.actionType(),
-                        ctx.targetType(),
-                        ctx.targetId()),
-                    ctx.payload(),
-                    requestMetadata,
-                    ctx.idempotencyKey(),
-                    ctx.approvalReason()))
-            .retrieve()
-            .body(ApprovalResponse.class);
-    if (response == null || response.approvalNo() == null || response.approvalNo().isBlank()) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
-    }
-    return new ConsolePresignDownloadResponse(response.approvalNo(), null);
-  }
-
-  private void requireApprovedApproval(String tenantId, String approvalNo) {
-    RestClient restClient = orchestratorInternalRestClient.build();
-    ApprovalRecordResponse response =
-        restClient
-            .get()
-            .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-            .retrieve()
-            .body(ApprovalRecordResponse.class);
-    ApprovalRecord record =
-        Guard.requireFound(
-            response == null ? null : response.getRecord(), "approval request not found");
-    String status = record.getApprovalStatus();
-    if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
-    }
+    // 保留 File 版原有租户处理：直接取 body tenantId（不经 tenantGuard.resolveTenant），仅消除复制。
+    String approvalNo =
+        approvalClient.submitApproval(
+            ApprovalSubmitCommand.builder()
+                .tenantId(extractTenantId(ctx.payload()))
+                .approvalType(ctx.approvalType())
+                .actionType(ctx.actionType())
+                .targetType(ctx.targetType())
+                .targetId(ctx.targetId())
+                .payloadJson(JsonUtils.toJson(ctx.payload()))
+                .approvalReason(ctx.approvalReason())
+                .idempotencyKey(ctx.idempotencyKey())
+                .build());
+    return new ConsolePresignDownloadResponse(approvalNo, null);
   }
 
   private String stringValue(Object value) {
@@ -374,90 +347,6 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
       return request.getTenantId();
     }
     return null;
-  }
-
-  private record ApprovalTarget(
-      String tenantId,
-      String approvalType,
-      String actionType,
-      String targetType,
-      String targetId) {}
-
-  @Getter
-  private static final class ApprovalRequest {
-    private final String tenantId;
-    private final String approvalType;
-    private final String actionType;
-    private final String targetType;
-    private final String targetId;
-    private final String payloadJson;
-    private final String requesterId;
-    private final String sourceTraceId;
-    private final String sourceIdempotencyKey;
-    private final String approvalReason;
-
-    private ApprovalRequest(
-        ApprovalTarget target,
-        String payloadJson,
-        String requesterId,
-        String sourceTraceId,
-        String sourceIdempotencyKey,
-        String approvalReason) {
-      this.tenantId = target.tenantId();
-      this.approvalType = target.approvalType();
-      this.actionType = target.actionType();
-      this.targetType = target.targetType();
-      this.targetId = target.targetId();
-      this.payloadJson = payloadJson;
-      this.requesterId = requesterId;
-      this.sourceTraceId = sourceTraceId;
-      this.sourceIdempotencyKey = sourceIdempotencyKey;
-      this.approvalReason = approvalReason;
-    }
-
-    private static ApprovalRequest of(
-        ApprovalTarget target,
-        Object payload,
-        ConsoleRequestMetadata metadata,
-        String idempotencyKey,
-        String approvalReason) {
-      return new ApprovalRequest(
-          target,
-          JsonUtils.toJson(payload),
-          ConsoleTextSanitizer.safeInput(metadata.operatorId(), 64),
-          metadata.traceId(),
-          idempotencyKey,
-          ConsoleTextSanitizer.safeInput(approvalReason, 512));
-    }
-  }
-
-  private record ApprovalResponse(String approvalNo) {}
-
-  @Getter
-  @Setter
-  @NoArgsConstructor
-  private static class ApprovalRecordResponse {
-    private ApprovalRecord record;
-  }
-
-  @Getter
-  @Setter
-  @NoArgsConstructor
-  private static class ApprovalRecord {
-    private String tenantId;
-    private String approvalNo;
-    private String approvalType;
-    private String actionType;
-    private String targetType;
-    private String targetId;
-    private String payloadJson;
-    private String approvalStatus;
-    private String requesterId;
-    private String approverId;
-    private String rejectionReason;
-    private String approvalReason;
-    private String sourceTraceId;
-    private String sourceIdempotencyKey;
   }
 
   private record FileOperationRequest(

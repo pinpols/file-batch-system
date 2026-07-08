@@ -13,7 +13,10 @@ import io.github.pinpols.batch.console.domain.job.service.ConsoleSelfServiceJobS
 import io.github.pinpols.batch.console.domain.job.service.ConsoleSelfServiceJobService.RerunParam;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import java.util.Map;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitResponse;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
@@ -21,6 +24,7 @@ import org.springframework.web.client.RestClient;
 class ConsoleSelfServiceJobServiceTest {
 
   private OrchestratorInternalRestClient orchestratorInternalRestClient;
+  private ConsoleRequestMetadataResolver metadataResolver;
   private ConsoleTenantGuard tenantGuard;
   private ConsoleSelfServiceJobService service;
 
@@ -32,6 +36,7 @@ class ConsoleSelfServiceJobServiceTest {
   @BeforeEach
   void setUp() {
     orchestratorInternalRestClient = mock(OrchestratorInternalRestClient.class);
+    metadataResolver = mock(ConsoleRequestMetadataResolver.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
 
     restClient = mock(RestClient.class);
@@ -46,14 +51,21 @@ class ConsoleSelfServiceJobServiceTest {
     doReturn(bodySpec).when(bodySpec).header(anyString(), (String[]) any());
     when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
     when(bodySpec.retrieve()).thenReturn(responseSpec);
+    when(metadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator-1", null, null));
 
-    service = new ConsoleSelfServiceJobService(orchestratorInternalRestClient, tenantGuard);
+    // 用真实共享审批客户端 + mock 的 REST 层，保持对提交链路（header/body/错误 key）的行为覆盖。
+    OrchestratorApprovalClient approvalClient =
+        new OrchestratorApprovalClient(orchestratorInternalRestClient, metadataResolver);
+    service = new ConsoleSelfServiceJobService(approvalClient, tenantGuard);
   }
 
   @Test
   void shouldSubmitRerunApproval() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(responseSpec.body(Map.class)).thenReturn(Map.of("approvalNo", "APR-001"));
+    when(responseSpec.body(ApprovalSubmitResponse.class))
+        .thenReturn(new ApprovalSubmitResponse("APR-001"));
 
     RerunParam param = new RerunParam("tenant-a", "JOB-01", "2026-04-10", "INST-001", "test rerun");
     String approvalNo = service.requestRerun(param, "operator-1", "idem-key-1");
@@ -64,7 +76,8 @@ class ConsoleSelfServiceJobServiceTest {
   @Test
   void shouldSubmitCompensationApproval() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(responseSpec.body(Map.class)).thenReturn(Map.of("approvalNo", "APR-002"));
+    when(responseSpec.body(ApprovalSubmitResponse.class))
+        .thenReturn(new ApprovalSubmitResponse("APR-002"));
 
     CompensationParam param =
         new CompensationParam(
@@ -77,7 +90,7 @@ class ConsoleSelfServiceJobServiceTest {
   @Test
   void shouldThrowWhenApprovalResponseMissing() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(responseSpec.body(Map.class)).thenReturn(null);
+    when(responseSpec.body(ApprovalSubmitResponse.class)).thenReturn(null);
 
     RerunParam param = new RerunParam("tenant-a", "JOB-01", "2026-04-10", "INST-001", "test rerun");
 
