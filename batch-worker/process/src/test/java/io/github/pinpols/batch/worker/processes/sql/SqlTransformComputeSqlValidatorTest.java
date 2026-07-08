@@ -136,6 +136,31 @@ class SqlTransformComputeSqlValidatorTest {
   }
 
   @Test
+  void validateSelect_rejectsForbiddenFunctionMixedCase() {
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () -> validator.validateSelect("select DbLink('host=evil', 'select 1') as c from biz.t"),
+        "forbidden function");
+  }
+
+  @Test
+  void validateSelect_rejectsForbiddenFunctionQuotedIdentifier() {
+    // 带引号标识符 "pg_read_server_files"(...) 曾逃逸子串比对;AST 收集函数名时去引号后仍拒。
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select \"pg_read_server_files\"('/etc/passwd') as c from biz.t"),
+        "forbidden function");
+  }
+
+  @Test
   void validateSelect_rejectsPgTerminateBackend() {
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));

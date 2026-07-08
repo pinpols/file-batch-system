@@ -222,6 +222,50 @@ class SqlTemplateExportSqlValidatorTest {
   }
 
   @Test
+  void validate_rejectsForbiddenFunctionWithCommentInjection() {
+    // 回归:老子串方案被"函数名与左括号间插块注释"绕过(右侧紧跟 ( 判定只跳空白不跳注释 → 漏判)。
+    // 现与 process 侧共用 SelectSqlAstValidator 的 AST 函数节点遍历,仍拒。
+    String sql =
+        "SELECT pg_read_server_files/**/('/etc/passwd') AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_read_server_files'");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionMixedCase() {
+    String sql =
+        "SELECT DbLink('host=evil', 'select 1') AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionQuotedIdentifier() {
+    // 带引号标识符 "pg_read_server_files"(...) 曾逃逸子串比对;AST 收集函数名时去引号后仍拒。
+    String sql =
+        "SELECT \"pg_read_server_files\"('/etc/passwd') AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionNestedInExpression() {
+    // AST 遍历应深入嵌套表达式 / 函数参数,不止顶层 select item。
+    String sql =
+        "SELECT upper(coalesce(pg_terminate_backend(pid), 'x')) AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
   void validate_rejectsCtas() {
     String sql = "CREATE TABLE biz.foo AS SELECT id FROM biz.t WHERE tenant_id = :tenantId";
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
