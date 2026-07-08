@@ -114,6 +114,28 @@
         order by id desc
     </select>
 
+    <resultMap id="NodePartitionAssignmentMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment">
+        <constructor>
+            <arg column="job_partition_id" javaType="java.lang.Long"/>
+            <arg column="node_code" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+      perf: report 链路按 DAG 节点计分区时,只需 (job_partition_id, workflowNodeCode) 映射,
+      不需要整行 task。此处 SQL 侧抽取 workflowNodeCode,避开 task_payload / effective_parameters 大 JSON 列。
+      order by id desc 与 selectByQuery 保持一致,防止迭代顺序差异影响下游聚合。
+    -->
+    <select id="selectNodeAssignmentsByInstance" resultMap="NodePartitionAssignmentMap">
+        select job_partition_id,
+               task_payload ->> 'workflowNodeCode' as node_code
+        from batch.job_task
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+        order by id desc
+    </select>
+
     <select id="selectReadyTasks" resultMap="JobTaskResultMap">
         select *
         from batch.job_task

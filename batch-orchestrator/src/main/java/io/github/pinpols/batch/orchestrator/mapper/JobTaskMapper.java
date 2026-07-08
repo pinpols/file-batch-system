@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
@@ -21,6 +22,16 @@ public interface JobTaskMapper {
       @Param("taskSeq") Integer taskSeq);
 
   List<JobTaskEntity> selectByQuery(JobTaskQuery query);
+
+  /**
+   * perf: 仅取 (job_partition_id, workflowNodeCode) 轻量投影,给 report 链路按 DAG 节点做分区计数用。
+   *
+   * <p>替代 {@link #selectByQuery(JobTaskQuery)} 的 {@code select *} 全量拉行(含 task_payload /
+   * effective_parameters 两个大 JSON 列),node_code 由 SQL 侧 {@code task_payload ->> 'workflowNodeCode'}
+   * 抽取。语义与原 Java 侧 {@code payloadStringValue(taskPayload, "workflowNodeCode")} 对齐。
+   */
+  List<NodePartitionAssignment> selectNodeAssignmentsByInstance(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   List<JobTaskEntity> selectReadyTasks(
       @Param("tenantId") String tenantId,

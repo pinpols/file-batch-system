@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,7 @@ import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -177,12 +179,12 @@ class DefaultTaskOutcomeServiceTest {
   }
 
   /**
-   * 死锁回归守护:成功 outcome 必须**先**以统一顺序对全兄弟分区 {@code selectByQueryForUpdate}(FOR UPDATE) 加锁,**再**对自己这个分区
-   * {@code markStatus} 写锁。否则两个并发 outcome 各自先锁自己分区、再抢全集 → 锁顺序反转死锁。本测试用 InOrder 钉死「bulk lock 先于
-   * per-partition write」这一不变量。
+   * 死锁回归守护(perf 改造后):成功 outcome 必须**先**对 (tenantId, jobInstanceId) 取事务级 advisory lock(同 instance
+   * 串行化),**再**对自己这个分区 {@code markStatus} 写锁。此前用 whole-instance FOR UPDATE 建立锁序,现改为 advisory
+   * lock,不变量从「bulk FOR UPDATE 先于 per-partition write」演进为「advisory lock 先于 per-partition write」。
    */
   @Test
-  void applyTaskOutcome_locksAllSiblingPartitionsBeforeMarkingSelf() {
+  void applyTaskOutcome_acquiresInstanceAdvisoryLockBeforeMarkingSelf() {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(1L);
     task.setTenantId("t1");
@@ -210,9 +212,10 @@ class DefaultTaskOutcomeServiceTest {
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
     when(jobTaskMapper.finishTask(any())).thenReturn(1);
-    when(jobPartitionMapper.selectByQueryForUpdate(any())).thenReturn(List.of(partition));
+    when(jobPartitionMapper.selectByQuery(any())).thenReturn(List.of(partition));
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
+    when(jobTaskMapper.selectNodeAssignmentsByInstance(eq("t1"), eq(10L)))
+        .thenReturn(List.of(new NodePartitionAssignment(99L, null)));
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
@@ -222,9 +225,9 @@ class DefaultTaskOutcomeServiceTest {
 
     service.applyTaskOutcome(command);
 
-    InOrder inOrder = inOrder(jobPartitionMapper);
-    // 统一顺序的全兄弟 FOR UPDATE 锁必须先于针对自己分区的 markStatus 写锁。
-    inOrder.verify(jobPartitionMapper).selectByQueryForUpdate(any());
+    InOrder inOrder = inOrder(jobInstanceMapper, jobPartitionMapper);
+    // instance 级 advisory lock 必须先于针对自己分区的 markStatus 写锁。
+    inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock(eq("t1"), eq(10L));
     inOrder.verify(jobPartitionMapper).markStatus(any());
   }
 }

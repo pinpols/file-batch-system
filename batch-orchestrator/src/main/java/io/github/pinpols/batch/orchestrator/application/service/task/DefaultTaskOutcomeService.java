@@ -28,6 +28,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
@@ -36,7 +37,6 @@ import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusPara
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateStepProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
-import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
@@ -312,14 +312,15 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           "task already finished by concurrent update: taskId=" + command.taskId());
     }
 
-    // 死锁防护(锁顺序统一):在任何对【单个分区】的写锁(下方 markStatus / updateOutputSummary)之前,
-    // 先以统一顺序(id desc)对该 instance 的【全部兄弟分区】FOR UPDATE 锁一遍,建立全局加锁序。
-    // 否则两个并发 outcome 各自先用 markStatus 锁住自己那一个分区、再到 advancePartitionAndInstance
-    // 抢全集 → 锁顺序反转 → Postgres 死锁(同一 job 的多分区近乎同时回报时偶发)。此处仅为加锁,
-    // 结果不用;后续 advancePartitionAndInstance 复读计数时对这些行是重入锁,不额外扩大锁集。
+    // 死锁防护 + 同 instance 串行化(perf):此前对该 instance 的【全部兄弟分区】whole-instance FOR UPDATE
+    // (纯排序加锁、丢结果)会把同 instance 的并发 report 完全串行、且是 O(N) 行锁。改用事务级 advisory lock:
+    // 对 (tenantId, jobInstanceId) 取一把 pg_advisory_xact_lock,把同 instance 的并发 outcome 串行化,
+    // 随事务自动释放。锁的是逻辑序而非行,因此:1) 下方 markStatus / updateOutputSummary(单分区写锁)与
+    // advancePartitionAndInstance(复读计数)始终在同一把逻辑锁下顺序执行,不再有锁顺序反转死锁;
+    // 2) 与 reclaim(FOR UPDATE SKIP LOCKED)的 asc/desc 行锁反转彻底消失(outcome 不再批量锁行)。
     if (task.getJobInstanceId() != null) {
-      jobMappers.jobPartitionMapper.selectByQueryForUpdate(
-          new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
+      jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
+          command.tenantId(), task.getJobInstanceId());
     }
 
     if (command.success()) {
@@ -435,9 +436,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       JobTaskEntity task,
       JobInstanceEntity jobInstance,
       Instant finishedAt) {
-    // C-2: 行锁序列化并发 outcome 处理器的分区计数，防止读到过期计数导致状态机转换冲突
+    // 并发 outcome 的分区计数一致性由入口处的 advisory lock(同 instance 串行化)保证,不再需要
+    // whole-instance FOR UPDATE 行锁。此处普通读即可拿到一致快照(含本事务已写入的自身分区状态)。
     List<JobPartitionEntity> partitions =
-        jobMappers.jobPartitionMapper.selectByQueryForUpdate(
+        jobMappers.jobPartitionMapper.selectByQuery(
             new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
     long successCount =
         partitions.stream()
@@ -454,11 +456,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
             command.tenantId(), jobInstance.getId());
     String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
-    List<JobTaskEntity> tasks =
-        jobMappers.jobTaskMapper.selectByQuery(
-            new JobTaskQuery(command.tenantId(), task.getJobInstanceId(), null, null, null));
+    // perf: 只取 (job_partition_id, workflowNodeCode) 轻量投影做按节点计分区,避免 select * 拉全部 task 行
+    // (task_payload / effective_parameters 两个大 JSON 列)。计数口径不变:仍以 partition 状态计成功/失败。
+    List<NodePartitionAssignment> nodeAssignments =
+        jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
+            command.tenantId(), task.getJobInstanceId());
     NodePartitionProgress nodeProgress =
-        resolveNodePartitionProgress(partitions, tasks, currentNodeCode, workflowRun);
+        resolveNodePartitionProgress(partitions, nodeAssignments, currentNodeCode, workflowRun);
     Set<String> activeNodes =
         workflowRun == null
             ? new LinkedHashSet<>()
@@ -857,7 +861,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   private NodePartitionProgress resolveNodePartitionProgress(
       List<JobPartitionEntity> partitions,
-      List<JobTaskEntity> tasks,
+      List<NodePartitionAssignment> assignments,
       String nodeCode,
       WorkflowRunEntity workflowRun) {
     if (nodeCode == null || nodeCode.isBlank()) {
@@ -871,13 +875,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       partitionsById.put(partition.getId(), partition);
     }
     Set<Long> nodePartitionIds = new LinkedHashSet<>();
-    for (JobTaskEntity task : tasks) {
-      if (task == null || task.getJobPartitionId() == null) {
+    for (NodePartitionAssignment assignment : assignments) {
+      if (assignment == null || assignment.jobPartitionId() == null) {
         continue;
       }
-      String taskNodeCode = resolveTaskNodeCode(task, workflowRun, nodeCode);
+      String taskNodeCode = resolveTaskNodeCode(assignment.nodeCode(), workflowRun, nodeCode);
       if (nodeCode.equals(taskNodeCode)) {
-        nodePartitionIds.add(task.getJobPartitionId());
+        nodePartitionIds.add(assignment.jobPartitionId());
       }
     }
     long nodeSuccessCount = 0L;
@@ -898,12 +902,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   private String resolveTaskNodeCode(
-      JobTaskEntity task, WorkflowRunEntity workflowRun, String fallbackNodeCode) {
-    String taskNodeCode =
-        TaskOutcomePayloadSupport.payloadStringValue(
-            task == null ? null : task.getTaskPayload(), "workflowNodeCode");
-    if (taskNodeCode != null && !taskNodeCode.isBlank()) {
-      return taskNodeCode;
+      String payloadNodeCode, WorkflowRunEntity workflowRun, String fallbackNodeCode) {
+    // payloadNodeCode 由 SQL 侧 task_payload ->> 'workflowNodeCode' 抽取,等价于原
+    // payloadStringValue(task.getTaskPayload(), "workflowNodeCode")。空/缺失时沿用原 fallback。
+    if (payloadNodeCode != null && !payloadNodeCode.isBlank()) {
+      return payloadNodeCode;
     }
     if (workflowRun != null
         && workflowRun.getCurrentNodeCode() != null

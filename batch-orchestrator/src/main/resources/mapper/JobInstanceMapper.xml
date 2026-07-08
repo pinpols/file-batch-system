@@ -72,6 +72,23 @@
         <result column="dry_run" property="dryRun"/>
     </resultMap>
 
+    <!--
+      perf/并发:同一 (tenantId, jobInstanceId) 的事务级 advisory lock,串行化同 instance 的并发 report。
+      替代此前对全兄弟分区的 whole-instance FOR UPDATE(纯排序加锁,丢结果)。
+      - pg_advisory_xact_lock 阻塞获取、随事务自动释放,不锁任何行(锁逻辑 hash key),因此不再有
+        「reclaim asc / outcome desc」的行锁顺序反转死锁风险。
+      - hashtext 返回 int4,单参重载解析到 pg_advisory_xact_lock(bigint)。
+      - 外层 select 常量以保证返回行集给 MyBatis;内层子查询强制求值从而真正加锁。
+    -->
+    <select id="acquireInstanceAdvisoryLock" resultType="java.lang.Integer">
+        select 1 as locked
+        from (
+            select pg_advisory_xact_lock(
+                hashtext(#{tenantId} || ':' || #{jobInstanceId}::text)
+            )
+        ) l
+    </select>
+
     <select id="selectByInstanceNo" resultMap="JobInstanceResultMap">
         select *
         from batch.job_instance

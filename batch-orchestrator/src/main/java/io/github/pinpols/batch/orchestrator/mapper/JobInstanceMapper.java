@@ -14,6 +14,16 @@ import org.apache.ibatis.annotations.Param;
 
 public interface JobInstanceMapper {
 
+  /**
+   * perf/并发：对同一 (tenantId, jobInstanceId) 取事务级 advisory lock,把同一 instance 的并发 report
+   * 串行化(替代此前对全兄弟分区的 whole-instance FOR UPDATE)。
+   *
+   * <p>{@code pg_advisory_xact_lock} 阻塞获取、随事务提交/回滚自动释放,无需手动 unlock。锁的是逻辑序(hash key), 不锁任何行,因此在
+   * Citus coordinator 上同样成立(死锁排序不再依赖行锁顺序)。返回值仅为满足 MyBatis select 需要行集,调用方忽略。
+   */
+  Integer acquireInstanceAdvisoryLock(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
   JobInstanceEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   JobInstanceEntity selectByInstanceNo(
