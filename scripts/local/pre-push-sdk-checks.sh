@@ -172,10 +172,34 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
       ok "规约 #1 FQN 通过"
     fi
 
-    # 规约 #3:@Autowired field 注入(test 也守)
-    scan ":[[:space:]]*@Autowired[[:space:]]*$" \
-         "规约 #3 违反 — @Autowired field 注入(只允许构造器)" "no" \
-      && ok "规约 #3 @Autowired 通过"
+    # 规约 #3:@Autowired field/setter 注入(test 也守)。
+    # 构造器上的 @Autowired 合法(多构造器歧义消解必需),按"注解后首个非注解行是否
+    # 以 <文件名>( 开头的构造器声明"区分,是则放行。
+    autowired_hits=$(grep -E ":[0-9]+:[[:space:]]*@Autowired[[:space:]]*$" "$TMP_DIFF" || true)
+    autowired_bad=""
+    if [[ -n "$autowired_hits" ]]; then
+      while IFS= read -r awhit; do
+        [[ -z "$awhit" ]] && continue
+        awfile="${awhit%%:*}"
+        awrest="${awhit#*:}"
+        awline="${awrest%%:*}"
+        awbase=$(basename "$awfile" .java)
+        awnext=""
+        if [[ -f "$awfile" ]]; then
+          awnext=$(awk -v n="$awline" 'NR>n && $0 !~ /^[[:space:]]*(@|$)/ {print; exit}' "$awfile")
+        fi
+        if ! printf '%s' "$awnext" | grep -qE "^[[:space:]]*(public|protected|private)?[[:space:]]*${awbase}[[:space:]]*\("; then
+          autowired_bad+="$awhit"$'\n'
+        fi
+      done <<< "$autowired_hits"
+    fi
+    if [[ -n "$(printf '%s' "$autowired_bad" | tr -d '[:space:]')" ]]; then
+      fail "规约 #3 违反 — @Autowired field/setter 注入(只允许构造器)"
+      printf '%s' "$autowired_bad" | sed '/^$/d;s/^/    /' | head -10
+      errors=$((errors+1))
+    else
+      ok "规约 #3 @Autowired 通过"
+    fi
 
     # 规约 #4:@Transactional 在 Controller/Mapper(只看真注解,非 javadoc)
     trans_hits=$(grep -E "(Controller|Mapper)\.java:[0-9]+:[[:space:]]*@Transactional" "$TMP_DIFF" | head -5 || true)
