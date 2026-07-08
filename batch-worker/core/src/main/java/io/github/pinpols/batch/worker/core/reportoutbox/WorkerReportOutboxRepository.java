@@ -166,10 +166,16 @@ public class WorkerReportOutboxRepository {
     int attempts = attemptsNullable;
     int nextAttempts = attempts + 1;
     if (nextAttempts >= props.getMaxPublishAttempts()) {
+      int updated;
       if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        pgMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
+        updated =
+            pgMapper.updateGiveUp(
+                id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis, STATUS_PUBLISHING);
       } else {
-        sqliteMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
+        updated = sqliteMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
+      }
+      if (updated == 0) {
+        log.warn("worker report outbox updateGiveUp 0 行受影响,行已被其它实例接管: id={}", id);
       }
       log.warn(
           "worker report outbox give up after {} attempts: id={}, cause={}",
@@ -181,10 +187,16 @@ public class WorkerReportOutboxRepository {
       long jitterMax = Math.max(0L, props.getJitterMillis());
       long jitter = jitterMax == 0 ? 0L : ThreadLocalRandom.current().nextLong(0, jitterMax + 1);
       long nextAt = nowEpochMillis + backoff + jitter;
+      int updated;
       if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        pgMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
+        updated =
+            pgMapper.updateRetry(
+                id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
       } else {
-        sqliteMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
+        updated = sqliteMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
+      }
+      if (updated == 0) {
+        log.warn("worker report outbox updateRetry 0 行受影响,行已被其它实例接管: id={}", id);
       }
       log.warn(
           "worker report outbox publish failed: id={}, attempt={}/{}, nextAttemptAt={}, cause={}",
@@ -199,10 +211,14 @@ public class WorkerReportOutboxRepository {
   void markGiveUp(long id, String reason) {
     long now = BatchDateTimeSupport.utcEpochMillis();
     int maxAttempts = props.getMaxPublishAttempts();
+    int updated;
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      pgMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);
+      updated = pgMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts, STATUS_PUBLISHING);
     } else {
-      sqliteMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);
+      updated = sqliteMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);
+    }
+    if (updated == 0) {
+      log.warn("worker report outbox giveUpRow 0 行受影响,行已被其它实例接管: id={}", id);
     }
     log.warn("worker report outbox marked GIVE_UP: id={}, reason={}", id, reason);
   }

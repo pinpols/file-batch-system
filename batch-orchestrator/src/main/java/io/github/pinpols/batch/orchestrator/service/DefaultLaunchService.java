@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -60,6 +61,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>注意：{@link #prepareJobInstance} 必须通过 self-proxy 调用，才能让 Spring AOP 的 {@code @Transactional} 生效。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DefaultLaunchService implements LaunchService {
@@ -130,11 +132,18 @@ public class DefaultLaunchService implements LaunchService {
     if (loaded.existingInstance() == null || rerunMode) {
       return null;
     }
-    jobMappers.triggerRequestMapper.updateAcceptance(
-        request.tenantId(),
-        request.requestId(),
-        BatchStatusConstants.DUPLICATE,
-        loaded.existingInstance().getId());
+    int updated =
+        jobMappers.triggerRequestMapper.updateAcceptance(
+            request.tenantId(),
+            request.requestId(),
+            BatchStatusConstants.DUPLICATE,
+            loaded.existingInstance().getId());
+    if (updated == 0) {
+      log.warn(
+          "updateAcceptance(DUPLICATE) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          request.tenantId(),
+          request.requestId());
+    }
     return new LaunchResponse(
         loaded.existingInstance().getInstanceNo(), loaded.existingInstance().getTraceId());
   }
@@ -170,11 +179,18 @@ public class DefaultLaunchService implements LaunchService {
       throw ex;
     }
 
-    jobMappers.triggerRequestMapper.updateAcceptance(
-        request.tenantId(),
-        request.requestId(),
-        BatchStatusConstants.LAUNCHED,
-        prepared.jobInstance().getId());
+    int updated =
+        jobMappers.triggerRequestMapper.updateAcceptance(
+            request.tenantId(),
+            request.requestId(),
+            BatchStatusConstants.LAUNCHED,
+            prepared.jobInstance().getId());
+    if (updated == 0) {
+      log.warn(
+          "updateAcceptance(LAUNCHED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          request.tenantId(),
+          request.requestId());
+    }
   }
 
   private void finalizeJobInstanceOnDispatchBusinessError(
@@ -225,11 +241,18 @@ public class DefaultLaunchService implements LaunchService {
                 .failureClass(FailureClass.BUSINESS_RULE.code())
                 .build());
     if (rows > 0) {
-      jobMappers.triggerRequestMapper.updateAcceptance(
-          request.tenantId(),
-          request.requestId(),
-          BatchStatusConstants.REJECTED,
-          jobInstance.getId());
+      int updated =
+          jobMappers.triggerRequestMapper.updateAcceptance(
+              request.tenantId(),
+              request.requestId(),
+              BatchStatusConstants.REJECTED,
+              jobInstance.getId());
+      if (updated == 0) {
+        log.warn(
+            "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+            request.tenantId(),
+            request.requestId());
+      }
       appendDispatchRejectedAudit(jobInstance, dispatchFailure);
     }
   }
@@ -589,11 +612,18 @@ public class DefaultLaunchService implements LaunchService {
     if (request.triggerType() == TriggerType.RERUN) {
       throw exception;
     }
-    jobMappers.triggerRequestMapper.updateAcceptance(
-        request.tenantId(),
-        request.requestId(),
-        BatchStatusConstants.DUPLICATE,
-        existingInstance.getId());
+    int updated =
+        jobMappers.triggerRequestMapper.updateAcceptance(
+            request.tenantId(),
+            request.requestId(),
+            BatchStatusConstants.DUPLICATE,
+            existingInstance.getId());
+    if (updated == 0) {
+      log.warn(
+          "updateAcceptance(DUPLICATE) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          request.tenantId(),
+          request.requestId());
+    }
     return new LaunchResponse(existingInstance.getInstanceNo(), existingInstance.getTraceId());
   }
 

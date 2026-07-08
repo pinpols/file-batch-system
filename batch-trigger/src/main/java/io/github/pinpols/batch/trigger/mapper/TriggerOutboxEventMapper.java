@@ -41,15 +41,24 @@ public interface TriggerOutboxEventMapper {
       @Param("pendingStatus1") String pendingStatus1,
       @Param("pendingStatus2") String pendingStatus2);
 
-  /** 投递成功,设置 published_at + status。 */
-  int markPublished(@Param("id") Long id, @Param("status") String status);
+  /**
+   * 投递成功,设置 published_at + status。只对当前仍为 PUBLISHING 的行生效(与 orchestrator OutboxEventMapper 对称的 CAS
+   * 守卫),返回 0 表示行已被其它 relay 实例接管。
+   */
+  int markPublished(
+      @Param("id") Long id,
+      @Param("status") String status,
+      @Param("publishingStatus") String publishingStatus);
 
-  /** 投递失败,递增 publish_attempt,写 last_error,延迟下次扫描。 */
+  /**
+   * 投递失败,递增 publish_attempt,写 last_error,延迟下次扫描。只对当前仍为 PUBLISHING 的行生效, 返回 0 表示行已被其它 relay 实例接管。
+   */
   int markFailed(
       @Param("id") Long id,
       @Param("status") String status,
       @Param("lastError") String lastError,
-      @Param("nextPublishAt") Instant nextPublishAt);
+      @Param("nextPublishAt") Instant nextPublishAt,
+      @Param("publishingStatus") String publishingStatus);
 
   int resetStalePublishing(
       @Param("publishingStatus") String publishingStatus,

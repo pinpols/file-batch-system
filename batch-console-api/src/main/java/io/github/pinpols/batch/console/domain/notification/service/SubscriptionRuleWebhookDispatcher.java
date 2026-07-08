@@ -7,6 +7,8 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.Arrays;
@@ -90,6 +92,7 @@ public class SubscriptionRuleWebhookDispatcher {
   private final WebhookDispatcher webhookDispatcher;
   private final NotificationSenderRegistry senderRegistry;
   private final SlidingWindowRateLimiter sendRateLimiter;
+  private final MeterRegistry meterRegistry;
 
   /**
    * 与 {@link WebhookDispatcher} 同款有界队列 + AbortPolicy:HTTP burst 投递不能跑在 Spring 事件发布线程(可能是请求/事务线程)上,
@@ -342,6 +345,13 @@ public class SubscriptionRuleWebhookDispatcher {
       }
       return !firstInWindow;
     } catch (DataAccessException ex) {
+      log.warn(
+          "notification dedup rate limiter unavailable — fail-open (not deduped):"
+              + " channelCode={}, eventType={}, cause={}",
+          channelCode,
+          eventType,
+          ex.getMessage());
+      Counter.builder("notification.dedup.redis_fallback").register(meterRegistry).increment();
       return false;
     }
   }
@@ -373,6 +383,14 @@ public class SubscriptionRuleWebhookDispatcher {
       }
       return allowed;
     } catch (DataAccessException ex) {
+      log.warn(
+          "notification destination rate limiter unavailable — fail-open: channelCode={},"
+              + " channelType={}, eventType={}, cause={}",
+          channelCode,
+          channelType,
+          eventType,
+          ex.getMessage());
+      Counter.builder("notification.ratelimit.redis_fallback").register(meterRegistry).increment();
       return true;
     }
   }

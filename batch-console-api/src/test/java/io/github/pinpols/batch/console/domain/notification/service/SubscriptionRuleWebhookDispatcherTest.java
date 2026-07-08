@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 @ExtendWith(MockitoExtension.class)
 class SubscriptionRuleWebhookDispatcherTest {
@@ -31,6 +34,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   @Mock private WebhookDispatcher webhookDispatcher;
   @Mock private NotificationSenderRegistry senderRegistry;
   @Mock private SlidingWindowRateLimiter sendRateLimiter;
+  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   private SubscriptionRuleWebhookDispatcher dispatcher;
 
@@ -39,7 +43,11 @@ class SubscriptionRuleWebhookDispatcherTest {
     lenient().when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(true);
     dispatcher =
         new SubscriptionRuleWebhookDispatcher(
-            subscriptionRuleMapper, webhookDispatcher, senderRegistry, sendRateLimiter);
+            subscriptionRuleMapper,
+            webhookDispatcher,
+            senderRegistry,
+            sendRateLimiter,
+            meterRegistry);
     return dispatcher;
   }
 
@@ -76,6 +84,41 @@ class SubscriptionRuleWebhookDispatcherTest {
     WebhookSubscriptionEntity synthetic = captor.getValue();
     assertThat(synthetic.getCallbackUrl()).isEqualTo("https://hook.example.com/in");
     assertThat(synthetic.getSecret()).isEqualTo("s3cr3t");
+  }
+
+  @Test
+  void shouldFailOpenAndRecordCounter_whenDedupRateLimiterThrows() {
+    // arrange: dedup 键(notify:dedup:*)查询 Redis 时抛 DataAccessException,其余键正常放行。
+    // fail-open 语义:不误判为重复,继续投递;同时须留痕(log.warn + counter),而非静默吞掉。
+    Map<String, Object> rule =
+        Map.of(
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-hook",
+            "channel_type", "WEBHOOK",
+            "event_types", "JOB_SUCCESS",
+            "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+        .thenReturn(List.of(rule));
+    when(webhookDispatcher.attemptDelivery(any(), any(), any()))
+        .thenReturn(WebhookDeliveryResult.ok());
+    when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(true);
+    when(sendRateLimiter.tryAcquire(
+            argThat(key -> key != null && key.startsWith("notify:dedup:")), anyInt()))
+        .thenThrow(new DataAccessResourceFailureException("redis down"));
+
+    dispatcher =
+        new SubscriptionRuleWebhookDispatcher(
+            subscriptionRuleMapper,
+            webhookDispatcher,
+            senderRegistry,
+            sendRateLimiter,
+            meterRegistry);
+    dispatcher.dispatch("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", Instant.now());
+
+    verify(webhookDispatcher, timeout(2000)).attemptDelivery(any(), any(), any());
+    assertThat(meterRegistry.find("notification.dedup.redis_fallback").counter()).isNotNull();
+    assertThat(meterRegistry.find("notification.dedup.redis_fallback").counter().count())
+        .isEqualTo(1.0);
   }
 
   @Test
@@ -177,7 +220,11 @@ class SubscriptionRuleWebhookDispatcherTest {
     when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(false);
     dispatcher =
         new SubscriptionRuleWebhookDispatcher(
-            subscriptionRuleMapper, webhookDispatcher, senderRegistry, sendRateLimiter);
+            subscriptionRuleMapper,
+            webhookDispatcher,
+            senderRegistry,
+            sendRateLimiter,
+            meterRegistry);
 
     dispatcher.dispatch("tenant-a", "JOB_SUCCESS", "s", "c", "data", Instant.now());
 

@@ -66,12 +66,15 @@
            AND publish_status IN (#{pendingStatus1}, #{pendingStatus2})
     </update>
 
+    <!-- R3-P0-6：与 orchestrator OutboxEventMapper.markPublished 对称加 publish_status='PUBLISHING' 守卫。
+         之前缺守卫，并发场景下能把已被其它 relay 实例接管的行覆盖。 -->
     <update id="markPublished">
         UPDATE batch.trigger_outbox_event
            SET publish_status = #{status},
                published_at   = CURRENT_TIMESTAMP,
                updated_at     = CURRENT_TIMESTAMP
          WHERE id = #{id}
+           AND publish_status = #{publishingStatus}
     </update>
 
     <update id="markFailed">
@@ -82,6 +85,7 @@
                next_publish_at  = #{nextPublishAt},
                updated_at       = CURRENT_TIMESTAMP
          WHERE id = #{id}
+           AND publish_status = #{publishingStatus}
     </update>
 
     <update id="resetStalePublishing">

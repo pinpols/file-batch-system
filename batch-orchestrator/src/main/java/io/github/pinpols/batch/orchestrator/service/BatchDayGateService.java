@@ -27,8 +27,10 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BatchDayGateService {
@@ -167,15 +169,29 @@ public class BatchDayGateService {
             .updatedAt(now)
             .build();
     waitingLaunchMapper.insert(waiting);
-    triggerRequestMapper.updateAcceptance(
-        request.tenantId(), request.requestId(), BatchStatusConstants.WAITING, null);
+    int updated =
+        triggerRequestMapper.updateAcceptance(
+            request.tenantId(), request.requestId(), BatchStatusConstants.WAITING, null);
+    if (updated == 0) {
+      log.warn(
+          "updateAcceptance(WAITING) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          request.tenantId(),
+          request.requestId());
+    }
     appendAuditLog(request, previous, "BATCH_DAY_GATE_WAIT", reason, traceId);
     emitGateAlert(request, previous, "BATCH_DAY_GATE_WAITING", "WARN", reason, traceId);
   }
 
   private void reject(LaunchRequest request, BatchDayInstanceEntity previous, String reason) {
-    triggerRequestMapper.updateAcceptance(
-        request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+    int updated =
+        triggerRequestMapper.updateAcceptance(
+            request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+    if (updated == 0) {
+      log.warn(
+          "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          request.tenantId(),
+          request.requestId());
+    }
     appendAuditLog(request, previous, "BATCH_DAY_GATE_REJECT", reason, request.traceId());
     emitGateAlert(request, previous, "BATCH_DAY_GATE_REJECTED", "ERROR", reason, request.traceId());
   }

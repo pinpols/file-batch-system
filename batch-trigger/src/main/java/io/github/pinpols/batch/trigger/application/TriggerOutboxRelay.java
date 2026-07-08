@@ -302,11 +302,16 @@ public class TriggerOutboxRelay {
           event.getId(),
           event.getRequestId(),
           ex);
-      mapper.markFailed(
-          event.getId(),
-          OutboxPublishStatus.GIVE_UP.code(),
-          truncate("payload deserialize: " + ex.getMessage()),
-          BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS));
+      int updated =
+          mapper.markFailed(
+              event.getId(),
+              OutboxPublishStatus.GIVE_UP.code(),
+              truncate("payload deserialize: " + ex.getMessage()),
+              BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
+              OutboxPublishStatus.PUBLISHING.code());
+      if (updated == 0) {
+        log.warn("TriggerOutboxRelay markFailed(GIVE_UP) 0 行受影响,行已被其它实例接管: id={}", event.getId());
+      }
       if (giveUpCounter != null) {
         giveUpCounter.increment();
       }
@@ -319,7 +324,14 @@ public class TriggerOutboxRelay {
       return false;
     }
     if (result.success()) {
-      mapper.markPublished(event.getId(), OutboxPublishStatus.PUBLISHED.code());
+      int updated =
+          mapper.markPublished(
+              event.getId(),
+              OutboxPublishStatus.PUBLISHED.code(),
+              OutboxPublishStatus.PUBLISHING.code());
+      if (updated == 0) {
+        log.warn("TriggerOutboxRelay markPublished 0 行受影响,行已被其它实例接管: id={}", event.getId());
+      }
       return true;
     } else {
       int nextAttempt = event.getPublishAttempt() + 1;
@@ -334,22 +346,32 @@ public class TriggerOutboxRelay {
             event.getRequestId(),
             event.getTopic(),
             result.errorMessage());
-        mapper.markFailed(
-            event.getId(),
-            OutboxPublishStatus.GIVE_UP.code(),
-            truncate(result.errorMessage()),
-            BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS));
+        int updated =
+            mapper.markFailed(
+                event.getId(),
+                OutboxPublishStatus.GIVE_UP.code(),
+                truncate(result.errorMessage()),
+                BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
+                OutboxPublishStatus.PUBLISHING.code());
+        if (updated == 0) {
+          log.warn("TriggerOutboxRelay markFailed(GIVE_UP) 0 行受影响,行已被其它实例接管: id={}", event.getId());
+        }
         if (giveUpCounter != null) {
           giveUpCounter.increment();
         }
         return false;
       }
       Instant retryAt = BatchDateTimeSupport.utcNow().plusSeconds(backoffSeconds(nextAttempt));
-      mapper.markFailed(
-          event.getId(),
-          OutboxPublishStatus.FAILED.code(),
-          truncate(result.errorMessage()),
-          retryAt);
+      int updated =
+          mapper.markFailed(
+              event.getId(),
+              OutboxPublishStatus.FAILED.code(),
+              truncate(result.errorMessage()),
+              retryAt,
+              OutboxPublishStatus.PUBLISHING.code());
+      if (updated == 0) {
+        log.warn("TriggerOutboxRelay markFailed(FAILED) 0 行受影响,行已被其它实例接管: id={}", event.getId());
+      }
       return false;
     }
   }

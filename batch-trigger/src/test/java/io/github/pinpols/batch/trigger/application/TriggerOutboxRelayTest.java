@@ -163,8 +163,10 @@ class TriggerOutboxRelayTest {
             eq("tenant-a:req-1"),
             any(LaunchEnvelope.class),
             eq("trace-1"));
-    verify(mapper).markPublished(101L, OutboxPublishStatus.PUBLISHED.code());
-    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any());
+    verify(mapper)
+        .markPublished(
+            101L, OutboxPublishStatus.PUBLISHED.code(), OutboxPublishStatus.PUBLISHING.code());
+    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any(), anyString());
   }
 
   @Test
@@ -184,8 +186,9 @@ class TriggerOutboxRelayTest {
             eq(102L),
             eq(OutboxPublishStatus.FAILED.code()),
             eq("kafka broker not reachable"),
-            any(Instant.class));
-    verify(mapper, never()).markPublished(anyLong(), anyString());
+            any(Instant.class),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(mapper, never()).markPublished(anyLong(), anyString(), anyString());
   }
 
   @Test
@@ -206,8 +209,9 @@ class TriggerOutboxRelayTest {
             eq(107L),
             eq(OutboxPublishStatus.GIVE_UP.code()),
             eq("kafka still down"),
-            any(Instant.class));
-    verify(mapper, never()).markPublished(anyLong(), anyString());
+            any(Instant.class),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(mapper, never()).markPublished(anyLong(), anyString(), anyString());
   }
 
   @Test
@@ -224,7 +228,8 @@ class TriggerOutboxRelayTest {
             eq(103L),
             eq(OutboxPublishStatus.GIVE_UP.code()),
             contains("payload deserialize"),
-            any(Instant.class));
+            any(Instant.class),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
     verify(publisher, never()).publish(any(), any(), any(), any());
   }
 
@@ -238,8 +243,8 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(publisher, never()).publish(any(), any(), any(), any());
-    verify(mapper, never()).markPublished(anyLong(), anyString());
-    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any());
+    verify(mapper, never()).markPublished(anyLong(), anyString(), anyString());
+    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any(), anyString());
   }
 
   @Test
@@ -257,7 +262,9 @@ class TriggerOutboxRelayTest {
 
     relay.poll();
 
-    verify(mapper).markPublished(106L, OutboxPublishStatus.PUBLISHED.code());
+    verify(mapper)
+        .markPublished(
+            106L, OutboxPublishStatus.PUBLISHED.code(), OutboxPublishStatus.PUBLISHING.code());
     verify(publisher, times(1)).publish(any(), any(), any(), any());
   }
 

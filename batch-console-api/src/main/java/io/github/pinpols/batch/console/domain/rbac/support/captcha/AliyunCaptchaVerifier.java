@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -37,6 +38,9 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
   private static final String ACTION = "VerifyIntelligentCaptcha";
   private static final String VERSION = "2023-03-05";
 
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+
   /** ISO8601 UTC,形如 2023-03-05T01:02:03Z,阿里云 x-acs-date 要求的格式。 */
   private static final DateTimeFormatter ISO8601 =
       DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC);
@@ -48,7 +52,7 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
   public AliyunCaptchaVerifier(CaptchaProperties properties, ObjectMapper objectMapper) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newHttpClient();
+    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
   }
 
   @Override
@@ -119,6 +123,7 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
         HttpRequest.newBuilder(URI.create(url))
             .header("Content-Type", "application/json; charset=utf-8")
             .header("Accept", "application/json")
+            .timeout(REQUEST_TIMEOUT)
             .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
     // host 头由 HttpClient 自行管理,不可手动 set,故签名头里跳过 host。
     headers.forEach(

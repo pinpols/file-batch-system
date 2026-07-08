@@ -19,6 +19,16 @@ spring:
       - "optional:file:${BATCH_CONSOLE_MENU_FILE:config/menu.yml}"
   # 注：DataRedisRepositoriesAutoConfiguration 已在 BatchConsoleApiApplication 主类 @SpringBootApplication(exclude=...) 排除
   #     data.redis.repositories.enabled=false 已在 batch-defaults.yml 设置；此处不再重复
+  mail:
+    # EmailNotificationSender 使用的 JavaMailSender 仅在 spring.mail.host 配置时才装配（见该类容错装配说明）。
+    # 这里只补超时默认值——SMTP host 不可达时 JavaMail 底层 socket 默认无超时，会一直挂到 OS 层 TCP
+    # 超时（可长达数分钟），阻塞发送线程。connectiontimeout/timeout/writetimeout 单位毫秒。
+    properties:
+      mail:
+        smtp:
+          connectiontimeout: 5000
+          timeout: 10000
+          writetimeout: 10000
   ai:
     # 默认聊天 provider = Anthropic(Claude);RAG 嵌入仍走 OpenAI embedding(Anthropic 无 embedding API)
     anthropic:

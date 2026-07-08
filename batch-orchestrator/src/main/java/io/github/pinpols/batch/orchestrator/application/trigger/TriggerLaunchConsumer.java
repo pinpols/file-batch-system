@@ -219,7 +219,15 @@ public class TriggerLaunchConsumer {
           jobInstanceId = jobInstance.getId();
         }
       }
-      triggerRequestMapper.updateAcceptance(tenantId, requestId, "LAUNCHED", jobInstanceId);
+      int updated =
+          triggerRequestMapper.updateAcceptance(tenantId, requestId, "LAUNCHED", jobInstanceId);
+      if (updated == 0) {
+        log.warn(
+            "TriggerLaunchConsumer updateAcceptance(LAUNCHED) 0 行受影响,行已是终态或被其它路径接管:"
+                + " tenantId={} requestId={}",
+            tenantId,
+            requestId);
+      }
     } catch (RuntimeException ex) {
       log.warn(
           "TriggerLaunchConsumer 回写 trigger_request LAUNCHED 失败(best-effort,主路径已 ack): tenantId={}"

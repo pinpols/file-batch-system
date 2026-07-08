@@ -31,6 +31,7 @@
               and fr.metadata_json ->> 'templateCode' &lt;&gt; ''
               and t.template_code = fr.metadata_json ->> 'templateCode'
               and t.enabled = true
+              and t.is_deleted = false
             order by t.version desc
             limit 1
             ) ftc on true

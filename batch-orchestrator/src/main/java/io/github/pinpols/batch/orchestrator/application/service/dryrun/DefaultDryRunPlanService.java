@@ -528,6 +528,16 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
               DryRunFinding.warn(
                   "EXEC_ENDPOINT_5XX", SCOPE_EXECUTION, key + " HEAD returned " + status, trimmed));
         }
+      } catch (InterruptedException ie) {
+        // 中断不是"endpoint 不可达":恢复中断位并停止探测循环,按现有方式返回已收集 findings。
+        Thread.currentThread().interrupt();
+        findings.add(
+            DryRunFinding.warn(
+                "EXEC_ENDPOINT_PROBE_INTERRUPTED",
+                SCOPE_EXECUTION,
+                key + " probe interrupted; remaining endpoint probes skipped",
+                trimmed));
+        break;
       } catch (Exception ex) {
         findings.add(
             DryRunFinding.warn(
