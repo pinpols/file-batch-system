@@ -29,9 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -73,8 +75,18 @@ final class RemoteFilesystemDispatchSupport {
   // 默认 512 MiB,jvm property 可调;超限拒绝该 dispatch(返回 failed,不 OOM)。
   private static final int MAX_OSS_INLINE_PAYLOAD_BYTES =
       Integer.getInteger("batch.dispatch.oss-max-inline-mib", 512) * 1024 * 1024;
+  // R-audit-p0: newCachedThreadPool 无界——stale NFS mount 下线程随并发 dispatch 持续创建且不可中断
+  // 释放，最终线程泄漏拖垮 JVM。改为有界池：core=0(空闲即回收)/max=8/SynchronousQueue(无排队缓冲，
+  // 池满即拒绝)。拒绝时该次 dispatch 走现有失败路径快速失败（见 copyWithTimeout 的
+  // RejectedExecutionException 分支），不再无限堆积等待线程。
+  private static final int NAS_COPY_MAX_THREADS = 8;
   private static final ExecutorService NAS_COPY_EXECUTOR =
-      Executors.newCachedThreadPool(
+      new ThreadPoolExecutor(
+          0,
+          NAS_COPY_MAX_THREADS,
+          60L,
+          TimeUnit.SECONDS,
+          new SynchronousQueue<>(),
           new ThreadFactory() {
             private final AtomicLong index = new AtomicLong();
 
@@ -84,25 +96,36 @@ final class RemoteFilesystemDispatchSupport {
               t.setDaemon(true);
               return t;
             }
-          });
+          },
+          new ThreadPoolExecutor.AbortPolicy());
 
   private RemoteFilesystemDispatchSupport() {}
 
   /** R2-P1-10：有超时保护的 Files.copy。stale NFS mount 时不会让派发线程永久阻塞。 */
   private static void copyWithTimeout(InputStream in, Path target) throws IOException {
-    Future<?> future =
-        NAS_COPY_EXECUTOR.submit(
-            () -> {
-              try {
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-              } catch (IOException ioe) {
-                // 红线 #5:不抛裸 RuntimeException。UncheckedIOException 是 JDK 为"lambda 内包装受检
-                // IOException"准备的语义化类型;它仍是 RuntimeException 子类,下方 ExecutionException
-                // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof
-                // IOException)照旧命中。
-                throw new UncheckedIOException(ioe);
-              }
-            });
+    Future<?> future;
+    try {
+      future =
+          NAS_COPY_EXECUTOR.submit(
+              () -> {
+                try {
+                  Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException ioe) {
+                  // 红线 #5:不抛裸 RuntimeException。UncheckedIOException 是 JDK 为"lambda 内包装受检
+                  // IOException"准备的语义化类型;它仍是 RuntimeException 子类,下方 ExecutionException
+                  // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof
+                  // IOException)照旧命中。
+                  throw new UncheckedIOException(ioe);
+                }
+              });
+    } catch (RejectedExecutionException ree) {
+      // 有界池(max=8)+ SynchronousQueue 已满:当前并发 NAS dispatch 已达上限,快速失败而非排队等待,
+      // 走现有失败路径(该次 dispatch 报可重试错误),不阻塞调用线程。
+      log.warn(
+          "NAS copy thread pool exhausted (max={}), rejecting dispatch fast", NAS_COPY_MAX_THREADS);
+      throw new IOException(
+          "NAS copy thread pool exhausted (max=" + NAS_COPY_MAX_THREADS + "); retry later", ree);
+    }
     try {
       future.get(NAS_COPY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     } catch (TimeoutException te) {

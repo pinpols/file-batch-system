@@ -21,14 +21,16 @@ public interface WorkerReportOutboxPgMapper {
       @Param("id") long id,
       @Param("publishStatus") String publishStatus,
       @Param("attemptCount") int attemptCount,
-      @Param("updatedAt") long updatedAt);
+      @Param("updatedAt") long updatedAt,
+      @Param("statusPublishing") String statusPublishing);
 
   int updateRetry(
       @Param("id") long id,
       @Param("attemptCount") int attemptCount,
       @Param("nextAttemptAt") long nextAttemptAt,
       @Param("updatedAt") long updatedAt,
-      @Param("publishStatus") String publishStatus);
+      @Param("publishStatus") String publishStatus,
+      @Param("statusPublishing") String statusPublishing);
 
   int resetStalePublishing(
       @Param("statusNew") String statusNew,
@@ -47,5 +49,6 @@ public interface WorkerReportOutboxPgMapper {
       @Param("id") long id,
       @Param("publishStatus") String publishStatus,
       @Param("now") long now,
-      @Param("maxAttempts") int maxAttempts);
+      @Param("maxAttempts") int maxAttempts,
+      @Param("statusPublishing") String statusPublishing);
 }

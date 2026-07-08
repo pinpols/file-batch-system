@@ -185,18 +185,27 @@ public class DataQualityCheckExecutor {
       throw new IllegalStateException("DQ SQL execution failed: " + dae.getMessage(), dae);
     }
     long actual = result == null ? 0L : result.longValue();
-    return matchThreshold(actual, rule.getThresholdJson()) ? STATUS_PASS : STATUS_FAIL;
+    return matchThreshold(actual, rule.getThresholdJson(), rule.getRuleCode())
+        ? STATUS_PASS
+        : STATUS_FAIL;
   }
 
   @SuppressWarnings("unchecked")
-  private boolean matchThreshold(long actual, String thresholdJson) {
+  private boolean matchThreshold(long actual, String thresholdJson, String ruleCode) {
     if (!Texts.hasText(thresholdJson)) {
       return actual > 0;
     }
     Map<String, Object> threshold;
     try {
       threshold = JsonUtils.fromJson(thresholdJson, Map.class);
-    } catch (Exception ignored) {
+    } catch (Exception ex) {
+      // thresholdJson 配置坏了不能静默翻转判定语义:留痕后仍走原 fallback(actual > 0)。
+      log.warn(
+          "DQ thresholdJson parse failed, falling back to 'actual > 0': ruleCode={},"
+              + " thresholdJson={}, cause={}",
+          ruleCode,
+          thresholdJson.length() <= 200 ? thresholdJson : thresholdJson.substring(0, 200) + "...",
+          ex.getMessage());
       return actual > 0;
     }
     if (threshold == null) {

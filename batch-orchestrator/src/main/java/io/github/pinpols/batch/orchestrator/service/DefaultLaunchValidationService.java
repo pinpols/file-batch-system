@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorCon
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
  * launch 热路径上不直连 DB 读配置。WORKFLOW 类型强制有 workflow_definition，其他类型（IMPORT/EXPORT/DISPATCH/GENERAL）
  * 不要求。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DefaultLaunchValidationService implements LaunchValidationService {
@@ -51,8 +53,10 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     JobDefinitionEntity jobDefinition =
         configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
     if (jobDefinition == null) {
-      triggerRequestMapper.updateAcceptance(
-          request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+      warnIfNotUpdated(
+          triggerRequestMapper.updateAcceptance(
+              request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null),
+          request);
       throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
     }
 
@@ -63,8 +67,10 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       workflowDefinition =
           configCacheService.findEnabledWorkflowDefinition(request.tenantId(), request.jobCode());
       if (workflowDefinition == null) {
-        triggerRequestMapper.updateAcceptance(
-            request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+        warnIfNotUpdated(
+            triggerRequestMapper.updateAcceptance(
+                request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null),
+            request);
         throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found_for_job");
       }
     }
@@ -75,6 +81,16 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
 
     return new LaunchLoadResult(
         triggerRequest, jobDefinition, workflowDefinition, existingInstance);
+  }
+
+  /** updateAcceptance 0 行受影响时,行已是终态(LAUNCHED/REJECTED/DUPLICATE),仅告警不抛异常。 */
+  private void warnIfNotUpdated(int updatedRows, LaunchRequest request) {
+    if (updatedRows == 0) {
+      log.warn(
+          "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          request.tenantId(),
+          request.requestId());
+    }
   }
 
   private void validate(LaunchRequest request) {

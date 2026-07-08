@@ -40,17 +40,19 @@
         SELECT attempt_count FROM batch.worker_report_outbox WHERE id = #{id}
     </select>
 
+    <!-- 与 claimNextReturning 的争抢语义闭环加 publish_status='PUBLISHING' 守卫,防止行已被
+         resetStalePublishing / 其它 worker 实例接管后再次被覆盖。 -->
     <update id="updateGiveUp">
         UPDATE batch.worker_report_outbox
         SET publish_status = #{publishStatus}, attempt_count = #{attemptCount}, updated_at = #{updatedAt}
-        WHERE id = #{id}
+        WHERE id = #{id} AND publish_status = #{statusPublishing}
     </update>
 
     <update id="updateRetry">
         UPDATE batch.worker_report_outbox
         SET attempt_count = #{attemptCount}, next_attempt_at = #{nextAttemptAt}, updated_at = #{updatedAt},
             publish_status = #{publishStatus}
-        WHERE id = #{id}
+        WHERE id = #{id} AND publish_status = #{statusPublishing}
     </update>
 
     <update id="resetStalePublishing">
@@ -76,6 +78,6 @@
     <update id="giveUpRow">
         UPDATE batch.worker_report_outbox SET publish_status = #{publishStatus}, updated_at = #{now}, attempt_count =
             CASE WHEN attempt_count &lt; #{maxAttempts} THEN #{maxAttempts} ELSE attempt_count END
-        WHERE id = #{id}
+        WHERE id = #{id} AND publish_status = #{statusPublishing}
     </update>
 </mapper>

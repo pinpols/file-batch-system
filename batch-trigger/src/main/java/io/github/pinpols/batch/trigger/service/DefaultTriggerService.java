@@ -215,8 +215,17 @@ public class DefaultTriggerService implements TriggerService {
               publishLaunchOutbox(launchRequest, dedupKey);
               // 同事务推进到 LAUNCHED — outbox 保证 at-least-once 投递；
               // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再长期停滞。
-              triggerRequestMapper.updateRequestStatus(
-                  command.getTenantId(), command.getRequestId(), "LAUNCHED");
+              // CAS 守卫:前态必须仍是本次刚 CAS 进入的 PROCESSING,防止并发场景下把已被其它路径推进的行覆盖。
+              int launched =
+                  triggerRequestMapper.updateRequestStatusConditional(
+                      command.getTenantId(), command.getRequestId(), "LAUNCHED", "PROCESSING");
+              if (launched <= 0) {
+                log.warn(
+                    "updateRequestStatusConditional(LAUNCHED) 0 行受影响,行状态已非 PROCESSING:"
+                        + " tenantId={} requestId={}",
+                    command.getTenantId(),
+                    command.getRequestId());
+              }
               return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
             });
     return result;
@@ -227,8 +236,17 @@ public class DefaultTriggerService implements TriggerService {
     if (existing != null) {
       return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
     }
-    triggerRequestMapper.updateRequestStatus(
-        launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
+    // CAS 守卫:前态必须仍是刚插入的 PENDING,防止覆盖被并发路径推进过的行(0 行时 reconciler 兜底,不抛异常)。
+    int accepted =
+        triggerRequestMapper.updateRequestStatusConditional(
+            launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED", "PENDING");
+    if (accepted <= 0) {
+      log.warn(
+          "updateRequestStatusConditional(ACCEPTED) 0 行受影响,行状态已非 PENDING: tenantId={}"
+              + " requestId={}",
+          launchRequest.tenantId(),
+          launchRequest.requestId());
+    }
     return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
   }
 

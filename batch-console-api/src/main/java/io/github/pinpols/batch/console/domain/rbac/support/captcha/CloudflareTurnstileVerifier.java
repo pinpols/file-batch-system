@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,9 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "batch.console.captcha.provider", havingValue = "cloudflare")
 public class CloudflareTurnstileVerifier implements CaptchaVerifier {
 
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+
   private final CaptchaProperties properties;
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
@@ -34,7 +38,7 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
   public CloudflareTurnstileVerifier(CaptchaProperties properties, ObjectMapper objectMapper) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newHttpClient();
+    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
   }
 
   @Override
@@ -72,6 +76,7 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
     HttpRequest request =
         HttpRequest.newBuilder(URI.create(url))
             .header("Content-Type", "application/x-www-form-urlencoded")
+            .timeout(REQUEST_TIMEOUT)
             .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
             .build();
     HttpResponse<String> response =

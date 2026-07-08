@@ -10,6 +10,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -49,6 +50,9 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
   private static final String ALGORITHM = "TC3-HMAC-SHA256";
   private static final String CONTENT_TYPE = "application/json; charset=utf-8";
 
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+
   private final CaptchaProperties properties;
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
@@ -56,7 +60,7 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
   public TencentCaptchaVerifier(CaptchaProperties properties, ObjectMapper objectMapper) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newHttpClient();
+    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
   }
 
   @Override
@@ -201,6 +205,7 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
   protected String postJson(String url, Map<String, String> headers, String body) throws Exception {
     HttpRequest.Builder builder =
         HttpRequest.newBuilder(URI.create(url))
+            .timeout(REQUEST_TIMEOUT)
             .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
     headers.forEach(builder::header);
     HttpResponse<String> response =

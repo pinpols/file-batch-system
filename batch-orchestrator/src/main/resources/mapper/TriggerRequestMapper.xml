@@ -66,6 +66,9 @@
         )
     </insert>
 
+    <!-- 守卫:调用点覆盖 ACCEPTED/WAITING(含 batch-day 门闩重投场景,前态可为二者之一)多种前态写入
+         LAUNCHED/REJECTED/WAITING/DUPLICATE,故不能锁死单一前态;改为禁止覆盖已终态行
+         (LAUNCHED/REJECTED/DUPLICATE 不允许被回退/覆写),防并发场景下的状态倒退。 -->
     <update id="updateAcceptance">
         update batch.trigger_request
         set request_status = #{requestStatus},
@@ -73,6 +76,7 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and request_id = #{requestId}
+          and request_status not in ('LAUNCHED', 'REJECTED', 'DUPLICATE')
     </update>
 
     <update id="updateTriggerType">

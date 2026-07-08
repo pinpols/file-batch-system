@@ -142,7 +142,8 @@ class DefaultTriggerServiceTest {
     // 同事务内：CAS PROCESSING → INSERT outbox → 更新 LAUNCHED
     verify(triggerOutboxPublisher)
         .publishRaw(eq("t1"), eq("req-pending"), eq("trace-pending"), anyString());
-    verify(triggerRequestMapper).updateRequestStatus("t1", "req-pending", "LAUNCHED");
+    verify(triggerRequestMapper)
+        .updateRequestStatusConditional("t1", "req-pending", "LAUNCHED", "PROCESSING");
   }
 
   @Test
@@ -182,7 +183,8 @@ class DefaultTriggerServiceTest {
     verify(triggerMisfirePendingMapper).approve(10L, "trigger-api");
     verify(triggerOutboxPublisher)
         .publishRaw(eq("t1"), eq("req-linked"), eq("trace-linked"), anyString());
-    verify(triggerRequestMapper).updateRequestStatus("t1", "req-linked", "LAUNCHED");
+    verify(triggerRequestMapper)
+        .updateRequestStatusConditional("t1", "req-linked", "LAUNCHED", "PROCESSING");
   }
 
   @Test

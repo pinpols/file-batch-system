@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,7 +51,12 @@ public class OrchestratorKafkaConsumerConfiguration {
   public static final String TRIGGER_LISTENER_FACTORY =
       "triggerLaunchKafkaListenerContainerFactory";
 
+  // R-audit-p0: 与 TriggerLaunchConsumer#METRIC_FAILED 同名同 tag 风格,
+  // 让"重试耗尽跳过"与消费失败其它原因(deserialize/business/runtime)汇入同一 metric 便于统一告警。
+  private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
+
   private final TriggerConsumerProperties consumerProperties;
+  private final MeterRegistry meterRegistry;
 
   @Bean
   public ConsumerFactory<String, String> triggerLaunchConsumerFactory(
@@ -118,6 +126,10 @@ public class OrchestratorKafkaConsumerConfiguration {
                     record.key(),
                     record.value(),
                     exception.getMessage());
+                Counter.builder(METRIC_FAILED)
+                    .tags(Tags.of("reason", "retries_exhausted"))
+                    .register(meterRegistry)
+                    .increment();
               }
             },
             new FixedBackOff(eh.getRetryBackoffMs(), Math.max(0, eh.getRetryAttempts() - 1)));
