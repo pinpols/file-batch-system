@@ -14,6 +14,8 @@ import com.github.benmanes.caffeine.cache.Ticker;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.InstantSource;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -30,15 +32,18 @@ class ApiKeyVerifierTest {
   @Mock private ApiKeyAuthMapper mapper;
   private ApiKeyVerifier verifier;
 
-  /** 可推进的假时钟(nanos),同时驱动 Caffeine TTL 逐出与 touch 节流窗口。 */
+  /** 可推进的假时钟(nanos),同时驱动 Caffeine TTL 逐出、touch 节流窗口与 expires_at 复查墙钟。 */
   private final AtomicLong nanos = new AtomicLong(0);
 
   private final Ticker fakeTicker = nanos::get;
 
+  /** 与 fakeTicker 同源的假墙钟:EPOCH + nanos。 */
+  private final InstantSource fakeClock = () -> Instant.EPOCH.plusNanos(nanos.get());
+
   @BeforeEach
   void setup() {
-    // 单测用假 ticker 构造器,避免依赖 Spring 容器;需要真实时钟的默认路径由单参构造器覆盖。
-    verifier = new ApiKeyVerifier(mapper, fakeTicker);
+    // 单测用假 ticker/墙钟构造器,避免依赖 Spring 容器;需要真实时钟的默认路径由单参构造器覆盖。
+    verifier = new ApiKeyVerifier(mapper, fakeTicker, fakeClock);
     // @Lazy self 自注入在单测无 Spring 容器时为 null;指向自身,@Async 方法在测试里同步执行。
     ReflectionTestUtils.setField(verifier, "self", verifier);
   }
@@ -281,6 +286,45 @@ class ApiKeyVerifierTest {
 
     verify(mapper, times(1)).findActiveCandidatesByPrefixAndTenant(PREFIX, "ta");
     verify(mapper, times(1)).findActiveCandidatesByPrefixAndTenant(PREFIX, "tb");
+  }
+
+  @Test
+  void cacheHitWithExpiredEntryFallsBackToSlowPathAndIsRejected() {
+    // key 在 fakeClock 的 30s 后自然过期
+    ApiKeyHasher.SaltedHash sh = ApiKeyHasher.hashWithSaltKdf(RAW_KEY);
+    ApiKeyEntity shortLived =
+        new ApiKeyEntity(
+            9L,
+            "tx",
+            "kn",
+            "*",
+            true,
+            Instant.EPOCH.plusSeconds(30),
+            sh.hash(),
+            sh.salt(),
+            "pbkdf2");
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx"))
+        .thenReturn(List.of(shortLived))
+        .thenReturn(List.of()); // 过期后 SQL 只取未过期行 → 无候选
+
+    assertThat(verifier.verify(RAW_KEY, "tx")).contains(shortLived); // 入缓存
+
+    advance(Duration.ofSeconds(60)); // < 5min 缓存 TTL,但已越过 expires_at
+
+    // 缓存命中但 expiresAt 已过 → invalidate 落回慢路径,被 SQL 拒掉
+    assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
+    verify(mapper, times(2)).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
+  }
+
+  @Test
+  void noCandidatesResultIsNotCached() {
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of());
+
+    assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
+    assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
+
+    // 查无候选行不入缓存:每次都重新查库
+    verify(mapper, times(2)).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
   }
 
   @Test

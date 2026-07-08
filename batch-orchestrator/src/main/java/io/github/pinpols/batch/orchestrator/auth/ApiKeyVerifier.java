@@ -6,12 +6,13 @@ import com.github.benmanes.caffeine.cache.Ticker;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.InstantSource;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,8 @@ import org.springframework.stereotype.Component;
  *       (batch-console-api 模块,<b>独立进程</b>);orchestrator 只只读该表,进程内 invalidate 够不着 console-api 的写。
  *       因此接受 <b>revoke 后最长 {@value #VERIFY_CACHE_TTL_MINUTES} 分钟的生效窗口</b>——worker 内调是可信内网短命
  *       凭据,分钟级窗口可接受;需要即时吊销的场景应缩短 TTL 或引入跨进程失效信号(当前不做)。
+ *       <p><b>expires_at 硬边界不受 TTL 窗口影响</b>:命中路径对缓存值做内存复查——{@code expiresAt} 已过则 invalidate
+ *       并落回慢路径(SQL 只取未过期行,自然拒掉),短命 key 的自然过期<b>不会</b>被缓存延长。
  *       <p>legacy sha256 → PBKDF2 的"登录即升级":缓存 key 是 rawKey 的 SHA-256,升级不改 rawKey 故 key 不变;缓存命中
  *       路径<b>不再</b>读取 entity 的 {@code keyHash/salt/keyHashAlgo}(比对已在写入缓存前完成),故 entity 里这些 字段即使因升级而
  *       DB 侧已变,缓存值也不会被误用;下游只用 {@code id/tenantId/scopes/enabled} 等不随升级变化的字段。
@@ -68,6 +71,8 @@ public class ApiKeyVerifier {
   /** last_used_at 两次真实写库的最小间隔;窗口内的命中跳过写库。 */
   static final Duration TOUCH_MIN_INTERVAL = Duration.ofSeconds(60);
 
+  private static final long TOUCH_MIN_INTERVAL_NANOS = TOUCH_MIN_INTERVAL.toNanos();
+
   public static final String SCOPE_WORKER_EXECUTE = "worker.execute";
 
   /**
@@ -85,6 +90,9 @@ public class ApiKeyVerifier {
 
   private final Ticker ticker;
 
+  /** 墙钟(epoch)来源——命中路径复查 {@code expires_at} 用;测试注入假钟,与 {@link #ticker} 同源推进。 */
+  private final InstantSource instantSource;
+
   /** 验证成功结果缓存:key = SHA-256(rawKey)|tenantId,value = 命中的不可变 entity。只缓存成功。 */
   private final Cache<String, ApiKeyEntity> verifyCache;
 
@@ -100,13 +108,16 @@ public class ApiKeyVerifier {
 
   /** 生产构造器(Spring):系统时钟。 */
   public ApiKeyVerifier(ApiKeyAuthMapper mapper) {
-    this(mapper, Ticker.systemTicker());
+    this(mapper, Ticker.systemTicker(), InstantSource.system());
   }
 
-  /** 可注入 {@link Ticker} 的构造器(测试用假时钟驱动 TTL 逐出与 touch 节流)。 */
-  ApiKeyVerifier(ApiKeyAuthMapper mapper, Ticker ticker) {
+  /**
+   * 可注入 {@link Ticker} + {@link InstantSource} 的构造器(测试用假时钟驱动 TTL 逐出 / touch 节流 / expires_at 复查)。
+   */
+  ApiKeyVerifier(ApiKeyAuthMapper mapper, Ticker ticker, InstantSource instantSource) {
     this.mapper = mapper;
     this.ticker = ticker;
+    this.instantSource = instantSource;
     this.verifyCache =
         Caffeine.newBuilder()
             .ticker(ticker)
@@ -129,8 +140,15 @@ public class ApiKeyVerifier {
     String cacheKey = verifyCacheKey(rawKey, claimedTenantId);
     ApiKeyEntity cached = verifyCache.getIfPresent(cacheKey);
     if (cached != null) {
-      maybeTouch(cached.id());
-      return Optional.of(cached);
+      // expires_at 硬边界内存复查:自然过期不允许被缓存 TTL 延长(revoke 的 5 分钟窗口是另一回事,见类 javadoc)。
+      Instant expiresAt = cached.expiresAt();
+      if (expiresAt != null && expiresAt.isBefore(instantSource.instant())) {
+        verifyCache.invalidate(cacheKey);
+        // 落回慢路径:SQL 只取未过期行,自然拒掉。
+      } else {
+        maybeTouch(cached.id());
+        return Optional.of(cached);
+      }
     }
 
     String prefix = rawKey.substring(0, KEY_PREFIX_LEN);
@@ -172,12 +190,11 @@ public class ApiKeyVerifier {
    */
   private void maybeTouch(Long id) {
     long now = ticker.read();
-    long intervalNanos = TimeUnit.NANOSECONDS.convert(TOUCH_MIN_INTERVAL);
     boolean[] doWrite = {false};
     lastTouchNanos.compute(
         id,
         (k, prev) -> {
-          if (prev != null && now - prev < intervalNanos) {
+          if (prev != null && now - prev < TOUCH_MIN_INTERVAL_NANOS) {
             return prev; // 窗口内,跳过写库
           }
           doWrite[0] = true;
