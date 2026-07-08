@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.worker.processes.config;
 
 import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
-import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
-import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -17,11 +15,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
-/** 平台数据源配置，提供 PROCESS Worker 所需的平台库 MyBatis SqlSession。 */
+/**
+ * 平台数据源配置，提供 PROCESS Worker 所需的平台库 MyBatis SqlSession。装配逻辑委托 {@link WorkerDataSourceSupport}（三个
+ * worker 模块共用）。
+ */
 @Configuration
 @EnableConfigurationProperties(DataSourceProperties.class)
 @RequiredArgsConstructor
@@ -41,33 +40,14 @@ public class PlatformDataSourceConfiguration {
   public DataSource processPlatformDataSource(
       DataSourceProperties properties,
       @Qualifier("processPlatformHikariConfig") HikariConfig hikariConfig) {
-    hikariConfig.setJdbcUrl(properties.determineUrl());
-    hikariConfig.setUsername(properties.determineUsername());
-    hikariConfig.setPassword(properties.determinePassword());
-    String driverClassName = properties.determineDriverClassName();
-    if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
-      hikariConfig.setDriverClassName(driverClassName);
-    }
-    String appName = environment.getProperty("spring.application.name", "batch-worker-process");
-    HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, appName + "-platform");
-    return new HikariDataSource(hikariConfig);
+    return WorkerDataSourceSupport.buildPlatformDataSource(
+        properties, hikariConfig, pgSessionProperties, environment, "batch-worker-process");
   }
 
   @Bean(name = "processPlatformSqlSessionFactory")
   public SqlSessionFactory processPlatformSqlSessionFactory(
       @Qualifier("processPlatformDataSource") DataSource dataSource) throws Exception {
-    SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-    factoryBean.setDataSource(dataSource);
-    Resource[] platformMappers =
-        new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml");
-    if (platformMappers.length > 0) {
-      factoryBean.setMapperLocations(platformMappers);
-    }
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration();
-    configuration.setMapUnderscoreToCamelCase(true);
-    factoryBean.setConfiguration(configuration);
-    return factoryBean.getObject();
+    return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
   }
 
   @Bean(name = "processPlatformSqlSessionTemplate")
@@ -76,10 +56,14 @@ public class PlatformDataSourceConfiguration {
     return new SqlSessionTemplate(sqlSessionFactory);
   }
 
+  /**
+   * 平台库 TransactionManager（区别于 {@code processBusinessTransactionManager}）——process 特有：process
+   * 模块存在需要跨平台库事务管理的场景，import/export 未见对应需求，保留为模块差异（详见任务报告）。
+   */
   @Bean(name = "transactionManager")
   @Primary
   public DataSourceTransactionManager transactionManager(
       @Qualifier("processPlatformDataSource") DataSource processPlatformDataSource) {
-    return new DataSourceTransactionManager(processPlatformDataSource);
+    return WorkerDataSourceSupport.buildTransactionManager(processPlatformDataSource);
   }
 }

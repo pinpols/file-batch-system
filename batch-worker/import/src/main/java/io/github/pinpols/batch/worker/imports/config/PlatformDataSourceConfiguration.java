@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.worker.imports.config;
 
 import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
-import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
-import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -17,9 +15,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
+/** 平台数据源配置，装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。 */
 @Configuration
 @EnableConfigurationProperties(DataSourceProperties.class)
 @RequiredArgsConstructor
@@ -39,33 +36,14 @@ public class PlatformDataSourceConfiguration {
   public DataSource importPlatformDataSource(
       DataSourceProperties properties,
       @Qualifier("importPlatformHikariConfig") HikariConfig hikariConfig) {
-    hikariConfig.setJdbcUrl(properties.determineUrl());
-    hikariConfig.setUsername(properties.determineUsername());
-    hikariConfig.setPassword(properties.determinePassword());
-    String driverClassName = properties.determineDriverClassName();
-    if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
-      hikariConfig.setDriverClassName(driverClassName);
-    }
-    String appName = environment.getProperty("spring.application.name", "batch-worker-import");
-    HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, appName + "-platform");
-    return new HikariDataSource(hikariConfig);
+    return WorkerDataSourceSupport.buildPlatformDataSource(
+        properties, hikariConfig, pgSessionProperties, environment, "batch-worker-import");
   }
 
   @Bean(name = "importPlatformSqlSessionFactory")
   public SqlSessionFactory importPlatformSqlSessionFactory(
       @Qualifier("importPlatformDataSource") DataSource dataSource) throws Exception {
-    SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-    factoryBean.setDataSource(dataSource);
-    Resource[] platformMappers =
-        new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml");
-    if (platformMappers.length > 0) {
-      factoryBean.setMapperLocations(platformMappers);
-    }
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration();
-    configuration.setMapUnderscoreToCamelCase(true);
-    factoryBean.setConfiguration(configuration);
-    return factoryBean.getObject();
+    return WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource);
   }
 
   @Bean(name = "importPlatformSqlSessionTemplate")

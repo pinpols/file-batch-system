@@ -2,18 +2,16 @@ package io.github.pinpols.batch.worker.processes.config;
 
 import com.zaxxer.hikari.HikariConfig;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
-import io.github.pinpols.batch.common.config.BusinessDataSourceBuilder;
 import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
 import io.github.pinpols.batch.common.rls.RlsPolicyHealthIndicator;
 import io.github.pinpols.batch.common.rls.RlsProperties;
 import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
-import io.github.pinpols.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
+import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
-import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -23,11 +21,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
-/** 业务数据源配置，提供 PROCESS 配置驱动 SQL 加工访问业务库的连接池。 */
+/**
+ * 业务数据源配置，提供 PROCESS 配置驱动 SQL 加工访问业务库的连接池。装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。
+ */
 @Configuration("processWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties({
   BusinessDataSourceProperties.class,
@@ -52,34 +50,21 @@ public class BusinessDataSourceConfiguration {
       BusinessRoutingProperties routingProperties,
       BusinessTenantPlacementMapper placementMapper,
       @Qualifier("processBusinessHikariConfig") HikariConfig hikariConfig) {
-    String appName = environment.getProperty("spring.application.name", "batch-worker-process");
-    // 构造 + pg-session 回退 + 路由包裹统一收敛到 BusinessDataSourceBuilder;routing 默认关=单片无损,开=多片
-    // placement mapper 供 TABLE 模式 resolver 读 placement 表(单片/CONFIG 模式忽略)
-    return BusinessDataSourceBuilder.build(
+    return WorkerDataSourceSupport.buildBusinessDataSource(
         hikariConfig,
         properties,
         pgSessionProperties,
         routingProperties,
-        new MyBatisTenantPlacementRepository(placementMapper),
-        appName);
+        placementMapper,
+        environment,
+        "batch-worker-process");
   }
 
   @Bean(name = "processBusinessSqlSessionFactory")
   public SqlSessionFactory processBusinessSqlSessionFactory(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource)
       throws Exception {
-    SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-    factoryBean.setDataSource(processBusinessDataSource);
-    Resource[] businessMappers =
-        new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/business/*.xml");
-    if (businessMappers.length > 0) {
-      factoryBean.setMapperLocations(businessMappers);
-    }
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration();
-    configuration.setMapUnderscoreToCamelCase(true);
-    factoryBean.setConfiguration(configuration);
-    return factoryBean.getObject();
+    return WorkerDataSourceSupport.buildBusinessSqlSessionFactory(processBusinessDataSource);
   }
 
   @Bean(name = "processBusinessSqlSessionTemplate")
@@ -89,10 +74,15 @@ public class BusinessDataSourceConfiguration {
     return new SqlSessionTemplate(processBusinessSqlSessionFactory);
   }
 
+  /**
+   * 业务库 TransactionManager —— 被 {@code SqlTransformComputePlugin} 通过
+   * {@code @Transactional(transactionManager = "processBusinessTransactionManager")} 显式引用，process
+   * 特有，import/export 无对应调用点，保留为模块差异（详见任务报告）。
+   */
   @Bean(name = "processBusinessTransactionManager")
   public DataSourceTransactionManager processBusinessTransactionManager(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
-    return new DataSourceTransactionManager(processBusinessDataSource);
+    return WorkerDataSourceSupport.buildTransactionManager(processBusinessDataSource);
   }
 
   /**
@@ -108,7 +98,8 @@ public class BusinessDataSourceConfiguration {
   public RlsPolicyHealthIndicator rlsPolicyHealthIndicator(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
       RlsProperties rlsProperties) {
-    return new RlsPolicyHealthIndicator(processBusinessDataSource, rlsProperties.getExemptTables());
+    return WorkerDataSourceSupport.buildRlsPolicyHealthIndicator(
+        processBusinessDataSource, rlsProperties);
   }
 
   /**
@@ -124,6 +115,7 @@ public class BusinessDataSourceConfiguration {
   public RlsStartupFailFastCheck rlsStartupFailFastCheck(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
       RlsProperties rlsProperties) {
-    return new RlsStartupFailFastCheck(processBusinessDataSource, rlsProperties.getExemptTables());
+    return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(
+        processBusinessDataSource, rlsProperties);
   }
 }
