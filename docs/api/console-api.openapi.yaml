@@ -9129,7 +9129,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/NotificationChannelUpsertRequest'
       responses:
         '200':
           description: Success
@@ -9184,7 +9184,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/NotificationChannelUpdateRequest'
       responses:
         '200':
           description: Success
@@ -9278,7 +9278,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/SubscriptionRuleUpsertRequest'
       responses:
         '200':
           description: Success
@@ -9335,7 +9335,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/SubscriptionRuleUpsertRequest'
       responses:
         '200':
           description: Success
@@ -11367,8 +11367,8 @@ components:
       type: object
       description: ADR-020 批次日重放提交命令
       properties:
-        tenantId:        { type: string }
-        calendarCode:    { type: string }
+        tenantId:        { type: string, description: '可省略；由 JWT 经 ConsoleTenantGuard 解析后强制覆盖' }
+        calendarCode:    { type: string, maxLength: 128 }
         bizDate:         { type: string, format: date }
         scope:
           type: string
@@ -11394,7 +11394,7 @@ components:
         requestedBy:     { type: string }
         autoApprove:     { type: boolean, description: 'true 直接 RUNNING；false PENDING_APPROVAL（默认）' }
         traceId:         { type: string }
-      required: [tenantId, calendarCode, bizDate, scope, reason, requestedBy]
+      required: [calendarCode, bizDate, scope, reason, requestedBy]
     BatchDayReplayPreview:
       type: object
       description: ADR-020 批次日重放影响预览；只读解析候选，不创建 session。
@@ -11488,7 +11488,7 @@ components:
       type: object
       description: ADR-026 演练计划请求
       properties:
-        tenantId: { type: string }
+        tenantId: { type: string, description: '可省略；由 JWT 经 ConsoleTenantGuard 解析后强制覆盖' }
         jobCode:  { type: string }
         bizDate:
           type: string
@@ -11506,7 +11506,51 @@ components:
             - sql / querySql / sourceQuery / validationSql / selectSql → JdbcTemplate EXPLAIN
             - s3Bucket → S3Client.headBucket（命名 DNS-style 校验）
             - endpointUrl / callbackUrl / channelEndpoint / dispatchTarget → HTTP HEAD（5s timeout）
-      required: [tenantId, jobCode]
+      required: [jobCode]
+    NotificationChannelUpsertRequest:
+      type: object
+      description: 通知渠道创建请求（2026-07-09 写路径类型化，字段名与既有 Map 消费键一致）
+      properties:
+        channelCode: { type: string, maxLength: 64 }
+        channelName: { type: string, maxLength: 128 }
+        channelType:
+          type: string
+          maxLength: 32
+          enum: [EMAIL, DINGTALK, WECOM, WEBHOOK, SMS]
+        configJson:
+          type: string
+          description: 渠道配置 JSON 字符串（原样写入 jsonb 列）
+        enabled: { type: boolean, default: true }
+      # channelCode/channelName/channelType 服务端 @NotBlank 必填(缺失 400);不落 spec required,
+      # 避免 oasdiff 对「type:object 自由体 → 显式 required」误判 ERR breaking(运行时行为未变,历史上即拒绝)。
+    NotificationChannelUpdateRequest:
+      type: object
+      description: 通知渠道更新请求；channelCode 取路径参数，body 不含。mapper 为全量覆盖更新，channelName/channelType 必填。
+      properties:
+        channelName: { type: string, maxLength: 128 }
+        channelType:
+          type: string
+          maxLength: 32
+          enum: [EMAIL, DINGTALK, WECOM, WEBHOOK, SMS]
+        configJson:
+          type: string
+          description: 渠道配置 JSON 字符串（原样写入 jsonb 列）
+        enabled: { type: boolean, default: true }
+      # channelName/channelType 服务端 @NotBlank 必填(缺失 400);不落 spec required,理由同上。
+    SubscriptionRuleUpsertRequest:
+      type: object
+      description: 订阅规则创建/更新请求（2026-07-09 写路径类型化，字段名与既有 Map 消费键一致）
+      properties:
+        ruleName: { type: string, maxLength: 128 }
+        channelCode: { type: string, maxLength: 64 }
+        eventTypes:
+          type: string
+          maxLength: 512
+          description: 逗号分隔事件类型，如 JOB_FAILED,JOB_TIMEOUT
+        severityFilter: { type: string, maxLength: 128 }
+        jobCodeFilter: { type: string, maxLength: 512 }
+        enabled: { type: boolean, default: true }
+      # ruleName/channelCode/eventTypes 服务端 @NotBlank 必填(缺失 400);不落 spec required,理由同上。
     BatchDayOperateRequest:
       type: object
       properties:

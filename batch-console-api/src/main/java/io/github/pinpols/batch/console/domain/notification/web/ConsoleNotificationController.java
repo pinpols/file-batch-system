@@ -2,8 +2,12 @@ package io.github.pinpols.batch.console.domain.notification.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleNotificationApplicationService;
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -52,8 +56,9 @@ public class ConsoleNotificationController {
   @PostMapping("/channels")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> createChannel(
-      @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
-    service.createChannel(tenantId, params);
+      @RequestParam @NotBlank String tenantId,
+      @Valid @RequestBody NotificationChannelUpsertRequest request) {
+    service.createChannel(tenantId, request);
     return responseFactory.success(null);
   }
 
@@ -62,8 +67,8 @@ public class ConsoleNotificationController {
   public CommonResponse<Void> updateChannel(
       @RequestParam @NotBlank String tenantId,
       @PathVariable String channelCode,
-      @RequestBody Map<String, Object> params) {
-    service.updateChannel(tenantId, channelCode, params);
+      @Valid @RequestBody NotificationChannelUpdateRequest request) {
+    service.updateChannel(tenantId, channelCode, request);
     return responseFactory.success(null);
   }
 
@@ -101,8 +106,9 @@ public class ConsoleNotificationController {
   @PostMapping("/rules")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> createRule(
-      @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
-    service.createRule(tenantId, params);
+      @RequestParam @NotBlank String tenantId,
+      @Valid @RequestBody SubscriptionRuleUpsertRequest request) {
+    service.createRule(tenantId, request);
     return responseFactory.success(null);
   }
 
@@ -111,8 +117,8 @@ public class ConsoleNotificationController {
   public CommonResponse<Void> updateRule(
       @RequestParam @NotBlank String tenantId,
       @PathVariable Long ruleId,
-      @RequestBody Map<String, Object> params) {
-    service.updateRule(tenantId, ruleId, params);
+      @Valid @RequestBody SubscriptionRuleUpsertRequest request) {
+    service.updateRule(tenantId, ruleId, request);
     return responseFactory.success(null);
   }
 

@@ -17,6 +17,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.job.web.request.DryRunPlanRequest;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -98,15 +99,16 @@ class ConsoleDryRunPlanControllerTest {
         .perform(
             post("/api/console/ops/dry-run/plan")
                 .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"tb\",\"level\":\"L1\"}"))
+                .content("{\"tenantId\":\"tb\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.ok").value(true));
 
     ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
     verify(bodySpec).body(bodyCaptor.capture());
-    @SuppressWarnings("unchecked")
-    Map<String, Object> forwarded = (Map<String, Object>) bodyCaptor.getValue();
-    assertThat(forwarded).containsEntry("tenantId", "ta");
+    DryRunPlanRequest forwarded = (DryRunPlanRequest) bodyCaptor.getValue();
+    assertThat(forwarded.getTenantId()).isEqualTo("ta");
+    assertThat(forwarded.getJobCode()).isEqualTo("job-a");
+    assertThat(forwarded.getLevel()).isEqualTo("L1");
     verify(bodyUriSpec).uri("/internal/orchestrator/dry-run/plan");
   }
 
@@ -119,7 +121,7 @@ class ConsoleDryRunPlanControllerTest {
         .perform(
             post("/api/console/ops/dry-run/plan")
                 .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"tb\"}"))
+                .content("{\"tenantId\":\"tb\",\"jobCode\":\"job-a\"}"))
         .andExpect(status().isForbidden());
     verify(orchestratorInternalRestClient, never()).build();
   }
@@ -144,7 +146,7 @@ class ConsoleDryRunPlanControllerTest {
         .perform(
             post("/api/console/ops/dry-run/plan")
                 .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"level\":\"L1\"}"))
+                .content("{\"tenantId\":\"ta\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.summary").value("ok"))
@@ -171,7 +173,7 @@ class ConsoleDryRunPlanControllerTest {
         .perform(
             post("/api/console/ops/dry-run/plan")
                 .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"level\":\"L1\"}"))
+                .content("{\"tenantId\":\"ta\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().is5xxServerError());
   }
 
@@ -179,8 +181,23 @@ class ConsoleDryRunPlanControllerTest {
   void planShouldHandleNullTenantInBody() throws Exception {
     when(tenantGuard.resolveTenant(null)).thenReturn("ta");
     mockMvc
-        .perform(post("/api/console/ops/dry-run/plan").contentType(APPLICATION_JSON).content("{}"))
+        .perform(
+            post("/api/console/ops/dry-run/plan")
+                .contentType(APPLICATION_JSON)
+                .content("{\"jobCode\":\"job-a\"}"))
         .andExpect(status().isOk());
     verify(tenantGuard).resolveTenant(null);
+  }
+
+  @Test
+  void planShouldRejectMissingJobCodeWith400() throws Exception {
+    // 类型化后的 bean validation 守护:jobCode @NotBlank,缺失直接 400,不触达 orchestrator。
+    mockMvc
+        .perform(
+            post("/api/console/ops/dry-run/plan")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"ta\"}"))
+        .andExpect(status().isBadRequest());
+    verify(orchestratorInternalRestClient, never()).build();
   }
 }

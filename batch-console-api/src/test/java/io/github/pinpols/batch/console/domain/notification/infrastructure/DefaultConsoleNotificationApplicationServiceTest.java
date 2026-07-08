@@ -10,6 +10,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -95,12 +98,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
 
     service.createChannel(
         "tenant-a",
-        Map.of(
-            "channelCode", "email-1",
-            "channelName", "Email One",
-            "channelType", "EMAIL",
-            "configJson", "{\"url\":\"https://example.com/hook\"}",
-            "enabled", true));
+        channelUpsert(
+            "email-1", "Email One", "EMAIL", "{\"url\":\"https://example.com/hook\"}", true));
 
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(channelMapper).insert(captor.capture());
@@ -123,11 +122,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
     assertThatThrownBy(
             () ->
                 service.createChannel(
-                    "tenant-a",
-                    Map.of(
-                        "channelCode", "email-1",
-                        "channelName", "Email One",
-                        "channelType", "EMAIL")))
+                    "tenant-a", channelUpsert("email-1", "Email One", "EMAIL", null, true)))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("code_already_exists");
   }
@@ -137,14 +132,12 @@ class DefaultConsoleNotificationApplicationServiceTest {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
         .thenReturn(Map.of("channelCode", "email-1"));
 
-    service.updateChannel(
-        "tenant-a",
-        "email-1",
-        Map.of(
-            "channelName", "Email Updated",
-            "channelType", "EMAIL",
-            "configJson", "{\"url\":\"https://example.com/new\"}",
-            "enabled", false));
+    NotificationChannelUpdateRequest update = new NotificationChannelUpdateRequest();
+    update.setChannelName("Email Updated");
+    update.setChannelType("EMAIL");
+    update.setConfigJson("{\"url\":\"https://example.com/new\"}");
+    update.setEnabled(false);
+    service.updateChannel("tenant-a", "email-1", update);
 
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(channelMapper).update(captor.capture());
@@ -165,13 +158,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
 
     service.createRule(
         "tenant-a",
-        Map.of(
-            "ruleName", "default-rule",
-            "channelCode", "email-1",
-            "eventTypes", "JOB_SUCCESS,JOB_FAILED",
-            "severityFilter", "HIGH",
-            "jobCodeFilter", "JOB-*",
-            "enabled", true));
+        ruleUpsert("default-rule", "email-1", "JOB_SUCCESS,JOB_FAILED", "HIGH", "JOB-*", true));
 
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(ruleMapper).insert(captor.capture());
@@ -195,10 +182,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
             () ->
                 service.createRule(
                     "tenant-a",
-                    Map.of(
-                        "ruleName", "default-rule",
-                        "channelCode", "missing",
-                        "eventTypes", "JOB_SUCCESS")))
+                    ruleUpsert("default-rule", "missing", "JOB_SUCCESS", null, null, true)))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
         .satisfies(
@@ -221,16 +205,10 @@ class DefaultConsoleNotificationApplicationServiceTest {
   void shouldUpdateRule() {
     when(ruleMapper.selectById("tenant-a", 7L)).thenReturn(Map.of("id", 7L));
 
+    when(channelMapper.selectByCode("tenant-a", "email-1"))
+        .thenReturn(Map.of("channelCode", "email-1"));
     service.updateRule(
-        "tenant-a",
-        7L,
-        Map.of(
-            "ruleName", "updated-rule",
-            "channelCode", "email-1",
-            "eventTypes", "JOB_FAILED",
-            "severityFilter", "LOW",
-            "jobCodeFilter", "JOB-1",
-            "enabled", false));
+        "tenant-a", 7L, ruleUpsert("updated-rule", "email-1", "JOB_FAILED", "LOW", "JOB-1", false));
 
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(ruleMapper).update(captor.capture());
@@ -250,7 +228,10 @@ class DefaultConsoleNotificationApplicationServiceTest {
   void shouldThrowWhenRuleMissing() {
     when(ruleMapper.selectById("tenant-a", 99L)).thenReturn(null);
 
-    assertThatThrownBy(() -> service.updateRule("tenant-a", 99L, Map.of()))
+    assertThatThrownBy(
+            () ->
+                service.updateRule(
+                    "tenant-a", 99L, ruleUpsert("r", "email-1", "JOB_FAILED", null, null, true)))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
         .satisfies(
@@ -267,6 +248,38 @@ class DefaultConsoleNotificationApplicationServiceTest {
                   .as("messageKey or args should imply not_found")
                   .isTrue();
             });
+  }
+
+  private static NotificationChannelUpsertRequest channelUpsert(
+      String channelCode,
+      String channelName,
+      String channelType,
+      String configJson,
+      Boolean enabled) {
+    NotificationChannelUpsertRequest req = new NotificationChannelUpsertRequest();
+    req.setChannelCode(channelCode);
+    req.setChannelName(channelName);
+    req.setChannelType(channelType);
+    req.setConfigJson(configJson);
+    req.setEnabled(enabled);
+    return req;
+  }
+
+  private static SubscriptionRuleUpsertRequest ruleUpsert(
+      String ruleName,
+      String channelCode,
+      String eventTypes,
+      String severityFilter,
+      String jobCodeFilter,
+      Boolean enabled) {
+    SubscriptionRuleUpsertRequest req = new SubscriptionRuleUpsertRequest();
+    req.setRuleName(ruleName);
+    req.setChannelCode(channelCode);
+    req.setEventTypes(eventTypes);
+    req.setSeverityFilter(severityFilter);
+    req.setJobCodeFilter(jobCodeFilter);
+    req.setEnabled(enabled);
+    return req;
   }
 
   @Test

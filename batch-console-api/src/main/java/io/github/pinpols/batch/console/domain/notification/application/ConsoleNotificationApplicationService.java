@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.application;
 
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import java.util.List;
 import java.util.Map;
 
@@ -10,9 +13,9 @@ public interface ConsoleNotificationApplicationService {
 
   Map<String, Object> getChannel(String tenantId, String channelCode);
 
-  void createChannel(String tenantId, Map<String, Object> params);
+  void createChannel(String tenantId, NotificationChannelUpsertRequest request);
 
-  void updateChannel(String tenantId, String channelCode, Map<String, Object> params);
+  void updateChannel(String tenantId, String channelCode, NotificationChannelUpdateRequest request);
 
   void deleteChannel(String tenantId, String channelCode);
 
@@ -20,9 +23,9 @@ public interface ConsoleNotificationApplicationService {
 
   Map<String, Object> getRule(String tenantId, Long ruleId);
 
-  void createRule(String tenantId, Map<String, Object> params);
+  void createRule(String tenantId, SubscriptionRuleUpsertRequest request);
 
-  void updateRule(String tenantId, Long ruleId, Map<String, Object> params);
+  void updateRule(String tenantId, Long ruleId, SubscriptionRuleUpsertRequest request);
 
   void deleteRule(String tenantId, Long ruleId);
 

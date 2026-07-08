@@ -1,10 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.job.web.request.DryRunPlanRequest;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import java.util.LinkedHashMap;
+import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
@@ -41,19 +42,16 @@ public class ConsoleDryRunPlanController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/plan")
-  public CommonResponse<Map<String, Object>> plan(@RequestBody Map<String, Object> request) {
+  public CommonResponse<Map<String, Object>> plan(@Valid @RequestBody DryRunPlanRequest request) {
     // R6 P0-2 加固：解析当前主体的 tenantId 后强制覆盖 body 里的 tenantId；
     // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，不再让"客户端任传 tenantId"成立。
-    Object bodyTenant = request == null ? null : request.get("tenantId");
-    String resolved = tenantGuard.resolveTenant(bodyTenant == null ? null : bodyTenant.toString());
-    Map<String, Object> sanitized = new LinkedHashMap<>(request == null ? Map.of() : request);
-    sanitized.put("tenantId", resolved);
+    request.setTenantId(tenantGuard.resolveTenant(request.getTenantId()));
     Map<String, Object> resp =
         orchestratorInternalRestClient
             .build()
             .post()
             .uri("/internal/orchestrator/dry-run/plan")
-            .body(sanitized)
+            .body(request)
             .retrieve()
             .body(new ParameterizedTypeReference<>() {});
     // J1 bugfix 2026-06-04:orchestrator 返 CommonResponse<DryRunPlanResult> envelope;
