@@ -106,7 +106,14 @@ public class ApiKeyVerifier {
    */
   @Lazy @Autowired private ApiKeyVerifier self;
 
-  /** 生产构造器(Spring):系统时钟。 */
+  /**
+   * 生产构造器(Spring):系统时钟。
+   *
+   * <p>{@code @Autowired} 必须显式标——本类有两个构造器(测试用三参 package-private),Spring 多构造器无注解时回退无参构造器 (不存在)→ 启动
+   * BeanInstantiationException。回归守护见 {@code
+   * ApiKeyVerifierTest.springCanInstantiateBeanDespiteMultipleConstructors}。
+   */
+  @Autowired
   public ApiKeyVerifier(ApiKeyAuthMapper mapper) {
     this(mapper, Ticker.systemTicker(), InstantSource.system());
   }

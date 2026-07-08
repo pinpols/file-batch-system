@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -357,5 +358,21 @@ class ApiKeyVerifierTest {
   void touchAsyncSwallowsExceptions() {
     when(mapper.touchLastUsedAt(anyLong())).thenThrow(new RuntimeException("DB down"));
     verifier.touchAsync(7L); // 不抛
+  }
+
+  /**
+   * Spring 装配冒烟:本类有两个构造器,多构造器无 {@code @Autowired} 注解时 Spring 回退无参构造器(不存在)→ 启动
+   * BeanInstantiationException。此测试用标准注解式 bean 定义({@code register},走
+   * AutowiredAnnotationBeanPostProcessor 构造器解析,与生产 component-scan 同路径;{@code registerBean(Class)}
+   * 会偏好 public 构造器反而掩盖问题)守护生产构造器上的 {@code @Autowired} 不被误删。
+   */
+  @Test
+  void springCanInstantiateBeanDespiteMultipleConstructors() {
+    try (AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext()) {
+      ctx.registerBean(ApiKeyAuthMapper.class, () -> mapper);
+      ctx.register(ApiKeyVerifier.class);
+      ctx.refresh();
+      assertThat(ctx.getBean(ApiKeyVerifier.class)).isNotNull();
+    }
   }
 }
