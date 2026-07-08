@@ -161,6 +161,61 @@ class SqlTransformComputeSqlValidatorTest {
   }
 
   @Test
+  void validateSelect_rejectsForbiddenFunctionInOrderBy() {
+    // 回归:TablesNamesFinder 不下钻 ORDER BY 标量表达式,共享核须显式补走,否则漏采放行。
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select c1 from biz.t where tenant_id = :tenantId"
+                    + " order by pg_terminate_backend(pid)"),
+        "forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validateSelect_rejectsForbiddenFunctionInGroupBy() {
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select max(c1) from biz.t group by pg_terminate_backend(pid)"),
+        "forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validateSelect_rejectsForbiddenFunctionInWindowOver() {
+    // 窗口 OVER(...) 是 AnalyticExpression 节点,函数名与内部表达式均须采集。
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select row_number() over (order by pg_terminate_backend(pid)) as rn from biz.t"),
+        "forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validateSelect_rejectsForbiddenFunctionInOffset() {
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select c1 from biz.t order by c1 offset pg_terminate_backend(1)"),
+        "forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
   void validateSelect_rejectsPgTerminateBackend() {
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));

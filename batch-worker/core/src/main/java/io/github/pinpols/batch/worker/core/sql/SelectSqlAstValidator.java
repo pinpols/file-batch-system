@@ -6,10 +6,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import net.sf.jsqlparser.expression.AnalyticExpression;
+import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
 import net.sf.jsqlparser.statement.select.AllTableColumns;
+import net.sf.jsqlparser.statement.select.OrderByElement;
 import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
@@ -145,8 +148,14 @@ public final class SelectSqlAstValidator {
   }
 
   /**
-   * 收集语句 AST 里所有函数调用节点的名字（小写、去引号）。复用 {@link TablesNamesFinder} 的全树遍历（它本就走遍 SELECT 各子句 + 子查询 +
-   * 函数参数），覆写 {@code visit(Function)} 作为副作用采集，{@code getTables} 触发 init+accept。
+   * 收集语句 AST 里所有函数调用节点的名字（小写、去引号）。以 {@link TablesNamesFinder} 的全树遍历为基座（它走遍 FROM/WHERE/select
+   * item/函数参数 + 各类子查询），覆写 {@code visit(Function)} 作为副作用采集，{@code getTables} 触发 init+accept。
+   *
+   * <p>但 TablesNamesFinder（jsqlparser 5.3 实测）<b>不下钻</b> ORDER BY / GROUP BY / HAVING / LIMIT /
+   * OFFSET 的标量表达式，也不把窗口函数 {@code fn(...) OVER (...)}（独立的 {@link AnalyticExpression} 节点，不走 {@code
+   * visit(Function)}）算进来——{@code ORDER BY pg_terminate_backend(pid)} 这类调用会漏采直接放行。这里覆写 {@code
+   * visit(PlainSelect)} / {@code visit(SetOperationList)} 显式补走上述子句（嵌套子查询/CTE 会经同一 visitor
+   * 递归回到这两个覆写，故深层同类子句一并覆盖），并覆写 {@code visit(AnalyticExpression)} 采集窗口函数名 + 下钻 OVER(...) 内部表达式。
    */
   private static Set<String> collectFunctionNames(Statement statement) {
     Set<String> names = new HashSet<>();
@@ -159,6 +168,84 @@ public final class SelectSqlAstValidator {
               names.add(function.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
             }
             return super.visit(function, context);
+          }
+
+          @Override
+          public <S> Void visit(AnalyticExpression aexpr, S context) {
+            // 窗口/分析函数是 AnalyticExpression 而非 Function 节点,名字单独采集,内部表达式手动下钻。
+            if (aexpr.getName() != null) {
+              names.add(aexpr.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
+            }
+            acceptIfPresent(aexpr.getExpression(), context);
+            acceptIfPresent(aexpr.getOffset(), context);
+            acceptIfPresent(aexpr.getDefaultValue(), context);
+            if (aexpr.getPartitionExpressionList() != null) {
+              aexpr.getPartitionExpressionList().accept(this, context);
+            }
+            acceptOrderBy(aexpr.getOrderByElements(), context);
+            return super.visit(aexpr, context);
+          }
+
+          @Override
+          public <S> Void visit(PlainSelect plainSelect, S context) {
+            Void r = super.visit(plainSelect, context);
+            acceptScalarClauses(
+                plainSelect.getGroupBy() == null
+                    ? null
+                    : plainSelect.getGroupBy().getGroupByExpressionList(),
+                plainSelect.getHaving(),
+                plainSelect.getOrderByElements(),
+                plainSelect.getLimit(),
+                plainSelect.getOffset(),
+                context);
+            return r;
+          }
+
+          @Override
+          public <S> Void visit(SetOperationList setOpList, S context) {
+            Void r = super.visit(setOpList, context);
+            acceptScalarClauses(
+                null,
+                null,
+                setOpList.getOrderByElements(),
+                setOpList.getLimit(),
+                setOpList.getOffset(),
+                context);
+            return r;
+          }
+
+          /** 补走 TablesNamesFinder 缺席的标量表达式子句:GROUP BY / HAVING / ORDER BY / LIMIT / OFFSET。 */
+          private <S> void acceptScalarClauses(
+              Expression groupByExpressions,
+              Expression having,
+              List<OrderByElement> orderBy,
+              net.sf.jsqlparser.statement.select.Limit limit,
+              net.sf.jsqlparser.statement.select.Offset offset,
+              S context) {
+            acceptIfPresent(groupByExpressions, context);
+            acceptIfPresent(having, context);
+            acceptOrderBy(orderBy, context);
+            if (limit != null) {
+              acceptIfPresent(limit.getRowCount(), context);
+              acceptIfPresent(limit.getOffset(), context);
+            }
+            if (offset != null) {
+              acceptIfPresent(offset.getOffset(), context);
+            }
+          }
+
+          private <S> void acceptOrderBy(List<OrderByElement> orderBy, S context) {
+            if (orderBy != null) {
+              for (OrderByElement obe : orderBy) {
+                acceptIfPresent(obe.getExpression(), context);
+              }
+            }
+          }
+
+          private <S> void acceptIfPresent(Expression e, S context) {
+            if (e != null) {
+              e.accept(this, context);
+            }
           }
         };
     finder.getTables(statement); // 触发全树遍历；副作用填充 names
