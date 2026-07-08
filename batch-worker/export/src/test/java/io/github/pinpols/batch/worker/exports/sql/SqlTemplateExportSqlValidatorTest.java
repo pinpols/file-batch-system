@@ -222,6 +222,93 @@ class SqlTemplateExportSqlValidatorTest {
   }
 
   @Test
+  void validate_rejectsForbiddenFunctionWithCommentInjection() {
+    // 回归:老子串方案被"函数名与左括号间插块注释"绕过(右侧紧跟 ( 判定只跳空白不跳注释 → 漏判)。
+    // 现与 process 侧共用 SelectSqlAstValidator 的 AST 函数节点遍历,仍拒。
+    String sql =
+        "SELECT pg_read_server_files/**/('/etc/passwd') AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_read_server_files'");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionMixedCase() {
+    String sql =
+        "SELECT DbLink('host=evil', 'select 1') AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionQuotedIdentifier() {
+    // 带引号标识符 "pg_read_server_files"(...) 曾逃逸子串比对;AST 收集函数名时去引号后仍拒。
+    String sql =
+        "SELECT \"pg_read_server_files\"('/etc/passwd') AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionNestedInExpression() {
+    // AST 遍历应深入嵌套表达式 / 函数参数,不止顶层 select item。
+    String sql =
+        "SELECT upper(coalesce(pg_terminate_backend(pid), 'x')) AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionInOrderBy() {
+    // 回归:TablesNamesFinder 不下钻 ORDER BY 标量表达式,共享核须显式补走,否则漏采放行
+    // (export 旧子串实现本能拦住此写法,共享核初版曾在此回归)。
+    String sql =
+        "SELECT c1 FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo"
+            + " ORDER BY pg_terminate_backend(pid)";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionInGroupBy() {
+    String sql =
+        "SELECT max(c1) AS m FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo"
+            + " GROUP BY pg_terminate_backend(pid)";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionInWindowOver() {
+    // 窗口 OVER(...) 是 AnalyticExpression 节点,函数名与内部表达式均须采集。
+    String sql =
+        "SELECT row_number() over (ORDER BY pg_terminate_backend(pid)) AS rn FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validate_rejectsForbiddenFunctionInOffset() {
+    String sql =
+        "SELECT c1 FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo"
+            + " ORDER BY c1 OFFSET pg_terminate_backend(1)";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
   void validate_rejectsCtas() {
     String sql = "CREATE TABLE biz.foo AS SELECT id FROM biz.t WHERE tenant_id = :tenantId";
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
