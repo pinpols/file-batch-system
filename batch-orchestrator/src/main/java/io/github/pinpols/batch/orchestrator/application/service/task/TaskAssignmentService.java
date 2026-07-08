@@ -5,7 +5,11 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.BiFunction;
 
 /** 处理 Worker 分配、任务租约管理、状态更新及日志追加，从 {@link DefaultTaskExecutionService} 中拆分。 */
 public interface TaskAssignmentService {
@@ -24,18 +28,17 @@ public interface TaskAssignmentService {
 
   /** PERF(5.2c): 请求级 (tenant,workerCode)→worker_registry 解析结果缓存（含 miss），见 {@link #assignWorker}。 */
   final class WorkerLookupMemo {
-    private final java.util.Map<String, java.util.Optional<WorkerRegistryEntity>> cache =
-        new java.util.HashMap<>();
+    private final Map<String, Optional<WorkerRegistryEntity>> cache = new HashMap<>();
 
     /** 命中即返回缓存结果（含缓存的 miss=null）；未命中调 loader 并缓存。 */
     public WorkerRegistryEntity resolve(
         String tenantId,
         String workerCode,
-        java.util.function.BiFunction<String, String, WorkerRegistryEntity> loader) {
+        BiFunction<String, String, WorkerRegistryEntity> loader) {
       return cache
           .computeIfAbsent(
               tenantId + "\u0000" + workerCode,
-              key -> java.util.Optional.ofNullable(loader.apply(tenantId, workerCode)))
+              key -> Optional.ofNullable(loader.apply(tenantId, workerCode)))
           .orElse(null);
     }
   }

@@ -30,6 +30,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -367,11 +368,11 @@ class DefaultTaskAssignmentServiceTest {
     row3.setTaskId(3L);
     row3.setCancelRequested(true);
     when(jobPartitionMapper.renewLeaseBatch(any(), any(), eq(TaskStatus.RUNNING.code())))
-        .thenReturn(java.util.List.of(row1, row3));
+        .thenReturn(List.of(row1, row3));
 
     var results =
         service.renewLeaseBatch(
-            java.util.List.of(
+            List.of(
                 new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", "inv-1"),
                 new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "inv-2"),
                 new TaskAssignmentService.LeaseRenewCommand("ta", 3L, "w1", "inv-3")));
@@ -392,7 +393,7 @@ class DefaultTaskAssignmentServiceTest {
   void renewLeaseBatchFiltersInvalidItemsBeforeSql() {
     var results =
         service.renewLeaseBatch(
-            java.util.List.of(
+            List.of(
                 new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", null),
                 new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "  "),
                 new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
@@ -406,7 +407,7 @@ class DefaultTaskAssignmentServiceTest {
   @Test
   @DisplayName("renewLeaseBatch: 空入参 → 空结果,不触 SQL")
   void renewLeaseBatchEmptyInput() {
-    assertThat(service.renewLeaseBatch(java.util.List.of())).isEmpty();
+    assertThat(service.renewLeaseBatch(List.of())).isEmpty();
     assertThat(service.renewLeaseBatch(null)).isEmpty();
     verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
   }

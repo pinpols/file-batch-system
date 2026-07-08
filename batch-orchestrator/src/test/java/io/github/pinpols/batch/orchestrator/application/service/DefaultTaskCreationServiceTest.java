@@ -13,9 +13,11 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -156,7 +158,7 @@ class DefaultTaskCreationServiceTest {
     when(jobTaskMapper.insertBatch(any()))
         .thenAnswer(
             inv -> {
-              java.util.List<JobTaskEntity> list = inv.getArgument(0);
+              List<JobTaskEntity> list = inv.getArgument(0);
               long id = 100L;
               for (JobTaskEntity t : list) {
                 t.setId(id++);
@@ -164,14 +166,13 @@ class DefaultTaskCreationServiceTest {
               return list.size();
             });
 
-    java.util.List<JobTaskEntity> result = service.createTasks(java.util.List.of(t1, t2));
+    List<JobTaskEntity> result = service.createTasks(List.of(t1, t2));
 
     assertThat(result).containsExactly(t1, t2);
     assertThat(t1.getVersion()).isEqualTo(0L);
-    verify(jobTaskMapper).insertBatch(java.util.List.of(t1, t2));
+    verify(jobTaskMapper).insertBatch(List.of(t1, t2));
     verify(jobTaskMapper, never()).insert(any());
-    org.mockito.ArgumentCaptor<java.util.List<JobStepInstanceEntity>> cap =
-        org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+    ArgumentCaptor<List<JobStepInstanceEntity>> cap = ArgumentCaptor.forClass(List.class);
     verify(jobStepInstanceMapper).insertBatch(cap.capture());
     assertThat(cap.getValue()).hasSize(2);
     assertThat(cap.getValue().get(0).getJobTaskId()).isEqualTo(100L);
@@ -186,8 +187,7 @@ class DefaultTaskCreationServiceTest {
     JobTaskEntity ok = buildTask(null, "t1", "IMPORT", 1);
     JobTaskEntity bad = buildTask(null, "t1", null, 1);
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> service.createTasks(java.util.List.of(ok, bad)))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.createTasks(List.of(ok, bad)))
         .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class);
     verify(jobTaskMapper, never()).insertBatch(any());
     verify(jobTaskMapper, never()).insert(any());
@@ -196,7 +196,7 @@ class DefaultTaskCreationServiceTest {
 
   @Test
   void createTasks_emptyOrNullInputNoSql() {
-    assertThat(service.createTasks(java.util.List.of())).isEmpty();
+    assertThat(service.createTasks(List.of())).isEmpty();
     assertThat(service.createTasks(null)).isEmpty();
     verify(jobTaskMapper, never()).insertBatch(any());
   }
