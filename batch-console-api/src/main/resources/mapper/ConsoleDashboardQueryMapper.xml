@@ -124,19 +124,23 @@
          简单聚合
          ============================================================ -->
 
+    <!-- 2026-07-09: 与同卡片 jobDailyTrend 一致加时间下界,避免全史无界聚合扫大表。 -->
     <select id="jobStatusCounts" resultMap="StatusCountResultMap">
         select instance_status as status,
                count(1)        as count
           from batch.job_instance
          where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
          group by instance_status
     </select>
 
+    <!-- 2026-07-09: 与同卡片 triggerDailyTrend 一致加时间下界。 -->
     <select id="triggerTypeCounts" resultMap="TypeCountResultMap">
         select trigger_type as type,
                count(1)     as count
           from batch.trigger_request
          where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
          group by trigger_type
     </select>
 
@@ -169,11 +173,13 @@
          order by active_partitions desc
     </select>
 
+    <!-- 2026-07-09: 与同卡片 alertDailyTrend 一致加时间下界。 -->
     <select id="alertSeverityCounts" resultMap="SeverityCountResultMap">
         select severity,
                count(1) as count
           from batch.alert_event
          where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
          group by severity
     </select>
 
