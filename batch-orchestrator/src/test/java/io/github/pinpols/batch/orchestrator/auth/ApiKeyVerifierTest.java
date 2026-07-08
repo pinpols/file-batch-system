@@ -10,14 +10,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.benmanes.caffeine.cache.Ticker;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -26,12 +28,23 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ApiKeyVerifierTest {
 
   @Mock private ApiKeyAuthMapper mapper;
-  @InjectMocks private ApiKeyVerifier verifier;
+  private ApiKeyVerifier verifier;
+
+  /** 可推进的假时钟(nanos),同时驱动 Caffeine TTL 逐出与 touch 节流窗口。 */
+  private final AtomicLong nanos = new AtomicLong(0);
+
+  private final Ticker fakeTicker = nanos::get;
 
   @BeforeEach
-  void wireSelf() {
+  void setup() {
+    // 单测用假 ticker 构造器,避免依赖 Spring 容器;需要真实时钟的默认路径由单参构造器覆盖。
+    verifier = new ApiKeyVerifier(mapper, fakeTicker);
     // @Lazy self 自注入在单测无 Spring 容器时为 null;指向自身,@Async 方法在测试里同步执行。
     ReflectionTestUtils.setField(verifier, "self", verifier);
+  }
+
+  private void advance(Duration d) {
+    nanos.addAndGet(d.toNanos());
   }
 
   // 至少 8 字符 (KEY_PREFIX_LEN)
@@ -215,6 +228,85 @@ class ApiKeyVerifierTest {
     assertThat(ApiKeyVerifier.scopesAllow("", "anything")).isFalse();
     assertThat(ApiKeyVerifier.scopesAllow(null, "anything")).isFalse();
     assertThat(ApiKeyVerifier.scopesAllow("anything", null)).isTrue();
+  }
+
+  // ─── 验证结果缓存 + touch 节流(perf/apikey-verify-cache) ──────────────────
+
+  @Test
+  void secondVerifyOfSameKeyHitsCacheAndSkipsHashing() {
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
+
+    assertThat(verifier.verify(RAW_KEY, "tx")).contains(rec);
+    assertThat(verifier.verify(RAW_KEY, "tx")).contains(rec);
+
+    // 第二次命中缓存,不再查库(即不再走 PBKDF2 比对慢路径)。
+    verify(mapper, times(1)).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
+  }
+
+  @Test
+  void failedVerifyIsNotCached() {
+    // 候选行 hash 属于另一 key → 每次都进慢路径,失败不缓存。
+    ApiKeyEntity other = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(other));
+
+    assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
+    assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
+
+    verify(mapper, times(2)).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
+  }
+
+  @Test
+  void cacheEntryExpiresAfterTtl() {
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
+
+    assertThat(verifier.verify(RAW_KEY, "tx")).contains(rec);
+    advance(Duration.ofMinutes(5).plusSeconds(1)); // 越过 5 分钟 TTL
+    assertThat(verifier.verify(RAW_KEY, "tx")).contains(rec);
+
+    // TTL 逐出后重新查库比对。
+    verify(mapper, times(2)).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
+  }
+
+  @Test
+  void differentTenantDoesNotShareCacheEntry() {
+    ApiKeyEntity a = pbkdf2Row(1L, "ta", "*", RAW_KEY);
+    ApiKeyEntity b = pbkdf2Row(2L, "tb", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "ta")).thenReturn(List.of(a));
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tb")).thenReturn(List.of(b));
+
+    assertThat(verifier.verify(RAW_KEY, "ta")).contains(a);
+    assertThat(verifier.verify(RAW_KEY, "tb")).contains(b);
+
+    verify(mapper, times(1)).findActiveCandidatesByPrefixAndTenant(PREFIX, "ta");
+    verify(mapper, times(1)).findActiveCandidatesByPrefixAndTenant(PREFIX, "tb");
+  }
+
+  @Test
+  void touchIsThrottledWithin60Seconds() {
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx"))
+        .thenReturn(List.of(pbkdf2Row(7L, "tx", "*", RAW_KEY)));
+
+    verifier.verify(RAW_KEY, "tx"); // 首次写
+    advance(Duration.ofSeconds(30));
+    verifier.verify(RAW_KEY, "tx"); // <60s,跳过
+    advance(Duration.ofSeconds(20));
+    verifier.verify(RAW_KEY, "tx"); // 累计 50s,仍跳过
+
+    verify(mapper, times(1)).touchLastUsedAt(eq(7L));
+  }
+
+  @Test
+  void touchResumesAfter60Seconds() {
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx"))
+        .thenReturn(List.of(pbkdf2Row(7L, "tx", "*", RAW_KEY)));
+
+    verifier.verify(RAW_KEY, "tx"); // 首次写
+    advance(Duration.ofSeconds(61)); // 越过 60s 节流窗口
+    verifier.verify(RAW_KEY, "tx"); // 再写一次
+
+    verify(mapper, times(2)).touchLastUsedAt(eq(7L));
   }
 
   @Test
