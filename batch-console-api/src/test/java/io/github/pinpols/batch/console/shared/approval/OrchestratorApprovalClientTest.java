@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.infrastructure;
+package io.github.pinpols.batch.console.shared.approval;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -13,11 +13,12 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalRecord;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalRecordResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalSubmitCommand;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalSubmitResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalTargetBinding;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalRecord;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalRecordResponse;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitResponse;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;

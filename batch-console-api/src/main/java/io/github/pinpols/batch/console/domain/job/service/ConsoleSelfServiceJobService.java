@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.service;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
