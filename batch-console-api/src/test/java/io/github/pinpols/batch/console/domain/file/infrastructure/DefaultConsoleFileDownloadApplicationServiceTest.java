@@ -14,12 +14,15 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalRecord;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalRecordResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.ByteArrayInputStream;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +46,11 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   private final BatchSecurityProperties batchSecurityProperties = new BatchSecurityProperties();
   private final OrchestratorInternalRestClient orchestratorInternalRestClient =
       mock(OrchestratorInternalRestClient.class);
+  private final ConsoleRequestMetadataResolver metadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  // 用真实共享审批客户端 + mock 的 REST 层：保持本测试仍然端到端覆盖"审批必须绑定 fileId"行为。
+  private final OrchestratorApprovalClient approvalClient =
+      new OrchestratorApprovalClient(orchestratorInternalRestClient, metadataResolver);
 
   private DefaultConsoleFileDownloadApplicationService service;
 
@@ -60,7 +68,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
             objectStore,
             cryptoService,
             batchSecurityProperties,
-            orchestratorInternalRestClient);
+            approvalClient);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
   }
 
@@ -68,30 +76,14 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   private void stubApproval(String status, String targetType, String targetId) {
     RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
     when(orchestratorInternalRestClient.build()).thenReturn(restClient);
-    String json =
-        "{\"record\":{\"approvalStatus\":\""
-            + status
-            + "\",\"targetType\":\""
-            + targetType
-            + "\",\"targetId\":\""
-            + targetId
-            + "\"}}";
-    Class<Object> responseClass = recordResponseClass();
-    Object record = JsonUtils.fromJson(json, responseClass);
-    when(restClient.get().uri(anyString(), any(Object[].class)).retrieve().body(responseClass))
-        .thenReturn(record);
-  }
-
-  /** 反射拿到 service 内私有 ApprovalRecordResponse 类型,供 stub 反序列化目标类型用。 */
-  @SuppressWarnings("unchecked")
-  private static <T> Class<T> recordResponseClass() {
-    for (Class<?> nested :
-        DefaultConsoleFileDownloadApplicationService.class.getDeclaredClasses()) {
-      if (nested.getSimpleName().equals("ApprovalRecordResponse")) {
-        return (Class<T>) nested;
-      }
-    }
-    throw new IllegalStateException("ApprovalRecordResponse not found");
+    ApprovalRecordResponse response =
+        new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId));
+    when(restClient
+            .get()
+            .uri(anyString(), any(Object[].class))
+            .retrieve()
+            .body(ApprovalRecordResponse.class))
+        .thenReturn(response);
   }
 
   private void stubEncryptedFile(long fileId) {

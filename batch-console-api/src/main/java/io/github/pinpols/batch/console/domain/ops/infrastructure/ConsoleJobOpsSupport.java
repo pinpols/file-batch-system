@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.CompensationCommandRequest;
@@ -15,6 +14,8 @@ import io.github.pinpols.batch.console.domain.job.web.request.PartitionReplayReq
 import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalSubmitCommand;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -24,9 +25,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Map;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -64,6 +63,9 @@ public class ConsoleJobOpsSupport {
 
   /** P0-1(2026-05-16):trigger 调用统一走带 X-Internal-Secret 的 client,prod bypass=false 不再 401。 */
   private final TriggerInternalRestClient triggerInternalRestClient;
+
+  /** 共享审批客户端：submit / require-approved 都下沉到它，避免四处复制。 */
+  private final OrchestratorApprovalClient approvalClient;
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleTenantGuard tenantGuard;
@@ -161,50 +163,25 @@ public class ConsoleJobOpsSupport {
   }
 
   public String submitApproval(ApprovalSubmitContext ctx) {
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
-    ApprovalResponse response =
-        restClient
-            .post()
-            .uri("/internal/approvals")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-            .body(
-                ApprovalRequest.of(
-                    new ApprovalTarget(
-                        resolveTenant(extractTenantId(ctx.payload())),
-                        ctx.approvalType(),
-                        ctx.actionType(),
-                        ctx.targetType(),
-                        ctx.targetId()),
-                    ctx.payload(),
-                    requestMetadata,
-                    ctx.idempotencyKey(),
-                    ctx.approvalReason()))
-            .retrieve()
-            .body(ApprovalResponse.class);
-    if (response == null || !hasText(response.approvalNo())) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
-    }
-    return response.approvalNo();
+    return approvalClient.submitApproval(
+        ApprovalSubmitCommand.builder()
+            .tenantId(resolveTenant(extractTenantId(ctx.payload())))
+            .approvalType(ctx.approvalType())
+            .actionType(ctx.actionType())
+            .targetType(ctx.targetType())
+            .targetId(ctx.targetId())
+            .payloadJson(JsonUtils.toJson(ctx.payload()))
+            .approvalReason(ctx.approvalReason())
+            .idempotencyKey(ctx.idempotencyKey())
+            .build());
   }
 
+  /**
+   * 校验审批已通过态（APPROVED/EXECUTED）。作业运维路径保留原有的<b>不绑定目标</b>行为（{@link ApprovalTargetBinding#none()}）——
+   * 本次重构只做去重不改此路径对外行为；作业侧的目标绑定加固是独立的后续项。
+   */
   public void requireApprovedApproval(String tenantId, String approvalNo) {
-    RestClient restClient = orchestratorInternalRestClient.build();
-    ApprovalRecordResponse response =
-        restClient
-            .get()
-            .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-            .retrieve()
-            .body(ApprovalRecordResponse.class);
-    ApprovalRecord record =
-        Guard.requireFound(
-            response == null ? null : response.getRecord(), "approval request not found");
-    String status = record.getApprovalStatus();
-    if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
-    }
+    approvalClient.requireApprovedApproval(tenantId, approvalNo, ApprovalTargetBinding.none());
   }
 
   public boolean hasText(String text) {
@@ -290,90 +267,6 @@ public class ConsoleJobOpsSupport {
       LocalDate bizDate,
       TriggerType triggerType,
       Map<String, Object> params) {}
-
-  private record ApprovalTarget(
-      String tenantId,
-      String approvalType,
-      String actionType,
-      String targetType,
-      String targetId) {}
-
-  @Getter
-  private static final class ApprovalRequest {
-    private final String tenantId;
-    private final String approvalType;
-    private final String actionType;
-    private final String targetType;
-    private final String targetId;
-    private final String payloadJson;
-    private final String requesterId;
-    private final String sourceTraceId;
-    private final String sourceIdempotencyKey;
-    private final String approvalReason;
-
-    private ApprovalRequest(
-        ApprovalTarget target,
-        String payloadJson,
-        String requesterId,
-        String sourceTraceId,
-        String sourceIdempotencyKey,
-        String approvalReason) {
-      this.tenantId = target.tenantId();
-      this.approvalType = target.approvalType();
-      this.actionType = target.actionType();
-      this.targetType = target.targetType();
-      this.targetId = target.targetId();
-      this.payloadJson = payloadJson;
-      this.requesterId = requesterId;
-      this.sourceTraceId = sourceTraceId;
-      this.sourceIdempotencyKey = sourceIdempotencyKey;
-      this.approvalReason = approvalReason;
-    }
-
-    private static ApprovalRequest of(
-        ApprovalTarget target,
-        Object payload,
-        ConsoleRequestMetadata metadata,
-        String idempotencyKey,
-        String approvalReason) {
-      return new ApprovalRequest(
-          target,
-          JsonUtils.toJson(payload),
-          ConsoleTextSanitizer.safeInput(metadata.operatorId(), 64),
-          metadata.traceId(),
-          idempotencyKey,
-          ConsoleTextSanitizer.safeInput(approvalReason, 512));
-    }
-  }
-
-  private record ApprovalResponse(String approvalNo) {}
-
-  @Getter
-  @Setter
-  @NoArgsConstructor
-  static class ApprovalRecordResponse {
-    private ApprovalRecord record;
-  }
-
-  @Getter
-  @Setter
-  @NoArgsConstructor
-  static class ApprovalRecord {
-    private String tenantId;
-    private String approvalNo;
-    private String approvalType;
-    private String actionType;
-    private String targetType;
-    private String targetId;
-    private String payloadJson;
-    private String approvalStatus;
-    private String requesterId;
-    private String approverId;
-    private String rejectionReason;
-    private String approvalReason;
-    private String sourceTraceId;
-    private String sourceIdempotencyKey;
-  }
 
   @Getter
   @Builder(toBuilder = true)

@@ -1,26 +1,24 @@
 package io.github.pinpols.batch.console.domain.job.service;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 /** 租户自助重跑/补偿：将请求转为审批工单提交到编排器，等待管理员审批后自动执行。 */
 @Service
 @RequiredArgsConstructor
 public class ConsoleSelfServiceJobService {
 
-  // R7-A1-P1：原来自建 RestClient 漏 X-Internal-Secret，生产关 bypass-mode 时
-  // /internal/approvals 直接 401；改走标准入口 OrchestratorInternalRestClient.
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
+  // R7-A1-P1：原来自建 RestClient 漏 X-Internal-Secret，生产关 bypass-mode 时 /internal/approvals 直接 401；
+  // 现统一走共享 OrchestratorApprovalClient（内部走带 secret 的 OrchestratorInternalRestClient），
+  // 顺带补齐此前缺失的 requestId/traceId header 透传与 requesterId 文本清洗。
+  private final OrchestratorApprovalClient approvalClient;
   private final ConsoleTenantGuard tenantGuard;
 
   public String requestRerun(RerunParam param, String operator, String idempotencyKey) {
@@ -67,29 +65,20 @@ public class ConsoleSelfServiceJobService {
     return submitApproval(approvalParam);
   }
 
-  @SuppressWarnings("unchecked")
   private String submitApproval(SubmitApprovalParam param) {
-    RestClient client = orchestratorInternalRestClient.build();
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("tenantId", param.tenantId());
-    body.put("approvalType", "SELF_SERVICE");
-    body.put("actionType", param.actionType());
-    body.put("targetType", param.targetType());
-    body.put("targetId", param.targetId());
-    body.put("payloadJson", param.payloadJson());
-    body.put("requesterId", param.operator());
-    Map<String, Object> response =
-        client
-            .post()
-            .uri("/internal/approvals")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, param.idempotencyKey())
-            .body(body)
-            .retrieve()
-            .body(Map.class);
-    if (response == null || !response.containsKey("approvalNo")) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.submit_failed");
-    }
-    return (String) response.get("approvalNo");
+    // 保留本调用方对外可见的错误 key error.approval.submit_failed（前端/i18n 已有映射）。
+    return approvalClient.submitApproval(
+        ApprovalSubmitCommand.builder()
+            .tenantId(param.tenantId())
+            .approvalType("SELF_SERVICE")
+            .actionType(param.actionType())
+            .targetType(param.targetType())
+            .targetId(param.targetId())
+            .payloadJson(param.payloadJson())
+            .requesterId(param.operator())
+            .idempotencyKey(param.idempotencyKey())
+            .emptyResponseMessageKey("error.approval.submit_failed")
+            .build());
   }
 
   @Builder

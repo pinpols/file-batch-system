@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
@@ -15,7 +14,8 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileErrorRecordQuery;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -29,7 +29,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
@@ -64,7 +63,7 @@ public class DefaultConsoleFileDownloadApplicationService
   private final BatchObjectStore objectStore;
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties batchSecurityProperties;
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
+  private final OrchestratorApprovalClient approvalClient;
 
   @Override
   public ResponseEntity<InputStreamResource> download(
@@ -81,7 +80,8 @@ public class DefaultConsoleFileDownloadApplicationService
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
     }
     if (Texts.hasText(approvalId)) {
-      requireApprovedApproval(effectiveTenant, approvalId, fileId);
+      approvalClient.requireApprovedApproval(
+          effectiveTenant, approvalId, ApprovalTargetBinding.file(fileId));
     }
     String bucket = stringValue(fileRecord.get("storage_bucket"));
     if (!Texts.hasText(bucket)) {
@@ -221,42 +221,6 @@ public class DefaultConsoleFileDownloadApplicationService
         || truthy(security.get("content_encryption_enabled"));
   }
 
-  /**
-   * 校验该审批单在本租户为 APPROVED/EXECUTED,<b>且</b>其目标资源（{@code targetType=FILE} 的 {@code targetId}）正是当前下载的
-   * {@code fileId}。
-   *
-   * <p>不绑定 fileId 会导致同租越权:租户内任一已 APPROVED 的下载审批单都能解锁<b>任意</b>加密文件下载。 审批创建侧（{@code
-   * DefaultConsoleFileApplicationService#presignDownload}）以 {@code targetType="FILE"} + {@code
-   * targetId=fileId} 写入数据库,这里据此 1:1 比对。
-   */
-  private void requireApprovedApproval(String tenantId, String approvalNo, Long fileId) {
-    RestClient restClient = orchestratorInternalRestClient.build();
-    ApprovalRecordResponse response =
-        restClient
-            .get()
-            .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-            .retrieve()
-            .body(ApprovalRecordResponse.class);
-    ApprovalRecordResponse.ApprovalRecord record =
-        Guard.requireFound(
-            response == null ? null : response.record(), "approval request not found");
-    String status = record.approvalStatus();
-    if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
-    }
-    if (!matchesTargetFile(record, fileId)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.approval.target_file_mismatch");
-    }
-  }
-
-  /** 审批单的目标资源必须是 FILE 类型且 targetId 等于当前 fileId,否则视为越权使用他单。 */
-  private boolean matchesTargetFile(ApprovalRecordResponse.ApprovalRecord record, Long fileId) {
-    if (fileId == null || !"FILE".equalsIgnoreCase(record.targetType())) {
-      return false;
-    }
-    return String.valueOf(fileId).equals(record.targetId());
-  }
-
   private boolean truthy(Object value) {
     if (value instanceof Boolean bool) {
       return bool;
@@ -266,9 +230,5 @@ public class DefaultConsoleFileDownloadApplicationService
 
   private String stringValue(Object value) {
     return value == null ? null : String.valueOf(value);
-  }
-
-  private record ApprovalRecordResponse(ApprovalRecord record) {
-    private record ApprovalRecord(String approvalStatus, String targetType, String targetId) {}
   }
 }

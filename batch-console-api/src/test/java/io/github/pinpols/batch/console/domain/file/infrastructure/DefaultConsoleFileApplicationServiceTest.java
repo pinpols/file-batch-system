@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -31,6 +32,7 @@ class DefaultConsoleFileApplicationServiceTest {
 
   private final OrchestratorInternalRestClient orchestratorClient =
       mock(OrchestratorInternalRestClient.class);
+  private final OrchestratorApprovalClient approvalClient = mock(OrchestratorApprovalClient.class);
   private final ConsoleRequestMetadataResolver metadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
@@ -45,6 +47,7 @@ class DefaultConsoleFileApplicationServiceTest {
     service =
         new DefaultConsoleFileApplicationService(
             orchestratorClient,
+            approvalClient,
             metadataResolver,
             tenantGuard,
             fileRecordMapper,
