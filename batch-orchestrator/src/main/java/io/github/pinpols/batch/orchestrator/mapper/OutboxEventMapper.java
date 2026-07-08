@@ -39,6 +39,42 @@ public interface OutboxEventMapper {
       @Param("publishingStatus") String publishingStatus);
 
   /**
+   * PERF(5.4) 阶段一：单租户一批 id 的 set-based 抢占 —— 一条 UPDATE 完成 NEW/FAILED→PUBLISHING CAS 并 RETURNING 胜出
+   * id 集（publish_attempt 递增语义与单条 markPublishing 一致）。tenant_id 为复合分布键， 调用方按租户分组后逐租户调用。
+   */
+  List<Long> markPublishingBatch(
+      @Param("tenantId") String tenantId,
+      @Param("ids") List<Long> ids,
+      @Param("publishingStatus") String publishingStatus,
+      @Param("pendingStatus1") String pendingStatus1,
+      @Param("pendingStatus2") String pendingStatus2);
+
+  /**
+   * PERF(5.4) 阶段三：单租户一批 id 的 set-based markPublished。保留 R3-P0-6 的 {@code publish_status=PUBLISHING}
+   * 守卫；返回命中行数，调用方与入参集合大小比对告警。
+   */
+  int markPublishedBatch(
+      @Param("tenantId") String tenantId,
+      @Param("ids") List<Long> ids,
+      @Param("status") String status,
+      @Param("publishingStatus") String publishingStatus);
+
+  /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markFailed（同一 nextPublishAt）。守卫同 markFailed。 */
+  int markFailedBatch(
+      @Param("tenantId") String tenantId,
+      @Param("ids") List<Long> ids,
+      @Param("status") String status,
+      @Param("nextPublishAt") Instant nextPublishAt,
+      @Param("publishingStatus") String publishingStatus);
+
+  /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markGiveUp。守卫同 markGiveUp。 */
+  int markGiveUpBatch(
+      @Param("tenantId") String tenantId,
+      @Param("ids") List<Long> ids,
+      @Param("status") String status,
+      @Param("publishingStatus") String publishingStatus);
+
+  /**
    * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久长期停滞。
    *
    * @return 被重置的记录数

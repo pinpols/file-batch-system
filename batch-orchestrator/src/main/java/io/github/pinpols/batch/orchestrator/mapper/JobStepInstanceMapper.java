@@ -10,6 +10,9 @@ public interface JobStepInstanceMapper {
 
   int insert(JobStepInstanceEntity entity);
 
+  /** PERF(5.1): createTasks 批量路径的 step 镜像多行 INSERT（fresh task，无幂等预检需求）。 */
+  int insertBatch(List<JobStepInstanceEntity> entities);
+
   JobStepInstanceEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   JobStepInstanceEntity selectByJobTaskId(

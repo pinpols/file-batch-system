@@ -7,6 +7,8 @@ import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.QueueBacklogQueryParam;
+import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
+import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import java.time.Instant;
@@ -21,6 +23,21 @@ public interface JobPartitionMapper {
   List<JobPartitionEntity> selectByQueryForUpdate(JobPartitionQuery query);
 
   int insert(JobPartitionEntity entity);
+
+  /**
+   * PERF(5.1): launch fan-out 多行 INSERT；PG getGeneratedKeys 按序回填每个元素的 {@code id}。 参数保持裸
+   * List（MyBatis Jdbc3KeyGenerator 对 collection 参数回填 key 的标准形态）。
+   */
+  int insertBatch(List<JobPartitionEntity> entities);
+
+  /**
+   * PERF(5.3): 批量续租 — 单条 UPDATE ... FROM VALUES JOIN job_task ... RETURNING。 返回续租成功的 (tenantId,
+   * taskId, cancelRequested) 行；缺席行=该项续租失败（语义同单条链路各前置/CAS 未命中）。
+   */
+  List<RenewLeaseBatchRow> renewLeaseBatch(
+      @Param("items") List<RenewLeaseBatchItem> items,
+      @Param("leaseExpireAt") Instant leaseExpireAt,
+      @Param("runningStatus") String runningStatus);
 
   JobPartitionEntity selectByTenantAndJobInstanceIdAndPartitionNo(
       @Param("tenantId") String tenantId,

@@ -16,6 +16,12 @@ public interface TaskExecutionService {
 
   JobTaskEntity createTask(JobTaskEntity task);
 
+  /**
+   * PERF(5.1): launch fan-out 批量创建，语义等价逐条 {@link #createTask}。详见 {@link
+   * TaskCreationService#createTasks}。
+   */
+  List<JobTaskEntity> createTasks(List<JobTaskEntity> tasks);
+
   JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode);
 
   /**
@@ -23,6 +29,22 @@ public interface TaskExecutionService {
    * Long)}。
    */
   EffectiveTaskConfig loadEffectiveConfig(String tenantId, Long taskId);
+
+  /**
+   * PERF(5.2b): 复用已加载 task 实体的重载，见 {@link TaskAssignmentService#loadEffectiveConfig(String,
+   * JobTaskEntity)}。
+   */
+  EffectiveTaskConfig loadEffectiveConfig(String tenantId, JobTaskEntity task);
+
+  /**
+   * PERF(5.2c): 带请求级 worker 解析缓存的认领重载，见 {@link TaskAssignmentService#assignWorker(String, Long,
+   * String, TaskAssignmentService.WorkerLookupMemo)}。
+   */
+  JobTaskEntity assignWorker(
+      String tenantId,
+      Long taskId,
+      String workerCode,
+      TaskAssignmentService.WorkerLookupMemo workerMemo);
 
   boolean renewTaskLease(
       String tenantId, Long taskId, String workerCode, String partitionInvocationId);
@@ -34,6 +56,10 @@ public interface TaskExecutionService {
       String workerCode,
       String partitionInvocationId,
       String detailsJson);
+
+  /** PERF(5.3): 批量续租（set-based）。详见 {@link TaskAssignmentService#renewLeaseBatch}。 */
+  List<TaskAssignmentService.TaskHeartbeatResult> renewLeaseBatch(
+      List<TaskAssignmentService.LeaseRenewCommand> items);
 
   /** ORCH-P4-1：平台请求取消 RUNNING task。详见 {@link TaskAssignmentService#requestCancel}。 */
   boolean requestCancel(String tenantId, Long taskId);

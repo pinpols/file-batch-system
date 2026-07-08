@@ -83,7 +83,8 @@ public class TaskControllerApplicationService {
       throw BizException.of(ResultCode.CONFLICT, "error.task.already_claimed");
     }
     // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
-    return taskExecutionService.loadEffectiveConfig(request.tenantId(), taskId);
+    // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉 loadEffectiveConfig 内的重复 selectById。
+    return taskExecutionService.loadEffectiveConfig(request.tenantId(), task);
   }
 
   /**
@@ -107,12 +108,17 @@ public class TaskControllerApplicationService {
     }
     List<TaskClaimResultPayload> results = new ArrayList<>(items.size());
     int claimed = 0;
+    // PERF(5.2c): 请求级 memo —— 同一批内同 (tenant,workerCode) 的 worker_registry 解析只查一次库。
+    TaskAssignmentService.WorkerLookupMemo workerMemo =
+        new TaskAssignmentService.WorkerLookupMemo();
     for (TaskClaimItemPayload item : items) {
       JobTaskEntity task =
-          taskExecutionService.assignWorker(item.tenantId(), item.taskId(), item.workerId());
+          taskExecutionService.assignWorker(
+              item.tenantId(), item.taskId(), item.workerId(), workerMemo);
       if (task != null && isClaimedBy(task, item.workerId())) {
+        // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
         EffectiveTaskConfig config =
-            taskExecutionService.loadEffectiveConfig(item.tenantId(), item.taskId());
+            taskExecutionService.loadEffectiveConfig(item.tenantId(), task);
         results.add(new TaskClaimResultPayload(item.taskId(), true, config));
         claimed++;
       } else {
@@ -269,14 +275,25 @@ public class TaskControllerApplicationService {
   public TaskLeaseRenewBatchResponse renewBatch(TaskLeaseRenewBatchRequest request) {
     List<TaskLeaseRenewItemPayload> items =
         request == null || request.items() == null ? List.of() : request.items();
-    List<TaskLeaseRenewResultPayload> results = new ArrayList<>(items.size());
+    if (items.isEmpty()) {
+      return new TaskLeaseRenewBatchResponse(List.of());
+    }
+    // PERF(5.3): set-based —— N 项一条 UPDATE ... RETURNING 完成续租 + cancelRequested 回读;
+    // 丢租约的项按原逐项语义返回 renewed=false(结果与入参逐位对齐)。
+    List<TaskAssignmentService.LeaseRenewCommand> commands = new ArrayList<>(items.size());
     for (TaskLeaseRenewItemPayload item : items) {
-      TaskAssignmentService.TaskHeartbeatResult result =
-          taskExecutionService.recordHeartbeat(
-              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId(), null);
+      commands.add(
+          new TaskAssignmentService.LeaseRenewCommand(
+              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()));
+    }
+    List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
+        taskExecutionService.renewLeaseBatch(commands);
+    List<TaskLeaseRenewResultPayload> results = new ArrayList<>(items.size());
+    for (int i = 0; i < items.size(); i++) {
+      TaskAssignmentService.TaskHeartbeatResult result = outcomes.get(i);
       results.add(
           new TaskLeaseRenewResultPayload(
-              item.taskId(), result.leaseRenewed(), result.cancelRequested()));
+              items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
     }
     return new TaskLeaseRenewBatchResponse(results);
   }

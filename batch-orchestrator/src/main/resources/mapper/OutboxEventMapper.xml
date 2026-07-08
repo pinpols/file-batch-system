@@ -124,6 +124,53 @@
           and publish_status = #{publishingStatus}
     </update>
 
+    <!-- PERF(5.4) 阶段一:set-based 抢占。谓词与单条 markPublishing 一致(NEW/FAILED 可重入集 CAS +
+         publish_attempt 递增),RETURNING 返回本 forwarder 胜出的 id 集,天然排斥并发 forwarder。 -->
+    <select id="markPublishingBatch" resultType="java.lang.Long">
+        update batch.outbox_event
+        set publish_status = #{publishingStatus},
+            publish_attempt = publish_attempt + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+          and publish_status in (#{pendingStatus1}, #{pendingStatus2})
+        returning id
+    </select>
+
+    <!-- PERF(5.4) 阶段三:批量版保留 R3-P0-6 的 publish_status='PUBLISHING' 守卫(与单条对称,
+         防止把已 PUBLISHED 行回退)。 -->
+    <update id="markPublishedBatch">
+        update batch.outbox_event
+        set publish_status = #{status},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+          and publish_status = #{publishingStatus}
+    </update>
+
+    <update id="markFailedBatch">
+        update batch.outbox_event
+        set publish_status = #{status},
+            next_publish_at = #{nextPublishAt},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+          and publish_status = #{publishingStatus}
+    </update>
+
+    <update id="markGiveUpBatch">
+        update batch.outbox_event
+        set publish_status = #{status},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+          and publish_status = #{publishingStatus}
+    </update>
+
     <delete id="deletePublishedBefore">
         delete from batch.outbox_event
         where tenant_id = #{tenantId}

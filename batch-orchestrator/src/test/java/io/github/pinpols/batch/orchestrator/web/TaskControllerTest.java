@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -146,7 +147,8 @@ class TaskControllerTest {
             null,
             null,
             null);
-    when(taskExecutionService.loadEffectiveConfig("t1", 10L)).thenReturn(config);
+    // PERF(5.2b): claim 复用 assignWorker 返回的 task 实体拉 config
+    when(taskExecutionService.loadEffectiveConfig(eq("t1"), same(task))).thenReturn(config);
 
     mockMvc
         .perform(
@@ -340,10 +342,11 @@ class TaskControllerTest {
 
   @Test
   void shouldReturn200WithPerTaskResultsForRenewBatch() throws Exception {
-    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
-        .thenReturn(new TaskHeartbeatResult(true, false));
-    when(taskExecutionService.recordHeartbeat("t1", 8L, "w1", null, null))
-        .thenReturn(new TaskHeartbeatResult(false, false));
+    // PERF(5.3): renewBatch 走 set-based renewLeaseBatch,一次下发、逐项结果与入参对齐
+    when(taskExecutionService.renewLeaseBatch(any()))
+        .thenReturn(
+            java.util.List.of(
+                new TaskHeartbeatResult(true, false), new TaskHeartbeatResult(false, false)));
 
     mockMvc
         .perform(
@@ -364,7 +367,6 @@ class TaskControllerTest {
         .andExpect(jsonPath("$.results[1].taskId").value(8))
         .andExpect(jsonPath("$.results[1].renewed").value(false));
 
-    verify(taskExecutionService).recordHeartbeat("t1", 7L, "w1", null, null);
-    verify(taskExecutionService).recordHeartbeat("t1", 8L, "w1", null, null);
+    verify(taskExecutionService).renewLeaseBatch(any());
   }
 }

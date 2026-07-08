@@ -9,6 +9,8 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,43 @@ public class DefaultTaskCreationService implements TaskCreationService {
   @Override
   @Transactional
   public JobTaskEntity createTask(JobTaskEntity task) {
+    validateForCreate(task);
+    jobTaskMapper.insert(task);
+    createStepInstance(task);
+    return task;
+  }
+
+  /**
+   * PERF(5.1): 批量创建 —— task 一次多行 INSERT（生成 id 按序回填）+ step 镜像一次多行 INSERT。
+   *
+   * <p>与逐条 {@link #createTask} 的语义差异仅一处：step 镜像不再做 selectByJobTaskId 幂等预检 —— 批量路径的 task id
+   * 是本事务内刚生成的，不可能已存在 step 镜像；单条路径（重复调用场景可达）保留预检。
+   */
+  @Override
+  @Transactional
+  public List<JobTaskEntity> createTasks(List<JobTaskEntity> tasks) {
+    if (tasks == null || tasks.isEmpty()) {
+      return tasks == null ? List.of() : tasks;
+    }
+    // 先整批校验再写：任何一项非法（task_type 缺失）整批不落库，避免半批状态。
+    for (JobTaskEntity task : tasks) {
+      validateForCreate(task);
+    }
+    jobTaskMapper.insertBatch(tasks);
+    List<JobStepInstanceEntity> stepInstances = new ArrayList<>(tasks.size());
+    for (JobTaskEntity task : tasks) {
+      if (task.getId() == null) {
+        continue;
+      }
+      stepInstances.add(buildStepInstance(task));
+    }
+    if (!stepInstances.isEmpty()) {
+      jobStepInstanceMapper.insertBatch(stepInstances);
+    }
+    return tasks;
+  }
+
+  private void validateForCreate(JobTaskEntity task) {
     if (task != null && task.getVersion() == null) {
       task.setVersion(0L);
     }
@@ -47,9 +86,6 @@ public class DefaultTaskCreationService implements TaskCreationService {
           "error.job_task.task_type_required",
           task.getJobInstanceId());
     }
-    jobTaskMapper.insert(task);
-    createStepInstance(task);
-    return task;
   }
 
   private void createStepInstance(JobTaskEntity task) {
@@ -61,6 +97,10 @@ public class DefaultTaskCreationService implements TaskCreationService {
     if (existing != null) {
       return;
     }
+    jobStepInstanceMapper.insert(buildStepInstance(task));
+  }
+
+  private JobStepInstanceEntity buildStepInstance(JobTaskEntity task) {
     JobStepInstanceEntity stepInstance = new JobStepInstanceEntity();
     stepInstance.setTenantId(task.getTenantId());
     stepInstance.setJobInstanceId(task.getJobInstanceId());
@@ -72,7 +112,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
     stepInstance.setRetryCount(0);
     stepInstance.setRelatedFileId(resolveRelatedFileId(task));
     stepInstance.setVersion(0L);
-    jobStepInstanceMapper.insert(stepInstance);
+    return stepInstance;
   }
 
   private String resolveStepCode(JobTaskEntity task) {

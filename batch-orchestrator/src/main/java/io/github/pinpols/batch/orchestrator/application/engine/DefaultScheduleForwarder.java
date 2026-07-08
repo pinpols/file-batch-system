@@ -21,10 +21,15 @@ import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Backoff;
@@ -60,6 +65,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DefaultScheduleForwarder implements ScheduleForwarder {
 
   private final OutboxEventMapper outboxEventMapper;
@@ -124,17 +130,30 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     long pollStartNanos = System.nanoTime();
     List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
     pollTimer.record(Duration.ofNanos(System.nanoTime() - pollStartNanos));
-    // ── 阶段一：批量 markPublishing + 并行触发 Kafka 发送 ──────────────────────
+    // ── 阶段一：set-based markPublishing + 并行触发 Kafka 发送 ──────────────────
+    // PERF(5.4): 抢占由逐条 CAS 改为按租户分组的批量 UPDATE ... RETURNING id(单条语句原子完成
+    // NEW/FAILED→PUBLISHING 抢占并返回胜出集,publish_attempt 递增语义不变)。selectPending 无租户过滤
+    // 时同批可能跨租户(shard 扫描),tenant_id 是复合分布键,按租户分组保留分布键裁剪。
+    Map<String, List<Long>> pendingIdsByTenant = new LinkedHashMap<>();
+    for (OutboxEventEntity event : pendingEvents) {
+      pendingIdsByTenant
+          .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
+          .add(event.getId());
+    }
+    Set<Long> wonIds = new HashSet<>();
+    for (Map.Entry<String, List<Long>> entry : pendingIdsByTenant.entrySet()) {
+      wonIds.addAll(
+          outboxEventMapper.markPublishingBatch(
+              entry.getKey(),
+              entry.getValue(),
+              OutboxPublishStatus.PUBLISHING.code(),
+              OutboxPublishStatus.NEW.code(),
+              OutboxPublishStatus.FAILED.code()));
+    }
     record InFlight(OutboxEventEntity event, CompletableFuture<Boolean> future) {}
     List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
     for (OutboxEventEntity event : pendingEvents) {
-      if (outboxEventMapper.markPublishing(
-              event.getTenantId(),
-              event.getId(),
-              OutboxPublishStatus.PUBLISHING.code(),
-              OutboxPublishStatus.NEW.code(),
-              OutboxPublishStatus.FAILED.code())
-          > 0) {
+      if (wonIds.contains(event.getId())) {
         CompletableFuture<Boolean> future;
         try {
           future = outboxPublisher.publish(event);
@@ -159,46 +178,92 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
           .join();
     }
 
-    // ── 阶段三：根据发送结果统一更新 DB 状态 ───────────────────────────────────
+    // ── 阶段三：根据发送结果 set-based 批量更新 DB 状态 ─────────────────────────
+    // PERF(5.4): 成功/失败/GIVE_UP 三组各按租户(失败组再按 attemptNo)聚合,组内一条 WHERE id IN (...)
+    // 批量 UPDATE;全部保留 R3-P0-6 的 publish_status='PUBLISHING' 守卫。命中行数 != 入参集合大小时
+    // log.warn(说明有行被并发方(如 resetStalePublishing)推走,守卫已正确拒写)。
+    // 失败组按 (tenant, attemptNo) 分组共用一个 computeNextRetryAt —— nextPublishAt 本就带随机
+    // jitter,组内共享一个抽样与逐条各自抽样在语义上等价。
     int attemptedEvents = 0;
     int publishSucceeded = 0;
     int publishFailed = 0;
+    Map<String, List<Long>> publishedByTenant = new LinkedHashMap<>();
+    Map<String, List<Long>> giveUpByTenant = new LinkedHashMap<>();
+    record FailedGroupKey(String tenantId, int attemptNo) {}
+    Map<FailedGroupKey, List<Long>> failedByGroup = new LinkedHashMap<>();
+    record PendingRetry(OutboxEventEntity event, int attemptNo, Instant nextRetryAt) {}
+    List<PendingRetry> pendingRetries = new ArrayList<>();
     for (InFlight item : inFlight) {
       OutboxEventEntity event = item.event();
+      attemptedEvents++;
+      boolean published = Boolean.TRUE.equals(item.future().getNow(false));
+      if (published) {
+        publishSucceeded++;
+        publishedByTenant
+            .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
+            .add(event.getId());
+        continue;
+      }
+      publishFailed++;
+      int publishAttemptNo = event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
+      if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
+        giveUpByTenant
+            .computeIfAbsent(event.getTenantId(), t -> new ArrayList<>())
+            .add(event.getId());
+        pendingRetries.add(new PendingRetry(event, publishAttemptNo, null));
+        giveUpCounter.increment();
+      } else {
+        failedByGroup
+            .computeIfAbsent(
+                new FailedGroupKey(event.getTenantId(), publishAttemptNo), key -> new ArrayList<>())
+            .add(event.getId());
+        pendingRetries.add(new PendingRetry(event, publishAttemptNo, null));
+      }
+    }
+    for (Map.Entry<String, List<Long>> entry : publishedByTenant.entrySet()) {
+      int updated =
+          outboxEventMapper.markPublishedBatch(
+              entry.getKey(),
+              entry.getValue(),
+              OutboxPublishStatus.PUBLISHED.code(),
+              OutboxPublishStatus.PUBLISHING.code());
+      warnOnPartialUpdate("markPublished", entry.getKey(), entry.getValue().size(), updated);
+    }
+    for (Map.Entry<String, List<Long>> entry : giveUpByTenant.entrySet()) {
+      int updated =
+          outboxEventMapper.markGiveUpBatch(
+              entry.getKey(),
+              entry.getValue(),
+              OutboxPublishStatus.GIVE_UP.code(),
+              OutboxPublishStatus.PUBLISHING.code());
+      warnOnPartialUpdate("markGiveUp", entry.getKey(), entry.getValue().size(), updated);
+    }
+    Map<FailedGroupKey, Instant> nextRetryAtByGroup = new LinkedHashMap<>();
+    for (Map.Entry<FailedGroupKey, List<Long>> entry : failedByGroup.entrySet()) {
+      Instant nextRetryAt = computeNextRetryAt(entry.getKey().attemptNo(), governance.outbox());
+      nextRetryAtByGroup.put(entry.getKey(), nextRetryAt);
+      int updated =
+          outboxEventMapper.markFailedBatch(
+              entry.getKey().tenantId(),
+              entry.getValue(),
+              OutboxPublishStatus.FAILED.code(),
+              nextRetryAt,
+              OutboxPublishStatus.PUBLISHING.code());
+      warnOnPartialUpdate(
+          "markFailed", entry.getKey().tenantId(), entry.getValue().size(), updated);
+    }
+    for (PendingRetry retry : pendingRetries) {
+      OutboxEventEntity event = retry.event();
       BatchMdc.put(StructuredLogField.TENANT_ID, event.getTenantId());
       BatchMdc.put(StructuredLogField.TRACE_ID, event.getTraceId());
       try {
-        attemptedEvents++;
-        boolean published = Boolean.TRUE.equals(item.future().getNow(false));
-        if (published) {
-          publishSucceeded++;
-          outboxEventMapper.markPublished(
-              event.getTenantId(),
-              event.getId(),
-              OutboxPublishStatus.PUBLISHED.code(),
-              OutboxPublishStatus.PUBLISHING.code());
+        if (retry.nextRetryAt() == null
+            && retry.attemptNo() >= governance.outbox().getMaxRetryAttempts()) {
+          recordRetry(event, retry.attemptNo(), null, "retry attempts exhausted");
         } else {
-          publishFailed++;
-          int publishAttemptNo =
-              event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
-          if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
-            outboxEventMapper.markGiveUp(
-                event.getTenantId(),
-                event.getId(),
-                OutboxPublishStatus.GIVE_UP.code(),
-                OutboxPublishStatus.PUBLISHING.code());
-            recordRetry(event, publishAttemptNo, null, "retry attempts exhausted");
-            giveUpCounter.increment();
-          } else {
-            Instant nextRetryAt = computeNextRetryAt(publishAttemptNo, governance.outbox());
-            outboxEventMapper.markFailed(
-                event.getTenantId(),
-                event.getId(),
-                OutboxPublishStatus.FAILED.code(),
-                nextRetryAt,
-                OutboxPublishStatus.PUBLISHING.code());
-            recordRetry(event, publishAttemptNo, nextRetryAt, "publish failed");
-          }
+          Instant groupNextRetryAt =
+              nextRetryAtByGroup.get(new FailedGroupKey(event.getTenantId(), retry.attemptNo()));
+          recordRetry(event, retry.attemptNo(), groupNextRetryAt, "publish failed");
         }
       } finally {
         BatchMdc.remove(StructuredLogField.TENANT_ID);
@@ -206,6 +271,19 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       }
     }
     return ScheduleForwarderResult.of(attemptedEvents, publishSucceeded, publishFailed);
+  }
+
+  /** PERF(5.4): 批量 UPDATE 命中行数与入参集合大小不一致时告警（守卫拒写=并发方已推进该行）。 */
+  private void warnOnPartialUpdate(String action, String tenantId, int expected, int updated) {
+    if (updated != expected) {
+      log.warn(
+          "outbox batch {} partial update: tenant={} expected={} updated={} — rows guarded by"
+              + " publish_status='PUBLISHING' were advanced concurrently",
+          action,
+          tenantId,
+          expected,
+          updated);
+    }
   }
 
   /**
