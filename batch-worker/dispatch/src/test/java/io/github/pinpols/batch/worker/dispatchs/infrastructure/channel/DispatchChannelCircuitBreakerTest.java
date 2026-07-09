@@ -103,6 +103,69 @@ class DispatchChannelCircuitBreakerTest {
   }
 
   @Test
+  void shouldIsolateOpenStateBetweenKeys() {
+    triggerOpen("ch-bad");
+
+    // ch-bad OPEN 时 ch-good 记录若干失败但未达阈值,仍独立放行且不计入 open 数
+    circuitBreaker.recordFailure("ch-good");
+    circuitBreaker.recordFailure("ch-good");
+    assertThat(circuitBreaker.allow("ch-good")).isTrue();
+    assertThat(circuitBreaker.currentOpenCircuits()).isEqualTo(1);
+  }
+
+  // --- 半开态(行为增强:原手写实现无半开态)---
+
+  @Test
+  void shouldLimitProbeCallsInHalfOpenState() throws InterruptedException {
+    properties.setCooldownMillis(30L);
+    DispatchChannelCircuitBreaker cb = new DispatchChannelCircuitBreaker(properties);
+    triggerOpenWith(cb, CHANNEL);
+    assertThat(cb.allow(CHANNEL)).isFalse(); // OPEN
+
+    Thread.sleep(60); // 越过冷却期 → HALF_OPEN
+
+    // HALF_OPEN 仅放行受限试探(3 个),之后未 record 前继续 allow 被拒绝
+    assertThat(cb.allow(CHANNEL)).isTrue();
+    assertThat(cb.allow(CHANNEL)).isTrue();
+    assertThat(cb.allow(CHANNEL)).isTrue();
+    assertThat(cb.allow(CHANNEL)).as("beyond half-open probe budget must be rejected").isFalse();
+  }
+
+  @Test
+  void shouldCloseAfterSuccessfulHalfOpenProbes() throws InterruptedException {
+    properties.setCooldownMillis(30L);
+    DispatchChannelCircuitBreaker cb = new DispatchChannelCircuitBreaker(properties);
+    triggerOpenWith(cb, CHANNEL);
+
+    Thread.sleep(60); // → HALF_OPEN
+
+    // 3 次试探全成功 → CLOSED
+    for (int i = 0; i < 3; i++) {
+      assertThat(cb.allow(CHANNEL)).isTrue();
+      cb.recordSuccess(CHANNEL);
+    }
+    assertThat(cb.currentOpenCircuits()).isEqualTo(0);
+    assertThat(cb.allow(CHANNEL)).isTrue(); // 已闭合,正常放行
+  }
+
+  @Test
+  void shouldReopenWhenHalfOpenProbeFails() throws InterruptedException {
+    properties.setCooldownMillis(30L);
+    DispatchChannelCircuitBreaker cb = new DispatchChannelCircuitBreaker(properties);
+    triggerOpenWith(cb, CHANNEL);
+
+    Thread.sleep(60); // → HALF_OPEN
+
+    // 试探失败(达半开失败阈值)→ 重新 OPEN
+    for (int i = 0; i < 3; i++) {
+      assertThat(cb.allow(CHANNEL)).isTrue();
+      cb.recordFailure(CHANNEL);
+    }
+    assertThat(cb.allow(CHANNEL)).isFalse();
+    assertThat(cb.currentOpenCircuits()).isEqualTo(1);
+  }
+
+  @Test
   void shouldOpenCircuitWhenFailuresArriveConcurrently() throws InterruptedException {
     // arrange: 高阈值 + 多线程并发累加，验证 compute 原子累加不丢计数、恰好达阈值即熔断。
     // 旧实现 incrementAndGet 后 remove 的 check-then-act 窗口在并发下会偶发丢失计数 → 熔断略延。
