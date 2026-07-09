@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-07-09
+- **CLAUDE.md §构建 改为统一走 Maven Wrapper(`./mvnw`)**:仓库新增 Maven Wrapper 3.3.4(`only-script` 模式,钉死 Maven 3.9.16),7 个 CI workflow 的 `mvn` 调用全部切 `./mvnw`,消除 runner 预装 Maven 版本漂移;对齐配对仓库 file-batch-processor 的既有实践。本地系统 mvn(enforcer 要求 ≥3.9.0)仍可用,但版本一致性以 wrapper 为准。`scripts/ci/*.sh` 内的 mvn 调用暂未切换(后续跟进)。
+
 ### 2026-06-29
 - **CLAUDE.md §模块 边界表述澄清**：把开头的"9 模块 Maven multi-module"改为"根 Maven reactor 9 个 module path + 平台运行时固定 10 个逻辑模块"，避免把 Maven 聚合路径数、worker 子模块数、SDK 三件套与运行时服务边界混在一起。明确 `sdk/java/{core,spring,testkit}` 已纳入根 reactor，但属于 ADR-035 SDK 发布 / 测试 / Spring 适配模块，不属于平台运行时固定 10 模块；Go / Python / Rust / TypeScript SDK 仍是独立语言工具链。
 
