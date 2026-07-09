@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerWebhookPayload;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -146,7 +147,36 @@ class AlertmanagerAlertRendererTest {
 
     assertThat(rendered.body()).contains("instance=1").doesNotContain("instance=2");
     assertThat(rendered.body()).contains("... and 2 more");
+    // alertCount 保留原始总量,但 alertnames 只累积展开的 shown 条(防超大批量下无界膨胀)。
     assertThat(rendered.structured()).containsEntry("alertCount", 3);
+    assertThat(rendered.structured().get("alertnames")).isEqualTo(List.of("Noise"));
+  }
+
+  @Test
+  void boundsAlertnamesToMaxAlerts_whenOversizedBatch() {
+    List<AlertmanagerAlert> many = new ArrayList<>();
+    for (int i = 0; i < 500; i++) {
+      many.add(
+          alert("firing", Map.of("alertname", "Flood", "instance", String.valueOf(i)), Map.of()));
+    }
+    AlertmanagerWebhookPayload payload =
+        new AlertmanagerWebhookPayload(
+            "4",
+            "gk",
+            0,
+            "firing",
+            "batch-default",
+            Map.of(),
+            Map.of("alertname", "Flood"),
+            Map.of(),
+            null,
+            many);
+
+    RenderedAlertNotification rendered = renderer.render(payload, 50);
+
+    assertThat(rendered.structured()).containsEntry("alertCount", 500);
+    assertThat((List<?>) rendered.structured().get("alertnames")).hasSize(50);
+    assertThat(rendered.body()).contains("... and 450 more");
   }
 
   @Test
