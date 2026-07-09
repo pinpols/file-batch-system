@@ -67,6 +67,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
       "io.github.pinpols.batch.console.config",
       "io.github.pinpols.batch.console.domain",
       "io.github.pinpols.batch.console.infrastructure",
+      // console.shared:跨域共享 bean(OrchestratorApprovalClient 等,#770 抽取);
+      // 漏扫会 NoSuchBean 启动失败(main-red 2026-07-09),守护见 SpringWiringGuardArchTest
+      "io.github.pinpols.batch.console.shared",
       "io.github.pinpols.batch.console.support",
       "io.github.pinpols.batch.console.service",
       "io.github.pinpols.batch.console.web",
