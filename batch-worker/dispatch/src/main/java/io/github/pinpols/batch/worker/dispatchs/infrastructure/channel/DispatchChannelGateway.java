@@ -77,17 +77,25 @@ public class DispatchChannelGateway {
       deliveryMetrics.recordDelivery(channelType, false, true);
       return new DispatchResult(false, null, null, false, false, "dispatch circuit open", null);
     }
-    DispatchChannelAdapter adapter = resolveAdapter(channelType);
-    DispatchResult result = adapter.dispatch(command);
-    if (result.success()) {
-      circuitBreaker.recordSuccess(cbKey);
-    } else {
+    // allow() 已取一个熔断许可(HALF_OPEN 探测许可有限)。从此处到 record* 之间任何逃逸异常
+    // (resolveAdapter 未知渠道 / adapter.dispatch 抛错)都必须把许可配对释放,否则该 cbKey 会永久卡
+    // HALF_OPEN、永久拒投递直到重启(静默 brick)。以 recordFailure(=R4J onError,释放许可并计一次失败)兜底。
+    try {
+      DispatchChannelAdapter adapter = resolveAdapter(channelType);
+      DispatchResult result = adapter.dispatch(command);
+      if (result.success()) {
+        circuitBreaker.recordSuccess(cbKey);
+      } else {
+        circuitBreaker.recordFailure(cbKey);
+      }
+      healthService.recordDispatchOutcome(
+          channelConfig, result.success(), result.message(), result.evidenceRef());
+      deliveryMetrics.recordDelivery(channelType, result.success(), false);
+      return result;
+    } catch (RuntimeException e) {
       circuitBreaker.recordFailure(cbKey);
+      throw e;
     }
-    healthService.recordDispatchOutcome(
-        channelConfig, result.success(), result.message(), result.evidenceRef());
-    deliveryMetrics.recordDelivery(channelType, result.success(), false);
-    return result;
   }
 
   /**

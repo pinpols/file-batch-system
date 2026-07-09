@@ -183,6 +183,21 @@
             <artifactId>opentelemetry-exporter-sender-jdk</artifactId>
         </dependency>
 
+        <!--
+          resilience4j:DownstreamFallback 的熔断状态机(spike Phase 2-B,首次生产启用)。
+          版本由根 pom dependencyManagement 统一管理。batch-common 是全模块基座,故 R4J autoconfig
+          随之进入各模块运行时(提供共享 CircuitBreakerRegistry + yaml 配置绑定 + micrometer 桥接);
+          DownstreamFallback 通过 ObjectProvider 复用该 registry,不新建竞争 bean。
+        -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-micrometer</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
