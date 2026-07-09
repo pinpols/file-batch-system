@@ -1103,7 +1103,7 @@ Notes:
 - `POST /api/console/notifications/channels` — create notification channel (EMAIL / DINGTALK / WECOM / WEBHOOK / SMS)
 - `PUT /api/console/notifications/channels/{channelCode}` — update channel
 - `DELETE /api/console/notifications/channels/{channelCode}` — delete channel
-- `POST /api/console/notifications/channels/{channelCode}/test` — send test notification
+- `POST /api/console/notifications/channels/{channelCode}/test` — send a real test notification via the channel's sender (SSRF-guarded + timeout for WEBHOOK); returns the actual delivery outcome (`success`/`status`/`message`/`errorSummary`) and writes a `notification_delivery_log` row
 - `GET /api/console/notifications/rules` — list subscription rules
 - `GET /api/console/notifications/rules/{ruleId}` — get rule detail
 - `POST /api/console/notifications/rules` — create subscription rule (links channel + event types + filters)

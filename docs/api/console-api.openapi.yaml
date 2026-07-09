@@ -9222,6 +9222,11 @@ paths:
     post:
       tags: [Notifications]
       summary: Test notification channel
+      description: >
+        真正按渠道类型发一条测试消息(WEBHOOK 走带 SSRF 防护+超时的投递路径,其余渠道走对应
+        NotificationSender),如实反映投递结果并落一条 notification_delivery_log。
+        data 为无类型 map:{channelCode, channelType, success(boolean), status("OK"|"FAILED"),
+        message, httpStatus(nullable), errorSummary(nullable)};失败时 errorSummary 透传发送器错误。
       operationId: testNotificationChannel
       security:
         - bearerAuth: []
@@ -9238,7 +9243,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Test result
+          description: Test result（真实投递结果，非固定成功）
           content:
             application/json:
               schema:

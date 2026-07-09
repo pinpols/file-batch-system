@@ -2,14 +2,23 @@ package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.service.NotificationMessage;
+import io.github.pinpols.batch.console.domain.notification.service.NotificationSender;
+import io.github.pinpols.batch.console.domain.notification.service.NotificationSenderRegistry;
+import io.github.pinpols.batch.console.domain.notification.service.WebhookDeliveryResult;
+import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
+import io.github.pinpols.batch.console.domain.notification.service.WebhookEventPayload;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
@@ -29,6 +38,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
   private NotificationChannelMapper channelMapper;
   private SubscriptionRuleMapper ruleMapper;
   private NotificationDeliveryLogMapper deliveryLogMapper;
+  private NotificationSenderRegistry senderRegistry;
+  private WebhookDispatcher webhookDispatcher;
   private DefaultConsoleNotificationApplicationService service;
 
   @BeforeEach
@@ -38,9 +49,17 @@ class DefaultConsoleNotificationApplicationServiceTest {
     channelMapper = mock(NotificationChannelMapper.class);
     ruleMapper = mock(SubscriptionRuleMapper.class);
     deliveryLogMapper = mock(NotificationDeliveryLogMapper.class);
+    senderRegistry = mock(NotificationSenderRegistry.class);
+    webhookDispatcher = mock(WebhookDispatcher.class);
     service =
         new DefaultConsoleNotificationApplicationService(
-            tenantGuard, metadataResolver, channelMapper, ruleMapper, deliveryLogMapper);
+            tenantGuard,
+            metadataResolver,
+            channelMapper,
+            ruleMapper,
+            deliveryLogMapper,
+            senderRegistry,
+            webhookDispatcher);
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(metadataResolver.current())
         .thenReturn(
@@ -293,24 +312,102 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
-  void shouldTestChannelAndWriteLog() {
-    when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of("channelCode", "email-1"));
+  void shouldTestChannelBySendingRealMessageAndLogSuccess() {
+    when(channelMapper.selectByCode("tenant-a", "wecom-1"))
+        .thenReturn(
+            Map.of(
+                "channel_code",
+                "wecom-1",
+                "channel_type",
+                "WECOM",
+                "config_json",
+                "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+    NotificationSender sender = mock(NotificationSender.class);
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any(NotificationMessage.class))).thenReturn(WebhookDeliveryResult.ok());
 
-    Map<String, Object> result = service.testChannel("tenant-a", "email-1");
+    Map<String, Object> result = service.testChannel("tenant-a", "wecom-1");
+
+    // 真调了 sender(不再是假成功)
+    ArgumentCaptor<NotificationMessage> msgCaptor = ArgumentCaptor.captor();
+    verify(sender).send(msgCaptor.capture());
+    assertThat(msgCaptor.getValue().channelType()).isEqualTo("WECOM");
+    assertThat(msgCaptor.getValue().payload().eventType()).isEqualTo("TEST");
 
     assertThat(result)
-        .containsEntry("channelCode", "email-1")
-        .containsEntry("status", "OK")
-        .containsEntry("message", "test notification dispatched");
+        .containsEntry("channelCode", "wecom-1")
+        .containsEntry("channelType", "WECOM")
+        .containsEntry("success", true)
+        .containsEntry("status", "OK");
+
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(captor.capture());
     assertThat(captor.getValue())
         .containsEntry("tenantId", "tenant-a")
         .containsEntry("ruleId", 0)
-        .containsEntry("channelCode", "email-1")
+        .containsEntry("channelCode", "wecom-1")
         .containsEntry("eventType", "TEST")
         .containsEntry("deliveryStatus", "SUCCESS")
         .containsEntry("attempt", 1);
+  }
+
+  @Test
+  void shouldReportFailureAndPassThroughErrorWhenSendFails() {
+    when(channelMapper.selectByCode("tenant-a", "wecom-1"))
+        .thenReturn(
+            Map.of(
+                "channel_code",
+                "wecom-1",
+                "channel_type",
+                "WECOM",
+                "config_json",
+                "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+    NotificationSender sender = mock(NotificationSender.class);
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any(NotificationMessage.class)))
+        .thenReturn(WebhookDeliveryResult.failure(200, "wecom errcode=93000"));
+
+    Map<String, Object> result = service.testChannel("tenant-a", "wecom-1");
+
+    assertThat(result)
+        .containsEntry("success", false)
+        .containsEntry("status", "FAILED")
+        .containsEntry("errorSummary", "wecom errcode=93000");
+    assertThat(result.get("message").toString()).contains("wecom errcode=93000");
+
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    verify(deliveryLogMapper).insert(captor.capture());
+    assertThat(captor.getValue())
+        .containsEntry("deliveryStatus", "FAILED")
+        .containsEntry("errorMessage", "wecom errcode=93000");
+  }
+
+  @Test
+  void shouldRouteWebhookChannelThroughWebhookDispatcher() {
+    when(channelMapper.selectByCode("tenant-a", "hook-1"))
+        .thenReturn(
+            Map.of(
+                "channel_code",
+                "hook-1",
+                "channel_type",
+                "WEBHOOK",
+                "config_json",
+                "{\"url\":\"https://example.com/hook\",\"secret\":\"s3cr3t\"}"));
+    when(webhookDispatcher.attemptDelivery(
+            any(WebhookSubscriptionEntity.class),
+            any(WebhookEventPayload.class),
+            any(String.class)))
+        .thenReturn(WebhookDeliveryResult.ok());
+
+    Map<String, Object> result = service.testChannel("tenant-a", "hook-1");
+
+    ArgumentCaptor<WebhookSubscriptionEntity> subCaptor = ArgumentCaptor.captor();
+    verify(webhookDispatcher)
+        .attemptDelivery(subCaptor.capture(), any(WebhookEventPayload.class), any(String.class));
+    assertThat(subCaptor.getValue().getCallbackUrl()).isEqualTo("https://example.com/hook");
+    assertThat(subCaptor.getValue().getSecret()).isEqualTo("s3cr3t");
+    // WEBHOOK 不经 sender 注册表
+    verify(senderRegistry, never()).resolve(any());
+    assertThat(result).containsEntry("success", true).containsEntry("status", "OK");
   }
 }
