@@ -62,7 +62,7 @@ jobs:
         # `-pl !batch-e2e-tests`:e2e module 不参与产物构建,加速。
         shell: bash
         run: |
-          mvn -B -ntp -DskipTests -pl '!batch-e2e-tests' compile
+          ./mvnw -B -ntp -DskipTests -pl '!batch-e2e-tests' compile
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3

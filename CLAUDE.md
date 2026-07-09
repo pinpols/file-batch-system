@@ -28,8 +28,9 @@
 
 ## 构建
 
-- `mvn package` — 默认 build,产物 `batch-*-${revision}.jar`(根 pom flatten 插件展开 `${revision}`)
-- `mvn -Drevision=X.Y.Z package` — release 覆盖版本
+- **统一走 Maven Wrapper**:`./mvnw`(钉死 Maven 3.9.16,见 `.mvn/wrapper/maven-wrapper.properties`);CI workflow 已全部切 `./mvnw`,本地系统 mvn(≥3.9.0)仍可用但不保证版本一致
+- `./mvnw package` — 默认 build,产物 `batch-*-${revision}.jar`(根 pom flatten 插件展开 `${revision}`)
+- `./mvnw -Drevision=X.Y.Z package` — release 覆盖版本
 - 跳测试**只用 `-DskipTests`**;**严禁 `-Dmaven.test.skip=true`**(后者会同时跳 test-jar 生成,打断 `batch-common:tests` 依赖链)
 - SemVer 2.0.0;main 默认 `<revision>1.1.0-SNAPSHOT</revision>`。完整 release flow → [`docs/runbook/releasing.md`](docs/runbook/releasing.md)
 

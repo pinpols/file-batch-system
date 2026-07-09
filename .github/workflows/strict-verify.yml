@@ -115,7 +115,7 @@ jobs:
       - name: Build console-api jar (skip tests)
         shell: bash
         run: |
-          mvn -DskipTests -pl batch-console-api -am package -B -q
+          ./mvnw -DskipTests -pl batch-console-api -am package -B -q
 
       - name: Start console-api
         shell: bash
