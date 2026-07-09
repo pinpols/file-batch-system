@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -34,6 +35,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   @Mock private WebhookDispatcher webhookDispatcher;
   @Mock private NotificationSenderRegistry senderRegistry;
   @Mock private SlidingWindowRateLimiter sendRateLimiter;
+  @Mock private NotificationDeliveryLogMapper deliveryLogMapper;
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   private SubscriptionRuleWebhookDispatcher dispatcher;
@@ -47,7 +49,8 @@ class SubscriptionRuleWebhookDispatcherTest {
             webhookDispatcher,
             senderRegistry,
             sendRateLimiter,
-            meterRegistry);
+            meterRegistry,
+            deliveryLogMapper);
     return dispatcher;
   }
 
@@ -112,7 +115,8 @@ class SubscriptionRuleWebhookDispatcherTest {
             webhookDispatcher,
             senderRegistry,
             sendRateLimiter,
-            meterRegistry);
+            meterRegistry,
+            deliveryLogMapper);
     dispatcher.dispatch("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", Instant.now());
 
     verify(webhookDispatcher, timeout(2000)).attemptDelivery(any(), any(), any());
@@ -224,10 +228,72 @@ class SubscriptionRuleWebhookDispatcherTest {
             webhookDispatcher,
             senderRegistry,
             sendRateLimiter,
-            meterRegistry);
+            meterRegistry,
+            deliveryLogMapper);
 
     dispatcher.dispatch("tenant-a", "JOB_SUCCESS", "s", "c", "data", Instant.now());
 
     verify(webhookDispatcher, never()).attemptDelivery(any(), any(), any());
+  }
+
+  @Test
+  void shouldPersistSuccessDeliveryLog_whenWebhookDelivered() {
+    Map<String, Object> rule =
+        Map.of(
+            "id", 42L,
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-hook",
+            "channel_type", "WEBHOOK",
+            "event_types", "JOB_SUCCESS",
+            "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+        .thenReturn(List.of(rule));
+    when(webhookDispatcher.attemptDelivery(any(), any(), any()))
+        .thenReturn(WebhookDeliveryResult.ok());
+
+    newDispatcher()
+        .dispatch(
+            "tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", Map.of("alertId", 7), Instant.now());
+
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    verify(deliveryLogMapper, timeout(2000)).insert(captor.capture());
+    assertThat(captor.getValue())
+        .containsEntry("tenantId", "tenant-a")
+        .containsEntry("ruleId", 42L)
+        .containsEntry("channelCode", "ops-hook")
+        .containsEntry("eventType", "JOB_SUCCESS")
+        .containsEntry("alertEventId", 7L)
+        .containsEntry("deliveryStatus", "SUCCESS");
+    assertThat(captor.getValue().get("errorMessage")).isNull();
+  }
+
+  @Test
+  void shouldPersistFailedDeliveryLog_whenSenderExhausts() {
+    Map<String, Object> rule =
+        Map.of(
+            "id", 9L,
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-wecom",
+            "channel_type", "WECOM",
+            "event_types", "JOB_FAILED",
+            "config_json", "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_FAILED"))
+        .thenReturn(List.of(rule));
+    NotificationSender sender = org.mockito.Mockito.mock(NotificationSender.class);
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.failure(200, "wecom errcode=93000"));
+
+    newDispatcher()
+        .dispatch("tenant-a", "JOB_FAILED", "stream-1", "cursor-1", Map.of(), Instant.now());
+
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    verify(deliveryLogMapper, timeout(2000)).insert(captor.capture());
+    assertThat(captor.getValue())
+        .containsEntry("tenantId", "tenant-a")
+        .containsEntry("ruleId", 9L)
+        .containsEntry("channelCode", "ops-wecom")
+        .containsEntry("eventType", "JOB_FAILED")
+        .containsEntry("deliveryStatus", "FAILED")
+        .containsEntry("errorMessage", "wecom errcode=93000");
   }
 }
