@@ -91,7 +91,7 @@ class AlertEscalationNotifierTest {
 
     ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
     verify(domainEventPublisher)
-        .publishChanged(eq("t1"), eq("alerts"), eq("alert-escalated"), payloadCaptor.capture());
+        .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), payloadCaptor.capture());
     assertThat(payloadCaptor.getValue()).isInstanceOf(AlertEscalationNotifyPayload.class);
     AlertEscalationNotifyPayload payload = (AlertEscalationNotifyPayload) payloadCaptor.getValue();
     assertThat(payload.alertId()).isEqualTo(11L);
@@ -114,7 +114,7 @@ class AlertEscalationNotifierTest {
     notifier.poll();
 
     verify(domainEventPublisher)
-        .publishChanged(eq("t1"), eq("alerts"), eq("alert-escalated"), any());
+        .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), any());
     assertThat(meterRegistry.counter("batch.alert.escalation.notifications").count())
         .isEqualTo(0.0);
   }
@@ -137,14 +137,14 @@ class AlertEscalationNotifierTest {
         .thenReturn(List.of(escalated(14L, "t1", 1, 0), escalated(15L, "t2", 1, 0)));
     doThrow(new RuntimeException("publish boom"))
         .when(domainEventPublisher)
-        .publishChanged(eq("t1"), eq("alerts"), eq("alert-escalated"), any());
+        .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), any());
     when(alertEventMapper.markEscalationNotified("t2", 15L, 0, 1)).thenReturn(1);
 
     notifier.poll();
 
     // 第二条仍被处理
     verify(domainEventPublisher)
-        .publishChanged(eq("t2"), eq("alerts"), eq("alert-escalated"), any());
+        .publishChanged(eq("t2"), eq("alerts"), eq("ALERT_ESCALATED"), any());
     verify(alertEventMapper).markEscalationNotified("t2", 15L, 0, 1);
     // 第一条发布抛异常 → 未推进水位线
     verify(alertEventMapper, never()).markEscalationNotified(eq("t1"), eq(14L), anyInt(), anyInt());
@@ -169,7 +169,7 @@ class AlertEscalationNotifierTest {
     notifier.poll();
 
     verify(domainEventPublisher, times(2))
-        .publishChanged(any(), eq("alerts"), eq("alert-escalated"), any());
+        .publishChanged(any(), eq("alerts"), eq("ALERT_ESCALATED"), any());
     verify(alertEventMapper).markEscalationNotified("t1", 21L, 0, 1);
     verify(alertEventMapper).markEscalationNotified("t2", 22L, 2, 3);
   }

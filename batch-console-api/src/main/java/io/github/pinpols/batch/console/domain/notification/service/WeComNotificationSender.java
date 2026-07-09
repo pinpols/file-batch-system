@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * 企业微信群机器人通知发送器（{@code channelType=WECHAT}，平台枚举 WECHAT 即企业微信）。
+ * 企业微信群机器人通知发送器（{@code channelType=WECOM}，平台枚举 WECOM 即企业微信）。
  *
  * <p>从渠道 {@code config_json} 取群机器人 webhook {@code url}，POST 一条 {@code msgtype=text} 文本消息， 文案由事件类型 +
  * 渲染 JSON 截断拼成简洁摘要。企业微信返回 {@code {"errcode":0,...}} 为成功， 其余 errcode / HTTP 非 2xx / 异常一律折叠成 {@link
@@ -44,7 +44,7 @@ public class WeComNotificationSender implements NotificationSender {
 
   @Override
   public boolean supports(String channelType) {
-    return "WECHAT".equalsIgnoreCase(channelType);
+    return "WECOM".equalsIgnoreCase(channelType);
   }
 
   @Override

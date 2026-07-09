@@ -14,9 +14,11 @@
 
     <insert id="insert">
         INSERT INTO batch.notification_delivery_log (tenant_id, rule_id, channel_code, event_type,
-                                                     alert_event_id, payload_json, delivery_status, attempt)
+                                                     alert_event_id, payload_json, delivery_status,
+                                                     error_message, attempt)
         VALUES (#{tenantId}, #{ruleId}, #{channelCode}, #{eventType},
-                #{alertEventId}, #{payloadJson}::jsonb, #{deliveryStatus}, #{attempt})
+                #{alertEventId}, #{payloadJson}::jsonb, #{deliveryStatus},
+                #{errorMessage,jdbcType=VARCHAR}, #{attempt})
     </insert>
 
     <update id="updateStatus">

@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.micrometer.core.instrument.Counter;
@@ -13,6 +14,7 @@ import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,7 +42,7 @@ import org.springframework.stereotype.Service;
  *       secret},构造一个内存版 {@link WebhookSubscriptionEntity},复用 {@link
  *       WebhookDispatcher#attemptDelivery} 的单次投递 + 同款 3 次 burst 退避重试 + DNS rebinding 防护 + HMAC
  *       签名机制。
- *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECHAT/SLACK/SMS):走可插拔 {@link NotificationSender} SPI,由
+ *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECOM/SLACK/SMS):走可插拔 {@link NotificationSender} SPI,由
  *       {@link NotificationSenderRegistry} 按 channelType 解析对应实现投递;无匹配 sender(如未接入的渠道)才 **显式 {@code
  *       log.warn} 跳过**,绝不静默丢弃。
  * </ul>
@@ -50,11 +52,12 @@ import org.springframework.stereotype.Service;
  * <p><b>去重</b>:若旧路({@code webhook_subscription})与本路({@code subscription_rule→WEBHOOK
  * channel})命中同一目标 URL, 两路都会各自投递,**不去重** —— 语义上是两个独立订阅(运维各自配置、各自启停),刻意不合并。
  *
- * <p><b>持久化 delivery-log 的取舍</b>:{@code webhook_delivery_log.subscription_id} 是 {@code NOT NULL
- * REFERENCES webhook_subscription(id)} 外键,而本路的来源是 {@code subscription_rule},其 id 不在 {@code
- * webhook_subscription} 表里,无法写该日志表(会违反外键)。因此本路 **只复用投递 + burst 重试**,不落 {@code
- * webhook_delivery_log}(也就不被 {@link WebhookDeliveryRelay} 持久化补偿覆盖);投递结果记应用日志。是否给本路补一张
- * 解耦的投递日志表是后续决策点,见类注释末尾。
+ * <p><b>持久化投递审计</b>:本路 **不** 写 {@code webhook_delivery_log}({@code subscription_id} 是 {@code NOT
+ * NULL REFERENCES webhook_subscription(id)} 外键,本路来源是 {@code subscription_rule},其 id 不在该表,
+ * 会违反外键;也就不被 {@link WebhookDeliveryRelay} 持久化补偿覆盖)。改为向解耦的 {@code notification_delivery_log}
+ * 落一条审计记录:每条真实投递(WEBHOOK 与第三方渠道)在 burst 重试收敛后,不论成功/失败都记一行(rule_id / channel_code / event_type /
+ * alert_event_id / delivery_status / error_message / attempt)。落日志在投递线程池上执行(不在事件发布线程),
+ * 且写库异常被吞掉只告警,绝不拖慢或中断投递(审计尽力而为)。
  */
 @Slf4j
 @Service
@@ -93,6 +96,7 @@ public class SubscriptionRuleWebhookDispatcher {
   private final NotificationSenderRegistry senderRegistry;
   private final SlidingWindowRateLimiter sendRateLimiter;
   private final MeterRegistry meterRegistry;
+  private final NotificationDeliveryLogMapper deliveryLogMapper;
 
   /**
    * 与 {@link WebhookDispatcher} 同款有界队列 + AbortPolicy:HTTP burst 投递不能跑在 Spring 事件发布线程(可能是请求/事务线程)上,
@@ -194,8 +198,11 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
 
+    DeliveryLogContext logContext =
+        deliveryLogContext(rule, channelCode, eventType, dataMap, payloadJson);
+
     if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
-      // 非 WEBHOOK 渠道走可插拔 NotificationSender(DINGTALK/WECHAT/SLACK/EMAIL/...);无对应 sender 才显式告警跳过。
+      // 非 WEBHOOK 渠道走可插拔 NotificationSender(DINGTALK/WECOM/SLACK/EMAIL/...);无对应 sender 才显式告警跳过。
       NotificationSender sender = senderRegistry.resolve(channelType);
       if (sender == null) {
         log.warn(
@@ -215,7 +222,8 @@ public class SubscriptionRuleWebhookDispatcher {
               payload,
               payloadJson);
       try {
-        executor.submit(() -> deliverViaSenderWithBurstRetry(sender, message, eventType));
+        executor.submit(
+            () -> deliverViaSenderWithBurstRetry(sender, message, eventType, logContext));
       } catch (RejectedExecutionException ex) {
         log.warn(
             "subscription_rule {} dispatch rejected (queue full); dropped: channelCode={},"
@@ -232,7 +240,8 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
     try {
-      executor.submit(() -> deliverWithBurstRetry(synthetic, payload, payloadJson, channelCode));
+      executor.submit(
+          () -> deliverWithBurstRetry(synthetic, payload, payloadJson, channelCode, logContext));
     } catch (RejectedExecutionException ex) {
       // 本路无持久化补偿(见类注释),队列满时丢弃,显式告警让运维可见。
       log.warn(
@@ -266,16 +275,19 @@ public class SubscriptionRuleWebhookDispatcher {
     return entity;
   }
 
-  /** 同 {@link WebhookDispatcher#deliverPersisted} 的 burst 重试,但不写 webhook_delivery_log(见类注释)。 */
+  /**
+   * 同 {@link WebhookDispatcher#deliverPersisted} 的 burst 重试;收敛后向 notification_delivery_log 落审计行。
+   */
   private void deliverWithBurstRetry(
       WebhookSubscriptionEntity subscription,
       WebhookEventPayload payload,
       String payloadJson,
-      String channelCode) {
+      String channelCode,
+      DeliveryLogContext logContext) {
     long backoffMillis = BACKOFF_BASE_MILLIS;
+    WebhookDeliveryResult result = null;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      WebhookDeliveryResult result =
-          webhookDispatcher.attemptDelivery(subscription, payload, payloadJson);
+      result = webhookDispatcher.attemptDelivery(subscription, payload, payloadJson);
       if (result.success()) {
         if (attempt > 1) {
           log.info(
@@ -285,6 +297,7 @@ public class SubscriptionRuleWebhookDispatcher {
               attempt,
               result.httpStatus());
         }
+        persistDeliveryLog(logContext, "SUCCESS", null, attempt);
         return;
       }
       if (attempt < MAX_ATTEMPTS) {
@@ -300,6 +313,8 @@ public class SubscriptionRuleWebhookDispatcher {
             result.errorSummary());
       }
     }
+    persistDeliveryLog(
+        logContext, "FAILED", result == null ? null : result.errorSummary(), MAX_ATTEMPTS);
   }
 
   /** 单渠道限流:每分钟投递上限(滑窗)。超额 → false(丢弃 + 告警)。 Redis 不可达时 fail-open(放行 + 告警),避免把限流可用性故障升级为"漏发真实告警"。 */
@@ -404,12 +419,16 @@ public class SubscriptionRuleWebhookDispatcher {
     return null;
   }
 
-  /** 非 WEBHOOK 渠道经 {@link NotificationSender} 的 burst 重试投递(同 webhook 路径,本路无持久化补偿)。 */
+  /** 非 WEBHOOK 渠道经 {@link NotificationSender} 的 burst 重试投递;收敛后落 notification_delivery_log 审计行。 */
   private void deliverViaSenderWithBurstRetry(
-      NotificationSender sender, NotificationMessage message, String eventType) {
+      NotificationSender sender,
+      NotificationMessage message,
+      String eventType,
+      DeliveryLogContext logContext) {
     long backoffMillis = BACKOFF_BASE_MILLIS;
+    WebhookDeliveryResult result = null;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      WebhookDeliveryResult result = sender.send(message);
+      result = sender.send(message);
       if (result.success()) {
         if (attempt > 1) {
           log.info(
@@ -420,6 +439,7 @@ public class SubscriptionRuleWebhookDispatcher {
               attempt,
               eventType);
         }
+        persistDeliveryLog(logContext, "SUCCESS", null, attempt);
         return;
       }
       if (attempt < MAX_ATTEMPTS) {
@@ -436,7 +456,97 @@ public class SubscriptionRuleWebhookDispatcher {
             result.errorSummary());
       }
     }
+    persistDeliveryLog(
+        logContext, "FAILED", result == null ? null : result.errorSummary(), MAX_ATTEMPTS);
   }
+
+  /**
+   * 向 {@code notification_delivery_log} 落一条投递审计行。写库异常只告警、绝不外抛(审计尽力而为,不能拖累/中断投递)。
+   * 运行在投递线程池上,不占事件发布线程。
+   */
+  private void persistDeliveryLog(
+      DeliveryLogContext ctx, String deliveryStatus, String errorMessage, int attempt) {
+    if (ctx == null) {
+      return;
+    }
+    try {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("tenantId", ctx.tenantId());
+      row.put("ruleId", ctx.ruleId());
+      row.put("channelCode", ctx.channelCode());
+      row.put("eventType", ctx.eventType());
+      row.put("alertEventId", ctx.alertEventId());
+      row.put("payloadJson", ctx.payloadJson());
+      row.put("deliveryStatus", deliveryStatus);
+      row.put("errorMessage", truncate(errorMessage));
+      row.put("attempt", attempt);
+      deliveryLogMapper.insert(row);
+    } catch (RuntimeException ex) {
+      log.warn(
+          "notification_delivery_log persist failed (audit only, delivery unaffected):"
+              + " channelCode={}, eventType={}, status={}, cause={}",
+          ctx.channelCode(),
+          ctx.eventType(),
+          deliveryStatus,
+          ex.getMessage());
+    }
+  }
+
+  private DeliveryLogContext deliveryLogContext(
+      Map<String, Object> rule,
+      String channelCode,
+      String eventType,
+      Map<String, Object> dataMap,
+      String payloadJson) {
+    return new DeliveryLogContext(
+        str(rule, "tenant_id"),
+        toLong(rule.get("id")),
+        channelCode,
+        eventType,
+        extractAlertEventId(dataMap),
+        payloadJson);
+  }
+
+  private static Long extractAlertEventId(Map<String, Object> dataMap) {
+    for (String key : List.of("alertEventId", "alertId")) {
+      Long id = toLong(dataMap.get(key));
+      if (id != null) {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  private static Long toLong(Object value) {
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    if (value instanceof String s && !s.isBlank()) {
+      try {
+        return Long.parseLong(s.trim());
+      } catch (NumberFormatException ex) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  private static String truncate(String value) {
+    if (value == null) {
+      return null;
+    }
+    // error_message 列 VARCHAR(1024);保守截断。
+    return value.length() > 1024 ? value.substring(0, 1024) : value;
+  }
+
+  /** 一次真实投递落审计日志所需的最小上下文(投递前从规则/事件抽取,喂给投递线程)。 */
+  private record DeliveryLogContext(
+      String tenantId,
+      Long ruleId,
+      String channelCode,
+      String eventType,
+      Long alertEventId,
+      String payloadJson) {}
 
   private boolean eventTypeMatches(String configuredEventTypes, String eventType) {
     if (configuredEventTypes == null || configuredEventTypes.isBlank()) {

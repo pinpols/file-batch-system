@@ -55,7 +55,8 @@ class ConsoleEventCatalogControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].code").value("JOB_SUCCESS"))
-        .andExpect(jsonPath("$.data.length()").value(14));
+        .andExpect(jsonPath("$.data[?(@.code == 'ALERT_ESCALATED')].code").value("ALERT_ESCALATED"))
+        .andExpect(jsonPath("$.data.length()").value(15));
   }
 
   @Test

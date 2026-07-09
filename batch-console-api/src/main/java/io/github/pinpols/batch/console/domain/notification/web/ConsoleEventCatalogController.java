@@ -41,6 +41,7 @@ public class ConsoleEventCatalogController {
             eventType("WORKER_OFFLINE", locale),
             eventType("WORKER_DRAIN", locale),
             eventType("ALERT_TRIGGERED", locale),
+            eventType("ALERT_ESCALATED", locale),
             eventType("APPROVAL_PENDING", locale),
             eventType("APPROVAL_COMPLETED", locale));
     return responseFactory.success(types);

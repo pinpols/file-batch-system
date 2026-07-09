@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>投递:{@link ConsoleRealtimeDomainEventPublisher#publishChanged} 发 {@code
- *       alerts/alert-escalated} 领域事件 → {@code ConsoleWebhookDomainEventListener} → 现有 webhook
+ *       alerts/ALERT_ESCALATED} 领域事件 → {@code ConsoleWebhookDomainEventListener} → 现有 webhook
  *       分发器(与告警 ack 走同一条路)。
  *   <li>调度:console-api 未启用全局 {@code @EnableScheduling},沿用自管理 {@link ScheduledExecutorService} +
  *       programmatic ShedLock(同 {@link WebhookDeliveryRelay}),多实例间互斥。
@@ -58,10 +58,15 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public class AlertEscalationNotifier {
 
-  /** 升级通知发往的 SSE / webhook 流与事件类型(与告警 ack 的 {@code alert-updated} 同流)。 */
+  /**
+   * 升级通知发往的 SSE / webhook 流与事件类型。流沿用告警的 {@code alerts} 流(与 ack 的 {@code alert-updated} 同流); 事件类型用
+   * {@code ALERT_ESCALATED}(UPPER_UNDERSCORE),对齐 {@code ConsoleEventCatalogController}
+   * 暴露给前端订阅的事件目录命名风格,使前端 subscription_rule 能配到并匹配升级事件(此前用连字符 {@code alert-escalated},归一化成 {@code
+   * ALERT-ESCALATED},与目录下划线风格不一致,订阅永远匹配不到)。
+   */
   private static final String ALERT_STREAM = "alerts";
 
-  private static final String ESCALATED_EVENT_TYPE = "alert-escalated";
+  private static final String ESCALATED_EVENT_TYPE = "ALERT_ESCALATED";
 
   private static final Duration LOCK_AT_MOST = Duration.ofMinutes(2);
   private static final Duration LOCK_AT_LEAST = Duration.ofSeconds(2);

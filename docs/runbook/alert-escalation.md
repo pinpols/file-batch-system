@@ -27,7 +27,7 @@
 
 **为什么 notifier 在 console-api 而非 orchestrator**:升级在 orchestrator 抬 tier 写共享表 `alert_event`;真正的通知渠道配置 / webhook 投递 /
 `ConsoleRealtimeDomainEvent` → 分发器全在 console-api,且 console-api **无 Kafka consumer**。让 console-api 轮询共享表上「刚升级未通知」的行,复用它本就有的「定时轮询 + ShedLock + webhook 投递」范式(同 `WebhookDeliveryRelay`),
-零新增 Kafka / policy 表 / 跨模块依赖。投递事件 `alerts/alert-escalated` 与告警 ack 的 `alert-updated` 走同一条流,订阅 `alerts` 流的 webhook 自动收到。
+零新增 Kafka / policy 表 / 跨模块依赖。投递事件 `alerts/ALERT_ESCALATED` 与告警 ack 的 `alert-updated` 走同一条流,订阅 `alerts` 流的 webhook 自动收到。
 
 **至少一次 + 不重复**:notifier 先发事件再 CAS 推进水位线(发了没标 → 下轮重发,at-least-once);ShedLock 保证多实例不并发轮询;
 `markEscalationNotified` 的 CAS(`escalation_notified_tier = expected AND status='OPEN'`)兜住「被并发 ack / 抢先通知」的竞态。每次 tier 抬升只成功推进一次水位线 ⇒ 只通知一次。

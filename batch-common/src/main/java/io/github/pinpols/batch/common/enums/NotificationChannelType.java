@@ -11,7 +11,7 @@ public enum NotificationChannelType implements DictEnum {
   EMAIL("EMAIL", "邮件"),
   WEBHOOK("WEBHOOK", "Webhook"),
   DINGTALK("DINGTALK", "钉钉"),
-  WECHAT("WECHAT", "企业微信"),
+  WECOM("WECOM", "企业微信"),
   SLACK("SLACK", "Slack"),
   SMS("SMS", "短信");
 
