@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.worker.exports.sql;
 
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.sql.SelectSqlAstValidator;
-import io.github.pinpols.batch.worker.core.sql.SelectSqlAstValidator.SchemaViolation;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.util.LinkedHashSet;
 import java.util.List;

@@ -58,7 +58,8 @@ public class DataQualityCheckExecutor {
   private static final String SEVERITY_WARN = "WARN";
 
   // R2-P0-1：DQ 规则 SQL 走 NamedParameterJdbcTemplate + JSqlParser AST 校验，消除字符串拼接注入面。
-  // SensorSqlValidator 已经做了「SELECT/WITH 限制 + 禁 *」校验，DQ 复用同一套规则。
+  // SensorSqlValidator 做「SELECT/WITH 限制 + 禁 *(含子查询/CTE) + schema 白名单 + 禁用函数黑名单
+  // (pg_read_file/dblink/pg_sleep 等)」校验，DQ 复用同一套规则(SelectSqlAstValidator 共享核)。
   // 允许的 schema 限定在 batch / archive 两个业务命名空间，禁止访问 pg_catalog / information_schema 等。
   private static final List<String> ALLOWED_DQ_SCHEMAS = List.of("batch", "archive");
 

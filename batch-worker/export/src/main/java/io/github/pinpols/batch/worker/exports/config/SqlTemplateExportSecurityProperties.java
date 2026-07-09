@@ -42,8 +42,9 @@ public class SqlTemplateExportSecurityProperties {
   private double maxPlanCost = -1;
 
   /**
-   * 禁止在 SQL 中调用的 PG 函数(大小写不敏感子串匹配 + 边界检查)。覆盖跨库 dblink / 系统级 pg_terminate_backend / 文件系统
-   * pg_read_server_files / 任意命令 copy_from_program 等。
+   * 禁止在 SQL 中调用的 PG 函数(大小写不敏感 AST 遍历,按函数家族前缀匹配)。覆盖跨库 dblink(含 dblink_exec/dblink_connect 家族) / 系统级
+   * pg_terminate_backend / 文件系统 pg_read_file / 任意命令 copy_from_program / 拒绝服务 pg_sleep(含
+   * pg_sleep_for/pg_sleep_until) 等。
    */
   private List<String> forbiddenFunctions =
       new ArrayList<>(
@@ -51,10 +52,14 @@ public class SqlTemplateExportSecurityProperties {
               "dblink",
               "pg_terminate_backend",
               "pg_cancel_backend",
+              "pg_read_file",
               "pg_read_server_files",
               "pg_read_binary_file",
               "pg_ls_dir",
               "copy_from_program",
               "lo_import",
-              "lo_export"));
+              "lo_export",
+              "pg_sleep",
+              "pg_sleep_for",
+              "pg_sleep_until"));
 }

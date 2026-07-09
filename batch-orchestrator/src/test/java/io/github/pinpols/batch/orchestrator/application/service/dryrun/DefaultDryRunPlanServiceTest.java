@@ -2,7 +2,10 @@ package io.github.pinpols.batch.orchestrator.application.service.dryrun;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
@@ -28,6 +31,7 @@ class DefaultDryRunPlanServiceTest {
   private OrchestratorConfigCacheService configCache;
   private SchedulePlanBuilder planBuilder;
   private DefaultDryRunPlanService service;
+  private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
@@ -36,8 +40,10 @@ class DefaultDryRunPlanServiceTest {
     WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
     WorkflowEdgeMapper edgeMapper = mock(WorkflowEdgeMapper.class);
     BatchTimezoneProvider tz = new BatchTimezoneProvider(new BatchTimezoneProperties());
+    jdbcTemplate = mock(JdbcTemplate.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<JdbcTemplate> jdbcTemplateProvider = mock(ObjectProvider.class);
+    when(jdbcTemplateProvider.getIfAvailable()).thenReturn(jdbcTemplate);
     @SuppressWarnings("unchecked")
     ObjectProvider<S3Client> s3ClientProvider = mock(ObjectProvider.class);
     @SuppressWarnings("unchecked")
@@ -226,5 +232,57 @@ class DefaultDryRunPlanServiceTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.findings()).extracting(DryRunFinding::code).contains("JOB_PARAMS_MISSING");
+  }
+
+  // ── S1: dry-run SQL 探针分号堆叠拒绝 ──────────────────────────────────────
+  private DryRunPlanResult probeExecutionSql(String sql) {
+    when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
+        .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setPartitionCount(1);
+    plan.getPartitions().add(new SchedulePlan.PartitionPlan());
+    when(planBuilder.build(any())).thenReturn(plan);
+    return service.plan(
+        DryRunPlanRequest.builder()
+            .tenantId("t1")
+            .jobCode("JOB_A")
+            .bizDate(LocalDate.of(2026, 5, 7))
+            .level(DryRunLevel.EXECUTION_PLAN)
+            .params(Map.of("sql", sql))
+            .build());
+  }
+
+  @Test
+  void l3RejectsStackedQuerySqlProbeAndDoesNotExecuteSecondStatement() {
+    DryRunPlanResult result = probeExecutionSql("SELECT 1; DROP TABLE job_definition");
+
+    assertThat(result.findings())
+        .extracting(DryRunFinding::code)
+        .contains("EXEC_SQL_MULTISTATEMENT_REJECTED")
+        .doesNotContain("EXEC_SQL_EXPLAIN_OK");
+    // 堆叠语句在进入 EXPLAIN 之前被拒 —— 第二条 DROP 绝不能触达 jdbcTemplate。
+    verify(jdbcTemplate, never()).execute(anyString());
+  }
+
+  @Test
+  void l3RejectsMultipleSelectStatements() {
+    DryRunPlanResult result = probeExecutionSql("SELECT 1; SELECT 2");
+
+    assertThat(result.findings())
+        .extracting(DryRunFinding::code)
+        .contains("EXEC_SQL_MULTISTATEMENT_REJECTED");
+    verify(jdbcTemplate, never()).execute(anyString());
+  }
+
+  @Test
+  void l3RunsExplainForSingleSelectProbe() {
+    DryRunPlanResult result = probeExecutionSql("SELECT count(*) FROM batch.job_instance");
+
+    assertThat(result.findings())
+        .extracting(DryRunFinding::code)
+        .contains("EXEC_SQL_EXPLAIN_OK")
+        .doesNotContain("EXEC_SQL_MULTISTATEMENT_REJECTED");
+    verify(jdbcTemplate)
+        .execute("EXPLAIN (ANALYZE FALSE, COSTS FALSE) SELECT count(*) FROM batch.job_instance");
   }
 }

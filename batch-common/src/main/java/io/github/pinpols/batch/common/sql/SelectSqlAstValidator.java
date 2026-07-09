@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.worker.core.sql;
+package io.github.pinpols.batch.common.sql;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -22,12 +22,15 @@ import net.sf.jsqlparser.statement.select.WithItem;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 
 /**
- * export（{@code SqlTemplateExportSqlValidator}）与 process（{@code SqlTransformComputeSqlValidator}）
- * 共享的 SELECT/WITH AST 校验核心 —— SELECT * 检测、schema allowlist 检测、禁用函数调用检测三条规则的树遍历逻辑此前在两侧 逐行重复维护，导致
- * process 早先已经把禁用函数检测升级为 AST 遍历（防"函数名与左括号间插注释"及带引号标识符两类绕过），而 export
- * 仍停留在旧的大小写不敏感子串匹配实现——同一条注入路径只在一侧被拦，另一侧存在安全口子。这里统一成 AST 版本，两侧都受益。
+ * worker 侧 export（{@code SqlTemplateExportSqlValidator}）/ process（{@code
+ * SqlTransformComputeSqlValidator}） 与 orchestrator 侧 sensor（{@code SensorSqlValidator}）/
+ * DataQuality（{@code DataQualityCheckExecutor}） 共享的 SELECT/WITH AST 校验核心 —— SELECT * 检测、schema
+ * allowlist 检测、禁用函数调用检测三条规则的树遍历逻辑此前在多侧逐行重复维护，导致 各侧规则漂移（process 早先已把禁用函数检测升级为 AST
+ * 遍历，防"函数名与左括号间插注释"及带引号标识符两类绕过，而 export 曾停留在旧的大小写不敏感子串匹配、sensor/DQ 则整块缺失禁用函数黑名单）。统一成本类的 AST
+ * 版本，各侧都受益。放在 batch-common 是因为 orchestrator 不依赖 worker-core，只有下沉到基座 batch-common
+ * 才能被两边同时复用；本类是纯静态工具、不装配任何 bean。
  *
- * <p>本类只做规则判定、不抛业务异常——两个调用方的错误契约不同（export 用 {@code IllegalArgumentException}，process 用 {@code
+ * <p>本类只做规则判定、不抛业务异常——各调用方的错误契约不同（export/sensor 用 {@code IllegalArgumentException}，process 用 {@code
  * BizException} + i18n key），由各自的 validator 按判定结果构造异常与文案。
  */
 public final class SelectSqlAstValidator {
@@ -130,6 +133,10 @@ public final class SelectSqlAstValidator {
    * 遍历已解析 AST 的所有函数调用节点，命中禁用列表（dblink / pg_terminate_backend / pg_read_server_files 等）即返回该函数名， 否则返回
    * {@code null}。取代旧的子串匹配 —— 后者可被"函数名与左括号间插入块注释"（{@code pg_read_server_files/**}{@code
    * /('x')}）或带引号标识符（{@code "pg_read_server_files"(...)}）绕过。
+   *
+   * <p><b>家族前缀匹配</b>：禁用项按「函数家族」拦截 —— 调用名等于禁用项，或以「禁用项 + 下划线」起头即命中。故 {@code dblink} 一条即覆盖 {@code
+   * dblink_exec} / {@code dblink_connect} / {@code dblink_send_query}，{@code pg_sleep} 亦覆盖 {@code
+   * pg_sleep_for} / {@code pg_sleep_until}。这些都是同名 PG 内置函数家族，整族封禁是安全增益（清单里全是危险系统函数，不会误伤业务函数）。
    */
   public static String findForbiddenFunctionCall(Statement statement, List<String> forbidden) {
     Set<String> called = collectFunctionNames(statement);
@@ -140,11 +147,25 @@ public final class SelectSqlAstValidator {
     for (String name : called) {
       // 既比对裸名，也比对 schema 限定名的尾段（pg_catalog.pg_read_server_files → pg_read_server_files）。
       String bare = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : name;
-      if (forbiddenLower.contains(name) || forbiddenLower.contains(bare)) {
+      if (matchesForbiddenFamily(name, forbiddenLower)
+          || matchesForbiddenFamily(bare, forbiddenLower)) {
         return name;
       }
     }
     return null;
+  }
+
+  /** 精确名或「禁用项_ 起头」的家族成员均视为命中。 */
+  private static boolean matchesForbiddenFamily(String candidate, Set<String> forbiddenLower) {
+    if (forbiddenLower.contains(candidate)) {
+      return true;
+    }
+    for (String f : forbiddenLower) {
+      if (candidate.startsWith(f + "_")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

@@ -2,9 +2,9 @@ package io.github.pinpols.batch.worker.processes.sql;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.sql.SelectSqlAstValidator;
-import io.github.pinpols.batch.worker.core.sql.SelectSqlAstValidator.SchemaViolation;
 import java.util.List;
 import java.util.Locale;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
@@ -131,25 +131,35 @@ public class SqlTransformComputeSqlValidator {
 
   private static Long topLimitOf(Select body) {
     if (body instanceof PlainSelect ps && ps.getLimit() != null) {
-      Object rows = ps.getLimit().getRowCount();
-      if (rows == null) return null;
-      try {
-        return Long.parseLong(rows.toString().trim());
-      } catch (NumberFormatException e) {
-        // 动态 LIMIT 参数 (e.g., LIMIT :pageSize) — 视为通过,上限由调用方参数绑定保障
-        return 0L;
-      }
+      return numericLimit(ps.getLimit().getRowCount());
     }
     if (body instanceof SetOperationList sol && sol.getLimit() != null) {
-      Object rows = sol.getLimit().getRowCount();
-      if (rows == null) return null;
-      try {
-        return Long.parseLong(rows.toString().trim());
-      } catch (NumberFormatException e) {
-        return 0L;
-      }
+      return numericLimit(sol.getLimit().getRowCount());
     }
     return null;
+  }
+
+  /**
+   * 顶层 LIMIT 的行数必须是明确的数值字面量。返回 {@code null} 表示无 LIMIT 子句(由调用方判定是否强制)。
+   *
+   * <p>S8:此前对 {@code LIMIT :pageSize} / {@code LIMIT (SELECT ...)} / {@code LIMIT CASE ...} 这类非数值
+   * rowCount 在 {@code NumberFormatException} 后返 0 视为通过,{@code maxLimitRows} 上限被完全绕过。改为直接拒绝——
+   * requireLimit 的目的就是给结果集封顶,非数值 LIMIT 无法在解析期证明 ≤ 上限,一律拒。
+   */
+  private static Long numericLimit(Object rowCount) {
+    if (rowCount == null) {
+      return null;
+    }
+    try {
+      return Long.parseLong(rowCount.toString().trim());
+    } catch (NumberFormatException e) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          ERR_KEY,
+          "sqlTransformCompute SQL top-level LIMIT must be a numeric literal (≤ maxLimitRows),"
+              + " got non-numeric: "
+              + rowCount);
+    }
   }
 
   private Statement parse(String sql) {

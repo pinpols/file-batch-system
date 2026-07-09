@@ -229,6 +229,26 @@ class SqlTransformComputeSqlValidatorTest {
   }
 
   @Test
+  void validateSelect_rejectsDblinkFamilyAndSleepFor() {
+    // 双侧一致:worker 侧默认清单也补齐 pg_sleep_for + 家族前缀匹配(dblink → dblink_exec)。
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select dblink_exec('h','drop table biz.t') from biz.t where tenant_id ="
+                    + " :tenantId"),
+        "forbidden function");
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select pg_sleep_for('5s') from biz.t where tenant_id = :tenantId"),
+        "forbidden function");
+  }
+
+  @Test
   void validateSelect_requireLimit_rejectsUnboundedQuery() {
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));
@@ -271,6 +291,40 @@ class SqlTransformComputeSqlValidatorTest {
             "select tenant_id from biz.order_event where tenant_id = :tenantId limit 5000");
 
     assertThat(sql).contains("limit 5000");
+  }
+
+  // ── S8: 非数值 LIMIT 不得绕过 maxLimitRows 上限 ──────────────────────────────
+  @Test
+  void validateSelect_requireLimit_rejectsParameterLimit() {
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    security.setRequireLimit(true);
+    security.setMaxLimitRows(10_000L);
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    // LIMIT :p 之前被 catch 后当 0 放行 → maxLimitRows 上限被完全绕过。
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select tenant_id from biz.order_event where tenant_id = :tenantId limit"
+                    + " :pageSize"),
+        "numeric");
+  }
+
+  @Test
+  void validateSelect_requireLimit_rejectsSubqueryLimit() {
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    security.setRequireLimit(true);
+    security.setMaxLimitRows(10_000L);
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select tenant_id from biz.order_event where tenant_id = :tenantId"
+                    + " limit (select 999999)"),
+        "numeric");
   }
 
   @Test
