@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
@@ -34,6 +35,8 @@ class ConsoleTenantReadinessServiceTest {
   @Mock private ResourceQueueMapper resourceQueueMapper;
   @Mock private JobDefinitionMapper jobDefinitionMapper;
 
+  @Mock private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
+
   @InjectMocks private ConsoleTenantReadinessService service;
 
   @BeforeEach
@@ -59,6 +62,21 @@ class ConsoleTenantReadinessServiceTest {
     assertThat(r.ready()).isTrue();
     assertThat(r.blocking()).isEmpty();
     assertThat(r.warnings()).isEmpty();
+  }
+
+  /** SEC-IDOR(S2):非全局角色对他租户跑就绪自检 → 守卫抛 FORBIDDEN,不落任何只读查询。 */
+  @Test
+  void shouldDenyCrossTenantReadiness_beforeQuerying() {
+    org.mockito.Mockito.doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
+        .when(tenantGuard)
+        .assertTenantAllowed("t-other");
+
+    assertThatThrownBy(() -> service.check("t-other"))
+        .isInstanceOf(BizException.class)
+        .extracting(ex -> ((BizException) ex).getCode())
+        .isEqualTo(ResultCode.FORBIDDEN);
+    org.mockito.Mockito.verify(tenantMapper, org.mockito.Mockito.never())
+        .selectByTenantId("t-other");
   }
 
   @Test

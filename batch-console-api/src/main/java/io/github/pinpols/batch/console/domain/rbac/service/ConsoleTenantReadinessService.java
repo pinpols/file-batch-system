@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapp
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse.ReadinessItem;
 import java.util.ArrayList;
@@ -46,9 +47,13 @@ public class ConsoleTenantReadinessService {
   private final FileChannelConfigMapper channelMapper;
   private final ResourceQueueMapper resourceQueueMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
+  private final ConsoleTenantGuard tenantGuard;
 
   public TenantReadinessResponse check(String tenantId) {
     Guard.requireText(tenantId, "tenantId is required");
+    // SEC(跨租户越权修复):非全局角色只能对自身租户跑就绪自检,tenantId 与 JWT 不符 → FORBIDDEN;
+    // 全局角色(ADMIN / AUDITOR)及内部 provision 编排(ADMIN 上下文)可查任意租户。
+    tenantGuard.assertTenantAllowed(tenantId);
     Guard.requireFound(tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId);
 
     List<ReadinessItem> blocking = new ArrayList<>();

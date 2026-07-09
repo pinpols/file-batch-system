@@ -111,4 +111,41 @@ class ConsoleTenantGuardTest {
     assertThatThrownBy(() -> tenantGuard.resolveTenant("tenant-b"))
         .isInstanceOf(BizException.class);
   }
+
+  // ── currentTenantScopeOrNull:列表 / 枚举端点的租户收敛作用域 ────────────────────
+
+  @Test
+  void currentTenantScope_globalRole_returnsNull() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "ignored"));
+
+    assertThat(tenantGuard.currentTenantScopeOrNull()).isNull();
+  }
+
+  @Test
+  void currentTenantScope_tenantRole_returnsAuthenticatedTenant() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER")), "ignored"));
+
+    assertThat(tenantGuard.currentTenantScopeOrNull()).isEqualTo("tenant-a");
+  }
+
+  @Test
+  void currentTenantScope_tenantContextMissing_throwsForbidden() {
+    when(requestMetadataResolver.current())
+        .thenThrow(new IllegalStateException("request scope missing"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("bob", null, Set.of("ROLE_TENANT_USER")), "ignored"));
+
+    assertThatThrownBy(() -> tenantGuard.currentTenantScopeOrNull())
+        .isInstanceOf(BizException.class)
+        .extracting(ex -> ((BizException) ex).getCode())
+        .isEqualTo(ResultCode.FORBIDDEN);
+  }
 }
