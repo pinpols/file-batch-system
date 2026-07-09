@@ -52,7 +52,9 @@ class OutboxCircuitBreakerRedisDownIntegrationTest extends AbstractChaosIntegrat
 
       StringRedisTemplate template = new StringRedisTemplate(factory);
       OrchestratorRedisSupport redis = new OrchestratorRedisSupport(template, new ObjectMapper());
-      OutboxPublishCircuitBreaker breaker = new OutboxPublishCircuitBreaker(governance, redis);
+      OutboxPublishCircuitBreaker breaker =
+          new OutboxPublishCircuitBreaker(
+              governance, redis, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
       // 预热:Redis 正常时 allowNow 走通(闭合 → 放行)
       assertThat(breaker.allowNow()).isTrue();

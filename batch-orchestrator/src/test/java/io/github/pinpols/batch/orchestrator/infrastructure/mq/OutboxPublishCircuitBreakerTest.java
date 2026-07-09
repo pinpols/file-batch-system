@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,7 @@ class OutboxPublishCircuitBreakerTest {
   @Mock private OrchestratorRedisSupport redis;
 
   private OutboxPublishCircuitBreaker breaker;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() {
@@ -37,7 +39,9 @@ class OutboxPublishCircuitBreakerTest {
     props.setCircuitBreakerCooldownMillis(5000L);
     props.setPollIntervalMillis(1000L);
     when(governance.outbox()).thenReturn(props);
-    breaker = new OutboxPublishCircuitBreaker(governance, redis);
+    meterRegistry = new SimpleMeterRegistry();
+    breaker = new OutboxPublishCircuitBreaker(governance, redis, meterRegistry);
+    breaker.initMetrics();
   }
 
   @Test
@@ -45,7 +49,7 @@ class OutboxPublishCircuitBreakerTest {
     OutboxProperties props = new OutboxProperties();
     props.setCircuitBreakerEnabled(false);
     when(governance.outbox()).thenReturn(props);
-    breaker = new OutboxPublishCircuitBreaker(governance, redis);
+    breaker = new OutboxPublishCircuitBreaker(governance, redis, meterRegistry);
 
     assertThat(breaker.allowNow()).isTrue();
   }
@@ -150,5 +154,37 @@ class OutboxPublishCircuitBreakerTest {
         .thenThrow(new RedisConnectionFailureException("redis down"));
 
     assertThatCode(() -> breaker.onAdvanceResult(2)).doesNotThrowAnyException();
+  }
+
+  // ─── O1: cluster-wide 熔断可观测 ──────────────────────────────────────────
+
+  @Test
+  void openGauge_isZero_whenCircuitClosed() {
+    when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(0L);
+    breaker.allowNow();
+    assertThat(meterRegistry.get("batch.outbox.circuit.open").gauge().value()).isZero();
+  }
+
+  @Test
+  void openGauge_isOne_whenCircuitOpen() {
+    // 熔断打开(openUntilMs 在未来):首个 allowNow 走慢速路径查 Redis → 发布 open 快照 → gauge = 1
+    long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
+    when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(futureMs);
+    breaker.allowNow();
+    assertThat(meterRegistry.get("batch.outbox.circuit.open").gauge().value()).isEqualTo(1.0d);
+  }
+
+  @Test
+  void failopenCounter_incrementsOnRedisFailureInBothPaths() {
+    when(redis.evalLong(anyString(), anyString(), anyString()))
+        .thenThrow(new RedisConnectionFailureException("redis down"));
+    when(redis.evalLong(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenThrow(new RedisConnectionFailureException("redis down"));
+
+    breaker.allowNow(); // allowNow fail-open 分支
+    breaker.onAdvanceResult(1); // onAdvanceResult fail-open 分支
+
+    assertThat(meterRegistry.get("batch.outbox.circuit.failopen.total").counter().count())
+        .isEqualTo(2.0d);
   }
 }
