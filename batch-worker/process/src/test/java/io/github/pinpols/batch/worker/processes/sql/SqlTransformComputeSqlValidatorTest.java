@@ -273,6 +273,40 @@ class SqlTransformComputeSqlValidatorTest {
     assertThat(sql).contains("limit 5000");
   }
 
+  // ── S8: 非数值 LIMIT 不得绕过 maxLimitRows 上限 ──────────────────────────────
+  @Test
+  void validateSelect_requireLimit_rejectsParameterLimit() {
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    security.setRequireLimit(true);
+    security.setMaxLimitRows(10_000L);
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    // LIMIT :p 之前被 catch 后当 0 放行 → maxLimitRows 上限被完全绕过。
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select tenant_id from biz.order_event where tenant_id = :tenantId limit"
+                    + " :pageSize"),
+        "numeric");
+  }
+
+  @Test
+  void validateSelect_requireLimit_rejectsSubqueryLimit() {
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    security.setRequireLimit(true);
+    security.setMaxLimitRows(10_000L);
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select tenant_id from biz.order_event where tenant_id = :tenantId"
+                    + " limit (select 999999)"),
+        "numeric");
+  }
+
   @Test
   void validateUserCheckSelect_allowsReadingProcessStaging() {
     SqlTransformComputeSqlValidator validator =
