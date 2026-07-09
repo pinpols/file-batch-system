@@ -40,7 +40,7 @@ import org.springframework.stereotype.Service;
  *       secret},构造一个内存版 {@link WebhookSubscriptionEntity},复用 {@link
  *       WebhookDispatcher#attemptDelivery} 的单次投递 + 同款 3 次 burst 退避重试 + DNS rebinding 防护 + HMAC
  *       签名机制。
- *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECHAT/SLACK/SMS):走可插拔 {@link NotificationSender} SPI,由
+ *   <li><b>非 WEBHOOK 渠道</b>(EMAIL/DINGTALK/WECOM/SLACK/SMS):走可插拔 {@link NotificationSender} SPI,由
  *       {@link NotificationSenderRegistry} 按 channelType 解析对应实现投递;无匹配 sender(如未接入的渠道)才 **显式 {@code
  *       log.warn} 跳过**,绝不静默丢弃。
  * </ul>
@@ -195,7 +195,7 @@ public class SubscriptionRuleWebhookDispatcher {
     }
 
     if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
-      // 非 WEBHOOK 渠道走可插拔 NotificationSender(DINGTALK/WECHAT/SLACK/EMAIL/...);无对应 sender 才显式告警跳过。
+      // 非 WEBHOOK 渠道走可插拔 NotificationSender(DINGTALK/WECOM/SLACK/EMAIL/...);无对应 sender 才显式告警跳过。
       NotificationSender sender = senderRegistry.resolve(channelType);
       if (sender == null) {
         log.warn(

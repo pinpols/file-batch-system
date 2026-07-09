@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-05-13"
+  x-last-updated: "2026-07-09"
   x-changelog:
+    - date: "2026-07-09"
+      summary: "NotificationChannelType 枚举企业微信渠道值由 WECHAT 更正为 WECOM，对齐 notification_channel DDL CHECK 约束与 NotificationChannel 创建/更新白名单（此前 DictEnum/发送器用 WECHAT，渠道 CHECK 用 WECOM，企微渠道永远匹配不到发送器）"
     - date: "2026-05-13"
       summary: "配置类 Excel 单域 template/export 已收敛删除，仅保留 /api/console/config/tenant-package/excel/** 作为 11-Sheet 租户配置包 Excel 唯一路径；报表中心 /api/console/reports/excel/** 保留"
     - date: "2026-05-03"
@@ -15822,7 +15824,7 @@ components:
       enum: [SUCCESS, FAILED, EXHAUSTED]
     NotificationChannelType:
       type: string
-      enum: [EMAIL, WEBHOOK, DINGTALK, WECHAT, SMS]
+      enum: [EMAIL, WEBHOOK, DINGTALK, WECOM, SMS]
     TenantStatus:
       type: string
       enum: [ACTIVE, SUSPENDED]

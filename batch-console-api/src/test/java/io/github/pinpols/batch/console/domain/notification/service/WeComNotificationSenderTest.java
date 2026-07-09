@@ -38,18 +38,20 @@ class WeComNotificationSenderTest {
         new WebhookEventPayload(
             "t1", "JOB_FAILED", "jobs", "cursor-1", Instant.parse("2026-06-24T00:00:00Z"), null);
     return new NotificationMessage(
-        "t1", "wecom-bot", "WECHAT", configJson, payload, "{\"jobId\":42}");
+        "t1", "wecom-bot", "WECOM", configJson, payload, "{\"jobId\":42}");
   }
 
   @Test
-  @DisplayName("supports 仅匹配 WECHAT（大小写不敏感）")
-  void shouldSupportWechatChannelTypeCaseInsensitive() {
+  @DisplayName("supports 仅匹配 WECOM（规范渠道值，对齐 DDL/白名单/DictEnum，大小写不敏感）")
+  void shouldSupportWecomChannelTypeCaseInsensitive() {
     // arrange
     WeComNotificationSender sender = newSender(200, "{\"errcode\":0}");
 
     // act / assert
-    assertThat(sender.supports("WECHAT")).isTrue();
-    assertThat(sender.supports("wechat")).isTrue();
+    assertThat(sender.supports("WECOM")).isTrue();
+    assertThat(sender.supports("wecom")).isTrue();
+    // 历史误值 WECHAT 不再匹配(渠道类型的规范值统一为 WECOM)。
+    assertThat(sender.supports("WECHAT")).isFalse();
     assertThat(sender.supports("DINGTALK")).isFalse();
     assertThat(sender.supports(null)).isFalse();
   }
