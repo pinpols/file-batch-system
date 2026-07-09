@@ -321,7 +321,7 @@ job_instance.expected_       ──┘                ↓
 
 兼容层说明：
 - 当前仍保留少量 `pipelineCode` 兼容入口，这是刻意保留的兼容层，不视为漏改
-- 典型落点见 [`ExecutionContext.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[`PipelineDefinitionModel.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/PipelineDefinitionModel.java)、[`AbstractPipelineStepExecutionAdapter.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
+- 典型落点见 [`ExecutionContext.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[`AbstractPipelineStepExecutionAdapter.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)（原 `PipelineDefinitionModel.java` 为零引用死代码，2026-07-09 已删除）
 
 ### 5.3 统一上下文的推荐结构
 

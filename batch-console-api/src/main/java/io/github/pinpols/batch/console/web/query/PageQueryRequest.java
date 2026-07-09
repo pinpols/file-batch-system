@@ -7,7 +7,9 @@ import lombok.Data;
 @Data
 public class PageQueryRequest {
 
+  /** 深翻页上限:offset = pageNo*pageSize 线性扫描,超深页应改走 cursor 模式(ADR-031)。 */
   @Min(1)
+  @Max(10000)
   private Integer pageNo = 1;
 
   @Min(1)

@@ -8,6 +8,9 @@ import io.github.pinpols.batch.console.domain.notification.application.ConsoleNo
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
@@ -79,19 +82,13 @@ public class DefaultConsoleNotificationApplicationService
 
   @Override
   @Transactional
-  public void createChannel(String tenantId, Map<String, Object> params) {
+  public void createChannel(String tenantId, NotificationChannelUpsertRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String channelCode = str(params, KEY_CHANNEL_CODE);
+    String channelCode = request.getChannelCode();
     Guard.requireText(channelCode, "channelCode is required");
-    String channelName = str(params, KEY_CHANNEL_NAME);
-    Guard.requireText(channelName, "channelName is required");
-    String channelType = str(params, KEY_CHANNEL_TYPE);
-    if (!CHANNEL_TYPES.contains(channelType)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
-          "channelType must be one of " + CHANNEL_TYPES);
-    }
+    Guard.requireText(request.getChannelName(), "channelName is required");
+    String channelType = request.getChannelType();
+    requireKnownChannelType(channelType);
     if (channelMapper.selectByCode(resolved, channelCode) != null) {
       throw BizException.of(
           ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
@@ -104,13 +101,13 @@ public class DefaultConsoleNotificationApplicationService
             KEY_CHANNEL_CODE,
             ConsoleTextSanitizer.safeInput(channelCode, 64),
             KEY_CHANNEL_NAME,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_CHANNEL_NAME), 128),
+            ConsoleTextSanitizer.safeInput(request.getChannelName(), 128),
             KEY_CHANNEL_TYPE,
             channelType,
             KEY_CONFIG_JSON,
-            str(params, KEY_CONFIG_JSON),
+            request.getConfigJson(),
             KEY_ENABLED,
-            params.getOrDefault(KEY_ENABLED, true),
+            enabledOrDefault(request.getEnabled()),
             "createdBy",
             operator,
             KEY_UPDATED_BY,
@@ -119,27 +116,35 @@ public class DefaultConsoleNotificationApplicationService
 
   @Override
   @Transactional
-  public void updateChannel(String tenantId, String channelCode, Map<String, Object> params) {
+  public void updateChannel(
+      String tenantId, String channelCode, NotificationChannelUpdateRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
-    String channelType = str(params, KEY_CHANNEL_TYPE);
-    if (channelType != null && !CHANNEL_TYPES.contains(channelType)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
-          "channelType must be one of " + CHANNEL_TYPES);
-    }
+    requireKnownChannelType(request.getChannelType());
     String operator = metadataResolver.current().operatorId();
     channelMapper.update(
         mapOf(
             KEY_TENANT_ID, resolved,
             KEY_CHANNEL_CODE, channelCode,
-            KEY_CHANNEL_NAME, ConsoleTextSanitizer.safeInput(str(params, KEY_CHANNEL_NAME), 128),
-            KEY_CHANNEL_TYPE, str(params, KEY_CHANNEL_TYPE),
-            KEY_CONFIG_JSON, str(params, KEY_CONFIG_JSON),
-            KEY_ENABLED, params.getOrDefault(KEY_ENABLED, true),
+            KEY_CHANNEL_NAME, ConsoleTextSanitizer.safeInput(request.getChannelName(), 128),
+            KEY_CHANNEL_TYPE, request.getChannelType(),
+            KEY_CONFIG_JSON, request.getConfigJson(),
+            KEY_ENABLED, enabledOrDefault(request.getEnabled()),
             KEY_UPDATED_BY, operator));
+  }
+
+  private static void requireKnownChannelType(String channelType) {
+    if (!CHANNEL_TYPES.contains(channelType)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "channelType must be one of " + CHANNEL_TYPES);
+    }
+  }
+
+  private static Boolean enabledOrDefault(Boolean enabled) {
+    return enabled == null ? Boolean.TRUE : enabled;
   }
 
   @Override
@@ -165,9 +170,9 @@ public class DefaultConsoleNotificationApplicationService
 
   @Override
   @Transactional
-  public void createRule(String tenantId, Map<String, Object> params) {
+  public void createRule(String tenantId, SubscriptionRuleUpsertRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String channelCode = str(params, KEY_CHANNEL_CODE);
+    String channelCode = request.getChannelCode();
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
     String operator = metadataResolver.current().operatorId();
@@ -176,17 +181,17 @@ public class DefaultConsoleNotificationApplicationService
             KEY_TENANT_ID,
             resolved,
             KEY_RULE_NAME,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_RULE_NAME), 128),
+            ConsoleTextSanitizer.safeInput(request.getRuleName(), 128),
             KEY_CHANNEL_CODE,
             channelCode,
             KEY_EVENT_TYPES,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_EVENT_TYPES), 512),
+            ConsoleTextSanitizer.safeInput(request.getEventTypes(), 512),
             KEY_SEVERITY_FILTER,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_SEVERITY_FILTER), 128),
+            ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), 128),
             KEY_JOB_CODE_FILTER,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_JOB_CODE_FILTER), 512),
+            ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), 512),
             KEY_ENABLED,
-            params.getOrDefault(KEY_ENABLED, true),
+            enabledOrDefault(request.getEnabled()),
             "createdBy",
             operator,
             KEY_UPDATED_BY,
@@ -195,14 +200,14 @@ public class DefaultConsoleNotificationApplicationService
 
   @Override
   @Transactional
-  public void updateRule(String tenantId, Long ruleId, Map<String, Object> params) {
+  public void updateRule(String tenantId, Long ruleId, SubscriptionRuleUpsertRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Guard.requireFound(
         ruleMapper.selectById(resolved, ruleId), "subscription rule not found: " + ruleId);
     // P1-4: update 也必须校验 channel 存在(与 createRule 一致)。否则可写入失效 channelCode,
     // 而 SubscriptionRuleMapper.selectEnabledByEventType 要 join notification_channel,
     // 失效 channel 会让规则永不命中(保存成功但永远不生效的无效规则)。
-    String channelCode = str(params, KEY_CHANNEL_CODE);
+    String channelCode = request.getChannelCode();
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
     String operator = metadataResolver.current().operatorId();
@@ -213,17 +218,17 @@ public class DefaultConsoleNotificationApplicationService
             "id",
             ruleId,
             KEY_RULE_NAME,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_RULE_NAME), 128),
+            ConsoleTextSanitizer.safeInput(request.getRuleName(), 128),
             KEY_CHANNEL_CODE,
             channelCode,
             KEY_EVENT_TYPES,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_EVENT_TYPES), 512),
+            ConsoleTextSanitizer.safeInput(request.getEventTypes(), 512),
             KEY_SEVERITY_FILTER,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_SEVERITY_FILTER), 128),
+            ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), 128),
             KEY_JOB_CODE_FILTER,
-            ConsoleTextSanitizer.safeInput(str(params, KEY_JOB_CODE_FILTER), 512),
+            ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), 512),
             KEY_ENABLED,
-            params.getOrDefault(KEY_ENABLED, true),
+            enabledOrDefault(request.getEnabled()),
             KEY_UPDATED_BY,
             operator));
   }
@@ -267,11 +272,6 @@ public class DefaultConsoleNotificationApplicationService
             1));
     return Map.of(
         KEY_CHANNEL_CODE, channelCode, "status", "OK", "message", "test notification dispatched");
-  }
-
-  private static String str(Map<String, Object> map, String key) {
-    Object v = map.get(key);
-    return v != null ? v.toString() : null;
   }
 
   private static Map<String, Object> mapOf(Object... pairs) {

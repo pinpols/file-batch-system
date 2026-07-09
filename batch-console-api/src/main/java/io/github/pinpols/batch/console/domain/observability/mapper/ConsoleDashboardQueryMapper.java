@@ -39,9 +39,11 @@ public interface ConsoleDashboardQueryMapper {
 
   // ── 简单聚合 ────────────────────────────────────────────────────────────────
 
-  List<StatusCountView> jobStatusCounts(@Param("tenantId") String tenantId);
+  List<StatusCountView> jobStatusCounts(
+      @Param("tenantId") String tenantId, @Param("days") int days);
 
-  List<TypeCountView> triggerTypeCounts(@Param("tenantId") String tenantId);
+  List<TypeCountView> triggerTypeCounts(
+      @Param("tenantId") String tenantId, @Param("days") int days);
 
   List<StatusCountView> workerStatusCounts(@Param("tenantId") String tenantId);
 
@@ -49,7 +51,8 @@ public interface ConsoleDashboardQueryMapper {
 
   List<ActivePartitionView> activePartitionsByWorker(@Param("tenantId") String tenantId);
 
-  List<SeverityCountView> alertSeverityCounts(@Param("tenantId") String tenantId);
+  List<SeverityCountView> alertSeverityCounts(
+      @Param("tenantId") String tenantId, @Param("days") int days);
 
   List<ExecutionProgressView> executionProgress(
       @Param("tenantId") String tenantId,

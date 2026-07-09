@@ -2,11 +2,12 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.job.web.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import java.util.LinkedHashMap;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -45,32 +46,27 @@ public class ConsoleBatchDayReplayController {
   @Idempotent
   public CommonResponse<Map<String, Object>> submit(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestBody Map<String, Object> command) {
-    Object bodyTenant = command == null ? null : command.get("tenantId");
-    String resolved = tenantGuard.resolveTenant(bodyTenant == null ? null : bodyTenant.toString());
-    Map<String, Object> sanitized = new LinkedHashMap<>(command == null ? Map.of() : command);
-    sanitized.put("tenantId", resolved);
+      @Valid @RequestBody BatchDayReplaySubmitRequest command) {
+    command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
     Map<String, Object> resp =
         proxyClient()
             .post()
             .uri("/internal/orchestrator/batch-day-replay/sessions")
-            .body(sanitized)
+            .body(command)
             .retrieve()
             .body(unwrapToMap());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/sessions/preview")
-  public CommonResponse<Map<String, Object>> preview(@RequestBody Map<String, Object> command) {
-    Object bodyTenant = command == null ? null : command.get("tenantId");
-    String resolved = tenantGuard.resolveTenant(bodyTenant == null ? null : bodyTenant.toString());
-    Map<String, Object> sanitized = new LinkedHashMap<>(command == null ? Map.of() : command);
-    sanitized.put("tenantId", resolved);
+  public CommonResponse<Map<String, Object>> preview(
+      @Valid @RequestBody BatchDayReplaySubmitRequest command) {
+    command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
     Map<String, Object> resp =
         proxyClient()
             .post()
             .uri("/internal/orchestrator/batch-day-replay/sessions/preview")
-            .body(sanitized)
+            .body(command)
             .retrieve()
             .body(unwrapToMap());
     return responseFactory.forwardOrchestrator(resp);

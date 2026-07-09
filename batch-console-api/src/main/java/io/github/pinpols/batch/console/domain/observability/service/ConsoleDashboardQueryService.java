@@ -50,7 +50,7 @@ public class ConsoleDashboardQueryService {
     Map<String, Object> result = new LinkedHashMap<>();
     Map<String, Long> byStatus = new LinkedHashMap<>();
     long total = 0L;
-    for (StatusCountView row : repository.jobStatusCounts(resolved)) {
+    for (StatusCountView row : repository.jobStatusCounts(resolved, days)) {
       long count = row.count() == null ? 0L : row.count();
       byStatus.put(row.status() == null ? UNKNOWN : row.status(), count);
       total += count;
@@ -85,7 +85,7 @@ public class ConsoleDashboardQueryService {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put(
         "byTriggerType",
-        repository.triggerTypeCounts(resolved).stream()
+        repository.triggerTypeCounts(resolved, days).stream()
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
@@ -173,7 +173,7 @@ public class ConsoleDashboardQueryService {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put(
         "bySeverity",
-        repository.alertSeverityCounts(resolved).stream()
+        repository.alertSeverityCounts(resolved, days).stream()
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
