@@ -32,6 +32,7 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
 
   @Autowired private DispatchChannelCircuitBreaker circuitBreaker;
   @Autowired private CircuitBreakerRegistry circuitBreakerRegistry;
+  @Autowired private MeterRegistry meterRegistry;
 
   @Test
   void contextLoadsWithResilience4jAutoconfig() {
@@ -41,6 +42,25 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
     assertThat(circuitBreaker).isNotNull();
     assertThat(circuitBreaker.allow("t1|API|ch-1")).isTrue();
     assertThat(circuitBreaker.currentOpenCircuits()).isEqualTo(0);
+  }
+
+  /**
+   * B3:验证本模块上下文里 R4J metrics 绑定链真活着(SB4/JDK25 下 CircuitBreakerMetricsAutoConfiguration
+   * 未被静默剔除)。用<b>共享 autoconfig registry</b> 建一个探针熔断器,断言 {@code resilience4j.circuitbreaker.state}
+   * 确被埋入——绑定链一旦断裂会「零 CB 指标而测试仍绿」,这条守住它。
+   *
+   * <p><b>覆盖边界(如实说明)</b>:这里断言的只是<b>共享 autoconfig registry</b> 的绑定链。而 {@link
+   * DispatchChannelCircuitBreaker} 有意用<b>自持 per-key registry</b>(见类注释,与 autoconfig 解耦以隔离 {@code
+   * currentOpenCircuits()} 语义),因此<b>该 breaker 自持 registry 是否真吐指标本用例并不覆盖</b>—— 给它的 per-key registry
+   * 加 micrometer 绑定并断言属后续工作(follow-up)。
+   */
+  @Test
+  void circuitBreakerMetricsAutoconfigBindsStateMeter_sharedRegistryOnly() {
+    circuitBreakerRegistry.circuitBreaker("dispatch-smoke-probe");
+
+    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").meters())
+        .as("metrics autoconfig must bind circuitbreaker.state gauge in worker-dispatch context")
+        .isNotEmpty();
   }
 
   @SpringBootConfiguration

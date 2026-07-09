@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -199,7 +200,7 @@ class DefaultTaskCreationServiceTest {
   void createTasks_chunksLargeBatch_andPreservesIdBackfillOrder() {
     // 1200 > chunk 500 → task/step 各分 3 批(500,500,200);id 回填拼接回原顺序正确。
     int total = 1200;
-    List<JobTaskEntity> tasks = new java.util.ArrayList<>();
+    List<JobTaskEntity> tasks = new ArrayList<>();
     for (int i = 0; i < total; i++) {
       tasks.add(buildTask(null, "t1", "IMPORT", i));
     }
@@ -228,7 +229,7 @@ class DefaultTaskCreationServiceTest {
     for (int i = 0; i < total; i++) {
       assertThat(tasks.get(i).getId()).as("task %d id", i).isEqualTo((long) (i + 1));
     }
-    List<JobStepInstanceEntity> allSteps = new java.util.ArrayList<>();
+    List<JobStepInstanceEntity> allSteps = new ArrayList<>();
     stepCap.getAllValues().forEach(allSteps::addAll);
     assertThat(allSteps).hasSize(total);
     for (int i = 0; i < total; i++) {
