@@ -3,6 +3,8 @@ package io.github.pinpols.batch.orchestrator.application.ratelimit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
@@ -41,9 +43,8 @@ class TenantActionRateLimiterTest {
 
     ArgumentCaptor<Long> claimMax = ArgumentCaptor.forClass(Long.class);
     ArgumentCaptor<Long> reportMax = ArgumentCaptor.forClass(Long.class);
-    org.mockito.Mockito.verify(limiter).tryConsume(eq("t1"), eq("TASK_CLAIM"), claimMax.capture());
-    org.mockito.Mockito.verify(limiter)
-        .tryConsume(eq("t1"), eq("TASK_REPORT"), reportMax.capture());
+    verify(limiter).tryConsume(eq("t1"), eq("TASK_CLAIM"), claimMax.capture());
+    verify(limiter).tryConsume(eq("t1"), eq("TASK_REPORT"), reportMax.capture());
     assertThat(claimMax.getValue()).isEqualTo(111L);
     assertThat(reportMax.getValue()).isEqualTo(222L);
   }
@@ -56,7 +57,7 @@ class TenantActionRateLimiterTest {
     TenantActionRateLimiter rl = newLimiter(props);
 
     assertThat(rl.tryConsume("t1", RateLimitAction.TASK_CLAIM)).isTrue();
-    org.mockito.Mockito.verifyNoInteractions(limiter);
+    verifyNoInteractions(limiter);
   }
 
   @Test
@@ -66,6 +67,6 @@ class TenantActionRateLimiterTest {
 
     assertThat(rl.tryConsume(null, RateLimitAction.TASK_CLAIM)).isTrue();
     assertThat(rl.tryConsume("  ", RateLimitAction.TASK_REPORT)).isTrue();
-    org.mockito.Mockito.verifyNoInteractions(limiter);
+    verifyNoInteractions(limiter);
   }
 }
