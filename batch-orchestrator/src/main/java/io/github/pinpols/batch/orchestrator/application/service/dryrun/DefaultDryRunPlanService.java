@@ -33,6 +33,10 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.Statements;
+import net.sf.jsqlparser.statement.select.Select;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.support.CronExpression;
@@ -407,6 +411,19 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
                 key));
         continue;
       }
+      if (!isSingleSelectStatement(trimmed)) {
+        // S1(stacked-query RCE)：首关键字白名单只看第一条,pgjdbc simple-query 执行
+        // `EXPLAIN <trimmed>` 时允许分号堆叠 → `SELECT 1; DROP TABLE job_definition` 里 DROP 真执行。
+        // 用 AST 确认 trimmed 恰好是单条 SELECT/WITH;多语句 / 非 Select / 无法解析一律拒,不进 EXPLAIN。
+        findings.add(
+            DryRunFinding.error(
+                "EXEC_SQL_MULTISTATEMENT_REJECTED",
+                SCOPE_EXECUTION,
+                "dry-run SQL probe must be exactly one SELECT/WITH statement; refusing to EXPLAIN a"
+                    + " multi-statement / stacked-query payload",
+                key));
+        continue;
+      }
       try {
         // R7-A1-P0：ANALYZE FALSE + COSTS FALSE 显式强制 planner-only，零侧效；
         // 即使 SQL 是 DML 也不会真正执行（与裸 EXPLAIN 不同，可对抗未来 PG 默认行为变化）。
@@ -424,6 +441,21 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       }
     }
     return probed;
+  }
+
+  /**
+   * 用 jsqlparser 确认 SQL 恰好是单条 {@link Select} 语句。多语句(分号堆叠)、非 Select、或无法解析都返回 {@code false} ——
+   * 后两者无法证明单语句安全,保守拒绝,绝不盲目走 pgjdbc simple-query 的 {@code EXPLAIN} 拼接。
+   */
+  private static boolean isSingleSelectStatement(String sql) {
+    Statements statements;
+    try {
+      statements = CCJSqlParserUtil.parseStatements(sql);
+    } catch (Exception e) {
+      return false;
+    }
+    List<Statement> list = statements.getStatements();
+    return list != null && list.size() == 1 && list.get(0) instanceof Select;
   }
 
   /**
