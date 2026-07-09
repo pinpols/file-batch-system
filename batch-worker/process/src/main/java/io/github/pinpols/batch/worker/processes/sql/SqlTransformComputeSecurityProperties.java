@@ -29,12 +29,14 @@ public class SqlTransformComputeSecurityProperties {
               "dblink",
               "pg_terminate_backend",
               "pg_cancel_backend",
+              "pg_read_file",
               "pg_read_server_files",
               "pg_read_binary_file",
               "pg_ls_dir",
               "copy_from_program",
               "lo_import",
-              "lo_export"));
+              "lo_export",
+              "pg_sleep"));
 
   /**
    * 强制源 SQL 在顶层有 LIMIT 子句,防止无界 ResultSet 拖垮连接池/OOM。

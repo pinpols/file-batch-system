@@ -2,9 +2,9 @@ package io.github.pinpols.batch.worker.processes.sql;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.sql.SelectSqlAstValidator;
-import io.github.pinpols.batch.worker.core.sql.SelectSqlAstValidator.SchemaViolation;
 import java.util.List;
 import java.util.Locale;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;

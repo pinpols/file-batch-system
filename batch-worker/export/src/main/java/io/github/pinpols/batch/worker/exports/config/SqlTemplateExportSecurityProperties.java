@@ -51,10 +51,12 @@ public class SqlTemplateExportSecurityProperties {
               "dblink",
               "pg_terminate_backend",
               "pg_cancel_backend",
+              "pg_read_file",
               "pg_read_server_files",
               "pg_read_binary_file",
               "pg_ls_dir",
               "copy_from_program",
               "lo_import",
-              "lo_export"));
+              "lo_export",
+              "pg_sleep"));
 }

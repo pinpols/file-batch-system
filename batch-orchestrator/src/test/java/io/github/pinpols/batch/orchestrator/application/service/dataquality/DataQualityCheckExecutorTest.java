@@ -120,6 +120,26 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
+  void rejectsForbiddenFunctionExpressionWithoutExecuting() {
+    DataQualityRuleEntity rule =
+        rule(
+            "DOS_SLEEP",
+            "TABLE_LEVEL",
+            "BLOCKER",
+            "SELECT pg_sleep(30) FROM batch.batch_day_instance",
+            null);
+    when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
+
+    var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
+
+    // 禁用函数在校验阶段被拒 → ERROR + BLOCKER → BLOCKED，且从不下发到 DB 执行。
+    assertThat(outcome.status()).isEqualTo(GateStatus.BLOCKED);
+    assertThat(outcome.findings().get(0).status()).isEqualTo("ERROR");
+    verify(jdbcTemplate, never())
+        .queryForObject(anyString(), any(MapSqlParameterSource.class), any(Class.class));
+  }
+
+  @Test
   void rowLevelRuleSkippedForNowAsPass() {
     DataQualityRuleEntity rule = rule("ROW_AMT_POS", "ROW_LEVEL", "BLOCKER", "amount > 0", null);
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));

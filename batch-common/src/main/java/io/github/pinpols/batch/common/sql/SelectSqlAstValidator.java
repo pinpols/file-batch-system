@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.worker.core.sql;
+package io.github.pinpols.batch.common.sql;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -22,12 +22,15 @@ import net.sf.jsqlparser.statement.select.WithItem;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 
 /**
- * export（{@code SqlTemplateExportSqlValidator}）与 process（{@code SqlTransformComputeSqlValidator}）
- * 共享的 SELECT/WITH AST 校验核心 —— SELECT * 检测、schema allowlist 检测、禁用函数调用检测三条规则的树遍历逻辑此前在两侧 逐行重复维护，导致
- * process 早先已经把禁用函数检测升级为 AST 遍历（防"函数名与左括号间插注释"及带引号标识符两类绕过），而 export
- * 仍停留在旧的大小写不敏感子串匹配实现——同一条注入路径只在一侧被拦，另一侧存在安全口子。这里统一成 AST 版本，两侧都受益。
+ * worker 侧 export（{@code SqlTemplateExportSqlValidator}）/ process（{@code
+ * SqlTransformComputeSqlValidator}） 与 orchestrator 侧 sensor（{@code SensorSqlValidator}）/
+ * DataQuality（{@code DataQualityCheckExecutor}） 共享的 SELECT/WITH AST 校验核心 —— SELECT * 检测、schema
+ * allowlist 检测、禁用函数调用检测三条规则的树遍历逻辑此前在多侧逐行重复维护，导致 各侧规则漂移（process 早先已把禁用函数检测升级为 AST
+ * 遍历，防"函数名与左括号间插注释"及带引号标识符两类绕过，而 export 曾停留在旧的大小写不敏感子串匹配、sensor/DQ 则整块缺失禁用函数黑名单）。统一成本类的 AST
+ * 版本，各侧都受益。放在 batch-common 是因为 orchestrator 不依赖 worker-core，只有下沉到基座 batch-common
+ * 才能被两边同时复用；本类是纯静态工具、不装配任何 bean。
  *
- * <p>本类只做规则判定、不抛业务异常——两个调用方的错误契约不同（export 用 {@code IllegalArgumentException}，process 用 {@code
+ * <p>本类只做规则判定、不抛业务异常——各调用方的错误契约不同（export/sensor 用 {@code IllegalArgumentException}，process 用 {@code
  * BizException} + i18n key），由各自的 validator 按判定结果构造异常与文案。
  */
 public final class SelectSqlAstValidator {
