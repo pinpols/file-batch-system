@@ -5,6 +5,8 @@ info:
   x-last-updated: "2026-07-09"
   x-changelog:
     - date: "2026-07-09"
+      summary: "event-catalog/event-types 新增可订阅事件 ALERT_ESCALATED（告警升级）；升级事件类型由连字符 alert-escalated 更正为下划线 ALERT_ESCALATED，对齐事件目录命名风格，使前端 subscription_rule 能订阅到升级告警"
+    - date: "2026-07-09"
       summary: "NotificationChannelType 枚举企业微信渠道值由 WECHAT 更正为 WECOM，对齐 notification_channel DDL CHECK 约束与 NotificationChannel 创建/更新白名单（此前 DictEnum/发送器用 WECHAT，渠道 CHECK 用 WECOM，企微渠道永远匹配不到发送器）"
     - date: "2026-05-13"
       summary: "配置类 Excel 单域 template/export 已收敛删除，仅保留 /api/console/config/tenant-package/excel/** 作为 11-Sheet 租户配置包 Excel 唯一路径；报表中心 /api/console/reports/excel/** 保留"

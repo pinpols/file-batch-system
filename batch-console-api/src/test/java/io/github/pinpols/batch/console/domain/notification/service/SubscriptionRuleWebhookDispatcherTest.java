@@ -237,6 +237,35 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  void shouldMatchAndDispatch_escalationEventAlignedWithCatalog() {
+    // Bug4:AlertEscalationNotifier 发 ALERT_ESCALATED(与事件目录一致),前端可配 subscription_rule
+    // event_types=ALERT_ESCALATED 来订阅升级告警;此处验证该事件类型能匹配到规则并投递。
+    Map<String, Object> rule =
+        Map.of(
+            "id", 1L,
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-hook",
+            "channel_type", "WEBHOOK",
+            "event_types", "ALERT_ESCALATED",
+            "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "ALERT_ESCALATED"))
+        .thenReturn(List.of(rule));
+    when(webhookDispatcher.attemptDelivery(any(), any(), any()))
+        .thenReturn(WebhookDeliveryResult.ok());
+
+    newDispatcher()
+        .dispatch(
+            "tenant-a",
+            "ALERT_ESCALATED",
+            "alerts",
+            "cursor-1",
+            Map.of("alertId", 55, "severity", "HIGH"),
+            Instant.now());
+
+    verify(webhookDispatcher, timeout(2000)).attemptDelivery(any(), any(), any());
+  }
+
+  @Test
   void shouldPersistSuccessDeliveryLog_whenWebhookDelivered() {
     Map<String, Object> rule =
         Map.of(

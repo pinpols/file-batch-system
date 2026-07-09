@@ -1020,7 +1020,7 @@ Notes:
 
 ### Event Catalog
 
-- `GET /api/console/event-catalog/event-types` — subscribable event types
+- `GET /api/console/event-catalog/event-types` — subscribable event types (includes `ALERT_ESCALATED` for alert-escalation subscriptions)
 - `GET /api/console/event-catalog/topics` — Kafka topic directory
 
 ### Queries
