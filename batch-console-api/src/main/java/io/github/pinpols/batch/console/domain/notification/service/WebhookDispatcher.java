@@ -1,18 +1,16 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.param.WebhookDeliveryLogInsertParam;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import jakarta.annotation.PreDestroy;
-import java.net.URI;
-import java.net.UnknownHostException;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,16 +27,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Webhook 异步分发器。
@@ -50,10 +47,11 @@ import org.springframework.web.client.RestClientResponseException;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WebhookDispatcher {
 
   private static final int MAX_ATTEMPTS = 3;
+
+  private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
   /** 有界队列容量 — 防止流量尖峰下内存积压。 */
   private static final int QUEUE_CAPACITY = 1024;
@@ -67,8 +65,28 @@ public class WebhookDispatcher {
   private final ConsoleWebhookService webhookService;
   private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
 
-  /** P2-1(2026-05-16):见 OrchestratorInternalRestClient 同名字段注释,改 ObjectProvider 避免复用 prototype。 */
-  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
+  /**
+   * OkHttp 客户端一次性构造并复用:内置 {@link SsrfGuardedDns} 在建连回调层做 per-request SSRF pin —— 连的就是 guard 校验过的 那个
+   * IP,关闭 DNS-rebinding 的 TOCTOU 窗口,且 TLS 仍按 hostname 校验(SNI/证书不动)。 5.11:显式 connect/read/write +
+   * callTimeout,避免慢回调长期占用线程。
+   */
+  private final OkHttpClient httpClient;
+
+  public WebhookDispatcher(
+      ConsoleWebhookService webhookService,
+      ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
+      SsrfGuardedDns ssrfGuardedDns) {
+    this.webhookService = webhookService;
+    this.deliveryLogRepository = deliveryLogRepository;
+    this.httpClient =
+        new OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(15, TimeUnit.SECONDS)
+            .dns(ssrfGuardedDns)
+            .build();
+  }
 
   // 5.11: 有界队列 + AbortPolicy(原 CallerRunsPolicy 会反压 Tomcat 请求线程,与 WebhookDeliveryRelay
   //   持久化补偿重叠,放弃即丢:实际是入队前已写 PENDING 日志,被拒任务由 relay 回退)
@@ -231,48 +249,57 @@ public class WebhookDispatcher {
     try {
       deliver(subscription, payload, payloadJson);
       return WebhookDeliveryResult.ok();
-    } catch (RestClientResponseException ex) {
+    } catch (WebhookHttpStatusException ex) {
       SwallowedExceptionLogger.info(
-          WebhookDispatcher.class, "catch:RestClientResponseException", ex);
+          WebhookDispatcher.class, "catch:WebhookHttpStatusException", ex);
 
-      return WebhookDeliveryResult.failure(
-          ex.getStatusCode().value(), sanitize(ex.getResponseBodyAsString()));
+      return WebhookDeliveryResult.failure(ex.status(), sanitize(ex.responseBody()));
     } catch (Exception ex) {
+      // 含 SsrfGuardedDns 抛出的 BlockedAddressException(rebinding 到内网被拦):投递失败,不建连。
       return WebhookDeliveryResult.failure(null, sanitize(ex.getMessage()));
     }
   }
 
   private void deliver(
       WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
-      throws UnknownHostException {
-    // S-2.6: 分发前二次 DNS 解析并校验 IP，防止 rebinding 到内网
-    String callbackHost = URI.create(subscription.getCallbackUrl()).getHost();
-    DnsResolveGuard.resolveAndValidate(callbackHost);
-
-    // 5.11: 显式设置 HTTP 超时，避免慢回调长期占用线程
-    RestClient client =
-        restClientBuilderProvider
-            .getObject()
-            .requestFactory(
-                new SimpleClientHttpRequestFactory() {
-                  {
-                    setConnectTimeout(Duration.ofSeconds(5));
-                    setReadTimeout(Duration.ofSeconds(10));
-                  }
-                })
-            .build();
-    RestClient.RequestBodySpec spec =
-        client
-            .post()
-            .uri(subscription.getCallbackUrl())
-            .contentType(MediaType.APPLICATION_JSON)
+      throws IOException {
+    // SSRF/rebinding 防护落在 httpClient 的 SsrfGuardedDns:OkHttp 建连回调时解析 + 校验 IP,连的就是校验的那个 IP。
+    Request.Builder builder =
+        new Request.Builder()
+            .url(subscription.getCallbackUrl())
             .header("X-Batch-Tenant-Id", payload.tenantId())
             .header("X-Batch-Event-Type", payload.eventType())
-            .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream());
+            .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream())
+            .post(RequestBody.create(payloadJson, JSON));
     if (subscription.getSecret() != null && !subscription.getSecret().isBlank()) {
-      spec = spec.header("X-Batch-Signature", sign(payloadJson, subscription.getSecret()));
+      builder = builder.header("X-Batch-Signature", sign(payloadJson, subscription.getSecret()));
     }
-    spec.body(payloadJson).retrieve().toBodilessEntity();
+    try (Response response = httpClient.newCall(builder.build()).execute()) {
+      if (!response.isSuccessful()) {
+        String body = response.body() == null ? "" : response.body().string();
+        throw new WebhookHttpStatusException(response.code(), body);
+      }
+    }
+  }
+
+  /** 非 2xx 响应的结构化载体:把 HTTP 状态码 + 响应体带回 {@link #attemptDelivery} 决策(替代原 RestClient 的异常映射)。 */
+  private static final class WebhookHttpStatusException extends IOException {
+    private final int status;
+    private final String responseBody;
+
+    WebhookHttpStatusException(int status, String responseBody) {
+      super("webhook responded with non-2xx status: " + status);
+      this.status = status;
+      this.responseBody = responseBody;
+    }
+
+    int status() {
+      return status;
+    }
+
+    String responseBody() {
+      return responseBody;
+    }
   }
 
   private boolean matches(String configuredEventTypes, String eventType) {

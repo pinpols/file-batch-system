@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.domain.notification.web.request.Notificat
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,6 +84,15 @@ public class DefaultConsoleNotificationApplicationService
   private final NotificationDeliveryLogMapper deliveryLogMapper;
   private final NotificationSenderRegistry senderRegistry;
   private final WebhookDispatcher webhookDispatcher;
+
+  /**
+   * deliverTest 是租户可反复触发的出站投递,也是 SSRF DNS-rebinding 的放大点(重复触发可赢 rebinding 竞态)。 按 (租户 + 渠道)
+   * 限频,挡住高频重放。
+   */
+  private final SlidingWindowRateLimiter testChannelRateLimiter;
+
+  /** deliverTest 每 (租户 + 渠道) 滑窗(1 分钟)内最多触发次数。 */
+  private static final int TEST_CHANNEL_LIMIT_PER_MINUTE = 10;
 
   @Override
   public List<Map<String, Object>> listChannels(String tenantId) {
@@ -275,6 +285,11 @@ public class DefaultConsoleNotificationApplicationService
   @Override
   public Map<String, Object> testChannel(String tenantId, String channelCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    // SSRF 收窄:deliverTest 可反复触发,是 rebinding 竞态的放大点;超频拦在建连之前。
+    if (!testChannelRateLimiter.tryAcquire(
+        "notif:test:" + resolved + ":" + channelCode, TEST_CHANNEL_LIMIT_PER_MINUTE)) {
+      throw BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited");
+    }
     Map<String, Object> channel =
         Guard.requireFound(
             channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);

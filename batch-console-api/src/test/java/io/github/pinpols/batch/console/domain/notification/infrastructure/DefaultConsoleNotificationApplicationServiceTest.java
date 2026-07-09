@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.domain.notification.web.request.Notificat
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
@@ -30,6 +31,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 class DefaultConsoleNotificationApplicationServiceTest {
 
@@ -40,6 +42,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   private NotificationDeliveryLogMapper deliveryLogMapper;
   private NotificationSenderRegistry senderRegistry;
   private WebhookDispatcher webhookDispatcher;
+  private SlidingWindowRateLimiter testChannelRateLimiter;
   private DefaultConsoleNotificationApplicationService service;
 
   @BeforeEach
@@ -51,6 +54,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
     deliveryLogMapper = mock(NotificationDeliveryLogMapper.class);
     senderRegistry = mock(NotificationSenderRegistry.class);
     webhookDispatcher = mock(WebhookDispatcher.class);
+    testChannelRateLimiter = mock(SlidingWindowRateLimiter.class);
+    when(testChannelRateLimiter.tryAcquire(any(), ArgumentMatchers.anyInt())).thenReturn(true);
     service =
         new DefaultConsoleNotificationApplicationService(
             tenantGuard,
@@ -59,7 +64,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
             ruleMapper,
             deliveryLogMapper,
             senderRegistry,
-            webhookDispatcher);
+            webhookDispatcher,
+            testChannelRateLimiter);
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(metadataResolver.current())
         .thenReturn(
@@ -409,5 +415,32 @@ class DefaultConsoleNotificationApplicationServiceTest {
     // WEBHOOK 不经 sender 注册表
     verify(senderRegistry, never()).resolve(any());
     assertThat(result).containsEntry("success", true).containsEntry("status", "OK");
+  }
+
+  @Test
+  void shouldRejectTestChannelWhenRateLimited() {
+    // deliverTest 是可重复触发的 SSRF 放大点(赢 DNS-rebinding 竞态);超频时限流拦下,不再建连投递。
+    when(channelMapper.selectByCode("tenant-a", "hook-1"))
+        .thenReturn(
+            Map.of(
+                "channel_code",
+                "hook-1",
+                "channel_type",
+                "WEBHOOK",
+                "config_json",
+                "{\"url\":\"https://example.com/hook\"}"));
+    when(testChannelRateLimiter.tryAcquire(any(), ArgumentMatchers.anyInt())).thenReturn(false);
+
+    assertThatThrownBy(() -> service.testChannel("tenant-a", "hook-1"))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getCode())
+                    .isEqualTo(io.github.pinpols.batch.common.enums.ResultCode.RATE_LIMITED));
+
+    // 拦在建连之前:没有走 webhook 投递,也没写投递日志
+    verify(webhookDispatcher, never())
+        .attemptDelivery(any(), any(WebhookEventPayload.class), any(String.class));
+    verify(deliveryLogMapper, never()).insert(any());
   }
 }

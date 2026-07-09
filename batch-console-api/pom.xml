@@ -133,6 +133,12 @@
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
         </dependency>
+        <!-- okhttp:webhook 出站投递用自定义 Dns 做 per-request SSRF pin(连的就是 guard 校验过的那个 IP),
+             与 worker-dispatch 同款;版本由 root dependencyManagement 统管(okhttp-jvm 才是 JVM 类来源)。 -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>

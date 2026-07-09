@@ -5,34 +5,31 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.web.client.RestClient;
 
 class WebhookDispatcherTest {
 
   private ConsoleWebhookService webhookService;
   private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
-  private ObjectProvider<RestClient.Builder> restClientBuilderProvider;
+  private SsrfGuardedDns ssrfGuardedDns;
   private WebhookDispatcher dispatcher;
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setUp() {
     webhookService = mock(ConsoleWebhookService.class);
     deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
-    // P2-1 (2026-05-16) 改 ObjectProvider 避免复用 prototype RestClient.Builder;
-    // 测试只验证 dispatch 路径不真发 HTTP，provider 返 mock builder 即可。
-    restClientBuilderProvider = mock(ObjectProvider.class);
-    when(restClientBuilderProvider.getObject()).thenReturn(mock(RestClient.Builder.class));
-    dispatcher =
-        new WebhookDispatcher(webhookService, deliveryLogRepository, restClientBuilderProvider);
+    // OkHttp 客户端内置 SsrfGuardedDns 做 per-request pin;这些用例只验 dispatch 路由/签名,不真发 HTTP。
+    ssrfGuardedDns = new SsrfGuardedDns(mock(BatchSecurityProperties.class));
+    dispatcher = new WebhookDispatcher(webhookService, deliveryLogRepository, ssrfGuardedDns);
   }
 
   @Test
@@ -109,6 +106,23 @@ class WebhookDispatcherTest {
     String result = (String) normalizeEventType.invoke(dispatcher, (String) null);
 
     assertThat(result).isEqualTo("UNKNOWN");
+  }
+
+  @Test
+  void shouldBlockDeliveryWhenCallbackHostResolvesToInternalAddress() {
+    // 真 per-request pin 的端到端证明:回调用**主机名**(rebinding 的实际攻击形态),它解析到内网回环,
+    // OkHttp 建连前经 SsrfGuardedDns 校验被拦,投递折叠为 failure。若 guard 是装饰性的(未接进真实 client),
+    // 这里会静默连到内网。注:字面量内网 IP 由 OkHttp 短路不走 Dns,但那类在建订阅时已被 CallbackUrlValidator 拦。
+    WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
+    subscription.setCallbackUrl("https://localhost:9/hook");
+    WebhookEventPayload payload =
+        new WebhookEventPayload(
+            "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
+
+    WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription, payload, "{}");
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("restricted network range");
   }
 
   @Test
