@@ -59,9 +59,14 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
 
   @Override
   public List<Object> triggerList() {
+    // SEC(跨租户越权修复):下游 /api/triggers/management/list 无 tenant 过滤能力(返回全租户
+    // TriggerStatusInfo),故在 console 侧按调用方租户收敛:
+    //   - 全局角色(ADMIN / AUDITOR)→ scope 为 null,返回全部;
+    //   - 租户角色(TENANT_ADMIN / TENANT_USER)→ 仅返回 tenantId 命中自身租户的条目。
     // 只读查询,trigger 不可达 → DownstreamFallback 降级为空 list + metrics(详见
     // docs/runbook/downstream-degradation.md "trigger:list" 条目)。
     // 状态变更(register / pause / resume / triggerAction)仍 fail-fast,见各方法的 callOrThrow。
+    String tenantScope = tenantGuard.currentTenantScopeOrNull();
     return downstreamFallback.callOrFallback(
         SVC,
         "list",
@@ -72,9 +77,26 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
                   .uri("/api/triggers/management/list")
                   .retrieve()
                   .body(new ParameterizedTypeReference<CommonResponse<List<Object>>>() {});
-          return resp != null ? resp.data() : List.<Object>of();
+          List<Object> data = resp != null ? resp.data() : List.<Object>of();
+          return filterByTenant(data, tenantScope);
         },
         ex -> List.<Object>of());
+  }
+
+  /**
+   * 按租户作用域过滤下游触发器列表。scope 为 null(全局角色)时原样返回; 否则仅保留 {@code tenantId} 命中 scope 的条目(下游条目反序列化为 {@code
+   * Map},取其 {@code tenantId} 键)。无法识别 tenantId 的条目按「不属于本租户」丢弃,fail-closed。
+   */
+  static List<Object> filterByTenant(List<Object> data, String tenantScope) {
+    if (tenantScope == null || data == null) {
+      return data != null ? data : List.<Object>of();
+    }
+    return data.stream()
+        .filter(
+            item ->
+                item instanceof Map<?, ?> row
+                    && tenantScope.equals(String.valueOf(row.get("tenantId"))))
+        .toList();
   }
 
   @Override

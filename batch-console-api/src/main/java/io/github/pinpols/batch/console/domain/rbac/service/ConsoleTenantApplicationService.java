@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapp
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.web.response.BatchCreateTenantsResponse;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleTenantResponse;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ProvisionTenantResponse;
@@ -54,6 +55,7 @@ public class ConsoleTenantApplicationService {
   private final ConsoleTriggerProxyService triggerProxyService;
   private final ConsoleTenantConfigCopyService configCopyService;
   private final ConsoleTenantReadinessService readinessService;
+  private final ConsoleTenantGuard tenantGuard;
   // bypassMode=true(本地/E2E)时关守卫,允许 e2e-/test- 前缀;production 时拒绝
   private final org.springframework.core.env.Environment environment;
 
@@ -91,6 +93,21 @@ public class ConsoleTenantApplicationService {
 
   public PageResponse<ConsoleTenantResponse> listTenants(
       String keyword, String status, PageRequest pageRequest) {
+    // SEC(跨租户越权修复):租户角色(TENANT_ADMIN / TENANT_USER)只能枚举自身租户,不能列全部;
+    // 全局角色(ADMIN / AUDITOR)返回 null 作用域 → 保留原全量查询。
+    String tenantScope = tenantGuard.currentTenantScopeOrNull();
+    if (tenantScope != null) {
+      Map<String, Object> row = tenantMapper.selectByTenantId(tenantScope);
+      List<ConsoleTenantResponse> scoped =
+          row == null
+              ? List.of()
+              : java.util.stream.Stream.of(row)
+                  .map(this::toResponse)
+                  .filter(t -> !HIDDEN_TENANT_IDS.contains(t.tenantId()))
+                  .toList();
+      return new PageResponse<>(
+          scoped.size(), pageRequest.pageNo(), pageRequest.pageSize(), scoped);
+    }
     List<Map<String, Object>> rows = tenantMapper.selectByQuery(keyword, status, pageRequest);
     long total = tenantMapper.countByQuery(keyword, status);
     List<ConsoleTenantResponse> items =
@@ -104,6 +121,9 @@ public class ConsoleTenantApplicationService {
   }
 
   public ConsoleTenantResponse getTenant(String tenantId) {
+    // SEC(跨租户越权修复):非全局角色只能读自身租户,path tenantId 与 JWT 不符 → FORBIDDEN;
+    // 全局角色(ADMIN / AUDITOR)可读任意租户。
+    tenantGuard.assertTenantAllowed(tenantId);
     return toResponse(
         Guard.requireFound(
             tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId));

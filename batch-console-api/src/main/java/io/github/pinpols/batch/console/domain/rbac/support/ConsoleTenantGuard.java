@@ -89,6 +89,35 @@ public class ConsoleTenantGuard {
     resolveTenant(requestedTenantId);
   }
 
+  /**
+   * 返回当前调用方的租户过滤作用域,用于<b>无显式 tenantId 入参</b>的列表 / 只读枚举端点 （例如 {@code listTenants} / {@code
+   * triggerList}):
+   *
+   * <ul>
+   *   <li><b>全局角色</b>（ADMIN / AUDITOR / CONFIG_ADMIN）:返回 {@code null}，语义为「不设租户过滤,可见全部」。
+   *   <li><b>租户角色</b>:返回 JWT / RequestScope 里的 tenantId,调用方据此把结果收敛到自身租户; 租户上下文缺失 → {@code
+   *       FORBIDDEN}(与 {@link #resolveTenant} 一致,不静默放行全量)。
+   * </ul>
+   *
+   * <p>注意:与 {@link #resolveTenant} 不同,本方法对全局角色<b>不</b>强制显式租户参数(列表端点本就无该参数), 而是返回 null
+   * 让调用方放行全量;跨租户越权拦截由租户角色分支的 tenantId 收敛完成。
+   */
+  public String currentTenantScopeOrNull() {
+    if (isCurrentUserGlobal()) {
+      return null;
+    }
+    String authenticatedTenantId = authenticatedTenantId();
+    ConsoleRequestMetadata metadata = currentMetadataOrNull();
+    String effectiveTenantId =
+        authenticatedTenantId != null
+            ? authenticatedTenantId
+            : metadata != null ? metadata.tenantId() : null;
+    if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
+      throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
+    }
+    return effectiveTenantId;
+  }
+
   private ConsoleRequestMetadata currentMetadataOrNull() {
     try {
       return requestMetadataResolver.current();

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
@@ -37,6 +38,7 @@ class ConsoleTenantApplicationServiceTest {
   @Mock private ConsoleTriggerProxyService triggerProxyService;
   @Mock private ConsoleTenantConfigCopyService configCopyService;
   @Mock private ConsoleTenantReadinessService readinessService;
+  @Mock private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
 
   private final org.springframework.core.env.Environment environment =
       new org.springframework.mock.env.MockEnvironment();
@@ -67,6 +69,7 @@ class ConsoleTenantApplicationServiceTest {
             triggerProxyService,
             configCopyService,
             readinessService,
+            tenantGuard,
             environment);
   }
 
@@ -238,6 +241,67 @@ class ConsoleTenantApplicationServiceTest {
     assertThat(resp.readiness().ready()).isTrue();
     verify(configCopyService, never()).copy(any(), any(), any());
     verify(readinessService).check("acme");
+  }
+
+  // ── SEC-IDOR(S2):租户管理只读端点跨租户越权修复 ──────────────────────────────
+
+  @org.junit.jupiter.api.Nested
+  class TenantScopeOnRead {
+
+    @Test
+    void getTenant_crossTenant_deniedByGuard_neverQueries() {
+      // arrange:守卫对越权 tenantId 抛 FORBIDDEN(等价 TENANT_ADMIN 读他租户)
+      org.mockito.Mockito.doThrow(
+              io.github.pinpols.batch.common.exception.BizException.of(
+                  io.github.pinpols.batch.common.enums.ResultCode.FORBIDDEN,
+                  "error.tenant.mismatch"))
+          .when(tenantGuard)
+          .assertTenantAllowed("tenant-b");
+
+      // act / assert
+      assertThatThrownBy(() -> service.getTenant("tenant-b"))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(io.github.pinpols.batch.common.enums.ResultCode.FORBIDDEN);
+      verify(tenantMapper, never()).selectByTenantId("tenant-b");
+    }
+
+    @Test
+    void getTenant_sameTenant_allowed_returnsRow() {
+      // 守卫放行(same-tenant / 全局角色)→ 正常返回
+      when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+
+      assertThat(service.getTenant("tenant-a").tenantId()).isEqualTo("tenant-a");
+      verify(tenantGuard).assertTenantAllowed("tenant-a");
+    }
+
+    @Test
+    void listTenants_tenantRole_scopedToOwnTenantOnly() {
+      // 租户角色:currentTenantScopeOrNull 返回自身租户 → 只返回自身,不发全量查询
+      when(tenantGuard.currentTenantScopeOrNull()).thenReturn("tenant-a");
+      when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+
+      var page = service.listTenants(null, null, new PageRequest(1, 20));
+
+      assertThat(page.items()).hasSize(1);
+      assertThat(page.items().get(0).tenantId()).isEqualTo("tenant-a");
+      verify(tenantMapper, never()).selectByQuery(any(), any(), any());
+      verify(tenantMapper, never()).countByQuery(any(), any());
+    }
+
+    @Test
+    void listTenants_globalRole_returnsFullQuery() {
+      // 全局角色:scope 为 null → 走原全量分页查询
+      when(tenantGuard.currentTenantScopeOrNull()).thenReturn(null);
+      when(tenantMapper.selectByQuery(any(), any(), any()))
+          .thenReturn(List.of(ACTIVE_TENANT, ACME_TENANT));
+      when(tenantMapper.countByQuery(any(), any())).thenReturn(2L);
+
+      var page = service.listTenants(null, null, new PageRequest(1, 20));
+
+      assertThat(page.items()).hasSize(2);
+      verify(tenantMapper).selectByQuery(any(), any(), any());
+    }
   }
 
   @Test
