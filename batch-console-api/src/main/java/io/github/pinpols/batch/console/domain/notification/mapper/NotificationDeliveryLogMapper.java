@@ -11,5 +11,9 @@ public interface NotificationDeliveryLogMapper {
 
   int insert(Map<String, Object> params);
 
+  /**
+   * 按主键更新一条投递日志状态。租户隔离:{@code params} 必须同时携带 {@code id} 与 {@code tenantId} —— SQL 的 WHERE 子句
+   * 除主键外强制带 {@code tenant_id} 谓词(见 mapper XML),防未来接线用可枚举 id 跨租户改写别人的日志行。
+   */
   int updateStatus(Map<String, Object> params);
 }
