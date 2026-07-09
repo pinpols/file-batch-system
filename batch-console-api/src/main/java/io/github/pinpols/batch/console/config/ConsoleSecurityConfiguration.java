@@ -43,6 +43,8 @@ public class ConsoleSecurityConfiguration {
   private final BatchSecurityProperties batchSecurityProperties;
   private static final String[] CSRF_IGNORED_MATCHERS = {
     "/actuator/**",
+    // Alertmanager 出口:AM 独立进程无 XSRF cookie,走 bearer token 自校验(见 AlertmanagerNotifyController)。
+    "/internal/am-notify/**",
     "/api/console/auth/login",
     "/api/console/auth/logout",
     "/api/console/auth/public-key",
@@ -120,6 +122,10 @@ public class ConsoleSecurityConfiguration {
             authorize ->
                 authorize
                     .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
+                    .permitAll()
+                    // Alertmanager 出口内网端点:AM 够不到 console cookie/JWT(ADR-030 §D7),
+                    // 由 AlertmanagerNotifyController 用共享密钥 bearer token 自校验(fail-closed)。
+                    .requestMatchers("/internal/am-notify/**")
                     .permitAll()
                     .requestMatchers(
                         "/api/console/auth/login",

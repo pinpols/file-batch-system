@@ -44,6 +44,8 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
   private static final Set<String> ALWAYS_ALLOWED =
       Set.of(
           "/actuator/**",
+          // Alertmanager 出口:维护期告警仍需送达(与 actuator 同属内网基础设施端点,非租户业务写)。
+          "/internal/am-notify/**",
           "/api/console/auth/check",
           "/api/console/auth/logout",
           "/api/console/system/maintenance",
