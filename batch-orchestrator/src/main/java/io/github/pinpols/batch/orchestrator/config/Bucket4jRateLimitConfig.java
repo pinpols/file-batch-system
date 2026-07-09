@@ -33,7 +33,10 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
  * lastRefillTime）：单机回拨最多导致少补令牌 = 更严限流（安全方向），永远不会像旧固定窗口那样复活老窗口 key 叠加计数击穿配额。
  *
  * <p><b>请求超时</b>：给 proxy manager 配 {@code requestTimeout}，避免 Redis 故障时命令阻塞到 Lettuce
- * 默认命令超时（~60s）——热路径 claim/report（12000/min）会大量线程阻塞削弱 fail-open。设 2s，与限流判定应有的延迟量级匹配。
+ * 默认命令超时（~60s）——热路径 claim/report（12000/min）会大量线程阻塞削弱 fail-open。设 500ms：既显著大于健康时限流判定的 Redis
+ * RTT（sub-ms，足够区分健康/故障），又足够小以防线程饥饿。为何不是 2s：Redis 慢故障（TCP 接受不响应）时每次 tryConsume 阻塞至多 requestTimeout 才
+ * fail-open；claim+report 合计约 200 req/s、Tomcat 默认 200 线程，若每请求平均持有 2s → 需求并发 400 超过池容量 200 →
+ * orchestrator 所有 HTTP 端点因线程池耗尽不可用，fail-open 的善意被线程饥饿反噬。降到 500ms 把最坏并发压回约 100，小于池容量。
  *
  * <p><b>过期策略</b>：{@code basedOnTimeForRefillingBucketUpToMax(1min)}——空闲桶在“回满到容量所需时间”后过期， 既回收闲置
  * key，又让阈值配置变更在桶过期后自然生效。
@@ -45,8 +48,11 @@ public class Bucket4jRateLimitConfig {
   /** 每分钟配额语义：桶容量与 refill 均以 1 分钟为周期。 */
   private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
 
-  /** 限流判定请求超时：Redis 故障时快速抛错 fail-open，不阻塞热路径线程到 Lettuce 默认命令超时（~60s）。 */
-  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(2);
+  /**
+   * 限流判定请求超时：Redis 故障时快速抛错 fail-open，不阻塞热路径线程到 Lettuce 默认命令超时（~60s）。取 500ms 而非 2s， 防高并发下热路径线程被慢故障的
+   * Redis 长时间挂起而耗尽 Tomcat 线程池（见类注释「请求超时」）。
+   */
+  private static final Duration REQUEST_TIMEOUT = Duration.ofMillis(500);
 
   /**
    * bucket4j 专用连接：与 Spring 共享底层 {@link RedisClient}，但使用 {@code String}(key)/{@code byte[]}(value)
