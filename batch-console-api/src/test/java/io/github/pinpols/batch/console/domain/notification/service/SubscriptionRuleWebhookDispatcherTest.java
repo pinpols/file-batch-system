@@ -210,6 +210,106 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  void shouldTenantScopeRateLimitKeys_whenSameChannelCodeAcrossTenants() {
+    // 两租户可合法配置同名 channelCode(唯一约束是 (tenant_id, channel_code))。
+    // 限流/去重/目标 key 必须带 tenant 前缀,否则 A 打满后 B 同名渠道合法告警被静默压制(跨租串扰)。
+    Map<String, Object> ruleA =
+        Map.of(
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-hook",
+            "channel_type", "WEBHOOK",
+            "event_types", "JOB_SUCCESS",
+            "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    Map<String, Object> ruleB =
+        Map.of(
+            "tenant_id", "tenant-b",
+            "channel_code", "ops-hook",
+            "channel_type", "WEBHOOK",
+            "event_types", "JOB_SUCCESS",
+            "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+        .thenReturn(List.of(ruleA));
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-b", "JOB_SUCCESS"))
+        .thenReturn(List.of(ruleB));
+    lenient()
+        .when(webhookDispatcher.attemptDelivery(any(), any(), any()))
+        .thenReturn(WebhookDeliveryResult.ok());
+
+    newDispatcher().dispatch("tenant-a", "JOB_SUCCESS", "s", "c", "data", Instant.now());
+    dispatcher.dispatch("tenant-b", "JOB_SUCCESS", "s", "c", "data", Instant.now());
+
+    ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+    verify(sendRateLimiter, timeout(2000).atLeastOnce()).tryAcquire(keys.capture(), anyInt());
+    List<String> sendKeys =
+        keys.getAllValues().stream().filter(k -> k.startsWith("notify:send:")).toList();
+    // 两租户的 send 限流 key 都带各自 tenant 前缀,且彼此不同 → 不共享限流窗口。
+    assertThat(sendKeys).contains("notify:send:tenant-a:ops-hook", "notify:send:tenant-b:ops-hook");
+    assertThat(keys.getAllValues())
+        .anyMatch(k -> k.startsWith("notify:dedup:tenant-a:"))
+        .anyMatch(k -> k.startsWith("notify:dedup:tenant-b:"))
+        .anyMatch(k -> k.startsWith("notify:dest:tenant-a:"))
+        .anyMatch(k -> k.startsWith("notify:dest:tenant-b:"));
+  }
+
+  @Test
+  void shouldIncrementDropCounter_whenChannelSendRateLimitExceeded() {
+    Map<String, Object> rule =
+        Map.of(
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-hook",
+            "channel_type", "WEBHOOK",
+            "event_types", "JOB_SUCCESS",
+            "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+        .thenReturn(List.of(rule));
+    when(sendRateLimiter.tryAcquire(any(), anyInt())).thenReturn(false);
+    dispatcher =
+        new SubscriptionRuleWebhookDispatcher(
+            subscriptionRuleMapper,
+            webhookDispatcher,
+            senderRegistry,
+            sendRateLimiter,
+            meterRegistry,
+            deliveryLogMapper);
+
+    dispatcher.dispatch("tenant-a", "JOB_SUCCESS", "s", "c", "data", Instant.now());
+
+    assertThat(
+            meterRegistry
+                .find("notification.dropped")
+                .tag("reason", "channel_ratelimit")
+                .counter()
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  void shouldIncrementDropCounter_whenNoSenderForChannelType() throws InterruptedException {
+    CountDownLatch queried = new CountDownLatch(1);
+    Map<String, Object> rule =
+        Map.of(
+            "tenant_id", "tenant-a",
+            "channel_code", "ops-mail",
+            "channel_type", "EMAIL",
+            "event_types", "JOB_SUCCESS",
+            "config_json", "{\"to\":\"ops@example.com\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_SUCCESS"))
+        .thenAnswer(
+            inv -> {
+              queried.countDown();
+              return List.of(rule);
+            });
+    // senderRegistry.resolve("EMAIL") 默认返回 null → no_sender 丢弃路径。
+
+    newDispatcher().dispatch("tenant-a", "JOB_SUCCESS", "s", "c", "data", Instant.now());
+
+    assertThat(queried.await(2, TimeUnit.SECONDS)).isTrue();
+    assertThat(
+            meterRegistry.find("notification.dropped").tag("reason", "no_sender").counter().count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
   void shouldDropDelivery_whenChannelSendRateLimitExceeded() {
     Map<String, Object> rule =
         Map.of(

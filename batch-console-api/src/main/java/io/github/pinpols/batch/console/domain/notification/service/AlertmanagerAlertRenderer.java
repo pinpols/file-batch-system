@@ -47,14 +47,13 @@ public class AlertmanagerAlertRenderer {
 
     StringBuilder body = new StringBuilder(title).append('\n');
     int shown = Math.min(alerts.size(), Math.max(0, maxAlerts));
+    // 只遍历前 shown 条:超大批量告警(未认证 sink 可灌任意条数)全量循环会让 body / alertnames 无界膨胀撑爆内存。
+    // alertCount / title / "... and N more" 仍用原始 alerts.size(),保留总量可见性。
     List<String> alertnames = new ArrayList<>();
-    for (int i = 0; i < alerts.size(); i++) {
+    for (int i = 0; i < shown; i++) {
       AlertmanagerAlert alert = alerts.get(i);
       String name = orPlaceholder(alert.label(LABEL_ALERTNAME));
       alertnames.add(name);
-      if (i >= shown) {
-        continue;
-      }
       body.append('\n')
           .append("- [")
           .append(upper(orPlaceholder(alert.status())))

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
@@ -161,11 +162,12 @@ public class SubscriptionRuleWebhookDispatcher {
     String payloadJson = JsonUtils.toJson(payload);
 
     for (Map<String, Object> rule : rules) {
-      dispatchRule(rule, normalizedEventType, dataMap, payload, payloadJson);
+      dispatchRule(tenantId, rule, normalizedEventType, dataMap, payload, payloadJson);
     }
   }
 
   private void dispatchRule(
+      String tenantId,
       Map<String, Object> rule,
       String eventType,
       Map<String, Object> dataMap,
@@ -186,15 +188,15 @@ public class SubscriptionRuleWebhookDispatcher {
     }
 
     // 单渠道每分钟投递上限,超额丢弃 + 告警(webhook 与第三方渠道同样适用)。
-    if (!withinSendRateLimit(channelCode, channelType, eventType)) {
+    if (!withinSendRateLimit(tenantId, channelCode, channelType, eventType)) {
       return;
     }
     // 去重:相同(渠道+事件+内容)在滑窗内只发一次,挡风暴重复刷屏。
-    if (isDuplicateWithinWindow(channelCode, eventType, payloadJson)) {
+    if (isDuplicateWithinWindow(tenantId, channelCode, eventType, payloadJson)) {
       return;
     }
     // 目标级限流:同一收件人(url/to/phoneNumbers)跨规则/渠道的更严上限。
-    if (!withinDestinationRateLimit(rule, channelCode, channelType, eventType)) {
+    if (!withinDestinationRateLimit(tenantId, rule, channelCode, channelType, eventType)) {
       return;
     }
 
@@ -205,6 +207,7 @@ public class SubscriptionRuleWebhookDispatcher {
       // 非 WEBHOOK 渠道走可插拔 NotificationSender(DINGTALK/WECOM/SLACK/EMAIL/...);无对应 sender 才显式告警跳过。
       NotificationSender sender = senderRegistry.resolve(channelType);
       if (sender == null) {
+        recordDrop("no_sender");
         log.warn(
             "subscription_rule matched but no sender for channel type; skipping:"
                 + " channelCode={}, channelType={}, eventType={}",
@@ -225,6 +228,7 @@ public class SubscriptionRuleWebhookDispatcher {
         executor.submit(
             () -> deliverViaSenderWithBurstRetry(sender, message, eventType, logContext));
       } catch (RejectedExecutionException ex) {
+        recordDrop("queue_full");
         log.warn(
             "subscription_rule {} dispatch rejected (queue full); dropped: channelCode={},"
                 + " eventType={}",
@@ -243,13 +247,22 @@ public class SubscriptionRuleWebhookDispatcher {
       executor.submit(
           () -> deliverWithBurstRetry(synthetic, payload, payloadJson, channelCode, logContext));
     } catch (RejectedExecutionException ex) {
-      // 本路无持久化补偿(见类注释),队列满时丢弃,显式告警让运维可见。
+      // 本路无持久化补偿(见类注释),队列满时丢弃,显式告警 + drop counter 让运维可见。
+      recordDrop("queue_full");
       log.warn(
           "subscription_rule WEBHOOK dispatch rejected (queue full); dropped: channelCode={},"
               + " eventType={}",
           channelCode,
           eventType);
     }
+  }
+
+  /**
+   * 每条被丢弃的真实通知自增 {@code notification.dropped{reason=...}} 计数器,让"真实告警丢失"在监控里可见 (队列满 / 渠道限流 / 目标限流 /
+   * 无 sender 都会静默丢一条真实通知,仅 log.warn 不足以触发告警)。
+   */
+  private void recordDrop(String reason) {
+    meterRegistry.counter("notification.dropped", "reason", reason).increment();
   }
 
   /**
@@ -317,13 +330,21 @@ public class SubscriptionRuleWebhookDispatcher {
         logContext, "FAILED", result == null ? null : result.errorSummary(), MAX_ATTEMPTS);
   }
 
-  /** 单渠道限流:每分钟投递上限(滑窗)。超额 → false(丢弃 + 告警)。 Redis 不可达时 fail-open(放行 + 告警),避免把限流可用性故障升级为"漏发真实告警"。 */
-  private boolean withinSendRateLimit(String channelCode, String channelType, String eventType) {
+  /**
+   * 单渠道限流:每分钟投递上限(滑窗)。超额 → false(丢弃 + 告警 + drop counter)。 Redis 不可达时 fail-open(放行 +
+   * 告警),避免把限流可用性故障升级为"漏发真实告警"。
+   *
+   * <p>限流 key 带 {@code tenantId} 前缀:{@code notification_channel} 唯一约束是 {@code (tenant_id,
+   * channel_code)}, 两租户可同名 channelCode;不带 tenant 前缀会让 A 租户打满限流后 B 租户同名渠道的合法告警被静默压制(跨租户串扰)。
+   */
+  private boolean withinSendRateLimit(
+      String tenantId, String channelCode, String channelType, String eventType) {
     try {
       boolean allowed =
           sendRateLimiter.tryAcquire(
-              "notify:send:" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+              "notify:send:" + tenantId + ":" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
       if (!allowed) {
+        recordDrop("channel_ratelimit");
         log.warn(
             "notification send rate limit exceeded; dropping to prevent flooding: channelCode={},"
                 + " channelType={}, eventType={}, limitPerMin={}",
@@ -347,9 +368,13 @@ public class SubscriptionRuleWebhookDispatcher {
    * false。Redis 不可达 fail-open(不误抑制真实告警)。
    */
   private boolean isDuplicateWithinWindow(
-      String channelCode, String eventType, String payloadJson) {
-    String fingerprint = Integer.toHexString((payloadJson == null ? "" : payloadJson).hashCode());
-    String key = "notify:dedup:" + channelCode + ":" + eventType + ":" + fingerprint;
+      String tenantId, String channelCode, String eventType, String payloadJson) {
+    // SHA-256 截断摘要(64 bit)替代 32 位 hashCode:窄摘要在跨租户共享 key 空间下更易碰撞,
+    // 一次误碰撞就会把另一条真实告警误判为重复而静默压制。key 同样带 tenantId 前缀防跨租串扰。
+    String fingerprint =
+        payloadJson == null || payloadJson.isEmpty() ? "empty" : Hashes.sha256Short(payloadJson);
+    String key =
+        "notify:dedup:" + tenantId + ":" + channelCode + ":" + eventType + ":" + fingerprint;
     try {
       boolean firstInWindow = sendRateLimiter.tryAcquire(key, DEDUP_WINDOW_LIMIT);
       if (!firstInWindow) {
@@ -376,18 +401,24 @@ public class SubscriptionRuleWebhookDispatcher {
    * fail-open。
    */
   private boolean withinDestinationRateLimit(
-      Map<String, Object> rule, String channelCode, String channelType, String eventType) {
+      String tenantId,
+      Map<String, Object> rule,
+      String channelCode,
+      String channelType,
+      String eventType) {
     Map<String, Object> config = parseConfig(str(rule, "config_json"));
     String dest = firstNonBlank(str(config, "url"), str(config, "to"), str(config, "phoneNumbers"));
     if (dest == null) {
       return true;
     }
     try {
+      // key 带 tenantId 前缀 + 目标指纹换 SHA-256(64 bit)防跨租串扰与窄哈希碰撞。
       boolean allowed =
           sendRateLimiter.tryAcquire(
-              "notify:dest:" + Integer.toHexString(dest.hashCode()),
+              "notify:dest:" + tenantId + ":" + Hashes.sha256Short(dest),
               MAX_SENDS_PER_DESTINATION_PER_MINUTE);
       if (!allowed) {
+        recordDrop("dest_ratelimit");
         log.warn(
             "notification destination rate limit exceeded; dropping: channelCode={},"
                 + " channelType={}, eventType={}, limitPerMin={}",

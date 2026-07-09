@@ -21,6 +21,7 @@
                 #{errorMessage,jdbcType=VARCHAR}, #{attempt})
     </insert>
 
+    <!-- 租户隔离:除主键外必须带 tenant_id 谓词,防未来接线用可枚举 id 跨租户改写别人的投递日志。 -->
     <update id="updateStatus">
         UPDATE batch.notification_delivery_log
            SET delivery_status = #{deliveryStatus},
@@ -29,5 +30,6 @@
                error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
                attempt = #{attempt}
          WHERE id = #{id}
+           AND tenant_id = #{tenantId}
     </update>
 </mapper>
