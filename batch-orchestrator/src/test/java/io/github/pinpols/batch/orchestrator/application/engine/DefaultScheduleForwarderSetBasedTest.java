@@ -192,6 +192,75 @@ class DefaultScheduleForwarderSetBasedTest {
     assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().count()).isEqualTo(1L);
   }
 
+  @Test
+  @DisplayName("B2:publish 返回 failedFuture → 阶段三照常回写 FAILED,不整批停摆")
+  void advanceHandlesExceptionallyCompletedFutureWithoutStallingBatch() {
+    OutboxEventEntity ok = event("ta", 1L, 0);
+    OutboxEventEntity boom = event("ta", 2L, 0);
+    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, boom));
+    when(outboxEventMapper.markPublishingBatch(
+            anyString(), anyList(), anyString(), anyString(), anyString()))
+        .thenReturn(List.of(1L, 2L));
+    when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
+    // 关键:异步 exceptionally-completed future(非同步抛异常,claimAndPublish 的 try/catch 抓不到)。
+    when(outboxPublisher.publish(boom))
+        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka send blew up")));
+    when(outboxEventMapper.markPublishedBatch(anyString(), anyList(), anyString(), anyString()))
+        .thenReturn(1);
+    when(outboxEventMapper.markFailedBatch(anyString(), anyList(), anyString(), any(), anyString()))
+        .thenReturn(1);
+
+    ScheduleForwarderResult result = forwarder.advance(null);
+
+    // 不整批停摆:成功的照常 PUBLISHED,失败的照常 FAILED 回写。
+    assertThat(result.attemptedEvents()).isEqualTo(2);
+    assertThat(result.publishSucceeded()).isEqualTo(1);
+    assertThat(result.publishFailed()).isEqualTo(1);
+    verify(outboxEventMapper)
+        .markPublishedBatch(
+            eq("ta"),
+            eq(List.of(1L)),
+            eq(OutboxPublishStatus.PUBLISHED.code()),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(outboxEventMapper)
+        .markFailedBatch(
+            eq("ta"),
+            eq(List.of(2L)),
+            eq(OutboxPublishStatus.FAILED.code()),
+            any(),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    // 失败事件落一条 event_outbox_retry 审计。
+    ArgumentCaptor<EventOutboxRetryEntity> retryCap =
+        ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
+    verify(eventOutboxRetryMapper, org.mockito.Mockito.times(1)).insert(retryCap.capture());
+    assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(2L);
+  }
+
+  @Test
+  @DisplayName("B2:markPublishedBatch 命中行数 < 期望 → warnOnPartialUpdate 并发守卫分支(不抛)")
+  void advanceTriggersPartialUpdateGuardWhenConcurrentAdvancerStealsRows() {
+    OutboxEventEntity a = event("ta", 1L, 0);
+    OutboxEventEntity b = event("ta", 2L, 0);
+    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(a, b));
+    when(outboxEventMapper.markPublishingBatch(
+            anyString(), anyList(), anyString(), anyString(), anyString()))
+        .thenReturn(List.of(1L, 2L));
+    when(outboxPublisher.publish(a)).thenReturn(CompletableFuture.completedFuture(true));
+    when(outboxPublisher.publish(b)).thenReturn(CompletableFuture.completedFuture(true));
+    // 期望更新 2 行,实际只命中 1(另一行被并发方 resetStalePublishing 推走)→ 触发 warnOnPartialUpdate。
+    when(outboxEventMapper.markPublishedBatch(anyString(), anyList(), anyString(), anyString()))
+        .thenReturn(1);
+
+    ScheduleForwarderResult result = forwarder.advance(null);
+
+    // 守卫只 log.warn,不抛不停摆;结果计数按发送结果如实统计。
+    assertThat(result.attemptedEvents()).isEqualTo(2);
+    assertThat(result.publishSucceeded()).isEqualTo(2);
+    verify(outboxEventMapper)
+        .markPublishedBatch(
+            eq("ta"), eq(List.of(1L, 2L)), eq(OutboxPublishStatus.PUBLISHED.code()), anyString());
+  }
+
   private OutboxEventEntity event(String tenantId, Long id, int publishAttempt) {
     OutboxEventEntity event = new OutboxEventEntity();
     event.setTenantId(tenantId);

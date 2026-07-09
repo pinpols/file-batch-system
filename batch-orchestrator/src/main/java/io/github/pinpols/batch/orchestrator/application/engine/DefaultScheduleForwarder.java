@@ -266,7 +266,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     for (InFlight item : inFlight) {
       OutboxEventEntity event = item.event();
       attemptedEvents++;
-      boolean published = Boolean.TRUE.equals(item.future().getNow(false));
+      boolean published = isPublishedNow(item.future());
       if (published) {
         publishSucceeded++;
         publishedByTenant
@@ -362,6 +362,20 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         BatchMdc.remove(StructuredLogField.TRACE_ID);
       }
     }
+  }
+
+  /**
+   * B2:安全判定单条 future 是否发布成功。{@code getNow(false)} 对 exceptionally-completed future 会 <b>抛</b>
+   * CompletionException——阶段二的 {@code allOf(...).exceptionally(...)} 只抑制了 <b>组合</b> future,单条 future
+   * 仍是异常态;若这里直接 getNow,一条 Kafka send 异步失败就会让整个 classifyOutcomes 上抛、阶段三完全跳过,整批事件原地 停在 PUBLISHING,要等
+   * resetStalePublishing 才回收(实测高峰积压放大)。故先用不抛的 {@code isCompletedExceptionally} /{@code isCancelled}
+   * 把异常态归为「未发布」(交阶段三按 FAILED 回写),只对正常完成的才取值。
+   */
+  private static boolean isPublishedNow(CompletableFuture<Boolean> future) {
+    if (!future.isDone() || future.isCancelled() || future.isCompletedExceptionally()) {
+      return false;
+    }
+    return Boolean.TRUE.equals(future.getNow(false));
   }
 
   /** PERF(5.4): 批量 UPDATE 命中行数与入参集合大小不一致时告警（守卫拒写=并发方已推进该行）。 */
