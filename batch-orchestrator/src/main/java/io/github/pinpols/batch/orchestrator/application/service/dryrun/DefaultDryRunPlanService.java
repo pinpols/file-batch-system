@@ -411,10 +411,22 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
                 key));
         continue;
       }
-      if (!isSingleSelectStatement(trimmed)) {
-        // S1(stacked-query RCE)：首关键字白名单只看第一条,pgjdbc simple-query 执行
-        // `EXPLAIN <trimmed>` 时允许分号堆叠 → `SELECT 1; DROP TABLE job_definition` 里 DROP 真执行。
-        // 用 AST 确认 trimmed 恰好是单条 SELECT/WITH;多语句 / 非 Select / 无法解析一律拒,不进 EXPLAIN。
+      // S1(stacked-query RCE)：首关键字白名单只看第一条,pgjdbc simple-query 执行 `EXPLAIN <trimmed>` 时允许分号堆叠
+      // → `SELECT 1; DROP TABLE job_definition` 里 DROP 真执行。用 AST 确认 trimmed 恰好是单条 SELECT/WITH,
+      // 否则不进 EXPLAIN。区分两类拒绝:真堆叠/多语句 vs jsqlparser 无法解析(合法 $tag$ dollar-quoting 等可能落此)。
+      SingleSelectCheck check = classifySingleSelect(trimmed);
+      if (check == SingleSelectCheck.UNPARSEABLE) {
+        findings.add(
+            DryRunFinding.error(
+                "EXEC_SQL_UNPARSEABLE_REJECTED",
+                SCOPE_EXECUTION,
+                "dry-run SQL probe could not be parsed to verify single-statement safety; refusing"
+                    + " to EXPLAIN via simple-query (may be valid PG-specific syntax jsqlparser"
+                    + " cannot parse — submit a parseable single SELECT/WITH)",
+                key));
+        continue;
+      }
+      if (check == SingleSelectCheck.MULTI_OR_NON_SELECT) {
         findings.add(
             DryRunFinding.error(
                 "EXEC_SQL_MULTISTATEMENT_REJECTED",
@@ -443,19 +455,29 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     return probed;
   }
 
+  /** {@link #classifySingleSelect} 的三态结果：单条 Select 放行 / 多语句或非 Select 拒 / 无法解析拒。 */
+  private enum SingleSelectCheck {
+    SINGLE_SELECT,
+    MULTI_OR_NON_SELECT,
+    UNPARSEABLE
+  }
+
   /**
-   * 用 jsqlparser 确认 SQL 恰好是单条 {@link Select} 语句。多语句(分号堆叠)、非 Select、或无法解析都返回 {@code false} ——
-   * 后两者无法证明单语句安全,保守拒绝,绝不盲目走 pgjdbc simple-query 的 {@code EXPLAIN} 拼接。
+   * 用 jsqlparser 判定 SQL 是否恰好一条 {@link Select}。无法解析单独归类(合法但 jsqlparser 不支持的 PG 特有语法会落此,与真堆叠区分),
+   * 两类都拒——都无法证明单语句安全,绝不盲目走 pgjdbc simple-query 的 {@code EXPLAIN} 拼接。
    */
-  private static boolean isSingleSelectStatement(String sql) {
+  private static SingleSelectCheck classifySingleSelect(String sql) {
     Statements statements;
     try {
       statements = CCJSqlParserUtil.parseStatements(sql);
     } catch (Exception e) {
-      return false;
+      return SingleSelectCheck.UNPARSEABLE;
     }
     List<Statement> list = statements.getStatements();
-    return list != null && list.size() == 1 && list.get(0) instanceof Select;
+    if (list != null && list.size() == 1 && list.get(0) instanceof Select) {
+      return SingleSelectCheck.SINGLE_SELECT;
+    }
+    return SingleSelectCheck.MULTI_OR_NON_SELECT;
   }
 
   /**

@@ -229,6 +229,26 @@ class SqlTransformComputeSqlValidatorTest {
   }
 
   @Test
+  void validateSelect_rejectsDblinkFamilyAndSleepFor() {
+    // 双侧一致:worker 侧默认清单也补齐 pg_sleep_for + 家族前缀匹配(dblink → dblink_exec)。
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select dblink_exec('h','drop table biz.t') from biz.t where tenant_id ="
+                    + " :tenantId"),
+        "forbidden function");
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select pg_sleep_for('5s') from biz.t where tenant_id = :tenantId"),
+        "forbidden function");
+  }
+
+  @Test
   void validateSelect_requireLimit_rejectsUnboundedQuery() {
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));

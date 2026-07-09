@@ -133,6 +133,10 @@ public final class SelectSqlAstValidator {
    * 遍历已解析 AST 的所有函数调用节点，命中禁用列表（dblink / pg_terminate_backend / pg_read_server_files 等）即返回该函数名， 否则返回
    * {@code null}。取代旧的子串匹配 —— 后者可被"函数名与左括号间插入块注释"（{@code pg_read_server_files/**}{@code
    * /('x')}）或带引号标识符（{@code "pg_read_server_files"(...)}）绕过。
+   *
+   * <p><b>家族前缀匹配</b>：禁用项按「函数家族」拦截 —— 调用名等于禁用项，或以「禁用项 + 下划线」起头即命中。故 {@code dblink} 一条即覆盖 {@code
+   * dblink_exec} / {@code dblink_connect} / {@code dblink_send_query}，{@code pg_sleep} 亦覆盖 {@code
+   * pg_sleep_for} / {@code pg_sleep_until}。这些都是同名 PG 内置函数家族，整族封禁是安全增益（清单里全是危险系统函数，不会误伤业务函数）。
    */
   public static String findForbiddenFunctionCall(Statement statement, List<String> forbidden) {
     Set<String> called = collectFunctionNames(statement);
@@ -143,11 +147,25 @@ public final class SelectSqlAstValidator {
     for (String name : called) {
       // 既比对裸名，也比对 schema 限定名的尾段（pg_catalog.pg_read_server_files → pg_read_server_files）。
       String bare = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : name;
-      if (forbiddenLower.contains(name) || forbiddenLower.contains(bare)) {
+      if (matchesForbiddenFamily(name, forbiddenLower)
+          || matchesForbiddenFamily(bare, forbiddenLower)) {
         return name;
       }
     }
     return null;
+  }
+
+  /** 精确名或「禁用项_ 起头」的家族成员均视为命中。 */
+  private static boolean matchesForbiddenFamily(String candidate, Set<String> forbiddenLower) {
+    if (forbiddenLower.contains(candidate)) {
+      return true;
+    }
+    for (String f : forbiddenLower) {
+      if (candidate.startsWith(f + "_")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

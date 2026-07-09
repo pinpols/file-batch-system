@@ -20,8 +20,9 @@ public class SqlTransformComputeSecurityProperties {
   private boolean forbidSelectStar = true;
 
   /**
-   * 禁止在表达式 / FROM / WHERE 中调用的 PG 函数(大小写不敏感子串匹配)。覆盖:连接 dblink / 系统级 pg_terminate_backend / 文件系统
-   * pg_read_server_files / 任意命令 copy_from_program 等。
+   * 禁止在表达式 / FROM / WHERE 中调用的 PG 函数(大小写不敏感 AST 遍历,按函数家族前缀匹配)。覆盖:连接 dblink(含
+   * dblink_exec/dblink_connect 家族) / 系统级 pg_terminate_backend / 文件系统 pg_read_file / 任意命令
+   * copy_from_program / 拒绝服务 pg_sleep(含 pg_sleep_for/pg_sleep_until) 等。
    */
   private List<String> forbiddenFunctions =
       new ArrayList<>(
@@ -36,7 +37,9 @@ public class SqlTransformComputeSecurityProperties {
               "copy_from_program",
               "lo_import",
               "lo_export",
-              "pg_sleep"));
+              "pg_sleep",
+              "pg_sleep_for",
+              "pg_sleep_until"));
 
   /**
    * 强制源 SQL 在顶层有 LIMIT 子句,防止无界 ResultSet 拖垮连接池/OOM。
