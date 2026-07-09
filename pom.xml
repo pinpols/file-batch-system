@@ -48,6 +48,10 @@
         <testcontainers.version>2.0.5</testcontainers.version>
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
+        <!-- Bucket4j:orchestrator 租户动作限流的真令牌桶(Redis 分布式后端,Lettuce 集成)。
+             8.10+ groupId 迁 com.bucket4j、artifact 带 _jdk17 后缀;lettuce 模块对 lettuce-core 为 provided,
+             复用本仓 spring-data-redis 传递的 lettuce 7.5.x。 -->
+        <bucket4j.version>8.14.0</bucket4j.version>
         <!-- okhttp 升 5.0.0-alpha.16(2026-05-23 决策):虽然 Maven Central 上 5.x 仍只有 alpha
              (latest 5.0.0-alpha.16,2025-05-29 发布,无 beta/rc/GA),但 Square 官方声明
              "alpha 的 API 稳定性等同 RC,Square 自家 prod 已在使用"(见 okhttp 5 README)。
@@ -109,6 +113,16 @@
                 <version>${spring-ai.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.bucket4j</groupId>
+                <artifactId>bucket4j_jdk17-core</artifactId>
+                <version>${bucket4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bucket4j</groupId>
+                <artifactId>bucket4j_jdk17-lettuce</artifactId>
+                <version>${bucket4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.mybatis.spring.boot</groupId>

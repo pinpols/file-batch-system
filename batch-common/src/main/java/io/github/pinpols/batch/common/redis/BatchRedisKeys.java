@@ -4,8 +4,12 @@ public final class BatchRedisKeys {
 
   private BatchRedisKeys() {}
 
-  public static String rateLimit(String tenantId, String action, long windowStartEpochSecond) {
-    return "ratelimit:%s:%s:%d".formatted(safe(tenantId), safe(action), windowStartEpochSecond);
+  /**
+   * 租户动作限流令牌桶 key：每 (tenantId, action) 一个 Bucket4j 桶。不含时间窗——令牌桶状态由 bucket4j 在 Redis 侧按 refill
+   * 速率累积，无需客户端窗口对齐。
+   */
+  public static String rateLimitBucket(String tenantId, String action) {
+    return "ratelimit:%s:%s".formatted(safe(tenantId), safe(action));
   }
 
   public static String outboxCircuit() {

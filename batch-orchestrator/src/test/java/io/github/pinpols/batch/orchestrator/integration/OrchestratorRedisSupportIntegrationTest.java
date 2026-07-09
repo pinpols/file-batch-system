@@ -70,25 +70,6 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void incrementWithinWindowCountsAndSetsTtlOnFirstIncrement() {
-    String tenantId = "t-rate-" + System.nanoTime();
-    long window = 1_000_000L;
-    Duration ttl = Duration.ofMinutes(1);
-
-    Long first = redis.incrementWithinWindow(tenantId, "export", window, ttl);
-    Long second = redis.incrementWithinWindow(tenantId, "export", window, ttl);
-    Long third = redis.incrementWithinWindow(tenantId, "export", window, ttl);
-
-    assertThat(first).isEqualTo(1L);
-    assertThat(second).isEqualTo(2L);
-    assertThat(third).isEqualTo(3L);
-
-    // Key 应有 TTL（仅在首次递增时设置）
-    String key = "ratelimit:" + tenantId.replace(':', '_') + ":export:" + window;
-    assertThat(redisTemplate.getExpire(key)).isPositive();
-  }
-
-  @Test
   void evalLongExecutesLuaScriptAgainstRealRedis() {
     String key = "test:it:lua:" + System.nanoTime();
     redisTemplate.opsForValue().set(key, "99");
