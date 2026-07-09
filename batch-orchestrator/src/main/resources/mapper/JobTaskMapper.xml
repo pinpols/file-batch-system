@@ -83,6 +83,59 @@
         )
     </insert>
 
+    <!-- PERF(5.1): launch fan-out 多行 INSERT — 列清单/取值表达式与单行 insert 逐列一致;
+         useGeneratedKeys 多行回填 list 元素 id(下游 step 镜像/outbox eventKey 依赖 task.getId(),
+         由 BatchInsertGeneratedKeysIntegrationTest 守护)。 -->
+    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_task (
+            tenant_id,
+            job_instance_id,
+            job_partition_id,
+            task_type,
+            task_seq,
+            task_status,
+            assigned_worker_code,
+            task_payload,
+            effective_parameters,
+            result_summary,
+            error_code,
+            error_message,
+            error_key,
+            error_args,
+            priority,
+            started_at,
+            finished_at,
+            dry_run,
+            task_timeout_seconds
+        ) values
+        <foreach collection="list" item="e" separator=",">
+            (
+                #{e.tenantId},
+                #{e.jobInstanceId},
+                #{e.jobPartitionId},
+                #{e.taskType},
+                #{e.taskSeq},
+                #{e.taskStatus},
+                #{e.assignedWorkerCode},
+                #{e.taskPayload,jdbcType=VARCHAR}::jsonb,
+                #{e.effectiveParameters,jdbcType=VARCHAR}::jsonb,
+                #{e.resultSummary,jdbcType=VARCHAR}::jsonb,
+                #{e.errorCode},
+                #{e.errorMessage},
+                #{e.errorKey},
+                #{e.errorArgs,jdbcType=VARCHAR}::jsonb,
+                coalesce(#{e.priority}, 5),
+                #{e.startedAt},
+                #{e.finishedAt},
+                <choose>
+                    <when test="e.dryRun != null">#{e.dryRun}</when>
+                    <otherwise>false</otherwise>
+                </choose>,
+                #{e.taskTimeoutSeconds}
+            )
+        </foreach>
+    </insert>
+
     <select id="selectById" resultMap="JobTaskResultMap">
         select *
         from batch.job_task

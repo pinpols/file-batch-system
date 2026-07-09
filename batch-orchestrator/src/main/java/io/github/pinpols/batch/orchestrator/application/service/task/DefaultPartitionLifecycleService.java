@@ -80,8 +80,12 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
       partitionEntity.setSourceFileId(partitionPlan.getSourceFileId());
       partitionEntity.setTemplateCode(partitionPlan.getTemplateCode());
       partitionEntity.setTargetRef(partitionPlan.getTargetRef());
-      jobPartitionMapper.insert(partitionEntity);
       partitionEntities.add(partitionEntity);
+    }
+    // PERF(5.1): launch fan-out 由逐条 insert 改单条多行 INSERT（N 往返 → 1）；
+    // useGeneratedKeys 按序回填每个 entity 的 id，下游 buildTask/releaseForDispatch 依赖。
+    if (!partitionEntities.isEmpty()) {
+      jobPartitionMapper.insertBatch(partitionEntities);
     }
     return partitionEntities;
   }

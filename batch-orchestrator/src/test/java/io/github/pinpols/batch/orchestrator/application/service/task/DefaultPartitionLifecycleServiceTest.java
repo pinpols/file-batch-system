@@ -265,10 +265,14 @@ class DefaultPartitionLifecycleServiceTest {
 
     service.createPartitions(plan, 900L, PartitionStatus.CREATED.code());
 
-    ArgumentCaptor<JobPartitionEntity> cap = ArgumentCaptor.forClass(JobPartitionEntity.class);
-    verify(jobPartitionMapper).insert(cap.capture());
+    // PERF(5.1): fan-out 走单条多行 INSERT(insertBatch),不再逐条 insert
+    ArgumentCaptor<List<JobPartitionEntity>> cap = ArgumentCaptor.forClass(List.class);
+    verify(jobPartitionMapper).insertBatch(cap.capture());
+    verify(jobPartitionMapper, never()).insert(any());
+    assertThat(cap.getValue()).hasSize(1);
     Map<String, Object> snapshot =
-        (Map<String, Object>) JsonUtils.fromJson(cap.getValue().getInputSnapshot(), Object.class);
+        (Map<String, Object>)
+            JsonUtils.fromJson(cap.getValue().get(0).getInputSnapshot(), Object.class);
     assertThat(snapshot.get("partitionPlanVersion")).isEqualTo(1);
     assertThat(snapshot.get("shardIndex")).isEqualTo(0);
     assertThat(snapshot.get("shardTotal")).isEqualTo(2);

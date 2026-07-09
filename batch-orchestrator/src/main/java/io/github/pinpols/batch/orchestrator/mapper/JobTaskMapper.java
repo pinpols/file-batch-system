@@ -14,6 +14,9 @@ public interface JobTaskMapper {
 
   int insert(JobTaskEntity entity);
 
+  /** PERF(5.1): launch fan-out 多行 INSERT；PG getGeneratedKeys 按序回填每个元素的 {@code id}。 */
+  int insertBatch(List<JobTaskEntity> entities);
+
   JobTaskEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   JobTaskEntity selectByPartitionAndSeq(

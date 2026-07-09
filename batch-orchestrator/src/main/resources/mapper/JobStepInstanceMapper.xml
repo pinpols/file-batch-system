@@ -65,6 +65,52 @@
         )
     </insert>
 
+    <!-- PERF(5.1): launch fan-out 批量创建 task 时的 step 镜像多行 INSERT。
+         仅供 createTasks 批量路径使用(task id 为本事务内刚生成,不可能已有 step 镜像,
+         无需单条路径的 selectByJobTaskId 幂等预检);列清单与单行 insert 逐列一致。 -->
+    <insert id="insertBatch">
+        insert into batch.job_step_instance (
+            tenant_id,
+            job_instance_id,
+            job_partition_id,
+            job_task_id,
+            step_code,
+            step_type,
+            step_status,
+            retry_count,
+            related_file_id,
+            result_summary,
+            error_code,
+            error_message,
+            error_key,
+            error_args,
+            version,
+            started_at,
+            finished_at
+        ) values
+        <foreach collection="list" item="e" separator=",">
+            (
+                #{e.tenantId},
+                #{e.jobInstanceId},
+                #{e.jobPartitionId},
+                #{e.jobTaskId},
+                #{e.stepCode},
+                #{e.stepType},
+                #{e.stepStatus},
+                #{e.retryCount},
+                #{e.relatedFileId},
+                #{e.resultSummary,jdbcType=VARCHAR}::jsonb,
+                #{e.errorCode},
+                #{e.errorMessage},
+                #{e.errorKey},
+                #{e.errorArgs,jdbcType=VARCHAR}::jsonb,
+                #{e.version},
+                #{e.startedAt},
+                #{e.finishedAt}
+            )
+        </foreach>
+    </insert>
+
     <select id="selectById" resultMap="JobStepInstanceResultMap">
         select *
         from batch.job_step_instance

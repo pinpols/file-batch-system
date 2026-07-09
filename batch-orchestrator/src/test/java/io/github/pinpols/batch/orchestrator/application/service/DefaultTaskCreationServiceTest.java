@@ -13,9 +13,11 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -144,6 +146,59 @@ class DefaultTaskCreationServiceTest {
     JobTaskEntity result = service.createTask(task);
 
     assertThat(result).isSameAs(task);
+  }
+
+  // ===== PERF(5.1) createTasks 批量 =====
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void createTasks_batchInsertsTasksAndStepsOnceEach() {
+    JobTaskEntity t1 = buildTask(null, "t1", "IMPORT", 1);
+    JobTaskEntity t2 = buildTask(null, "t1", "EXPORT", 1);
+    when(jobTaskMapper.insertBatch(any()))
+        .thenAnswer(
+            inv -> {
+              List<JobTaskEntity> list = inv.getArgument(0);
+              long id = 100L;
+              for (JobTaskEntity t : list) {
+                t.setId(id++);
+              }
+              return list.size();
+            });
+
+    List<JobTaskEntity> result = service.createTasks(List.of(t1, t2));
+
+    assertThat(result).containsExactly(t1, t2);
+    assertThat(t1.getVersion()).isEqualTo(0L);
+    verify(jobTaskMapper).insertBatch(List.of(t1, t2));
+    verify(jobTaskMapper, never()).insert(any());
+    ArgumentCaptor<List<JobStepInstanceEntity>> cap = ArgumentCaptor.forClass(List.class);
+    verify(jobStepInstanceMapper).insertBatch(cap.capture());
+    assertThat(cap.getValue()).hasSize(2);
+    assertThat(cap.getValue().get(0).getJobTaskId()).isEqualTo(100L);
+    assertThat(cap.getValue().get(1).getJobTaskId()).isEqualTo(101L);
+    // 批量路径 task id 为 fresh 生成:无幂等预检、无逐条 step insert
+    verify(jobStepInstanceMapper, never()).selectByJobTaskId(anyString(), anyLong());
+    verify(jobStepInstanceMapper, never()).insert(any());
+  }
+
+  @Test
+  void createTasks_failsFastWholeBatchWhenTaskTypeMissing() {
+    JobTaskEntity ok = buildTask(null, "t1", "IMPORT", 1);
+    JobTaskEntity bad = buildTask(null, "t1", null, 1);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.createTasks(List.of(ok, bad)))
+        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class);
+    verify(jobTaskMapper, never()).insertBatch(any());
+    verify(jobTaskMapper, never()).insert(any());
+    verify(jobStepInstanceMapper, never()).insertBatch(any());
+  }
+
+  @Test
+  void createTasks_emptyOrNullInputNoSql() {
+    assertThat(service.createTasks(List.of())).isEmpty();
+    assertThat(service.createTasks(null)).isEmpty();
+    verify(jobTaskMapper, never()).insertBatch(any());
   }
 
   private JobTaskEntity buildTask(Long id, String tenantId, String taskType, Integer taskSeq) {

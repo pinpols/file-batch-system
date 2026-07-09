@@ -30,6 +30,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.micrometer.observation.annotation.Observed;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -238,16 +239,29 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     }
   }
 
+  // PERF(5.1): fan-out 由“逐分区 createTask + 逐条 outbox”改为两阶段——先整批构建 task 一次多行
+  // INSERT（含 step 镜像批写），再逐分区 releaseForDispatch（CREATED→READY 状态机 CAS，保持逐条不动）
+  // 并写 outbox。outbox 保持逐条：写入被 OutboxWriteChokePointArchTest 锁死在
+  // OutboxDomainEventPublisher.publish 单入口（NOT EXISTS 去重承重点），批量化需动 common 的
+  // DomainEventPublisher 契约与该治理护栏，按任务降级方案保持逐条（见 task-5-report）。
   private void createTasksAndMaybeOutboxEvents(TaskCreationContext context) {
-    if (context.scheduling().partitions().isEmpty()) {
+    List<JobPartitionEntity> partitions = context.scheduling().partitions();
+    if (partitions.isEmpty()) {
       return;
     }
-    for (JobPartitionEntity partition : context.scheduling().partitions()) {
-      JobTaskEntity task = buildTask(context.buildContext(partition));
-      taskExecutionService.createTask(task);
-      if (context.scheduling().decision().isDispatchable()
-          && partitionLifecycleService.releaseForDispatch(
-              partition, task, PartitionStatus.CREATED.code(), TaskStatus.CREATED.code())) {
+    List<JobTaskEntity> tasks = new ArrayList<>(partitions.size());
+    for (JobPartitionEntity partition : partitions) {
+      tasks.add(buildTask(context.buildContext(partition)));
+    }
+    taskExecutionService.createTasks(tasks);
+    if (!context.scheduling().decision().isDispatchable()) {
+      return;
+    }
+    for (int i = 0; i < partitions.size(); i++) {
+      JobPartitionEntity partition = partitions.get(i);
+      JobTaskEntity task = tasks.get(i);
+      if (partitionLifecycleService.releaseForDispatch(
+          partition, task, PartitionStatus.CREATED.code(), TaskStatus.CREATED.code())) {
         taskDispatchOutboxService.writeDispatchEvent(
             context.execution().jobInstance(),
             task,

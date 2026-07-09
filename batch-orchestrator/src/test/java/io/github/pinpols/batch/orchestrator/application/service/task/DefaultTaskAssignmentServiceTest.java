@@ -30,6 +30,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -351,6 +352,85 @@ class DefaultTaskAssignmentServiceTest {
     assertThat(config.partitionNo()).isEqualTo(3);
     assertThat(config.partitionCount()).isEqualTo(4);
     assertThat(config.partitionInvocationId()).isEqualTo("inv-1");
+  }
+
+  // ===== renewLeaseBatch (PERF 5.3) =====
+
+  @Test
+  @DisplayName("renewLeaseBatch: 一条 set-based SQL;结果与入参逐位对齐,缺席行=false")
+  void renewLeaseBatchMapsRowsBackToItems() {
+    var row1 = new io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow();
+    row1.setTenantId("ta");
+    row1.setTaskId(1L);
+    row1.setCancelRequested(false);
+    var row3 = new io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow();
+    row3.setTenantId("ta");
+    row3.setTaskId(3L);
+    row3.setCancelRequested(true);
+    when(jobPartitionMapper.renewLeaseBatch(any(), any(), eq(TaskStatus.RUNNING.code())))
+        .thenReturn(List.of(row1, row3));
+
+    var results =
+        service.renewLeaseBatch(
+            List.of(
+                new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", "inv-1"),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "inv-2"),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 3L, "w1", "inv-3")));
+
+    assertThat(results).hasSize(3);
+    assertThat(results.get(0).leaseRenewed()).isTrue();
+    assertThat(results.get(0).cancelRequested()).isFalse();
+    assertThat(results.get(1).leaseRenewed()).isFalse();
+    assertThat(results.get(2).leaseRenewed()).isTrue();
+    assertThat(results.get(2).cancelRequested()).isTrue();
+    // set-based:不再逐项 selectById / renewLease
+    verify(jobTaskMapper, never()).selectById(anyString(), anyLong());
+    verify(jobPartitionMapper, never()).renewLease(any());
+  }
+
+  @Test
+  @DisplayName("renewLeaseBatch: 入参缺失项(R3-P1-10 invocationId 等)Java 侧判 false,不进 SQL")
+  void renewLeaseBatchFiltersInvalidItemsBeforeSql() {
+    var results =
+        service.renewLeaseBatch(
+            List.of(
+                new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", null),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "  "),
+                new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
+                new TaskAssignmentService.LeaseRenewCommand("ta", 4L, "", "inv")));
+
+    assertThat(results).hasSize(4);
+    assertThat(results).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());
+    verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
+  }
+
+  @Test
+  @DisplayName("renewLeaseBatch: 空入参 → 空结果,不触 SQL")
+  void renewLeaseBatchEmptyInput() {
+    assertThat(service.renewLeaseBatch(List.of())).isEmpty();
+    assertThat(service.renewLeaseBatch(null)).isEmpty();
+    verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
+  }
+
+  // ===== assignWorker + WorkerLookupMemo (PERF 5.2c) =====
+
+  @Test
+  @DisplayName("assignWorker(memo): 同一批内同 (tenant,workerCode) 只查一次 worker_registry(含 miss)")
+  void assignWorkerMemoDeduplicatesWorkerRegistryLookup() {
+    JobTaskEntity t1 = task(101L, 1L, TaskStatus.READY.code());
+    JobTaskEntity t2 = task(102L, 1L, TaskStatus.READY.code());
+    when(jobTaskMapper.selectById(eq("ta"), eq(101L))).thenReturn(t1);
+    when(jobTaskMapper.selectById(eq("ta"), eq(102L))).thenReturn(t2);
+    // worker 离线:两次 claim 都判不可认领,但 worker_registry 只应查一次
+    when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
+    var memo = new TaskAssignmentService.WorkerLookupMemo();
+
+    assertThat(service.assignWorker("ta", 101L, "w1", memo)).isSameAs(t1);
+    assertThat(service.assignWorker("ta", 102L, "w1", memo)).isSameAs(t2);
+
+    verify(workerRegistryMapper, org.mockito.Mockito.times(1))
+        .selectByTenantAndWorkerCode(eq("ta"), eq("w1"));
   }
 
   // ===== updateTaskStatus =====

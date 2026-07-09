@@ -23,6 +23,8 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
+import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobExecutionLogQuery;
@@ -38,6 +40,8 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -83,12 +87,24 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   @Override
   @Transactional
   public JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode) {
+    return assignWorker(tenantId, taskId, workerCode, null);
+  }
+
+  @Override
+  @Transactional
+  public JobTaskEntity assignWorker(
+      String tenantId, Long taskId, String workerCode, WorkerLookupMemo workerMemo) {
     // 入口语义：如果不可认领（worker 不在线/组不匹配/状态不允许），返回 current（由 controller 转换为 409/404）。
     JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
     if (current == null) {
       return null;
     }
-    if (!isWorkerClaimable(tenantId, workerCode, current)) {
+    // PERF(5.2): 认领可行性评估与后续 partition lease claim 复用同一次 job_partition selectById。
+    // 评估阶段（worker 在线 + 组匹配）已把 partition 读进内存，其间只发生 job_task 的 CAS（不触碰
+    // job_partition），version 不会漂移，可直接把已加载的 partition 传给 claimPartitionLeaseForTask，
+    // 省掉重复 selectById；CAS 失败时后者仍会自行重读并重试（保留原重试语义）。
+    ClaimEval eval = evaluateClaim(tenantId, workerCode, current, workerMemo);
+    if (!eval.claimable()) {
       return current;
     }
     int updated =
@@ -106,7 +122,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
     if (current.getJobPartitionId() != null) {
       // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
-      int claimed = claimPartitionLeaseForTask(tenantId, current.getJobPartitionId(), workerCode);
+      int claimed =
+          claimPartitionLeaseForTask(
+              tenantId, current.getJobPartitionId(), workerCode, eval.partition());
       if (claimed <= 0) {
         // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
         // 同理返回 current（READY），不重读 DB。
@@ -135,6 +153,19 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
     // 续租语义：只有 RUNNING 且 worker 匹配时允许续租；失败由 controller 统一转成 409。
     JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
+    return renewTaskLease(current, tenantId, taskId, workerCode, partitionInvocationId);
+  }
+
+  /**
+   * 续租核心逻辑，作用在调用方已加载的 {@code current} 上。抽出私有重载让 {@link #recordHeartbeat} 复用同一次 job_task
+   * selectById（PERF 5.3），避免续租前后各读一次。校验条件（存在性/RUNNING/worker 匹配/invocationId 非空）与租约 CAS 一字未改。
+   */
+  private boolean renewTaskLease(
+      JobTaskEntity current,
+      String tenantId,
+      Long taskId,
+      String workerCode,
+      String partitionInvocationId) {
     if (current == null || current.getJobPartitionId() == null) {
       return false;
     }
@@ -176,16 +207,75 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       String workerCode,
       String partitionInvocationId,
       String detailsJson) {
-    boolean renewed = renewTaskLease(tenantId, taskId, workerCode, partitionInvocationId);
+    // PERF(5.3): 一次 job_task selectById 同时服务续租校验与 cancelRequested 回读，删掉原先续租后的第二次
+    // selectById。cancel 是协作式（worker 下一拍即可感知），用续租前读到的标记读回可接受；租约 CAS 未改。
+    JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
+    boolean renewed = renewTaskLease(current, tenantId, taskId, workerCode, partitionInvocationId);
     if (!renewed) {
       return new TaskHeartbeatResult(false, false);
     }
     if (Texts.hasText(detailsJson)) {
       jobTaskMapper.updateHeartbeatDetails(tenantId, taskId, detailsJson);
     }
-    JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
-    boolean cancelRequested = task != null && Boolean.TRUE.equals(task.getCancelRequested());
+    boolean cancelRequested = Boolean.TRUE.equals(current.getCancelRequested());
     return new TaskHeartbeatResult(true, cancelRequested);
+  }
+
+  /**
+   * PERF(5.3): renewBatch set-based —— N 项批量续租从 O(N) 次(selectById + renewLease UPDATE)压成 1 条 {@code
+   * UPDATE ... FROM VALUES JOIN job_task ... RETURNING}。
+   *
+   * <p>逐项语义与逐条 {@link #recordHeartbeat}(detailsJson=null)一致:
+   *
+   * <ul>
+   *   <li>入参缺失(tenant/taskId/workerCode/invocationId 任一为空)→ Java 侧直接判 false,不进 SQL(对应单条链路的前置校验,
+   *       R3-P1-10 invocationId 强制非空);
+   *   <li>task 不存在/无 partition/非 RUNNING/worker 不匹配/lease CAS 未命中 → SQL 谓词不命中,RETURNING 缺席 → false;
+   *   <li>命中项 RETURNING 一并带回 cancel_requested,不再二次 selectById。
+   * </ul>
+   */
+  @Override
+  @Transactional
+  public List<TaskHeartbeatResult> renewLeaseBatch(List<LeaseRenewCommand> items) {
+    if (items == null || items.isEmpty()) {
+      return List.of();
+    }
+    Instant leaseExpireAt =
+        BatchDateTimeSupport.utcNow().plusSeconds(partitionLeaseProperties.getExpireSeconds());
+    List<RenewLeaseBatchItem> sqlItems = new ArrayList<>(items.size());
+    for (LeaseRenewCommand item : items) {
+      if (item == null
+          || !Texts.hasText(item.tenantId())
+          || item.taskId() == null
+          || !Texts.hasText(item.workerCode())
+          || !Texts.hasText(item.partitionInvocationId())) {
+        continue;
+      }
+      sqlItems.add(
+          RenewLeaseBatchItem.builder()
+              .tenantId(item.tenantId())
+              .taskId(item.taskId())
+              .workerCode(item.workerCode())
+              .invocationId(item.partitionInvocationId())
+              .build());
+    }
+    Map<String, RenewLeaseBatchRow> renewedByKey = new HashMap<>();
+    if (!sqlItems.isEmpty()) {
+      for (RenewLeaseBatchRow row :
+          jobPartitionMapper.renewLeaseBatch(sqlItems, leaseExpireAt, TaskStatus.RUNNING.code())) {
+        renewedByKey.put(row.getTenantId() + "\u0000" + row.getTaskId(), row);
+      }
+    }
+    List<TaskHeartbeatResult> results = new ArrayList<>(items.size());
+    for (LeaseRenewCommand item : items) {
+      RenewLeaseBatchRow row =
+          item == null ? null : renewedByKey.get(item.tenantId() + "\u0000" + item.taskId());
+      results.add(
+          row == null
+              ? new TaskHeartbeatResult(false, false)
+              : new TaskHeartbeatResult(true, Boolean.TRUE.equals(row.getCancelRequested())));
+    }
+    return results;
   }
 
   @Override
@@ -297,9 +387,19 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   @Override
   public EffectiveTaskConfig loadEffectiveConfig(String tenantId, Long taskId) {
     JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
+    return loadEffectiveConfig(tenantId, task);
+  }
+
+  /**
+   * PERF(5.2b): 复用调用方已持有的 task 实体（claim 成功后 assignWorker 返回的最新行），省掉一次 job_task selectById。partition
+   * 仍实时读 —— claim 刚写入的 current_invocation_id 必须取最新；instance/definition 本就只在此处读，无重复。
+   */
+  @Override
+  public EffectiveTaskConfig loadEffectiveConfig(String tenantId, JobTaskEntity task) {
     if (task == null) {
       return null;
     }
+    Long taskId = task.getId();
     JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
     if (instance == null) {
       return null;
@@ -397,8 +497,14 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
    * task 已 CAS 为 RUNNING 后绑定 partition lease。若首次 claim 仅因 version 漂移失败，重读仍为 READY 时再试一轮， 避免长 IT
    * 套件中其它流程对 job_partition 的并发 touch 把整条认领事务打回 READY。
    */
-  private int claimPartitionLeaseForTask(String tenantId, Long partitionId, String workerCode) {
-    JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, partitionId);
+  private int claimPartitionLeaseForTask(
+      String tenantId, Long partitionId, String workerCode, JobPartitionEntity preloadedPartition) {
+    // PERF(5.2): 优先复用认领评估阶段已读到的 partition（无 job_partition 写入介于其间，version 未漂移）；
+    // 缺省（null）时回退到自读，保持与原实现完全一致的行为。
+    JobPartitionEntity partition =
+        preloadedPartition != null
+            ? preloadedPartition
+            : jobPartitionMapper.selectById(tenantId, partitionId);
     if (partition == null) {
       return 0;
     }
@@ -444,26 +550,38 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     return SchedulingPriorityBand.LOW.code();
   }
 
-  private boolean isWorkerClaimable(String tenantId, String workerCode, JobTaskEntity task) {
+  /**
+   * 认领可行性评估结果：是否可认领 + 评估过程中已加载的 {@code job_partition}（可能为 null——task 无 partition 或 worker 不在线时不会读
+   * partition）。partition 随结果一并返回，供后续 lease claim 复用，避免二次 selectById（PERF 5.2）。
+   */
+  private record ClaimEval(boolean claimable, JobPartitionEntity partition) {}
+
+  private ClaimEval evaluateClaim(
+      String tenantId, String workerCode, JobTaskEntity task, WorkerLookupMemo workerMemo) {
     if (workerCode == null || workerCode.isBlank()) {
-      return false;
+      return new ClaimEval(false, null);
     }
-    WorkerRegistryEntity workerRegistry = resolveClaimableWorker(tenantId, workerCode);
+    // PERF(5.2c): memo 非空时同 (tenant,workerCode) 只查一次 worker_registry（含缓存 miss）。
+    WorkerRegistryEntity workerRegistry =
+        workerMemo == null
+            ? resolveClaimableWorker(tenantId, workerCode)
+            : workerMemo.resolve(tenantId, workerCode, this::resolveClaimableWorker);
     if (workerRegistry == null
         || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
-      return false;
+      return new ClaimEval(false, null);
     }
     if (task == null || task.getJobPartitionId() == null) {
-      return true;
+      return new ClaimEval(true, null);
     }
     JobPartitionEntity partition =
         jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
     if (partition == null
         || partition.getWorkerGroup() == null
         || partition.getWorkerGroup().isBlank()) {
-      return true;
+      return new ClaimEval(true, partition);
     }
-    return partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.workerGroup());
+    return new ClaimEval(
+        partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.workerGroup()), partition);
   }
 
   /**

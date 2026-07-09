@@ -118,6 +118,83 @@
         )
     </insert>
 
+    <!-- PERF(5.1): launch fan-out 多行 INSERT — 列清单/取值表达式与单行 insert 逐列一致。
+         useGeneratedKeys 多行回填:PG getGeneratedKeys 返回全部行,MyBatis 按序回填 list 元素 id
+         (下游 buildTask/releaseForDispatch 依赖 partition.getId(),回填是硬需求,由
+         BatchInsertGeneratedKeysIntegrationTest 守护)。 -->
+    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_partition (
+            tenant_id,
+            job_instance_id,
+            partition_no,
+            partition_key,
+            partition_status,
+            worker_group,
+            worker_code,
+            lease_expire_at,
+            retry_count,
+            business_key,
+            idempotency_key,
+            input_snapshot,
+            output_summary,
+            dry_run,
+            source_file_id,
+            template_code,
+            target_ref
+        ) values
+        <foreach collection="list" item="e" separator=",">
+            (
+                #{e.tenantId},
+                #{e.jobInstanceId},
+                #{e.partitionNo},
+                #{e.partitionKey},
+                #{e.partitionStatus},
+                #{e.workerGroup},
+                #{e.workerCode},
+                #{e.leaseExpireAt},
+                #{e.retryCount},
+                #{e.businessKey},
+                #{e.idempotencyKey},
+                #{e.inputSnapshot,jdbcType=VARCHAR}::jsonb,
+                #{e.outputSummary,jdbcType=VARCHAR}::jsonb,
+                <choose>
+                    <when test="e.dryRun != null">#{e.dryRun}</when>
+                    <otherwise>false</otherwise>
+                </choose>,
+                #{e.sourceFileId},
+                #{e.templateCode},
+                #{e.targetRef}
+            )
+        </foreach>
+    </insert>
+
+    <!-- PERF(5.3): 批量续租 — 一条 UPDATE ... FROM (VALUES ...) JOIN job_task,把 renewBatch 的
+         O(N) 次(selectById + renewLease)压成 1 条。谓词与单条链路逐字对齐:
+         Java 前置(task 存在/有 partition/RUNNING/worker 匹配) → join + task_status/assigned_worker_code;
+         renewLease CAS(worker_code + current_invocation_id,R3-P1-10 强制) → 原样保留。
+         RETURNING 同时带回 cancel_requested,替代原先心跳内的第二次 selectById。 -->
+    <select id="renewLeaseBatch"
+            resultType="io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow">
+        update batch.job_partition p
+        set lease_expire_at = #{leaseExpireAt},
+            updated_at = current_timestamp
+        from batch.job_task t,
+             (values
+             <foreach collection="items" item="i" separator=",">
+                 (#{i.tenantId}, #{i.taskId}, #{i.workerCode}, #{i.invocationId})
+             </foreach>
+             ) as req(tenant_id, task_id, worker_code, invocation_id)
+        where t.tenant_id = req.tenant_id
+          and t.id = req.task_id
+          and t.task_status = #{runningStatus}
+          and t.assigned_worker_code = req.worker_code
+          and p.tenant_id = t.tenant_id
+          and p.id = t.job_partition_id
+          and p.worker_code = req.worker_code
+          and p.current_invocation_id = req.invocation_id
+        returning t.tenant_id as tenantId, t.id as taskId, t.cancel_requested as cancelRequested
+    </select>
+
     <select id="selectByTenantAndJobInstanceIdAndPartitionNo" resultMap="JobPartitionResultMap">
         select *
         from batch.job_partition

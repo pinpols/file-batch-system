@@ -37,6 +37,11 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
   }
 
   @Override
+  public List<JobTaskEntity> createTasks(List<JobTaskEntity> tasks) {
+    return taskCreationService.createTasks(tasks);
+  }
+
+  @Override
   public JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode) {
     return taskAssignmentService.assignWorker(tenantId, taskId, workerCode);
   }
@@ -44,6 +49,20 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
   @Override
   public EffectiveTaskConfig loadEffectiveConfig(String tenantId, Long taskId) {
     return taskAssignmentService.loadEffectiveConfig(tenantId, taskId);
+  }
+
+  @Override
+  public EffectiveTaskConfig loadEffectiveConfig(String tenantId, JobTaskEntity task) {
+    return taskAssignmentService.loadEffectiveConfig(tenantId, task);
+  }
+
+  @Override
+  public JobTaskEntity assignWorker(
+      String tenantId,
+      Long taskId,
+      String workerCode,
+      TaskAssignmentService.WorkerLookupMemo workerMemo) {
+    return taskAssignmentService.assignWorker(tenantId, taskId, workerCode, workerMemo);
   }
 
   @Override
@@ -62,6 +81,12 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
       String detailsJson) {
     return taskAssignmentService.recordHeartbeat(
         tenantId, taskId, workerCode, partitionInvocationId, detailsJson);
+  }
+
+  @Override
+  public List<TaskAssignmentService.TaskHeartbeatResult> renewLeaseBatch(
+      List<TaskAssignmentService.LeaseRenewCommand> items) {
+    return taskAssignmentService.renewLeaseBatch(items);
   }
 
   @Override
