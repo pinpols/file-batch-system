@@ -73,7 +73,15 @@ public class DispatchChannelCircuitBreaker {
     if (!properties.isEnabled()) {
       return;
     }
-    registry.circuitBreaker(key).onSuccess(0L, TimeUnit.NANOSECONDS);
+    CircuitBreaker circuitBreaker = registry.circuitBreaker(key);
+    circuitBreaker.onSuccess(0L, TimeUnit.NANOSECONDS);
+    // 有界化(对齐原 ConcurrentHashMap 在恢复时 remove 的语义):CLOSED 且窗口内无残留失败的健康 breaker
+    // 可安全驱逐,避免高基数 tenant|channelType|channelCode 无界增长;下次调用会重建等价的新 CLOSED 实例。
+    // HALF_OPEN 探测中不驱逐,以免打断受限试探。
+    if (circuitBreaker.getState() == CircuitBreaker.State.CLOSED
+        && circuitBreaker.getMetrics().getNumberOfFailedCalls() == 0) {
+      registry.remove(key);
+    }
   }
 
   public void recordFailure(String key) {
