@@ -2,6 +2,9 @@ package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import java.util.Map;
 import java.util.function.ToLongFunction;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantActionRateLimiter {
 
+  /**
+   * 限流拒绝计数：同步 REST 热路径（claim/report/register）命中限流被拒（将抛 429）时自增。tag 仅 {@code action} （基数 = {@link
+   * RateLimitAction} 枚举数，很小）。<b>刻意不带 tenant tag</b>：租户数可能很多，作为 tag 会打爆监控时序基数； per-action
+   * 维度已足够做容量规划/滥用侦测，租户级归因走日志。这里是同步限流拒绝的唯一计数点，异步 LAUNCH 路径另有 {@code
+   * batch.trigger.launch.failed.total{reason=rate_limited}}。
+   */
+  static final String METRIC_REJECTED = "batch.ratelimit.rejected.total";
+
   // 规则 #9:action→配额解析改路由表(避免 if-chain)。未登记 action 走 getOrDefault → 0 → 由底层放行。
   private static final Map<RateLimitAction, ToLongFunction<RateLimitProperties>> LIMIT_RESOLVERS =
       Map.of(
@@ -37,6 +48,7 @@ public class TenantActionRateLimiter {
 
   private final BatchOrchestratorGovernanceProperties governance;
   private final TokenBucketRateLimiter limiter;
+  private final MeterRegistry meterRegistry;
 
   public boolean tryConsume(String tenantId, RateLimitAction action) {
     if (!governance.rateLimit().isEnabled()) {
@@ -47,6 +59,14 @@ public class TenantActionRateLimiter {
     }
     long max =
         LIMIT_RESOLVERS.getOrDefault(action, props -> 0L).applyAsLong(governance.rateLimit());
-    return limiter.tryConsume(tenantId, action.name(), max);
+    boolean allowed = limiter.tryConsume(tenantId, action.name(), max);
+    if (!allowed) {
+      // 唯一同步拒绝计数点：两个 controller 都经此门面,拒绝后各自抛 429。这里计数免去在 controller 重复埋点。
+      Counter.builder(METRIC_REJECTED)
+          .tags(Tags.of("action", action.name()))
+          .register(meterRegistry)
+          .increment();
+    }
+    return allowed;
   }
 }

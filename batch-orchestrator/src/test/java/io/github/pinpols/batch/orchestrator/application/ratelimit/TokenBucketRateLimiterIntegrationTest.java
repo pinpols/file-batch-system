@@ -14,6 +14,7 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -93,7 +94,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
                   ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
                       Duration.ofMinutes(1)))
               .build();
-      TokenBucketRateLimiter replicaTwo = new TokenBucketRateLimiter(secondProxyManager);
+      TokenBucketRateLimiter replicaTwo =
+          new TokenBucketRateLimiter(secondProxyManager, new SimpleMeterRegistry());
 
       // 副本1 消费 2 个
       assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();

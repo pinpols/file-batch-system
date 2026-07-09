@@ -7,6 +7,9 @@ import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.lettuce.core.RedisException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,15 +41,28 @@ public class TokenBucketRateLimiter {
 
   private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
 
+  /**
+   * fail-open 计数：Redis 不可达时在无限流保护下放行的请求数。tag {@code reason} 区分 {@code redis_exception}（Lettuce
+   * 命令级故障）与 {@code bucket4j_timeout}（配了 requestTimeout 后超时）。tag 基数固定为 2，不带 tenant/action 高基数维度，
+   * 供「过去 N 分钟多少请求在无限流保护下放行」告警。
+   */
+  static final String METRIC_FAILOPEN = "batch.ratelimit.failopen.total";
+
+  static final String FAILOPEN_REASON_REDIS = "redis_exception";
+  static final String FAILOPEN_REASON_TIMEOUT = "bucket4j_timeout";
+
   private final LettuceBasedProxyManager<String> proxyManager;
+  private final MeterRegistry meterRegistry;
 
   // 按 maxPerMinute 缓存 BucketConfiguration supplier，避免每次 tryConsume 都新建（阈值集合很小，见
   // RateLimitProperties）。
   private final Map<Long, Supplier<BucketConfiguration>> configSuppliers =
       new ConcurrentHashMap<>();
 
-  public TokenBucketRateLimiter(LettuceBasedProxyManager<String> proxyManager) {
+  public TokenBucketRateLimiter(
+      LettuceBasedProxyManager<String> proxyManager, MeterRegistry meterRegistry) {
     this.proxyManager = proxyManager;
+    this.meterRegistry = meterRegistry;
   }
 
   public boolean tryConsume(String tenantId, String action, long maxPerMinute) {
@@ -64,6 +80,9 @@ public class TokenBucketRateLimiter {
       // 坑：Redis 命令级故障抛 io.lettuce.core.RedisException；但 proxy manager 配了 requestTimeout 后，
       //     超时抛的是 io.github.bucket4j.TimeoutException（不是 RedisException）——必须一并兜住，
       //     否则超时会逃逸 catch → fail-closed(500)，静默反转降级方向。
+      String reason =
+          (ex instanceof TimeoutException) ? FAILOPEN_REASON_TIMEOUT : FAILOPEN_REASON_REDIS;
+      failOpenCounter(reason).increment();
       log.warn(
           "Redis rate-limit unavailable; fail-open: tenantId={}, action={}, cause={}",
           tenantId,
@@ -72,6 +91,10 @@ public class TokenBucketRateLimiter {
       log.debug("Redis rate-limit failure: key={}", key, ex);
       return true;
     }
+  }
+
+  private Counter failOpenCounter(String reason) {
+    return Counter.builder(METRIC_FAILOPEN).tags(Tags.of("reason", reason)).register(meterRegistry);
   }
 
   private Supplier<BucketConfiguration> configSupplierFor(long maxPerMinute) {
