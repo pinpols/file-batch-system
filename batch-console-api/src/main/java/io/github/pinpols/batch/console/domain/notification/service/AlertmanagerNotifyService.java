@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscri
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerWebhookPayload;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -34,12 +35,16 @@ public class AlertmanagerNotifyService {
   private static final String COL_CONFIG_JSON = "config_json";
   private static final String EVENT_TYPE = "ALERTMANAGER";
 
+  /** 缺渠道丢弃告警的计数器名(供 Prometheus 对"关于告警的告警"再告警)。 */
+  private static final String METRIC_SKIPPED = "am.notify.skipped";
+
   private final AlertmanagerNotifyProperties properties;
   private final NotificationChannelMapper channelMapper;
   private final NotificationDeliveryLogMapper deliveryLogMapper;
   private final NotificationSenderRegistry senderRegistry;
   private final WebhookDispatcher webhookDispatcher;
   private final AlertmanagerAlertRenderer renderer;
+  private final MeterRegistry meterRegistry;
 
   /** 投递结果(供接收端回执;delivered=false 且 status=SKIPPED 表示无对应渠道)。 */
   public record AmNotifyOutcome(
@@ -51,10 +56,10 @@ public class AlertmanagerNotifyService {
     String channelCode = receiver;
     Map<String, Object> channel = channelMapper.selectByCode(tenantId, channelCode);
     if (channel == null) {
-      log.warn(
-          "AM notify skipped: no notification_channel for receiver={} tenantId={}",
-          receiver,
-          tenantId);
+      // 固定标识符 am_notify_skipped 便于日志告警规则反查;计数器供 Prometheus 再告警。
+      // 告警系统最不该有的失败:告警渠道没预建 → 告警静默蒸发。运维须为每个 receiver 预建同名渠道。
+      meterRegistry.counter(METRIC_SKIPPED, "receiver", receiver).increment();
+      log.warn("am_notify_skipped receiver={} tenantId={} reason=no_channel", receiver, tenantId);
       return new AmNotifyOutcome(
           receiver, channelCode, false, "SKIPPED", "no channel configured for receiver");
     }
@@ -64,10 +69,13 @@ public class AlertmanagerNotifyService {
 
     RenderedAlertNotification rendered = renderer.render(payload, properties.getMaxAlerts());
     String payloadJson = JsonUtils.toJson(rendered.structured());
+    // eventType 用稳定常量 ALERTMANAGER(与 delivery_log 一侧一致):WebhookDispatcher 会把 eventType 写进
+    // X-Batch-Event-Type 头,若放含 CR/LF 的异形 alertname/title,JDK http client 抛错 → WEBHOOK 投递静默失败。
+    // 人类可读 title 只进 body(rendered.structured() 的 "text" 字段已含),不进 header。
     WebhookEventPayload eventPayload =
         new WebhookEventPayload(
             tenantId,
-            rendered.title(),
+            EVENT_TYPE,
             "alertmanager",
             payload.groupKey(),
             BatchDateTimeSupport.utcNow(),

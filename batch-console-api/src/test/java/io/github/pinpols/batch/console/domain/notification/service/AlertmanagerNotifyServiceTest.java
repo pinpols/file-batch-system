@@ -14,6 +14,8 @@ import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDe
 import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerNotifyService.AmNotifyOutcome;
 import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerWebhookPayload;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,12 +35,14 @@ class AlertmanagerNotifyServiceTest {
   @Mock private NotificationSender sender;
 
   private AlertmanagerNotifyService service;
+  private MeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() {
     AlertmanagerNotifyProperties properties = new AlertmanagerNotifyProperties();
     properties.setTenantId("system");
     properties.setMaxAlerts(50);
+    meterRegistry = new SimpleMeterRegistry();
     service =
         new AlertmanagerNotifyService(
             properties,
@@ -46,7 +50,8 @@ class AlertmanagerNotifyServiceTest {
             deliveryLogMapper,
             senderRegistry,
             webhookDispatcher,
-            new AlertmanagerAlertRenderer());
+            new AlertmanagerAlertRenderer(),
+            meterRegistry);
   }
 
   private AlertmanagerWebhookPayload payload(String receiver) {
@@ -79,8 +84,9 @@ class AlertmanagerNotifyServiceTest {
     ArgumentCaptor<NotificationMessage> msg = ArgumentCaptor.forClass(NotificationMessage.class);
     verify(sender).send(msg.capture());
     assertThat(msg.getValue().channelType()).isEqualTo("WECOM");
-    assertThat(msg.getValue().payload().eventType())
-        .isEqualTo("[FIRING] batch-dispatch · X (1 alert)");
+    // eventType 是稳定常量(进 X-Batch-Event-Type 头),人类可读 title 只在 body/structured.text。
+    assertThat(msg.getValue().payload().eventType()).isEqualTo("ALERTMANAGER");
+    assertThat(msg.getValue().payload().data().toString()).contains("[FIRING] batch-dispatch · X");
 
     ArgumentCaptor<Map<String, Object>> log = ArgumentCaptor.forClass(Map.class);
     verify(deliveryLogMapper).insert(log.capture());
@@ -117,6 +123,45 @@ class AlertmanagerNotifyServiceTest {
     assertThat(outcome.status()).isEqualTo("SKIPPED");
     verify(deliveryLogMapper, never()).insert(any());
     verify(senderRegistry, never()).resolve(anyString());
+    // I-1: 缺渠道不再静默,计数器自增供 Prometheus 再告警。
+    assertThat(meterRegistry.counter("am.notify.skipped", "receiver", "batch-unknown").count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  void eventTypeStaysConstantEvenWithCrlfAlertname() {
+    when(channelMapper.selectByCode("system", "batch-dispatch"))
+        .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+    AlertmanagerWebhookPayload evil =
+        new AlertmanagerWebhookPayload(
+            "4",
+            "gk",
+            0,
+            "firing",
+            "batch-dispatch",
+            Map.of(),
+            Map.of("alertname", "Evil\r\nX-Injected: 1"),
+            Map.of(),
+            null,
+            List.of(
+                new AlertmanagerAlert(
+                    "firing",
+                    Map.of("alertname", "Evil\r\nX-Injected: 1"),
+                    Map.of(),
+                    null,
+                    null,
+                    null,
+                    "fp")));
+
+    service.deliver("batch-dispatch", evil);
+
+    // M-2: eventType 进 X-Batch-Event-Type 头,必须是无 CR/LF 的稳定常量,否则 JDK http client 抛错静默失败。
+    ArgumentCaptor<NotificationMessage> msg = ArgumentCaptor.forClass(NotificationMessage.class);
+    verify(sender).send(msg.capture());
+    assertThat(msg.getValue().payload().eventType()).isEqualTo("ALERTMANAGER");
+    assertThat(msg.getValue().payload().eventType()).doesNotContain("\r", "\n");
   }
 
   @Test
