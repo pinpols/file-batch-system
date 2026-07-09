@@ -49,18 +49,16 @@ class DefaultScheduleForwarderSetBasedTest {
   @Mock private BatchOrchestratorGovernanceProperties governance;
 
   private DefaultScheduleForwarder forwarder;
+  private SimpleMeterRegistry meterRegistry;
   private final OutboxProperties outboxProperties = new OutboxProperties();
 
   @BeforeEach
   void setUp() {
     when(governance.outbox()).thenReturn(outboxProperties);
+    meterRegistry = new SimpleMeterRegistry();
     forwarder =
         new DefaultScheduleForwarder(
-            outboxEventMapper,
-            eventOutboxRetryMapper,
-            outboxPublisher,
-            governance,
-            new SimpleMeterRegistry());
+            outboxEventMapper, eventOutboxRetryMapper, outboxPublisher, governance, meterRegistry);
     forwarder.initMetrics();
   }
 
@@ -167,6 +165,31 @@ class DefaultScheduleForwarderSetBasedTest {
         .markPublishingBatch(eq("ta"), eq(List.of(1L)), anyString(), anyString(), anyString());
     verify(outboxEventMapper)
         .markPublishingBatch(eq("tb"), eq(List.of(2L)), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("A6:每轮批填充 attempted/succeeded 进 DistributionSummary(饱和信号)")
+  void advanceRecordsBatchFillDistributionSummaries() {
+    OutboxEventEntity ok = event("ta", 1L, 0);
+    OutboxEventEntity fail = event("ta", 2L, 0);
+    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, fail));
+    when(outboxEventMapper.markPublishingBatch(
+            anyString(), anyList(), anyString(), anyString(), anyString()))
+        .thenReturn(List.of(1L, 2L));
+    when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
+    when(outboxPublisher.publish(fail)).thenReturn(CompletableFuture.completedFuture(false));
+    when(outboxEventMapper.markPublishedBatch(anyString(), anyList(), anyString(), anyString()))
+        .thenReturn(1);
+    when(outboxEventMapper.markFailedBatch(anyString(), anyList(), anyString(), any(), anyString()))
+        .thenReturn(1);
+
+    forwarder.advance(null);
+
+    assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().totalAmount())
+        .isEqualTo(2.0d);
+    assertThat(meterRegistry.get("batch.outbox.forward.succeeded").summary().totalAmount())
+        .isEqualTo(1.0d);
+    assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().count()).isEqualTo(1L);
   }
 
   private OutboxEventEntity event(String tenantId, Long id, int publishAttempt) {

@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
@@ -85,6 +86,14 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
    */
   private Timer pollTimer;
 
+  /**
+   * A6:每轮 outbox 批填充规模。{@code attempted} 长期贴近 {@code batchSize} 上限=饱和信号(积压未消化, 应调大 batchSize
+   * 或加分片);{@code succeeded} 与 attempted 的差=Kafka 侧失败/重试压力。
+   */
+  private DistributionSummary batchAttemptedSummary;
+
+  private DistributionSummary batchSucceededSummary;
+
   @PostConstruct
   void initMetrics() {
     giveUpCounter =
@@ -99,6 +108,20 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
             .description(
                 "Outbox DB selectPending latency — isolated from Kafka send to diagnose slow"
                     + " queries vs slow brokers when publish.duration spikes.")
+            .publishPercentileHistogram()
+            .register(meterRegistry);
+    batchAttemptedSummary =
+        DistributionSummary.builder("batch.outbox.forward.attempted")
+            .description(
+                "Events attempted per outbox forward round — sustained values near outbox.batchSize"
+                    + " indicate saturation (backlog not draining).")
+            .publishPercentileHistogram()
+            .register(meterRegistry);
+    batchSucceededSummary =
+        DistributionSummary.builder("batch.outbox.forward.succeeded")
+            .description(
+                "Events successfully published per outbox forward round — gap vs attempted reflects"
+                    + " Kafka-side failure/retry pressure.")
             .publishPercentileHistogram()
             .register(meterRegistry);
   }
@@ -127,6 +150,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     OutcomeGroups groups = classifyOutcomes(inFlight);
     Map<FailedGroupKey, Instant> nextRetryAtByGroup = flushOutcomeGroups(groups);
     recordPendingRetries(groups.pendingRetries(), nextRetryAtByGroup);
+    // A6:本轮批填充规模喂 DistributionSummary(饱和/失败压力可观测)。
+    batchAttemptedSummary.record(groups.attemptedEvents());
+    batchSucceededSummary.record(groups.publishSucceeded());
     return ScheduleForwarderResult.of(
         groups.attemptedEvents(), groups.publishSucceeded(), groups.publishFailed());
   }
