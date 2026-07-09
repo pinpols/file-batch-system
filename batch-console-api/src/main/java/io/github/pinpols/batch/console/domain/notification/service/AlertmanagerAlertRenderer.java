@@ -5,6 +5,7 @@ import io.github.pinpols.batch.console.domain.notification.web.request.Alertmana
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -109,6 +110,6 @@ public class AlertmanagerAlertRenderer {
   }
 
   private static String upper(String value) {
-    return value == null ? PLACEHOLDER : value.toUpperCase(java.util.Locale.ROOT);
+    return value == null ? PLACEHOLDER : value.toUpperCase(Locale.ROOT);
   }
 }

@@ -246,6 +246,21 @@ if [[ -n "$CHANGED_CTL" ]]; then
   # 只对 batch-console-api 的 controller 强制要求(/internal/* 不入主 OpenAPI)
   CONSOLE_CTL=$(echo "$CHANGED_CTL" | grep "batch-console-api/" || true)
 
+  # 排除纯 /internal controller(类级 @RequestMapping("/internal...") 且无 /api 公开映射)——
+  # 内网端点(AM webhook / 内部推送)不入 console 主 OpenAPI,与本段注释意图一致。
+  if [[ -n "$CONSOLE_CTL" ]]; then
+    FILTERED_CTL=""
+    while IFS= read -r ctl; do
+      [[ -z "$ctl" ]] && continue
+      if [[ -f "$ctl" ]] && grep -qE '@RequestMapping\("/internal' "$ctl" && ! grep -qE '"/api' "$ctl"; then
+        info "  跳过纯 /internal controller(不入主 OpenAPI):$ctl"
+        continue
+      fi
+      FILTERED_CTL+="$ctl"$'\n'
+    done <<< "$CONSOLE_CTL"
+    CONSOLE_CTL=$(printf '%s' "$FILTERED_CTL" | sed '/^$/d')
+  fi
+
   if [[ -n "$CONSOLE_CTL" ]]; then
     info "Console-api controller 变更:"
     echo "$CONSOLE_CTL" | sed 's/^/    /'
