@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 import com.github.benmanes.caffeine.cache.Ticker;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -370,9 +372,42 @@ class ApiKeyVerifierTest {
   void springCanInstantiateBeanDespiteMultipleConstructors() {
     try (AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext()) {
       ctx.registerBean(ApiKeyAuthMapper.class, () -> mapper);
+      ctx.registerBean(MeterRegistry.class, SimpleMeterRegistry::new);
       ctx.register(ApiKeyVerifier.class);
       ctx.refresh();
       assertThat(ctx.getBean(ApiKeyVerifier.class)).isNotNull();
     }
+  }
+
+  // ─── O4: 验证缓存命中率可观测(CaffeineCacheMetrics) ──────────────────────
+
+  @Test
+  void cacheMetricsBoundToMicrometer_recordHitsAndMisses() {
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    ApiKeyVerifier metered = new ApiKeyVerifier(mapper, fakeTicker, fakeClock, registry);
+    ReflectionTestUtils.setField(metered, "self", metered);
+    metered.bindCacheMetrics();
+
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
+
+    metered.verify(RAW_KEY, "tx"); // miss → 入缓存
+    metered.verify(RAW_KEY, "tx"); // hit
+
+    // CaffeineCacheMetrics 以 tag cache=apikey.verify 暴露 cache.gets{result=hit/miss}
+    double hits =
+        registry
+            .get("cache.gets")
+            .tags("cache", "apikey.verify", "result", "hit")
+            .functionCounter()
+            .count();
+    double misses =
+        registry
+            .get("cache.gets")
+            .tags("cache", "apikey.verify", "result", "miss")
+            .functionCounter()
+            .count();
+    assertThat(hits).isEqualTo(1.0d);
+    assertThat(misses).isEqualTo(1.0d);
   }
 }

@@ -5,6 +5,9 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Ticker;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -96,6 +99,13 @@ public class ApiKeyVerifier {
   /** 验证成功结果缓存:key = SHA-256(rawKey)|tenantId,value = 命中的不可变 entity。只缓存成功。 */
   private final Cache<String, ApiKeyEntity> verifyCache;
 
+  /**
+   * O4:命中率/逐出/加载可观测。缓存价值=躲 PBKDF2 600k 迭代 CPU 税(本轮 perf 核心), 但此前不可观测 → TTL/size 无法校准、缓存穿透 CPU
+   * 打满无预警。@PostConstruct 用 {@link CaffeineCacheMetrics} 绑定 {@code cache.*}(tag {@code
+   * cache=apikey.verify})。 测试构造器无 registry 时为 null,跳过绑定。
+   */
+  private final MeterRegistry meterRegistry;
+
   /** keyId → 上次真实写 last_used_at 的 ticker 纳秒时刻;用于 60s 写节流。key 数量 ~= 活跃 key 数,极小。 */
   private final ConcurrentHashMap<Long, Long> lastTouchNanos = new ConcurrentHashMap<>();
 
@@ -114,23 +124,46 @@ public class ApiKeyVerifier {
    * ApiKeyVerifierTest.springCanInstantiateBeanDespiteMultipleConstructors}。
    */
   @Autowired
-  public ApiKeyVerifier(ApiKeyAuthMapper mapper) {
-    this(mapper, Ticker.systemTicker(), InstantSource.system());
+  public ApiKeyVerifier(ApiKeyAuthMapper mapper, MeterRegistry meterRegistry) {
+    this(mapper, Ticker.systemTicker(), InstantSource.system(), meterRegistry);
   }
 
   /**
    * 可注入 {@link Ticker} + {@link InstantSource} 的构造器(测试用假时钟驱动 TTL 逐出 / touch 节流 / expires_at 复查)。
+   * meterRegistry 为 null:不绑 micrometer(纯逻辑单测无需指标)。
    */
   ApiKeyVerifier(ApiKeyAuthMapper mapper, Ticker ticker, InstantSource instantSource) {
+    this(mapper, ticker, instantSource, null);
+  }
+
+  ApiKeyVerifier(
+      ApiKeyAuthMapper mapper,
+      Ticker ticker,
+      InstantSource instantSource,
+      MeterRegistry meterRegistry) {
     this.mapper = mapper;
     this.ticker = ticker;
     this.instantSource = instantSource;
+    this.meterRegistry = meterRegistry;
     this.verifyCache =
         Caffeine.newBuilder()
             .ticker(ticker)
             .expireAfterWrite(Duration.ofMinutes(VERIFY_CACHE_TTL_MINUTES))
             .maximumSize(VERIFY_CACHE_MAX_SIZE)
+            // O4:开启统计,供 CaffeineCacheMetrics 读命中率/逐出/加载耗时。
+            .recordStats()
             .build();
+  }
+
+  /**
+   * O4:把 {@link #verifyCache} 的 Caffeine 统计绑定到 micrometer,暴露 {@code cache.gets}/{@code
+   * cache.evictions}/{@code cache.size} 等(tag {@code cache=apikey.verify})。 registry 缺失(纯逻辑单测)时跳过。
+   */
+  @PostConstruct
+  void bindCacheMetrics() {
+    if (meterRegistry != null) {
+      CaffeineCacheMetrics.monitor(meterRegistry, verifyCache, "apikey.verify");
+    }
   }
 
   /**
