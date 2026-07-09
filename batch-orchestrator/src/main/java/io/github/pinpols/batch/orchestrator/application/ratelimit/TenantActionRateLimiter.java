@@ -28,10 +28,24 @@ import org.springframework.stereotype.Component;
 public class TenantActionRateLimiter {
 
   /**
-   * 限流拒绝计数：同步 REST 热路径（claim/report/register）命中限流被拒（将抛 429）时自增。tag 仅 {@code action} （基数 = {@link
-   * RateLimitAction} 枚举数，很小）。<b>刻意不带 tenant tag</b>：租户数可能很多，作为 tag 会打爆监控时序基数； per-action
-   * 维度已足够做容量规划/滥用侦测，租户级归因走日志。这里是同步限流拒绝的唯一计数点，异步 LAUNCH 路径另有 {@code
-   * batch.trigger.launch.failed.total{reason=rate_limited}}。
+   * 限流拒绝计数：本门面 {@link #tryConsume} 返回 false 时按 {@code action} 自增。tag 仅 {@code action}（基数 = {@link
+   * RateLimitAction} 枚举数，很小）。<b>刻意不带 tenant tag</b>：租户数可能很多，作为 tag 会打爆监控时序基数；per-action
+   * 维度已足够做容量规划/滥用侦测，租户级归因走日志。
+   *
+   * <p><b>覆盖本门面全部 4 个调用点，但拒绝的对外语义并不一致——据此告警须按 action 区分</b>：
+   *
+   * <ul>
+   *   <li>{@code TASK_CLAIM} / {@code TASK_REPORT}（{@code TaskController}，同步 REST）→ 拒绝抛 <b>429</b>。
+   *   <li>{@code WORKER_REGISTER}（{@code WorkerController}，同步 REST）→ 拒绝抛 <b>429</b>。
+   *   <li>{@code LAUNCH}（{@code LaunchApplicationService}，同步 {@code POST /api/triggers/launch}）→
+   *       拒绝抛 <b>429</b>。（异步 Kafka LAUNCH 路径不经本门面，其限流命中另计在 {@code
+   *       batch.trigger.launch.failed.total{reason=rate_limited}}。）
+   *   <li>{@code DISPATCH_RELEASE}（{@code WaitingPartitionDispatchScheduler}，内部派发调度）→ 拒绝仅 {@code
+   *       return} 让本轮不派发（<b>内部派发背压，不产生客户端 429</b>），下一轮调度自然重试。
+   * </ul>
+   *
+   * <p>因此本指标总和 <b>不等于</b>客户端 429 速率——把 {@code DISPATCH_RELEASE} 的内部背压算进 429 告警会失真；要「429 速率」须排除
+   * {@code action=DISPATCH_RELEASE}。
    */
   static final String METRIC_REJECTED = "batch.ratelimit.rejected.total";
 
@@ -61,7 +75,9 @@ public class TenantActionRateLimiter {
         LIMIT_RESOLVERS.getOrDefault(action, props -> 0L).applyAsLong(governance.rateLimit());
     boolean allowed = limiter.tryConsume(tenantId, action.name(), max);
     if (!allowed) {
-      // 唯一同步拒绝计数点：两个 controller 都经此门面,拒绝后各自抛 429。这里计数免去在 controller 重复埋点。
+      // 门面级唯一拒绝计数点,覆盖全部 4 个调用点(TaskController/WorkerController/LaunchApplicationService
+      // 拒绝后各自抛 429;WaitingPartitionDispatchScheduler 拒绝仅内部派发背压 return,非 REST 非 429)。
+      // 在此计数免去各调用点重复埋点;DISPATCH_RELEASE 语义见 METRIC_REJECTED javadoc(告警须按 action 区分)。
       Counter.builder(METRIC_REJECTED)
           .tags(Tags.of("action", action.name()))
           .register(meterRegistry)
