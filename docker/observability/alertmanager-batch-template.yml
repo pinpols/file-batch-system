@@ -24,31 +24,46 @@ route:
         - alert_group="capacity"
       receiver: batch-sre
 
+# NOTE: 每个 receiver 的 webhook 指向 console-api 的 AM 出口端点
+# POST /internal/am-notify/{receiver}(容器网络内 batch-console-api:18080),由 console-api 复用
+# NotificationSenderRegistry 投递到真实渠道并落 notification_delivery_log。
+# 鉴权:AM 独立进程够不到 console cookie/JWT,统一带共享密钥 bearer token;
+# 该 token 必须与 console-api 的 batch.console.alertmanager.bearer-token 一致。
+# 占位符 REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN 部署时替换(AM 不做 env 变量替换,须渲染真实值)。
 receivers:
   - name: batch-default
     webhook_configs:
-      - url: http://host.docker.internal:19001/alert
+      - url: http://batch-console-api:18080/internal/am-notify/batch-default
         send_resolved: true
+        http_config: &am_notify_http
+          authorization:
+            type: Bearer
+            credentials: REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN
   - name: batch-pager
     webhook_configs:
-      - url: http://host.docker.internal:19001/pager
+      - url: http://batch-console-api:18080/internal/am-notify/batch-pager
         send_resolved: true
+        http_config: *am_notify_http
   - name: batch-dispatch
     webhook_configs:
-      - url: http://host.docker.internal:19001/dispatch
+      - url: http://batch-console-api:18080/internal/am-notify/batch-dispatch
         send_resolved: true
+        http_config: *am_notify_http
   - name: batch-sla
     webhook_configs:
-      - url: http://host.docker.internal:19001/sla
+      - url: http://batch-console-api:18080/internal/am-notify/batch-sla
         send_resolved: true
+        http_config: *am_notify_http
   - name: batch-freshness
     webhook_configs:
-      - url: http://host.docker.internal:19001/freshness
+      - url: http://batch-console-api:18080/internal/am-notify/batch-freshness
         send_resolved: true
+        http_config: *am_notify_http
   - name: batch-sre
     webhook_configs:
-      - url: http://host.docker.internal:19001/sre
+      - url: http://batch-console-api:18080/internal/am-notify/batch-sre
         send_resolved: true
+        http_config: *am_notify_http
 
 inhibit_rules:
   - source_matchers:
