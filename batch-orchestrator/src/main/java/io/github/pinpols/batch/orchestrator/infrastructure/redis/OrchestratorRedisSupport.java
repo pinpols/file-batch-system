@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,11 +18,11 @@ import org.springframework.stereotype.Component;
 /**
  * Orchestrator Redis 操作工具类：封装常用 Redis 操作，统一序列化/反序列化并提供原子化操作支持。
  *
- * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除异常数据）、 Hash 整体写入、滑动窗口计数器（{@code
- * incrementWithinWindow}，首次写入时设置 TTL）， 以及执行 Lua 脚本（{@code evalLong}）。
+ * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除异常数据）、 Hash 整体写入， 以及执行 Lua 脚本（{@code evalLong} / {@code
+ * evalList}）。
  *
  * <p>Cache-Aside 方法使用 best-effort 语义：Redis 连接类异常（{@link RedisConnectionFailureException} / {@link
- * RedisSystemException}）时读返回 null、写/删跳过，调用方回落 PG。限流、Quota、Lua 等强语义操作不吞 Redis 异常。
+ * RedisSystemException}）时读返回 null、写/删跳过，调用方回落 PG。Quota、Lua 等强语义操作不吞 Redis 异常。
  */
 @Slf4j
 @Component
@@ -132,28 +131,6 @@ public class OrchestratorRedisSupport {
   public Map<Object, Object> entries(String key) {
     Map<Object, Object> result = cacheRead(key, () -> redisTemplate.opsForHash().entries(key));
     return result == null ? Map.of() : result;
-  }
-
-  // R3-P0-10：INCR + EXPIRE 非原子；首次 INCR 成功后 expire 失败 → counter 永不过期，租户被永久 rate-limit。
-  // 改 Lua：INCR 返回 1 时立即 PEXPIRE，单次往返保证原子。
-  private static final String LUA_INCR_EXPIRE =
-      "local v = redis.call('INCR', KEYS[1])\n"
-          + "if v == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end\n"
-          + "return v";
-
-  public Long incrementWithinWindow(
-      String tenantId, String action, long windowStartEpochSecond, Duration ttl) {
-    String key = BatchRedisKeys.rateLimit(tenantId, action, windowStartEpochSecond);
-    try {
-      return redisTemplate.execute(
-          new DefaultRedisScript<>(LUA_INCR_EXPIRE, Long.class),
-          List.of(key),
-          String.valueOf(ttl.toMillis()));
-    } catch (RedisConnectionFailureException | RedisSystemException ex) {
-      // fail-open：Redis 不可达时返回 null，调用方按 "未命中限流" 处理；与原 cacheWrite 一致语义
-      log.warn("Redis rate-limit unavailable; fail-open: key={}, cause={}", key, ex.getMessage());
-      return null;
-    }
   }
 
   public Long evalLong(String script, String key, String... args) {

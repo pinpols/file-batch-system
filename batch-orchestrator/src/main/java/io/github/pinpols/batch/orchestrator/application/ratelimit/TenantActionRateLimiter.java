@@ -2,14 +2,13 @@ package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import java.time.Clock;
 import java.util.Map;
 import java.util.function.ToLongFunction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 租户级动作限流门面：{@link RateLimitAction} 决定读哪个配额配置，然后委托 {@link TokenBucketRateLimiter} 做 Redis 固定窗口计数。
+ * 租户级动作限流门面：{@link RateLimitAction} 决定读哪个配额配置，然后委托 {@link TokenBucketRateLimiter} 做 Redis 分布式令牌桶限流。
  *
  * <p>放行短路：
  *
@@ -38,7 +37,6 @@ public class TenantActionRateLimiter {
 
   private final BatchOrchestratorGovernanceProperties governance;
   private final TokenBucketRateLimiter limiter;
-  private final Clock clock;
 
   public boolean tryConsume(String tenantId, RateLimitAction action) {
     if (!governance.rateLimit().isEnabled()) {
@@ -49,6 +47,6 @@ public class TenantActionRateLimiter {
     }
     long max =
         LIMIT_RESOLVERS.getOrDefault(action, props -> 0L).applyAsLong(governance.rateLimit());
-    return limiter.tryConsume(tenantId, action.name(), max, clock.millis());
+    return limiter.tryConsume(tenantId, action.name(), max);
   }
 }
