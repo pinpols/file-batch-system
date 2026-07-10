@@ -19,6 +19,7 @@ import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
 import io.github.pinpols.batch.console.domain.audit.web.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.auth.AiChatRequest;
@@ -60,6 +61,7 @@ class DefaultConsoleAiApplicationServiceTest {
   @Mock private ConsoleAiKnowledgeBase knowledgeBase;
 
   @Mock private ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
+  @Mock private ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
 
   private ConsoleAiProperties aiProperties;
   private DefaultConsoleAiApplicationService service;
@@ -79,7 +81,8 @@ class DefaultConsoleAiApplicationServiceTest {
             promptGuard,
             auditService,
             knowledgeBase,
-            queryServiceProvider);
+            queryServiceProvider,
+            diagnosticServiceProvider);
   }
 
   private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
