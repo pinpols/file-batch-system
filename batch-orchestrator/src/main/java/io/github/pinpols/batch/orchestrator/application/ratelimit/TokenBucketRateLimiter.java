@@ -6,6 +6,7 @@ import io.github.bucket4j.TimeoutException;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.lettuce.core.RedisException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -51,8 +52,15 @@ public class TokenBucketRateLimiter {
   static final String FAILOPEN_REASON_REDIS = "redis_exception";
   static final String FAILOPEN_REASON_TIMEOUT = "bucket4j_timeout";
 
+  /**
+   * fail-open reason：Redis 短路熔断 OPEN，直接放行未发 Redis 命令（省掉 requestTimeout 阻塞）。与上面两类 reason 一套 counter，
+   * 但语义不同——上面是"发了命令但故障"，这个是"熔断判定不健康后连命令都没发"。tag 基数固定，供告警区分持续慢故障 vs 偶发抖动。
+   */
+  static final String FAILOPEN_REASON_CIRCUIT_OPEN = "circuit_open";
+
   private final LettuceBasedProxyManager<String> proxyManager;
   private final MeterRegistry meterRegistry;
+  private final RedisRateLimitCircuitBreaker circuitBreaker;
 
   // 按 maxPerMinute 缓存 BucketConfiguration supplier，避免每次 tryConsume 都新建（阈值集合很小，见
   // RateLimitProperties）。
@@ -60,9 +68,12 @@ public class TokenBucketRateLimiter {
       new ConcurrentHashMap<>();
 
   public TokenBucketRateLimiter(
-      LettuceBasedProxyManager<String> proxyManager, MeterRegistry meterRegistry) {
+      LettuceBasedProxyManager<String> proxyManager,
+      MeterRegistry meterRegistry,
+      RedisRateLimitCircuitBreaker circuitBreaker) {
     this.proxyManager = proxyManager;
     this.meterRegistry = meterRegistry;
+    this.circuitBreaker = circuitBreaker;
   }
 
   public boolean tryConsume(String tenantId, String action, long maxPerMinute) {
@@ -74,7 +85,19 @@ public class TokenBucketRateLimiter {
     }
     String key = BatchRedisKeys.rateLimitBucket(tenantId, action);
     try {
-      return proxyManager.getProxy(key, configSupplierFor(maxPerMinute)).tryConsume(1);
+      // 经短路熔断执行：CLOSED/HALF_OPEN 时正常发 Redis 命令；OPEN 时不发命令、抛 CallNotPermittedException 短路 fail-open。
+      return circuitBreaker.call(
+          () -> proxyManager.getProxy(key, configSupplierFor(maxPerMinute)).tryConsume(1));
+    } catch (CallNotPermittedException ex) {
+      // 短路 OPEN：连续超时已判定 Redis 不健康，直接 fail-open 放行，未发 Redis 命令 → 省掉 requestTimeout(500ms) 阻塞。
+      // 方向与下面的 catch 一致（放行），但这条路径下热路径线程不再被慢故障 Redis 拖住，避免 Tomcat 线程池耗尽。
+      failOpenCounter(FAILOPEN_REASON_CIRCUIT_OPEN).increment();
+      log.debug(
+          "Redis rate-limit circuit OPEN; short-circuit fail-open (no Redis call): tenantId={},"
+              + " action={}",
+          tenantId,
+          action);
+      return true;
     } catch (RedisException | TimeoutException ex) {
       // fail-open：放行，与旧固定窗口实现同方向。宁可短暂不限流，也不因 Redis 抖动整体 5xx。
       // 坑：Redis 命令级故障抛 io.lettuce.core.RedisException；但 proxy manager 配了 requestTimeout 后，
