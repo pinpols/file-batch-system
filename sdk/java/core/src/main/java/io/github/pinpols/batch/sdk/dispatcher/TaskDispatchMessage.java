@@ -127,6 +127,13 @@ public record TaskDispatchMessage(
   /**
    * 解析 schemaVersion 的主版本前缀(如 {@code "v2-rc"} → {@code "v2"};{@code "v2.1"} → {@code
    * "v2"};null/blank → {@link #DEFAULT_SCHEMA_VERSION})。 用于 {@link #isSchemaSupported()} 判定。
+   *
+   * <p><b>畸形值语义(向 Go/TS/Rust 的 reject 收敛)</b>:只有<b>真正缺省</b>(null / 全空白)才回退 {@link
+   * #DEFAULT_SCHEMA_VERSION}(对齐 fixture 16 缺省=v1 accept)。非空但首字符即非字母数字的畸形值(如 {@code " v3"} 前导空格、
+   * {@code "!v3"}、BOM+{@code v3})<b>不再</b>退回 v1 —— 否则带前导空白的 v3 会被本 SDK 按 v1 假设吃掉,违反 fixture 18 的
+   * {@code sdkMustNot "process a v3 message under v1 assumptions"} 精神。此时返回去空白后的原串,使其必不在 {@link
+   * #SUPPORTED_MAJOR_VERSIONS} → {@link #isSchemaSupported()} 判 false → dispatcher reject(不提交
+   * offset)。
    */
   public String resolvedMajor() {
     if (schemaVersion == null || schemaVersion.isBlank()) {
@@ -137,7 +144,10 @@ public record TaskDispatchMessage(
     while (end < schemaVersion.length() && Character.isLetterOrDigit(schemaVersion.charAt(end))) {
       end++;
     }
-    return end > 0 ? schemaVersion.substring(0, end) : DEFAULT_SCHEMA_VERSION;
+    // end==0:非空却以非字母数字打头(畸形值,如 " v1"/" v3"/"!v3"/BOM+v3)。返回原串(已非 blank
+    // 且以非字母数字打头 → 必不等于 "v1"/"v2")→ isSchemaSupported=false → reject。**不能** strip 后返回,
+    // 否则 " v1" 会被去空格成 "v1" 而被误 accept;也不能回退 DEFAULT_SCHEMA_VERSION 按 v1 解析(违反 fixture 18)。
+    return end > 0 ? schemaVersion.substring(0, end) : schemaVersion;
   }
 
   /** 当前 SDK 是否能处理此消息的 schema(false → dispatcher 拒收 + log WARN)。 */

@@ -103,6 +103,36 @@ class TaskDispatchMessageTest {
   }
 
   @Test
+  void schemaVersionRejectedWhenMalformedLeadingNonAlnum() throws Exception {
+    // P1:首字符非字母数字的畸形 schemaVersion(前导空格 / 标点 / BOM)不能回退 v1 accept。
+    // 否则 " v3" 会被本 SDK 按 v1 假设吃掉,违反 fixture 18 sdkMustNot "process v3 under v1"。
+    // 用 record 构造直接锁 resolvedMajor(避免 Jackson 对畸形值的 trim 干扰)。
+    for (String v : new String[] {" v3", "\tv3", "!v3", "\uFEFFv3", " v1", " v2", "-v1", ".v2"}) {
+      TaskDispatchMessage msg =
+          new TaskDispatchMessage(v, 1L, "tx", "j", "t", "ti", Map.of(), Map.of());
+      assertThat(msg.isSchemaSupported())
+          .as("malformed schemaVersion=%s must be rejected (no silent v1 fallback)", v)
+          .isFalse();
+      assertThat(msg.resolvedMajor())
+          .as("malformed schemaVersion=%s must not resolve to a supported major", v)
+          .isNotIn("v1", "v2");
+    }
+  }
+
+  @Test
+  void schemaVersionOnlyTrulyMissingFallsBackToV1() {
+    // 对照:真正缺省(null / 全空白)才 fallback v1 accept(fixture 16 缺省=v1)。
+    assertThat(
+            new TaskDispatchMessage(null, 1L, "tx", "j", "t", "ti", Map.of(), Map.of())
+                .resolvedMajor())
+        .isEqualTo("v1");
+    assertThat(
+            new TaskDispatchMessage("   ", 1L, "tx", "j", "t", "ti", Map.of(), Map.of())
+                .isSchemaSupported())
+        .isTrue();
+  }
+
+  @Test
   void resolvedMajorStripsSuffix() {
     TaskDispatchMessage msg =
         new TaskDispatchMessage("v2-rc", 1L, "tx", "j", "t", "ti", Map.of(), Map.of());
