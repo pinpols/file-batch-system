@@ -7,6 +7,7 @@ import io.github.bucket4j.redis.lettuce.Bucket4jLettuce;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.orchestrator.config.Bucket4jRateLimitConfig;
+import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
@@ -37,7 +39,13 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
   @EnableAutoConfiguration
-  @Import({BatchClockConfig.class, Bucket4jRateLimitConfig.class, TokenBucketRateLimiter.class})
+  @EnableConfigurationProperties(RateLimitProperties.class)
+  @Import({
+    BatchClockConfig.class,
+    Bucket4jRateLimitConfig.class,
+    TokenBucketRateLimiter.class,
+    RedisRateLimitCircuitBreaker.class
+  })
   static class TestApplication {}
 
   @Autowired private TokenBucketRateLimiter limiter;
@@ -94,8 +102,12 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
                   ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
                       Duration.ofMinutes(1)))
               .build();
+      SimpleMeterRegistry replicaMeterRegistry = new SimpleMeterRegistry();
       TokenBucketRateLimiter replicaTwo =
-          new TokenBucketRateLimiter(secondProxyManager, new SimpleMeterRegistry());
+          new TokenBucketRateLimiter(
+              secondProxyManager,
+              replicaMeterRegistry,
+              RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry));
 
       // 副本1 消费 2 个
       assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
