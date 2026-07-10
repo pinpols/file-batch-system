@@ -76,6 +76,35 @@ class ConsoleTenantGuardTest {
   }
 
   @Test
+  void shouldRejectRequestTenantFallbackOnWebPathWhenJwtTenantClaimMissing() {
+    // M1 (#780 review): web/authenticated 路径的 fail-open 尾巴。
+    // 一个 tenant 角色但 JWT 无 tenant claim 的 principal,过去会 fallback 到请求携带的
+    // requestTenantId → 可读任意租户(IDOR)。web 路径(SecurityContext 有 ConsolePrincipal)
+    // 缺租户上下文时必须 fail-closed(FORBIDDEN),不得回退到请求方自带的 tenantId。
+    when(requestMetadataResolver.current())
+        .thenThrow(new IllegalStateException("request scope missing"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("tester", null, Set.of("ROLE_TENANT_USER")), "ignored"));
+
+    assertThatThrownBy(() -> tenantGuard.resolveTenant("victim-tenant"))
+        .isInstanceOf(BizException.class)
+        .extracting(ex -> ((BizException) ex).getCode())
+        .isEqualTo(ResultCode.FORBIDDEN);
+  }
+
+  @Test
+  void shouldKeepRequestTenantFallbackOnSystemPathWithoutPrincipal() {
+    // 系统 / @Async 路径:SecurityContext 无 ConsolePrincipal → 保留 requestTenantId fallback
+    // (有意设计,不误伤定时任务 / 异步推送)。
+    when(requestMetadataResolver.current())
+        .thenThrow(new IllegalStateException("request scope missing"));
+
+    assertThat(tenantGuard.resolveTenant("system-tenant")).isEqualTo("system-tenant");
+  }
+
+  @Test
   void shouldAllowGlobalRoleToCrossTenant() {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
