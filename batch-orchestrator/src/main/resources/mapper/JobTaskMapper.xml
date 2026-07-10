@@ -143,6 +143,19 @@
           and id = #{id}
     </select>
 
+    <!--
+      reclaim 专用:立即取 task 行锁,取不到就抛 55P03(不等待)。见 PartitionReclaimUnit.doReclaim
+      与 OutcomeVsReclaimDeadlockIntegrationTest —— 用 NOWAIT 让 reclaim 遇 outcome 正持有的 task 行时
+      本轮让路,而非等待成环产生 40P01 行锁反转死锁。
+    -->
+    <select id="lockForReclaimNoWait" resultType="java.lang.Long">
+        select id
+        from batch.job_task
+        where tenant_id = #{tenantId}
+          and id = #{id}
+        for update nowait
+    </select>
+
     <select id="selectByPartitionAndSeq" resultMap="JobTaskResultMap">
         select *
         from batch.job_task

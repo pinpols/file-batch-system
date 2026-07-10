@@ -75,8 +75,11 @@
     <!--
       perf/并发:同一 (tenantId, jobInstanceId) 的事务级 advisory lock,串行化同 instance 的并发 report。
       替代此前对全兄弟分区的 whole-instance FOR UPDATE(纯排序加锁,丢结果)。
-      - pg_advisory_xact_lock 阻塞获取、随事务自动释放,不锁任何行(锁逻辑 hash key),因此不再有
-        「reclaim asc / outcome desc」的行锁顺序反转死锁风险。
+      - pg_advisory_xact_lock 阻塞获取、随事务自动释放,不锁任何行(锁逻辑 hash key),消除 outcome-vs-outcome
+        的锁顺序反转、以及旧的「reclaim asc N 行 / outcome desc N 行」环形死锁。
+      - 边界:本 advisory lock 只串行化 outcome-vs-outcome;reclaim 不取它。单 outcome × 单 reclaim 对同一
+        (task, partition) 的 2 行反转(outcome task→partition vs reclaim partition→task)由 PartitionReclaimUnit
+        对 task 行改用 FOR UPDATE NOWAIT 让路解决,不靠本锁(见 OutcomeVsReclaimDeadlockIntegrationTest)。
       - hashtext 返回 int4,单参重载解析到 pg_advisory_xact_lock(bigint)。
       - 外层 select 常量以保证返回行集给 MyBatis;内层子查询强制求值从而真正加锁。
     -->

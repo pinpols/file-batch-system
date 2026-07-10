@@ -68,6 +68,16 @@ public interface JobTaskMapper {
       @Param("readyStatus") String readyStatus,
       @Param("expectedVersion") Long expectedVersion);
 
+  /**
+   * 尝试用 {@code FOR UPDATE NOWAIT} 立即取得某 task 行的行锁,取不到(行正被并发事务持有)立即抛 {@link
+   * org.springframework.dao.CannotAcquireLockException}(PostgreSQL SQLState 55P03),<b>绝不等待</b>。
+   *
+   * <p>reclaim 路径专用:reclaim 与 outcome 对同一 (task, partition) 取锁顺序相反(reclaim partition→task, outcome
+   * task→partition),直接 UPDATE 的等待会构成行锁反转死锁。reclaim 是尽力而为的后台清理,先用本方法 试锁
+   * task,抢不到即本轮让路、下轮重试,从而永不参与等待环。返回被锁 task 的 id(命中即 1 行);行不存在返回 {@code null}。
+   */
+  Long lockForReclaimNoWait(@Param("tenantId") String tenantId, @Param("id") Long id);
+
   int promoteStatus(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
