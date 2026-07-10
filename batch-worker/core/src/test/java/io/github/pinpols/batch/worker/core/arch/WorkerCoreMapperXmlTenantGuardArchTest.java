@@ -22,6 +22,9 @@ class WorkerCoreMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArc
         "PlatformFileRuntimeMapper#markPipelineSuccess",
         "PlatformFileRuntimeMapper#markPipelineFailed",
         "PlatformFileRuntimeMapper#markPipelineCompensating",
+        // file_record 有 tenant_id 列,但 worker 按已认领的 file_record id 推进该文件运行态(id 由认领任务下发)
+        "PlatformFileRuntimeMapper#updateFileRecordStatus",
+        "PlatformFileRuntimeMapper#updateFileRecordMetadata",
         // report 发件箱发布器状态机:全局轮询后按全局行 id 推进;resetStalePublishing 为跨租 reaper
         "WorkerReportOutboxPgMapper#updateGiveUp",
         "WorkerReportOutboxPgMapper#updateRetry",

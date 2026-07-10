@@ -51,14 +51,14 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         // 账号 CRUD:服务层 ConsoleUserAccountService 每次写前先 selectById 再 assertSameTenantOrGlobal(读校验后按
         // id 写)
         "ConsoleUserAccountMapper#updateProfile",
-        "ConsoleUserAccountMapper#updatePasswordHash",
+        "ConsoleUserAccountMapper#updatePasswordHash", // 当前无 Java 调用方(死 SQL,保留守护待清理)
         "ConsoleUserAccountMapper#updatePasswordHashAndMustChange",
         "ConsoleUserAccountMapper#updateEnabled",
-        "ConsoleUserAccountMapper#deleteById",
+        "ConsoleUserAccountMapper#deleteById", // 当前无 Java 调用方(死 SQL,保留守护待清理)
         // 假日子表:业务日历的子表,服务层先 calendarMapper.selectById(tenantId,id) 校验父日历归属,再按 calendar_id/id 改删
         "CalendarHolidayMapper#update",
-        "CalendarHolidayMapper#deleteById",
-        "CalendarHolidayMapper#deleteByCalendarId",
+        "CalendarHolidayMapper#deleteById", // 当前无 Java 调用方(死 SQL,保留守护待清理)
+        "CalendarHolidayMapper#deleteByCalendarId", // 当前无 Java 调用方(死 SQL,保留守护待清理)
         "CalendarHolidayMapper#deleteByCalendarIdAndId",
         // Web Push 订阅:按浏览器 push endpoint(全局唯一)或订阅 id;touch/stale 由推送发件器/清理任务驱动
         "ConsolePushSubscriptionMapper#touchLastPushedAt",

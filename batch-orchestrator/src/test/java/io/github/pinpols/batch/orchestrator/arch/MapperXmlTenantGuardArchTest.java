@@ -73,6 +73,8 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "SuccessInstanceArchiveMapper#deleteJobExecutionLogsByInstanceIds",
         "SuccessInstanceArchiveMapper#deleteCompensationCommandsByInstanceIds",
         "SuccessInstanceArchiveMapper#deleteWorkflowRunsByInstanceIds",
+        // file_dispatch_record 有 tenant_id 列,但归档按预选实例 id 集级联删派单明细(id 集即隔离边界)
+        "SuccessInstanceArchiveMapper#deleteFileDispatchRecordsByInstanceIds",
         // 定义子表级联删除:按父 workflow_definition_id / ids 删(父定义已按 tenant 校验)
         "WorkflowEdgeMapper#deleteByWorkflowDefinitionId",
         "WorkflowNodeMapper#deleteByWorkflowDefinitionId",

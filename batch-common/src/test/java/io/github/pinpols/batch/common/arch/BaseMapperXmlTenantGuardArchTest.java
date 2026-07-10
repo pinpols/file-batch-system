@@ -75,12 +75,12 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
         "biz_table_schema", // 业务库 schema 元数据,全局系统表
         "batch_runtime_default_parameter", // 运行时默认参数,全局系统表
         "business_shard_catalog", // 租户→分片路由目录,全局主数据(跨租,无 tenant_id 列)
-        // ② run/config 明细子表:无 tenant_id 列,靠父表 FK + 父 id 隔离(父行按 tenant 校验)
-        "pipeline_step_definition", // pipeline_definition 的配置子表,经 pipeline_definition_id 访问
-        "pipeline_step_run", // pipeline_instance 的 run 子表,经 pipeline_instance_id 访问
-        "workflow_node_run", // workflow_run 的 run 子表,经 workflow_run_id 访问
-        "file_dispatch_record", // 派单明细,经 instance/dispatch id 访问,无 tenant_id 列
-        "file_record"); // 平台文件运行态表,经 file/pipeline 运行 id 访问,无 tenant_id 列(schema 既定)
+        // ② run/config 明细子表:无 tenant_id 列(逐个据 DDL 核实),靠父表 FK + 父 id 隔离(父行按 tenant 校验)
+        "pipeline_step_definition", // V6:pipeline_definition 的配置子表,经 pipeline_definition_id 访问
+        "pipeline_step_run", // V6:pipeline_instance 的 run 子表,经 pipeline_instance_id 访问
+        "workflow_node_run"); // V5:workflow_run 的 run 子表,经 workflow_run_id 访问
+    // 注:file_record / file_dispatch_record **有** tenant_id 列(V6 tenant_id NOT NULL)——它们是租户可达的
+    // 文件治理/派单表,不放这里(否则整表失明);其确属 by-design 的具体语句走 knownTenantlessBatchWriteStatements()。
   }
 
   /**
@@ -127,6 +127,10 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
    * #tenantExemptTables()} 的,断言其 WHERE 子句出现 {@code tenant_id}。缺失即违规——要么补 {@code AND tenant_id =
    * #{...}},要么(确属 by-design)加入 {@link #tenantExemptTables()} 或 {@link
    * #knownTenantlessBatchWriteStatements()} 并注明理由。
+   *
+   * <p><b>检测软肋(已知假阴性面):</b>只要 WHERE 起点之后**任意位置**出现 {@code tenant_id} 字面即判通过——包括它只出现在 子查询 / EXISTS /
+   * IN 里、并不约束被改行本身(如 {@code WHERE id = #{id} AND x IN (SELECT ... WHERE tenant_id =
+   * ...)})。这类"tenant_id 只约束子查询"的写会漏过。存量已逐条人工核实无此形态;此为静态字面扫描的固有局限,真隔离仍靠 code review + 运行时纪律兜底。
    */
   @Test
   void everyBatchTableWriteMustFilterByTenantId() throws IOException {
