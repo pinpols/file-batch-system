@@ -5,8 +5,12 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,6 +28,20 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>行为增强</b>:原手写实现冷却期一到即全放行(无半开态),此处补 HALF_OPEN 受限探测——冷却后仅放行少量试探调用 ({@code
  * permittedNumberOfCallsInHalfOpenState}),成功才闭合、失败立即重新熔断,避免半开瞬间被洪峰打垮。
+ *
+ * <p><b>指标绑定(#783 B3 覆盖缺口补齐)</b>:自持 registry 不接入 R4J autoconfig 的共享 registry,因此需要显式用 {@link
+ * TaggedCircuitBreakerMetrics#ofCircuitBreakerRegistry(CircuitBreakerRegistry)} 绑到注入的 {@link
+ * MeterRegistry},让 {@code resilience4j.circuitbreaker.state/calls/...} 对本类的 per-key breaker
+ * 也产出,而不只是 {@code batch.dispatch.circuits.open} 聚合 gauge(见 {@code DispatchDeliveryMetrics})。
+ *
+ * <p><b>高基数权衡</b>:per-key breaker 以 {@code tenantId|channelType|channelCode} 为
+ * tag,组合数理论上随渠道×租户增长。缓解依据 {@link #recordSuccess}既有的驱逐语义——CLOSED 且窗口内无失败的健康 breaker 会被 {@code
+ * registry.remove} 逐出,TaggedCircuitBreakerMetrics 绑定的是 registry 本身,breaker 被移除后其 tagged meter
+ * 也随之收回(resilience4j-micrometer 通过 registry 的 onEntryRemoved 事件联动)。因此稳态下驻留在 registry(进而暴露 per-key
+ * 明细指标)的只是当前失败中/半开试探中/熔断中的渠道,数量与 batch.dispatch.circuits.open 同数量级、天然有界;只有健康渠道不会长期占位。仍建议运维侧对 R4J
+ * per-key 明细指标设合理的 scrape/保留策略作为兜底,避免故障风暴瞬间 tenant×channel×code 组合激增。参考量化:scrape 间隔 ≥30s(默认 15s
+ * 会更密采到瞬时峰值、不必要放大 TSDB series 数);对 {@code resilience4j_circuitbreaker_state{state="open"}} 的活跃
+ * series 数设告警, 阈值取稳态基线(≈日常同时熔断渠道数)的约 10×;TSDB 侧对该指标名设较短保留(如 7d),避免峰值 series 长期占用。
  */
 @Component
 public class DispatchChannelCircuitBreaker {
@@ -37,9 +55,24 @@ public class DispatchChannelCircuitBreaker {
   private final DispatchCircuitBreakerProperties properties;
   private final CircuitBreakerRegistry registry;
 
-  public DispatchChannelCircuitBreaker(DispatchCircuitBreakerProperties properties) {
+  /**
+   * 生产/Spring 装配路径:注入真实 {@link MeterRegistry},自持 registry 绑到 micrometer,per-key breaker 状态吐 {@code
+   * resilience4j.circuitbreaker.*} 指标。
+   */
+  @Autowired
+  public DispatchChannelCircuitBreaker(
+      DispatchCircuitBreakerProperties properties, MeterRegistry meterRegistry) {
     this.properties = properties;
     this.registry = CircuitBreakerRegistry.of(buildConfig(properties));
+    TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(registry).bindTo(meterRegistry);
+  }
+
+  /**
+   * 纯单元测试便利构造器:不接 micrometer(内部用一次性 {@link SimpleMeterRegistry}),熔断行为与二参构造器完全等价。测试如需断言指标
+   * 绑定,请显式用二参构造器传入自己的 {@link MeterRegistry}。
+   */
+  public DispatchChannelCircuitBreaker(DispatchCircuitBreakerProperties properties) {
+    this(properties, new SimpleMeterRegistry());
   }
 
   private static CircuitBreakerConfig buildConfig(DispatchCircuitBreakerProperties properties) {
