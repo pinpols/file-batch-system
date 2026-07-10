@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.domain.notification.web.request.Notificat
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -43,6 +44,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   private NotificationSenderRegistry senderRegistry;
   private WebhookDispatcher webhookDispatcher;
   private SlidingWindowRateLimiter testChannelRateLimiter;
+  private CallbackUrlValidator callbackUrlValidator;
   private DefaultConsoleNotificationApplicationService service;
 
   @BeforeEach
@@ -56,6 +58,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
     webhookDispatcher = mock(WebhookDispatcher.class);
     testChannelRateLimiter = mock(SlidingWindowRateLimiter.class);
     when(testChannelRateLimiter.tryAcquire(any(), ArgumentMatchers.anyInt())).thenReturn(true);
+    callbackUrlValidator = mock(CallbackUrlValidator.class);
     service =
         new DefaultConsoleNotificationApplicationService(
             tenantGuard,
@@ -65,7 +68,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
             deliveryLogMapper,
             senderRegistry,
             webhookDispatcher,
-            testChannelRateLimiter);
+            testChannelRateLimiter,
+            callbackUrlValidator);
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(metadataResolver.current())
         .thenReturn(
@@ -137,6 +141,47 @@ class DefaultConsoleNotificationApplicationServiceTest {
         .containsEntry("enabled", true)
         .containsEntry("createdBy", "operator-1")
         .containsEntry("updatedBy", "operator-1");
+  }
+
+  @Test
+  void shouldValidateWebhookChannelUrlOnCreateAndRejectRestrictedAddress() {
+    // Critical 回归堵口:WEBHOOK 渠道 url 存前经 CallbackUrlValidator fail-closed,拦字面量内网/元数据 IP,
+    // 不让它入库(OkHttp Dns pin 对字面量 IP 短路不生效,此处是主修)。
+    when(channelMapper.selectByCode("tenant-a", "hook-1")).thenReturn(null);
+    org.mockito.Mockito.doThrow(
+            io.github.pinpols.batch.common.exception.BizException.of(
+                io.github.pinpols.batch.common.enums.ResultCode.INVALID_ARGUMENT,
+                "error.callback.restricted_address"))
+        .when(callbackUrlValidator)
+        .validate("https://169.254.169.254/latest/meta-data/");
+
+    assertThatThrownBy(
+            () ->
+                service.createChannel(
+                    "tenant-a",
+                    channelUpsert(
+                        "hook-1",
+                        "Hook One",
+                        "WEBHOOK",
+                        "{\"url\":\"https://169.254.169.254/latest/meta-data/\"}",
+                        true)))
+        .isInstanceOf(BizException.class);
+
+    verify(channelMapper, never()).insert(any());
+  }
+
+  @Test
+  void shouldNotValidateUrlForNonWebhookChannel() {
+    // 非 WEBHOOK 渠道(EMAIL/SMS 等)不经 callbackUrl SSRF 校验,避免误伤。
+    when(channelMapper.selectByCode("tenant-a", "email-1")).thenReturn(null);
+
+    service.createChannel(
+        "tenant-a",
+        channelUpsert(
+            "email-1", "Email One", "EMAIL", "{\"url\":\"https://example.com/x\"}", true));
+
+    verify(callbackUrlValidator, never()).validate(any());
+    verify(channelMapper).insert(any());
   }
 
   @Test

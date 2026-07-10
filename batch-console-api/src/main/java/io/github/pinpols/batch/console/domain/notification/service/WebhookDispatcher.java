@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -10,6 +11,7 @@ import io.github.pinpols.batch.console.domain.notification.param.WebhookDelivery
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -263,7 +265,13 @@ public class WebhookDispatcher {
   private void deliver(
       WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
       throws IOException {
-    // SSRF/rebinding 防护落在 httpClient 的 SsrfGuardedDns:OkHttp 建连回调时解析 + 校验 IP,连的就是校验的那个 IP。
+    // 主机名 rebinding:由 httpClient 内置 SsrfGuardedDns 在建连回调层解析 + 校验 + pin(连的就是校验的那个 IP)。
+    // 字面量 IP 兜底:OkHttp 对字面量 IP 短路不走 Dns,故这里补一次 guard 拦住 metadata/内网字面量 IP;
+    // 对主机名这次是冗余预检(实连 IP 仍由 SsrfGuardedDns 决定,不重开 rebinding 窗口)。
+    String host = URI.create(subscription.getCallbackUrl()).getHost();
+    if (host != null) {
+      DnsResolveGuard.resolveAndValidate(host);
+    }
     Request.Builder builder =
         new Request.Builder()
             .url(subscription.getCallbackUrl())

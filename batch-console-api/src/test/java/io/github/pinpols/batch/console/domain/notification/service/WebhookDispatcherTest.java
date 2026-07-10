@@ -126,6 +126,22 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  void shouldBlockDeliveryWhenCallbackIsLiteralInternalIp() {
+    // Critical 回归防护:OkHttp 对字面量 IP 短路不走 SsrfGuardedDns,故 deliver 里补 guard 兜底拦字面量内网/元数据 IP。
+    // 若没有这道兜底,租户建 WEBHOOK 渠道 url=169.254.169.254 点测试即打云 metadata。
+    WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
+    subscription.setCallbackUrl("https://169.254.169.254/latest/meta-data/");
+    WebhookEventPayload payload =
+        new WebhookEventPayload(
+            "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
+
+    WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription, payload, "{}");
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("restricted network range");
+  }
+
+  @Test
   void shouldSignPayloadWithHmacSha256() throws Exception {
     Method sign = WebhookDispatcher.class.getDeclaredMethod("sign", String.class, String.class);
     sign.setAccessible(true);

@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.domain.notification.web.request.Notificat
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
@@ -91,6 +92,12 @@ public class DefaultConsoleNotificationApplicationService
    */
   private final SlidingWindowRateLimiter testChannelRateLimiter;
 
+  /**
+   * WEBHOOK 渠道 url 存前 fail-closed 校验:拦字面量内网/元数据 IP。OkHttp 的 SsrfGuardedDns pin 对**字面量 IP** 短路不生效,
+   * 故字面量 IP 的 SSRF 必须在入库这道关拦住(与 webhook 订阅一致)。
+   */
+  private final CallbackUrlValidator callbackUrlValidator;
+
   /** deliverTest 每 (租户 + 渠道) 滑窗(1 分钟)内最多触发次数。 */
   private static final int TEST_CHANNEL_LIMIT_PER_MINUTE = 10;
 
@@ -117,6 +124,7 @@ public class DefaultConsoleNotificationApplicationService
     Guard.requireText(request.getChannelName(), "channelName is required");
     String channelType = request.getChannelType();
     requireKnownChannelType(channelType);
+    validateWebhookChannelUrl(channelType, request.getConfigJson());
     if (channelMapper.selectByCode(resolved, channelCode) != null) {
       throw BizException.of(
           ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
@@ -150,6 +158,7 @@ public class DefaultConsoleNotificationApplicationService
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
     requireKnownChannelType(request.getChannelType());
+    validateWebhookChannelUrl(request.getChannelType(), request.getConfigJson());
     String operator = metadataResolver.current().operatorId();
     channelMapper.update(
         mapOf(
@@ -160,6 +169,21 @@ public class DefaultConsoleNotificationApplicationService
             KEY_CONFIG_JSON, request.getConfigJson(),
             KEY_ENABLED, enabledOrDefault(request.getEnabled()),
             KEY_UPDATED_BY, operator));
+  }
+
+  /**
+   * WEBHOOK 渠道:对 config_json 里的 url 做存前 SSRF 校验(与 webhook 订阅同一把 {@link CallbackUrlValidator})。
+   * 拦字面量内网/元数据 IP —— 这是字面量 IP SSRF 的主修(OkHttp Dns pin 对字面量 IP 短路不生效)。url 缺失则跳过(由投递期"missing
+   * url"处理)。
+   */
+  private void validateWebhookChannelUrl(String channelType, String configJson) {
+    if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
+      return;
+    }
+    String url = str(parseConfig(configJson), "url");
+    if (url != null && !url.isBlank()) {
+      callbackUrlValidator.validate(url);
+    }
   }
 
   private static void requireKnownChannelType(String channelType) {
