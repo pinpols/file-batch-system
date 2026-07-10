@@ -330,8 +330,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // (纯排序加锁、丢结果)会把同 instance 的并发 report 完全串行、且是 O(N) 行锁。改用事务级 advisory lock:
     // 对 (tenantId, jobInstanceId) 取一把 pg_advisory_xact_lock,把同 instance 的并发 outcome 串行化,
     // 随事务自动释放。锁的是逻辑序而非行,因此:1) 下方 markStatus / updateOutputSummary(单分区写锁)与
-    // advancePartitionAndInstance(复读计数)始终在同一把逻辑锁下顺序执行,不再有锁顺序反转死锁;
-    // 2) 与 reclaim(FOR UPDATE SKIP LOCKED)的 asc/desc 行锁反转彻底消失(outcome 不再批量锁行)。
+    // advancePartitionAndInstance(复读计数)始终在同一把逻辑锁下顺序执行,消除了 outcome-vs-outcome 的锁顺序反转;
+    // 2) outcome 不再批量锁全兄弟分区,消除了旧的「reclaim asc N 行 / outcome desc N 行」环形死锁。
+    // 注意(边界):advisory lock 只串行化 outcome-vs-outcome,reclaim 不取该 advisory lock;outcome 仍按
+    // task(finishTask)→ partition(markStatus)取行锁,与 reclaim 的 partition→task 相反,单 outcome × 单
+    // reclaim
+    // 对同一 (task, partition) 的 2 行反转不由本 advisory lock 解决 —— 那条已由 PartitionReclaimUnit 对 task 行
+    // 改用 FOR UPDATE NOWAIT 让路修复(见 OutcomeVsReclaimDeadlockIntegrationTest)。
     if (task.getJobInstanceId() != null) {
       // A6:锁的阻塞获取耗时单独计时(争用归因)。record(Runnable) 只关心墙钟时长,返回值不用。
       advisoryLockWaitTimer.record(

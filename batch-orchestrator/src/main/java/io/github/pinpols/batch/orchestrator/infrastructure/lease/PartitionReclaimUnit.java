@@ -18,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -116,6 +117,24 @@ public class PartitionReclaimUnit {
       log.debug("reclaim skipped, partition version conflict: partitionId={}", partition.getId());
       // partition CAS 失败：另一并发流程已推进过该行，本轮跳过；事务可正常提交（未做任何修改）。
       return;
+    }
+    // #768 后续修复:reclaim 与 outcome(applyTaskOutcome)对同一 (task, partition) 的行锁取序相反——
+    // reclaim 是 partition(上面 resetForDispatch 已锁)→ task;outcome 是 task(finishTask)→
+    // partition(markStatus)。
+    // 若这里直接 resetForRetry(task 行锁)采用默认「等待」语义,当 outcome 正持有该 task 行、并反向等待本事务已持有的
+    // partition 行时,构成 40P01 行锁反转死锁(OutcomeVsReclaimDeadlockIntegrationTest 已真复现)。#768 的
+    // instance advisory lock 只串行化 outcome-vs-outcome(reclaim 不取该 advisory lock),挡不住这条 2 行反转。
+    // 修法:reclaim 是尽力而为的后台清理,先用 FOR UPDATE NOWAIT 试取 task 行锁——抢不到(=该 task 正被 outcome 回报)
+    // 就抛 ReclaimRetryableException 让本事务回滚(撤销上面的 partition reset)、本轮让路,由 15s 后的下一轮重试。
+    // reclaim 因此永不「等待」task 行锁,不再参与任何等待环。CAS/version/前态条件一律不变。
+    try {
+      jobTaskMapper.lockForReclaimNoWait(partition.getTenantId(), task.getId());
+    } catch (CannotAcquireLockException taskRowBusy) {
+      throw new ReclaimRetryableException(
+          "task row locked by concurrent outcome report, yielding reclaim this cycle: partitionId="
+              + partition.getId()
+              + ", taskId="
+              + task.getId());
     }
     if (jobTaskMapper.resetForRetry(
             partition.getTenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion())

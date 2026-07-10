@@ -304,8 +304,10 @@
          DefaultTaskOutcomeService.advancePartitionAndInstance 的「全兄弟 id desc FOR UPDATE」
          构成 asc-vs-desc 锁顺序反转死锁(同一 instance 两分区时)。SKIP LOCKED 让 reclaim 跳过
          正被 outcome 处理(已锁)的分区——本就不该回收在跑的分区——从而永不等待、不参与环形等待。
-         (当前生产 reclaim 走 PartitionReclaimUnit 的 per-partition REQUIRES_NEW 路径,单锁不反转;
-         本方法仅测试可达,此处为防 future footgun 的防御性硬化。) -->
+         (当前生产 reclaim 走 PartitionReclaimUnit 的 per-partition REQUIRES_NEW 路径,本方法仅测试可达。
+          注意:per-partition 路径并非「单锁」——reclaim 在该路径里取 partition→task 两把行锁,与 outcome 的
+          task→partition 顺序相反,曾真复现 40P01(见 OutcomeVsReclaimDeadlockIntegrationTest)。该反转已由
+          PartitionReclaimUnit 对 task 行改用 FOR UPDATE NOWAIT 让路修复,不再依赖 outcome 是否批量锁行。) -->
     <select id="selectExpiredLeases" resultMap="JobPartitionResultMap">
         select *
         from batch.job_partition

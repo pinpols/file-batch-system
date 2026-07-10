@@ -62,8 +62,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * </ul>
  *
  * <p>两条路径对同一 (task, partition) 取锁顺序<b>相反</b>。#768 的 advisory lock 只串行化 outcome-vs-outcome(reclaim
- * 不取 advisory lock),因此这条 2 行 AB-BA 反转必须靠别的机制避免 —— 本测就是要用真并发确认它在 60s 内<b>不</b>触发 PG 死锁 (SQLState
- * {@code 40P01} / "deadlock detected")。若真触发,即为「#768 未完全消除该反转」的重大发现,如实断言失败,不改绿。
+ * 不取 advisory lock),这条 2 行 AB-BA 反转靠 advisory lock <b>挡不住</b> —— 本测曾真复现 60s 内的 PG 死锁 (SQLState
+ * {@code 40P01}),即「#768 未完全消除该反转」。<b>修复</b>:{@code PartitionReclaimUnit.doReclaim} 对 task 行改用
+ * {@code FOR UPDATE NOWAIT} 让路(抢不到即本轮回滚、下轮重试),reclaim 因此永不「等待」task 行锁、不再参与等待环。本测现作为<b>回归守护</b>: 断言
+ * 60s 并发风暴内不再出现任何 40P01;若有人把它退回等待型 UPDATE 会立刻转红,不得改绿掩盖。
  *
  * <p>做法:ADR-046 束作业展开成单 instance + N 个 partition/task,claim 进 RUNNING;逐轮把 (task,partition,step) 重置回
  * RUNNING + 过期 lease,再用栅栏让 N 个 outcome 线程与 N 个 reclaim 线程同刻起跑抢同索引的 (task,partition)。跑 R 轮放大命中窗口。
