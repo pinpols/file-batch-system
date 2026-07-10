@@ -23,6 +23,8 @@ import io.github.pinpols.batch.console.domain.notification.web.request.Notificat
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.CallbackUrlValidator;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,6 +86,21 @@ public class DefaultConsoleNotificationApplicationService
   private final NotificationSenderRegistry senderRegistry;
   private final WebhookDispatcher webhookDispatcher;
 
+  /**
+   * deliverTest 是租户可反复触发的出站投递,也是 SSRF DNS-rebinding 的放大点(重复触发可赢 rebinding 竞态)。 按 (租户 + 渠道)
+   * 限频,挡住高频重放。
+   */
+  private final SlidingWindowRateLimiter testChannelRateLimiter;
+
+  /**
+   * WEBHOOK 渠道 url 存前 fail-closed 校验:拦字面量内网/元数据 IP。OkHttp 的 SsrfGuardedDns pin 对**字面量 IP** 短路不生效,
+   * 故字面量 IP 的 SSRF 必须在入库这道关拦住(与 webhook 订阅一致)。
+   */
+  private final CallbackUrlValidator callbackUrlValidator;
+
+  /** deliverTest 每 (租户 + 渠道) 滑窗(1 分钟)内最多触发次数。 */
+  private static final int TEST_CHANNEL_LIMIT_PER_MINUTE = 10;
+
   @Override
   public List<Map<String, Object>> listChannels(String tenantId) {
     return channelMapper.selectByTenant(tenantGuard.resolveTenant(tenantId));
@@ -107,6 +124,7 @@ public class DefaultConsoleNotificationApplicationService
     Guard.requireText(request.getChannelName(), "channelName is required");
     String channelType = request.getChannelType();
     requireKnownChannelType(channelType);
+    validateWebhookChannelUrl(channelType, request.getConfigJson());
     if (channelMapper.selectByCode(resolved, channelCode) != null) {
       throw BizException.of(
           ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
@@ -140,6 +158,7 @@ public class DefaultConsoleNotificationApplicationService
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
     requireKnownChannelType(request.getChannelType());
+    validateWebhookChannelUrl(request.getChannelType(), request.getConfigJson());
     String operator = metadataResolver.current().operatorId();
     channelMapper.update(
         mapOf(
@@ -150,6 +169,21 @@ public class DefaultConsoleNotificationApplicationService
             KEY_CONFIG_JSON, request.getConfigJson(),
             KEY_ENABLED, enabledOrDefault(request.getEnabled()),
             KEY_UPDATED_BY, operator));
+  }
+
+  /**
+   * WEBHOOK 渠道:对 config_json 里的 url 做存前 SSRF 校验(与 webhook 订阅同一把 {@link CallbackUrlValidator})。
+   * 拦字面量内网/元数据 IP —— 这是字面量 IP SSRF 的主修(OkHttp Dns pin 对字面量 IP 短路不生效)。url 缺失则跳过(由投递期"missing
+   * url"处理)。
+   */
+  private void validateWebhookChannelUrl(String channelType, String configJson) {
+    if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
+      return;
+    }
+    String url = str(parseConfig(configJson), "url");
+    if (url != null && !url.isBlank()) {
+      callbackUrlValidator.validate(url);
+    }
   }
 
   private static void requireKnownChannelType(String channelType) {
@@ -275,6 +309,11 @@ public class DefaultConsoleNotificationApplicationService
   @Override
   public Map<String, Object> testChannel(String tenantId, String channelCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    // SSRF 收窄:deliverTest 可反复触发,是 rebinding 竞态的放大点;超频拦在建连之前。
+    if (!testChannelRateLimiter.tryAcquire(
+        "notif:test:" + resolved + ":" + channelCode, TEST_CHANNEL_LIMIT_PER_MINUTE)) {
+      throw BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited");
+    }
     Map<String, Object> channel =
         Guard.requireFound(
             channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
