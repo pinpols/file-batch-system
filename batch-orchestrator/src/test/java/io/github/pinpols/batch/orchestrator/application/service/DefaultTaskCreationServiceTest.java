@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -192,6 +193,50 @@ class DefaultTaskCreationServiceTest {
     verify(jobTaskMapper, never()).insertBatch(any());
     verify(jobTaskMapper, never()).insert(any());
     verify(jobStepInstanceMapper, never()).insertBatch(any());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void createTasks_chunksLargeBatch_andPreservesIdBackfillOrder() {
+    // 1200 > chunk 500 → task/step 各分 3 批(500,500,200);id 回填拼接回原顺序正确。
+    int total = 1200;
+    List<JobTaskEntity> tasks = new ArrayList<>();
+    for (int i = 0; i < total; i++) {
+      tasks.add(buildTask(null, "t1", "IMPORT", i));
+    }
+    java.util.concurrent.atomic.AtomicLong nextId = new java.util.concurrent.atomic.AtomicLong(1L);
+    when(jobTaskMapper.insertBatch(any()))
+        .thenAnswer(
+            inv -> {
+              List<JobTaskEntity> chunk = inv.getArgument(0);
+              for (JobTaskEntity t : chunk) {
+                t.setId(nextId.getAndIncrement());
+              }
+              return chunk.size();
+            });
+
+    service.createTasks(tasks);
+
+    // task 与 step 各切 3 批
+    ArgumentCaptor<List<JobTaskEntity>> taskCap = ArgumentCaptor.forClass(List.class);
+    verify(jobTaskMapper, org.mockito.Mockito.times(3)).insertBatch(taskCap.capture());
+    assertThat(taskCap.getAllValues()).extracting(List::size).containsExactly(500, 500, 200);
+    ArgumentCaptor<List<JobStepInstanceEntity>> stepCap = ArgumentCaptor.forClass(List.class);
+    verify(jobStepInstanceMapper, org.mockito.Mockito.times(3)).insertBatch(stepCap.capture());
+    assertThat(stepCap.getAllValues()).extracting(List::size).containsExactly(500, 500, 200);
+
+    // 回填顺序:原 tasks 第 i 个拿到第 i 个生成 id;step 镜像的 jobTaskId 与之一致。
+    for (int i = 0; i < total; i++) {
+      assertThat(tasks.get(i).getId()).as("task %d id", i).isEqualTo((long) (i + 1));
+    }
+    List<JobStepInstanceEntity> allSteps = new ArrayList<>();
+    stepCap.getAllValues().forEach(allSteps::addAll);
+    assertThat(allSteps).hasSize(total);
+    for (int i = 0; i < total; i++) {
+      assertThat(allSteps.get(i).getJobTaskId())
+          .as("step %d jobTaskId", i)
+          .isEqualTo((long) (i + 1));
+    }
   }
 
   @Test

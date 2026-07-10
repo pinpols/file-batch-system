@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
@@ -85,6 +86,14 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
    */
   private Timer pollTimer;
 
+  /**
+   * A6:每轮 outbox 批填充规模。{@code attempted} 长期贴近 {@code batchSize} 上限=饱和信号(积压未消化, 应调大 batchSize
+   * 或加分片);{@code succeeded} 与 attempted 的差=Kafka 侧失败/重试压力。
+   */
+  private DistributionSummary batchAttemptedSummary;
+
+  private DistributionSummary batchSucceededSummary;
+
   @PostConstruct
   void initMetrics() {
     giveUpCounter =
@@ -99,6 +108,20 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
             .description(
                 "Outbox DB selectPending latency — isolated from Kafka send to diagnose slow"
                     + " queries vs slow brokers when publish.duration spikes.")
+            .publishPercentileHistogram()
+            .register(meterRegistry);
+    batchAttemptedSummary =
+        DistributionSummary.builder("batch.outbox.forward.attempted")
+            .description(
+                "Events attempted per outbox forward round — sustained values near outbox.batchSize"
+                    + " indicate saturation (backlog not draining).")
+            .publishPercentileHistogram()
+            .register(meterRegistry);
+    batchSucceededSummary =
+        DistributionSummary.builder("batch.outbox.forward.succeeded")
+            .description(
+                "Events successfully published per outbox forward round — gap vs attempted reflects"
+                    + " Kafka-side failure/retry pressure.")
             .publishPercentileHistogram()
             .register(meterRegistry);
   }
@@ -127,6 +150,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     OutcomeGroups groups = classifyOutcomes(inFlight);
     Map<FailedGroupKey, Instant> nextRetryAtByGroup = flushOutcomeGroups(groups);
     recordPendingRetries(groups.pendingRetries(), nextRetryAtByGroup);
+    // A6:本轮批填充规模喂 DistributionSummary(饱和/失败压力可观测)。
+    batchAttemptedSummary.record(groups.attemptedEvents());
+    batchSucceededSummary.record(groups.publishSucceeded());
     return ScheduleForwarderResult.of(
         groups.attemptedEvents(), groups.publishSucceeded(), groups.publishFailed());
   }
@@ -240,7 +266,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     for (InFlight item : inFlight) {
       OutboxEventEntity event = item.event();
       attemptedEvents++;
-      boolean published = Boolean.TRUE.equals(item.future().getNow(false));
+      boolean published = isPublishedNow(item.future());
       if (published) {
         publishSucceeded++;
         publishedByTenant
@@ -336,6 +362,20 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         BatchMdc.remove(StructuredLogField.TRACE_ID);
       }
     }
+  }
+
+  /**
+   * B2:安全判定单条 future 是否发布成功。{@code getNow(false)} 对 exceptionally-completed future 会 <b>抛</b>
+   * CompletionException——阶段二的 {@code allOf(...).exceptionally(...)} 只抑制了 <b>组合</b> future,单条 future
+   * 仍是异常态;若这里直接 getNow,一条 Kafka send 异步失败就会让整个 classifyOutcomes 上抛、阶段三完全跳过,整批事件原地 停在 PUBLISHING,要等
+   * resetStalePublishing 才回收(实测高峰积压放大)。故先用不抛的 {@code isCompletedExceptionally} /{@code isCancelled}
+   * 把异常态归为「未发布」(交阶段三按 FAILED 回写),只对正常完成的才取值。
+   */
+  private static boolean isPublishedNow(CompletableFuture<Boolean> future) {
+    if (!future.isDone() || future.isCancelled() || future.isCompletedExceptionally()) {
+      return false;
+    }
+    return Boolean.TRUE.equals(future.getNow(false));
   }
 
   /** PERF(5.4): 批量 UPDATE 命中行数与入参集合大小不一致时告警（守卫拒写=并发方已推进该行）。 */

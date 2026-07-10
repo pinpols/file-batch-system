@@ -43,6 +43,7 @@ import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
@@ -99,6 +100,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
+  /**
+   * A6:同 instance report 串行化的 advisory lock 阻塞获取耗时。争用此前只体现为端到端 report 延时,无法归因是 锁等待还是 DB 慢;这个 Timer
+   * 把锁等待单独切出来(P95 上升=同 instance 高并发 report 排队)。
+   */
+  private final Timer advisoryLockWaitTimer;
+
   @Lazy @Autowired private DefaultTaskOutcomeService self;
 
   @Component
@@ -130,6 +137,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     this.casMissCounter =
         Counter.builder("batch.orchestrator.cas.miss")
             .description("CAS miss count during optimistic locking updates")
+            .register(collaborators.meterRegistry());
+    this.advisoryLockWaitTimer =
+        Timer.builder("batch.report.advisory_lock.wait")
+            .description(
+                "Blocking wait to acquire the per-instance pg_advisory_xact_lock that serializes"
+                    + " concurrent reports for the same job_instance.")
+            .publishPercentileHistogram()
             .register(collaborators.meterRegistry());
   }
 
@@ -319,8 +333,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // advancePartitionAndInstance(复读计数)始终在同一把逻辑锁下顺序执行,不再有锁顺序反转死锁;
     // 2) 与 reclaim(FOR UPDATE SKIP LOCKED)的 asc/desc 行锁反转彻底消失(outcome 不再批量锁行)。
     if (task.getJobInstanceId() != null) {
-      jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
-          command.tenantId(), task.getJobInstanceId());
+      // A6:锁的阻塞获取耗时单独计时(争用归因)。record(Runnable) 只关心墙钟时长,返回值不用。
+      advisoryLockWaitTimer.record(
+          () ->
+              jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
+                  command.tenantId(), task.getJobInstanceId()));
     }
 
     if (command.success()) {

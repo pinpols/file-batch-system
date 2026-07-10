@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ class OutboxPollSchedulerTest {
   @Mock private OutboxEventMapper outboxEventMapper;
 
   private OutboxPollScheduler scheduler;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() throws Throwable {
@@ -55,6 +57,7 @@ class OutboxPollSchedulerTest {
     executor.setPoolSize(1);
     executor.setThreadNamePrefix("outbox-poll-test-");
     executor.initialize();
+    meterRegistry = new SimpleMeterRegistry();
     scheduler =
         new OutboxPollScheduler(
             scheduleForwarder,
@@ -65,6 +68,7 @@ class OutboxPollSchedulerTest {
             outboxEventMapper,
             new io.github.pinpols.batch.orchestrator.infrastructure.sharding
                 .StaticShardAssignmentProvider(governance.outbox()),
+            meterRegistry,
             executor);
     // 不调用 onApplicationReady()，避免后台线程干扰单元测试
   }
@@ -90,6 +94,9 @@ class OutboxPollSchedulerTest {
 
     verify(scheduleForwarder, never()).advance(any());
     verify(outboxPublishCircuitBreaker, never()).onAdvanceResult(anyInt());
+    // O1: 熔断跳过整轮时 batch.outbox.circuit.skipped_polls.total +1
+    assertThat(meterRegistry.get("batch.outbox.circuit.skipped_polls.total").counter().count())
+        .isEqualTo(1.0d);
   }
 
   // 自适应间隔行为通过 OutboxForwarderE2eIT 验证

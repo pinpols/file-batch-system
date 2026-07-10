@@ -73,10 +73,12 @@ class DefaultTaskOutcomeServiceTest {
   @Mock JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler;
 
   private DefaultTaskOutcomeService service;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   @SuppressWarnings("unchecked")
   void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
     OrchestratorJobMappers jobMappers =
         new OrchestratorJobMappers(
             jobInstanceMapper,
@@ -97,7 +99,7 @@ class DefaultTaskOutcomeServiceTest {
             mock(
                 io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService
                     .class),
-            new SimpleMeterRegistry(),
+            meterRegistry,
             jobInstanceTerminalChildStateReconciler,
             mock(ResultVersionWriter.class),
             mock(BatchDayReplayTerminalReconciler.class),
@@ -229,5 +231,7 @@ class DefaultTaskOutcomeServiceTest {
     // instance 级 advisory lock 必须先于针对自己分区的 markStatus 写锁。
     inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock(eq("t1"), eq(10L));
     inOrder.verify(jobPartitionMapper).markStatus(any());
+    // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
+    assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count()).isEqualTo(1L);
   }
 }

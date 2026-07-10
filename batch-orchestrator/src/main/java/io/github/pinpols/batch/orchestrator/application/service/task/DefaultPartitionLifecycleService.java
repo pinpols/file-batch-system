@@ -84,9 +84,9 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     }
     // PERF(5.1): launch fan-out 由逐条 insert 改单条多行 INSERT（N 往返 → 1）；
     // useGeneratedKeys 按序回填每个 entity 的 id，下游 buildTask/releaseForDispatch 依赖。
-    if (!partitionEntities.isEmpty()) {
-      jobPartitionMapper.insertBatch(partitionEntities);
-    }
+    // R2:按固定 chunk 切批,防绑定参数越 PG 65535 上限整批回滚;subList 视图回填保证 id 顺序正确。
+    BatchInsertChunks.insertInChunks(
+        partitionEntities, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobPartitionMapper::insertBatch);
     return partitionEntities;
   }
 

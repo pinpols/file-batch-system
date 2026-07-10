@@ -5,6 +5,10 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -64,6 +68,13 @@ public class OutboxPublishCircuitBreaker {
 
   private final OutboxProperties outboxProperties;
   private final OrchestratorRedisSupport redis;
+  private final MeterRegistry meterRegistry;
+
+  /**
+   * A5(outbox 部分):Redis 抖动时 allowNow/onAdvanceResult 走 fail-open 回落缓存态的累计次数。 非零速率=集群熔断态与 Redis
+   * 失联,虽不影响投递(事件已同事务落 PG)但说明基础设施降级,需运维关注。
+   */
+  private Counter failOpenCounter;
 
   /**
    * T-2：把 {@code cachedOpenUntilMs} + {@code closedCacheExpiresAt} 捆绑成单个不可变 record， 通过 volatile
@@ -78,9 +89,50 @@ public class OutboxPublishCircuitBreaker {
   private final AtomicBoolean halfOpenProbing = new AtomicBoolean(false);
 
   public OutboxPublishCircuitBreaker(
-      BatchOrchestratorGovernanceProperties governance, OrchestratorRedisSupport redis) {
+      BatchOrchestratorGovernanceProperties governance,
+      OrchestratorRedisSupport redis,
+      MeterRegistry meterRegistry) {
     this.outboxProperties = governance.outbox();
     this.redis = redis;
+    this.meterRegistry = meterRegistry;
+  }
+
+  /**
+   * O1:cluster-wide outbox 熔断可观测。DispatchChannel 有 {@code batch.dispatch.circuits.open} gauge,
+   * 这个集群级的此前唯一痕迹是每轮 log.warn。
+   *
+   * <ul>
+   *   <li>{@code batch.outbox.circuit.open}(0/1 gauge):熔断打开=整个集群 outbox 投递暂停,最严重降级之一;
+   *   <li>{@code batch.outbox.circuit.failopen.total}(counter):Redis 抖动放行(fail-open)的累计次数。
+   * </ul>
+   */
+  @PostConstruct
+  void initMetrics() {
+    Gauge.builder("batch.outbox.circuit.open", this, OutboxPublishCircuitBreaker::openStateSample)
+        .description(
+            "Cluster-wide outbox publish circuit breaker state (1=open → all orchestrators pause"
+                + " outbox delivery; 0=closed). One of the most severe degradations.")
+        .register(meterRegistry);
+    failOpenCounter =
+        Counter.builder("batch.outbox.circuit.failopen.total")
+            .description(
+                "Outbox circuit breaker fell back to cached state because Redis was unreachable"
+                    + " (fail-open). Non-zero rate signals Redis degradation, not delivery loss.")
+            .register(meterRegistry);
+  }
+
+  /**
+   * gauge 采样:读本地已发布的一致快照(不访问 Redis)。{@code openUntilMs > now} 即视为开态。 采样精度受快慢双路径缓存影响(与 allowNow
+   * 同源),用于告警足够。
+   */
+  private int openStateSample() {
+    return state.openUntilMs() > BatchDateTimeSupport.utcEpochMillis() ? 1 : 0;
+  }
+
+  private void recordFailOpen() {
+    if (failOpenCounter != null) {
+      failOpenCounter.increment();
+    }
   }
 
   /**
@@ -118,6 +170,7 @@ public class OutboxPublishCircuitBreaker {
       // Redis 不可达时 fail-open：outbox 事件本就与状态同事务落 PG 不丢,熔断器是纯保护性基础设施,
       // 不应把 Redis 故障放大成投递停摆(与 quota 限流器一致的 fail-open 语义)。回落上次缓存态:
       // 本地已知熔断开→继续拒;否则放行,Redis 恢复后 evalLong 自然重新同步集群态。
+      recordFailOpen();
       log.warn(
           "Outbox 熔断器:Redis 不可达,allowNow fail-open 回落缓存态(openUntilMs={}):{}",
           snapshot.openUntilMs(),
@@ -156,6 +209,7 @@ public class OutboxPublishCircuitBreaker {
     } catch (DataAccessException ex) {
       // Redis 不可达时 best-effort：本轮不更新集群熔断态,保留本地 state,重置半开标记避免泄漏,
       // 不向 OutboxPollScheduler 抛异常(否则每轮栽在 Redis 上,把 Redis 故障放大成投递停摆)。
+      recordFailOpen();
       log.warn("Outbox 熔断器:Redis 不可达,onAdvanceResult 跳过集群态更新:{}", ex.getMessage());
       halfOpenProbing.compareAndSet(true, false);
       return;

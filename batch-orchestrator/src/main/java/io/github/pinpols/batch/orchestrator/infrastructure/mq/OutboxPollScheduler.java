@@ -12,6 +12,8 @@ import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulS
 import io.github.pinpols.batch.orchestrator.infrastructure.sharding.ShardAssignment;
 import io.github.pinpols.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.RejectedExecutionException;
@@ -86,11 +88,14 @@ public class OutboxPollScheduler {
   private final ShardAssignmentProvider shardAssignmentProvider;
   private final ThreadPoolTaskScheduler executor;
 
+  /** O1:因集群 outbox 熔断打开而整轮跳过推进的次数。稳态应为 0,持续增长=集群投递降级。 */
+  private final Counter circuitSkippedPollsCounter;
+
   private final AtomicBoolean pollingLoopStarted = new AtomicBoolean(false);
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong currentIntervalMillis = new AtomicLong(0);
 
-  @SuppressWarnings("PMD.ExcessiveParameterList") // 8 项依赖均单一职责,封装 Command 类反而模糊语义
+  @SuppressWarnings("PMD.ExcessiveParameterList") // 9 项依赖均单一职责,封装 Command 类反而模糊语义
   public OutboxPollScheduler(
       DefaultScheduleForwarder scheduleForwarder,
       OutboxPublishCircuitBreaker outboxPublishCircuitBreaker,
@@ -99,6 +104,7 @@ public class OutboxPollScheduler {
       OrchestratorGracefulShutdown gracefulShutdown,
       OutboxEventMapper outboxEventMapper,
       ShardAssignmentProvider shardAssignmentProvider,
+      MeterRegistry meterRegistry,
       @Qualifier(OrchestratorAsyncConfiguration.OUTBOX_POLL_SCHEDULER)
           ThreadPoolTaskScheduler executor) {
     this.scheduleForwarder = scheduleForwarder;
@@ -109,6 +115,12 @@ public class OutboxPollScheduler {
     this.outboxEventMapper = outboxEventMapper;
     this.shardAssignmentProvider = shardAssignmentProvider;
     this.executor = executor;
+    this.circuitSkippedPollsCounter =
+        Counter.builder("batch.outbox.circuit.skipped_polls.total")
+            .description(
+                "Outbox poll rounds skipped because the cluster circuit breaker was open"
+                    + " (cooldown). Non-zero rate mirrors batch.outbox.circuit.open=1.")
+            .register(meterRegistry);
   }
 
   @EventListener(ApplicationReadyEvent.class)
@@ -207,6 +219,7 @@ public class OutboxPollScheduler {
       return null;
     }
     if (!outboxPublishCircuitBreaker.allowNow()) {
+      circuitSkippedPollsCounter.increment();
       log.warn("Outbox 投递熔断已打开：跳过推进（cooldown 中）");
       return null;
     }

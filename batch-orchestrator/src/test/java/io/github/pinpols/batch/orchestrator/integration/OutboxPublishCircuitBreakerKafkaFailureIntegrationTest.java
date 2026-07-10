@@ -129,7 +129,10 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
     @Primary
     OutboxPublishCircuitBreaker testCircuitBreaker(
         BatchOrchestratorGovernanceProperties governance) {
-      return new OutboxPublishCircuitBreaker(governance, new InMemoryCircuitRedisSupport());
+      return new OutboxPublishCircuitBreaker(
+          governance,
+          new InMemoryCircuitRedisSupport(),
+          new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
     @Bean

@@ -32,6 +32,7 @@ class DownstreamFallbackContextSmokeTest {
 
   @Autowired private DownstreamFallback downstreamFallback;
   @Autowired private CircuitBreakerRegistry circuitBreakerRegistry;
+  @Autowired private MeterRegistry meterRegistry;
 
   @Test
   void contextLoadsWithResilience4jAutoconfigAndFallbackWorks() {
@@ -42,6 +43,20 @@ class DownstreamFallbackContextSmokeTest {
 
     String result = downstreamFallback.callOrFallback("smoke", "op", () -> "ok", ex -> "fb");
     assertThat(result).isEqualTo("ok");
+  }
+
+  /**
+   * B3:光验 registry!=null + happy path 不够——若绑定链断裂(如 prod 误排除 metrics autoconfig),会「零 CB 指标而测试仍绿」。断言
+   * {@code resilience4j.circuitbreaker.state} 真被埋进 registry,守护绑定链本身。
+   */
+  @Test
+  void circuitBreakerStateMeterIsActuallyBound() {
+    // 触发一次调用确保 "smoke" 熔断器被创建并被 metrics binder 注册。
+    downstreamFallback.callOrFallback("smoke", "op", () -> "ok", ex -> "fb");
+
+    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").meters())
+        .as("metrics autoconfig must bind circuitbreaker.state gauge for created breakers")
+        .isNotEmpty();
   }
 
   @SpringBootConfiguration

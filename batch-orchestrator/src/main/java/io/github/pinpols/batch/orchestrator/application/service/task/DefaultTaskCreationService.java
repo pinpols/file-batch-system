@@ -58,7 +58,10 @@ public class DefaultTaskCreationService implements TaskCreationService {
     for (JobTaskEntity task : tasks) {
       validateForCreate(task);
     }
-    jobTaskMapper.insertBatch(tasks);
+    // R2:按固定 chunk 切批,防单条多行 INSERT 的绑定参数越 PG 65535 上限整批回滚。
+    // useGeneratedKeys 通过 subList 视图回填,id 落回原 tasks 对应位置(顺序正确)。
+    BatchInsertChunks.insertInChunks(
+        tasks, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobTaskMapper::insertBatch);
     List<JobStepInstanceEntity> stepInstances = new ArrayList<>(tasks.size());
     for (JobTaskEntity task : tasks) {
       if (task.getId() == null) {
@@ -67,7 +70,8 @@ public class DefaultTaskCreationService implements TaskCreationService {
       stepInstances.add(buildStepInstance(task));
     }
     if (!stepInstances.isEmpty()) {
-      jobStepInstanceMapper.insertBatch(stepInstances);
+      BatchInsertChunks.insertInChunks(
+          stepInstances, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobStepInstanceMapper::insertBatch);
     }
     return tasks;
   }
