@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
+import java.util.ArrayList;
 import java.util.List;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
@@ -338,5 +340,33 @@ class SqlTransformComputeSqlValidatorTest {
                 + " where batch_key = :batchKey");
 
     assertThat(sql).contains("batch.process_staging");
+  }
+
+  // ── W1-4: 配置源统一守护 ──────────────────────────────────────────────────
+  // process 的 forbiddenFunctions 默认值必须与 batch-common 单一权威源内容一致，不得再各侧硬编码字面量各自维护。
+
+  @Test
+  void defaultForbiddenFunctions_matchesBatchCommonSharedSource() {
+    assertThat(new SqlTransformComputeSecurityProperties().getForbiddenFunctions())
+        .containsExactlyInAnyOrderElementsOf(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
+  }
+
+  @Test
+  void validateSelect_blocksFunctionAddedToSharedSource() {
+    // 模拟"单一源加一个禁用函数"：在共享源基础上追加一个仅测试用的函数名，process 侧必须同样拦住它——
+    // 证明 properties 默认值是从共享清单派生的副本，而非另一份独立硬编码副本。
+    List<String> extended = new ArrayList<>(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
+    extended.add("w1_4_test_only_marker_fn");
+    SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    security.setForbiddenFunctions(extended);
+    SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
+
+    assertRejected(
+        () ->
+            validator.validateSelect(
+                "select w1_4_test_only_marker_fn(tenant_id) from biz.order_event where tenant_id"
+                    + " = :tenantId"),
+        "w1_4_test_only_marker_fn");
   }
 }

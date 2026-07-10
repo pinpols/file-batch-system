@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.processes.sql;
 
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
@@ -20,26 +21,12 @@ public class SqlTransformComputeSecurityProperties {
   private boolean forbidSelectStar = true;
 
   /**
-   * 禁止在表达式 / FROM / WHERE 中调用的 PG 函数(大小写不敏感 AST 遍历,按函数家族前缀匹配)。覆盖:连接 dblink(含
-   * dblink_exec/dblink_connect 家族) / 系统级 pg_terminate_backend / 文件系统 pg_read_file / 任意命令
-   * copy_from_program / 拒绝服务 pg_sleep(含 pg_sleep_for/pg_sleep_until) 等。
+   * 禁止在表达式 / FROM / WHERE 中调用的 PG 函数(大小写不敏感 AST 遍历,按函数家族前缀匹配)。默认值取自单一权威源 {@link
+   * SelectSqlAstValidator#DEFAULT_FORBIDDEN_FUNCTIONS}（与 sensor/DQ、export 侧同源，防止清单漂移）；yml
+   * 可在此基础上追加或覆盖。
    */
   private List<String> forbiddenFunctions =
-      new ArrayList<>(
-          List.of(
-              "dblink",
-              "pg_terminate_backend",
-              "pg_cancel_backend",
-              "pg_read_file",
-              "pg_read_server_files",
-              "pg_read_binary_file",
-              "pg_ls_dir",
-              "copy_from_program",
-              "lo_import",
-              "lo_export",
-              "pg_sleep",
-              "pg_sleep_for",
-              "pg_sleep_until"));
+      new ArrayList<>(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
 
   /**
    * 强制源 SQL 在顶层有 LIMIT 子句,防止无界 ResultSet 拖垮连接池/OOM。

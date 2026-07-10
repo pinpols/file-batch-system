@@ -3,6 +3,8 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -166,5 +168,30 @@ class SensorSqlValidatorTest {
     // 传空黑名单时不做函数校验（保留调用方按需关闭的能力）。
     String sql = "SELECT pg_sleep(0) AS c FROM biz.signal";
     assertThat(SensorSqlValidator.validate(sql, ALLOWED, List.of())).isEqualTo(sql);
+  }
+
+  // ── W1-4: 配置源统一守护 ──────────────────────────────────────────────────
+  // sensor/DQ 的默认禁用函数黑名单必须与 batch-common 单一权威源同一份数据，不得再各侧硬编码字面量各自维护。
+
+  @Test
+  void defaultForbiddenFunctions_isSameSourceAsBatchCommon() {
+    assertThat(SensorSqlValidator.DEFAULT_FORBIDDEN_FUNCTIONS)
+        .isSameAs(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
+  }
+
+  @Test
+  void validate_blocksFunctionAddedToSharedSource() {
+    // 模拟"单一源加一个禁用函数"：在共享源基础上追加一个仅测试用的函数名，sensor 侧必须同样拦住它——
+    // 证明它是从共享清单派生的运行时列表，而非另一份独立硬编码副本。
+    List<String> extended = new ArrayList<>(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
+    extended.add("w1_4_test_only_marker_fn");
+
+    assertThatThrownBy(
+            () ->
+                SensorSqlValidator.validate(
+                    "SELECT w1_4_test_only_marker_fn(1) AS c FROM biz.signal", ALLOWED, extended))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function")
+        .hasMessageContaining("w1_4_test_only_marker_fn");
   }
 }
