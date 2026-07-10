@@ -37,6 +37,36 @@ public final class SelectSqlAstValidator {
 
   private SelectSqlAstValidator() {}
 
+  /**
+   * 危险 PG 函数黑名单的单一权威源。sensor / DataQuality（{@code SensorSqlValidator}）、export（{@code
+   * SqlTemplateExportSecurityProperties}）、process（{@code SqlTransformComputeSecurityProperties}）
+   * 三侧默认清单此前各自维护同一份字面量（历史上曾漂移：export/process 早于 sensor/DQ 补齐 pg_sleep_for/pg_sleep_until 与 dblink
+   * 家族），改一处漏一处。统一到此常量后，各侧仍保留自己的默认值字段（properties 语义不变，租户仍可在 yml 覆盖/追加），只是默认值取自这里，防止再次漂移。
+   *
+   * <p>覆盖：任意命令 / 网络连接（{@code dblink} 家族 / {@code copy_from_program}）、后端控制（{@code
+   * pg_terminate_backend} / {@code pg_cancel_backend}）、服务器文件读取（{@code pg_read_file} / {@code
+   * pg_read_binary_file} / {@code pg_read_server_files} / {@code pg_ls_dir} / {@code lo_import} /
+   * {@code lo_export}）、拒绝服务（{@code pg_sleep} 家族，含 {@code pg_sleep_for} / {@code
+   * pg_sleep_until}）。按家族前缀匹配（见 {@link #findForbiddenFunctionCall}）。
+   *
+   * <p>调用方需要可变副本时应 {@code new ArrayList<>(DEFAULT_FORBIDDEN_FUNCTIONS)}——这里返回的是不可变列表。
+   */
+  public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS =
+      List.of(
+          "dblink",
+          "pg_terminate_backend",
+          "pg_cancel_backend",
+          "pg_read_file",
+          "pg_read_binary_file",
+          "pg_read_server_files",
+          "pg_ls_dir",
+          "copy_from_program",
+          "lo_import",
+          "lo_export",
+          "pg_sleep",
+          "pg_sleep_for",
+          "pg_sleep_until");
+
   /** SELECT/WITH 主体（含所有 WITH 子查询、UNION 分支、嵌套子查询）中是否出现 {@code SELECT *} 或 {@code SELECT table.*}。 */
   public static boolean containsSelectStar(Select select) {
     Deque<Select> queue = collectInitialBodies(select);

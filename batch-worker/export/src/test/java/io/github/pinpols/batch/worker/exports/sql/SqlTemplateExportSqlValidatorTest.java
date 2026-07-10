@@ -3,7 +3,9 @@ package io.github.pinpols.batch.worker.exports.sql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -325,5 +327,32 @@ class SqlTemplateExportSqlValidatorTest {
             + "WHERE sb.tenant_id = :tenantId AND sb.batch_no = :batchNo";
     String result = validatorWithDefaults().validate(sql);
     assertThat(result).isEqualTo(sql);
+  }
+
+  // ── W1-4: 配置源统一守护 ──────────────────────────────────────────────────
+  // export 的 forbiddenFunctions 默认值必须与 batch-common 单一权威源内容一致，不得再各侧硬编码字面量各自维护。
+
+  @Test
+  void defaultForbiddenFunctions_matchesBatchCommonSharedSource() {
+    assertThat(new SqlTemplateExportSecurityProperties().getForbiddenFunctions())
+        .containsExactlyInAnyOrderElementsOf(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
+  }
+
+  @Test
+  void validate_blocksFunctionAddedToSharedSource() {
+    // 模拟"单一源加一个禁用函数"：在共享源基础上追加一个仅测试用的函数名，export 侧必须同样拦住它——
+    // 证明 properties 默认值是从共享清单派生的副本，而非另一份独立硬编码副本。
+    List<String> extended = new ArrayList<>(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
+    extended.add("w1_4_test_only_marker_fn");
+    SqlTemplateExportSecurityProperties props = new SqlTemplateExportSecurityProperties();
+    props.setForbiddenFunctions(extended);
+    SqlTemplateExportSqlValidator v = new SqlTemplateExportSqlValidator(props);
+
+    String sql =
+        "SELECT w1_4_test_only_marker_fn(1) AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> v.validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'w1_4_test_only_marker_fn'");
   }
 }

@@ -28,29 +28,14 @@ public final class SensorSqlValidator {
   private SensorSqlValidator() {}
 
   /**
-   * sensor / DataQuality SQL 默认禁用的 PG 函数黑名单。覆盖：任意命令 / 网络连接（{@code dblink} / {@code
-   * copy_from_program}）、后端控制（{@code pg_terminate_backend} / {@code
-   * pg_cancel_backend}）、服务器文件读取（{@code pg_read_file} / {@code pg_read_binary_file} / {@code
-   * pg_ls_dir} / {@code lo_import} / {@code lo_export}）、拒绝服务（{@code pg_sleep} / {@code
-   * pg_sleep_for} / {@code pg_sleep_until}）。与 worker export/process 侧保持一致的安全边界。函数按家族前缀匹配（见 {@link
-   * SelectSqlAstValidator#findForbiddenFunctionCall}），故 {@code dblink} 一条即覆盖 {@code dblink_exec} /
-   * {@code dblink_connect} / {@code dblink_send_query} 等。
+   * sensor / DataQuality SQL 默认禁用的 PG 函数黑名单。取自单一权威源 {@link
+   * SelectSqlAstValidator#DEFAULT_FORBIDDEN_FUNCTIONS}（与 worker export/process 侧的 {@code
+   * SqlTemplateExportSecurityProperties} / {@code SqlTransformComputeSecurityProperties}
+   * 默认值同源，防止三侧清单再次漂移）。函数按家族前缀匹配（见 {@link SelectSqlAstValidator#findForbiddenFunctionCall}），故 {@code
+   * dblink} 一条即覆盖 {@code dblink_exec} / {@code dblink_connect} / {@code dblink_send_query} 等。
    */
   public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS =
-      List.of(
-          "dblink",
-          "pg_terminate_backend",
-          "pg_cancel_backend",
-          "pg_read_file",
-          "pg_read_binary_file",
-          "pg_read_server_files",
-          "pg_ls_dir",
-          "copy_from_program",
-          "lo_import",
-          "lo_export",
-          "pg_sleep",
-          "pg_sleep_for",
-          "pg_sleep_until");
+      SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS;
 
   /**
    * 解析校验，返回 trim 后 SQL；失败抛 IllegalArgumentException 含原因。使用 {@link #DEFAULT_FORBIDDEN_FUNCTIONS}
