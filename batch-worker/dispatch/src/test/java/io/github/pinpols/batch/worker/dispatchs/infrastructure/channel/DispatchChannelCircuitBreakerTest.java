@@ -248,6 +248,36 @@ class DispatchChannelCircuitBreakerTest {
   }
 
   @Test
+  void shouldRemoveMeterWhenBreakerEvictedOnRecovery() throws InterruptedException {
+    // 完整生命周期 + 无 meter 泄漏(简报第 4 点验收):OPEN → HALF_OPEN 成功探测 → CLOSED 且 0 残留失败触发
+    // recordSuccess 驱逐 → 断言该 key 的 state meter 从 meterRegistry 消失。这是"基数不爆靠驱逐→onEntryRemoved
+    // →removeMetrics"核心机制的直接回归兜底:resilience4j 升级改事件语义时此测试会红,而非静默泄漏 meter。
+    properties.setCooldownMillis(30L);
+    SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    DispatchChannelCircuitBreaker cb = new DispatchChannelCircuitBreaker(properties, meterRegistry);
+
+    String key = "ch-lifecycle";
+    triggerOpenWith(cb, key); // → OPEN
+    assertThat(cb.allow(key)).as("OPEN 时应拒绝").isFalse();
+    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", key).meters())
+        .as("OPEN breaker 必须已被 metered")
+        .isNotEmpty();
+
+    Thread.sleep(60); // 越过冷却期 → HALF_OPEN
+
+    // 半开受限探测全成功 → CLOSED;末次 recordSuccess 时 CLOSED 且窗口内 0 失败 → registry.remove 驱逐
+    for (int i = 0; i < 3; i++) {
+      assertThat(cb.allow(key)).isTrue();
+      cb.recordSuccess(key);
+    }
+    assertThat(cb.currentOpenCircuits()).isEqualTo(0);
+
+    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", key).meters())
+        .as("breaker 恢复健康被驱逐后,其 tagged state meter 必须随 onEntryRemoved 一并消失(无泄漏)")
+        .isEmpty();
+  }
+
+  @Test
   void shouldNotAlterCircuitBreakerBehaviorWhenMeterRegistryInjected() {
     // 约束验证:注入 MeterRegistry 只加指标绑定,allow/recordSuccess/recordFailure 语义与无 MeterRegistry 时完全一致。
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();

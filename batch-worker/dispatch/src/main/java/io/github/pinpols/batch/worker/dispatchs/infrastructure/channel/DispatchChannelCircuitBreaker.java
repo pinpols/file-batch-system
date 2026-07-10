@@ -39,7 +39,9 @@ import org.springframework.stereotype.Component;
  * registry.remove} 逐出,TaggedCircuitBreakerMetrics 绑定的是 registry 本身,breaker 被移除后其 tagged meter
  * 也随之收回(resilience4j-micrometer 通过 registry 的 onEntryRemoved 事件联动)。因此稳态下驻留在 registry(进而暴露 per-key
  * 明细指标)的只是当前失败中/半开试探中/熔断中的渠道,数量与 batch.dispatch.circuits.open 同数量级、天然有界;只有健康渠道不会长期占位。仍建议运维侧对 R4J
- * per-key 明细指标设合理的 scrape/保留策略作为兜底,避免故障风暴瞬间 tenant×channel×code 组合激增。
+ * per-key 明细指标设合理的 scrape/保留策略作为兜底,避免故障风暴瞬间 tenant×channel×code 组合激增。参考量化:scrape 间隔 ≥30s(默认 15s
+ * 会更密采到瞬时峰值、不必要放大 TSDB series 数);对 {@code resilience4j_circuitbreaker_state{state="open"}} 的活跃
+ * series 数设告警, 阈值取稳态基线(≈日常同时熔断渠道数)的约 10×;TSDB 侧对该指标名设较短保留(如 7d),避免峰值 series 长期占用。
  */
 @Component
 public class DispatchChannelCircuitBreaker {
