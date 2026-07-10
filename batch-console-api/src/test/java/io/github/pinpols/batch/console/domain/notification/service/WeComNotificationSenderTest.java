@@ -1,8 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,17 +16,29 @@ import org.junit.jupiter.api.Test;
 class WeComNotificationSenderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final SsrfGuardedDns ssrfGuardedDns =
+      new SsrfGuardedDns(mock(BatchSecurityProperties.class));
 
   /** 记录 postJson 是否被调用 + 收到的 body，断言「缺 url 不走网络」。 */
   private AtomicReference<String> capturedBody;
 
   /** 可配置返回的桩：覆盖 postJson 返回预置 JSON，不走真实网络。 */
   private WeComNotificationSender newSender(int statusCode, String responseBody) {
-    return new WeComNotificationSender(objectMapper) {
+    return new WeComNotificationSender(objectMapper, ssrfGuardedDns) {
       @Override
       protected WeComHttpResponse postJson(String url, String body) {
         capturedBody.set(body);
         return new WeComHttpResponse(statusCode, responseBody);
+      }
+    };
+  }
+
+  /** postJson 被调用即失败的桩：证明 SSRF guard 在建连前短路。 */
+  private WeComNotificationSender newSenderThatMustNotConnect() {
+    return new WeComNotificationSender(objectMapper, ssrfGuardedDns) {
+      @Override
+      protected WeComHttpResponse postJson(String url, String body) {
+        throw new AssertionError("must not connect to restricted address");
       }
     };
   }
@@ -103,5 +118,37 @@ class WeComNotificationSenderTest {
     assertThat(result.success()).isFalse();
     assertThat(result.httpStatus()).isEqualTo(200);
     assertThat(result.errorSummary()).isEqualTo("wecom errcode=93000");
+  }
+
+  @Test
+  @DisplayName("SSRF: 主机名解析到内网回环 → 建连前被 guard 拦, 不走网络")
+  void shouldBlock_whenHostResolvesToInternalAddress() {
+    // arrange
+    WeComNotificationSender sender = newSenderThatMustNotConnect();
+
+    // act
+    WebhookDeliveryResult result =
+        sender.send(messageWith("{\"url\":\"https://localhost/robot?key=x\"}"));
+
+    // assert: BlockedAddressException 折叠为 failure(等价 restricted network range)
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("BlockedAddressException");
+    assertThat(capturedBody.get()).isNull();
+  }
+
+  @Test
+  @DisplayName("SSRF: 字面量内网/元数据 IP → 被 guard 兜底拦(OkHttp 对字面量 IP 短路不走 Dns)")
+  void shouldBlock_whenUrlIsLiteralInternalIp() {
+    // arrange
+    WeComNotificationSender sender = newSenderThatMustNotConnect();
+
+    // act
+    WebhookDeliveryResult result =
+        sender.send(messageWith("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));
+
+    // assert
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("BlockedAddressException");
+    assertThat(capturedBody.get()).isNull();
   }
 }

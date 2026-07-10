@@ -3,15 +3,17 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,12 +38,30 @@ public class SlackNotificationSender implements NotificationSender {
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
-  private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  /** 单次调用总时长上限,兜住慢回调长期占用线程(与 WebhookDispatcher 同款)。 */
+  private static final Duration CALL_TIMEOUT = Duration.ofSeconds(15);
 
-  public SlackNotificationSender(ObjectMapper objectMapper) {
+  private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+  private final ObjectMapper objectMapper;
+
+  /**
+   * OkHttp 客户端内置 {@link SsrfGuardedDns},在建连回调层做 per-request SSRF pin —— 连的就是 guard 校验过的那个 IP, 关闭
+   * DNS-rebinding 的 TOCTOU 窗口,TLS 仍按 hostname 校验(SNI/证书不动)。与 WebhookDispatcher / worker-dispatch
+   * 同款。
+   */
+  private final OkHttpClient httpClient;
+
+  public SlackNotificationSender(ObjectMapper objectMapper, SsrfGuardedDns ssrfGuardedDns) {
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    this.httpClient =
+        new OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT)
+            .readTimeout(REQUEST_TIMEOUT)
+            .writeTimeout(REQUEST_TIMEOUT)
+            .callTimeout(CALL_TIMEOUT)
+            .dns(ssrfGuardedDns)
+            .build();
   }
 
   @Override
@@ -68,7 +88,9 @@ public class SlackNotificationSender implements NotificationSender {
     }
 
     try {
-      // SSRF/rebinding 防护:租户可配 url,投递前二次解析校验 IP 不落内网/回环/链路本地。
+      // 字面量 IP 兜底:OkHttp 对字面量 IP 短路不走 SsrfGuardedDns,故这里补一次 guard 拦住 metadata/内网字面量 IP。
+      // IM 渠道 url 存前未过 CallbackUrlValidator(仅 WEBHOOK 渠道过),故此兜底不可省。对主机名是冗余预检,
+      // 实连 IP 仍由 SsrfGuardedDns 决定(连的就是校验的那个 IP),不重开 rebinding 窗口。
       DnsResolveGuard.resolveAndValidate(URI.create(url).getHost());
       SlackResponse response = postJson(url, body);
       int status = response.status();
@@ -82,13 +104,6 @@ public class SlackNotificationSender implements NotificationSender {
           message.channelCode(),
           status);
       return WebhookDeliveryResult.failure(status, truncate(responseBody, ERROR_SUMMARY_MAX_CHARS));
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      log.warn(
-          "[slack] delivery interrupted tenant={} channel={}",
-          message.tenantId(),
-          message.channelCode());
-      return WebhookDeliveryResult.failure(null, ie.getClass().getSimpleName());
     } catch (RuntimeException | IOException e) {
       log.warn(
           "[slack] delivery failed tenant={} channel={} ex={}",
@@ -134,17 +149,11 @@ public class SlackNotificationSender implements NotificationSender {
   protected record SlackResponse(int status, String body) {}
 
   /** 抽出便于单测覆盖：POST JSON 到 url，返回状态码 + 响应体。 */
-  protected SlackResponse postJson(String url, String body)
-      throws IOException, InterruptedException {
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .timeout(REQUEST_TIMEOUT)
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-            .build();
-    HttpResponse<String> response =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    return new SlackResponse(response.statusCode(), response.body());
+  protected SlackResponse postJson(String url, String body) throws IOException {
+    Request request = new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
+    try (Response response = httpClient.newCall(request).execute()) {
+      String responseBody = response.body() == null ? "" : response.body().string();
+      return new SlackResponse(response.code(), responseBody);
+    }
   }
 }

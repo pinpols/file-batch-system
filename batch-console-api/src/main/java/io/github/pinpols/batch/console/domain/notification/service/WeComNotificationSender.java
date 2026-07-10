@@ -4,13 +4,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -21,7 +23,7 @@ import org.springframework.util.StringUtils;
  * 渲染 JSON 截断拼成简洁摘要。企业微信返回 {@code {"errcode":0,...}} 为成功， 其余 errcode / HTTP 非 2xx / 异常一律折叠成 {@link
  * WebhookDeliveryResult#failure}（不抛、不打 url，日志净化）。
  *
- * <p>无状态、线程安全（单例 bean，共享 {@link HttpClient}）。参考 captcha 远程校验器范式： HTTP POST 抽 {@code protected}
+ * <p>无状态、线程安全（单例 bean，共享 {@link OkHttpClient}）。参考 captcha 远程校验器范式： HTTP POST 抽 {@code protected}
  * 方法便于单测打桩。
  */
 @Component
@@ -34,12 +36,30 @@ public class WeComNotificationSender implements NotificationSender {
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
-  private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  /** 单次调用总时长上限,兜住慢回调长期占用线程(与 WebhookDispatcher 同款)。 */
+  private static final Duration CALL_TIMEOUT = Duration.ofSeconds(15);
 
-  public WeComNotificationSender(ObjectMapper objectMapper) {
+  private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+  private final ObjectMapper objectMapper;
+
+  /**
+   * OkHttp 客户端内置 {@link SsrfGuardedDns},在建连回调层做 per-request SSRF pin —— 连的就是 guard 校验过的那个 IP, 关闭
+   * DNS-rebinding 的 TOCTOU 窗口,TLS 仍按 hostname 校验(SNI/证书不动)。与 WebhookDispatcher / worker-dispatch
+   * 同款。
+   */
+  private final OkHttpClient httpClient;
+
+  public WeComNotificationSender(ObjectMapper objectMapper, SsrfGuardedDns ssrfGuardedDns) {
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    this.httpClient =
+        new OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT)
+            .readTimeout(REQUEST_TIMEOUT)
+            .writeTimeout(REQUEST_TIMEOUT)
+            .callTimeout(CALL_TIMEOUT)
+            .dns(ssrfGuardedDns)
+            .build();
   }
 
   @Override
@@ -55,7 +75,9 @@ public class WeComNotificationSender implements NotificationSender {
     }
     String body = buildTextMessage(message);
     try {
-      // SSRF/rebinding 防护:租户可配 url,投递前二次解析校验 IP 不落内网/回环/链路本地。
+      // 字面量 IP 兜底:OkHttp 对字面量 IP 短路不走 SsrfGuardedDns,故这里补一次 guard 拦住 metadata/内网字面量 IP。
+      // IM 渠道 url 存前未过 CallbackUrlValidator(仅 WEBHOOK 渠道过),故此兜底不可省。主机名的实连 IP 由 SsrfGuardedDns
+      // 在建连回调层 pin(连的就是校验的那个 IP),关闭 rebinding 窗口。
       DnsResolveGuard.resolveAndValidate(URI.create(url).getHost());
       WeComHttpResponse response = postJson(url, body);
       return interpret(response);
@@ -141,18 +163,13 @@ public class WeComNotificationSender implements NotificationSender {
 
   /** HTTP POST 抽出便于单测打桩（覆盖此方法返回预置 JSON，不走真实网络）。 */
   protected WeComHttpResponse postJson(String url, String body) throws Exception {
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .timeout(REQUEST_TIMEOUT)
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-            .build();
-    HttpResponse<String> response =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    return new WeComHttpResponse(response.statusCode(), response.body());
+    Request request = new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
+    try (Response response = httpClient.newCall(request).execute()) {
+      String responseBody = response.body() == null ? "" : response.body().string();
+      return new WeComHttpResponse(response.code(), responseBody);
+    }
   }
 
-  /** {@link #postJson} 返回的最小响应视图，解耦 JDK {@link HttpResponse}，便于单测构造。 */
+  /** {@link #postJson} 返回的最小响应视图，解耦 OkHttp {@link Response}，便于单测构造。 */
   protected record WeComHttpResponse(int statusCode, String body) {}
 }
