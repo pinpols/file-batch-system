@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.arch;
 
 import io.github.pinpols.batch.common.arch.BaseMapperXmlTenantGuardArchTest;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 治理护栏:任何引用 batch.* 业务表的 mapper XML,SELECT/UPDATE/DELETE 都必须强制带 tenant_id 过滤, 不允许 {@code <if
@@ -38,5 +39,38 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "FileArrivalGroupMapper",
         "ConsoleUserAccountMapper",
         "OutboxRetryLogMapper");
+  }
+
+  /**
+   * batch.* UPDATE/DELETE 缺 tenant_id 谓词的语句级豁免(表带 tenant_id 列,但隔离不在本条 SQL 的 WHERE)。每条注明 by-design
+   * 依据。console-api 是租户可达面,故此处逐条核实过服务层隔离机制。红线:新写用户可达 batch.* 写严禁往此追加。
+   */
+  @Override
+  protected Set<String> knownTenantlessBatchWriteStatements() {
+    return Set.of(
+        // 账号 CRUD:服务层 ConsoleUserAccountService 每次写前先 selectById 再 assertSameTenantOrGlobal(读校验后按
+        // id 写)
+        "ConsoleUserAccountMapper#updateProfile",
+        "ConsoleUserAccountMapper#updatePasswordHash",
+        "ConsoleUserAccountMapper#updatePasswordHashAndMustChange",
+        "ConsoleUserAccountMapper#updateEnabled",
+        "ConsoleUserAccountMapper#deleteById",
+        // 假日子表:业务日历的子表,服务层先 calendarMapper.selectById(tenantId,id) 校验父日历归属,再按 calendar_id/id 改删
+        "CalendarHolidayMapper#update",
+        "CalendarHolidayMapper#deleteById",
+        "CalendarHolidayMapper#deleteByCalendarId",
+        "CalendarHolidayMapper#deleteByCalendarIdAndId",
+        // Web Push 订阅:按浏览器 push endpoint(全局唯一)或订阅 id;touch/stale 由推送发件器/清理任务驱动
+        "ConsolePushSubscriptionMapper#touchLastPushedAt",
+        "ConsolePushSubscriptionMapper#deleteAllByEndpoint",
+        "ConsolePushSubscriptionMapper#deleteIfStaleSince",
+        // Webhook 投递重试:重试调度器全局认领后按投递 id 推进状态(非用户可达的按 id 直改)
+        "ConsoleWebhookDeliveryLogMapper#claimForRetry",
+        "ConsoleWebhookDeliveryLogMapper#markRetrySuccess",
+        "ConsoleWebhookDeliveryLogMapper#markRetryFailure",
+        "ConsoleWebhookDeliveryLogMapper#markGiveUp",
+        // 工作流定义子表级联删除:按父 workflow_definition_id 删(父定义已按 tenant 校验后整体重建)
+        "WorkflowNodeMapper#deleteByWorkflowDefinitionId",
+        "WorkflowEdgeMapper#deleteByWorkflowDefinitionId");
   }
 }
