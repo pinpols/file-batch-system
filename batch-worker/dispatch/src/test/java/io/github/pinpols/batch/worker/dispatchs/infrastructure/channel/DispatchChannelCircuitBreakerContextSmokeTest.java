@@ -24,6 +24,10 @@ import org.springframework.test.context.TestPropertySource;
  *
  * <p>{@link DispatchChannelCircuitBreaker} 使用自持的 per-key registry(不依赖 autoconfig 的共享 registry, 以隔离
  * {@code currentOpenCircuits()} 语义),但本冒烟仍导入 R4J autoconfig 以确认其在本模块可无害装配。
+ *
+ * <p><b>#783 B3 覆盖缺口已补齐</b>:{@link #circuitBreakerMetricsBindsStateMeter_selfHeldRegistry()} 断言自持
+ * registry 的 per-key breaker OPEN 时,注入的 {@link MeterRegistry} 里也真出现对应的 {@code
+ * resilience4j.circuitbreaker.state} meter——不再只覆盖共享 autoconfig registry。
  */
 @SpringBootTest(classes = DispatchChannelCircuitBreakerContextSmokeTest.SmokeApp.class)
 @ActiveProfiles("test")
@@ -49,10 +53,9 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
    * 未被静默剔除)。用<b>共享 autoconfig registry</b> 建一个探针熔断器,断言 {@code resilience4j.circuitbreaker.state}
    * 确被埋入——绑定链一旦断裂会「零 CB 指标而测试仍绿」,这条守住它。
    *
-   * <p><b>覆盖边界(如实说明)</b>:这里断言的只是<b>共享 autoconfig registry</b> 的绑定链。而 {@link
-   * DispatchChannelCircuitBreaker} 有意用<b>自持 per-key registry</b>(见类注释,与 autoconfig 解耦以隔离 {@code
-   * currentOpenCircuits()} 语义),因此<b>该 breaker 自持 registry 是否真吐指标本用例并不覆盖</b>—— 给它的 per-key registry
-   * 加 micrometer 绑定并断言属后续工作(follow-up)。
+   * <p><b>覆盖边界(如实说明)</b>:这里断言的只是<b>共享 autoconfig registry</b> 的绑定链,与 {@link
+   * DispatchChannelCircuitBreaker} 自持的 per-key registry 相互独立(见类注释)。自持 registry 的绑定见下方 {@link
+   * #circuitBreakerMetricsBindsStateMeter_selfHeldRegistry()}。
    */
   @Test
   void circuitBreakerMetricsAutoconfigBindsStateMeter_sharedRegistryOnly() {
@@ -60,6 +63,27 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
 
     assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").meters())
         .as("metrics autoconfig must bind circuitbreaker.state gauge in worker-dispatch context")
+        .isNotEmpty();
+  }
+
+  /**
+   * #783 B3 覆盖缺口补齐:{@link DispatchChannelCircuitBreaker} 自持 per-key registry 不接共享 autoconfig
+   * registry,之前只有 {@code batch.dispatch.circuits.open} 聚合 gauge、没有 R4J 明细指标覆盖。这里让某个 key 熔断
+   * OPEN,断言注入的 {@link MeterRegistry} 里真出现该 breaker 的 {@code resilience4j.circuitbreaker.state}
+   * meter(带 {@code name} tag 定位到具体 key),验证 {@code TaggedCircuitBreakerMetrics} 绑定链在 Spring 上下文里真活着。
+   */
+  @Test
+  void circuitBreakerMetricsBindsStateMeter_selfHeldRegistry() {
+    String key = "t-smoke|API|ch-smoke";
+    // 默认 failureThreshold=5(见 DispatchCircuitBreakerProperties 默认值)
+    for (int i = 0; i < 5; i++) {
+      circuitBreaker.allow(key);
+      circuitBreaker.recordFailure(key);
+    }
+    assertThat(circuitBreaker.allow(key)).as("breaker for key must be OPEN").isFalse();
+
+    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", key).meters())
+        .as("self-held registry breaker state must be bound to the injected MeterRegistry")
         .isNotEmpty();
   }
 
@@ -78,8 +102,8 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
 
     @Bean
     DispatchChannelCircuitBreaker dispatchChannelCircuitBreaker(
-        DispatchCircuitBreakerProperties properties) {
-      return new DispatchChannelCircuitBreaker(properties);
+        DispatchCircuitBreakerProperties properties, MeterRegistry meterRegistry) {
+      return new DispatchChannelCircuitBreaker(properties, meterRegistry);
     }
   }
 }

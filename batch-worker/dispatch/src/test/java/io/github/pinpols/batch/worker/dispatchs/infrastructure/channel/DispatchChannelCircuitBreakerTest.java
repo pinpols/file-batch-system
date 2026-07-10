@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -209,6 +210,56 @@ class DispatchChannelCircuitBreakerTest {
     }
     assertThat(breaker.allow(CHANNEL)).isFalse();
     assertThat(breaker.currentOpenCircuits()).isEqualTo(1);
+  }
+
+  // --- 指标绑定(#783 B3 覆盖缺口)---
+
+  @Test
+  void shouldBindSelfHeldRegistryStateMeterWhenOpen() {
+    SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    DispatchChannelCircuitBreaker cb = new DispatchChannelCircuitBreaker(properties, meterRegistry);
+
+    triggerOpenWith(cb, "ch-metered");
+
+    assertThat(
+            meterRegistry
+                .find("resilience4j.circuitbreaker.state")
+                .tag("name", "ch-metered")
+                .meters())
+        .as("OPEN breaker for the key must be bound to the injected MeterRegistry")
+        .isNotEmpty();
+  }
+
+  @Test
+  void shouldIsolateMetersPerKeyAcrossDifferentBreakerKeys() {
+    SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    DispatchChannelCircuitBreaker cb = new DispatchChannelCircuitBreaker(properties, meterRegistry);
+
+    triggerOpenWith(cb, "ch-a");
+    cb.recordFailure("ch-b"); // below threshold, stays CLOSED
+
+    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", "ch-a").meters())
+        .as("ch-a breaker must be metered")
+        .isNotEmpty();
+    // ch-b 未熔断但仍是活跃 breaker(CLOSED 且有失败计数,未被 recordSuccess 驱逐),同样应有独立 meter
+    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", "ch-b").meters())
+        .as("ch-b breaker must be independently metered from ch-a")
+        .isNotEmpty();
+  }
+
+  @Test
+  void shouldNotAlterCircuitBreakerBehaviorWhenMeterRegistryInjected() {
+    // 约束验证:注入 MeterRegistry 只加指标绑定,allow/recordSuccess/recordFailure 语义与无 MeterRegistry 时完全一致。
+    SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    DispatchChannelCircuitBreaker cb = new DispatchChannelCircuitBreaker(properties, meterRegistry);
+
+    cb.recordFailure(CHANNEL);
+    cb.recordFailure(CHANNEL);
+    assertThat(cb.allow(CHANNEL)).isTrue(); // below threshold, same as no-registry constructor
+
+    cb.recordFailure(CHANNEL);
+    assertThat(cb.allow(CHANNEL)).isFalse(); // threshold reached, OPEN
+    assertThat(cb.currentOpenCircuits()).isEqualTo(1);
   }
 
   // --- helpers ---
