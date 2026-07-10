@@ -106,12 +106,13 @@ func TestKafkaConsumer_Integration(t *testing.T) {
 				continue // ignore stray records from other runs
 			}
 			seen[msg.TaskID] = disp
-			// Commit ONLY on acceptance; otherwise drop pending so the offset
-			// is withheld and the message would be redelivered.
+			// Commit ONLY on acceptance; otherwise Withhold so the offset is
+			// deferred (never crossed by a later commit) and the message would be
+			// redelivered — mirroring the live consume loop's disposition handling.
 			if disp == client.DispositionAccepted {
 				consumer.Commit()
 			} else {
-				consumer.DropPending()
+				consumer.Withhold()
 			}
 		}
 	}

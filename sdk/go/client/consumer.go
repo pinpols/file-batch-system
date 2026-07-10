@@ -88,6 +88,16 @@ type Consumer interface {
 	Resume()
 	// Commit acknowledges processed offsets.
 	Commit()
+	// Withhold marks the LAST polled record as valid-but-deferred: its offset is
+	// NOT committed and NO later commit on the same partition may cross it, so the
+	// record is redelivered (on rebalance/restart) instead of being silently
+	// skipped. Called instead of Commit() for §A schema-rejected / §1.9
+	// foreign-tenant records and for hard claim failures (5xx exhausted) — cases
+	// where committing would create an "offset advanced but task never handled"
+	// black hole. Mirrors the Java SDK's seek-back+withhold semantics
+	// (KafkaTaskConsumer.handleRecordAndMaybeCommit RETRY_LATER) as far as the
+	// broker-agnostic SPI allows; see the kafka adapter for the offset-ceiling.
+	Withhold()
 	// Wakeup interrupts an in-progress Poll (used on graceful stop, §1.6).
 	Wakeup()
 	// Close releases resources.
@@ -179,13 +189,14 @@ type FakeConsumer struct {
 	mu      sync.Mutex
 	records [][]Record
 	idx     int
-	paused  bool
-	woken   bool
-	Commits int
-	Pauses  int
-	Resumes int
-	Wakeups int
-	Closed  bool
+	paused    bool
+	woken     bool
+	Commits   int
+	Withholds int
+	Pauses    int
+	Resumes   int
+	Wakeups   int
+	Closed    bool
 }
 
 // NewFakeConsumer scripts successive Poll() batches.
@@ -227,6 +238,11 @@ func (f *FakeConsumer) IsPaused() bool { f.mu.Lock(); defer f.mu.Unlock(); retur
 // Commit records a commit call.
 func (f *FakeConsumer) Commit() { f.mu.Lock(); defer f.mu.Unlock(); f.Commits++ }
 
+// Withhold records a withhold call (offset deferred, never committed). The fake
+// carries no offsets, so it only tracks the count; the real kafka adapter
+// enforces the offset-ceiling invariant.
+func (f *FakeConsumer) Withhold() { f.mu.Lock(); defer f.mu.Unlock(); f.Withholds++ }
+
 // Wakeup records a wakeup and short-circuits further polls.
 func (f *FakeConsumer) Wakeup() { f.mu.Lock(); defer f.mu.Unlock(); f.woken = true; f.Wakeups++ }
 
@@ -234,6 +250,7 @@ func (f *FakeConsumer) Wakeup() { f.mu.Lock(); defer f.mu.Unlock(); f.woken = tr
 func (f *FakeConsumer) Close() { f.mu.Lock(); defer f.mu.Unlock(); f.Closed = true }
 
 // counters returns synchronized snapshots for test assertions.
-func (f *FakeConsumer) wakeups() int { f.mu.Lock(); defer f.mu.Unlock(); return f.Wakeups }
-func (f *FakeConsumer) closed() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.Closed }
-func (f *FakeConsumer) commits() int { f.mu.Lock(); defer f.mu.Unlock(); return f.Commits }
+func (f *FakeConsumer) wakeups() int   { f.mu.Lock(); defer f.mu.Unlock(); return f.Wakeups }
+func (f *FakeConsumer) closed() bool   { f.mu.Lock(); defer f.mu.Unlock(); return f.Closed }
+func (f *FakeConsumer) commits() int   { f.mu.Lock(); defer f.mu.Unlock(); return f.Commits }
+func (f *FakeConsumer) withholds() int { f.mu.Lock(); defer f.mu.Unlock(); return f.Withholds }
