@@ -47,8 +47,7 @@ public class ConsoleTenantGuard {
       return normalized;
     }
 
-    // 租户角色 / 系统上下文：以 JWT 为权威；JWT / RequestScope 均缺失时允许 requestTenantId
-    // fallback 以支持 @Async / 定时任务等系统路径。requestTenantId 与 JWT tenantId
+    // 租户角色 / 系统上下文：以 JWT 为权威。requestTenantId 与 JWT tenantId
     // 不一致时抛 FORBIDDEN —— 这是越权的真正拦截点（参见 shouldRejectMismatchedTenant 测试）
     ConsoleRequestMetadata metadata = currentMetadataOrNull();
     String authenticatedTenantId = authenticatedTenantId();
@@ -57,7 +56,15 @@ public class ConsoleTenantGuard {
             ? authenticatedTenantId
             : metadata != null ? metadata.tenantId() : null;
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
-      effectiveTenantId = normalized;
+      // M1 (#780 评审) fail-closed 收口：JWT tenant claim 与 request metadata 双缺失时，
+      // 仅在<b>系统 / @Async 路径</b>（SecurityContext 无 ConsolePrincipal）回退到调用方
+      // 携带的 requestTenantId 以支持定时任务 / 异步推送等无 principal 的内部路径。
+      // <b>web / 已认证路径</b>（SecurityContext 有 ConsolePrincipal 但 tenant 上下文缺失）
+      // 不得回退到请求方自带 tenantId —— 否则一个无 tenant claim 的 principal 可借此读任意
+      // 租户（IDOR）。缺上下文即在下方 fail-closed 为 FORBIDDEN。
+      if (!hasAuthenticatedPrincipal()) {
+        effectiveTenantId = normalized;
+      }
     }
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
       // 认证已通过(JWT 解析成功)但租户上下文判定失败(JWT 缺 tenant claim / 损坏 / RequestScope 缺失且无 fallback)
@@ -129,6 +136,18 @@ public class ConsoleTenantGuard {
     } catch (ScopeNotActiveException exception) {
       return null;
     }
+  }
+
+  /**
+   * 当前调用是否处于 web / 已认证上下文（SecurityContext 持有 {@link ConsolePrincipal}）。
+   *
+   * <p>用于区分 web 请求路径与系统 / @Async 内部路径：console 的 @Async / 定时任务不传播 SecurityContext（见 {@code
+   * ConsoleAsyncConfiguration}，默认 ThreadLocal 不继承），故那些路径 此处返回 {@code false}，保留 requestTenantId
+   * fallback；web 请求线程始终带 principal，返回 {@code true}，缺租户上下文时 fail-closed。
+   */
+  private boolean hasAuthenticatedPrincipal() {
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal;
   }
 
   private boolean isCurrentUserGlobal() {
