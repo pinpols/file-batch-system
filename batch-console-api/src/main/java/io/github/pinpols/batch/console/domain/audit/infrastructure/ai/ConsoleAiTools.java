@@ -7,7 +7,9 @@ import io.github.pinpols.batch.console.domain.job.web.query.JobInstanceQueryRequ
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobExecutionLogResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -24,11 +26,17 @@ public class ConsoleAiTools {
 
   private final String tenantId;
   private final ConsoleQueryApplicationService queryService;
+  private final ConsoleClusterDiagnosticService diagnosticService;
   private final int maxRows;
 
-  public ConsoleAiTools(String tenantId, ConsoleQueryApplicationService queryService, int maxRows) {
+  public ConsoleAiTools(
+      String tenantId,
+      ConsoleQueryApplicationService queryService,
+      ConsoleClusterDiagnosticService diagnosticService,
+      int maxRows) {
     this.tenantId = tenantId;
     this.queryService = queryService;
+    this.diagnosticService = diagnosticService;
     this.maxRows = Math.max(maxRows, 1);
   }
 
@@ -81,6 +89,70 @@ public class ConsoleAiTools {
                     + " finishedAt="
                     + instance.finishedAt())
         .collect(Collectors.joining("\n"));
+  }
+
+  @Tool(
+      description =
+          "返回当前租户的集群健康诊断快照(只读,固定阈值):ShedLock 定时任务租约、Worker 注册一致性、"
+              + "Outbox 投递健康、终态实例遗留活跃子项。用于解读『任务卡住 / stuck / 不推进 / 定时任务不跑 / "
+              + "worker 失联 / 事件积压』等集群面问题,判断卡点在哪一层并给处置建议。无需任何参数。")
+  public String getClusterDiagnostics() {
+    if (diagnosticService == null) {
+      return "集群诊断服务当前不可用(诊断能力未装配)。";
+    }
+    Map<String, Object> diagnostics = diagnosticService.diagnose(tenantId);
+    if (diagnostics == null || diagnostics.isEmpty()) {
+      return "集群诊断当前无数据(可能诊断服务未就绪或该租户无相关记录)。";
+    }
+    Map<String, Object> shedLock = subMap(diagnostics.get("shedLock"));
+    Map<String, Object> workers = subMap(diagnostics.get("workers"));
+    Map<String, Object> outbox = subMap(diagnostics.get("outbox"));
+    Map<String, Object> terminal = subMap(diagnostics.get("terminalChildren"));
+    return "[集群诊断] 当前租户只读快照(固定阈值,超阈即判不健康)\n"
+        + "ShedLock 定时任务租约: totalLocks="
+        + field(shedLock, "totalLocks")
+        + " activeLocks="
+        + field(shedLock, "activeLocks")
+        + "\nWorker 一致性: healthy="
+        + field(workers, "healthy")
+        + " onlineWorkers="
+        + field(workers, "onlineWorkers")
+        + " drainingWorkers="
+        + field(workers, "drainingWorkers")
+        + " offlineWorkers="
+        + field(workers, "offlineWorkers")
+        + " staleOnlineWorkers="
+        + field(workers, "staleOnlineWorkers")
+        + " drainingPastDeadlineWorkers="
+        + field(workers, "drainingPastDeadlineWorkers")
+        + " decommissionedWorkersWithActiveTasks="
+        + field(workers, "decommissionedWorkersWithActiveTasks")
+        + " invalidCapabilityTags="
+        + field(workers, "invalidCapabilityTags")
+        + " runningInstances="
+        + field(workers, "runningInstances")
+        + "\nOutbox 投递: healthy="
+        + field(outbox, "healthy")
+        + " pendingEvents="
+        + field(outbox, "pendingEvents")
+        + " activeEvents="
+        + field(outbox, "activeEvents")
+        + " stalePublishingEvents="
+        + field(outbox, "stalePublishingEvents")
+        + "\n终态子项 (terminalChildren): healthy="
+        + field(terminal, "healthy")
+        + " terminalInstancesWithActiveChildren="
+        + field(terminal, "terminalInstancesWithActiveChildren");
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> subMap(Object value) {
+    return value instanceof Map ? (Map<String, Object>) value : Map.of();
+  }
+
+  private static String field(Map<String, Object> map, String key) {
+    Object value = map.get(key);
+    return value == null ? "-" : value.toString();
   }
 
   private String renderInstance(ConsoleJobInstanceResponse instance) {

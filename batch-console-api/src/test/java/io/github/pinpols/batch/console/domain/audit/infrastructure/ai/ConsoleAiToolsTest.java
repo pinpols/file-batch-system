@@ -12,8 +12,11 @@ import io.github.pinpols.batch.console.domain.job.web.query.JobInstanceQueryRequ
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobExecutionLogResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -26,9 +29,10 @@ class ConsoleAiToolsTest {
   private static final String TENANT = "tenant-1";
 
   @Mock private ConsoleQueryApplicationService queryService;
+  @Mock private ConsoleClusterDiagnosticService diagnosticService;
 
   private ConsoleAiTools tools() {
-    return new ConsoleAiTools(TENANT, queryService, 10);
+    return new ConsoleAiTools(TENANT, queryService, diagnosticService, 10);
   }
 
   private ConsoleJobInstanceResponse instance(Long id, String status, String failureClass) {
@@ -128,5 +132,49 @@ class ConsoleAiToolsTest {
     verify(queryService).jobInstances(captor.capture());
     assertThat(captor.getValue().getTenantId()).isEqualTo(TENANT);
     assertThat(captor.getValue().getInstanceStatus()).isEqualTo("FAILED");
+  }
+
+  @Test
+  void getClusterDiagnosticsRendersHealthAndBindsTenant() {
+    Map<String, Object> shedLock = new LinkedHashMap<>();
+    shedLock.put("totalLocks", 3);
+    shedLock.put("activeLocks", 1);
+    Map<String, Object> workers = new LinkedHashMap<>();
+    workers.put("healthy", false);
+    workers.put("onlineWorkers", 2);
+    workers.put("staleOnlineWorkers", 1);
+    workers.put("runningInstances", 5);
+    Map<String, Object> outbox = new LinkedHashMap<>();
+    outbox.put("healthy", true);
+    outbox.put("pendingEvents", 0);
+    outbox.put("stalePublishingEvents", 0);
+    Map<String, Object> terminalChildren = new LinkedHashMap<>();
+    terminalChildren.put("healthy", true);
+    terminalChildren.put("terminalInstancesWithActiveChildren", 0);
+    Map<String, Object> diagnostics = new LinkedHashMap<>();
+    diagnostics.put("shedLock", shedLock);
+    diagnostics.put("workers", workers);
+    diagnostics.put("outbox", outbox);
+    diagnostics.put("terminalChildren", terminalChildren);
+    when(diagnosticService.diagnose(eq(TENANT))).thenReturn(diagnostics);
+
+    String out = tools().getClusterDiagnostics();
+
+    assertThat(out)
+        .contains("ShedLock")
+        .contains("totalLocks=3")
+        .contains("Worker")
+        .contains("healthy=false")
+        .contains("staleOnlineWorkers=1")
+        .contains("Outbox")
+        .contains("terminal");
+    // 租户由构造绑定,模型不传租户 —— 诊断强制限定当前租户
+    verify(diagnosticService).diagnose(TENANT);
+  }
+
+  @Test
+  void getClusterDiagnosticsHandlesEmptyResult() {
+    when(diagnosticService.diagnose(eq(TENANT))).thenReturn(Map.of());
+    assertThat(tools().getClusterDiagnostics()).isNotBlank();
   }
 }
