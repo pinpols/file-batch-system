@@ -1,8 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -10,6 +13,8 @@ import org.junit.jupiter.api.Test;
 class DingTalkNotificationSenderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final SsrfGuardedDns ssrfGuardedDns =
+      new SsrfGuardedDns(mock(BatchSecurityProperties.class));
 
   private NotificationMessage message(String configJson) {
     WebhookEventPayload payload =
@@ -20,7 +25,8 @@ class DingTalkNotificationSenderTest {
 
   @Test
   void supportsIsCaseInsensitive() {
-    DingTalkNotificationSender sender = new DingTalkNotificationSender(objectMapper);
+    DingTalkNotificationSender sender =
+        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns);
     assertThat(sender.supports("DINGTALK")).isTrue();
     assertThat(sender.supports("dingtalk")).isTrue();
     assertThat(sender.supports("DingTalk")).isTrue();
@@ -32,7 +38,7 @@ class DingTalkNotificationSenderTest {
   void missingUrlFailsWithoutNetworkCall() {
     AtomicReference<Boolean> called = new AtomicReference<>(false);
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper) {
+        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
           @Override
           protected String postJson(String url, String body) {
             called.set(true);
@@ -52,7 +58,7 @@ class DingTalkNotificationSenderTest {
   void errcodeZeroIsOk() {
     AtomicReference<String> sentBody = new AtomicReference<>();
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper) {
+        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
           @Override
           protected String postJson(String url, String body) {
             sentBody.set(body);
@@ -71,7 +77,7 @@ class DingTalkNotificationSenderTest {
   @Test
   void nonZeroErrcodeFails() {
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper) {
+        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
           @Override
           protected String postJson(String url, String body) {
             return "{\"errcode\":310000,\"errmsg\":\"keywords not in content\"}";
@@ -90,7 +96,7 @@ class DingTalkNotificationSenderTest {
   void secretAppendsTimestampAndSignToUrl() {
     AtomicReference<String> sentUrl = new AtomicReference<>();
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper) {
+        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
           @Override
           protected long epochMillis() {
             return 1_700_000_000_000L;
@@ -115,5 +121,39 @@ class DingTalkNotificationSenderTest {
     // 加签后的 sign 是 base64+urlencode，非空且不等于明文 secret。
     String sign = sentUrl.get().substring(sentUrl.get().indexOf("&sign=") + "&sign=".length());
     assertThat(sign).isNotBlank().doesNotContain("SEC123");
+  }
+
+  @Test
+  void ssrfHostResolvingToInternalIsBlockedBeforeNetwork() {
+    DingTalkNotificationSender sender =
+        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
+          @Override
+          protected String postJson(String url, String body) {
+            throw new AssertionError("must not connect to internal address");
+          }
+        };
+
+    WebhookDeliveryResult result =
+        sender.send(message("{\"url\":\"https://localhost/robot/send?access_token=t\"}"));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("BlockedAddressException");
+  }
+
+  @Test
+  void ssrfLiteralInternalIpIsBlocked() {
+    DingTalkNotificationSender sender =
+        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
+          @Override
+          protected String postJson(String url, String body) {
+            throw new AssertionError("must not connect to metadata IP");
+          }
+        };
+
+    WebhookDeliveryResult result =
+        sender.send(message("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("BlockedAddressException");
   }
 }

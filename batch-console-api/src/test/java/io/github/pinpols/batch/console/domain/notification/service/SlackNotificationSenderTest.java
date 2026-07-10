@@ -1,8 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -12,6 +15,8 @@ import org.junit.jupiter.api.Test;
 class SlackNotificationSenderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final SsrfGuardedDns ssrfGuardedDns =
+      new SsrfGuardedDns(mock(BatchSecurityProperties.class));
 
   private NotificationMessage message(String configJson) {
     WebhookEventPayload payload =
@@ -23,7 +28,7 @@ class SlackNotificationSenderTest {
   @DisplayName("supports 大小写不敏感匹配 SLACK，其余渠道不接")
   void shouldSupportSlackCaseInsensitive() {
     // arrange
-    SlackNotificationSender sender = new SlackNotificationSender(objectMapper);
+    SlackNotificationSender sender = new SlackNotificationSender(objectMapper, ssrfGuardedDns);
 
     // act / assert
     assertThat(sender.supports("SLACK")).isTrue();
@@ -37,7 +42,7 @@ class SlackNotificationSenderTest {
   void shouldFailWithoutGoingNetwork_whenUrlMissing() {
     // arrange: postJson 若被调用即让测试失败
     SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper) {
+        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
           @Override
           protected SlackResponse postJson(String url, String body) {
             throw new AssertionError("must not call network when url missing");
@@ -59,7 +64,7 @@ class SlackNotificationSenderTest {
     // arrange
     AtomicReference<String> captured = new AtomicReference<>();
     SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper) {
+        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
           @Override
           protected SlackResponse postJson(String url, String body) {
             captured.set(body);
@@ -82,7 +87,7 @@ class SlackNotificationSenderTest {
   void shouldFail_whenBodyNotOk() {
     // arrange
     SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper) {
+        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
           @Override
           protected SlackResponse postJson(String url, String body) {
             return new SlackResponse(400, "invalid_payload");
@@ -97,5 +102,47 @@ class SlackNotificationSenderTest {
     assertThat(result.success()).isFalse();
     assertThat(result.httpStatus()).isEqualTo(400);
     assertThat(result.errorSummary()).isEqualTo("invalid_payload");
+  }
+
+  @Test
+  @DisplayName("SSRF: 主机名解析到内网回环 -> 建连前被 guard 拦, 不走网络")
+  void shouldBlock_whenHostResolvesToInternalAddress() {
+    // arrange: postJson 被调用即失败, 证明 guard 在建连前短路
+    SlackNotificationSender sender =
+        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
+          @Override
+          protected SlackResponse postJson(String url, String body) {
+            throw new AssertionError("must not connect to internal address");
+          }
+        };
+
+    // act
+    WebhookDeliveryResult result =
+        sender.send(message("{\"url\":\"https://localhost/services/XXX\"}"));
+
+    // assert: BlockedAddressException 折叠为 failure(等价 restricted network range)
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("BlockedAddressException");
+  }
+
+  @Test
+  @DisplayName("SSRF: 字面量内网/元数据 IP -> 被 guard 兜底拦(OkHttp 对字面量 IP 短路不走 Dns)")
+  void shouldBlock_whenUrlIsLiteralInternalIp() {
+    // arrange
+    SlackNotificationSender sender =
+        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
+          @Override
+          protected SlackResponse postJson(String url, String body) {
+            throw new AssertionError("must not connect to metadata IP");
+          }
+        };
+
+    // act
+    WebhookDeliveryResult result =
+        sender.send(message("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));
+
+    // assert
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary()).contains("BlockedAddressException");
   }
 }
