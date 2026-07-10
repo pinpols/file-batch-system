@@ -141,11 +141,32 @@ class SdkPlatformContractTest {
         captureReports(SdkTaskResult.fail(new IllegalStateException("boom")));
     Map<String, Object> body = reports.get(0);
     assertThat(body.get("success")).isEqualTo(false);
-    assertThat(body).containsEntry("errorCode", "IllegalStateException");
+    // #P2 errorCode 词表统一:未捕获异常 → protocol 常量 EXECUTION_FAILED(跨语言可聚合),
+    // 不再用异常类 SimpleName;原类名 IllegalStateException 保留在 resultSummary.message 可诊断。
+    assertThat(body).containsEntry("errorCode", "EXECUTION_FAILED");
+    // errorMessage 仍是红线禁发字段(平台读 resultSummary,不读 errorMessage)。
+    assertThat(body).doesNotContainKey("errorMessage");
     // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是裸串(否则平台解析 500)
     assertThat(body.get("resultSummary").toString())
-        .contains("\"code\":\"IllegalStateException\"")
-        .contains("\"message\":\"boom\"");
+        .contains("\"code\":\"EXECUTION_FAILED\"")
+        .contains("boom")
+        .contains("IllegalStateException");
+  }
+
+  @Test
+  void reportBusinessFailWithoutCodeDefaultsToExecutionFailed() throws IOException {
+    // 业务 fail(message) 无显式码、无异常 → 规范回退 EXECUTION_FAILED(不再是旧的 "FAILED" 非协议值)。
+    Map<String, Object> body = captureReports(SdkTaskResult.fail("business rule violated")).get(0);
+    assertThat(body).containsEntry("success", false).containsEntry("errorCode", "EXECUTION_FAILED");
+    assertThat(body.get("resultSummary").toString()).contains("\"code\":\"EXECUTION_FAILED\"");
+  }
+
+  @Test
+  void reportPreservesExplicitBusinessErrorCodeFromOutput() throws IOException {
+    // handler 经 output['errorCode'] 显式给的协议/业务码(如 CANCELLED)必须原样透传,不被 EXECUTION_FAILED 覆盖。
+    Map<String, Object> body = captureReports(SdkTaskResult.cancelled(Map.of("offset", 42))).get(0);
+    assertThat(body).containsEntry("success", false).containsEntry("errorCode", "CANCELLED");
+    assertThat(body.get("resultSummary").toString()).contains("\"code\":\"CANCELLED\"");
   }
 
   // ─── 公用 helpers ────────────────────────────────────────────────────────
