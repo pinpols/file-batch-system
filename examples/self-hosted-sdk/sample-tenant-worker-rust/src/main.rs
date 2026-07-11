@@ -22,23 +22,41 @@
 //! against the live orchestrator (the same chain the Go/Python/TS/Java samples
 //! drive). Build needs `cmake` (rdkafka). See `README.md`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
+use std::panic::AssertUnwindSafe;
 use std::process;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Duration;
 
 use batch_worker_sdk::client::handler::{
-    NoopProgressReporter, TaskContext, TaskHandler, TaskResult,
+    CancellationSignal, NoopProgressReporter, TaskContext, TaskHandler, TaskResult,
 };
 use batch_worker_sdk::client::lifecycle::Worker;
 use batch_worker_sdk::client::reqwest_transport::{ReqwestConfig, ReqwestTransport};
+use batch_worker_sdk::client::scheduler::{HeartbeatScheduler, LeaseRenewalScheduler};
 use batch_worker_sdk::client::sensitive::SensitiveValidator;
 use batch_worker_sdk::client::transport::{classify_response, Transport, TransportOutcome};
 use batch_worker_sdk::kafka::{
     DispatchMessage, KafkaConsumerConfig, KafkaTaskConsumer, MessageHandler,
 };
+use batch_worker_sdk::protocol::{HeartbeatHint, HeartbeatResponse, RenewResponse};
+
+/// A task currently executing on this worker: its cooperative-cancel signal (so
+/// the lease-renewal loop can deliver a platform `cancelRequested`) and its
+/// `partitionInvocationId` (threaded into the renew body for partition tasks).
+#[derive(Clone)]
+struct InFlightTask {
+    cancel: CancellationSignal,
+    partition_invocation_id: Option<String>,
+}
+
+/// Registry of in-flight tasks, shared between the poll thread (which registers a
+/// task around `execute`) and the lease-renewal thread (which renews each one and
+/// delivers cancellation). Keyed by task id.
+type InFlight = Arc<Mutex<HashMap<String, InFlightTask>>>;
 
 fn main() {
     // ── (1) Config — fail fast listing every missing required var at once. ──
@@ -63,8 +81,10 @@ fn main() {
     // The SDK validator scans the *keys* of any payload; here we attest that
     // the static register attributes carry no sensitive values.
     let validator = SensitiveValidator::new();
-    let register_attrs: [(&str, &str); 2] =
-        [("buildId", "sample-tenant-worker-rust@dev"), ("sdkVersion", "rust-byo-sdk")];
+    let register_attrs: [(&str, &str); 2] = [
+        ("buildId", "sample-tenant-worker-rust@dev"),
+        ("sdkVersion", "rust-byo-sdk"),
+    ];
     if validator.validate(register_attrs).is_rejected() {
         eprintln!("[sample-worker] FATAL register attributes carry a sensitive value");
         process::exit(1);
@@ -102,11 +122,15 @@ fn main() {
 
     // ── (3) Business handler (the SPI a tenant implements) + the bridge that
     // runs the claim → execute → report lifecycle per accepted dispatch message. ─
+    // The shared in-flight registry lets the lease-renewal loop (below) renew each
+    // executing task's lease and deliver `cancelRequested` to it.
+    let in_flight_tasks: InFlight = Arc::new(Mutex::new(HashMap::new()));
     let bridge = HandlerBridge {
         handler: EchoHandler,
         transport: transport.clone(),
         tenant_id: cfg.tenant_id.clone(),
         worker_code: cfg.worker_code.clone(),
+        in_flight: Arc::clone(&in_flight_tasks),
     };
 
     let mut consumer = match KafkaTaskConsumer::new(kafka_cfg, bridge) {
@@ -117,8 +141,10 @@ fn main() {
         }
     };
 
-    // ── (4) Worker lifecycle FSM (§1.5/§1.6) over the real transport. ──────
-    let mut worker = Worker::new(&cfg.worker_code, transport);
+    // ── (4) Worker lifecycle FSM (§1.5/§1.6) over the real transport. The Worker
+    // owns register/deactivate; the heartbeat + lease-renewal schedulers (below)
+    // get their own clones (reqwest's client is internally Arc'd → cheap). ──────
+    let mut worker = Worker::new(&cfg.worker_code, transport.clone());
 
     // (4a) SIGTERM hook. std has no portable async-signal-safe handler, so the
     // documented integration point is `Worker::request_stop()` / `stop_flag()`:
@@ -149,7 +175,27 @@ fn main() {
         }
     }
 
-    // ── (5) Run loop: poll Kafka until the stop flag flips. ────────────────
+    // ── (5) Background schedulers (§1.3 heartbeat + §1.4 lease renewal). ───
+    // A registered worker that never heartbeats is "假死" to the platform:
+    // liveness lapses, `cancelRequested` never arrives, and leases expire → the
+    // task is reclaimed and re-dispatched (double-run). So — like the Java/Go/
+    // Python samples — we run BOTH schedulers on their own threads against the
+    // real transport, driven by the SDK's `HeartbeatScheduler` /
+    // `LeaseRenewalScheduler`. They observe the same `stop_flag` and exit on stop.
+    let heartbeat_thread = spawn_heartbeat(
+        cfg.worker_code.clone(),
+        transport.clone(),
+        Arc::clone(&stop_flag),
+    );
+    let lease_thread = spawn_lease_renewal(
+        transport.clone(),
+        Arc::clone(&in_flight_tasks),
+        cfg.tenant_id.clone(),
+        cfg.worker_code.clone(),
+        Arc::clone(&stop_flag),
+    );
+
+    // ── (6) Run loop: poll Kafka until the stop flag flips. ────────────────
     // `in_flight` would be incremented/decremented around real task execution;
     // here it stays 0 (the echo handler returns synchronously) but is plumbed
     // so backpressure (§1.5) reflects real concurrency once execution is async.
@@ -166,12 +212,169 @@ fn main() {
     log("entering Kafka poll loop (Ctrl-C / SIGTERM to drain)");
     if let Err(e) = consumer.run(if_read, keep_running) {
         eprintln!("[sample-worker] FATAL kafka run loop: {e}");
-        process::exit(1);
+        stop_flag.store(true, Ordering::SeqCst);
     }
 
-    // ── (6) Graceful stop (§1.6: drain → shut executor → deactivate). ──────
+    // ── (7) Graceful stop (§1.6: drain → shut executor → deactivate). ──────
+    // Ensure the schedulers see the stop, then join them BEFORE deactivating so
+    // we do not heartbeat/renew against an already-deactivated worker.
+    stop_flag.store(true, Ordering::SeqCst);
+    let _ = heartbeat_thread.join();
+    let _ = lease_thread.join();
     let report = worker.stop(30_000);
     log(&format!("stopped cleanly: {:?}", report.steps));
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Background schedulers — real heartbeat (§1.3) + lease-renewal (§1.4) loops.
+// ───────────────────────────────────────────────────────────────────────────
+
+/// Spawn the heartbeat loop: every interval, POST a heartbeat and apply the
+/// platform's reverse directive. A DRAIN directive flips the shared stop flag so
+/// the whole worker drains + deactivates. The interval is dynamically updated from
+/// `nextHeartbeatHint` by the SDK scheduler (§1.3).
+fn spawn_heartbeat(
+    worker_code: String,
+    transport: ReqwestTransport,
+    stop_flag: Arc<AtomicBool>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let mut sched = HeartbeatScheduler::new(&worker_code, transport);
+        while !stop_flag.load(Ordering::SeqCst) {
+            // The heartbeat body a production worker sends (status + capacity);
+            // the SDK defaults `protocolVersion` on register, not here.
+            let raw = sched.tick(r#"{"status":"RUNNING"}"#);
+            let parsed = parse_heartbeat(&raw.body);
+            let tick = sched.apply(raw.status, &parsed);
+            if let Some(decision) = &tick.decision {
+                if decision.drain_then_deactivate == Some(true) {
+                    log("heartbeat: platform requested DRAIN → stopping worker");
+                    stop_flag.store(true, Ordering::SeqCst);
+                    break;
+                }
+            } else {
+                log(&format!(
+                    "heartbeat: non-2xx ({:?}) — will retry next interval",
+                    tick.transport
+                ));
+            }
+            sleep_interruptible(tick.next_interval_ms, &stop_flag);
+        }
+        log("heartbeat loop exited");
+    })
+}
+
+/// Spawn the lease-renewal loop: every interval, renew every in-flight task's
+/// lease and deliver `cancelRequested` to the task's cancel signal (§1.4). A
+/// 404/409 (lease reclaimed) drops the task locally. In this echo sample tasks
+/// finish synchronously, so the registry is usually empty between polls — the
+/// loop is the real wiring a long-running/async handler needs so its lease never
+/// expires mid-flight (the double-run this fix prevents).
+fn spawn_lease_renewal(
+    transport: ReqwestTransport,
+    in_flight: InFlight,
+    tenant_id: String,
+    worker_code: String,
+    stop_flag: Arc<AtomicBool>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let sched = LeaseRenewalScheduler::new(transport);
+        while !stop_flag.load(Ordering::SeqCst) {
+            // Snapshot so the renew IO does not hold the registry lock.
+            let tasks: Vec<(String, InFlightTask)> = match in_flight.lock() {
+                Ok(g) => g.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                Err(_) => Vec::new(),
+            };
+            for (task_id, task) in tasks {
+                let body = build_body(
+                    &[
+                        ("tenantId", json_str(&tenant_id)),
+                        ("workerId", json_str(&worker_code)),
+                    ],
+                    &task.partition_invocation_id,
+                );
+                let raw = sched.tick(&task_id, &body);
+                let parsed = parse_renew(&raw.body);
+                let renew = sched.renew_one(&task_id, raw.status, &parsed);
+                if let Some(decision) = &renew.decision {
+                    if decision.cancel_requested == Some(true) {
+                        log(&format!(
+                            "lease-renew: task {task_id} cancelRequested → signalling"
+                        ));
+                        task.cancel.cancel();
+                    }
+                }
+                if renew.drop_local {
+                    log(&format!(
+                        "lease-renew: task {task_id} lease reclaimed → dropping locally"
+                    ));
+                    if let Ok(mut g) = in_flight.lock() {
+                        g.remove(&task_id);
+                    }
+                }
+            }
+            sleep_interruptible(sched.interval_ms, &stop_flag);
+        }
+        log("lease-renewal loop exited");
+    })
+}
+
+/// Sleep `total_ms` in short slices so the shared stop flag is observed promptly
+/// (a 30s heartbeat interval must not delay a SIGTERM drain by 30s).
+fn sleep_interruptible(total_ms: i64, stop_flag: &Arc<AtomicBool>) {
+    let slice = Duration::from_millis(200);
+    let mut remaining = Duration::from_millis(total_ms.max(0) as u64);
+    while !remaining.is_zero() && !stop_flag.load(Ordering::SeqCst) {
+        let step = remaining.min(slice);
+        thread::sleep(step);
+        remaining -= step;
+    }
+}
+
+/// Parse a heartbeat reverse-directive body (wire-protocol §2.1) into the SDK's
+/// [`HeartbeatResponse`]. Absent/malformed fields default (no directive applied).
+fn parse_heartbeat(body: &str) -> HeartbeatResponse {
+    let v: serde_json::Value = serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
+    HeartbeatResponse {
+        platform_status: v
+            .get("platformStatus")
+            .and_then(|x| x.as_str())
+            .map(String::from),
+        should_drain: v.get("shouldDrain").and_then(|x| x.as_bool()),
+        desired_max_concurrent: v.get("desiredMaxConcurrent").and_then(|x| x.as_i64()),
+        paused_task_types: v
+            .get("pausedTaskTypes")
+            .and_then(|x| x.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|s| s.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        next_heartbeat_hint: v.get("nextHeartbeatHint").and_then(parse_hint),
+    }
+}
+
+/// Parse a `nextHeartbeatHint` JSON value: an ISO-8601 string ("PT15S") or a raw
+/// number of seconds.
+fn parse_hint(v: &serde_json::Value) -> Option<HeartbeatHint> {
+    if let Some(s) = v.as_str() {
+        Some(HeartbeatHint::Iso(s.to_string()))
+    } else {
+        v.as_f64().map(HeartbeatHint::Seconds)
+    }
+}
+
+/// Parse a lease-renew body (wire-protocol §2.2) into the SDK's [`RenewResponse`].
+fn parse_renew(body: &str) -> RenewResponse {
+    let v: serde_json::Value = serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
+    RenewResponse {
+        lease_until: v
+            .get("leaseUntil")
+            .and_then(|x| x.as_str())
+            .map(String::from),
+        cancel_requested: v.get("cancelRequested").and_then(|x| x.as_bool()),
+    }
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -228,6 +431,9 @@ struct HandlerBridge<H: TaskHandler> {
     transport: ReqwestTransport,
     tenant_id: String,
     worker_code: String,
+    /// Shared with the lease-renewal loop: the bridge registers a task here around
+    /// `execute` so its lease is renewed and `cancelRequested` reaches it.
+    in_flight: InFlight,
 }
 
 impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
@@ -235,16 +441,36 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
         let task_id = msg.task_id_str();
 
         // ── 1. CLAIM — take ownership (TaskClaimRequest: tenantId/workerId). A
-        // non-success claim withholds the offset (Err) so the record is re-read,
-        // matching the Java RETRY_LATER path.
-        let claim_body = build_body(&[
-            ("tenantId", json_str(&self.tenant_id)),
-            ("workerId", json_str(&self.worker_code)),
-        ], &msg.partition_invocation_id);
+        // transient-failure claim withholds the offset (Err) so the record is
+        // re-read, matching the Java RETRY_LATER path.
+        let claim_body = build_body(
+            &[
+                ("tenantId", json_str(&self.tenant_id)),
+                ("workerId", json_str(&self.worker_code)),
+            ],
+            &msg.partition_invocation_id,
+        );
         let claim_resp = self.transport.claim(&task_id, &claim_body);
         match classify_response(&claim_resp, 0) {
-            TransportOutcome::Success | TransportOutcome::IdempotentSuccess => {}
-            other => return Err(format!("claim not successful for task {task_id}: {other:?}")),
+            // 2xx — we own the task, proceed to execute.
+            TransportOutcome::Success => {}
+            // 409 / already-claimed — someone else owns it (redelivery, a peer
+            // worker, or an at-least-once duplicate). SKIP execution so we never
+            // run the side-effecting handler twice, and let the offset advance
+            // (Ok) — re-reading would only re-hit the same 409. This matches the
+            // Java/Go/Python "409 → skip" contract; the previous `{}` fall-through
+            // here re-executed on every duplicate.
+            TransportOutcome::IdempotentSuccess => {
+                log(&format!(
+                    "task {task_id} already claimed (409) → skip execution"
+                ));
+                return Ok(());
+            }
+            other => {
+                return Err(format!(
+                    "claim not successful for task {task_id}: {other:?}"
+                ))
+            }
         }
 
         // ── 2. EXECUTE the business handler. (TaskContext has a private field,
@@ -258,7 +484,28 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
             .with_partition_invocation_id(msg.partition_invocation_id.clone());
         ctx.parameters = extract_params(msg);
         ctx.progress = Box::new(NoopProgressReporter);
-        let result = self.handler.execute(&ctx);
+
+        // Register in the in-flight set so the lease-renewal loop keeps this task's
+        // lease alive and can deliver `cancelRequested` to `ctx.cancellation`.
+        self.register_in_flight(&task_id, &ctx, &msg.partition_invocation_id);
+
+        // Guard the business handler with `catch_unwind` so a panicking handler is
+        // mapped to a fail REPORT (errorCode EXECUTION_FAILED) rather than killing
+        // the worker with no terminal report — the platform would otherwise wait
+        // for the lease to expire and re-dispatch (double-run). `execute` takes
+        // `&self` + `&ctx` (shared refs); `AssertUnwindSafe` is sound here.
+        let result = match std::panic::catch_unwind(AssertUnwindSafe(|| self.handler.execute(&ctx)))
+        {
+            Ok(r) => r,
+            Err(panic) => {
+                let detail = panic_message(panic.as_ref());
+                log(&format!(
+                    "task {task_id} handler PANICKED: {detail} → reporting fail"
+                ));
+                TaskResult::failure("EXECUTION_FAILED", &format!("handler panicked: {detail}"))
+            }
+        };
+        self.unregister_in_flight(&task_id);
         let success = result.is_success();
         log(&format!(
             "task {task_id} -> errorCode={} summary={:?}",
@@ -279,7 +526,10 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
             ("tenantId", json_str(&self.tenant_id)),
             ("workerId", json_str(&self.worker_code)),
             ("success", serde_json::Value::from(success)),
-            ("outputs", serde_json::to_value(&result.outputs).unwrap_or(serde_json::Value::Null)),
+            (
+                "outputs",
+                serde_json::to_value(&result.outputs).unwrap_or(serde_json::Value::Null),
+            ),
             ("resultSummary", json_str(&result_summary)),
         ];
         if !success {
@@ -289,7 +539,33 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
         let report_resp = self.transport.report(&task_id, &report_body);
         match classify_response(&report_resp, 0) {
             TransportOutcome::Success | TransportOutcome::IdempotentSuccess => Ok(()),
-            other => Err(format!("report not successful for task {task_id}: {other:?}")),
+            other => Err(format!(
+                "report not successful for task {task_id}: {other:?}"
+            )),
+        }
+    }
+}
+
+impl<H: TaskHandler> HandlerBridge<H> {
+    /// Add a task to the in-flight registry (shared with the lease-renewal loop),
+    /// carrying its cancel signal + `partitionInvocationId`.
+    fn register_in_flight(&self, task_id: &str, ctx: &TaskContext, pinv: &Option<String>) {
+        if let Ok(mut g) = self.in_flight.lock() {
+            g.insert(
+                task_id.to_string(),
+                InFlightTask {
+                    cancel: ctx.cancellation.clone(),
+                    partition_invocation_id: pinv.clone(),
+                },
+            );
+        }
+    }
+
+    /// Remove a task from the in-flight registry once it has reached a terminal
+    /// report (success / fail / cancel).
+    fn unregister_in_flight(&self, task_id: &str) {
+        if let Ok(mut g) = self.in_flight.lock() {
+            g.remove(task_id);
         }
     }
 }
@@ -297,6 +573,18 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
 /// A JSON string value.
 fn json_str(s: &str) -> serde_json::Value {
     serde_json::Value::from(s)
+}
+
+/// Best-effort extraction of a message from a caught panic payload (a `&str` or
+/// `String`), used to build the fail REPORT when a handler panics.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
 }
 
 /// Build a compact JSON object body from ordered (key, value) pairs, appending

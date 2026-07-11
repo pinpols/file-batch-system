@@ -58,7 +58,10 @@ const HEADER_SIGNATURE: &str = "x-batch-signature";
 /// timeouts. Per the BYO SDK guide §1.1 the per-request timeout must stay below
 /// `heartbeat_interval / 3` so a stalled call can never starve the heartbeat
 /// loop; the default (10s) matches the Go/Java clients.
-#[derive(Debug, Clone)]
+///
+/// `Debug` is hand-written (not derived) so a `{:?}` — in a log line, a panic
+/// message, an error chain — never leaks `api_key`. See the `impl` below.
+#[derive(Clone)]
 pub struct ReqwestConfig {
     /// Orchestrator base URL, e.g. `https://orch.internal:8080` (no trailing `/`).
     pub base_url: String,
@@ -80,6 +83,21 @@ pub struct ReqwestConfig {
     /// env `BATCH_SDK_REQUEST_SIGNING_ENABLED`. With no api key, signing is a
     /// no-op even when enabled (there is no HMAC key).
     pub request_signing_enabled: bool,
+}
+
+impl std::fmt::Debug for ReqwestConfig {
+    /// Redacts `api_key` so `{:?}` (logs / panics / error chains) can never leak
+    /// the secret. Rendered as a fixed `***` marker only when present.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReqwestConfig")
+            .field("base_url", &self.base_url)
+            .field("tenant_id", &self.tenant_id)
+            .field("api_key", &self.api_key.as_ref().map(|_| "***"))
+            .field("connect_timeout_ms", &self.connect_timeout_ms)
+            .field("read_timeout_ms", &self.read_timeout_ms)
+            .field("request_signing_enabled", &self.request_signing_enabled)
+            .finish()
+    }
 }
 
 impl ReqwestConfig {
@@ -136,13 +154,27 @@ impl ReqwestConfig {
 /// loops; the underlying client keeps connections alive so heartbeats don't
 /// re-handshake each tick. Cloning is cheap — reqwest's client is internally
 /// reference-counted.
-#[derive(Debug, Clone)]
+///
+/// `Debug` is hand-written so a `{:?}` never leaks the stored `api_key` (also the
+/// HMAC signing secret); it renders as `***` when present.
+#[derive(Clone)]
 pub struct ReqwestTransport {
     client: Client,
     base_url: String,
     tenant_id: String,
     api_key: Option<String>,
     request_signing_enabled: bool,
+}
+
+impl std::fmt::Debug for ReqwestTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReqwestTransport")
+            .field("base_url", &self.base_url)
+            .field("tenant_id", &self.tenant_id)
+            .field("api_key", &self.api_key.as_ref().map(|_| "***"))
+            .field("request_signing_enabled", &self.request_signing_enabled)
+            .finish()
+    }
 }
 
 /// Construction error for [`ReqwestTransport::new`] — only the one-time client
@@ -327,10 +359,7 @@ fn new_nonce() -> String {
 /// [`SUPPORTED_SCHEMA_VERSIONS`] — advertised on register (#536 gate). Kept in
 /// sync with the supported-versions list rather than hard-coded.
 fn current_protocol_version() -> &'static str {
-    SUPPORTED_SCHEMA_VERSIONS
-        .last()
-        .copied()
-        .unwrap_or("v1")
+    SUPPORTED_SCHEMA_VERSIONS.last().copied().unwrap_or("v1")
 }
 
 /// Default `protocolVersion` into a register body. If `body` parses to a JSON
@@ -417,7 +446,10 @@ mod tests {
     /// Spawn a single-connection HTTP/1.1 server that captures one request and
     /// replies with `status`/`resp_body`. Returns the bound base URL and a
     /// receiver for the captured request.
-    fn one_shot_server(status: u16, resp_body: &'static str) -> (String, mpsc::Receiver<CapturedRequest>) {
+    fn one_shot_server(
+        status: u16,
+        resp_body: &'static str,
+    ) -> (String, mpsc::Receiver<CapturedRequest>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
         let addr = listener.local_addr().expect("local addr");
         let (tx, rx) = mpsc::channel();
@@ -440,7 +472,9 @@ mod tests {
 
         // Request line: e.g. "POST /internal/tasks/7/claim HTTP/1.1".
         let mut request_line = String::new();
-        reader.read_line(&mut request_line).expect("read request line");
+        reader
+            .read_line(&mut request_line)
+            .expect("read request line");
         let mut parts = request_line.split_whitespace();
         req.method = parts.next().unwrap_or_default().to_string();
         req.path = parts.next().unwrap_or_default().to_string();
@@ -471,12 +505,18 @@ mod tests {
             req.body = String::from_utf8_lossy(&buf).into_owned();
         }
 
-        let reason = if (200..300).contains(&status) { "OK" } else { "ERR" };
+        let reason = if (200..300).contains(&status) {
+            "OK"
+        } else {
+            "ERR"
+        };
         let response = format!(
             "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{resp_body}",
             resp_body.len(),
         );
-        stream.write_all(response.as_bytes()).expect("write response");
+        stream
+            .write_all(response.as_bytes())
+            .expect("write response");
         stream.flush().expect("flush response");
         req
     }
@@ -504,7 +544,9 @@ mod tests {
         assert_eq!(req.header("X-Batch-Api-Key"), Some("secret-key"));
         assert_eq!(req.header("Content-Type"), Some("application/json"));
         // Idempotency-Key MUST be present on claim.
-        let idem = req.header("Idempotency-Key").expect("idempotency-key on claim");
+        let idem = req
+            .header("Idempotency-Key")
+            .expect("idempotency-key on claim");
         assert!(idem.starts_with("rs-"), "idempotency key = {idem}");
         // Body carries the required identity fields.
         assert!(req.body.contains("\"tenantId\":\"tenant-42\""));
@@ -524,7 +566,10 @@ mod tests {
 
         let req = rx.recv().expect("captured request");
         assert_eq!(req.path, "/internal/tasks/7/report");
-        assert!(req.header("Idempotency-Key").is_some(), "report needs idempotency-key");
+        assert!(
+            req.header("Idempotency-Key").is_some(),
+            "report needs idempotency-key"
+        );
         assert!(req.body.contains("\"success\":true"));
         assert!(req.body.contains("\"taskId\":7"));
         assert_eq!(classify_response(&resp, 0), TransportOutcome::Success);
@@ -578,12 +623,18 @@ mod tests {
         let (base, rx) = one_shot_server(200, "{}");
         let t = transport(&base);
         t.heartbeat("worker-9", r#"{"state":"RUNNING"}"#);
-        assert_eq!(rx.recv().unwrap().path, "/internal/workers/worker-9/heartbeat");
+        assert_eq!(
+            rx.recv().unwrap().path,
+            "/internal/workers/worker-9/heartbeat"
+        );
 
         let (base2, rx2) = one_shot_server(200, "");
         let t2 = transport(&base2);
         t2.deactivate("worker-9");
-        assert_eq!(rx2.recv().unwrap().path, "/internal/workers/worker-9/deactivate");
+        assert_eq!(
+            rx2.recv().unwrap().path,
+            "/internal/workers/worker-9/deactivate"
+        );
     }
 
     #[test]
@@ -645,10 +696,39 @@ mod tests {
     }
 
     #[test]
+    fn config_debug_redacts_api_key() {
+        let cfg = ReqwestConfig::new("https://orch.internal:8080", "tenant-42")
+            .with_api_key("super-secret-key");
+        let dbg = format!("{cfg:?}");
+        assert!(
+            !dbg.contains("super-secret-key"),
+            "Debug leaked api_key: {dbg}"
+        );
+        assert!(dbg.contains("***"), "redaction marker missing: {dbg}");
+        // Non-secret fields are still visible.
+        assert!(dbg.contains("tenant-42"));
+    }
+
+    #[test]
+    fn transport_debug_redacts_api_key() {
+        let t = ReqwestTransport::new(
+            ReqwestConfig::new("https://orch.internal:8080", "tenant-42")
+                .with_api_key("super-secret-key"),
+        )
+        .expect("build transport");
+        let dbg = format!("{t:?}");
+        assert!(
+            !dbg.contains("super-secret-key"),
+            "Debug leaked api_key: {dbg}"
+        );
+        assert!(dbg.contains("***"), "redaction marker missing: {dbg}");
+    }
+
+    #[test]
     fn api_key_omitted_when_absent() {
         let (base, rx) = one_shot_server(200, "");
-        let t = ReqwestTransport::new(ReqwestConfig::new(&base, "tenant-42"))
-            .expect("build transport");
+        let t =
+            ReqwestTransport::new(ReqwestConfig::new(&base, "tenant-42")).expect("build transport");
         assert!(!t.has_api_key());
         t.register("w1", "{}");
         let req = rx.recv().expect("captured request");

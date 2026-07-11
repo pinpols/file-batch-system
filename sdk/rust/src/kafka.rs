@@ -24,9 +24,34 @@
 //! 1. UTF-8 + JSON deserialize, ignoring unknown fields (§1.2),
 //! 2. [`run_pipeline`] runs schemaVersion-reject (§A) → tenant self-check (§1.9)
 //!    → capacity backpressure (§1.5),
-//! 3. on **accept** → dispatch to the handler, then **commit** the offset,
-//! 4. on **reject / drop / parse-error** → log + **do NOT commit** (so a fixed
-//!    deploy can re-read; offset only advances on real progress).
+//! 3. on **accept** → dispatch to the handler, then **commit** the offset.
+//!
+//! ## Offset disposition — the load-bearing part (§1.2, fixture 18/28/30)
+//!
+//! The committed offset is only allowed to move on *real* progress, and a
+//! withheld record must **stay withheld** — a `BaseConsumer`'s in-memory position
+//! advances every `poll()` even without a commit, so simply "not committing" is a
+//! bug: a later record's commit would silently jump the committed offset **past**
+//! the withheld one. Each disposition therefore maps to an explicit
+//! [`OffsetAction`] the poll loop applies:
+//!
+//! * **Advance** (`Accepted`, `DecodeError`, `HandlerPanicked`) — commit
+//!   `offset+1`. `Accepted` is real progress; `DecodeError`/`HandlerPanicked` are
+//!   **commit-skip** (fixture 30): an undecodable / deterministically-panicking
+//!   record is unrecoverable poison, so we advance past it rather than let one
+//!   corrupt message head-of-line block the partition forever.
+//! * **RewindBlock** (`RejectedSchema` §A, `DroppedForeignTenant` §1.9) — the
+//!   record is valid-but-unconsumable-now (an unknown schema major / a foreign
+//!   tenant); re-delivery to a *fixed* deployment is meaningful. We `seek` the
+//!   position back to the record and `pause` that partition so the committed
+//!   offset never advances past it and no later commit skips it.
+//! * **RewindRetry** (`Backpressure` §1.5, `HandlerRetryLater`) — a valid record
+//!   deferred by capacity or a transient handler error; `seek` back so it is
+//!   re-read on the next cycle / after capacity resume, without a per-partition
+//!   pause block.
+//!
+//! All withhold / drop / poison / panic events are logged (`log` facade) — never
+//! silently swallowed.
 //!
 //! ## Security (§1.8)
 //!
@@ -37,6 +62,8 @@
 
 #![cfg(feature = "kafka")]
 
+use std::collections::HashSet;
+use std::panic::AssertUnwindSafe;
 use std::time::Duration;
 
 use rdkafka::config::ClientConfig;
@@ -52,7 +79,10 @@ use crate::client::consumer::{run_pipeline, MessageOutcome, TaskRecord};
 /// Mirrors the Kafka-related fields of the Java `BatchPlatformClientConfig` and
 /// the Python config. Credentials are supplied by the caller (env / secret) and
 /// never read from a message payload (§1.8).
-#[derive(Debug, Clone)]
+///
+/// `Debug` is hand-written (not derived) so a `{:?}` — in a log line, a panic
+/// message, an error chain — never leaks the SASL password. See the `impl` below.
+#[derive(Clone)]
 pub struct KafkaConsumerConfig {
     /// Kafka bootstrap servers, e.g. `"broker-1:9092,broker-2:9092"`.
     pub bootstrap_servers: String,
@@ -76,6 +106,25 @@ pub struct KafkaConsumerConfig {
     pub sasl_username: Option<String>,
     /// `sasl.password`.
     pub sasl_password: Option<String>,
+}
+
+impl std::fmt::Debug for KafkaConsumerConfig {
+    /// Redacts `sasl_password` so `{:?}` (logs / panics / error chains) can never
+    /// leak the secret. `sasl_username` is an identity, not a secret, so it is
+    /// shown; the password is rendered as a fixed `***` marker only when present.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KafkaConsumerConfig")
+            .field("bootstrap_servers", &self.bootstrap_servers)
+            .field("tenant_id", &self.tenant_id)
+            .field("worker_code", &self.worker_code)
+            .field("max_concurrent", &self.max_concurrent)
+            .field("poll_interval", &self.poll_interval)
+            .field("security_protocol", &self.security_protocol)
+            .field("sasl_mechanism", &self.sasl_mechanism)
+            .field("sasl_username", &self.sasl_username)
+            .field("sasl_password", &self.sasl_password.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 impl KafkaConsumerConfig {
@@ -133,6 +182,19 @@ impl KafkaConsumerConfig {
 /// Returns `Some(trimmed)` when the option holds a non-blank string, else `None`.
 fn non_blank(s: &Option<String>) -> Option<&str> {
     s.as_deref().map(str::trim).filter(|s| !s.is_empty())
+}
+
+/// Best-effort extraction of a human-readable message from a caught panic payload
+/// (`catch_unwind`'s `Box<dyn Any>`). Rust panics carry a `&str` or `String`
+/// payload; anything else is reported as an opaque marker.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
 }
 
 /// Escape librdkafka-regex metacharacters in a tenant id so it is matched
@@ -217,27 +279,74 @@ impl DispatchMessage {
 }
 
 /// The disposition of one polled record after the adapter has run it through the
-/// pipeline (a superset of [`MessageOutcome`] that also names decode failures).
+/// pipeline (a superset of [`MessageOutcome`] that also names decode failures and
+/// handler panics).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordDisposition {
-    /// Accepted, dispatched, offset committed.
+    /// Accepted, dispatched, offset committed (real progress).
     Accepted,
-    /// At capacity — assignment paused, offset NOT committed (re-read on resume).
+    /// At capacity — assignment paused, offset withheld + rewound (re-read on
+    /// resume).
     Backpressure,
-    /// Unknown schemaVersion major — rejected, offset NOT committed (§A).
+    /// Unknown schemaVersion major — rejected; offset withheld, partition paused
+    /// until a fixed deploy re-reads it (§A).
     RejectedSchema,
-    /// Foreign tenant — dropped, offset NOT committed (§1.9).
+    /// Foreign tenant — dropped; offset withheld, partition paused (§1.9).
     DroppedForeignTenant,
-    /// Empty or non-JSON payload — skipped, offset NOT committed.
+    /// Empty or non-JSON payload — undecodable poison; **commit-skip** past it so
+    /// one corrupt message cannot head-of-line block the partition (fixture 30).
     DecodeError,
-    /// Handler returned `Err` — offset NOT committed (retry on next poll).
+    /// Handler returned `Err` — transient failure; offset withheld + rewound
+    /// (retry on next poll).
     HandlerRetryLater,
+    /// Handler **panicked** — caught so the poll loop survives; **commit-skip**
+    /// past it (like poison) so a deterministically-panicking record cannot wedge
+    /// the partition. The handler bridge is responsible for the fail REPORT.
+    HandlerPanicked,
+}
+
+/// What the poll loop must do with the committed offset for a given disposition.
+///
+/// Making this explicit (rather than a single `committed()` bool) is the fix for
+/// the offset-withhold bug: a `BaseConsumer`'s position advances on every poll, so
+/// a withheld record must be actively rewound (and, when unconsumable-until-
+/// redeploy, its partition paused) or a later commit silently skips past it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffsetAction {
+    /// Commit `offset+1` — real progress (`Accepted`) or commit-skip past poison
+    /// (`DecodeError` / `HandlerPanicked`, fixture 30).
+    Advance,
+    /// Withhold: rewind the position to this record so it is re-read next cycle /
+    /// after capacity resume. Committed offset is NOT advanced.
+    RewindRetry,
+    /// Withhold + pause: rewind AND pause this partition until a fixed deployment
+    /// re-reads the record. Committed offset is NOT advanced and no later record
+    /// on another partition can commit past it.
+    RewindBlock,
 }
 
 impl RecordDisposition {
-    /// Whether this disposition advanced the committed offset.
+    /// The offset action the poll loop applies for this disposition.
+    pub fn offset_action(&self) -> OffsetAction {
+        match self {
+            // Real progress, or commit-skip past unrecoverable poison / panic.
+            RecordDisposition::Accepted
+            | RecordDisposition::DecodeError
+            | RecordDisposition::HandlerPanicked => OffsetAction::Advance,
+            // Valid-but-unconsumable-now → block the partition until a redeploy.
+            RecordDisposition::RejectedSchema | RecordDisposition::DroppedForeignTenant => {
+                OffsetAction::RewindBlock
+            }
+            // Deferred / transient → rewind and re-read soon.
+            RecordDisposition::Backpressure | RecordDisposition::HandlerRetryLater => {
+                OffsetAction::RewindRetry
+            }
+        }
+    }
+
+    /// Whether this disposition advanced the committed offset (`Advance`).
     pub fn committed(&self) -> bool {
-        matches!(self, RecordDisposition::Accepted)
+        matches!(self.offset_action(), OffsetAction::Advance)
     }
 }
 
@@ -254,9 +363,16 @@ pub struct KafkaTaskConsumer<H: MessageHandler> {
     config: KafkaConsumerConfig,
     consumer: BaseConsumer,
     handler: H,
-    /// Cached pause state — avoids issuing a pause/resume RPC every poll (mirrors
-    /// the Java `paused` flag and the Python `_paused` cache).
+    /// Cached capacity-pause state — avoids issuing a pause/resume RPC every poll
+    /// (mirrors the Java `paused` flag and the Python `_paused` cache). This is the
+    /// *capacity* (§1.5) pause of the whole assignment; it is separate from the
+    /// per-partition `blocked_partitions` withhold.
     paused: bool,
+    /// Partitions parked by a `RewindBlock` withhold (unknown schema major /
+    /// foreign tenant). They stay paused until a fixed deployment re-reads them, so
+    /// capacity-`resume` must skip them (else it would un-park a still-blocked
+    /// partition and let it hot-loop the unconsumable record).
+    blocked_partitions: HashSet<(String, i32)>,
 }
 
 impl<H: MessageHandler> KafkaTaskConsumer<H> {
@@ -270,6 +386,7 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
             consumer,
             handler,
             paused: false,
+            blocked_partitions: HashSet::new(),
         })
     }
 
@@ -286,6 +403,7 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
             consumer,
             handler,
             paused: false,
+            blocked_partitions: HashSet::new(),
         })
     }
 
@@ -339,16 +457,64 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
         let (payload, topic, partition, offset) = extracted;
 
         let disp = self.handle_payload(payload.as_deref(), in_flight());
-        if disp.committed() {
-            // Commit this record's offset (next offset = offset + 1), mirroring
-            // the Java `commitSync(Map.of(tp, offset+1))` after a successful
-            // dispatch. Manual commit (enable.auto.commit=false) → offsets only
-            // advance on real progress.
-            let mut tpl = TopicPartitionList::new();
-            tpl.add_partition_offset(&topic, partition, Offset::Offset(offset + 1))?;
-            self.consumer.commit(&tpl, CommitMode::Sync)?;
+        match disp.offset_action() {
+            OffsetAction::Advance => {
+                // Commit this record's offset (next offset = offset + 1),
+                // mirroring the Java `commitSync(Map.of(tp, offset+1))`. Manual
+                // commit (enable.auto.commit=false) → real progress (`Accepted`)
+                // or commit-skip past unrecoverable poison / panic (fixture 30).
+                let mut tpl = TopicPartitionList::new();
+                tpl.add_partition_offset(&topic, partition, Offset::Offset(offset + 1))?;
+                self.consumer.commit(&tpl, CommitMode::Sync)?;
+            }
+            OffsetAction::RewindRetry => {
+                // Withhold a valid-but-deferred record (capacity / transient
+                // handler error): rewind so it is re-read on the next cycle /
+                // after capacity resume. The committed offset is NOT advanced, so
+                // a later record can never commit past it.
+                self.rewind_to(&topic, partition, offset);
+            }
+            OffsetAction::RewindBlock => {
+                // Withhold + park a valid-but-unconsumable-now record (unknown
+                // schema major / foreign tenant): rewind AND pause this partition
+                // until a fixed deploy re-reads it. Without this, the position
+                // would advance and a later commit would silently skip the rejected
+                // record (the P0 offset-withhold bug).
+                self.rewind_to(&topic, partition, offset);
+                self.pause_partition(&topic, partition);
+            }
         }
         Ok(Some(disp))
+    }
+
+    /// Rewind the consumer position on one partition back to `offset` so that
+    /// record is re-read. Best-effort — a seek failure is logged, not fatal (the
+    /// worst case degrades to the pre-fix behavior for that one record).
+    fn rewind_to(&self, topic: &str, partition: i32, offset: i64) {
+        if let Err(e) = self.consumer.seek(
+            topic,
+            partition,
+            Offset::Offset(offset),
+            Duration::from_secs(5),
+        ) {
+            log::warn!(
+                "kafka withhold: seek {topic}[{partition}]@{offset} failed: {e}; \
+                 committed offset unchanged"
+            );
+        }
+    }
+
+    /// Pause a single partition and record it in `blocked_partitions` so the
+    /// capacity `resume` will not un-park it.
+    fn pause_partition(&mut self, topic: &str, partition: i32) {
+        let mut tpl = TopicPartitionList::new();
+        // add_partition cannot fail for a well-formed (topic, partition).
+        let _ = tpl.add_partition(topic, partition);
+        if let Err(e) = self.consumer.pause(&tpl) {
+            log::warn!("kafka withhold: pause {topic}[{partition}] failed: {e}");
+        }
+        self.blocked_partitions
+            .insert((topic.to_string(), partition));
     }
 
     /// Decode an owned payload, run it through the pipeline, and (on accept)
@@ -359,16 +525,22 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
         let payload = match payload {
             Some(p) if !p.is_empty() => p,
             _ => {
-                // Empty tombstone-style record — skip, do not commit.
+                // Empty tombstone-style record — undecodable poison. Commit-skip
+                // past it (fixture 30) so it cannot head-of-line block; log so the
+                // skip is visible, not silent.
+                log::warn!("kafka decode: empty/tombstone record → commit-skip past it");
                 return RecordDisposition::DecodeError;
             }
         };
 
         let decoded: DispatchMessage = match serde_json::from_slice(payload) {
             Ok(d) => d,
-            Err(_) => {
-                // Malformed JSON — log + skip (Java DROP_TERMINAL logs ERROR);
-                // do not commit so it is visible on re-read, not silently lost.
+            Err(e) => {
+                // Malformed JSON — undecodable poison. Commit-skip past it
+                // (fixture 30): re-delivery only re-fails, so advancing avoids a
+                // permanent one-message head-of-line block. Log ERROR (Java
+                // DROP_TERMINAL logs ERROR) — never a silent drop.
+                log::error!("kafka decode error: {e} → commit-skip past poison record");
                 return RecordDisposition::DecodeError;
             }
         };
@@ -380,19 +552,77 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
             self.config.max_concurrent,
             &self.config.tenant_id,
         ) {
-            MessageOutcome::RejectSchema => RecordDisposition::RejectedSchema,
-            MessageOutcome::DropForeignTenant => RecordDisposition::DroppedForeignTenant,
+            MessageOutcome::RejectSchema => {
+                log::warn!(
+                    "kafka reject: unknown schemaVersion major {:?} for task {} → \
+                     withhold + pause partition (§A)",
+                    decoded.schema_version,
+                    decoded.task_id_str()
+                );
+                RecordDisposition::RejectedSchema
+            }
+            MessageOutcome::DropForeignTenant => {
+                log::warn!(
+                    "kafka drop: foreign tenant {:?} (worker tenant {}) for task {} → \
+                     withhold + pause partition (§1.9)",
+                    decoded.tenant_id,
+                    self.config.tenant_id,
+                    decoded.task_id_str()
+                );
+                RecordDisposition::DroppedForeignTenant
+            }
             MessageOutcome::Accept { paused: true } => {
-                // Valid message but we are at capacity: pause and defer (offset
-                // not committed → re-read after resume). Mirrors the Java/Python
-                // backpressure path.
+                // Valid message but we are at capacity: pause the whole assignment
+                // and defer (offset withheld + rewound → re-read after resume).
+                // Mirrors the Java/Python backpressure path.
+                log::warn!(
+                    "kafka backpressure: at capacity ({}/{}) → defer task {} (rewind)",
+                    in_flight,
+                    self.config.max_concurrent,
+                    decoded.task_id_str()
+                );
                 self.pause_assignment();
                 RecordDisposition::Backpressure
             }
-            MessageOutcome::Accept { paused: false } => match self.handler.on_accepted(&decoded) {
-                Ok(()) => RecordDisposition::Accepted,
-                Err(_) => RecordDisposition::HandlerRetryLater,
-            },
+            MessageOutcome::Accept { paused: false } => self.dispatch_to_handler(&decoded),
+        }
+    }
+
+    /// Dispatch an accepted, in-tenant message to the handler, guarding the call
+    /// with [`std::panic::catch_unwind`] so a panicking business handler **never**
+    /// kills the poll loop / process. `on_accepted` takes `&mut self.handler`, so
+    /// the closure is wrapped in [`AssertUnwindSafe`] (the poll loop owns the
+    /// handler and drives it one message at a time — there is no shared mutable
+    /// state left inconsistent by a caught unwind).
+    ///
+    /// * `Ok(())`  → `Accepted` (commit).
+    /// * `Err(_)`  → `HandlerRetryLater` (rewind + re-read; transient failure).
+    /// * panic     → `HandlerPanicked` (commit-skip, logged ERROR): the panic is
+    ///   contained, the next record is processed, and the process stays up. The
+    ///   handler bridge is responsible for the fail REPORT before the offset moves
+    ///   on; a panic escaping the bridge is treated as poison rather than
+    ///   re-panic-looped.
+    fn dispatch_to_handler(&mut self, decoded: &DispatchMessage) -> RecordDisposition {
+        let handler = &mut self.handler;
+        let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| handler.on_accepted(decoded)));
+        match outcome {
+            Ok(Ok(())) => RecordDisposition::Accepted,
+            Ok(Err(msg)) => {
+                log::warn!(
+                    "kafka handler: task {} returned Err ({msg}) → rewind + retry-later",
+                    decoded.task_id_str()
+                );
+                RecordDisposition::HandlerRetryLater
+            }
+            Err(panic) => {
+                log::error!(
+                    "kafka handler PANICKED on task {}: {} → contained; commit-skip \
+                     (handler bridge must report fail)",
+                    decoded.task_id_str(),
+                    panic_message(panic.as_ref())
+                );
+                RecordDisposition::HandlerPanicked
+            }
         }
     }
 
@@ -418,13 +648,27 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
         }
     }
 
-    /// Resume every currently-assigned partition.
+    /// Resume every currently-assigned partition **except** those parked by a
+    /// `RewindBlock` withhold (unknown schema / foreign tenant). Un-parking a
+    /// still-blocked partition would let it hot-loop the unconsumable record, so
+    /// capacity resume must leave blocked partitions paused.
     fn resume_assignment(&mut self) {
-        if let Ok(tpl) = self.consumer.assignment() {
+        if let Ok(assignment) = self.consumer.assignment() {
+            if assignment.count() == 0 {
+                self.paused = false;
+                return;
+            }
+            let mut tpl = TopicPartitionList::new();
+            for elem in assignment.elements() {
+                let key = (elem.topic().to_string(), elem.partition());
+                if !self.blocked_partitions.contains(&key) {
+                    let _ = tpl.add_partition(elem.topic(), elem.partition());
+                }
+            }
             if tpl.count() > 0 {
                 let _ = self.consumer.resume(&tpl);
-                self.paused = false;
             }
+            self.paused = false;
         }
     }
 
@@ -472,7 +716,10 @@ mod tests {
         let c = test_config("localhost:9092".to_string());
         // node-direct: batch.task.dispatch.<workerType>.node.<workerCode>, the
         // `.*` covering any base workerType (workerType-agnostic, #2).
-        assert_eq!(c.topic_regex(), r"^batch\.task\.dispatch\..*\.node\.worker-1");
+        assert_eq!(
+            c.topic_regex(),
+            r"^batch\.task\.dispatch\..*\.node\.worker-1"
+        );
     }
 
     #[test]
@@ -509,7 +756,10 @@ mod tests {
         c.worker_code = "w.o+rker".to_string();
         // dots and '+' in the worker code must be escaped so the node-direct
         // subscription matches literally.
-        assert_eq!(c.topic_regex(), r"^batch\.task\.dispatch\..*\.node\.w\.o\+rker");
+        assert_eq!(
+            c.topic_regex(),
+            r"^batch\.task\.dispatch\..*\.node\.w\.o\+rker"
+        );
     }
 
     #[test]
@@ -539,6 +789,82 @@ mod tests {
         let m: DispatchMessage = serde_json::from_slice(raw).expect("decode");
         assert_eq!(m.task_id, 7);
         assert_eq!(m.task_type, "export");
+    }
+
+    // ── Offset-disposition contract (the P0 withhold-vs-commit-skip fix) ───
+
+    #[test]
+    fn offset_action_advances_only_on_progress_or_poison() {
+        // Real progress commits; undecodable poison AND a contained handler panic
+        // commit-skip (fixture 30) so one bad record can't head-of-line block.
+        assert_eq!(
+            RecordDisposition::Accepted.offset_action(),
+            OffsetAction::Advance
+        );
+        assert_eq!(
+            RecordDisposition::DecodeError.offset_action(),
+            OffsetAction::Advance
+        );
+        assert_eq!(
+            RecordDisposition::HandlerPanicked.offset_action(),
+            OffsetAction::Advance
+        );
+        // committed() is the Advance shorthand.
+        assert!(RecordDisposition::Accepted.committed());
+        assert!(RecordDisposition::DecodeError.committed());
+        assert!(RecordDisposition::HandlerPanicked.committed());
+    }
+
+    #[test]
+    fn offset_action_withholds_and_blocks_unconsumable_records() {
+        // Unknown schema major / foreign tenant: withhold AND pause the partition
+        // (RewindBlock) so a later commit never skips past the rejected record —
+        // the exact P0 bug (previously these did nothing → silent skip).
+        assert_eq!(
+            RecordDisposition::RejectedSchema.offset_action(),
+            OffsetAction::RewindBlock
+        );
+        assert_eq!(
+            RecordDisposition::DroppedForeignTenant.offset_action(),
+            OffsetAction::RewindBlock
+        );
+        // These must NOT count as committed.
+        assert!(!RecordDisposition::RejectedSchema.committed());
+        assert!(!RecordDisposition::DroppedForeignTenant.committed());
+    }
+
+    #[test]
+    fn offset_action_rewinds_deferred_records_without_blocking() {
+        // Capacity backpressure / transient handler error: rewind + re-read, no
+        // permanent partition park.
+        assert_eq!(
+            RecordDisposition::Backpressure.offset_action(),
+            OffsetAction::RewindRetry
+        );
+        assert_eq!(
+            RecordDisposition::HandlerRetryLater.offset_action(),
+            OffsetAction::RewindRetry
+        );
+        assert!(!RecordDisposition::Backpressure.committed());
+        assert!(!RecordDisposition::HandlerRetryLater.committed());
+    }
+
+    #[test]
+    fn config_debug_redacts_sasl_password() {
+        let mut c = test_config("localhost:9092".to_string());
+        c.sasl_username = Some("svc-tenant-a".to_string());
+        c.sasl_password = Some("super-secret-pw".to_string());
+        let dbg = format!("{c:?}");
+        // The password must never appear; the username (an identity) may.
+        assert!(
+            !dbg.contains("super-secret-pw"),
+            "Debug leaked sasl_password: {dbg}"
+        );
+        assert!(dbg.contains("***"), "redaction marker missing: {dbg}");
+        assert!(
+            dbg.contains("svc-tenant-a"),
+            "username should still be shown: {dbg}"
+        );
     }
 
     // ── Live-broker integration test (CI only) ────────────────────────────
@@ -659,25 +985,27 @@ mod tests {
             assigned_topics(&assignment)
         );
 
-        // Produce three records: a good one, a foreign-tenant one (must be
-        // dropped), and a bad-schema one (must be rejected).
+        // Produce a good record then a foreign-tenant record on the SAME (single)
+        // partition. A withhold (foreign-tenant / bad-schema) seeks back AND pauses
+        // the partition, so at most ONE withheld disposition is observable per run
+        // on one partition — a subsequent record after the pause is never delivered.
+        // We therefore assert good→Accepted+committed and foreign→dropped+not-advanced.
+        // RejectedSchema is the *same* RewindBlock plumbing as DroppedForeignTenant
+        // (see `offset_action`); its unit coverage is
+        // `offset_action_withholds_and_blocks_unconsumable_records`.
         let good =
             br#"{"taskId":1,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#;
         let foreign =
             br#"{"taskId":2,"tenantId":"tenant-b","schemaVersion":"v1","workerType":"import"}"#;
-        let bad_schema =
-            br#"{"taskId":3,"tenantId":"tenant-a","schemaVersion":"v3","workerType":"import"}"#;
-        for payload in [good.as_slice(), foreign.as_slice(), bad_schema.as_slice()] {
+        for payload in [good.as_slice(), foreign.as_slice()] {
             send_record(&producer, &topic, payload);
         }
 
-        // Consume and assert: only the good record is accepted + committed.
-        // Poll for up to ~15s or until all three decisions have been observed.
+        // Poll for up to ~15s or until both decisions have been observed.
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         let mut dispositions = Vec::<String>::new();
         let mut saw_good = false;
         let mut saw_foreign = false;
-        let mut saw_bad_schema = false;
         while std::time::Instant::now() < deadline {
             let disp = consumer.poll_once(&if_read).expect("poll");
             dispositions.push(format!("{disp:?}"));
@@ -686,10 +1014,9 @@ mod tests {
                     saw_good = accepted.lock().unwrap().iter().any(|t| t == "1");
                 }
                 Some(RecordDisposition::DroppedForeignTenant) => saw_foreign = true,
-                Some(RecordDisposition::RejectedSchema) => saw_bad_schema = true,
                 _ => {}
             }
-            if saw_good && saw_foreign && saw_bad_schema {
+            if saw_good && saw_foreign {
                 break;
             }
         }
@@ -704,16 +1031,8 @@ mod tests {
             "foreign-tenant record must be dropped; dispositions={dispositions:?}"
         );
         assert!(
-            saw_bad_schema,
-            "unknown-schema record must be rejected; dispositions={dispositions:?}"
-        );
-        assert!(
             !got.contains(&"2".to_string()),
             "foreign-tenant record must be dropped (§1.9)"
-        );
-        assert!(
-            !got.contains(&"3".to_string()),
-            "unknown-schema record must be rejected (§A)"
         );
     }
 }
