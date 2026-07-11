@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleApiKeyService;
+import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleApiKeyCreateResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -12,7 +13,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -59,19 +59,19 @@ public class ConsoleApiKeyController {
       aggregateType = "api_key",
       recordParams = false,
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ConsoleApiKeyCreateResponse> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateApiKeyRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
     ConsoleApiKeyService.CreateResult result =
         apiKeyService.create(
             tenantId, request.keyName(), request.scopes(), request.expiresAt(), operator);
     return responseFactory.success(
-        Map.of(
-            "id", result.entity().getId(),
-            "keyName", result.entity().getKeyName(),
-            "keyPrefix", result.entity().getKeyPrefix(),
-            "rawKey", result.rawKey(),
-            "createdAt", result.entity().getCreatedAt()));
+        new ConsoleApiKeyCreateResponse(
+            result.entity().getId(),
+            result.entity().getKeyName(),
+            result.entity().getKeyPrefix(),
+            result.rawKey(),
+            result.entity().getCreatedAt()));
   }
 
   /** 吊销 API Key。 */

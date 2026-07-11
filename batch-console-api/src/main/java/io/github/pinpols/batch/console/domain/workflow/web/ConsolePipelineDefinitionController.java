@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.web.request.PipelineDefinitionSaveRequest;
+import io.github.pinpols.batch.console.domain.workflow.web.response.ConsolePipelineDefinitionListItemResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.PipelineDefinitionDetailResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -34,16 +35,24 @@ public class ConsolePipelineDefinitionController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<ConsolePipelineDefinitionListItemResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "jobCode", required = false) String jobCode,
       @RequestParam(value = "pipelineType", required = false) String pipelineType,
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    return responseFactory.success(
+    PageResponse<Map<String, Object>> page =
         pipelineDefinitionApplicationService.list(
-            tenantId, jobCode, pipelineType, enabled, pageNo, pageSize));
+            tenantId, jobCode, pipelineType, enabled, pageNo, pageSize);
+    return responseFactory.success(
+        new PageResponse<>(
+            page.total(),
+            page.pageNo(),
+            page.pageSize(),
+            page.items().stream().map(ConsolePipelineDefinitionListItemResponse::from).toList(),
+            page.nextCursor(),
+            page.hasMore()));
   }
 
   @GetMapping("/{id}")

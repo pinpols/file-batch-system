@@ -5,6 +5,10 @@ import io.github.pinpols.batch.console.domain.notification.application.ConsoleNo
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationChannelResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationDeliveryLogResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationTestResultResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleSubscriptionRuleResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -12,7 +16,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -40,17 +43,21 @@ public class ConsoleNotificationController {
   @GetMapping("/channels")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
-  public CommonResponse<List<Map<String, Object>>> listChannels(
+  public CommonResponse<List<ConsoleNotificationChannelResponse>> listChannels(
       @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(service.listChannels(tenantId));
+    return responseFactory.success(
+        service.listChannels(tenantId).stream()
+            .map(ConsoleNotificationChannelResponse::from)
+            .toList());
   }
 
   @GetMapping("/channels/{channelCode}")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
-  public CommonResponse<Map<String, Object>> getChannel(
+  public CommonResponse<ConsoleNotificationChannelResponse> getChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
-    return responseFactory.success(service.getChannel(tenantId, channelCode));
+    return responseFactory.success(
+        ConsoleNotificationChannelResponse.from(service.getChannel(tenantId, channelCode)));
   }
 
   @PostMapping("/channels")
@@ -82,25 +89,28 @@ public class ConsoleNotificationController {
 
   @PostMapping("/channels/{channelCode}/test")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> testChannel(
+  public CommonResponse<ConsoleNotificationTestResultResponse> testChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
-    return responseFactory.success(service.testChannel(tenantId, channelCode));
+    return responseFactory.success(
+        ConsoleNotificationTestResultResponse.from(service.testChannel(tenantId, channelCode)));
   }
 
   @GetMapping("/rules")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
-  public CommonResponse<List<Map<String, Object>>> listRules(
+  public CommonResponse<List<ConsoleSubscriptionRuleResponse>> listRules(
       @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(service.listRules(tenantId));
+    return responseFactory.success(
+        service.listRules(tenantId).stream().map(ConsoleSubscriptionRuleResponse::from).toList());
   }
 
   @GetMapping("/rules/{ruleId}")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
-  public CommonResponse<Map<String, Object>> getRule(
+  public CommonResponse<ConsoleSubscriptionRuleResponse> getRule(
       @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
-    return responseFactory.success(service.getRule(tenantId, ruleId));
+    return responseFactory.success(
+        ConsoleSubscriptionRuleResponse.from(service.getRule(tenantId, ruleId)));
   }
 
   @PostMapping("/rules")
@@ -133,9 +143,12 @@ public class ConsoleNotificationController {
   @GetMapping("/delivery-logs")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
-  public CommonResponse<List<Map<String, Object>>> deliveryLogs(
+  public CommonResponse<List<ConsoleNotificationDeliveryLogResponse>> deliveryLogs(
       @RequestParam @NotBlank String tenantId,
       @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
-    return responseFactory.success(service.deliveryLogs(tenantId, limit));
+    return responseFactory.success(
+        service.deliveryLogs(tenantId, limit).stream()
+            .map(ConsoleNotificationDeliveryLogResponse::from)
+            .toList());
   }
 }

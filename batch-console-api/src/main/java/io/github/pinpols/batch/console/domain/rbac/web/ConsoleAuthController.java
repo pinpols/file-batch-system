@@ -16,11 +16,12 @@ import io.github.pinpols.batch.console.domain.rbac.web.request.ChangeOwnPassword
 import io.github.pinpols.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthProfileResponse;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleLoginPublicKeyResponse;
+import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleStreamTicketResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -105,15 +106,13 @@ public class ConsoleAuthController {
    * batch.console.security.login-encryption.enabled=false} 时该端点返回 404,FE 走明文路径。
    */
   @GetMapping("/public-key")
-  public CommonResponse<Map<String, String>> publicKey() {
+  public CommonResponse<ConsoleLoginPublicKeyResponse> publicKey() {
     if (!securityProperties.getLoginEncryption().isEnabled()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.auth.encryption_unavailable");
     }
     return responseFactory.success(
-        Map.of(
-            "algorithm", "RSA-OAEP-256",
-            "publicKey", loginKeyPairService.publicKeyPem(),
-            "fingerprint", loginKeyPairService.fingerprint()));
+        new ConsoleLoginPublicKeyResponse(
+            "RSA-OAEP-256", loginKeyPairService.publicKeyPem(), loginKeyPairService.fingerprint()));
   }
 
   /** 为当前已认证用户签发 JWT。 */
@@ -243,7 +242,7 @@ public class ConsoleAuthController {
   /** 签发一次性 SSE ticket（5min 有效，用于 EventSource 连接鉴权）。 */
   @PostMapping("/stream/ticket")
   @PreAuthorize("isAuthenticated()")
-  public CommonResponse<Map<String, String>> streamTicket(Authentication authentication) {
+  public CommonResponse<ConsoleStreamTicketResponse> streamTicket(Authentication authentication) {
     Object raw = authentication.getPrincipal();
     if (!(raw instanceof ConsolePrincipal principal)) {
       throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
@@ -252,6 +251,6 @@ public class ConsoleAuthController {
     // 不再从配置的 defaultAuthorities 回退（防止低权用户拿 ticket 后被提权）。
     String ticket =
         sseTicketService.issue(principal.username(), principal.tenantId(), principal.authorities());
-    return responseFactory.success(Map.of("ticket", ticket));
+    return responseFactory.success(new ConsoleStreamTicketResponse(ticket));
   }
 }

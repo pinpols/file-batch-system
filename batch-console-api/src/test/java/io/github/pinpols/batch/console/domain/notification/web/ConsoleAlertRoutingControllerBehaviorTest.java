@@ -85,15 +85,17 @@ class ConsoleAlertRoutingControllerBehaviorTest {
 
   @Test
   void createShouldReturnRow() throws Exception {
+    // 生产 AlertRoutingConfigMapper 以 resultType=map 返回 snake_case 列键（route_code），
+    // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
     when(service.create(any(AlertRoutingSaveRequest.class)))
-        .thenReturn(Map.of("id", 1L, "routeCode", "RT_NEW"));
+        .thenReturn(Map.of("id", 1L, "route_code", "RT_NEW"));
     mockMvc
         .perform(
             post("/api/console/alert-routings")
                 .contentType(APPLICATION_JSON)
                 .content(saveBody("RT_NEW")))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.routeCode").value("RT_NEW"));
+        .andExpect(jsonPath("$.data.route_code").value("RT_NEW"));
   }
 
   @Test
