@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleTenantUsageSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -15,8 +16,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -53,19 +52,15 @@ public class ConsoleTenantSelfServiceController {
 
   /** 查看租户配额用量摘要（从系统参数读取运行时统计）。 */
   @GetMapping("/usage")
-  public CommonResponse<Map<String, String>> usage(@RequestParam("tenantId") String tenantId) {
+  public CommonResponse<ConsoleTenantUsageSummaryResponse> usage(
+      @RequestParam("tenantId") String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, String> usageMap = new LinkedHashMap<>();
-    parameterService
-        .getValue(resolved, "tenant.usage.running-jobs")
-        .ifPresent(v -> usageMap.put("runningJobs", v));
-    parameterService
-        .getValue(resolved, "tenant.usage.daily-triggers")
-        .ifPresent(v -> usageMap.put("dailyTriggers", v));
-    parameterService
-        .getValue(resolved, "tenant.usage.file-count")
-        .ifPresent(v -> usageMap.put("fileCount", v));
-    return responseFactory.success(usageMap);
+    // 历史 wire：系统参数缺失时对应键不出现（record 用 @JsonInclude(NON_NULL) 省略 null 保持一致）。
+    return responseFactory.success(
+        new ConsoleTenantUsageSummaryResponse(
+            parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null),
+            parameterService.getValue(resolved, "tenant.usage.daily-triggers").orElse(null),
+            parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null)));
   }
 
   /** 提交配额扩容申请（记录为系统参数，等待管理员审批）。 */

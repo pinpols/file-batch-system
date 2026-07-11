@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.AlertRoutingSaveRequest;
@@ -26,7 +27,7 @@ public class ConsoleAlertRoutingController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<ConsoleAlertRoutingResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "routeCode", required = false) String routeCode,
       @RequestParam(value = "team", required = false) String team,
@@ -34,9 +35,17 @@ public class ConsoleAlertRoutingController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    return responseFactory.success(
+    PageResponse<Map<String, Object>> page =
         alertRoutingApplicationService.list(
-            tenantId, routeCode, team, severity, enabled, pageNo, pageSize));
+            tenantId, routeCode, team, severity, enabled, pageNo, pageSize);
+    return responseFactory.success(
+        new PageResponse<>(
+            page.total(),
+            page.pageNo(),
+            page.pageSize(),
+            page.items().stream().map(ConsoleAlertRoutingResponse::from).toList(),
+            page.nextCursor(),
+            page.hasMore()));
   }
 
   @PostMapping
@@ -44,9 +53,10 @@ public class ConsoleAlertRoutingController {
       action = "alertRouting.create",
       aggregateType = "alert_routing",
       targetTenantParam = "#request.tenantId")
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ConsoleAlertRoutingResponse> create(
       @Valid @RequestBody AlertRoutingSaveRequest request) {
-    return responseFactory.success(alertRoutingApplicationService.create(request));
+    return responseFactory.success(
+        ConsoleAlertRoutingResponse.from(alertRoutingApplicationService.create(request)));
   }
 
   @PutMapping("/{id}")
@@ -55,9 +65,10 @@ public class ConsoleAlertRoutingController {
       aggregateType = "alert_routing",
       aggregateId = "#id",
       targetTenantParam = "#request.tenantId")
-  public CommonResponse<Map<String, Object>> update(
+  public CommonResponse<ConsoleAlertRoutingResponse> update(
       @PathVariable Long id, @Valid @RequestBody AlertRoutingSaveRequest request) {
-    return responseFactory.success(alertRoutingApplicationService.update(id, request));
+    return responseFactory.success(
+        ConsoleAlertRoutingResponse.from(alertRoutingApplicationService.update(id, request)));
   }
 
   @PostMapping("/{id}/toggle")

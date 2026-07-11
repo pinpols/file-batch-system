@@ -9,11 +9,11 @@ import io.github.pinpols.batch.console.domain.file.web.request.FileArrivalGroupA
 import io.github.pinpols.batch.console.domain.file.web.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePresignUploadResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -93,13 +93,14 @@ public class ConsoleFileController {
 
   /** 获取预签名上传地址（租户主动上传文件）。 */
   @PostMapping("/presign-upload")
-  public CommonResponse<Map<String, Object>> presignUpload(
+  public CommonResponse<ConsoleFilePresignUploadResponse> presignUpload(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @RequestParam("tenantId") String tenantId,
       @RequestParam("channelCode") String channelCode,
       @RequestParam("fileName") String fileName) {
     return responseFactory.success(
-        applicationService.presignUpload(tenantId, channelCode, fileName, idempotencyKey));
+        ConsoleFilePresignUploadResponse.from(
+            applicationService.presignUpload(tenantId, channelCode, fileName, idempotencyKey)));
   }
 
   /** 上传文件内容。S3 与本地文件系统都经 BatchObjectStore 写入，不暴露真实存储路径。 */

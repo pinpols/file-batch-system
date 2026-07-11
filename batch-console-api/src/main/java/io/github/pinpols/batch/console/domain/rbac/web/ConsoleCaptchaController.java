@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.captcha.CaptchaChallengeStore;
+import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleCaptchaConfigResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,12 +37,12 @@ public class ConsoleCaptchaController {
 
   /** FE 拉取验证码配置:provider + 公开 siteKey + 登录防护是否开启。绝不下发 secretKey。 */
   @GetMapping("/config")
-  public CommonResponse<Map<String, Object>> config() {
+  public CommonResponse<ConsoleCaptchaConfigResponse> config() {
     return responseFactory.success(
-        Map.of(
-            "provider", captchaProperties.getProvider(),
-            "siteKey", captchaProperties.getSiteKey(),
-            "loginProtectionEnabled", loginProtectionProperties.isEnabled()));
+        new ConsoleCaptchaConfigResponse(
+            captchaProperties.getProvider(),
+            captchaProperties.getSiteKey(),
+            loginProtectionProperties.isEnabled()));
   }
 
   /** self-hosted 滑块挑战签发。非 self-hosted provider → 404。 */

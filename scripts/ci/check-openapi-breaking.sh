@@ -39,7 +39,9 @@ for spec in "${SPECS[@]}"; do
   # (运行时一直返对象,`string` -> object 是 spec 修正非 wire 变化)。该忽略**收窄为
   # path 白名单**,避免未来别处真实 string -> object 破坏被全局掩盖;白名单外的
   # string -> object/array 仍按 ERR 拦截。
-  string_fix_paths='/api/console/(instances/\{id\}/(cancel|terminate|pause|resume)|instances/partitions/\{id\}/(cancel|retry)|ops/triggers/\{jobCode\}/(register|unregister|pause|resume)|scheduler/(pause-all|resume-all))'
+  # 批次4(notification/workflow/file/rbac Map 收敛)另修正 workflow-runs 生命周期动作
+  # 5 条历史误声明为 CommonResponseString 的 path(运行时一直返对象),同属 spec 修正非 wire 变化。
+  string_fix_paths='/api/console/(instances/\{id\}/(cancel|terminate|pause|resume)|instances/partitions/\{id\}/(cancel|retry)|ops/triggers/\{jobCode\}/(register|unregister|pause|resume)|scheduler/(pause-all|resume-all)|workflow-runs/\{id\}/(cancel|terminate|pause|resume|skip-node))'
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
     | grep -E 'response.s property type/format changed from ``/`` to `(object|array)`/``.*\[response-property-type-changed\]' \
       > "$clarification_ignore_tmp" || true

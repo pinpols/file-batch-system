@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.domain.notification.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleEventTopicResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleEventTypeResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -25,9 +26,9 @@ public class ConsoleEventCatalogController {
   private final MessageSource messageSource;
 
   @GetMapping("/event-types")
-  public CommonResponse<List<Map<String, String>>> eventTypes() {
+  public CommonResponse<List<ConsoleEventTypeResponse>> eventTypes() {
     Locale locale = LocaleContextHolder.getLocale();
-    List<Map<String, String>> types =
+    List<ConsoleEventTypeResponse> types =
         List.of(
             eventType("JOB_SUCCESS", locale),
             eventType("JOB_FAILED", locale),
@@ -48,12 +49,12 @@ public class ConsoleEventCatalogController {
   }
 
   @GetMapping("/topics")
-  public CommonResponse<List<Map<String, String>>> topics() {
+  public CommonResponse<List<ConsoleEventTopicResponse>> topics() {
     Locale locale = LocaleContextHolder.getLocale();
     // P2-3(2026-05-16):补 TASK_DISPATCH_PROCESS / TRIGGER_LAUNCH_V1 / VERIFIER_FAILURE_V1。
     // 这 3 个 topic 在 BatchTopics.java 都是 active 常量,运维 UI 需要看到完整 topic 列表
     // (订阅告警/排障时不能漏);测试可加 catalog-vs-BatchTopics 同步守护。
-    List<Map<String, String>> topicList =
+    List<ConsoleEventTopicResponse> topicList =
         List.of(
             topic(BatchTopics.TASK_DISPATCH_IMPORT, "TASK_DISPATCH_IMPORT", locale),
             topic(BatchTopics.TASK_DISPATCH_EXPORT, "TASK_DISPATCH_EXPORT", locale),
@@ -69,14 +70,14 @@ public class ConsoleEventCatalogController {
     return responseFactory.success(topicList);
   }
 
-  private Map<String, String> eventType(String code, Locale locale) {
+  private ConsoleEventTypeResponse eventType(String code, Locale locale) {
     String description = messageSource.getMessage("event.type." + code, null, code, locale);
-    return Map.of("code", code, "description", description);
+    return new ConsoleEventTypeResponse(code, description);
   }
 
-  private Map<String, String> topic(String name, String constantName, Locale locale) {
+  private ConsoleEventTopicResponse topic(String name, String constantName, Locale locale) {
     String description =
         messageSource.getMessage("event.topic." + constantName, null, name, locale);
-    return Map.of("name", name, "description", description);
+    return new ConsoleEventTopicResponse(name, description);
   }
 }

@@ -3,9 +3,10 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunActionResponse;
+import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -28,10 +29,11 @@ public class ConsoleWorkflowRunController {
       aggregateType = "workflow_run",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> cancel(
+  public CommonResponse<ConsoleWorkflowRunActionResponse> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "cancel"));
+        ConsoleWorkflowRunActionResponse.from(
+            orchestratorProxyService.workflowRunAction(id, tenantId, "cancel")));
   }
 
   @PostMapping("/{id}/terminate")
@@ -40,10 +42,11 @@ public class ConsoleWorkflowRunController {
       aggregateType = "workflow_run",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> terminate(
+  public CommonResponse<ConsoleWorkflowRunActionResponse> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "terminate"));
+        ConsoleWorkflowRunActionResponse.from(
+            orchestratorProxyService.workflowRunAction(id, tenantId, "terminate")));
   }
 
   @PostMapping("/{id}/pause")
@@ -52,10 +55,11 @@ public class ConsoleWorkflowRunController {
       aggregateType = "workflow_run",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> pause(
+  public CommonResponse<ConsoleWorkflowRunActionResponse> pause(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "pause"));
+        ConsoleWorkflowRunActionResponse.from(
+            orchestratorProxyService.workflowRunAction(id, tenantId, "pause")));
   }
 
   @PostMapping("/{id}/resume")
@@ -64,10 +68,11 @@ public class ConsoleWorkflowRunController {
       aggregateType = "workflow_run",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> resume(
+  public CommonResponse<ConsoleWorkflowRunActionResponse> resume(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        orchestratorProxyService.workflowRunAction(id, tenantId, "resume"));
+        ConsoleWorkflowRunActionResponse.from(
+            orchestratorProxyService.workflowRunAction(id, tenantId, "resume")));
   }
 
   @PostMapping("/{id}/skip-node")
@@ -76,11 +81,12 @@ public class ConsoleWorkflowRunController {
       aggregateType = "workflow_run",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> skipNode(
+  public CommonResponse<ConsoleWorkflowRunSkipNodeResponse> skipNode(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,
       @RequestParam("nodeCode") String nodeCode) {
     return responseFactory.success(
-        orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode));
+        ConsoleWorkflowRunSkipNodeResponse.from(
+            orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode)));
   }
 }

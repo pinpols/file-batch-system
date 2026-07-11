@@ -66,14 +66,16 @@ class ConsoleNotificationControllerTest {
 
   @Test
   void shouldListChannels() throws Exception {
+    // 生产 NotificationChannelMapper 以 resultType=map 返回 snake_case 列键（channel_code），
+    // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
     when(applicationService.listChannels("t1"))
-        .thenReturn(List.of(Map.of("channelCode", "mail-1", "channelType", "EMAIL")));
+        .thenReturn(List.of(Map.of("channel_code", "mail-1", "channel_type", "EMAIL")));
 
     mockMvc
         .perform(get("/api/console/notifications/channels").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].channelCode").value("mail-1"));
+        .andExpect(jsonPath("$.data[0].channel_code").value("mail-1"));
   }
 
   @Test

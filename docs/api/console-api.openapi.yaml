@@ -167,7 +167,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapStringObject'
+                $ref: '#/components/schemas/CommonResponseConsoleLoginPublicKey'
         '404':
           description: Login encryption is unavailable
   /api/console/captcha/config:
@@ -185,7 +185,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapStringObject'
+                $ref: '#/components/schemas/CommonResponseConsoleCaptchaConfig'
   /api/console/captcha/challenge:
     get:
       tags: [Auth]
@@ -2204,7 +2204,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleApiKeyCreate'
   /api/console/api-keys/{id}:
     get:
       tags: [ApiKeys]
@@ -6802,7 +6802,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleAlertRoutingPage'
     post:
       tags: [AlertRoutings]
       summary: Create alert routing
@@ -6823,7 +6823,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleAlertRouting'
   /api/console/alert-routings/{id}:
     put:
       tags: [AlertRoutings]
@@ -6851,7 +6851,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleAlertRouting'
   /api/console/alert-routings/{id}/toggle:
     post:
       tags: [AlertRoutings]
@@ -6922,7 +6922,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsolePipelineDefinitionListPage'
     post:
       tags: [PipelineDefinitions]
       summary: Create pipeline definition
@@ -7140,7 +7140,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunAction'
   /api/console/workflow-runs/{id}/terminate:
     post:
       tags: [WorkflowRuns]
@@ -7167,7 +7167,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunAction'
   /api/console/workflow-runs/{id}/pause:
     post:
       tags: [WorkflowRuns]
@@ -7194,7 +7194,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunAction'
   /api/console/workflow-runs/{id}/resume:
     post:
       tags: [WorkflowRuns]
@@ -7221,7 +7221,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunAction'
   /api/console/workflow-runs/{id}/skip-node:
     post:
       tags: [WorkflowRuns]
@@ -7253,7 +7253,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunSkipNode'
 
   # ─── P2: Dashboard ────────────────────────────────────────────────────────────
   /api/console/dashboard/job-stats:
@@ -8768,7 +8768,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleTenantUsageSummary'
   /api/console/tenants/quota/request:
     post:
       tags: [TenantSelfService]
@@ -8829,7 +8829,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleFilePresignUpload'
   /api/console/files/{fileId}/content:
     put:
       tags: [Files]
@@ -8972,7 +8972,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleEventTypeList'
   /api/console/event-catalog/topics:
     get:
       tags: [EventCatalog]
@@ -8984,7 +8984,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleEventTopicList'
   /api/console/workers/{workerCode}/warmup:
     post:
       tags: [Workers]
@@ -9115,7 +9115,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleNotificationChannelList'
     post:
       tags: [Notifications]
       summary: Create notification channel
@@ -9165,7 +9165,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleNotificationChannel'
     put:
       tags: [Notifications]
       summary: Update notification channel
@@ -9249,7 +9249,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleNotificationTestResult'
   /api/console/notifications/rules:
     get:
       tags: [Notifications]
@@ -9269,7 +9269,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleSubscriptionRuleList'
     post:
       tags: [Notifications]
       summary: Create notification rule
@@ -9320,7 +9320,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleSubscriptionRule'
     put:
       tags: [Notifications]
       summary: Update notification rule
@@ -9403,7 +9403,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleNotificationDeliveryLogList'
 
   /api/console/config/tenant-package/excel/export:
     get:
@@ -17083,3 +17083,328 @@ components:
         - type: object
           properties:
             data: { $ref: '#/components/schemas/ForensicExportResponse' }
+    # ── batch 4: notification + workflow + file + rbac map→typed ──────────────
+    # rbac / auth / captcha / api-key / tenant self-service
+    ConsoleLoginPublicKeyResponse:
+      type: object
+      description: 登录 RSA 公钥（PEM），供前端加密 login body。
+      required: [algorithm, publicKey, fingerprint]
+      properties:
+        algorithm: { type: string }
+        publicKey: { type: string }
+        fingerprint: { type: string }
+    CommonResponseConsoleLoginPublicKey:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleLoginPublicKeyResponse' }
+    ConsoleCaptchaConfigResponse:
+      type: object
+      description: 验证码公开配置（不含 secretKey）。
+      required: [provider, siteKey, loginProtectionEnabled]
+      properties:
+        provider: { type: string }
+        siteKey: { type: string }
+        loginProtectionEnabled: { type: boolean }
+    CommonResponseConsoleCaptchaConfig:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleCaptchaConfigResponse' }
+    ConsoleApiKeyCreateResponse:
+      type: object
+      description: 创建 API Key 结果；rawKey 明文仅此一次可见。
+      required: [id, keyName, keyPrefix, rawKey, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        keyName: { type: string }
+        keyPrefix: { type: string }
+        rawKey: { type: string }
+        createdAt: { type: string, format: date-time }
+    CommonResponseConsoleApiKeyCreate:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleApiKeyCreateResponse' }
+    ConsoleTenantUsageSummaryResponse:
+      type: object
+      description: 租户配额用量摘要；系统参数缺失时对应键省略（NON_NULL）。
+      properties:
+        runningJobs: { type: string, nullable: true }
+        dailyTriggers: { type: string, nullable: true }
+        fileCount: { type: string, nullable: true }
+    CommonResponseConsoleTenantUsageSummary:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleTenantUsageSummaryResponse' }
+    # notification channels / rules / delivery logs / test / alert routing / event catalog
+    ConsoleNotificationChannelResponse:
+      type: object
+      description: 通知渠道行（mapper 显式列，snake_case 键；config_json 为 jsonb 原样透传）。
+      required: [id]
+      properties:
+        id: { type: integer, format: int64 }
+        tenant_id: { type: string, nullable: true }
+        channel_code: { type: string, nullable: true }
+        channel_name: { type: string, nullable: true }
+        channel_type: { type: string, nullable: true }
+        config_json: { nullable: true, description: jsonb 渠道配置原样透传 }
+        enabled: { type: boolean, nullable: true }
+        created_by: { type: string, nullable: true }
+        updated_by: { type: string, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    CommonResponseConsoleNotificationChannel:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleNotificationChannelResponse' }
+    CommonResponseConsoleNotificationChannelList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleNotificationChannelResponse' }
+    ConsoleSubscriptionRuleResponse:
+      type: object
+      description: 订阅规则行（mapper 显式列，snake_case 键）。
+      required: [id]
+      properties:
+        id: { type: integer, format: int64 }
+        tenant_id: { type: string, nullable: true }
+        rule_name: { type: string, nullable: true }
+        channel_code: { type: string, nullable: true }
+        event_types: { type: string, nullable: true }
+        severity_filter: { type: string, nullable: true }
+        job_code_filter: { type: string, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        created_by: { type: string, nullable: true }
+        updated_by: { type: string, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    CommonResponseConsoleSubscriptionRule:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleSubscriptionRuleResponse' }
+    CommonResponseConsoleSubscriptionRuleList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleSubscriptionRuleResponse' }
+    ConsoleNotificationDeliveryLogResponse:
+      type: object
+      description: 通知投递日志行（mapper 显式列，snake_case 键；payload_json/error_args 为 jsonb 原样透传）。
+      required: [id]
+      properties:
+        id: { type: integer, format: int64 }
+        tenant_id: { type: string, nullable: true }
+        rule_id: { type: integer, format: int64, nullable: true }
+        channel_code: { type: string, nullable: true }
+        event_type: { type: string, nullable: true }
+        alert_event_id: { type: integer, format: int64, nullable: true }
+        payload_json: { nullable: true, description: jsonb 投递负载原样透传 }
+        delivery_status: { type: string, nullable: true }
+        error_message: { type: string, nullable: true }
+        error_key: { type: string, nullable: true }
+        error_args: { nullable: true, description: jsonb i18n 占位参数原样透传 }
+        attempt: { type: integer, format: int32, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+    CommonResponseConsoleNotificationDeliveryLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleNotificationDeliveryLogResponse' }
+    ConsoleNotificationTestResultResponse:
+      type: object
+      description: 通知渠道测试结果（camelCase；httpStatus/errorSummary 键恒存在，值可空）。
+      required: [channelCode, channelType, success, status, message, httpStatus, errorSummary]
+      properties:
+        channelCode: { type: string }
+        channelType: { type: string }
+        success: { type: boolean }
+        status: { type: string }
+        message: { type: string }
+        httpStatus: { type: integer, format: int32, nullable: true }
+        errorSummary: { type: string, nullable: true }
+    CommonResponseConsoleNotificationTestResult:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleNotificationTestResultResponse' }
+    ConsoleAlertRoutingConfigResponse:
+      type: object
+      description: >-
+        告警路由配置行（snake_case 键，全列标量）。list 端点省略
+        created_by/updated_by/is_deleted；create/update（select *）含全部列。
+      required: [id]
+      properties:
+        id: { type: integer, format: int64 }
+        tenant_id: { type: string, nullable: true }
+        route_code: { type: string, nullable: true }
+        route_name: { type: string, nullable: true }
+        team: { type: string, nullable: true }
+        alert_group: { type: string, nullable: true }
+        severity: { type: string, nullable: true }
+        receiver: { type: string, nullable: true }
+        group_by: { type: string, nullable: true }
+        group_wait_seconds: { type: integer, format: int32, nullable: true }
+        group_interval_seconds: { type: integer, format: int32, nullable: true }
+        repeat_interval_seconds: { type: integer, format: int32, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string, nullable: true }
+        created_by: { type: string, nullable: true }
+        updated_by: { type: string, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+        is_deleted: { type: boolean, nullable: true }
+    ConsoleAlertRoutingConfigPageResponse:
+      type: object
+      required: [total, pageNo, pageSize, items]
+      properties:
+        total: { type: integer, format: int64 }
+        pageNo: { type: integer, format: int32 }
+        pageSize: { type: integer, format: int32 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ConsoleAlertRoutingConfigResponse' }
+    CommonResponseConsoleAlertRouting:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleAlertRoutingConfigResponse' }
+    CommonResponseConsoleAlertRoutingPage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleAlertRoutingConfigPageResponse' }
+    ConsoleEventTypeResponse:
+      type: object
+      description: 可订阅事件类型（code + 本地化 description）。
+      required: [code, description]
+      properties:
+        code: { type: string }
+        description: { type: string }
+    CommonResponseConsoleEventTypeList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleEventTypeResponse' }
+    ConsoleEventTopicResponse:
+      type: object
+      description: Kafka Topic 映射（name + 本地化 description）。
+      required: [name, description]
+      properties:
+        name: { type: string }
+        description: { type: string }
+    CommonResponseConsoleEventTopicList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleEventTopicResponse' }
+    # workflow run actions / pipeline definition list
+    ConsoleWorkflowRunActionResponse:
+      type: object
+      description: 工作流运行实例生命周期动作结果（cancel/terminate/pause/resume）。
+      required: [id, status]
+      properties:
+        id: { type: integer, format: int64 }
+        status: { type: string }
+    CommonResponseConsoleWorkflowRunAction:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleWorkflowRunActionResponse' }
+    ConsoleWorkflowRunSkipNodeResponse:
+      type: object
+      description: 工作流运行实例跳过节点结果（nodeStatus 恒为 SKIPPED）。
+      required: [id, nodeCode, nodeStatus]
+      properties:
+        id: { type: integer, format: int64 }
+        nodeCode: { type: string }
+        nodeStatus: { type: string }
+    CommonResponseConsoleWorkflowRunSkipNode:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleWorkflowRunSkipNodeResponse' }
+    ConsolePipelineDefinitionListItemResponse:
+      type: object
+      description: 流水线定义列表项（mapper 显式列，snake_case 键，全列标量）。
+      required: [id]
+      properties:
+        id: { type: integer, format: int64 }
+        tenant_id: { type: string, nullable: true }
+        job_code: { type: string, nullable: true }
+        pipeline_name: { type: string, nullable: true }
+        pipeline_type: { type: string, nullable: true }
+        biz_type: { type: string, nullable: true }
+        worker_group: { type: string, nullable: true }
+        version: { type: integer, format: int32, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    ConsolePipelineDefinitionListPageResponse:
+      type: object
+      required: [total, pageNo, pageSize, items]
+      properties:
+        total: { type: integer, format: int64 }
+        pageNo: { type: integer, format: int32 }
+        pageSize: { type: integer, format: int32 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ConsolePipelineDefinitionListItemResponse' }
+    CommonResponseConsolePipelineDefinitionListPage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsolePipelineDefinitionListPageResponse' }
+    # file managed-upload session
+    ConsoleFilePresignUploadResponse:
+      type: object
+      description: 托管上传会话（camelCase，9 固定字段均恒存在）。
+      required: [fileId, status, uploadMode, uploadMethod, contentField, uploadUrl, storageBucket, storagePath, fileName]
+      properties:
+        fileId: { type: integer, format: int64 }
+        status: { type: string }
+        uploadMode: { type: string }
+        uploadMethod: { type: string }
+        contentField: { type: string }
+        uploadUrl: { type: string }
+        storageBucket: { type: string }
+        storagePath: { type: string }
+        fileName: { type: string }
+    CommonResponseConsoleFilePresignUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleFilePresignUploadResponse' }
