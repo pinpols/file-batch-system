@@ -1,19 +1,23 @@
 package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.OffsetDateTime;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultProcessingPositionStoreTest {
@@ -22,8 +26,17 @@ class DefaultProcessingPositionStoreTest {
   private static final long INSTANCE = 1001L;
 
   @Mock PipelineProgressMapper mapper;
+  @Mock ObjectProvider<io.micrometer.core.instrument.MeterRegistry> meterRegistryProvider;
 
-  @InjectMocks DefaultProcessingPositionStore store;
+  private SimpleMeterRegistry meterRegistry;
+  private DefaultProcessingPositionStore store;
+
+  @BeforeEach
+  void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
+    store = new DefaultProcessingPositionStore(mapper, meterRegistryProvider);
+  }
 
   @Test
   @DisplayName("load:无行返回 empty(),首次跑场景")
@@ -36,6 +49,7 @@ class DefaultProcessingPositionStoreTest {
     assertThat(pos.completed()).isFalse();
     assertThat(pos.positionMarker()).isNull();
     assertThat(pos.processedCount()).isZero();
+    assertMetric("LOAD", "load", "empty", 1.0);
   }
 
   @Test
@@ -60,6 +74,7 @@ class DefaultProcessingPositionStoreTest {
     assertThat(pos.completed()).isTrue();
     assertThat(pos.processedCount()).isEqualTo(999L);
     assertThat(pos.positionMarker()).isNull(); // completed() 不带 marker
+    assertMetric("GENERATE", "load", "completed", 1.0);
   }
 
   @Test
@@ -84,6 +99,7 @@ class DefaultProcessingPositionStoreTest {
     assertThat(pos.completed()).isFalse();
     assertThat(pos.positionMarker()).isEqualTo("row:12345");
     assertThat(pos.processedCount()).isEqualTo(12345L);
+    assertMetric("LOAD", "load", "resumable", 1.0);
   }
 
   @Test
@@ -92,6 +108,7 @@ class DefaultProcessingPositionStoreTest {
     store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L);
 
     verify(mapper).advance(eq(TENANT), eq(INSTANCE), eq("LOAD"), eq("row:500"), eq(500L));
+    assertMetric("LOAD", "advance", "success", 1.0);
   }
 
   @Test
@@ -100,6 +117,19 @@ class DefaultProcessingPositionStoreTest {
     store.markCompleted(TENANT, INSTANCE, ProcessingStage.GENERATE);
 
     verify(mapper).markCompleted(eq(TENANT), eq(INSTANCE), eq("GENERATE"));
+    assertMetric("GENERATE", "complete", "success", 1.0);
+  }
+
+  @Test
+  @DisplayName("存储异常:记录 failure 指标并保留原异常")
+  void shouldRecordFailureAndRethrow() {
+    IllegalStateException failure = new IllegalStateException("database unavailable");
+    doThrow(failure).when(mapper).advance(TENANT, INSTANCE, "LOAD", "row:500", 500L);
+
+    assertThatThrownBy(() -> store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L))
+        .isSameAs(failure);
+
+    assertMetric("LOAD", "advance", "failure", 1.0);
   }
 
   @Test
@@ -111,5 +141,15 @@ class DefaultProcessingPositionStoreTest {
 
     // findByInstanceAndStage 触发(by when()),advance / markCompleted 不触发
     verify(mapper).findByInstanceAndStage(TENANT, INSTANCE, "LOAD");
+  }
+
+  private void assertMetric(String stage, String operation, String outcome, double expected) {
+    assertThat(
+            meterRegistry
+                .get(DefaultProcessingPositionStore.METRIC_OPERATIONS)
+                .tags("stage", stage, "operation", operation, "outcome", outcome)
+                .counter()
+                .count())
+        .isEqualTo(expected);
   }
 }

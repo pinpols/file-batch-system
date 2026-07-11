@@ -35,6 +35,9 @@
 **边界(v1)**:平台**已接通的投递渠道只有 WEBHOOK(+ Web Push)**;`notification_channel` 里的 EMAIL / 钉钉 / 企微仍是配置占位、sender 未实现,
 故升级通知 v1 只覆盖 WEBHOOK。要让邮件 / IM 真正被呼叫,需另行实现对应 sender(独立后续)。`alert_routing_config`(前端「告警路由」页管的表)目前仍是孤儿配置、无运行时消费方,不在本回路内。升级**不改 `severity`、不重走 emit**,状态机不介入。
 
+> **决策（2026-07-11）**：保留 Prometheus → Alertmanager 静态规则和路由模板；应用内 `alert_event` /
+> `alert_routing_config` 动态迁移暂缓到上线前出现真实告警流量后再评估。Console 页面当前只读并标记“预留”，不得把 CRUD 成功解释为路由已生效。
+
 ## 配置开关(`batch.alert.escalation.*`)
 
 | 键 | 默认 | 说明 |

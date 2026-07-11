@@ -149,6 +149,18 @@ groups:
           summary: "Pipeline step execution latency is high for {{ $labels.job }}"
           description: "P95 worker pipeline step execution stayed above 60 seconds for 15 minutes. Inspect slow plugins, datasource latency, and file/object storage dependencies."
 
+      - alert: BatchWorkerCheckpointPersistenceFailed
+        expr: increase(batch_worker_checkpoint_operations_total{outcome="failure"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "Worker checkpoint persistence failed"
+          description: "Checkpoint {{ $labels.operation }} failed for stage {{ $labels.stage }}. Stop widening the checkpoint rollout and inspect platform PostgreSQL connectivity and worker logs."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/platform-worker-checkpoint-howto.md"
+
       - alert: BatchRedisMemoryUsageHigh
         expr: redis_memory_max_bytes > 0 and redis_memory_used_bytes / redis_memory_max_bytes > 0.80
         for: 10m

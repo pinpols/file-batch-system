@@ -4,7 +4,7 @@
 
 ## 解决的问题
 
-平台 worker 的 Import LOAD 当前是「全量重跑」模型:任务超时 / 进程崩 / lease 被回收后,
+引入本特性前，平台 worker 的 Import LOAD 是「全量重跑」模型:任务超时 / 进程崩 / lease 被回收后,
 下一个 worker 从**第 0 行**重头读 staging 文件 + 重新调 `plugin.loadChunk`。
 在百万行级真实任务下,业务库被反复 INSERT/UPDATE 风暴冲击,SLA 受损。
 
@@ -22,6 +22,16 @@
 1. dev 环境长期开 → 跑日常用例验证不破坏正路径
 2. staging 灰度 1~2 周,看 `batch.pipeline_progress` 表行数 / 重派任务命中续跑次数
 3. prod 按租户 profile 渐进打开;**先在百万行级业务的租户上开**,小数据量租户继续 false 即可
+
+专用指标：`batch.worker.checkpoint.operations.total{stage,operation,outcome}`。标签均为固定枚举，不带 tenant/instance：
+
+- `operation=load,outcome=empty|resumable|completed|failure`：首次运行、命中续跑、幂等跳过和读取失败；
+- `operation=advance,outcome=success|failure`：位点推进结果；
+- `operation=complete,outcome=success|failure`：完成标记结果。
+
+灰度期间至少观察 `load/resumable` 是否出现，以及 `outcome=failure` 是否持续为 0；表行数只能证明位点写入，不能替代失败指标。
+Prometheus 规则 `BatchWorkerCheckpointPersistenceFailed` 会在 5 分钟窗口出现失败时告警，并沿现有
+`alert_group=worker` 静态路由发送；收到告警后应停止扩大灰度，先检查平台 PostgreSQL 和 worker 日志。
 
 ## 同事务约束(important)
 
@@ -144,6 +154,9 @@ ORDER BY completed_at DESC;
 |---|---|
 | **阶段级续跑**(ADR-038 §决策四 P4) | 与 ADR-020 batch-day-replay 语义重叠,需对齐后再做。本 PR 暂不实现。 |
 | **确定化残文件清理**(GENERATE 崩溃后从未重派的孤儿 `inst-*.<ext>`) | 走 tmp 目录,OS / 容器重启即清;若要主动清,后续可加按 mtime 的定期清扫(低优先,YAGNI)。 |
+
+> P4 当前为明确冻结项，不是默认待办。只有生产/同构 staging 证据表明“已完成 stage 被重复执行”成为显著 SLA 或数据库成本后，
+> 才重新评估；不得仅因 ADR 中存在设计草案就实施。
 
 ## 相关
 

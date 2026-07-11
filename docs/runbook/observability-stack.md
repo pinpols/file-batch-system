@@ -266,8 +266,8 @@ scrape_configs:
 ## Grafana
 
 - 导入 `docs/observability/grafana-dashboard-batch.json`（JVM + 平台计数器 + Redis/Kafka/PostgreSQL/MinIO）。
-- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`export_file_rows_total`（导出文件行数，按 tenant 分标签）、`dispatch_receipt_total`（分发回执计数，按 tenant 分标签）、`batch_console_realtime_subscriptions_active`、`batch_console_realtime_replay_events_total`、`batch_console_realtime_replay_cursor_miss_total`、`batch_console_realtime_replay_decode_failures_total`、`batch_console_realtime_pubsub_decode_failures_total`、`batch_console_realtime_pubsub_handle_failures_total`、`hikaricp_connections_*`、`redis_connected_clients`、`redis_memory_used_bytes`、`kafka_consumergroup_lag`、`pg_up`、`pg_stat_database_numbackends`、MinIO cluster metrics、JVM 内存/线程。
-- 告警与路由模板见 `docs/observability/prometheus-batch-rules.yml` 和 `docs/observability/alertmanager-batch-template.yml`。
+- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`batch_worker_checkpoint_operations_total`（续跑命中及位点持久化结果）、`export_file_rows_total`（导出文件行数，按 tenant 分标签）、`dispatch_receipt_total`（分发回执计数，按 tenant 分标签）、`batch_console_realtime_subscriptions_active`、`batch_console_realtime_replay_events_total`、`batch_console_realtime_replay_cursor_miss_total`、`batch_console_realtime_replay_decode_failures_total`、`batch_console_realtime_pubsub_decode_failures_total`、`batch_console_realtime_pubsub_handle_failures_total`、`hikaricp_connections_*`、`redis_connected_clients`、`redis_memory_used_bytes`、`kafka_consumergroup_lag`、`pg_up`、`pg_stat_database_numbackends`、MinIO cluster metrics、JVM 内存/线程。
+- 告警与路由模板见 `docker/observability/prometheus-batch-rules.yml` 和 `docker/observability/alertmanager-batch-template.yml`。
 - Redis / realtime 已补的 Prometheus 规则包括：
   - `BatchRedisMemoryUsageHigh`
   - `BatchRedisConnectedClientsHigh`

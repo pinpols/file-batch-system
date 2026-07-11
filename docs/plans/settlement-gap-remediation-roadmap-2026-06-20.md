@@ -40,7 +40,7 @@
 | PR | 内容 | 模块 | 备注 |
 |---|---|---|---|
 | 2.1 | **长任务 task 级心跳**(atomic 执行中续 task 心跳,防长 shell/sql 被误判 worker 死) | worker-atomic + core | 直接 |
-| 2.2 | **ADR-038 checkpoint/resume 接入** `LoadStep`/`GenerateStep`(表+store 已就绪,接 advance 调用) | worker-core/import/export | 已有 ADR-038 |
+| 2.2 | **ADR-038 checkpoint/resume 接入** `LoadStep`/`GenerateStep` | worker-core/import/export | ✅ 已完成；Import 真实崩溃同实例续跑已通过，阶段级续跑 P4 明确冻结 |
 | 2.3 | **准入控制 / 过载软节流**(硬拒改软节流/排队,峰值流量不误拒正常请求) | orchestrator | ⚠️ 需小 ADR 决策 |
 
 ## Phase 3 — 结算治理 / 合规（~4 PR）
