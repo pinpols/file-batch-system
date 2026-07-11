@@ -43,13 +43,18 @@ jobs:
     name: sdk e2e (${{ matrix.lang }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # java 是新接入的第 3 条腿(#649 GA 对齐):先 non-blocking 跑一轮验证真 orchestrator
-    # 往返(register/claim/report),绿稳后再去掉本行转阻塞。go/python 仍阻塞。
-    continue-on-error: ${{ matrix.lang == 'java' }}
+    # 非阻塞腿(continue-on-error)——go/python 是已校准的阻塞信号,其余先 non-blocking 起步:
+    #   java   :#649 GA 对齐,runner 已支持真往返(register/claim/report),绿稳后转阻塞。
+    #   typescript / rust:矩阵已登记,但 scripts/ci/run-sdk-orchestrator-e2e.sh 尚无这两语言的
+    #     build/start case(仅 go|python|java)。本 wf 先把两腿 scaffold 成 non-blocking「pending
+    #     runner support」占位(见下方 Run 步骤的 lang 分支),让「TS/Rust 从未打过真 orchestrator」
+    #     这一审计缺口在矩阵里显性化 + 有明确收口路径,而不是无声缺席。runner 补齐 case 后即转真跑;
+    #     真跑绿稳(+ sdk-live-transport flake 治理见文件尾注)后再逐腿去掉 continue-on-error 转必需。
+    continue-on-error: ${{ matrix.lang == 'java' || matrix.lang == 'typescript' || matrix.lang == 'rust' }}
     strategy:
       fail-fast: false
       matrix:
-        lang: [go, python, java]
+        lang: [go, python, java, typescript, rust]
     env:
       # 与 .env.example 对齐(本地/CI 同一套 dev 默认)。
       BATCH_PLATFORM_DB_PASSWORD: batch_pass_123
@@ -81,6 +86,16 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+
+      - name: Set up Node.js
+        if: matrix.lang == 'typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Rust
+        if: matrix.lang == 'rust'
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Prepare env file
         # .env.example 故意不含 3 个 :? required 密钥(BATCH_PLATFORM/BUSINESS_DB_PASSWORD、
@@ -142,7 +157,21 @@ jobs:
           bash scripts/data/load-system-test-data.sh || echo "WARN: seed partial (stage B may be limited)"
 
       - name: Run SDK × real-orchestrator e2e (${{ matrix.lang }})
-        run: bash scripts/ci/run-sdk-orchestrator-e2e.sh "${{ matrix.lang }}"
+        run: |
+          case "${{ matrix.lang }}" in
+            typescript|rust)
+              # runner(scripts/ci/run-sdk-orchestrator-e2e.sh)当前只支持 go|python|java。
+              # 这两腿先 scaffold 成 non-blocking 占位:登记意图 + 明确收口路径,不产生红噪声。
+              # 收口:由各自语言 agent 给 runner 补 build/start case(examples/self-hosted-sdk/
+              # sample-tenant-worker-{typescript,rust}),补齐后删除本分支改为直接调 runner。
+              echo "PENDING: '${{ matrix.lang }}' real-orchestrator e2e lane scaffolded but runner has no"
+              echo "         build/start case yet (runner supports go|python|java). Non-blocking until"
+              echo "         runner gains ${{ matrix.lang }} support; see workflow header + docs/runbook/ci/sdk-e2e-required-path.md."
+              ;;
+            *)
+              bash scripts/ci/run-sdk-orchestrator-e2e.sh "${{ matrix.lang }}"
+              ;;
+          esac
 
       - name: Dump container logs on failure
         if: failure()
