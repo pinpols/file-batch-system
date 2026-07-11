@@ -16,4 +16,6 @@ public record AiAuditCommand(
     String responseHash,
     String responsePreview,
     String refusalReason,
+    Integer promptTokens,
+    Integer completionTokens,
     Instant createdAt) {}

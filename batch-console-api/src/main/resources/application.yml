@@ -147,6 +147,11 @@ batch:
       max-prompt-length: ${BATCH_CONSOLE_AI_MAX_PROMPT_LENGTH:4000}
       # response 最大长度（防止输出过长）
       max-response-length: ${BATCH_CONSOLE_AI_MAX_RESPONSE_LENGTH:3000}
+      # 调用限流:每租户+每用户每分钟最大调用次数(滑动窗口,复用 console 限流器,key 含 tenant)。
+      # AI 每次烧 token + 调外部 LLM,比普通接口贵,独立更严;超限返回 429。<=0 关闭。
+      rate-limit-per-minute: ${BATCH_CONSOLE_AI_RATE_LIMIT_PER_MINUTE:20}
+      # 单次模型调用应用层硬超时:超时→优雅降级(非 500),防 Tomcat 线程被 provider 拖住。
+      request-timeout: ${BATCH_CONSOLE_AI_REQUEST_TIMEOUT:60s}
       # 允许使用 AI 的用户白名单
       allowed-users:
         - ${BATCH_CONSOLE_AI_ALLOWED_USER:admin}
