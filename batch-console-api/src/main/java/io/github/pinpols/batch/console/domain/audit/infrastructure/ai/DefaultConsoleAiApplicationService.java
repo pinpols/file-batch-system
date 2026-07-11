@@ -173,11 +173,13 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       chatResponse = callModel(spec);
     } catch (Exception exception) {
       return degradeAndAudit(
-          requestId,
-          traceId,
-          sessionId,
-          tenantId,
-          requestMetadata.operatorId(),
+          AuditRequest.builder()
+              .tenantId(tenantId)
+              .requestId(requestId)
+              .traceId(traceId)
+              .sessionId(sessionId)
+              .operatorId(requestMetadata.operatorId())
+              .build(),
           prompt,
           gateResult,
           exception);
@@ -260,14 +262,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
   /** 模型调用失败 / 超时 → 优雅降级响应 + FAILED 审计(不裸抛 500)。 */
   private AiChatResponse degradeAndAudit(
-      String requestId,
-      String traceId,
-      String sessionId,
-      String tenantId,
-      String operatorId,
-      String prompt,
-      AiPromptGateResult gateResult,
-      Exception exception) {
+      AuditRequest request, String prompt, AiPromptGateResult gateResult, Exception exception) {
     SwallowedExceptionLogger.info(
         DefaultConsoleAiApplicationService.class, "catch:ai-model-call-failed", exception);
     aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_FAILED);
@@ -277,9 +272,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             "model_call_failed:" + exception.getClass().getSimpleName(), 512);
 
     AiChatResponse response = new AiChatResponse();
-    response.setRequestId(requestId);
-    response.setTraceId(traceId);
-    response.setSessionId(sessionId);
+    response.setRequestId(request.requestId());
+    response.setTraceId(request.traceId());
+    response.setSessionId(request.sessionId());
     response.setPromptCategory(gateResult.category().code());
     response.setPromptDecision(AiPromptDecision.FAILED.code());
     response.setModelName(aiProperties.getModel());
@@ -289,14 +284,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     auditService.record(
         buildAuditCommand(
             AuditContext.builder()
-                .request(
-                    AuditRequest.builder()
-                        .tenantId(tenantId)
-                        .requestId(requestId)
-                        .traceId(traceId)
-                        .sessionId(sessionId)
-                        .operatorId(operatorId)
-                        .build())
+                .request(request)
                 .result(
                     AuditResult.builder()
                         .promptCategory(gateResult.category())
