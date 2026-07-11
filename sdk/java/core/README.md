@@ -61,7 +61,10 @@ BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
     .tenantId("tenant-xyz")
     .workerCode("xyz-import-worker-1")
     .kafkaBootstrap("kafka.example.com:9092")
-    .kafkaTopicPattern("batch.task.dispatch.tenant-xyz.*")
+    // node-direct 订阅正则:对齐内建 worker AbstractTaskConsumer.topicPattern() 发布的
+    // `batch.task.dispatch.<workerType>.node.<workerCode>`。旧的 tenant-first
+    // `batch.task.dispatch.<tenant>.*` 平台**从不发布**,会静默收不到任何任务。
+    .kafkaTopicPattern("batch\\.task\\.dispatch\\..+\\.node\\." + Pattern.quote("xyz-import-worker-1"))
     .kafkaGroupId("tenant-xyz-import-workers")
     .build();
 
@@ -119,21 +122,31 @@ Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSec
 
 ## 配置项一览
 
-`BatchPlatformClientConfig` 关键字段(完整见类 javadoc):
+`BatchPlatformClientConfig` 关键字段(**逐项对照 `BatchPlatformClientConfig` 源码**,完整见类 javadoc):
 
-| 字段 | 默认 | 说明 |
-|---|---|---|
-| `baseUrl` | 必填 | 平台 HTTP base,如 `https://batch.example.com` |
-| `apiKey` | 必填 | 平台签发的 worker key,Bearer 注入,**禁日志** |
-| `tenantId` | 必填 | 注入 `X-Batch-Tenant-Id` header,所有 internal 调用必带 |
-| `workerCode` | 必填 | 进程唯一标识(注册后落 `worker_instance`) |
-| `kafkaBootstrap` | 必填 | Kafka broker(SASL 凭据走单独 properties) |
-| `kafkaTopicPattern` | 必填 | 派单 topic 正则,如 `batch.task.dispatch.tenant-xyz.*` |
-| `kafkaGroupId` | 必填 | consumer group,跨进程同 group 自动分片 |
-| `maxConcurrentTasks` | 16 | 进程内并发 handler 上限(超出 capacity-aware pause) |
-| `heartbeatIntervalMs` | 15_000 | 心跳基础间隔(服务器 hint 钳制覆盖) |
-| `httpConnectTimeoutMs` / `httpReadTimeoutMs` | 5_000 / 30_000 | HTTP 调用超时 |
-| `gracefulShutdownTimeoutMs` | 30_000 | `stop()` 总预算(Kafka 15% / dispatcher 70% / scheduler 10% / deactivate 5%) |
+| 字段 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `baseUrl` | String | 必填 | 平台 HTTP base,如 `https://batch.example.com`(**禁**尾斜杠) |
+| `apiKey` | String | 可空(P1 阶段)/上线必填 | 平台签发的 worker key,Bearer 注入,**禁日志** |
+| `tenantId` | String | 必填 | 注入 `X-Batch-Tenant-Id` header,所有 internal 调用必带 |
+| `workerCode` | String | 必填 | 进程唯一标识(注册后落 `worker_instance`) |
+| `kafkaBootstrap` | String | 必填 | Kafka broker(SASL 凭据走下方 3 个 `kafkaSasl*` 字段) |
+| `kafkaTopicPattern` | String | 必填 | 派单 topic 正则,node-direct:`batch\.task\.dispatch\..+\.node\.<workerCode>` |
+| `kafkaGroupId` | String | 必填 | consumer group,跨进程同 group 自动分片 |
+| `buildId` | String | null | 运行指纹(建议 CI 注入 git SHA / 镜像 tag);**禁放敏感信息** |
+| `maxConcurrentTasks` | int | **4** | 进程内并发 handler 上限(1..64,超出 capacity-aware pause) |
+| `heartbeatInterval` | Duration | **30s** | 心跳基础间隔(服务器 `nextHeartbeatHintMs` 钳制覆盖) |
+| `httpTimeout` | Duration | **10s** | HTTP 调用超时(connect + read 合一,非分离字段) |
+| `kafkaPollInterval` | Duration | 200ms | Kafka poll 间隔 |
+| `leaseRenewInterval` | Duration | 60s | in-flight 任务 lease 续约间隔(应 < orchestrator lease TTL 的 1/2) |
+| `claimMax5xxRetries` | int | 3 | CLAIM 收 5xx / 传输错误的最大额外重试(401/403 永远 fail-fast) |
+| `claimRetryBaseDelay` | Duration | 200ms | CLAIM 5xx 重试基准退避(`base × 2^attempt`) |
+| `clientErrorFailFastThreshold` | int | 5 | CLAIM/REPORT 连续(非鉴权非 409)4xx 达阈值 → dispatcher FATAL |
+| `kafkaSecurityProtocol` / `kafkaSaslMechanism` / `kafkaSaslJaasConfig` | String | null | Kafka SASL/SCRAM(prod 必填;从 K8s Secret / env 注入,**禁硬编码**) |
+| `strictTimingValidation` | boolean | true | 启动期时序 4 规则违反即 fail-fast;env `BATCH_SDK_STRICT_TIMING=false` 降级 WARN |
+| `requestSigningEnabled` | boolean | false | 写请求 HMAC 签名(`X-Batch-Timestamp/Nonce/Signature`);env `BATCH_SDK_REQUEST_SIGNING_ENABLED=true` |
+
+> 无 `*Ms` 后缀字段、无 `httpConnectTimeoutMs` / `httpReadTimeoutMs` / `gracefulShutdownTimeoutMs` —— 超时统一走 `Duration` 类型。`stop(Duration)` 的优雅停超时是 `stop()` 方法参数(默认 30s),不是 config 字段。完整 env 前缀 / 五语言配置总表见 [`docs/sdk/config-reference.md`](../../../docs/sdk/config-reference.md)。
 
 ## 安全约束(必须遵守)
 

@@ -6,26 +6,27 @@
 > - **`sample-tenant-worker`(本目录)** — 纯 Java + 手写 `main` wiring
 > - [`../sample-tenant-worker-spring`](../sample-tenant-worker-spring/) — Java + Spring Boot starter(自动装配)
 > - [`../sample-tenant-worker-python`](../sample-tenant-worker-python/) — Python 3.12+ + asyncio
-> - [`../batch-worker-sdk-template`](../batch-worker-sdk-template/) — Java 生产 fork 起点(Dockerfile + CI)
 >
-> 其它语言(Go / Rust / Node)走 [BYO SDK guide](../../docs/sdk/byo-sdk-guide.md) 自研。
+> 其它语言(Go / Rust / Node)走 [BYO SDK guide](../../../docs/sdk/byo-sdk-guide.md) 自研。
 
 ## 跑
 
+在仓库根执行(路径对齐 `sdk/java/{core,testkit}` 嵌套布局):
+
 ```bash
-# 1. 装 SDK 到本地 maven (首次)
-mvn -pl batch-worker-sdk -am install -DskipTests
+# 1. 装 SDK(core + testkit)到本地 maven (首次)
+./mvnw -pl sdk/java/core,sdk/java/testkit -am install -DskipTests
 
 # 2. 打 sample worker
-mvn install -f examples/sample-tenant-worker/pom.xml -DskipTests
+./mvnw -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml install -DskipTests
 
 # 3. 跑(需配置以下环境变量)
 export BATCH_BASE_URL=https://batch.example.com
 export BATCH_TENANT_ID=tenant-xyz
 export BATCH_WORKER_CODE=xyz-sample-worker-1
 export BATCH_KAFKA=kafka.example.com:9092
-export BATCH_API_KEY=...  # P2 启用后必填
-java -jar examples/sample-tenant-worker/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar
+export BATCH_API_KEY=...  # 上线后必填
+java -jar examples/self-hosted-sdk/sample-tenant-worker-java/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar
 ```
 
 ## 注册的 handler

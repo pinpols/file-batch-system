@@ -28,7 +28,8 @@
     <maven.compiler.source>25</maven.compiler.source>
     <maven.compiler.target>25</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <batch-sdk.version>1.1.0-SNAPSHOT</batch-sdk.version>
+    <!-- 对齐根 reactor <revision>(main = 1.1.0);SNAPSHOT pin 与已安装的 1.1.0 对不上会解析失败。 -->
+    <batch-sdk.version>1.1.0</batch-sdk.version>
   </properties>
 
   <dependencies>
