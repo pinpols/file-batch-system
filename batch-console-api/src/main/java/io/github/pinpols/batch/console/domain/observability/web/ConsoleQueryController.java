@@ -45,6 +45,7 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetrySched
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleApprovalCommandResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
@@ -122,10 +123,13 @@ public class ConsoleQueryController {
   @GetMapping(
       value = "/pipeline-progress",
       params = {"tenantId", "workerCodes"})
-  public CommonResponse<List<Map<String, Object>>> workerPipelineProgress(
+  public CommonResponse<List<ConsolePipelineProgressItemResponse>> workerPipelineProgress(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("workerCodes") List<String> workerCodes) {
-    return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
+    return responseFactory.success(
+        orchestratorProxy.pipelineProgress(tenantId, workerCodes).stream()
+            .map(ConsolePipelineProgressItemResponse::from)
+            .toList());
   }
 
   /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */

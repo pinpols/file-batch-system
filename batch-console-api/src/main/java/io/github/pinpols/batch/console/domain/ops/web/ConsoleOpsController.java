@@ -5,6 +5,7 @@ import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxCleanupResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
@@ -15,7 +16,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -49,9 +49,12 @@ public class ConsoleOpsController {
 
   /** Kafka consumer group 积压查询。 */
   @GetMapping("/kafka-lag")
-  public CommonResponse<List<Map<String, Object>>> kafkaConsumerLag(
+  public CommonResponse<List<ConsoleKafkaConsumerLagResponse>> kafkaConsumerLag(
       @RequestParam(value = "groupId", required = false) String groupId) {
-    return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));
+    return responseFactory.success(
+        kafkaLagQueryService.consumerGroupLags(groupId).stream()
+            .map(ConsoleKafkaConsumerLagResponse::from)
+            .toList());
   }
 
   /** Outbox 积压统计（按 publish_status 分组）。 */

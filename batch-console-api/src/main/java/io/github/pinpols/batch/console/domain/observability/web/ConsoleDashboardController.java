@@ -2,9 +2,16 @@ package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleDashboardQueryService;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleAlertTrendResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleExecutionProgressResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleJobStatsResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleSlaComplianceResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleSlaReportResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleTenantUsageResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleTriggerStatsResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleWorkerLoadResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -25,60 +32,71 @@ public class ConsoleDashboardController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping("/job-stats")
-  public CommonResponse<Map<String, Object>> jobStats(
+  public CommonResponse<ConsoleJobStatsResponse> jobStats(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "days", defaultValue = "7") int days) {
-    return responseFactory.success(queryService.jobStats(tenantId, days));
+    return responseFactory.success(
+        ConsoleJobStatsResponse.from(queryService.jobStats(tenantId, days)));
   }
 
   @GetMapping("/trigger-stats")
-  public CommonResponse<Map<String, Object>> triggerStats(
+  public CommonResponse<ConsoleTriggerStatsResponse> triggerStats(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "days", defaultValue = "7") int days) {
-    return responseFactory.success(queryService.triggerStats(tenantId, days));
+    return responseFactory.success(
+        ConsoleTriggerStatsResponse.from(queryService.triggerStats(tenantId, days)));
   }
 
   @GetMapping("/worker-load")
-  public CommonResponse<Map<String, Object>> workerLoad(@RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(queryService.workerLoad(tenantId));
+  public CommonResponse<ConsoleWorkerLoadResponse> workerLoad(
+      @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        ConsoleWorkerLoadResponse.from(queryService.workerLoad(tenantId)));
   }
 
   @GetMapping("/alert-trend")
-  public CommonResponse<Map<String, Object>> alertTrend(
+  public CommonResponse<ConsoleAlertTrendResponse> alertTrend(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "days", defaultValue = "7") int days) {
-    return responseFactory.success(queryService.alertTrend(tenantId, days));
+    return responseFactory.success(
+        ConsoleAlertTrendResponse.from(queryService.alertTrend(tenantId, days)));
   }
 
   @GetMapping("/sla-compliance")
-  public CommonResponse<Map<String, Object>> slaCompliance(
+  public CommonResponse<ConsoleSlaComplianceResponse> slaCompliance(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "days", defaultValue = "7") int days) {
-    return responseFactory.success(queryService.slaCompliance(tenantId, days));
+    return responseFactory.success(
+        ConsoleSlaComplianceResponse.from(queryService.slaCompliance(tenantId, days)));
   }
 
   /** SLA 报表：按 job 维度统计成功率、SLA 达标率、平均/最大耗时。 */
   @GetMapping("/sla-report")
-  public CommonResponse<Map<String, Object>> slaReport(
+  public CommonResponse<ConsoleSlaReportResponse> slaReport(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "days", defaultValue = "7") int days) {
-    return responseFactory.success(queryService.slaReport(tenantId, days));
+    return responseFactory.success(
+        ConsoleSlaReportResponse.from(queryService.slaReport(tenantId, days)));
   }
 
   /** 执行进度查询（轻量）：按 jobCode + bizDate 返回实例进度。面向业务方。 */
   @GetMapping("/execution-progress")
-  public CommonResponse<List<Map<String, Object>>> executionProgress(
+  public CommonResponse<List<ConsoleExecutionProgressResponse>> executionProgress(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("jobCode") String jobCode,
       @RequestParam("bizDate") String bizDate) {
-    return responseFactory.success(queryService.executionProgress(tenantId, jobCode, bizDate));
+    return responseFactory.success(
+        queryService.executionProgress(tenantId, jobCode, bizDate).stream()
+            .map(ConsoleExecutionProgressResponse::from)
+            .toList());
   }
 
   /** 租户用量统计：配置数量 + 近期实例/文件处理量。 */
   @GetMapping("/tenant-usage")
-  public CommonResponse<Map<String, Object>> tenantUsage(
+  public CommonResponse<ConsoleTenantUsageResponse> tenantUsage(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "days", defaultValue = "30") int days) {
-    return responseFactory.success(queryService.tenantUsage(tenantId, days));
+    return responseFactory.success(
+        ConsoleTenantUsageResponse.from(queryService.tenantUsage(tenantId, days)));
   }
 }

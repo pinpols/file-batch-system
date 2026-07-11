@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.domain.ops.web.request.ForensicExportRequest;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -40,7 +41,7 @@ public class ConsoleForensicController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/export")
-  public CommonResponse<Map<String, Object>> requestExport(
+  public CommonResponse<ConsoleForensicExportResponse> requestExport(
       @Valid @RequestBody ForensicExportRequest request) {
     Map<String, Object> result =
         orchestratorProxyService.requestForensicExport(
@@ -50,7 +51,7 @@ public class ConsoleForensicController {
             request.getJobCodes(),
             request.getExportFormat() == null ? "BUNDLE" : request.getExportFormat(),
             request.getRequestedBy());
-    return responseFactory.success(result);
+    return responseFactory.success(ConsoleForensicExportResponse.from(result));
   }
 
   @GetMapping("/export/{exportId}/download")
