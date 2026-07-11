@@ -5,22 +5,26 @@ A minimal, **illustrative** self-hosted tenant worker built on the Rust BYO SDK
 (`examples/sample-tenant-worker-go`) and Python
 (`examples/sample-tenant-worker-python`) samples.
 
-## ⚠️ Illustrative — not yet runnable end-to-end
+## Connects for real
 
-The SDK's control-plane HTTP transport (`HttpTransport`) is a **documented
-stub**: the Rust std library ships no HTTP client and the SDK core is
-zero-dependency, so the real `register` / `heartbeat` / `claim` / `report` /
-`renew` calls land with a **future reqwest adapter**. Until then:
+Both adapters are real and wired end-to-end (no stubs, nothing commented out):
 
-- the **Kafka** path is real (rdkafka, behind the `kafka` feature) and this
-  binary is shaped to run a live poll loop;
-- the **control-plane** calls (`worker.start()` / `worker.stop()`) are wired but
-  **commented out**, because calling the stub panics by design. Each call site
-  shows exactly where the real call goes once a real `Transport` is supplied.
+- the **Kafka** consumer is real (rdkafka, behind the `kafka` feature) and runs
+  a live poll loop;
+- the **control-plane** transport is real (`ReqwestTransport`, behind the `http`
+  feature): `register` → `claim` → `execute` → `report` → `deactivate` all hit
+  the live orchestrator, and the **heartbeat** (§1.3) + **lease-renewal** (§1.4)
+  schedulers run on their own threads.
 
-This example is **compiled by CI** (and runs fully once the reqwest adapter
-lands). It is intentionally not built in the dev sandbox here, where the Rust
-CDN is unreachable so `cargo` cannot fetch crates.
+This example is compiled by CI and runs against a live stack. `cmake` is required
+to build rdkafka (see the SDK README).
+
+> **Still a sample, not turnkey production.** The echo handler runs synchronously
+> and never blocks, so the in-flight registry the lease-renewal loop iterates is
+> usually empty between polls — the wiring is real, but a production worker with
+> long-running/async tasks is what actually exercises lease renewal +
+> cooperative cancel. The SIGTERM hook is also a documented no-op (see below): a
+> production worker installs a real signal handler that flips the SDK stop flag.
 
 ## What it shows
 
@@ -32,11 +36,18 @@ CDN is unreachable so `cargo` cannot fetch crates.
    vars are set.
 3. An echo-style **business handler** implementing the `TaskHandler` SPI, plus a
    `HandlerBridge` that adapts the Kafka adapter's per-message callback
-   (`MessageHandler`) to it (builds a `TaskContext`, dispatches, maps the
-   `TaskResult` back to an offset-commit / retry decision).
+   (`MessageHandler`) to it: it runs the **claim → execute → report** lifecycle,
+   **skips execution on a 409/already-claimed** (no double side-effects), and
+   **guards the handler with `catch_unwind`** so a panicking handler is reported
+   as a fail (`EXECUTION_FAILED`) instead of killing the worker.
 4. The **worker lifecycle** (`Worker` 4-state FSM, §1.5) with a `request_stop()`
-   SIGTERM hook (`Worker::stop_flag()`), and the graceful `stop(30_000)`
-   sequence (§1.6) — both shown at their real call sites.
+   SIGTERM hook (`Worker::stop_flag()`) and the graceful `stop(30_000)` sequence
+   (§1.6).
+5. The **heartbeat** (`HeartbeatScheduler`) and **lease-renewal**
+   (`LeaseRenewalScheduler`) loops on background threads: heartbeats keep the
+   worker live and apply a DRAIN directive (flip the stop flag); lease renewal
+   keeps in-flight leases alive and delivers `cancelRequested` to the running
+   task's cancel signal.
 
 ## Environment variables
 
@@ -65,16 +76,21 @@ export KAFKA_BOOTSTRAP=localhost:9092
 # export KAFKA_SASL_USERNAME=svc-tenant-a
 # export KAFKA_SASL_PASSWORD=...
 
-cargo run --features kafka
+cargo run
 ```
 
-The `kafka` feature is forwarded to the SDK by this crate's `Cargo.toml`
-(`features = ["kafka"]`), so `cargo run` alone also enables it; the explicit
-flag above matches the Go/Python sample docs and is harmless.
+This crate's `Cargo.toml` already enables the SDK's `kafka` + `http` features
+(`batch-worker-sdk = { ..., features = ["kafka", "http"] }`), so a bare
+`cargo run` builds both the real Kafka consumer and the real control-plane
+transport. Building rdkafka needs `cmake` on the `PATH`.
 
 ## Make it yours
 
-Swap `EchoHandler` for your business logic (implement `TaskHandler::execute`),
-and — once the reqwest adapter lands — uncomment the `worker.start()` /
-`worker.stop()` call sites and pass a real `Transport` in place of
-`HttpTransport`.
+Swap `EchoHandler` for your business logic (implement `TaskHandler::execute`).
+For a production worker you should also:
+
+- install a **real SIGTERM handler** (e.g. the `signal_hook` crate) that flips
+  the SDK stop flag — the sample's hook is a documented no-op (see `main.rs`);
+- run tasks **asynchronously** (a bounded executor) and increment/decrement the
+  `in_flight` counter around execution so backpressure (§1.5) and lease renewal
+  (§1.4) reflect real concurrency — the echo handler here is synchronous.
