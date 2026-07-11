@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchWindow
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowUpdateRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchWindowResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import java.util.HashMap;
@@ -28,18 +29,20 @@ public class DefaultConsoleBatchWindowApplicationService
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
   @Override
-  public PageResponse<Map<String, Object>> list(
+  public PageResponse<ConsoleBatchWindowResponse> list(
       String tenantId, String windowCode, Boolean enabled, int pageNo, int pageSize) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     PageRequest pageRequest = new PageRequest(pageNo, pageSize);
     long total = batchWindowMapper.countByQuery(resolved, windowCode, enabled);
-    List<Map<String, Object>> items =
-        batchWindowMapper.selectByQuery(resolved, windowCode, enabled, pageRequest);
+    List<ConsoleBatchWindowResponse> items =
+        batchWindowMapper.selectByQuery(resolved, windowCode, enabled, pageRequest).stream()
+            .map(ConsoleBatchWindowResponse::from)
+            .toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
   @Override
-  public Map<String, Object> create(BatchWindowCreateRequest request) {
+  public ConsoleBatchWindowResponse create(BatchWindowCreateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         batchWindowMapper.selectByUniqueKey(tenantId, request.getWindowCode());
@@ -69,11 +72,11 @@ public class DefaultConsoleBatchWindowApplicationService
     batchWindowMapper.insert(params);
     cacheInvalidationService.evictBatchWindow(tenantId, request.getWindowCode());
     Long id = ((Number) params.get("id")).longValue();
-    return batchWindowMapper.selectById(tenantId, id);
+    return ConsoleBatchWindowResponse.from(batchWindowMapper.selectById(tenantId, id));
   }
 
   @Override
-  public Map<String, Object> update(Long id, BatchWindowUpdateRequest request) {
+  public ConsoleBatchWindowResponse update(Long id, BatchWindowUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(batchWindowMapper.selectById(tenantId, id), "batch window not found");
@@ -117,7 +120,7 @@ public class DefaultConsoleBatchWindowApplicationService
     batchWindowMapper.update(params);
     cacheInvalidationService.evictBatchWindow(
         tenantId, String.valueOf(existing.get("window_code")));
-    return batchWindowMapper.selectById(tenantId, id);
+    return ConsoleBatchWindowResponse.from(batchWindowMapper.selectById(tenantId, id));
   }
 
   @Override

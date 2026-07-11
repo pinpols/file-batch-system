@@ -20,11 +20,13 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleCalendarApp
 import io.github.pinpols.batch.console.domain.job.web.request.CalendarSaveRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.HolidayImportRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.HolidaySaveRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleCalendarResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleHolidayResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -73,7 +75,20 @@ class ConsoleCalendarControllerBehaviorTest {
   @Test
   void createShouldReturnPersistedRow() throws Exception {
     when(service.create(any(CalendarSaveRequest.class)))
-        .thenReturn(Map.of("id", 1L, "calendarCode", "default-calendar"));
+        .thenReturn(
+            new ConsoleCalendarResponse(
+                1L,
+                "ta",
+                "default-calendar",
+                "默认",
+                "Asia/Shanghai",
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null));
     mockMvc
         .perform(
             post("/api/console/calendars")
@@ -87,7 +102,10 @@ class ConsoleCalendarControllerBehaviorTest {
 
   @Test
   void updateShouldPassPathIdToService() throws Exception {
-    when(service.update(eq(7L), any(CalendarSaveRequest.class))).thenReturn(Map.of("id", 7L));
+    when(service.update(eq(7L), any(CalendarSaveRequest.class)))
+        .thenReturn(
+            new ConsoleCalendarResponse(
+                7L, "ta", "c1", "n", "Asia/Shanghai", null, null, null, true, null, null, null));
     mockMvc
         .perform(
             put("/api/console/calendars/7")
@@ -112,7 +130,10 @@ class ConsoleCalendarControllerBehaviorTest {
   @Test
   void holidaysShouldReturnListForTenant() throws Exception {
     when(service.holidays(3L, "ta"))
-        .thenReturn(List.of(Map.of("holidayDate", "2026-05-20", "holidayName", "N1")));
+        .thenReturn(
+            List.of(
+                new ConsoleHolidayResponse(
+                    1L, 3L, LocalDate.parse("2026-05-20"), "HOLIDAY", "N1", null, null, null)));
     mockMvc
         .perform(get("/api/console/calendars/3/holidays").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -142,7 +163,9 @@ class ConsoleCalendarControllerBehaviorTest {
   @Test
   void updateHolidayShouldPassBothIdsAndBody() throws Exception {
     when(service.updateHoliday(eq(3L), eq(5L), any(HolidaySaveRequest.class)))
-        .thenReturn(Map.of("id", 5L));
+        .thenReturn(
+            new ConsoleHolidayResponse(
+                5L, 3L, LocalDate.parse("2026-05-20"), "HOLIDAY", "N1", null, null, null));
     mockMvc
         .perform(
             put("/api/console/calendars/3/holidays/5")

@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.domain.job.web.request.RerunRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -24,7 +25,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -70,7 +70,7 @@ public class ConsoleJobController {
   /** 批量触发多个作业。 */
   @PostMapping("/batch-trigger")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
-  public CommonResponse<List<Map<String, Object>>> batchTrigger(
+  public CommonResponse<List<ConsoleBatchTriggerEntryResponse>> batchTrigger(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @RequestBody @NotEmpty @Size(max = 50) List<@Valid TriggerRequest> items) {
     return responseFactory.success(triggerService.batchTrigger(items, idempotencyKey));

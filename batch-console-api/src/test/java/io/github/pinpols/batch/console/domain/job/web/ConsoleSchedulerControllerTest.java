@@ -43,17 +43,18 @@ class ConsoleSchedulerControllerTest {
 
   @Test
   void statusShouldReturnSchedulerState() throws Exception {
-    when(proxy.schedulerStatus()).thenReturn(Map.of("state", "RUNNING"));
+    // 下游 TriggerManagementController 真实返回键为 status（非 state），DTO 对齐生产 wire。
+    when(proxy.schedulerStatus()).thenReturn(Map.of("status", "RUNNING"));
     mockMvc
         .perform(get("/api/console/scheduler/status"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.state").value("RUNNING"));
+        .andExpect(jsonPath("$.data.status").value("RUNNING"));
   }
 
   @Test
   void pauseAllAndResumeAllShouldDelegate() throws Exception {
-    when(proxy.schedulerPauseAll()).thenReturn(Map.of("state", "PAUSED"));
-    when(proxy.schedulerResumeAll()).thenReturn(Map.of("state", "RUNNING"));
+    when(proxy.schedulerPauseAll()).thenReturn(Map.of("status", "ALL_PAUSED"));
+    when(proxy.schedulerResumeAll()).thenReturn(Map.of("status", "ALL_RESUMED"));
     mockMvc.perform(post("/api/console/scheduler/pause-all")).andExpect(status().isOk());
     mockMvc.perform(post("/api/console/scheduler/resume-all")).andExpect(status().isOk());
     verify(proxy).schedulerPauseAll();

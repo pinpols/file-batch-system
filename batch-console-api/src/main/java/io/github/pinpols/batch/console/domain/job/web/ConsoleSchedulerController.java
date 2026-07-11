@@ -2,10 +2,10 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleSchedulerCommandResponse;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleTriggerProxyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -25,19 +25,22 @@ public class ConsoleSchedulerController {
   @GetMapping("/status")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
-  public CommonResponse<Map<String, String>> status() {
-    return responseFactory.success(triggerProxyService.schedulerStatus());
+  public CommonResponse<ConsoleSchedulerCommandResponse> status() {
+    return responseFactory.success(
+        ConsoleSchedulerCommandResponse.from(triggerProxyService.schedulerStatus()));
   }
 
   @PostMapping("/pause-all")
   @AuditAction(action = "scheduler.pauseAll", aggregateType = "scheduler")
-  public CommonResponse<Map<String, String>> pauseAll() {
-    return responseFactory.success(triggerProxyService.schedulerPauseAll());
+  public CommonResponse<ConsoleSchedulerCommandResponse> pauseAll() {
+    return responseFactory.success(
+        ConsoleSchedulerCommandResponse.from(triggerProxyService.schedulerPauseAll()));
   }
 
   @PostMapping("/resume-all")
   @AuditAction(action = "scheduler.resumeAll", aggregateType = "scheduler")
-  public CommonResponse<Map<String, String>> resumeAll() {
-    return responseFactory.success(triggerProxyService.schedulerResumeAll());
+  public CommonResponse<ConsoleSchedulerCommandResponse> resumeAll() {
+    return responseFactory.success(
+        ConsoleSchedulerCommandResponse.from(triggerProxyService.schedulerResumeAll()));
   }
 }

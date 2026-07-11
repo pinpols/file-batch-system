@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayOperateRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayOperateResponse;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -34,7 +35,7 @@ public class ConsoleBatchDayController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/operate")
-  public CommonResponse<Map<String, Object>> operate(
+  public CommonResponse<ConsoleBatchDayOperateResponse> operate(
       @Valid @RequestBody BatchDayOperateRequest request) {
     Map<String, Object> result =
         orchestratorProxyService.batchDayOperate(
@@ -44,6 +45,6 @@ public class ConsoleBatchDayController {
             request.getAction(),
             request.getOperatorId(),
             request.getReason());
-    return responseFactory.success(result);
+    return responseFactory.success(ConsoleBatchDayOperateResponse.from(result));
   }
 }

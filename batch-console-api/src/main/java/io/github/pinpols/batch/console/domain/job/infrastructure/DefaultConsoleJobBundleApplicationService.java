@@ -7,14 +7,15 @@ import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigIni
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
 import io.github.pinpols.batch.console.domain.job.web.request.JobBundleCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.JobBundleImportRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleExportResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleResultResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleSummaryResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,36 +25,25 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleJobBundleApplicationService
     implements ConsoleJobBundleApplicationService {
 
-  private static final String KEY_BUNDLE = "bundle";
-  private static final String KEY_SUMMARY = "summary";
-  private static final String KEY_TENANT_ID = "tenantId";
-
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleTenantConfigCopyService tenantConfigCopyService;
   private final ConsoleTenantConfigInitApplicationService initApplicationService;
   private final ConsoleRequestMetadataResolver metadataResolver;
 
   @Override
-  public Map<String, Object> exportBundle(String tenantId, String jobCode) {
+  public ConsoleJobBundleExportResponse exportBundle(String tenantId, String jobCode) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConfigSyncBundlePayload bundle =
         tenantConfigCopyService.buildJobBundle(resolvedTenantId, jobCode);
-    if (sizeOf(bundle.getJobDefinitions()) == 0) {
+    if (bundle.getJobDefinitions() == null || bundle.getJobDefinitions().isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found", jobCode);
     }
-    return mapOf(
-        KEY_TENANT_ID,
-        resolvedTenantId,
-        "jobCode",
-        jobCode,
-        KEY_SUMMARY,
-        summarize(bundle),
-        KEY_BUNDLE,
-        bundle);
+    return new ConsoleJobBundleExportResponse(
+        resolvedTenantId, jobCode, ConsoleJobBundleSummaryResponse.from(bundle), bundle);
   }
 
   @Override
-  public Map<String, Object> create(JobBundleCreateRequest request) {
+  public ConsoleJobBundleResultResponse create(JobBundleCreateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     TenantConfigBatchInitRequest initRequest = toInitRequest(request.getBundle());
     initRequest.setTargetTenantIds(List.of(tenantId));
@@ -63,12 +53,12 @@ public class DefaultConsoleJobBundleApplicationService
     initRequest.setStrict(true);
     TenantConfigBatchInitResponse response =
         initApplicationService.batchInit(initRequest, operator(), UUID.randomUUID().toString());
-    return mapOf(
-        KEY_TENANT_ID, tenantId, KEY_SUMMARY, summarize(request.getBundle()), "result", response);
+    return new ConsoleJobBundleResultResponse(
+        tenantId, ConsoleJobBundleSummaryResponse.from(request.getBundle()), response);
   }
 
   @Override
-  public Map<String, Object> importBundle(JobBundleImportRequest request) {
+  public ConsoleJobBundleResultResponse importBundle(JobBundleImportRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     TenantConfigBatchInitRequest initRequest = toInitRequest(request.getBundle());
     initRequest.setTargetTenantIds(request.getTargetTenantIds());
@@ -78,8 +68,8 @@ public class DefaultConsoleJobBundleApplicationService
     initRequest.setStrict(true);
     TenantConfigBatchInitResponse response =
         initApplicationService.batchInit(initRequest, operator(), UUID.randomUUID().toString());
-    return mapOf(
-        KEY_TENANT_ID, tenantId, KEY_SUMMARY, summarize(request.getBundle()), "result", response);
+    return new ConsoleJobBundleResultResponse(
+        tenantId, ConsoleJobBundleSummaryResponse.from(request.getBundle()), response);
   }
 
   private TenantConfigBatchInitRequest toInitRequest(ConfigSyncBundlePayload bundle) {
@@ -103,32 +93,5 @@ public class DefaultConsoleJobBundleApplicationService
   private String operator() {
     String operator = metadataResolver.current().operatorId();
     return operator == null || operator.isBlank() ? "system" : operator;
-  }
-
-  private Map<String, Integer> summarize(ConfigSyncBundlePayload bundle) {
-    Map<String, Integer> summary = new LinkedHashMap<>();
-    summary.put("jobDefinitions", sizeOf(bundle.getJobDefinitions()));
-    summary.put("workflowDefinitions", sizeOf(bundle.getWorkflowDefinitions()));
-    summary.put("pipelineDefinitions", sizeOf(bundle.getPipelineDefinitions()));
-    summary.put("fileChannels", sizeOf(bundle.getFileChannels()));
-    summary.put("fileTemplates", sizeOf(bundle.getFileTemplates()));
-    summary.put("resourceQueues", sizeOf(bundle.getResourceQueues()));
-    summary.put("batchWindows", sizeOf(bundle.getBatchWindows()));
-    summary.put("businessCalendars", sizeOf(bundle.getBusinessCalendars()));
-    summary.put("quotaPolicies", sizeOf(bundle.getQuotaPolicies()));
-    summary.put("alertRoutings", sizeOf(bundle.getAlertRoutings()));
-    return summary;
-  }
-
-  private int sizeOf(List<?> list) {
-    return list == null ? 0 : list.size();
-  }
-
-  private Map<String, Object> mapOf(Object... pairs) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    for (int i = 0; i < pairs.length; i += 2) {
-      result.put(String.valueOf(pairs[i]), pairs[i + 1]);
-    }
-    return result;
   }
 }

@@ -3,13 +3,15 @@ package io.github.pinpols.batch.console.domain.job.web;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayReplaySubmitRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplayEntryResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplaySessionResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -44,43 +46,43 @@ public class ConsoleBatchDayReplayController {
   // 防止跨租户提交；同时通过 @Idempotent 拦截重复请求。
   @PostMapping("/sessions")
   @Idempotent
-  public CommonResponse<Map<String, Object>> submit(
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> submit(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchDayReplaySubmitRequest command) {
     command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
-    Map<String, Object> resp =
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
         proxyClient()
             .post()
             .uri("/internal/orchestrator/batch-day-replay/sessions")
             .body(command)
             .retrieve()
-            .body(unwrapToMap());
+            .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/sessions/preview")
-  public CommonResponse<Map<String, Object>> preview(
+  public CommonResponse<ConsoleBatchDayReplayPreviewResponse> preview(
       @Valid @RequestBody BatchDayReplaySubmitRequest command) {
     command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
-    Map<String, Object> resp =
+    CommonResponse<ConsoleBatchDayReplayPreviewResponse> resp =
         proxyClient()
             .post()
             .uri("/internal/orchestrator/batch-day-replay/sessions/preview")
             .body(command)
             .retrieve()
-            .body(unwrapToMap());
+            .body(new ParameterizedTypeReference<>() {});
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/sessions/{sessionId}/approve")
   @Idempotent
-  public CommonResponse<Map<String, Object>> approve(
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> approve(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("approver") String approver) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
         proxyClient()
             .post()
             .uri(
@@ -90,18 +92,18 @@ public class ConsoleBatchDayReplayController {
                 resolved,
                 approver)
             .retrieve()
-            .body(unwrapToMap());
+            .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/sessions/{sessionId}/cancel")
   @Idempotent
-  public CommonResponse<Map<String, Object>> cancel(
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> cancel(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
         proxyClient()
             .post()
             .uri(
@@ -109,16 +111,16 @@ public class ConsoleBatchDayReplayController {
                 sessionId,
                 resolved)
             .retrieve()
-            .body(unwrapToMap());
+            .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @GetMapping("/sessions/{sessionId}")
-  public CommonResponse<Map<String, Object>> detail(
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> detail(
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
         proxyClient()
             .get()
             .uri(
@@ -126,14 +128,14 @@ public class ConsoleBatchDayReplayController {
                 sessionId,
                 resolved)
             .retrieve()
-            .body(unwrapToMap());
+            .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   // P1-5: entries 必须先解析 tenantId 走 guard 守护，避免跨租户拉取条目；改用 URI template
   // 而非字符串拼接，让 RestClient 做转义。
   @GetMapping("/sessions/{sessionId}/entries")
-  public CommonResponse<List<Map<String, Object>>> entries(
+  public CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> entries(
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam(value = "status", required = false) String status,
@@ -143,29 +145,33 @@ public class ConsoleBatchDayReplayController {
         status == null || status.isBlank()
             ? "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}"
             : "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}&status={status}";
-    Map<String, Object> resp =
+    CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> resp =
         status == null || status.isBlank()
             ? proxyClient()
                 .get()
                 .uri(uri, sessionId, resolved, limit)
                 .retrieve()
-                .body(unwrapToMap())
+                .body(entryListResponse())
             : proxyClient()
                 .get()
                 .uri(uri, sessionId, resolved, limit, status)
                 .retrieve()
-                .body(unwrapToMap());
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> data =
-        resp == null ? List.of() : (List<Map<String, Object>>) resp.getOrDefault("data", List.of());
-    return responseFactory.success(data);
+                .body(entryListResponse());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   private RestClient proxyClient() {
     return orchestratorInternalRestClient.build();
   }
 
-  private static ParameterizedTypeReference<Map<String, Object>> unwrapToMap() {
+  private static ParameterizedTypeReference<CommonResponse<ConsoleBatchDayReplaySessionResponse>>
+      sessionResponse() {
+    return new ParameterizedTypeReference<>() {};
+  }
+
+  private static ParameterizedTypeReference<
+          CommonResponse<List<ConsoleBatchDayReplayEntryResponse>>>
+      entryListResponse() {
     return new ParameterizedTypeReference<>() {};
   }
 }

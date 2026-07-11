@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleTriggerActionResponse;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleTriggerProxyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -40,28 +40,34 @@ public class ConsoleTriggerController {
   }
 
   @PostMapping("/{jobCode}/register")
-  public CommonResponse<Map<String, String>> register(
+  public CommonResponse<ConsoleTriggerActionResponse> register(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, jobCode, "register"));
+        ConsoleTriggerActionResponse.from(
+            triggerProxyService.triggerAction(tenantId, jobCode, "register")));
   }
 
   @PostMapping("/{jobCode}/unregister")
-  public CommonResponse<Map<String, String>> unregister(
+  public CommonResponse<ConsoleTriggerActionResponse> unregister(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, jobCode, "unregister"));
+        ConsoleTriggerActionResponse.from(
+            triggerProxyService.triggerAction(tenantId, jobCode, "unregister")));
   }
 
   @PostMapping("/{jobCode}/pause")
-  public CommonResponse<Map<String, String>> pause(
+  public CommonResponse<ConsoleTriggerActionResponse> pause(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(triggerProxyService.triggerAction(tenantId, jobCode, "pause"));
+    return responseFactory.success(
+        ConsoleTriggerActionResponse.from(
+            triggerProxyService.triggerAction(tenantId, jobCode, "pause")));
   }
 
   @PostMapping("/{jobCode}/resume")
-  public CommonResponse<Map<String, String>> resume(
+  public CommonResponse<ConsoleTriggerActionResponse> resume(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(triggerProxyService.triggerAction(tenantId, jobCode, "resume"));
+    return responseFactory.success(
+        ConsoleTriggerActionResponse.from(
+            triggerProxyService.triggerAction(tenantId, jobCode, "resume")));
   }
 }
