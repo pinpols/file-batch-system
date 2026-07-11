@@ -27,6 +27,11 @@ public class BatchWorkerSdkProperties {
   private String kafkaSecurityProtocol;
   private String kafkaSaslMechanism;
   private String kafkaSaslJaasConfig;
+  // R3-4 时序校验严格度开关(默认 fail-fast);对齐 BatchPlatformClientConfig.strictTimingValidation。
+  private boolean strictTimingValidation = true;
+  // 写请求 HMAC 签名开关(默认关);对齐 BatchPlatformClientConfig.requestSigningEnabled。
+  // 缺此键时 Spring 用户无法开启请求签名。
+  private boolean requestSigningEnabled = false;
 
   BatchPlatformClientConfig toConfig() {
     return BatchPlatformClientConfig.builder()
@@ -49,6 +54,8 @@ public class BatchWorkerSdkProperties {
         .kafkaSecurityProtocol(kafkaSecurityProtocol)
         .kafkaSaslMechanism(kafkaSaslMechanism)
         .kafkaSaslJaasConfig(kafkaSaslJaasConfig)
+        .strictTimingValidation(strictTimingValidation)
+        .requestSigningEnabled(requestSigningEnabled)
         .build();
   }
 
@@ -210,5 +217,21 @@ public class BatchWorkerSdkProperties {
 
   public void setKafkaSaslJaasConfig(String kafkaSaslJaasConfig) {
     this.kafkaSaslJaasConfig = kafkaSaslJaasConfig;
+  }
+
+  public boolean isStrictTimingValidation() {
+    return strictTimingValidation;
+  }
+
+  public void setStrictTimingValidation(boolean strictTimingValidation) {
+    this.strictTimingValidation = strictTimingValidation;
+  }
+
+  public boolean isRequestSigningEnabled() {
+    return requestSigningEnabled;
+  }
+
+  public void setRequestSigningEnabled(boolean requestSigningEnabled) {
+    this.requestSigningEnabled = requestSigningEnabled;
   }
 }
