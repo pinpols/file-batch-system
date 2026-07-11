@@ -28,11 +28,14 @@ import {
 
 import {
   MessagePipeline,
+  dispositionOf,
   type Consumer,
   type ConsumerRecord,
   type Logger,
+  type MessageDisposition,
   consoleLogger,
-} from "../src/client/consumer.ts";
+} from "../client/consumer.ts";
+import { offsetAction, resolveFromBeginning } from "./offsetPolicy.ts";
 
 /** SASL config (only SCRAM-SHA-512 is supported per byo-sdk-guide §1.2). */
 export interface KafkaSaslConfig {
@@ -151,61 +154,46 @@ export class KafkaConsumerAdapter implements Consumer {
   }
 
   /**
-   * Connect, subscribe to the wildcard topic, and run with manual commit.
+   * Connect, subscribe to the wildcard topic, and run with manual commit + the
+   * full offset/seek/pause policy.
    *
-   * `onMessage` is the seam used by the core `MessagePipeline.onMessage`. The
-   * adapter wraps each record so it can apply the commit / pause policy AFTER
-   * the handler returns — but the simplest integration is `runPipeline`, which
-   * supplies a handler that already returns the pipeline outcome.
+   * `onMessage` is the production seam (the lifecycle passes
+   * `MessagePipeline.onMessage` through it). It returns a {@link MessageDisposition}
+   * the adapter acts on AFTER the record is handled:
+   *   - "commit"       → advance past this offset (accepted task / poison skip)
+   *   - "withhold"     → seek back + pause; the offset is NEVER crossed (§A/§1.9)
+   *   - "backpressure" → seek back + pause; resumed when a slot frees (§1.5/§2)
+   *
+   * This replaces the old `start()` that only forwarded records and never
+   * committed (offset never advanced → every restart replayed the partition).
    */
   async start(
-    onMessage: (r: ConsumerRecord) => Promise<void>,
+    onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,
+  ): Promise<void> {
+    await this.#runLoop(onMessage);
+  }
+
+  /**
+   * Run the consumer with a full `MessagePipeline`. Convenience wrapper over
+   * {@link start}: feeds each record through the pipeline and maps the outcome to
+   * the offset disposition via the shared {@link dispositionOf}.
+   */
+  async runPipeline(pipeline: MessagePipeline): Promise<void> {
+    await this.#runLoop(async (record) =>
+      dispositionOf(await pipeline.onMessage(record)),
+    );
+  }
+
+  /** Shared connect → subscribe → run-with-policy loop for start()/runPipeline(). */
+  async #runLoop(
+    onEach: (r: ConsumerRecord) => Promise<MessageDisposition>,
   ): Promise<void> {
     await this.#consumer.connect();
     await this.#consumer.subscribe({
       topic: this.#topicRegex,
-      fromBeginning: this.#config.fromBeginning ?? true,
-    });
-    this.#running = true;
-    this.#logger.info("kafka consumer subscribed", {
-      group: this.#groupId,
-      topicRegex: this.#topicRegex.source,
-    });
-
-    await this.#consumer.run({
-      autoCommit: false,
-      eachMessage: async (payload: EachMessagePayload) => {
-        this.#assignedTopics.add(payload.topic);
-        const value = payload.message.value?.toString("utf8") ?? "";
-        const record: ConsumerRecord = {
-          value,
-          meta: {
-            topic: payload.topic,
-            partition: payload.partition,
-            offset: payload.message.offset,
-          },
-        };
-        await onMessage(record);
-      },
-    });
-  }
-
-  /**
-   * Run the consumer with a full pipeline + offset/pause policy.
-   *
-   * Per message:
-   *   1. feed the raw record through `pipeline.onMessage`
-   *   2. commit the offset ONLY when the outcome is "accepted" (would proceed
-   *      to claim). Rejected schema / foreign tenant / parse error / backpressure
-   *      are NOT committed, so the platform can redeliver.
-   *   3. on a "backpressure" outcome, pause the partition; when capacity frees
-   *      (decided by the pipeline's assignment + a resume hook) resume it.
-   */
-  async runPipeline(pipeline: MessagePipeline): Promise<void> {
-    await this.#consumer.connect();
-    await this.#consumer.subscribe({
-      topic: this.#topicRegex,
-      fromBeginning: this.#config.fromBeginning ?? true,
+      // default to latest (auto.offset.reset=latest, parity with the other four
+      // SDKs). fromBeginning:true would replay the whole topic on a new group.
+      fromBeginning: resolveFromBeginning(this.#config.fromBeginning),
     });
     this.#running = true;
     this.#logger.info("kafka consumer subscribed", {
@@ -227,33 +215,41 @@ export class KafkaConsumerAdapter implements Consumer {
           },
         };
 
-        const outcome = await pipeline.onMessage(record);
+        const disposition = await onEach(record);
+        const action = offsetAction(
+          disposition,
+          payload.topic,
+          payload.partition,
+          payload.message.offset,
+        );
 
-        if (outcome.kind === "backpressure") {
-          // pause this specific partition; resume after the backpressure window
-          this.#pausePartition(payload.topic, payload.partition);
-          return; // do NOT commit; redeliver after resume
-        }
-
-        if (outcome.committed) {
+        if (action.type === "commit") {
           // manual commit: advance past this offset (offset + 1 per kafkajs)
           await this.#consumer.commitOffsets([
-            {
-              topic: payload.topic,
-              partition: payload.partition,
-              offset: (BigInt(payload.message.offset) + 1n).toString(),
-            },
+            { topic: action.topic, partition: action.partition, offset: action.offset },
           ]);
+          return;
         }
-        // rejected / dropped / parse-error: intentionally NOT committed (§A/§1.9)
+        // seek BACK to this offset then pause the partition, so (a) this message
+        // is redelivered on resume and (b) NO later commit can cross this offset
+        // (§A/§1.9 — parity with the Go/Java seek+pause semantics).
+        this.#consumer.seek({
+          topic: action.topic,
+          partition: action.partition,
+          offset: action.offset,
+        });
+        this.#consumer.pause([
+          { topic: action.topic, partitions: [action.partition] },
+        ]);
+        this.#paused = true;
+        this.#logger.warn("seek-back + pause partition (offset withheld)", {
+          topic: action.topic,
+          partition: action.partition,
+          offset: action.offset,
+          reason: action.reason,
+        });
       },
     });
-  }
-
-  #pausePartition(topic: string, partition: number): void {
-    this.#consumer.pause([{ topic, partitions: [partition] }]);
-    this.#paused = true;
-    this.#logger.warn("paused partition (backpressure)", { topic, partition });
   }
 
   /** Resume a specific partition (call when a concurrency slot frees up). */

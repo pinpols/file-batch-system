@@ -30,7 +30,7 @@ import {
   KafkaConsumerAdapter,
   consumerGroupId,
   dispatchTopicRegex,
-} from "./kafkaConsumer.ts";
+} from "../src/kafka/kafkaConsumer.ts";
 
 const BOOTSTRAP = process.env.KAFKA_BOOTSTRAP;
 

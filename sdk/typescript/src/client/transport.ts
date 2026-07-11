@@ -16,6 +16,7 @@
  */
 
 import http from "node:http";
+import https from "node:https";
 import { randomUUID } from "node:crypto";
 import {
   classifyHttp,
@@ -42,6 +43,12 @@ export interface ClaimResponse {
    * every renew / report so the platform can reject a stale invocation.
    */
   partitionInvocationId?: string | null;
+  /**
+   * The claim resolved to a 409 idempotent-already-claimed: the task is NOT ours
+   * to execute (redelivery, or another worker won the race). The caller must skip
+   * the handler + report so it never double-runs (§B).
+   */
+  idempotent?: boolean;
 }
 
 /** Register acknowledgement. */
@@ -64,7 +71,11 @@ export interface Transport {
   register(body: Record<string, unknown>): Promise<RegisterAck>;
   heartbeat(workerCode: string, body: Record<string, unknown>): Promise<HeartbeatResponse>;
   deactivate(workerCode: string): Promise<void>;
-  claim(taskId: string, idempotencyKey: string): Promise<ClaimResponse>;
+  claim(
+    taskId: string,
+    idempotencyKey: string,
+    partitionInvocationId?: string | null,
+  ): Promise<ClaimResponse>;
   report(taskId: string, body: ReportBody, idempotencyKey: string): Promise<void>;
   renew(taskId: string, body: Record<string, unknown>): Promise<RenewResponse>;
 }
@@ -131,6 +142,8 @@ export interface HttpTransportOptions {
   now?: () => number;
   /** injectable nonce generator for signing; tests pin it. */
   nonceGen?: () => string;
+  /** sink for the cleartext-http warning (defaults to console); tests pin it. */
+  warn?: (msg: string) => void;
 }
 
 interface RawResponse {
@@ -154,8 +167,10 @@ export class HttpTransport implements Transport {
   #requestSigningEnabled: boolean;
   #now: () => number;
   #nonceGen: () => string;
-  #agent: http.Agent;
-  /** running count of non-auth 4xx for the fail-fast threshold (§B). */
+  #secure: boolean;
+  #transport: typeof http | typeof https;
+  #agent: http.Agent | https.Agent;
+  /** running count of CONSECUTIVE non-auth 4xx for the fail-fast threshold (§B). */
   #clientErrorCount = 0;
 
   constructor(opts: HttpTransportOptions) {
@@ -171,8 +186,39 @@ export class HttpTransport implements Transport {
     this.#requestSigningEnabled = opts.requestSigningEnabled ?? false;
     this.#now = opts.now ?? Date.now;
     this.#nonceGen = opts.nonceGen ?? randomUUID;
+
+    // Pick the transport by the base_url scheme. Feeding an https:// URL to
+    // node:http would NOT perform a TLS handshake — the api_key would travel in
+    // cleartext. Warn when http:// is used against a non-loopback host.
+    this.#secure = this.#baseUrl.protocol === "https:";
+    this.#transport = this.#secure ? https : http;
+    if (!this.#secure) {
+      const host = this.#baseUrl.hostname;
+      const loopback =
+        host === "localhost" || host === "127.0.0.1" || host === "::1";
+      if (!loopback) {
+        const warn =
+          opts.warn ?? ((m: string) => console.warn(m));
+        warn(
+          `HttpTransport: base_url uses http:// over non-loopback host "${host}" — ` +
+            "api_key + payloads travel in CLEARTEXT. Use https:// in production.",
+        );
+      }
+    }
     // keep-alive agent — §1.1: avoid per-call TCP+TLS handshake.
-    this.#agent = new http.Agent({ keepAlive: true, maxSockets: 16 });
+    this.#agent = this.#secure
+      ? new https.Agent({ keepAlive: true, maxSockets: 16 })
+      : new http.Agent({ keepAlive: true, maxSockets: 16 });
+  }
+
+  /** True when the base_url is https:// (TLS on the wire). */
+  get isSecure(): boolean {
+    return this.#secure;
+  }
+
+  /** Current CONSECUTIVE non-auth 4xx count (resets to 0 on any success). */
+  get clientErrorCount(): number {
+    return this.#clientErrorCount;
   }
 
   /** Tear down pooled sockets (call on worker stop). */
@@ -217,7 +263,7 @@ export class HttpTransport implements Transport {
       const method = "POST";
       const payload = body === undefined ? "" : JSON.stringify(body);
       const ac = new AbortController();
-      const req = http.request(
+      const req = this.#transport.request(
         url,
         {
           method,
@@ -301,8 +347,13 @@ export class HttpTransport implements Transport {
 
       switch (decision.action) {
         case "success":
+          // a successful call resets the CONSECUTIVE 4xx counter so a long-lived
+          // worker never accumulates unrelated 4xx into a false fail-fast (§B,
+          // aligned with Java TaskDispatcher's consecutive-failure semantics).
+          this.#clientErrorCount = 0;
           return res;
         case "idempotent-success":
+          this.#clientErrorCount = 0;
           // renew 409 = lease reclaimed (zombie claim) → surface as revoked so
           // the scheduler cancels + drops; claim 409 = already-claimed success.
           if (op === "renew") {
@@ -400,16 +451,35 @@ export class HttpTransport implements Transport {
     );
   }
 
-  async claim(taskId: string, idempotencyKey: string): Promise<ClaimResponse> {
+  async claim(
+    taskId: string,
+    idempotencyKey: string,
+    partitionInvocationId?: string | null,
+  ): Promise<ClaimResponse> {
     // TaskClaimRequest requires [tenantId, workerId]; workerId == workerCode (ADR-035 §9).
+    // ADR-014: carry the partitionInvocationId from the dispatch message so the
+    // platform can CAS-reject a stale invocation (parity with Go/Python/Rust/Java,
+    // which all send it in the claim body). Omit when absent (NON_NULL).
+    const body: Record<string, unknown> = {
+      tenantId: this.#tenantId,
+      workerId: this.#workerCode,
+    };
+    if (partitionInvocationId != null && partitionInvocationId !== "") {
+      body.partitionInvocationId = partitionInvocationId;
+    }
     const raw = await this.#call(
       "claim",
       `/internal/tasks/${encodeURIComponent(taskId)}/claim`,
-      { tenantId: this.#tenantId, workerId: this.#workerCode },
+      body,
       { "idempotency-key": idempotencyKey },
       true,
     );
-    return HttpTransport.#parse<ClaimResponse>(raw);
+    const parsed = HttpTransport.#parse<ClaimResponse>(raw);
+    // 409 = already claimed → the caller must skip execution (§B).
+    if (raw.status === 409) {
+      parsed.idempotent = true;
+    }
+    return parsed;
   }
 
   async report(

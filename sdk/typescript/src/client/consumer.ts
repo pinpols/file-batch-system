@@ -42,10 +42,49 @@ export interface Assignment {
   isPaused(): boolean;
 }
 
+/**
+ * What the Kafka adapter must do with a record's offset once the record has run
+ * through the pipeline (the value the `Consumer.start` callback returns). This is
+ * the seam that carries the offset-commit policy OUT of the pipeline and INTO the
+ * real Kafka adapter, so the production `start()` path applies it — the bug was
+ * that `start()` fed records to the pipeline but never committed / paused.
+ *
+ *   - "commit"       — advance past this offset (accepted task, or a poison
+ *                      record commit-skipped so it can't head-of-line block the
+ *                      partition; §4.5 / fixture 30).
+ *   - "withhold"     — do NOT commit; seek back + pause so this offset is NEVER
+ *                      crossed by a later commit (rejected schema / foreign tenant
+ *                      / not-for-us; §A / §1.9). A fixed deploy re-reads it.
+ *   - "backpressure" — at capacity; seek back + pause the partition, resume when a
+ *                      slot frees (§1.5 / §2). The message is redelivered.
+ */
+export type MessageDisposition = "commit" | "withhold" | "backpressure";
+
+/** Map a pipeline outcome to the Kafka offset disposition (shared by every adapter). */
+export function dispositionOf(outcome: PipelineOutcome): MessageDisposition {
+  switch (outcome.kind) {
+    case "accepted":
+    case "parse-error":
+      return "commit";
+    case "backpressure":
+      return "backpressure";
+    case "rejected-schema":
+    case "dropped-tenant":
+    case "not-for-worker":
+      return "withhold";
+  }
+}
+
 /** The consumer seam (real kafkajs adapter implements this). */
 export interface Consumer {
-  /** Begin subscription; deliver each record to the supplied pipeline. */
-  start(onMessage: (r: ConsumerRecord) => Promise<void>): Promise<void>;
+  /**
+   * Begin subscription; deliver each record to the supplied pipeline. The
+   * callback returns the {@link MessageDisposition} the adapter applies to the
+   * record's offset (commit / withhold+pause / backpressure+pause).
+   */
+  start(
+    onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,
+  ): Promise<void>;
   /** Interrupt poll (maps to kafkajs `consumer.stop()` / wakeup). */
   wakeup(): Promise<void>;
   pause(): void;
@@ -196,7 +235,7 @@ export class FakeConsumer implements Consumer {
   #records: ConsumerRecord[];
   #paused = false;
   #wokeUp = false;
-  #handler?: (r: ConsumerRecord) => Promise<void>;
+  #handler?: (r: ConsumerRecord) => Promise<MessageDisposition>;
 
   constructor(records: ConsumerRecord[] = []) {
     this.#records = records;
@@ -207,7 +246,9 @@ export class FakeConsumer implements Consumer {
     this.#records.push(...records);
   }
 
-  async start(onMessage: (r: ConsumerRecord) => Promise<void>): Promise<void> {
+  async start(
+    onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,
+  ): Promise<void> {
     this.#handler = onMessage;
     // drain the scripted queue immediately (cooperative, awaited)
     await this.drain();

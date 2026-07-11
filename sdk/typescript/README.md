@@ -4,6 +4,18 @@ A tenant-facing Bring-Your-Own worker SDK for the file-batch-system platform, bu
 
 **最低环境要求(消费方)**:**Node 22**(`engines.node`)—— 发布产物是编译后的 ES2023 `dist/*.js`(非原始 `.ts`),运行时零依赖;Kafka 适配器用可选 `kafkajs`(`optionalDependencies`)。开发/跑测试使用 Node 22 的原生 type-stripping 能力。
 
+> **⚠️ 包名 `@batch/worker-sdk` 仍是占位 scope,尚未在 npm 注册,现在 `npm install @batch/worker-sdk` 装不了。** 发布前会改成真实 scope(计划形如 `@yourorg/batch-worker-sdk`,由仓库管理员建 npm org 后定,见 [`docs/sdk/RELEASING.md`](../../docs/sdk/RELEASING.md))。在此之前请用 workspace 引用(monorepo 内 `"@batch/worker-sdk": "workspace:*"`),**不要**深相对路径 import 源码。下文示例里的 `@batch/worker-sdk` 会随真实 scope 敲定同步更新。
+
+## Kafka 消费器(可选)
+
+真实 kafkajs 消费适配器是独立子路径导出,核心 `import ... from "@batch/worker-sdk"` 不会拉入 kafkajs:
+
+```ts
+import { KafkaConsumerAdapter } from "@batch/worker-sdk/kafka";
+```
+
+装了可选依赖 `kafkajs` 才可用。适配器把每条记录喂给 `MessagePipeline` 并按结果做 **手动 offset 提交 / seek+pause**:accepted→commit、rejected/foreign-tenant/backpressure→seek 回退 + pause(offset 绝不被后续 commit 越过)、poison→commit-skip。消费起点默认 `latest`(`fromBeginning` 默认 `false`,与其余四语言 SDK 对齐),显式传 `fromBeginning: true` 才从头消费。
+
 ## Running the tests
 
 From this directory:
