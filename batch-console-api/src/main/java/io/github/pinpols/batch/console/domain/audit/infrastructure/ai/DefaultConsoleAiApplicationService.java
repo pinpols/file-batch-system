@@ -20,21 +20,31 @@ import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditServic
 import io.github.pinpols.batch.console.domain.audit.web.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
+import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.auth.AiChatRequest;
 import io.micrometer.common.util.StringUtils;
+import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -74,6 +84,30 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   private final ConsoleAiKnowledgeBase knowledgeBase;
   private final ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
   private final ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
+  private final SlidingWindowRateLimiter rateLimiter;
+  private final ConsoleAiMetrics aiMetrics;
+
+  /**
+   * 模型调用超时用的有界线程池:0 常驻 + 上限 16 + SynchronousQueue,provider 卡死时并发被封顶,超过即拒绝(当降级处理), 空闲线程 60s
+   * 回收,daemon 线程不阻塞 JVM 退出。仅用于给 blocking 的 SDK 调用套一层应用层硬超时,防 Tomcat 线程被拖住。
+   */
+  private final ExecutorService modelCallExecutor =
+      new ThreadPoolExecutor(
+          0,
+          16,
+          60L,
+          TimeUnit.SECONDS,
+          new SynchronousQueue<>(),
+          runnable -> {
+            Thread thread = new Thread(runnable, "console-ai-model-call");
+            thread.setDaemon(true);
+            return thread;
+          });
+
+  @PreDestroy
+  void shutdownModelCallExecutor() {
+    modelCallExecutor.shutdownNow();
+  }
 
   /** 执行一轮 AI 对话并写审计。 */
   @Override
@@ -81,6 +115,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     authorizationService.assertAllowed();
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     String tenantId = resolveTenantId(request.getTenantId(), requestMetadata.tenantId());
+    // 调用限流:AI 每次都烧 token + 调外部 LLM,独立更严;key 含 tenant 防跨租户压制(#779)。超限直接 429。
+    enforceRateLimit(tenantId, requestMetadata.operatorId());
     String sessionId = resolveSessionId(request.getSessionId(), requestMetadata.requestId());
     String prompt =
         ConsoleTextSanitizer.safeInput(request.getPrompt(), aiProperties.getMaxPromptLength());
@@ -88,6 +124,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     String requestId = firstNonBlank(requestMetadata.requestId(), IdGenerator.newBusinessNo("ai"));
     String traceId = firstNonBlank(requestMetadata.traceId(), IdGenerator.newTraceId());
     if (!gateResult.approved()) {
+      aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_REJECTED);
       AiChatResponse response = buildRejectedResponse(requestId, traceId, sessionId, gateResult);
       auditService.record(
           buildAuditCommand(
@@ -129,7 +166,37 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     if (tools != null) {
       spec = spec.tools(tools);
     }
-    String answer = spec.call().content();
+
+    // 模型调用:失败 / 超时 → 优雅降级(友好提示 + FAILED 审计),不 fail-closed 冒泡成 500。
+    ChatResponse chatResponse;
+    try {
+      chatResponse = callModel(spec);
+    } catch (Exception exception) {
+      return degradeAndAudit(
+          AuditRequest.builder()
+              .tenantId(tenantId)
+              .requestId(requestId)
+              .traceId(traceId)
+              .sessionId(sessionId)
+              .operatorId(requestMetadata.operatorId())
+              .build(),
+          prompt,
+          gateResult,
+          exception);
+    }
+
+    // 成本计量:从 ChatResponse metadata 取 token usage 打指标 + 落审计(租户成本靠审计聚合)。
+    Integer promptTokens = null;
+    Integer completionTokens = null;
+    Usage usage = chatResponse.getMetadata() == null ? null : chatResponse.getMetadata().getUsage();
+    if (usage != null) {
+      promptTokens = usage.getPromptTokens();
+      completionTokens = usage.getCompletionTokens();
+    }
+    aiMetrics.recordTokens(promptTokens, completionTokens);
+    aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_APPROVED);
+
+    String answer = extractContent(chatResponse);
     String grounded = appendCitations(trim(answer, aiProperties.getMaxResponseLength()), snippets);
     answer = ConsoleTextSanitizer.safeDisplay(grounded, grounded.length());
 
@@ -163,9 +230,96 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                         .response(
                             ConsoleTextSanitizer.safeInput(
                                 answer, aiProperties.getMaxResponseLength()))
+                        .promptTokens(promptTokens)
+                        .completionTokens(completionTokens)
                         .build())
                 .build()));
     return response;
+  }
+
+  /**
+   * 应用层硬超时:把 blocking 的 SDK 调用丢到有界线程池,{@code Future.get(timeout)} 封顶等待时间。 超时 / provider 卡死 → 抛异常由上层
+   * catch 转优雅降级,Tomcat 线程最多等 {@code requestTimeout}。
+   */
+  private ChatResponse callModel(ChatClient.ChatClientRequestSpec spec) throws Exception {
+    long timeoutMillis = aiProperties.getRequestTimeout().toMillis();
+    Future<ChatResponse> future = modelCallExecutor.submit(() -> spec.call().chatResponse());
+    try {
+      return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+    } catch (Exception exception) {
+      future.cancel(true);
+      throw exception;
+    }
+  }
+
+  private String extractContent(ChatResponse chatResponse) {
+    if (chatResponse == null || chatResponse.getResult() == null) {
+      return "";
+    }
+    String text = chatResponse.getResult().getOutput().getText();
+    return text == null ? "" : text;
+  }
+
+  /** 模型调用失败 / 超时 → 优雅降级响应 + FAILED 审计(不裸抛 500)。 */
+  private AiChatResponse degradeAndAudit(
+      AuditRequest request, String prompt, AiPromptGateResult gateResult, Exception exception) {
+    SwallowedExceptionLogger.info(
+        DefaultConsoleAiApplicationService.class, "catch:ai-model-call-failed", exception);
+    aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_FAILED);
+    String degraded = "AI 助手暂时不可用，请稍后重试。";
+    String reason =
+        ConsoleTextSanitizer.safeInput(
+            "model_call_failed:" + exception.getClass().getSimpleName(), 512);
+
+    AiChatResponse response = new AiChatResponse();
+    response.setRequestId(request.requestId());
+    response.setTraceId(request.traceId());
+    response.setSessionId(request.sessionId());
+    response.setPromptCategory(gateResult.category().code());
+    response.setPromptDecision(AiPromptDecision.FAILED.code());
+    response.setModelName(aiProperties.getModel());
+    response.setAnswer(ConsoleTextSanitizer.safeDisplay(degraded, degraded.length()));
+    response.setRefusalReason(null);
+
+    auditService.record(
+        buildAuditCommand(
+            AuditContext.builder()
+                .request(request)
+                .result(
+                    AuditResult.builder()
+                        .promptCategory(gateResult.category())
+                        .decision(AiPromptDecision.FAILED)
+                        .modelName(aiProperties.getModel())
+                        .prompt(prompt)
+                        .response(degraded)
+                        .refusalReason(reason)
+                        .build())
+                .build()));
+    return response;
+  }
+
+  /** AI 调用限流:滑动窗口(Redis),key 含 tenant + user;超限抛 429。Redis 不可达 → fail-open(与限流过滤器一致)。 */
+  private void enforceRateLimit(String tenantId, String operatorId) {
+    int limit = aiProperties.getRateLimitPerMinute();
+    if (limit <= 0) {
+      return;
+    }
+    String user = StringUtils.isNotBlank(operatorId) ? operatorId : "anonymous";
+    String key = "ai:chat:tenant:" + tenantId + ":user:" + user;
+    boolean allowed;
+    try {
+      allowed = rateLimiter.tryAcquire(key, limit);
+    } catch (DataAccessException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultConsoleAiApplicationService.class,
+          "catch:ai-rate-limit-redis-unavailable",
+          exception);
+      return;
+    }
+    if (!allowed) {
+      aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_RATE_LIMITED);
+      throw BizException.of(ResultCode.RATE_LIMITED, "error.ai.rate_limited");
+    }
   }
 
   private AiChatResponse buildRejectedResponse(
@@ -210,6 +364,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         hash(context.result().response()),
         preview(context.result().response(), 512),
         context.result().refusalReason(),
+        context.result().promptTokens(),
+        context.result().completionTokens(),
         BatchDateTimeSupport.utcNow());
   }
 
@@ -367,5 +523,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       String modelName,
       String prompt,
       String response,
-      String refusalReason) {}
+      String refusalReason,
+      Integer promptTokens,
+      Integer completionTokens) {}
 }

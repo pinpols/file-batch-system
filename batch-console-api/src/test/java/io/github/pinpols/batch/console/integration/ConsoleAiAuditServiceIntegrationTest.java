@@ -42,6 +42,8 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
             "hash-resp-001",
             "3 jobs failed",
             null,
+            120,
+            45,
             BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
@@ -62,6 +64,9 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     assertThat(entry.getPromptCategory()).isEqualTo("PLATFORM");
     assertThat(entry.getPromptDecision()).isEqualTo("APPROVED");
     assertThat(entry.getPromptPreview()).isEqualTo("how many jobs failed today?");
+    // 成本可观测：token 用量落审计,支持按租户事后聚合成本
+    assertThat(entry.getPromptTokens()).isEqualTo(120);
+    assertThat(entry.getCompletionTokens()).isEqualTo(45);
   }
 
   @Test
@@ -81,6 +86,8 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
             null,
             null,
             "blocked_keyword:password",
+            null,
+            null,
             BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
@@ -115,6 +122,8 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
               "query " + i,
               null,
               "result " + i,
+              null,
+              null,
               null,
               BatchDateTimeSupport.utcNow()));
     }

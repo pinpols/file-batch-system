@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
@@ -35,6 +36,19 @@ public class ConsoleAiProperties {
 
   /** 模型回复长度上限（字符）。超出截断。 */
   private int maxResponseLength = 3000;
+
+  /**
+   * AI 对话每租户 + 每用户每分钟最大调用次数(滑动窗口)。AI 调用每次都烧 token + 调外部 LLM,比普通接口贵得多, 独立更严限流(默认 20/min)。复用 console
+   * 现有 {@code SlidingWindowRateLimiter}(Redis);限流 key 含 tenantId 防跨租户压制。 超限返回 429 {@code
+   * ResultCode.RATE_LIMITED}。设 &lt;= 0 关闭 AI 调用限流。
+   */
+  private int rateLimitPerMinute = 20;
+
+  /**
+   * 单次模型调用的最长等待时间。provider Java SDK 自带默认超时(约 10 分钟)不算无限等,但对 console UI 过长会拖住 Tomcat
+   * 线程;这里在应用层再包一层更短的硬上限(默认 60s),超时 → 优雅降级(非 500)而非无限阻塞。
+   */
+  private Duration requestTimeout = Duration.ofSeconds(60);
 
   /** 允许使用 AI 的用户白名单（按 username）。空 list = 不限制（仅靠 authorities）。 */
   private List<String> allowedUsers = new ArrayList<>(List.of("admin"));

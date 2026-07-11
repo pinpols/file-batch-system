@@ -16,6 +16,8 @@
         <result column="response_hash" property="responseHash"/>
         <result column="response_preview" property="responsePreview"/>
         <result column="refusal_reason" property="refusalReason"/>
+        <result column="prompt_tokens" property="promptTokens"/>
+        <result column="completion_tokens" property="completionTokens"/>
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
@@ -24,11 +26,13 @@
         insert into batch.console_ai_audit_log (
             tenant_id, request_id, trace_id, session_id, operator_id,
             prompt_category, prompt_decision, model_name,
-            prompt_hash, prompt_preview, response_hash, response_preview, refusal_reason
+            prompt_hash, prompt_preview, response_hash, response_preview, refusal_reason,
+            prompt_tokens, completion_tokens
         ) values (
             #{tenantId}, #{requestId}, #{traceId}, #{sessionId}, #{operatorId},
             #{promptCategory}, #{promptDecision}, #{modelName},
-            #{promptHash}, #{promptPreview}, #{responseHash}, #{responsePreview}, #{refusalReason}
+            #{promptHash}, #{promptPreview}, #{responseHash}, #{responsePreview}, #{refusalReason},
+            #{promptTokens}, #{completionTokens}
         )
     </insert>
 
