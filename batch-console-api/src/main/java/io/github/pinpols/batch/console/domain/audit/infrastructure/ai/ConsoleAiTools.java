@@ -6,6 +6,8 @@ import io.github.pinpols.batch.console.domain.job.web.query.JobExecutionLogQuery
 import io.github.pinpols.batch.console.domain.job.web.query.JobInstanceQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobExecutionLogResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
+import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
 import java.util.List;
@@ -143,6 +145,61 @@ public class ConsoleAiTools {
         + field(terminal, "healthy")
         + " terminalInstancesWithActiveChildren="
         + field(terminal, "terminalInstancesWithActiveChildren");
+  }
+
+  @Tool(
+      description =
+          "列出当前租户当前未决(status=OPEN)的告警事件,用于告警分诊:按 severity(CRITICAL/ERROR/WARN/INFO)与"
+              + "影响排序、对同类反复告警(看 occurrenceCount 去重归并)、概括当前告警态势并给处置/升级建议。"
+              + "用户问『现在有哪些告警 / 该先处理哪个 / 告警态势 / 要不要升级』这类问题时调用。无需参数。")
+  public String getOpenAlerts() {
+    return renderAlerts(queryAlerts("OPEN"), "当前租户暂无未决(OPEN)告警。");
+  }
+
+  @Tool(
+      description =
+          "列出当前租户最近的告警事件(不限状态,含 OPEN/ACKED/SUPPRESSED/CLOSED),用于回顾近期告警态势、"
+              + "识别反复出现(occurrenceCount 高)或已处置的告警。用户问『最近有哪些告警 / 告警历史 / 某类告警是不是反复出现』时调用。无需参数。")
+  public String getRecentAlerts() {
+    return renderAlerts(queryAlerts(null), "当前租户近期无告警记录。");
+  }
+
+  private List<ConsoleAlertEventResponse> queryAlerts(String status) {
+    AlertEventQueryRequest request = new AlertEventQueryRequest();
+    request.setTenantId(tenantId);
+    request.setStatus(status);
+    request.setPageNo(1);
+    request.setPageSize(maxRows);
+    PageResponse<ConsoleAlertEventResponse> page = queryService.alertEvents(request);
+    return page.items();
+  }
+
+  private String renderAlerts(List<ConsoleAlertEventResponse> alerts, String emptyMessage) {
+    if (alerts.isEmpty()) {
+      return emptyMessage;
+    }
+    return alerts.stream().map(this::renderAlert).collect(Collectors.joining("\n"));
+  }
+
+  private String renderAlert(ConsoleAlertEventResponse alert) {
+    return "id="
+        + alert.id()
+        + " alertType="
+        + nullToDash(alert.alertType())
+        + " severity="
+        + nullToDash(alert.severity())
+        + " status="
+        + nullToDash(alert.status())
+        + " occurrenceCount="
+        + (alert.occurrenceCount() == null ? "-" : alert.occurrenceCount())
+        + " firstSeenAt="
+        + alert.firstSeenAt()
+        + " lastSeenAt="
+        + alert.lastSeenAt()
+        + " traceId="
+        + nullToDash(alert.traceId())
+        + " | "
+        + truncate(alert.title(), 200);
   }
 
   @SuppressWarnings("unchecked")

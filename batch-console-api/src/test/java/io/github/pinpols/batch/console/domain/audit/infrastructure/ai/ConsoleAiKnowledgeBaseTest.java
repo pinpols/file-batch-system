@@ -76,6 +76,24 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   @Test
+  void retrievesAlertTriageAndDataQualityCorpus() {
+    ConsoleAiKnowledgeBase base =
+        new ConsoleAiKnowledgeBase(providerOf(fakeEmbeddingModel()), propertiesWithRag(true));
+
+    // 告警分诊语料(08)可检索
+    assertThat(
+            base.retrieve(
+                "alert severity CRITICAL occurrenceCount alertType status OPEN escalation triage"))
+        .isNotEmpty();
+    // DQ 规则草稿语料(09)可检索
+    List<ConsoleAiKnowledgeBase.Snippet> dq =
+        base.retrieve(
+            "data quality ruleType TABLE_LEVEL expression thresholdJson severity BLOCKER draft");
+    assertThat(dq).isNotEmpty();
+    assertThat(dq).anySatisfy(s -> assertThat(s.text()).contains("ruleType"));
+  }
+
+  @Test
   void returnsEmptyWhenRagDisabled() {
     ConsoleAiKnowledgeBase base =
         new ConsoleAiKnowledgeBase(providerOf(fakeEmbeddingModel()), propertiesWithRag(false));
