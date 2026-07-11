@@ -104,6 +104,7 @@ func NewWorker(cfg Config, transport Transport, consumer Consumer, handler TaskH
 		WithHeartbeatInFlight(registry.Count),
 		WithHeartbeatLogger(logger),
 		WithOnDrain(w.beginDrain),
+		WithOnFatal(w.onHeartbeatFatal),
 	)
 	w.lease = NewLeaseRenewalScheduler(transport, registry, cfg.WorkerCode, cfg.TenantID,
 		WithLeaseInterval(cfg.LeaseRenewInterval),
@@ -386,6 +387,16 @@ func errAsDrop(err error) (*NotFoundError, bool) {
 // configured budget (invoked from the heartbeat DRAINING directive, §1.5).
 func (w *Worker) beginDrain() {
 	w.fsm.SetState(StateDraining)
+	go w.Stop(w.cfg.StopTimeout)
+}
+
+// onHeartbeatFatal stops the whole worker after a fatal (401/403) heartbeat
+// error. Continuing to consume once the heartbeat is dead guarantees a
+// double-run: the platform declares the worker dead after its liveness window
+// and redispatches every in-flight task. Stop() is launched async (it Waits on
+// the scheduler goroutines, including the heartbeat goroutine invoking us, so a
+// synchronous call would self-deadlock).
+func (w *Worker) onHeartbeatFatal() {
 	go w.Stop(w.cfg.StopTimeout)
 }
 

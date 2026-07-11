@@ -335,6 +335,30 @@ func TestWorker_ClaimNotFoundCommits(t *testing.T) {
 	}
 }
 
+// P1: a FATAL (401/403) heartbeat error must stop the WHOLE worker, not just the
+// heartbeat scheduler. A dead heartbeat means the platform will declare us dead
+// and redispatch in-flight tasks; continuing to consume would double-run them.
+func TestWorker_FatalHeartbeatStopsWorker(t *testing.T) {
+	fp := NewFakePlatform()
+	// First heartbeat returns a fatal auth error.
+	fp.ScriptHeartbeat(protocol.HeartbeatResponse{}, &FatalError{Status: 401, Op: "heartbeat"})
+
+	cfg := testConfig()
+	cfg.HeartbeatInterval = time.Millisecond // fire immediately
+	consumer := NewFakeConsumer()
+	w := NewWorker(cfg, fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult { return Success(nil, "") }), nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	// The fatal heartbeat must escalate to a full worker Stop -> deactivate once.
+	waitFor(t, 2*time.Second, func() bool { return len(fp.DeactivateCalls) == 1 })
+	if !consumer.closed() {
+		t.Fatalf("fatal heartbeat must stop (close) the consumer")
+	}
+}
+
 func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)

@@ -33,6 +33,11 @@ type HeartbeatScheduler struct {
 	inFlight func() int
 	// onDrain is invoked once when the platform signals DRAINING (drainThenDeactivate).
 	onDrain func()
+	// onFatal is invoked once when heartbeat hits a FATAL (401/403 auth) error.
+	// The worker MUST stop consuming: a dead heartbeat means the platform will
+	// declare this worker dead after its liveness window (~120s) and redispatch
+	// in-flight tasks — so continuing to claim would double-run them.
+	onFatal func()
 
 	mu          sync.Mutex
 	lastApplied protocol.Decision // exposed for tests
@@ -56,6 +61,13 @@ func WithHeartbeatInFlight(f func() int) HeartbeatOption {
 // WithOnDrain registers the DRAINING callback (lifecycle wires it to Stop).
 func WithOnDrain(f func()) HeartbeatOption {
 	return func(s *HeartbeatScheduler) { s.onDrain = f }
+}
+
+// WithOnFatal registers the fatal-heartbeat callback (lifecycle wires it to a
+// full worker Stop). Invoked once, from the heartbeat loop, on a FATAL auth
+// error before the scheduler returns.
+func WithOnFatal(f func()) HeartbeatOption {
+	return func(s *HeartbeatScheduler) { s.onFatal = f }
 }
 
 // WithHeartbeatLogger injects a logger.
@@ -152,7 +164,14 @@ func (s *HeartbeatScheduler) Run(ctx context.Context) {
 					return
 				}
 				if IsFatal(err) {
-					s.logger.Printf("ERROR fatal heartbeat error worker=%s: %v (stopping scheduler)", s.workerCode, err)
+					// A dead heartbeat = the platform will soon declare us dead and
+					// redispatch our in-flight tasks. Stopping only THIS scheduler
+					// would leave the consume loop claiming new work → guaranteed
+					// double-run. Escalate to a full worker stop instead.
+					s.logger.Printf("ERROR fatal heartbeat error worker=%s: %v (stopping worker)", s.workerCode, err)
+					if s.onFatal != nil {
+						s.onFatal()
+					}
 					return
 				}
 				s.logger.Printf("WARN heartbeat error worker=%s: %v", s.workerCode, err)
