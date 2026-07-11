@@ -744,7 +744,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseKafkaConsumerLagList'
   /api/console/ops/outbox/stats:
     get:
       tags: [Ops]
@@ -1178,7 +1178,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapStringObject'
+                $ref: '#/components/schemas/CommonResponseForensicExport'
   /api/console/forensic/export/{exportId}/download:
     get:
       tags: [Forensic]
@@ -1857,7 +1857,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseSystemParameterValue'
   /api/console/webhooks:
     get:
       tags: [Webhooks]
@@ -6413,7 +6413,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigApprovalDetail'
   /api/console/config/releases/{releaseId}/submit-approval:
     post:
       tags: [Config]
@@ -6441,7 +6441,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigApprovalDetail'
   /api/console/config/approvals/{approvalId}/approve:
     post:
       tags: [Config]
@@ -6469,7 +6469,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigApprovalDetail'
   /api/console/config/approvals/{approvalId}/reject:
     post:
       tags: [Config]
@@ -6497,7 +6497,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigApprovalDetail'
   /api/console/config/sync/export:
     post:
       tags: [Config]
@@ -7282,7 +7282,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseJobStats'
   /api/console/dashboard/trigger-stats:
     get:
       tags: [Dashboard]
@@ -7309,7 +7309,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseTriggerStats'
   /api/console/dashboard/worker-load:
     get:
       tags: [Dashboard]
@@ -7329,7 +7329,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWorkerLoad'
   /api/console/dashboard/alert-trend:
     get:
       tags: [Dashboard]
@@ -7356,7 +7356,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseAlertTrend'
   /api/console/dashboard/sla-compliance:
     get:
       tags: [Dashboard]
@@ -7383,7 +7383,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseSlaCompliance'
   /api/console/dashboard/sla-report:
     get:
       tags: [Dashboard]
@@ -7410,7 +7410,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseSlaReport'
   /api/console/dashboard/execution-progress:
     get:
       tags: [Dashboard]
@@ -7440,7 +7440,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseExecutionProgressList'
   /api/console/dashboard/tenant-usage:
     get:
       tags: [Dashboard]
@@ -7467,7 +7467,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseTenantUsage'
 
   # ─── P3: File Channels CRUD ───────────────────────────────────────────────────
   /api/console/file-channels:
@@ -8134,7 +8134,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseClusterDiagnostic'
   /api/console/ops/cluster-diagnostic/shedlock:
     get:
       tags: [ClusterDiagnostic]
@@ -8148,7 +8148,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseShedLockStatus'
   /api/console/ops/cluster-diagnostic/workers:
     get:
       tags: [ClusterDiagnostic]
@@ -8162,7 +8162,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWorkerConsistency'
   /api/console/ops/cluster-diagnostic/outbox:
     get:
       tags: [ClusterDiagnostic]
@@ -8176,7 +8176,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseOutboxHealth'
   /api/console/ops/cluster-diagnostic/terminal-children:
     get:
       tags: [ClusterDiagnostic]
@@ -8190,7 +8190,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseTerminalChildrenHealth'
   /api/console/ops/cluster-diagnostic/instances/{id}:
     get:
       tags: [ClusterDiagnostic]
@@ -8214,7 +8214,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseInstanceDiagnosis'
   /api/console/tenants:
     get:
       tags: [Tenants]
@@ -16586,3 +16586,500 @@ components:
             data:
               type: array
               items: { $ref: '#/components/schemas/BatchTriggerEntryResponse' }
+    # ── Map 响应收敛批次 3：observability + ops ──────────────────────────────
+    # dashboard job-stats：byStatus 为动态维度键（status→count）→ additionalProperties。
+    JobStatsDailyTrendEntry:
+      type: object
+      required: [day, status, count]
+      properties:
+        day: { type: string, description: "LocalDate ISO 或占位符 UNKNOWN。" }
+        status: { type: string }
+        count: { type: integer, format: int64 }
+    JobStatsResponse:
+      type: object
+      required: [byStatus, total, dailyTrend]
+      properties:
+        byStatus:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+          description: "job 实例状态值 → 计数（动态维度键，含 UNKNOWN 占位）。"
+        total: { type: integer, format: int64 }
+        dailyTrend:
+          type: array
+          items: { $ref: '#/components/schemas/JobStatsDailyTrendEntry' }
+    CommonResponseJobStats:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/JobStatsResponse' }
+    TriggerTypeCountEntry:
+      type: object
+      required: [type, count]
+      properties:
+        type: { type: string }
+        count: { type: integer, format: int64 }
+    DayCountEntry:
+      type: object
+      required: [day, count]
+      properties:
+        day: { type: string }
+        count: { type: integer, format: int64 }
+    TriggerStatsResponse:
+      type: object
+      required: [byTriggerType, dailyTrend]
+      properties:
+        byTriggerType:
+          type: array
+          items: { $ref: '#/components/schemas/TriggerTypeCountEntry' }
+        dailyTrend:
+          type: array
+          items: { $ref: '#/components/schemas/DayCountEntry' }
+    CommonResponseTriggerStats:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/TriggerStatsResponse' }
+    WorkerStatusCountEntry:
+      type: object
+      required: [status, count]
+      properties:
+        status: { type: string }
+        count: { type: integer, format: int64 }
+    WorkerGroupStatusCountEntry:
+      type: object
+      required: [workerGroup, status, count]
+      properties:
+        workerGroup: { type: string }
+        status: { type: string }
+        count: { type: integer, format: int64 }
+    WorkerActivePartitionsEntry:
+      type: object
+      required: [workerCode, activePartitions]
+      properties:
+        workerCode: { type: string }
+        activePartitions: { type: integer, format: int64 }
+    WorkerLoadResponse:
+      type: object
+      required: [byStatus, byWorkerGroup, activePartitionsByWorker]
+      properties:
+        byStatus:
+          type: array
+          items: { $ref: '#/components/schemas/WorkerStatusCountEntry' }
+        byWorkerGroup:
+          type: array
+          items: { $ref: '#/components/schemas/WorkerGroupStatusCountEntry' }
+        activePartitionsByWorker:
+          type: array
+          items: { $ref: '#/components/schemas/WorkerActivePartitionsEntry' }
+    CommonResponseWorkerLoad:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/WorkerLoadResponse' }
+    AlertSeverityCountEntry:
+      type: object
+      required: [severity, count]
+      properties:
+        severity: { type: string }
+        count: { type: integer, format: int64 }
+    AlertDaySeverityCountEntry:
+      type: object
+      required: [day, severity, count]
+      properties:
+        day: { type: string }
+        severity: { type: string }
+        count: { type: integer, format: int64 }
+    AlertTrendResponse:
+      type: object
+      required: [bySeverity, dailyTrend]
+      properties:
+        bySeverity:
+          type: array
+          items: { $ref: '#/components/schemas/AlertSeverityCountEntry' }
+        dailyTrend:
+          type: array
+          items: { $ref: '#/components/schemas/AlertDaySeverityCountEntry' }
+    CommonResponseAlertTrend:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/AlertTrendResponse' }
+    SlaComplianceDayEntry:
+      type: object
+      required: [day, breached, onTime]
+      properties:
+        day: { type: string }
+        breached: { type: integer, format: int64 }
+        onTime: { type: integer, format: int64 }
+    SlaComplianceResponse:
+      type: object
+      required: [breached, onTime, totalWithSla, dailyTrend]
+      properties:
+        breached: { type: integer, format: int64 }
+        onTime: { type: integer, format: int64 }
+        totalWithSla: { type: integer, format: int64 }
+        avgDurationSeconds: { type: number, nullable: true }
+        dailyTrend:
+          type: array
+          items: { $ref: '#/components/schemas/SlaComplianceDayEntry' }
+    CommonResponseSlaCompliance:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/SlaComplianceResponse' }
+    SlaJobReportEntry:
+      type: object
+      required: [jobCode, jobName, totalInstances, successCount, failedCount, slaBreached, slaOnTime, totalPartitions]
+      properties:
+        jobCode: { type: string }
+        jobName: { type: string, nullable: true }
+        totalInstances: { type: integer, format: int64 }
+        successCount: { type: integer, format: int64 }
+        failedCount: { type: integer, format: int64 }
+        slaBreached: { type: integer, format: int64 }
+        slaOnTime: { type: integer, format: int64 }
+        avgDurationSeconds: { type: number, nullable: true }
+        maxDurationSeconds: { type: number, nullable: true }
+        totalPartitions: { type: integer, format: int64 }
+    SlaReportResponse:
+      type: object
+      required: [tenantId, periodDays, jobs]
+      properties:
+        tenantId: { type: string }
+        periodDays: { type: integer, format: int32 }
+        jobs:
+          type: array
+          items: { $ref: '#/components/schemas/SlaJobReportEntry' }
+    CommonResponseSlaReport:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/SlaReportResponse' }
+    ExecutionProgressResponse:
+      type: object
+      required: [id, jobCode, instanceNo, instanceStatus, expectedPartitions, successPartitions, failedPartitions, completedPartitions, progressPercent]
+      properties:
+        id: { type: integer, format: int64 }
+        jobCode: { type: string }
+        instanceNo: { type: string }
+        instanceStatus: { type: string }
+        expectedPartitions: { type: integer, format: int32 }
+        successPartitions: { type: integer, format: int32 }
+        failedPartitions: { type: integer, format: int32 }
+        completedPartitions: { type: integer, format: int32 }
+        progressPercent: { type: integer, format: int64 }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    CommonResponseExecutionProgressList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ExecutionProgressResponse' }
+    TenantUsageResponse:
+      type: object
+      required: [tenantId, jobDefinitions, workflowDefinitions, fileChannels, fileTemplates, recentJobInstances, recentFiles, periodDays]
+      properties:
+        tenantId: { type: string }
+        jobDefinitions: { type: integer, format: int64 }
+        workflowDefinitions: { type: integer, format: int64 }
+        fileChannels: { type: integer, format: int64 }
+        fileTemplates: { type: integer, format: int64 }
+        recentJobInstances: { type: integer, format: int64 }
+        recentFiles: { type: integer, format: int64 }
+        periodDays: { type: integer, format: int32 }
+    CommonResponseTenantUsage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/TenantUsageResponse' }
+    SystemParameterValueResponse:
+      type: object
+      description: "命中返回 {key,value}；未命中仅 {key}（value 省略）。"
+      required: [key]
+      properties:
+        key: { type: string }
+        value: { type: string, nullable: true }
+    CommonResponseSystemParameterValue:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/SystemParameterValueResponse' }
+    # ── ops cluster diagnostic ───────────────────────────────────────────────
+    ShedLockEntry:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        lockUntil: { type: string, format: date-time, nullable: true }
+        lockedAt: { type: string, format: date-time, nullable: true }
+        lockedBy: { type: string, nullable: true }
+    ShedLockStatusResponse:
+      type: object
+      required: [totalLocks, activeLocks, locks]
+      properties:
+        totalLocks: { type: integer, format: int32 }
+        activeLocks: { type: integer, format: int64 }
+        locks:
+          type: array
+          items: { $ref: '#/components/schemas/ShedLockEntry' }
+    CommonResponseShedLockStatus:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ShedLockStatusResponse' }
+    WorkerGroupCapacity:
+      type: object
+      required: [totalWorkers, onlineWorkers, drainingWorkers, offlineWorkers, decommissionedWorkers, currentLoad, maxConcurrent]
+      properties:
+        workerGroup: { type: string, nullable: true }
+        totalWorkers: { type: integer, format: int64 }
+        onlineWorkers: { type: integer, format: int64 }
+        drainingWorkers: { type: integer, format: int64 }
+        offlineWorkers: { type: integer, format: int64 }
+        decommissionedWorkers: { type: integer, format: int64 }
+        currentLoad: { type: integer, format: int64 }
+        maxConcurrent: { type: integer, format: int64 }
+    WorkerConsistencyResponse:
+      type: object
+      required: [onlineWorkers, drainingWorkers, offlineWorkers, staleOnlineWorkers, drainingPastDeadlineWorkers, decommissionedWorkersWithActiveTasks, invalidCapabilityTags, workerGroups, runningInstances, healthy]
+      properties:
+        onlineWorkers: { type: integer, format: int64 }
+        drainingWorkers: { type: integer, format: int64 }
+        offlineWorkers: { type: integer, format: int64 }
+        staleOnlineWorkers: { type: integer, format: int64 }
+        drainingPastDeadlineWorkers: { type: integer, format: int64 }
+        decommissionedWorkersWithActiveTasks: { type: integer, format: int64 }
+        invalidCapabilityTags: { type: integer, format: int64 }
+        workerGroups:
+          type: array
+          items: { $ref: '#/components/schemas/WorkerGroupCapacity' }
+        runningInstances: { type: integer, format: int64 }
+        healthy: { type: boolean }
+    CommonResponseWorkerConsistency:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/WorkerConsistencyResponse' }
+    DeliveryStatEntry:
+      type: object
+      required: [cnt]
+      properties:
+        deliveryStatus: { type: string, nullable: true }
+        cnt: { type: integer, format: int64 }
+    OutboxHealthResponse:
+      type: object
+      required: [pendingEvents, activeEvents, stalePublishingEvents, deliveryStats, healthy]
+      properties:
+        pendingEvents: { type: integer, format: int64 }
+        activeEvents: { type: integer, format: int64 }
+        stalePublishingEvents: { type: integer, format: int64 }
+        deliveryStats:
+          type: array
+          items: { $ref: '#/components/schemas/DeliveryStatEntry' }
+        healthy: { type: boolean }
+    CommonResponseOutboxHealth:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/OutboxHealthResponse' }
+    TerminalChildrenHealthResponse:
+      type: object
+      required: [terminalInstancesWithActiveChildren, healthy]
+      properties:
+        terminalInstancesWithActiveChildren: { type: integer, format: int64 }
+        healthy: { type: boolean }
+    CommonResponseTerminalChildrenHealth:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/TerminalChildrenHealthResponse' }
+    ClusterDiagnosticResponse:
+      type: object
+      required: [shedLock, workers, outbox, terminalChildren]
+      properties:
+        shedLock: { $ref: '#/components/schemas/ShedLockStatusResponse' }
+        workers: { $ref: '#/components/schemas/WorkerConsistencyResponse' }
+        outbox: { $ref: '#/components/schemas/OutboxHealthResponse' }
+        terminalChildren: { $ref: '#/components/schemas/TerminalChildrenHealthResponse' }
+    CommonResponseClusterDiagnostic:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ClusterDiagnosticResponse' }
+    DiagnosisInstanceSummary:
+      type: object
+      description: "job_instance 摘要；键恒定，值可 null。"
+      required: [id, instanceNo, jobCode, instanceStatus, now]
+      properties:
+        id: { type: integer, format: int64 }
+        instanceNo: { type: string }
+        jobCode: { type: string }
+        bizDate: { type: string, format: date, nullable: true }
+        instanceStatus: { type: string }
+        queueCode: { type: string, nullable: true }
+        workerGroup: { type: string, nullable: true }
+        traceId: { type: string, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        deadlineAt: { type: string, format: date-time, nullable: true }
+        now: { type: string, format: date-time }
+    DiagnosisStatusCount:
+      type: object
+      required: [count]
+      properties:
+        status: { type: string, nullable: true }
+        count: { type: integer, format: int64 }
+    DiagnosisOutboxStatusCount:
+      type: object
+      required: [count]
+      properties:
+        status: { type: string, nullable: true }
+        count: { type: integer, format: int64 }
+        oldest: { type: string, format: date-time, nullable: true }
+        newest: { type: string, format: date-time, nullable: true }
+    DiagnosisSummary:
+      type: object
+      required: [partitionStatusCounts, taskStatusCounts, outboxStatusCounts, onlineWorkersForGroup]
+      properties:
+        partitionStatusCounts:
+          type: array
+          items: { $ref: '#/components/schemas/DiagnosisStatusCount' }
+        taskStatusCounts:
+          type: array
+          items: { $ref: '#/components/schemas/DiagnosisStatusCount' }
+        outboxStatusCounts:
+          type: array
+          items: { $ref: '#/components/schemas/DiagnosisOutboxStatusCount' }
+        onlineWorkersForGroup: { type: integer, format: int64 }
+    DiagnosisFinding:
+      type: object
+      required: [severity, reasonCode, message, suggestedActions, evidence]
+      properties:
+        severity: { type: string }
+        reasonCode: { type: string }
+        message: { type: string }
+        suggestedActions:
+          type: array
+          items: { type: string }
+        evidence:
+          type: object
+          additionalProperties: true
+          description: "每条 finding 依类型携带异构键（instanceStatus / activePartitions / workerGroup / statusCounts …），真动态负载。"
+    InstanceDiagnosisResponse:
+      type: object
+      required: [tenantId, jobInstanceId, healthy, instance, summary, findings]
+      properties:
+        tenantId: { type: string }
+        jobInstanceId: { type: integer, format: int64 }
+        healthy: { type: boolean }
+        instance: { $ref: '#/components/schemas/DiagnosisInstanceSummary' }
+        summary: { $ref: '#/components/schemas/DiagnosisSummary' }
+        findings:
+          type: array
+          items: { $ref: '#/components/schemas/DiagnosisFinding' }
+    CommonResponseInstanceDiagnosis:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/InstanceDiagnosisResponse' }
+    # ── ops config approval ──────────────────────────────────────────────────
+    ConfigApprovalRow:
+      type: object
+      description: "config_approval 单行（MyBatis map，省略 null 列）。"
+      required: [id, approvalStatus]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string, nullable: true }
+        releaseId: { type: integer, format: int64, nullable: true }
+        approvalStatus: { type: string }
+        requestedBy: { type: string, nullable: true }
+        requestedAt: { type: string, format: date-time, nullable: true }
+        reviewedBy: { type: string, nullable: true }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        reviewComment: { type: string, nullable: true }
+        expiredAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    ConfigApprovalDetailResponse:
+      type: object
+      required: [releaseId, tenantId, configType, configKey, configStatus]
+      properties:
+        releaseId: { type: integer, format: int64 }
+        tenantId: { type: string }
+        configType: { type: string }
+        configKey: { type: string }
+        configStatus: { type: string }
+        approval:
+          allOf: [ { $ref: '#/components/schemas/ConfigApprovalRow' } ]
+          nullable: true
+          description: "最新审批行；无审批时为 null（键保留）。"
+    CommonResponseConfigApprovalDetail:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConfigApprovalDetailResponse' }
+    # ── ops kafka lag ────────────────────────────────────────────────────────
+    KafkaPartitionLag:
+      type: object
+      required: [topic, partition, committedOffset, endOffset, lag]
+      properties:
+        topic: { type: string }
+        partition: { type: integer, format: int32 }
+        committedOffset: { type: integer, format: int64 }
+        endOffset: { type: integer, format: int64 }
+        lag: { type: integer, format: int64 }
+    KafkaConsumerLagResponse:
+      type: object
+      description: "混合两种形态：正常组 {groupId,totalLag,partitionCount[,partitionsWithLag]}；出错条目 {[groupId,]error}。缺失键省略。"
+      properties:
+        groupId: { type: string, nullable: true }
+        totalLag: { type: integer, format: int64, nullable: true }
+        partitionCount: { type: integer, format: int32, nullable: true }
+        partitionsWithLag:
+          type: array
+          nullable: true
+          items: { $ref: '#/components/schemas/KafkaPartitionLag' }
+        error: { type: string, nullable: true }
+    CommonResponseKafkaConsumerLagList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/KafkaConsumerLagResponse' }
+    # ── ops forensic export ──────────────────────────────────────────────────
+    ForensicExportResponse:
+      type: object
+      description: "透传自 orchestrator ForensicExportResponse，字段 1:1；downloadUrl v0.1 恒为 null（键保留）。"
+      required: [exportId, status]
+      properties:
+        exportId: { type: string }
+        status: { type: string }
+        storagePath: { type: string, nullable: true }
+        fileSizeBytes: { type: integer, format: int64, nullable: true }
+        sha256: { type: string, nullable: true }
+        downloadUrl: { type: string, nullable: true }
+    CommonResponseForensicExport:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ForensicExportResponse' }

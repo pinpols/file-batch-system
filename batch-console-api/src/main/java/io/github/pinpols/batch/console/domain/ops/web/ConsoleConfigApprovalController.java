@@ -3,12 +3,12 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApprovalApplicationService;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleConfigApprovalDetailResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.ConfigApprovalActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseApprovalSubmitRequest;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -33,35 +33,39 @@ public class ConsoleConfigApprovalController {
 
   @PostMapping("/releases/{releaseId}/submit-approval")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<Map<String, Object>> submitApproval(
+  public CommonResponse<ConsoleConfigApprovalDetailResponse> submitApproval(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long releaseId,
       @Valid @RequestBody ConfigReleaseApprovalSubmitRequest request) {
-    return responseFactory.success(applicationService.submit(releaseId, request));
+    return responseFactory.success(
+        ConsoleConfigApprovalDetailResponse.from(applicationService.submit(releaseId, request)));
   }
 
   @GetMapping("/releases/{releaseId}/approval")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> approvalDetail(
+  public CommonResponse<ConsoleConfigApprovalDetailResponse> approvalDetail(
       @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.detail(tenantId, releaseId));
+    return responseFactory.success(
+        ConsoleConfigApprovalDetailResponse.from(applicationService.detail(tenantId, releaseId)));
   }
 
   @PostMapping("/approvals/{approvalId}/approve")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<Map<String, Object>> approve(
+  public CommonResponse<ConsoleConfigApprovalDetailResponse> approve(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long approvalId,
       @Valid @RequestBody ConfigApprovalActionRequest request) {
-    return responseFactory.success(applicationService.approve(approvalId, request));
+    return responseFactory.success(
+        ConsoleConfigApprovalDetailResponse.from(applicationService.approve(approvalId, request)));
   }
 
   @PostMapping("/approvals/{approvalId}/reject")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<Map<String, Object>> reject(
+  public CommonResponse<ConsoleConfigApprovalDetailResponse> reject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long approvalId,
       @Valid @RequestBody ConfigApprovalActionRequest request) {
-    return responseFactory.success(applicationService.reject(approvalId, request));
+    return responseFactory.success(
+        ConsoleConfigApprovalDetailResponse.from(applicationService.reject(approvalId, request)));
   }
 }

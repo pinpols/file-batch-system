@@ -3,13 +3,13 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleSystemParameterService;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleSystemParameterValueResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -41,13 +41,13 @@ public class ConsoleSystemParameterController {
   }
 
   @GetMapping("/value")
-  public CommonResponse<Map<String, String>> getValue(
+  public CommonResponse<ConsoleSystemParameterValueResponse> getValue(
       @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
     return responseFactory.success(
         parameterService
             .getValue(tenantId, key)
-            .map(v -> Map.of("key", key, "value", v))
-            .orElse(Map.of("key", key)));
+            .map(v -> ConsoleSystemParameterValueResponse.of(key, v))
+            .orElseGet(() -> ConsoleSystemParameterValueResponse.of(key, null)));
   }
 
   @PutMapping

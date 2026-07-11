@@ -12,6 +12,7 @@ import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnost
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,14 +50,26 @@ class ConsoleClusterDiagnosticControllerTest {
 
   @Test
   void shouldReturnDiagnostic() throws Exception {
-    when(diagnosticService.diagnose("t1")).thenReturn(Map.of("status", "healthy", "nodeCount", 3));
+    // 键与真实 ConsoleClusterDiagnosticService.loadDiagnose
+    // 输出一致：shedLock/workers/outbox/terminalChildren。
+    when(diagnosticService.diagnose("t1"))
+        .thenReturn(
+            Map.of(
+                "shedLock", Map.of("totalLocks", 2, "activeLocks", 1L, "locks", List.of()),
+                "workers", Map.of("onlineWorkers", 3L, "healthy", true, "workerGroups", List.of()),
+                "outbox", Map.of("pendingEvents", 0L, "healthy", true, "deliveryStats", List.of()),
+                "terminalChildren",
+                    Map.of("terminalInstancesWithActiveChildren", 0L, "healthy", true)));
 
     mockMvc
         .perform(get("/api/console/ops/cluster-diagnostic").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.status").value("healthy"))
-        .andExpect(jsonPath("$.data.nodeCount").value(3));
+        .andExpect(jsonPath("$.data.shedLock.totalLocks").value(2))
+        .andExpect(jsonPath("$.data.workers.onlineWorkers").value(3))
+        .andExpect(jsonPath("$.data.outbox.healthy").value(true))
+        .andExpect(
+            jsonPath("$.data.terminalChildren.terminalInstancesWithActiveChildren").value(0));
   }
 
   @Test

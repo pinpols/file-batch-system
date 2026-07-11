@@ -56,8 +56,18 @@ class ConsoleConfigApprovalControllerTest {
 
   @Test
   void submitApprovalShouldPassReleaseIdAndForwardBody() throws Exception {
+    // 键与真实 detail() 输出一致：releaseId/tenantId/configType/configKey/configStatus/approval。
     when(service.submit(eq(7L), any(ConfigReleaseApprovalSubmitRequest.class)))
-        .thenReturn(Map.of("approvalId", 100));
+        .thenReturn(
+            Map.of(
+                "releaseId",
+                7L,
+                "tenantId",
+                "ta",
+                "configStatus",
+                "PENDING_APPROVAL",
+                "approval",
+                Map.of("id", 100L, "approvalStatus", "PENDING")));
     mockMvc
         .perform(
             post("/api/console/config/releases/7/submit-approval")
@@ -65,24 +75,44 @@ class ConsoleConfigApprovalControllerTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"go\"}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.approvalId").value(100));
+        .andExpect(jsonPath("$.data.releaseId").value(7))
+        .andExpect(jsonPath("$.data.configStatus").value("PENDING_APPROVAL"))
+        .andExpect(jsonPath("$.data.approval.approvalStatus").value("PENDING"));
     verify(service).submit(eq(7L), any(ConfigReleaseApprovalSubmitRequest.class));
   }
 
   @Test
   void approvalDetailShouldPassReleaseIdAndTenant() throws Exception {
-    when(service.detail("ta", 7L)).thenReturn(Map.of("status", "PENDING"));
+    when(service.detail("ta", 7L))
+        .thenReturn(
+            Map.of(
+                "releaseId",
+                7L,
+                "tenantId",
+                "ta",
+                "configStatus",
+                "PENDING_APPROVAL",
+                "approval",
+                Map.of("id", 100L, "approvalStatus", "PENDING")));
     mockMvc
         .perform(get("/api/console/config/releases/7/approval").param("tenantId", "ta"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.status").value("PENDING"));
+        .andExpect(jsonPath("$.data.configStatus").value("PENDING_APPROVAL"))
+        .andExpect(jsonPath("$.data.approval.approvalStatus").value("PENDING"));
     verify(service).detail("ta", 7L);
   }
 
   @Test
   void approveShouldPassApprovalIdAndBody() throws Exception {
     when(service.approve(eq(100L), any(ConfigApprovalActionRequest.class)))
-        .thenReturn(Map.of("status", "APPROVED"));
+        .thenReturn(
+            Map.of(
+                "releaseId",
+                7L,
+                "configStatus",
+                "PUBLISHED",
+                "approval",
+                Map.of("id", 100L, "approvalStatus", "APPROVED")));
     mockMvc
         .perform(
             post("/api/console/config/approvals/100/approve")
@@ -90,14 +120,22 @@ class ConsoleConfigApprovalControllerTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"ok\"}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.status").value("APPROVED"));
+        .andExpect(jsonPath("$.data.configStatus").value("PUBLISHED"))
+        .andExpect(jsonPath("$.data.approval.approvalStatus").value("APPROVED"));
     verify(service).approve(eq(100L), any(ConfigApprovalActionRequest.class));
   }
 
   @Test
   void rejectShouldPassApprovalIdAndBody() throws Exception {
     when(service.reject(eq(100L), any(ConfigApprovalActionRequest.class)))
-        .thenReturn(Map.of("status", "REJECTED"));
+        .thenReturn(
+            Map.of(
+                "releaseId",
+                7L,
+                "configStatus",
+                "DRAFT",
+                "approval",
+                Map.of("id", 100L, "approvalStatus", "REJECTED")));
     mockMvc
         .perform(
             post("/api/console/config/approvals/100/reject")
@@ -105,7 +143,8 @@ class ConsoleConfigApprovalControllerTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"no\"}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.status").value("REJECTED"));
+        .andExpect(jsonPath("$.data.configStatus").value("DRAFT"))
+        .andExpect(jsonPath("$.data.approval.approvalStatus").value("REJECTED"));
     verify(service).reject(eq(100L), any(ConfigApprovalActionRequest.class));
   }
 
