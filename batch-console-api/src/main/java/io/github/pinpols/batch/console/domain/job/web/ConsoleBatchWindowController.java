@@ -5,10 +5,10 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchWindowApplicationService;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowUpdateRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchWindowResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -26,7 +26,7 @@ public class ConsoleBatchWindowController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<ConsoleBatchWindowResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "windowCode", required = false) String windowCode,
       @RequestParam(value = "enabled", required = false) Boolean enabled,
@@ -37,13 +37,13 @@ public class ConsoleBatchWindowController {
   }
 
   @PostMapping
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ConsoleBatchWindowResponse> create(
       @Valid @RequestBody BatchWindowCreateRequest request) {
     return responseFactory.success(batchWindowApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
-  public CommonResponse<Map<String, Object>> update(
+  public CommonResponse<ConsoleBatchWindowResponse> update(
       @PathVariable Long id, @Valid @RequestBody BatchWindowUpdateRequest request) {
     return responseFactory.success(batchWindowApplicationService.update(id, request));
   }

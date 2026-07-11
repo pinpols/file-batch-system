@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.domain.job.web.request.RerunRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +44,8 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
   }
 
   @Override
-  public List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey) {
+  public List<ConsoleBatchTriggerEntryResponse> batchTrigger(
+      List<TriggerRequest> items, String idempotencyKey) {
     return triggerService.batchTrigger(items, idempotencyKey);
   }
 

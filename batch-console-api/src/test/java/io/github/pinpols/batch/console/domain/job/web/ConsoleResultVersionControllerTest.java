@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -22,7 +23,6 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.ParameterizedTypeReference;
@@ -73,9 +73,9 @@ class ConsoleResultVersionControllerTest {
     when(postUriSpec.uri(anyString(), any(Object[].class))).thenReturn(postSpec);
     when(getSpec.retrieve()).thenReturn(responseSpec);
     when(postSpec.retrieve()).thenReturn(responseSpec);
-    // list 期望 wrapped {data: [...]} 解包
+    // orchestrator 返回 CommonResponse<...> envelope；控制器按类型化 body 反序列化后 forwardOrchestrator 透传 data。
     when(responseSpec.body(any(ParameterizedTypeReference.class)))
-        .thenReturn(Map.of("data", List.of(Map.of("id", 1))));
+        .thenReturn(CommonResponse.success(List.of()));
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(

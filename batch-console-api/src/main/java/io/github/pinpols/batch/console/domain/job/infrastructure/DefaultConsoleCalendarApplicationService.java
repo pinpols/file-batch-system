@@ -11,6 +11,8 @@ import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.web.request.CalendarSaveRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.HolidayImportRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.HolidaySaveRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleCalendarResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleHolidayResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import java.util.HashMap;
@@ -35,18 +37,20 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
   @Override
-  public PageResponse<Map<String, Object>> list(
+  public PageResponse<ConsoleCalendarResponse> list(
       String tenantId, String calendarCode, Boolean enabled, Integer pageNo, Integer pageSize) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     PageRequest pageRequest = new PageRequest(pageNo, pageSize);
     long total = calendarMapper.countByQuery(resolved, calendarCode, enabled);
-    List<Map<String, Object>> items =
-        calendarMapper.selectByQuery(resolved, calendarCode, enabled, pageRequest);
+    List<ConsoleCalendarResponse> items =
+        calendarMapper.selectByQuery(resolved, calendarCode, enabled, pageRequest).stream()
+            .map(ConsoleCalendarResponse::from)
+            .toList();
     return new PageResponse<>(total, pageNo, pageSize, items);
   }
 
   @Override
-  public Map<String, Object> create(CalendarSaveRequest request) {
+  public ConsoleCalendarResponse create(CalendarSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     long existing = calendarMapper.countByQuery(tenantId, request.getCalendarCode(), null);
     if (existing > 0) {
@@ -70,11 +74,12 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     params.put("enabled", request.getEnabled() != null && request.getEnabled());
     calendarMapper.insert(params);
     cacheInvalidationService.evictBusinessCalendar(tenantId, request.getCalendarCode());
-    return calendarMapper.selectById(tenantId, ((Number) params.get("id")).longValue());
+    return ConsoleCalendarResponse.from(
+        calendarMapper.selectById(tenantId, ((Number) params.get("id")).longValue()));
   }
 
   @Override
-  public Map<String, Object> update(Long id, CalendarSaveRequest request) {
+  public ConsoleCalendarResponse update(Long id, CalendarSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
@@ -93,7 +98,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     calendarMapper.update(params);
     cacheInvalidationService.evictBusinessCalendar(
         tenantId, String.valueOf(existing.get(KEY_CALENDAR_CODE)));
-    return calendarMapper.selectById(tenantId, id);
+    return ConsoleCalendarResponse.from(calendarMapper.selectById(tenantId, id));
   }
 
   @Override
@@ -111,10 +116,10 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   }
 
   @Override
-  public List<Map<String, Object>> holidays(Long id, String tenantId) {
+  public List<ConsoleHolidayResponse> holidays(Long id, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
-    return holidayMapper.selectByCalendarId(id);
+    return holidayMapper.selectByCalendarId(id).stream().map(ConsoleHolidayResponse::from).toList();
   }
 
   @Override
@@ -145,7 +150,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   }
 
   @Override
-  public Map<String, Object> updateHoliday(Long id, Long holidayId, HolidaySaveRequest request) {
+  public ConsoleHolidayResponse updateHoliday(Long id, Long holidayId, HolidaySaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> calendar =
         Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
@@ -164,7 +169,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     holidayMapper.update(params);
     cacheInvalidationService.evictBusinessCalendar(
         tenantId, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));
-    return holidayMapper.selectByCalendarIdAndId(id, holidayId);
+    return ConsoleHolidayResponse.from(holidayMapper.selectByCalendarIdAndId(id, holidayId));
   }
 
   @Override

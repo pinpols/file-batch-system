@@ -17,6 +17,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -115,7 +116,10 @@ class ConsoleJobControllerTest {
   @Test
   void shouldBatchTriggerJobs() throws Exception {
     when(triggerService.batchTrigger(any(), anyString()))
-        .thenReturn(List.of(Map.of("index", 0, "status", "SUCCESS", "instanceNo", "INS-1")));
+        .thenReturn(
+            List.of(
+                new ConsoleBatchTriggerEntryResponse(
+                    0, "IMPORT_JOB", "2026-03-27", null, "SUCCESS", null, "INS-1", null)));
 
     mockMvc
         .perform(

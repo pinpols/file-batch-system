@@ -8,6 +8,8 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleDryRunResultResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -121,34 +123,43 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
   }
 
   @Override
-  public List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey) {
-    List<Map<String, Object>> results = new ArrayList<>();
+  public List<ConsoleBatchTriggerEntryResponse> batchTrigger(
+      List<TriggerRequest> items, String idempotencyKey) {
+    List<ConsoleBatchTriggerEntryResponse> results = new ArrayList<>();
     for (int i = 0; i < items.size(); i++) {
       TriggerRequest item = items.get(i);
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("index", i);
-      entry.put("jobCode", item.getJobCode());
-      entry.put("bizDate", item.getBizDate());
+      Boolean dryRunFlag = null;
+      String status;
+      ConsoleDryRunResultResponse result = null;
+      String instanceNo = null;
+      String error = null;
       try {
         if (item.isDryRun()) {
           Map<String, Object> dryRun = dryRunTrigger(item);
-          entry.put("dryRun", true);
-          entry.put(
-              "status", Boolean.TRUE.equals(dryRun.get("valid")) ? "DRY_RUN_OK" : "DRY_RUN_FAILED");
-          entry.put("result", dryRun);
+          dryRunFlag = true;
+          status = Boolean.TRUE.equals(dryRun.get("valid")) ? "DRY_RUN_OK" : "DRY_RUN_FAILED";
+          result = ConsoleDryRunResultResponse.from(dryRun);
         } else {
           String itemKey = idempotencyKey + ":" + i;
-          String instanceNo = trigger(item, itemKey);
-          entry.put("status", "SUCCESS");
-          entry.put("instanceNo", instanceNo);
+          instanceNo = trigger(item, itemKey);
+          status = "SUCCESS";
         }
       } catch (Exception e) {
         SwallowedExceptionLogger.warn(DefaultConsoleJobTriggerService.class, "catch:Exception", e);
 
-        entry.put("status", "FAILED");
-        entry.put("error", e.getMessage());
+        status = "FAILED";
+        error = e.getMessage();
       }
-      results.add(entry);
+      results.add(
+          new ConsoleBatchTriggerEntryResponse(
+              i,
+              item.getJobCode(),
+              item.getBizDate(),
+              dryRunFlag,
+              status,
+              result,
+              instanceNo,
+              error));
     }
     return results;
   }

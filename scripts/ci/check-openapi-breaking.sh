@@ -34,9 +34,18 @@ for spec in "${SPECS[@]}"; do
   # 旧 schema 完全未声明 data 类型时,补成实际 object/array 只是契约澄清,不会改变 wire。
   # oasdiff 会把 blank -> object/array 误判为 response-property-type-changed ERR。
   # 仅动态忽略这一种精确形态;已有明确类型之间的变化仍由 breaking gate 拦截。
+  #
+  # 批次2(job 域 Map 收敛)另修正了 12 条历史误声明为 CommonResponseString 的 path
+  # (运行时一直返对象,`string` -> object 是 spec 修正非 wire 变化)。该忽略**收窄为
+  # path 白名单**,避免未来别处真实 string -> object 破坏被全局掩盖;白名单外的
+  # string -> object/array 仍按 ERR 拦截。
+  string_fix_paths='/api/console/(instances/\{id\}/(cancel|terminate|pause|resume)|instances/partitions/\{id\}/(cancel|retry)|ops/triggers/\{jobCode\}/(register|unregister|pause|resume)|scheduler/(pause-all|resume-all))'
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
     | grep -E 'response.s property type/format changed from ``/`` to `(object|array)`/``.*\[response-property-type-changed\]' \
       > "$clarification_ignore_tmp" || true
+  oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
+    | grep -E "in API (GET|POST|PUT|DELETE|PATCH) ${string_fix_paths} .*response.s property type/format changed from \`string\`/\`\` to \`object\`/\`\`.*\[response-property-type-changed\]" \
+      >> "$clarification_ignore_tmp" || true
   # 仅 ERR 级 breaking 才 fail;成功时静默(该 spec 有重复参数定义,oasdiff 会刷大量
   # request-parameter-removed 的 WARN 噪音,失败时才打全量便于定位)。
   out="$(oasdiff breaking "$base_tmp" "$spec" --fail-on ERR \

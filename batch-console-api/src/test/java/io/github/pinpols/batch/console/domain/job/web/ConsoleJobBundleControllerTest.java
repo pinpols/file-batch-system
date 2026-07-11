@@ -16,10 +16,15 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
 import io.github.pinpols.batch.console.domain.job.web.request.JobBundleCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.JobBundleImportRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleExportResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleResultResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Map;
+import io.github.pinpols.batch.console.web.request.config.ConfigSyncBundlePayload;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -60,7 +65,11 @@ class ConsoleJobBundleControllerTest {
   @Test
   void createShouldForwardToApplicationService() throws Exception {
     when(applicationService.create(any(JobBundleCreateRequest.class)))
-        .thenReturn(Map.of("tenantId", "t1", "result", "ok"));
+        .thenReturn(
+            new ConsoleJobBundleResultResponse(
+                "t1",
+                ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+                new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
     mockMvc
         .perform(
             post("/api/console/jobs/bundle/create")
@@ -85,9 +94,11 @@ class ConsoleJobBundleControllerTest {
 
   @Test
   void exportShouldReturnBundlePayload() throws Exception {
+    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
     when(applicationService.exportBundle("t1", "JOB_A"))
         .thenReturn(
-            Map.of("tenantId", "t1", "bundle", Map.of("jobDefinitions", java.util.List.of())));
+            new ConsoleJobBundleExportResponse(
+                "t1", "JOB_A", ConsoleJobBundleSummaryResponse.from(bundle), bundle));
     mockMvc
         .perform(
             get("/api/console/jobs/bundle/export")
@@ -112,7 +123,11 @@ class ConsoleJobBundleControllerTest {
   @Test
   void importShouldForwardToApplicationService() throws Exception {
     when(applicationService.importBundle(any(JobBundleImportRequest.class)))
-        .thenReturn(Map.of("tenantId", "t1", "result", Map.of("totalTenants", 2)));
+        .thenReturn(
+            new ConsoleJobBundleResultResponse(
+                "t1",
+                ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+                new TenantConfigBatchInitResponse("op-1", 2, 2, 0, false, List.of())));
     mockMvc
         .perform(
             post("/api/console/jobs/bundle/import")

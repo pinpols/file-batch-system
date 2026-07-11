@@ -4,10 +4,11 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
 import io.github.pinpols.batch.console.domain.job.web.request.JobBundleCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.JobBundleImportRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleExportResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleResultResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -30,19 +31,19 @@ public class ConsoleJobBundleController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/create")
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ConsoleJobBundleResultResponse> create(
       @Valid @RequestBody JobBundleCreateRequest request) {
     return responseFactory.success(applicationService.create(request));
   }
 
   @GetMapping("/export")
-  public CommonResponse<Map<String, Object>> export(
+  public CommonResponse<ConsoleJobBundleExportResponse> export(
       @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
     return responseFactory.success(applicationService.exportBundle(tenantId, jobCode));
   }
 
   @PostMapping("/import")
-  public CommonResponse<Map<String, Object>> importBundle(
+  public CommonResponse<ConsoleJobBundleResultResponse> importBundle(
       @Valid @RequestBody JobBundleImportRequest request) {
     return responseFactory.success(applicationService.importBundle(request));
   }

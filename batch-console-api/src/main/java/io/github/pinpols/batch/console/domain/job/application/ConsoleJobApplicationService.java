@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.domain.job.web.request.RerunRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import java.util.List;
 import java.util.Map;
@@ -38,5 +39,6 @@ public interface ConsoleJobApplicationService {
   /** 只校验不触发。 */
   Map<String, Object> dryRunTrigger(TriggerRequest request);
 
-  List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey);
+  List<ConsoleBatchTriggerEntryResponse> batchTrigger(
+      List<TriggerRequest> items, String idempotencyKey);
 }

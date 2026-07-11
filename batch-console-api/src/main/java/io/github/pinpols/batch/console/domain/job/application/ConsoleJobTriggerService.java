@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import java.util.List;
 import java.util.Map;
 
@@ -14,5 +15,6 @@ public interface ConsoleJobTriggerService {
   Map<String, Object> dryRunTrigger(TriggerRequest request);
 
   /** 批量触发：同时触发多个 job。 */
-  List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey);
+  List<ConsoleBatchTriggerEntryResponse> batchTrigger(
+      List<TriggerRequest> items, String idempotencyKey);
 }

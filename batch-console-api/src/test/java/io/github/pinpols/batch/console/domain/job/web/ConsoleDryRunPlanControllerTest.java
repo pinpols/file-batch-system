@@ -13,11 +13,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.job.web.request.DryRunPlanRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleDryRunPlanResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -74,13 +76,7 @@ class ConsoleDryRunPlanControllerTest {
     // 让 ConsoleDryRunPlanController 二次 success(resp) 包装 bug 在 unit-test 里看不见。
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
         .thenReturn(
-            Map.of(
-                "success",
-                true,
-                "code",
-                "SUCCESS",
-                "data",
-                Map.of("level", "L1", "ok", true, "findings", List.of())));
+            CommonResponse.success(new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of())));
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
@@ -101,7 +97,7 @@ class ConsoleDryRunPlanControllerTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"tb\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.ok").value(true));
+        .andExpect(jsonPath("$.data.success").value(true));
 
     ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
     verify(bodySpec).body(bodyCaptor.capture());
@@ -134,13 +130,8 @@ class ConsoleDryRunPlanControllerTest {
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
         .thenReturn(
-            Map.of(
-                "success",
-                true,
-                "code",
-                "SUCCESS",
-                "data",
-                Map.of("findings", List.of(), "summary", "ok")));
+            CommonResponse.success(
+                new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of("scheduledJobs", 3))));
 
     mockMvc
         .perform(
@@ -149,7 +140,8 @@ class ConsoleDryRunPlanControllerTest {
                 .content("{\"tenantId\":\"ta\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.summary").value("ok"))
+        .andExpect(jsonPath("$.data.level").value("L1"))
+        .andExpect(jsonPath("$.data.summary.scheduledJobs").value(3))
         .andExpect(jsonPath("$.data.findings").isArray())
         // 关键负向断言:不能有嵌套 data.data / data.code 这条路径
         .andExpect(jsonPath("$.data.data").doesNotExist())
@@ -163,11 +155,7 @@ class ConsoleDryRunPlanControllerTest {
     // 不能把它当 success(payload) 让 FE 误以为成功。
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
-        .thenReturn(
-            Map.of(
-                "success", false,
-                "code", "BUSINESS_ERROR",
-                "message", "dry-run rejected"));
+        .thenReturn(CommonResponse.failure(ResultCode.BUSINESS_ERROR, "dry-run rejected"));
 
     mockMvc
         .perform(

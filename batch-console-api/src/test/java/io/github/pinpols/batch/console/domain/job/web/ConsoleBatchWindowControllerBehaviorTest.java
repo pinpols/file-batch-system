@@ -18,11 +18,11 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchWindowApplicationService;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowUpdateRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchWindowResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -68,7 +68,22 @@ class ConsoleBatchWindowControllerBehaviorTest {
   @Test
   void createShouldReturnRow() throws Exception {
     when(service.create(any(BatchWindowCreateRequest.class)))
-        .thenReturn(Map.of("id", 1L, "windowCode", "always-open"));
+        .thenReturn(
+            new ConsoleBatchWindowResponse(
+                1L,
+                "ta",
+                "always-open",
+                null,
+                "Asia/Shanghai",
+                "00:00:00",
+                "23:59:00",
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null));
     mockMvc
         .perform(
             post("/api/console/batch-windows")
@@ -76,12 +91,29 @@ class ConsoleBatchWindowControllerBehaviorTest {
                 .content(
                     "{\"tenantId\":\"ta\",\"windowCode\":\"always-open\",\"timezone\":\"Asia/Shanghai\",\"startTime\":\"00:00\",\"endTime\":\"23:59\"}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.windowCode").value("always-open"));
+        // wire 红线：batch_window 历史响应键为 snake_case，故断言 window_code 而非 windowCode。
+        .andExpect(jsonPath("$.data.window_code").value("always-open"));
   }
 
   @Test
   void updateShouldPassPathId() throws Exception {
-    when(service.update(eq(7L), any(BatchWindowUpdateRequest.class))).thenReturn(Map.of("id", 7L));
+    when(service.update(eq(7L), any(BatchWindowUpdateRequest.class)))
+        .thenReturn(
+            new ConsoleBatchWindowResponse(
+                7L,
+                "ta",
+                "w1",
+                null,
+                "Asia/Shanghai",
+                "00:00:00",
+                "23:59:00",
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null));
     mockMvc
         .perform(
             put("/api/console/batch-windows/7")

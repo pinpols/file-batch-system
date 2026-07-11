@@ -2,10 +2,12 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -32,9 +34,11 @@ public class ConsoleInstanceController {
       aggregateType = "job_instance",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> cancel(
+  public CommonResponse<ConsoleInstanceActionResponse> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "cancel"));
+    return responseFactory.success(
+        ConsoleInstanceActionResponse.from(
+            orchestratorProxyService.instanceAction(id, tenantId, "cancel")));
   }
 
   @PostMapping("/{id}/terminate")
@@ -43,10 +47,11 @@ public class ConsoleInstanceController {
       aggregateType = "job_instance",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> terminate(
+  public CommonResponse<ConsoleInstanceActionResponse> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        orchestratorProxyService.instanceAction(id, tenantId, "terminate"));
+        ConsoleInstanceActionResponse.from(
+            orchestratorProxyService.instanceAction(id, tenantId, "terminate")));
   }
 
   @PostMapping("/{id}/pause")
@@ -55,9 +60,11 @@ public class ConsoleInstanceController {
       aggregateType = "job_instance",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> pause(
+  public CommonResponse<ConsoleInstanceActionResponse> pause(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "pause"));
+    return responseFactory.success(
+        ConsoleInstanceActionResponse.from(
+            orchestratorProxyService.instanceAction(id, tenantId, "pause")));
   }
 
   @PostMapping("/{id}/resume")
@@ -66,9 +73,11 @@ public class ConsoleInstanceController {
       aggregateType = "job_instance",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> resume(
+  public CommonResponse<ConsoleInstanceActionResponse> resume(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "resume"));
+    return responseFactory.success(
+        ConsoleInstanceActionResponse.from(
+            orchestratorProxyService.instanceAction(id, tenantId, "resume")));
   }
 
   @PostMapping("/partitions/{id}/cancel")
@@ -77,10 +86,11 @@ public class ConsoleInstanceController {
       aggregateType = "job_partition",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> cancelPartition(
+  public CommonResponse<ConsolePartitionActionResponse> cancelPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        orchestratorProxyService.partitionAction(id, tenantId, "cancel"));
+        ConsolePartitionActionResponse.from(
+            orchestratorProxyService.partitionAction(id, tenantId, "cancel")));
   }
 
   @PostMapping("/partitions/{id}/retry")
@@ -89,9 +99,11 @@ public class ConsoleInstanceController {
       aggregateType = "job_partition",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> retryPartition(
+  public CommonResponse<ConsolePartitionActionResponse> retryPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(orchestratorProxyService.partitionAction(id, tenantId, "retry"));
+    return responseFactory.success(
+        ConsolePartitionActionResponse.from(
+            orchestratorProxyService.partitionAction(id, tenantId, "retry")));
   }
 
   @PostMapping("/{id}/partitions/retry-failed")
@@ -100,8 +112,10 @@ public class ConsoleInstanceController {
       aggregateType = "job_instance",
       aggregateId = "#id",
       targetTenantParam = "#tenantId")
-  public CommonResponse<Map<String, Object>> retryFailedPartitions(
+  public CommonResponse<ConsoleRetryFailedPartitionsResponse> retryFailedPartitions(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(orchestratorProxyService.retryFailedPartitions(id, tenantId));
+    return responseFactory.success(
+        ConsoleRetryFailedPartitionsResponse.from(
+            orchestratorProxyService.retryFailedPartitions(id, tenantId)));
   }
 }

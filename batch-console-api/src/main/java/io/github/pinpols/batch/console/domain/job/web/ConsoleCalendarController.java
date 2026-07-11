@@ -6,11 +6,12 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleCalendarApp
 import io.github.pinpols.batch.console.domain.job.web.request.CalendarSaveRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.HolidayImportRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.HolidaySaveRequest;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleCalendarResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleHolidayResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -29,7 +30,7 @@ public class ConsoleCalendarController {
 
   @GetMapping
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<ConsoleCalendarResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "calendarCode", required = false) String calendarCode,
       @RequestParam(value = "enabled", required = false) Boolean enabled,
@@ -40,13 +41,13 @@ public class ConsoleCalendarController {
   }
 
   @PostMapping
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ConsoleCalendarResponse> create(
       @Valid @RequestBody CalendarSaveRequest request) {
     return responseFactory.success(calendarApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
-  public CommonResponse<Map<String, Object>> update(
+  public CommonResponse<ConsoleCalendarResponse> update(
       @PathVariable Long id, @Valid @RequestBody CalendarSaveRequest request) {
     return responseFactory.success(calendarApplicationService.update(id, request));
   }
@@ -62,7 +63,7 @@ public class ConsoleCalendarController {
 
   @GetMapping("/{id}/holidays")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<List<Map<String, Object>>> holidays(
+  public CommonResponse<List<ConsoleHolidayResponse>> holidays(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(calendarApplicationService.holidays(id, tenantId));
   }
@@ -75,7 +76,7 @@ public class ConsoleCalendarController {
   }
 
   @PutMapping("/{id}/holidays/{holidayId}")
-  public CommonResponse<Map<String, Object>> updateHoliday(
+  public CommonResponse<ConsoleHolidayResponse> updateHoliday(
       @PathVariable Long id,
       @PathVariable Long holidayId,
       @Valid @RequestBody HolidaySaveRequest request) {

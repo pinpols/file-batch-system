@@ -2,12 +2,12 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,12 +37,12 @@ public class ConsoleResultVersionController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<List<Map<String, Object>>> list(
+  public CommonResponse<List<ConsoleResultVersionResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<List<ConsoleResultVersionResponse>> resp =
         proxyClient()
             .get()
             .uri(
@@ -52,19 +52,16 @@ public class ConsoleResultVersionController {
                 businessKey,
                 limit)
             .retrieve()
-            .body(unwrapToMap());
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> data =
-        resp == null ? List.of() : (List<Map<String, Object>>) resp.getOrDefault("data", List.of());
-    return responseFactory.success(data);
+            .body(new ParameterizedTypeReference<>() {});
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   @GetMapping("/effective")
-  public CommonResponse<Map<String, Object>> effective(
+  public CommonResponse<ConsoleResultVersionResponse> effective(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<ConsoleResultVersionResponse> resp =
         proxyClient()
             .get()
             .uri(
@@ -73,21 +70,21 @@ public class ConsoleResultVersionController {
                 resolved,
                 businessKey)
             .retrieve()
-            .body(unwrapToMap());
+            .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @GetMapping("/{id}")
-  public CommonResponse<Map<String, Object>> detail(
+  public CommonResponse<ConsoleResultVersionResponse> detail(
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<ConsoleResultVersionResponse> resp =
         proxyClient()
             .get()
             .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
             .retrieve()
-            .body(unwrapToMap());
+            .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -95,12 +92,12 @@ public class ConsoleResultVersionController {
   @PostMapping("/{id}/promote")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
   @Idempotent
-  public CommonResponse<Map<String, Object>> promote(
+  public CommonResponse<ConsoleResultVersionResponse> promote(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<ConsoleResultVersionResponse> resp =
         proxyClient()
             .post()
             .uri(
@@ -108,19 +105,19 @@ public class ConsoleResultVersionController {
                 id,
                 resolved)
             .retrieve()
-            .body(unwrapToMap());
+            .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/{id}/reject")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
   @Idempotent
-  public CommonResponse<Map<String, Object>> reject(
+  public CommonResponse<ConsoleResultVersionResponse> reject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<ConsoleResultVersionResponse> resp =
         proxyClient()
             .post()
             .uri(
@@ -128,7 +125,7 @@ public class ConsoleResultVersionController {
                 id,
                 resolved)
             .retrieve()
-            .body(unwrapToMap());
+            .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -136,7 +133,8 @@ public class ConsoleResultVersionController {
     return orchestratorInternalRestClient.build();
   }
 
-  private static ParameterizedTypeReference<Map<String, Object>> unwrapToMap() {
+  private static ParameterizedTypeReference<CommonResponse<ConsoleResultVersionResponse>>
+      typedResponse() {
     return new ParameterizedTypeReference<>() {};
   }
 }
