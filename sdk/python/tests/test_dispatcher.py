@@ -289,6 +289,9 @@ async def test_handler_exception_reports_failure_not_leaks(httpx_mock: HTTPXMock
     body = _report_body(report_reqs)
     assert body["success"] is False
     assert "kaboom" in body["resultSummary"]
+    # #P2 errorCode 词表统一:未捕获 handler 异常 → protocol 常量 EXECUTION_FAILED
+    # (不再是语言私有的 "SdkDispatchError"),跨语言 SDK 告警可聚合。
+    assert body["errorCode"] == "EXECUTION_FAILED"
 
 
 async def test_claim_409_skips_handler_and_report(httpx_mock: HTTPXMock) -> None:

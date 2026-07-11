@@ -118,6 +118,13 @@ def _schema_major(schema: str) -> str:
 # 缺省必须 accept,不能拒。
 DEFAULT_SCHEMA_VERSION = "v1"
 
+# 无显式 errorCode 时的规范回退。对齐 wire-protocol §B「task 执行结果错误码」表 +
+# Java ``SdkErrorCode.EXECUTION_FAILED`` + Go ``protocol.ErrorCodeExecutionFailed`` +
+# TS ``ErrorCode.EXECUTION_FAILED`` + Rust ``error_code::EXECUTION_FAILED``。
+# 早先此处用 ``"SdkDispatchError"`` 兜底,平台按 errorCode 聚合告警时 Python SDK 的
+# 失败与其它语言碎片化不可归并;现统一到 protocol 常量。
+DEFAULT_ERROR_CODE = "EXECUTION_FAILED"
+
 
 class DispatchDisposition(Enum):
     """dispatcher 对单条派单消息的处理决定;``KafkaTaskConsumer`` 据此决定 offset 提交。
@@ -560,8 +567,9 @@ class TaskDispatcher:
         # errorCode(机器可读分类)。已废弃 errorMessage,平台读不到。
         # handler 通过 SdkTaskResult.fail(code, ...) 给出的 errorCode/errorClass
         # 放在 result.output;无 result(no-handler / handler 抛错)回落到
-        # SdkDispatchError。
-        error_code = "SdkDispatchError"
+        # protocol 常量 EXECUTION_FAILED(#P2 errorCode 词表统一,对齐 Java/Go/TS/Rust,
+        # 不再用语言私有的 "SdkDispatchError"),原因文本保留在 resultSummary.message 可诊断。
+        error_code = DEFAULT_ERROR_CODE
         outputs: dict[str, Any] = {}
         if result is not None:
             outputs = dict(result.output)

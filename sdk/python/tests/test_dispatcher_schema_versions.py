@@ -77,6 +77,29 @@ async def test_unsupported_schema_versions_dropped(
         await http.close()
 
 
+@pytest.mark.parametrize("schema", [" v3", "\tv3", "!v3", "\ufeffv3", " v1", "-v1", ".v2"])
+async def test_malformed_schema_versions_rejected(
+    schema: str, caplog: pytest.LogCaptureFixture, httpx_mock: HTTPXMock
+) -> None:
+    """P1:首字符非字母数字的畸形 schemaVersion(前导空格/标点/BOM)必须 reject,
+    不能因 ``strip()`` 或 fallback 被误当 v1 accept —— 违反 fixture 18
+    sdkMustNot "process a v3 message under v1 assumptions"。含 " v1":哪怕主版本
+    看似受支持,前导空白也是畸形,必须拒(与 Java resolvedMajor 返原串同语义)。
+    """
+    cfg = _cfg()
+    http = PlatformHttpClient(cfg)
+    dispatcher = TaskDispatcher(cfg, http)
+    try:
+        caplog.set_level("WARNING", logger="batch_worker_sdk.dispatcher.dispatcher")
+        disposition = await dispatcher.on_message(_msg(55, schema))
+        assert disposition is DispatchDisposition.RETRY_LATER
+        assert dispatcher.in_flight_count() == 0
+        assert httpx_mock.get_requests() == []
+        assert any("unsupported schemaVersion" in r.message for r in caplog.records)
+    finally:
+        await http.close()
+
+
 async def test_missing_or_blank_schema_accepted_as_v1(httpx_mock: HTTPXMock) -> None:
     """缺字段 / 空白 schemaVersion 按 v1 解析并 accept(对齐 Java + 契约 fixture 16)。"""
 
