@@ -985,25 +985,27 @@ mod tests {
             assigned_topics(&assignment)
         );
 
-        // Produce three records: a good one, a foreign-tenant one (must be
-        // dropped), and a bad-schema one (must be rejected).
+        // Produce a good record then a foreign-tenant record on the SAME (single)
+        // partition. A withhold (foreign-tenant / bad-schema) seeks back AND pauses
+        // the partition, so at most ONE withheld disposition is observable per run
+        // on one partition — a subsequent record after the pause is never delivered.
+        // We therefore assert good→Accepted+committed and foreign→dropped+not-advanced.
+        // RejectedSchema is the *same* RewindBlock plumbing as DroppedForeignTenant
+        // (see `offset_action`); its unit coverage is
+        // `offset_action_withholds_and_blocks_unconsumable_records`.
         let good =
             br#"{"taskId":1,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#;
         let foreign =
             br#"{"taskId":2,"tenantId":"tenant-b","schemaVersion":"v1","workerType":"import"}"#;
-        let bad_schema =
-            br#"{"taskId":3,"tenantId":"tenant-a","schemaVersion":"v3","workerType":"import"}"#;
-        for payload in [good.as_slice(), foreign.as_slice(), bad_schema.as_slice()] {
+        for payload in [good.as_slice(), foreign.as_slice()] {
             send_record(&producer, &topic, payload);
         }
 
-        // Consume and assert: only the good record is accepted + committed.
-        // Poll for up to ~15s or until all three decisions have been observed.
+        // Poll for up to ~15s or until both decisions have been observed.
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         let mut dispositions = Vec::<String>::new();
         let mut saw_good = false;
         let mut saw_foreign = false;
-        let mut saw_bad_schema = false;
         while std::time::Instant::now() < deadline {
             let disp = consumer.poll_once(&if_read).expect("poll");
             dispositions.push(format!("{disp:?}"));
@@ -1012,10 +1014,9 @@ mod tests {
                     saw_good = accepted.lock().unwrap().iter().any(|t| t == "1");
                 }
                 Some(RecordDisposition::DroppedForeignTenant) => saw_foreign = true,
-                Some(RecordDisposition::RejectedSchema) => saw_bad_schema = true,
                 _ => {}
             }
-            if saw_good && saw_foreign && saw_bad_schema {
+            if saw_good && saw_foreign {
                 break;
             }
         }
@@ -1030,16 +1031,8 @@ mod tests {
             "foreign-tenant record must be dropped; dispositions={dispositions:?}"
         );
         assert!(
-            saw_bad_schema,
-            "unknown-schema record must be rejected; dispositions={dispositions:?}"
-        );
-        assert!(
             !got.contains(&"2".to_string()),
             "foreign-tenant record must be dropped (§1.9)"
-        );
-        assert!(
-            !got.contains(&"3".to_string()),
-            "unknown-schema record must be rejected (§A)"
         );
     }
 }
