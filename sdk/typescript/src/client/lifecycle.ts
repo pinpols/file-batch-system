@@ -363,6 +363,10 @@ export class WorkerLifecycle {
           // ADR-037 §决策三 — cooperative cancel lands here as a *cancelled*
           // terminal report, not a failure.
           if (e instanceof SdkTaskStopped) {
+            this.#logger.info("handler stopped at checkpoint (cooperative cancel)", {
+              taskId: msg.taskId,
+              breakPosition: e.breakPosition,
+            });
             result = {
               success: false,
               errorCode: ErrorCode.CANCELLED,
@@ -370,6 +374,15 @@ export class WorkerLifecycle {
               outputs: { breakPosition: e.breakPosition },
             };
           } else {
+            // Handler threw a business exception → EXECUTION_FAILED report. Log the
+            // stack locally: the platform only sees success=false, so a worker with
+            // no log leaves "why does this task keep failing?" unanswerable. Parity
+            // with Go/Python/Java which all ERROR-log here.
+            this.#logger.error("handler execution failed", {
+              taskId: msg.taskId,
+              errorCode: ErrorCode.EXECUTION_FAILED,
+              error: e instanceof Error ? (e.stack ?? e.message) : String(e),
+            });
             result = {
               success: false,
               errorCode: ErrorCode.EXECUTION_FAILED,
@@ -440,6 +453,10 @@ export class WorkerLifecycle {
     if (this.#draining && this.#fsm === "DRAINING" && this.#inFlight.size === 0) {
       // already stopping with nothing in flight — still ensure deactivate ran
     }
+    this.#logger.info("graceful stop starting", {
+      timeoutMs,
+      inFlight: this.#inFlight.size,
+    });
     const plan = planStop(timeoutMs);
     this.#draining = true;
     this.#setFsm("DRAINING");

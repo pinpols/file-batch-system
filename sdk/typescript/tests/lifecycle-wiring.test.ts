@@ -174,3 +174,38 @@ test("lifecycle: partitionInvocationId is read from the dispatch message and sen
   assert.equal(body.partitionInvocationId, "inv-9", "report echoes the same invocation id");
   await lc.stop(100);
 });
+
+test("lifecycle: a handler business exception is ERROR-logged locally (parity w/ Go/Py/Java)", async () => {
+  const platform = new FakePlatform({ claim: { effectiveConfig: {} } });
+  platform.feedMessages({ taskId: "t-boom", tenantId: "tenant-A", workerType: "IMPORT" });
+  const errors: Array<{ msg: string; ctx?: Record<string, unknown> }> = [];
+  const capturing = {
+    info: () => {},
+    warn: () => {},
+    error: (msg: string, ctx?: Record<string, unknown>) => errors.push({ msg, ctx }),
+  };
+  const lc = new WorkerLifecycle({
+    config: baseConfig,
+    transport: platform.transport,
+    consumer: platform.consumer,
+    handler: {
+      execute: async () => {
+        throw new Error("kaboom");
+      },
+    },
+    logger: capturing,
+    installSignalHandlers: false,
+  });
+  await lc.start();
+  await new Promise((r) => setTimeout(r, 10));
+
+  // the failure must still be reported to the platform...
+  const report = platform.transport.calls.find((c) => c.op === "report")!;
+  assert.ok(report, "a failure report is sent");
+  // ...AND surfaced in the local log with the stack, so operators can see WHY.
+  const hit = errors.find((e) => e.msg === "handler execution failed");
+  assert.ok(hit, `handler failure must be ERROR-logged; got ${JSON.stringify(errors)}`);
+  assert.equal(hit!.ctx?.taskId, "t-boom");
+  assert.ok(String(hit!.ctx?.error).includes("kaboom"), "log carries the error detail");
+  await lc.stop(100);
+});
