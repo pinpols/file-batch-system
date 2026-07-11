@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./kafka": {
+      "types": "./dist/kafka/kafkaConsumer.d.ts",
+      "import": "./dist/kafka/kafkaConsumer.js"
     }
   },
   "types": "./dist/index.d.ts",
