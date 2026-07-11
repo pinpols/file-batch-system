@@ -12024,13 +12024,18 @@ components:
       properties:
         tenantId:
           type: string
+          description: 租户 id;可由请求体或请求头携带(两者都给时须一致)。
+        sessionId:
+          type: string
+          description: 会话 id,多轮对话续接时回传上一轮响应的 sessionId;不传则后端以本次 requestId 起新会话。
         prompt:
           type: string
-        model:
-          type: string
-        conversationId:
-          type: string
-      required: [tenantId, prompt]
+          description: 用户问题(必填,@NotBlank)。
+        context:
+          type: object
+          additionalProperties: true
+          description: 可选的附加上下文,任意 JSON 键值对(Map<String,Object>)。
+      required: [prompt]
     AiChatResponse:
       type: object
       properties:
@@ -12064,7 +12069,7 @@ components:
           type: string
           nullable: true
           description: 拒绝原因；APPROVED 时为 null，被门禁拒绝时给出原因。
-      required: [requestId, traceId, sessionId, promptCategory, promptDecision, modelName, answer]
+      required: [requestId, traceId, sessionId, promptCategory, promptDecision, modelName, answer, refusalReason]
     AiAuditLogResponse:
       type: object
       properties:
