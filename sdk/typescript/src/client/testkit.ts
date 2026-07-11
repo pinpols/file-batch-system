@@ -86,8 +86,12 @@ export class FakeTransport implements Transport {
     await resolveResponder(this.#script.deactivate ?? undefined);
   }
 
-  async claim(taskId: string, idempotencyKey: string): Promise<ClaimResponse> {
-    this.#record("claim", taskId, idempotencyKey);
+  async claim(
+    taskId: string,
+    idempotencyKey: string,
+    partitionInvocationId?: string | null,
+  ): Promise<ClaimResponse> {
+    this.#record("claim", taskId, idempotencyKey, partitionInvocationId ?? null);
     return resolveResponder(
       this.#script.claim ?? { effectiveConfig: {}, leaseUntil: null },
     );
