@@ -94,8 +94,14 @@ test("lifecycle: production callback returns 'withhold' for a foreign-tenant mes
 
 test("lifecycle: at capacity, the second message yields 'backpressure' (seek+pause, not commit)", async () => {
   const platform = new FakePlatform({ claim: { effectiveConfig: {} } });
-  // handler blocks forever so the first task stays in-flight and fills capacity.
-  const handler: TaskHandler = { execute: () => new Promise(() => {}) };
+  // handler holds t1 in-flight (fills capacity) via a controllable gate; released
+  // after the assertion so nothing leaks a forever-pending promise into node:test's
+  // event loop (which would flag this and every later async test in the file).
+  let releaseT1!: () => void;
+  const t1Gate = new Promise<void>((r) => {
+    releaseT1 = r;
+  });
+  const handler: TaskHandler = { execute: () => t1Gate.then(() => taskSuccess()) };
   const consumer = new CapturingConsumer([
     rec({ taskId: "t1", tenantId: "tenant-A", workerType: "IMPORT" }),
     rec({ taskId: "t2", tenantId: "tenant-A", workerType: "IMPORT" }),
@@ -111,7 +117,8 @@ test("lifecycle: at capacity, the second message yields 'backpressure' (seek+pau
   await lc.start();
   await new Promise((r) => setTimeout(r, 10));
   assert.deepEqual(consumer.dispositions, ["commit", "backpressure"]);
-  await lc.stop(50);
+  releaseT1();
+  await lc.stop(100);
 });
 
 test("lifecycle: claim 409 (idempotent) SKIPS handler execution and report", async () => {
