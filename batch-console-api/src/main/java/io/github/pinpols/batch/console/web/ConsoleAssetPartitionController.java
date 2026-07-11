@@ -4,10 +4,9 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.web.response.ops.AssetPartitionReadinessResponse;
 import java.time.LocalDate;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,12 +30,12 @@ public class ConsoleAssetPartitionController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping("/readiness")
-  public CommonResponse<Map<String, Object>> readiness(
+  public CommonResponse<AssetPartitionReadinessResponse> readiness(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("jobCode") String jobCode,
       @RequestParam("bizDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    AssetPartitionReadinessResponse resp =
         proxyClient()
             .get()
             .uri(
@@ -45,15 +44,11 @@ public class ConsoleAssetPartitionController {
                 jobCode,
                 bizDate)
             .retrieve()
-            .body(unwrapToMap());
-    return responseFactory.success(resp == null ? Map.of() : resp);
+            .body(AssetPartitionReadinessResponse.class);
+    return responseFactory.success(resp);
   }
 
   private RestClient proxyClient() {
     return orchestratorInternalRestClient.build();
-  }
-
-  private static ParameterizedTypeReference<Map<String, Object>> unwrapToMap() {
-    return new ParameterizedTypeReference<>() {};
   }
 }

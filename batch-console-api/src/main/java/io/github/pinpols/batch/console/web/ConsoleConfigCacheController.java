@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import java.util.Map;
+import io.github.pinpols.batch.console.web.response.CacheEvictionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -38,50 +38,51 @@ public class ConsoleConfigCacheController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/evict-job-definition")
-  public CommonResponse<Map<String, String>> evictJobDefinition(
+  public CommonResponse<CacheEvictionResponse> evictJobDefinition(
       @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
     cacheInvalidationService.evictJobDefinition(tenantId, jobCode);
-    return responseFactory.success(Map.of("evicted", "job-definition:" + tenantId + ":" + jobCode));
+    return responseFactory.success(
+        new CacheEvictionResponse("job-definition:" + tenantId + ":" + jobCode));
   }
 
   @PostMapping("/evict-all-job-definitions")
-  public CommonResponse<Map<String, String>> evictAllJobDefinitions(
+  public CommonResponse<CacheEvictionResponse> evictAllJobDefinitions(
       @RequestParam("tenantId") String tenantId) {
     cacheInvalidationService.evictAllJobDefinitions(tenantId);
-    return responseFactory.success(Map.of("evicted", "job-definition:" + tenantId + ":*"));
+    return responseFactory.success(new CacheEvictionResponse("job-definition:" + tenantId + ":*"));
   }
 
   @PostMapping("/evict-workflow-definition")
-  public CommonResponse<Map<String, String>> evictWorkflowDefinition(
+  public CommonResponse<CacheEvictionResponse> evictWorkflowDefinition(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("workflowCode") String workflowCode) {
     cacheInvalidationService.evictWorkflowDefinition(tenantId, workflowCode);
     return responseFactory.success(
-        Map.of("evicted", "workflow-definition:" + tenantId + ":" + workflowCode));
+        new CacheEvictionResponse("workflow-definition:" + tenantId + ":" + workflowCode));
   }
 
   @PostMapping("/evict-business-calendar")
-  public CommonResponse<Map<String, String>> evictBusinessCalendar(
+  public CommonResponse<CacheEvictionResponse> evictBusinessCalendar(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("calendarCode") String calendarCode) {
     cacheInvalidationService.evictBusinessCalendar(tenantId, calendarCode);
     return responseFactory.success(
-        Map.of("evicted", "business-calendar:" + tenantId + ":" + calendarCode));
+        new CacheEvictionResponse("business-calendar:" + tenantId + ":" + calendarCode));
   }
 
   @PostMapping("/evict-batch-window")
-  public CommonResponse<Map<String, String>> evictBatchWindow(
+  public CommonResponse<CacheEvictionResponse> evictBatchWindow(
       @RequestParam("tenantId") String tenantId, @RequestParam("windowCode") String windowCode) {
     cacheInvalidationService.evictBatchWindow(tenantId, windowCode);
     return responseFactory.success(
-        Map.of("evicted", "batch-window:" + tenantId + ":" + windowCode));
+        new CacheEvictionResponse("batch-window:" + tenantId + ":" + windowCode));
   }
 
   @PostMapping("/evict-quota-policies")
-  public CommonResponse<Map<String, String>> evictQuotaPolicies(
+  public CommonResponse<CacheEvictionResponse> evictQuotaPolicies(
       @RequestParam("tenantId") String tenantId) {
     cacheInvalidationService.evictQuotaPolicies(tenantId);
     return responseFactory.success(
-        Map.of("evicted", "tenant-quota-policy:" + tenantId + ":enabled-first"));
+        new CacheEvictionResponse("tenant-quota-policy:" + tenantId + ":enabled-first"));
   }
 }

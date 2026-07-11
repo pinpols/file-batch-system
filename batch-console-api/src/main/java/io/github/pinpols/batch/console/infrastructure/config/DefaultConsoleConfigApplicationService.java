@@ -29,6 +29,8 @@ import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
 import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
+import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
 import java.time.Instant;
@@ -510,13 +512,9 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   }
 
   @Override
-  public Map<String, Object> configDependencies(
+  public ConfigDependenciesResponse configDependencies(
       String tenantId, String configType, String configCode) {
     String resolved = resolveTenant(tenantId);
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put(KEY_CONFIG_TYPE, configType);
-    result.put("configCode", configCode);
-
     List<ConfigDependentView> dependentJobs =
         switch (configType.toUpperCase()) {
           case "QUEUE", "RESOURCE_QUEUE" ->
@@ -528,48 +526,40 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
           case "WORKER_GROUP" -> dashboardQueryMapper.jobsByWorkerGroup(resolved, configCode);
           default -> List.of();
         };
-    result.put(
-        "dependentJobs",
+    return new ConfigDependenciesResponse(
+        configType,
+        configCode,
         dependentJobs.stream()
             .map(
-                j ->
-                    Map.of(
-                        "id", j.id(),
-                        "code", j.code(),
-                        "name", j.name() != null ? j.name() : ""))
-            .toList());
-    result.put("dependentJobCount", dependentJobs.size());
-    return result;
+                job ->
+                    new ConfigDependenciesResponse.DependentJobResponse(
+                        job.id(), job.code(), job.name() == null ? "" : job.name()))
+            .toList(),
+        dependentJobs.size());
   }
 
   @Override
-  public Map<String, Object> diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB) {
+  public ConfigReleaseDiffResponse diffConfigReleases(
+      String tenantId, Long releaseIdA, Long releaseIdB) {
     String resolved = resolveTenant(tenantId);
     ConfigReleaseEntity a = loadRelease(resolved, releaseIdA);
     ConfigReleaseEntity b = loadRelease(resolved, releaseIdB);
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("releaseA", toConfigReleaseResponse(a));
-    result.put("releaseB", toConfigReleaseResponse(b));
-
     // JSON payload diff:容忍历史坏 JSON,坏数据按 null 比较(否则穿透 500)。
     Object payloadA = safeParseJson(a.getConfigPayload());
     Object payloadB = safeParseJson(b.getConfigPayload());
     boolean payloadChanged = !Objects.equals(payloadA, payloadB);
-    result.put("payloadChanged", payloadChanged);
-    if (payloadChanged) {
-      result.put("payloadA", payloadA);
-      result.put("payloadB", payloadB);
-    }
-
     // Gray scope diff
     Object grayA = safeParseJson(a.getGrayScope());
     Object grayB = safeParseJson(b.getGrayScope());
     boolean grayChanged = !Objects.equals(grayA, grayB);
-    result.put("grayScopeChanged", grayChanged);
-
-    // Status diff
-    result.put("statusChanged", !Objects.equals(a.getConfigStatus(), b.getConfigStatus()));
-    return result;
+    return new ConfigReleaseDiffResponse(
+        toConfigReleaseResponse(a),
+        toConfigReleaseResponse(b),
+        payloadChanged,
+        payloadChanged ? payloadA : null,
+        payloadChanged ? payloadB : null,
+        grayChanged,
+        !Objects.equals(a.getConfigStatus(), b.getConfigStatus()));
   }
 
   private ConsoleConfigChangeLogResponse toConfigChangeLogResponse(ConfigChangeLogEntity entity) {

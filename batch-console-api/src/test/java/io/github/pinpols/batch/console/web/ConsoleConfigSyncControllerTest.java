@@ -19,8 +19,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncExportRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncImportRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncPreviewRequest;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncExportResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncImportResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncLogResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncPreviewResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncSummaryResponse;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,7 +63,8 @@ class ConsoleConfigSyncControllerTest {
 
   @Test
   void exportShouldDelegateWithIdempotencyHeader() throws Exception {
-    when(service.export(any(ConfigSyncExportRequest.class))).thenReturn(Map.of("bundleSize", 10));
+    when(service.export(any(ConfigSyncExportRequest.class)))
+        .thenReturn(new ConfigSyncExportResponse("ta", "dev", "prod", summary(), null));
     mockMvc
         .perform(
             post("/api/console/config/sync/export")
@@ -67,14 +73,15 @@ class ConsoleConfigSyncControllerTest {
                 .content(
                     "{\"sourceTenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\"}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.bundleSize").value(10));
+        .andExpect(jsonPath("$.data.sourceTenantId").value("ta"))
+        .andExpect(jsonPath("$.data.summary.jobDefinitions").value(1));
     verify(service).export(any(ConfigSyncExportRequest.class));
   }
 
   @Test
   void previewShouldDelegateWithIdempotencyHeader() throws Exception {
     when(service.preview(any(ConfigSyncPreviewRequest.class)))
-        .thenReturn(Map.of("willCreate", 5, "willSkip", 2));
+        .thenReturn(new ConfigSyncPreviewResponse("tb", "ta", "dev", "prod", summary()));
     mockMvc
         .perform(
             post("/api/console/config/sync/preview")
@@ -89,7 +96,7 @@ class ConsoleConfigSyncControllerTest {
   @Test
   void importBundleShouldDelegateWithBundleAndDryRun() throws Exception {
     when(service.importBundle(any(ConfigSyncImportRequest.class)))
-        .thenReturn(Map.of("totalTenants", 1, "successTenants", 1));
+        .thenReturn(new ConfigSyncImportResponse(7L, summary(), null));
     mockMvc
         .perform(
             post("/api/console/config/sync/import")
@@ -99,16 +106,37 @@ class ConsoleConfigSyncControllerTest {
                     "{\"tenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\","
                         + "\"targetTenantIds\":[\"tb\"],\"dryRun\":true,\"bundle\":{}}"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.totalTenants").value(1));
+        .andExpect(jsonPath("$.data.syncLogId").value(7));
     verify(service).importBundle(any(ConfigSyncImportRequest.class));
   }
 
   @Test
   void logsShouldPassTenantAndLimit() throws Exception {
-    when(service.logs("ta", 50)).thenReturn(List.of(Map.of("ts", "2026-05-20T10:00:00Z")));
+    when(service.logs("ta", 50))
+        .thenReturn(
+            List.of(
+                new ConfigSyncLogResponse(
+                    1L,
+                    "ta",
+                    "IMPORT",
+                    "dev",
+                    "prod",
+                    "jobDefinitions",
+                    1,
+                    1,
+                    0,
+                    0,
+                    "SUCCESS",
+                    null,
+                    "admin",
+                    Instant.parse("2026-05-20T10:00:00Z"))));
     mockMvc
         .perform(get("/api/console/config/sync/logs").param("tenantId", "ta"))
         .andExpect(status().isOk());
     verify(service).logs("ta", 50);
+  }
+
+  private static ConfigSyncSummaryResponse summary() {
+    return new ConfigSyncSummaryResponse(1, 2, 3, 4, 5);
   }
 }

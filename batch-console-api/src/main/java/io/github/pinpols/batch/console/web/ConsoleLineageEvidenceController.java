@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import java.util.Map;
+import io.github.pinpols.batch.console.web.response.ops.LineageEvidenceResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,11 +25,11 @@ public class ConsoleLineageEvidenceController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping("/result-versions/{id}")
-  public CommonResponse<Map<String, Object>> byResultVersion(
+  public CommonResponse<LineageEvidenceResponse> byResultVersion(
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<LineageEvidenceResponse> resp =
         proxyClient()
             .get()
             .uri(
@@ -37,16 +37,16 @@ public class ConsoleLineageEvidenceController {
                 id,
                 resolved)
             .retrieve()
-            .body(unwrapToMap());
+            .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @GetMapping("/effective")
-  public CommonResponse<Map<String, Object>> byEffectiveBusinessKey(
+  public CommonResponse<LineageEvidenceResponse> byEffectiveBusinessKey(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<LineageEvidenceResponse> resp =
         proxyClient()
             .get()
             .uri(
@@ -55,7 +55,7 @@ public class ConsoleLineageEvidenceController {
                 resolved,
                 businessKey)
             .retrieve()
-            .body(unwrapToMap());
+            .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -63,7 +63,8 @@ public class ConsoleLineageEvidenceController {
     return orchestratorInternalRestClient.build();
   }
 
-  private static ParameterizedTypeReference<Map<String, Object>> unwrapToMap() {
+  private static ParameterizedTypeReference<CommonResponse<LineageEvidenceResponse>>
+      typedResponse() {
     return new ParameterizedTypeReference<>() {};
   }
 }

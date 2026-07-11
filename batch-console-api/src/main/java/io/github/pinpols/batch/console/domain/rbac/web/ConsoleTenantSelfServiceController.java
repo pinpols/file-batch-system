@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
+import io.github.pinpols.batch.console.web.response.config.QuotaPolicyResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -45,7 +46,7 @@ public class ConsoleTenantSelfServiceController {
 
   /** 查看当前租户配额策略。 */
   @GetMapping("/quota")
-  public CommonResponse<PageResponse<Map<String, Object>>> quota(
+  public CommonResponse<PageResponse<QuotaPolicyResponse>> quota(
       @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(quotaPolicyService.list(tenantId, null, null, 1, 100));
   }

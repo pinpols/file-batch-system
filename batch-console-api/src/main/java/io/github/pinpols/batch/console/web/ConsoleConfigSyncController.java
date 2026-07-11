@@ -8,9 +8,12 @@ import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncExportRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncImportRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncPreviewRequest;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncExportResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncImportResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncLogResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncPreviewResponse;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -34,28 +37,28 @@ public class ConsoleConfigSyncController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/export")
-  public CommonResponse<Map<String, Object>> export(
+  public CommonResponse<ConfigSyncExportResponse> export(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody ConfigSyncExportRequest request) {
     return responseFactory.success(applicationService.export(request));
   }
 
   @PostMapping("/preview")
-  public CommonResponse<Map<String, Object>> preview(
+  public CommonResponse<ConfigSyncPreviewResponse> preview(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody ConfigSyncPreviewRequest request) {
     return responseFactory.success(applicationService.preview(request));
   }
 
   @PostMapping("/import")
-  public CommonResponse<Map<String, Object>> importBundle(
+  public CommonResponse<ConfigSyncImportResponse> importBundle(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody ConfigSyncImportRequest request) {
     return responseFactory.success(applicationService.importBundle(request));
   }
 
   @GetMapping("/logs")
-  public CommonResponse<List<Map<String, Object>>> logs(
+  public CommonResponse<List<ConfigSyncLogResponse>> logs(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "limit", defaultValue = "50") int limit) {
     return responseFactory.success(applicationService.logs(tenantId, limit));

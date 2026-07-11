@@ -14,6 +14,11 @@ import io.github.pinpols.batch.console.web.request.config.ConfigSyncExportReques
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncImportRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncPreviewRequest;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncExportResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncImportResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncLogResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncPreviewResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigSyncSummaryResponse;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,45 +67,35 @@ public class DefaultConsoleConfigSyncApplicationService
   private final PlatformTransactionManager transactionManager;
 
   @Override
-  public Map<String, Object> export(ConfigSyncExportRequest request) {
+  public ConfigSyncExportResponse export(ConfigSyncExportRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getSourceTenantId());
     ConfigSyncBundlePayload bundle =
         tenantConfigCopyService.buildBundle(tenantId, request.getConfigTypes());
-    return mapOf(
-        "sourceTenantId",
+    return new ConfigSyncExportResponse(
         tenantId,
-        "sourceEnv",
         request.getSourceEnv(),
-        "targetEnv",
         request.getTargetEnv(),
-        KEY_SUMMARY,
-        summarize(bundle),
-        "bundle",
+        ConfigSyncSummaryResponse.from(bundle),
         bundle);
   }
 
   @Override
-  public Map<String, Object> preview(ConfigSyncPreviewRequest request) {
+  public ConfigSyncPreviewResponse preview(ConfigSyncPreviewRequest request) {
     String sourceTenantId = tenantGuard.resolveTenant(request.getSourceTenantId());
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConfigSyncBundlePayload bundle =
         tenantConfigCopyService.buildBundle(sourceTenantId, request.getConfigTypes());
-    return mapOf(
-        KEY_TENANT_ID,
+    return new ConfigSyncPreviewResponse(
         tenantId,
-        "sourceTenantId",
         sourceTenantId,
-        "sourceEnv",
         request.getSourceEnv(),
-        "targetEnv",
         request.getTargetEnv(),
-        KEY_SUMMARY,
-        summarize(bundle));
+        ConfigSyncSummaryResponse.from(bundle));
   }
 
   @Override
   @Transactional
-  public Map<String, Object> importBundle(ConfigSyncImportRequest request) {
+  public ConfigSyncImportResponse importBundle(ConfigSyncImportRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     if (request.getBundle() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.bundle_required");
@@ -115,8 +110,8 @@ public class DefaultConsoleConfigSyncApplicationService
       TenantConfigBatchInitResponse response =
           initApplicationService.batchInit(initRequest, operator, UUID.randomUUID().toString());
       updateLog(logId, tenantId, response);
-      return mapOf(
-          "syncLogId", logId, KEY_SUMMARY, summarize(request.getBundle()), "result", response);
+      return new ConfigSyncImportResponse(
+          logId, ConfigSyncSummaryResponse.from(request.getBundle()), response);
     } catch (RuntimeException ex) {
       markLogFailed(tenantId, logId, totalCount(request.getBundle()), ex.getMessage());
       throw ex;
@@ -124,9 +119,12 @@ public class DefaultConsoleConfigSyncApplicationService
   }
 
   @Override
-  public List<Map<String, Object>> logs(String tenantId, int limit) {
-    return configSyncLogMapper.selectByTenant(
-        tenantGuard.resolveTenant(tenantId), Math.min(Math.max(limit, 1), 200));
+  public List<ConfigSyncLogResponse> logs(String tenantId, int limit) {
+    return configSyncLogMapper
+        .selectByTenant(tenantGuard.resolveTenant(tenantId), Math.min(Math.max(limit, 1), 200))
+        .stream()
+        .map(ConfigSyncLogResponse::from)
+        .toList();
   }
 
   private void markLogFailed(String tenantId, Long logId, int failedItems, String errorMessage) {
@@ -154,8 +152,8 @@ public class DefaultConsoleConfigSyncApplicationService
 
   private Long createLog(
       String tenantId, ConfigSyncImportRequest request, ConfigSyncBundlePayload bundle) {
-    Map<String, Integer> summary = summarize(bundle);
-    int totalItems = summary.values().stream().mapToInt(Integer::intValue).sum();
+    ConfigSyncSummaryResponse summary = ConfigSyncSummaryResponse.from(bundle);
+    int totalItems = summary.total();
     String operator = metadataResolver.current().operatorId();
     Map<String, Object> params =
         mapOf(
@@ -168,7 +166,7 @@ public class DefaultConsoleConfigSyncApplicationService
             "targetEnv",
             request.getTargetEnv(),
             "configTypes",
-            String.join(",", summary.keySet()),
+            String.join(",", configTypes()),
             "totalItems",
             totalItems,
             "successItems",
@@ -223,22 +221,17 @@ public class DefaultConsoleConfigSyncApplicationService
     return initRequest;
   }
 
-  private Map<String, Integer> summarize(ConfigSyncBundlePayload bundle) {
-    Map<String, Integer> summary = new LinkedHashMap<>();
-    summary.put("jobDefinitions", sizeOf(bundle.getJobDefinitions()));
-    summary.put("workflowDefinitions", sizeOf(bundle.getWorkflowDefinitions()));
-    summary.put("pipelineDefinitions", sizeOf(bundle.getPipelineDefinitions()));
-    summary.put("fileChannels", sizeOf(bundle.getFileChannels()));
-    summary.put("fileTemplates", sizeOf(bundle.getFileTemplates()));
-    return summary;
+  private static List<String> configTypes() {
+    return List.of(
+        "jobDefinitions",
+        "workflowDefinitions",
+        "pipelineDefinitions",
+        "fileChannels",
+        "fileTemplates");
   }
 
   private int totalCount(ConfigSyncBundlePayload bundle) {
-    return summarize(bundle).values().stream().mapToInt(Integer::intValue).sum();
-  }
-
-  private int sizeOf(List<?> list) {
-    return list == null ? 0 : list.size();
+    return ConfigSyncSummaryResponse.from(bundle).total();
   }
 
   private Long longValue(Object value) {

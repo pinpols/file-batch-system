@@ -61,4 +61,19 @@ public class ConsoleResponseFactory {
     }
     return success((T) resp.get("data"));
   }
+
+  /** 透传已按具体 payload 类型反序列化的 orchestrator 响应。 */
+  public <T> CommonResponse<T> forwardOrchestrator(CommonResponse<T> response) {
+    if (response == null) {
+      return success(null);
+    }
+    if (response.code() != ResultCode.SUCCESS) {
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.console.orchestrator_forward_failed",
+          response.code() == null ? "" : response.code().code(),
+          response.message() == null ? "" : response.message());
+    }
+    return success(response.data());
+  }
 }

@@ -7,8 +7,8 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.ResourceQueueCreateRequest;
 import io.github.pinpols.batch.console.web.request.config.ResourceQueueUpdateRequest;
+import io.github.pinpols.batch.console.web.response.config.ResourceQueueResponse;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -26,7 +26,7 @@ public class ConsoleResourceQueueController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<ResourceQueueResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "queueCode", required = false) String queueCode,
       @RequestParam(value = "queueType", required = false) String queueType,
@@ -39,13 +39,13 @@ public class ConsoleResourceQueueController {
   }
 
   @PostMapping
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ResourceQueueResponse> create(
       @Valid @RequestBody ResourceQueueCreateRequest request) {
     return responseFactory.success(resourceQueueApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
-  public CommonResponse<Map<String, Object>> update(
+  public CommonResponse<ResourceQueueResponse> update(
       @PathVariable Long id, @Valid @RequestBody ResourceQueueUpdateRequest request) {
     return responseFactory.success(resourceQueueApplicationService.update(id, request));
   }

@@ -568,7 +568,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseCacheEviction'
   /api/console/ops/cache/evict-all-job-definitions:
     post:
       tags: [Ops]
@@ -588,7 +588,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseCacheEviction'
   /api/console/ops/cache/evict-workflow-definition:
     post:
       tags: [Ops]
@@ -613,7 +613,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseCacheEviction'
   /api/console/ops/cache/evict-business-calendar:
     post:
       tags: [Ops]
@@ -638,7 +638,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseCacheEviction'
   /api/console/ops/cache/evict-batch-window:
     post:
       tags: [Ops]
@@ -663,7 +663,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseCacheEviction'
   /api/console/ops/cache/evict-quota-policies:
     post:
       tags: [Ops]
@@ -683,7 +683,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseCacheEviction'
   /api/console/ops/summary:
     get:
       tags: [Ops]
@@ -1407,7 +1407,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseCapacityProfile'
   /api/console/asset-partitions/readiness:
     get:
       tags: [Ops]
@@ -1591,7 +1591,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseLineageEvidence'
   /api/console/lineage/effective:
     get:
       tags: [Ops]
@@ -1615,7 +1615,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseLineageEvidence'
   /api/console/result-versions/effective:
     get:
       tags: [Ops]
@@ -5764,7 +5764,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseResourceQueuePage'
     post:
       tags: [Queues]
       summary: Create resource queue
@@ -5785,7 +5785,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseResourceQueue'
   /api/console/queues/{id}:
     put:
       tags: [Queues]
@@ -5813,7 +5813,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseResourceQueue'
   /api/console/queues/{id}/toggle:
     post:
       tags: [Queues]
@@ -6355,7 +6355,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigDependencies'
   /api/console/config/releases/diff:
     get:
       tags: [Config]
@@ -6387,7 +6387,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigReleaseDiff'
   /api/console/config/releases/{releaseId}/approval:
     get:
       tags: [Config]
@@ -6519,7 +6519,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigSyncExport'
   /api/console/config/sync/preview:
     post:
       tags: [Config]
@@ -6541,7 +6541,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigSyncPreview'
   /api/console/config/sync/import:
     post:
       tags: [Config]
@@ -6563,7 +6563,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigSyncImport'
   /api/console/config/sync/logs:
     get:
       tags: [Config]
@@ -6590,7 +6590,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConfigSyncLogList'
   /api/console/config/releases/{releaseId}:
     get:
       tags: [Config]
@@ -6676,7 +6676,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseQuotaPolicyPage'
     post:
       tags: [QuotaPolicies]
       summary: Create quota policy
@@ -6697,7 +6697,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseQuotaPolicy'
   /api/console/quota-policies/{id}:
     put:
       tags: [QuotaPolicies]
@@ -6725,7 +6725,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseQuotaPolicy'
   /api/console/quota-policies/{id}/toggle:
     post:
       tags: [QuotaPolicies]
@@ -10374,6 +10374,327 @@ components:
           properties:
             data:
               nullable: true
+    CacheEvictionResponse:
+      type: object
+      required: [evicted]
+      properties:
+        evicted:
+          type: string
+          description: 已失效的缓存键描述。
+    CommonResponseCacheEviction:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/CacheEvictionResponse'
+    ResourceQueueResponse:
+      type: object
+      required: [id, tenantId, queueCode, queueType, enabled]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        queueCode: { type: string }
+        queueName: { type: string, nullable: true }
+        queueType: { type: string }
+        maxRunningJobs: { type: integer, format: int32, nullable: true }
+        maxRunningPartitions: { type: integer, format: int32, nullable: true }
+        maxQps: { type: integer, format: int32, nullable: true }
+        workerGroup: { type: string, nullable: true }
+        resourceTag: { type: string, nullable: true }
+        priorityPolicy: { type: string, nullable: true }
+        fairShareWeight: { type: integer, format: int32, nullable: true }
+        enabled: { type: boolean }
+        description: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    ResourceQueuePageResponse:
+      type: object
+      required: [total, pageNo, pageSize, items]
+      properties:
+        total: { type: integer, format: int64 }
+        pageNo: { type: integer, format: int32 }
+        pageSize: { type: integer, format: int32 }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceQueueResponse'
+    CommonResponseResourceQueue:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ResourceQueueResponse'
+    CommonResponseResourceQueuePage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ResourceQueuePageResponse'
+    QuotaPolicyResponse:
+      type: object
+      required: [id, tenantId, policyCode, enabled]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        policyCode: { type: string }
+        maxRunningJobsPerTenant: { type: integer, format: int32, nullable: true }
+        maxPartitionsPerTenant: { type: integer, format: int32, nullable: true }
+        maxQpsPerTenant: { type: integer, format: int32, nullable: true }
+        fairShareWeight: { type: integer, format: int32, nullable: true }
+        enabled: { type: boolean }
+        description: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    QuotaPolicyPageResponse:
+      type: object
+      required: [total, pageNo, pageSize, items]
+      properties:
+        total: { type: integer, format: int64 }
+        pageNo: { type: integer, format: int32 }
+        pageSize: { type: integer, format: int32 }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotaPolicyResponse'
+    CommonResponseQuotaPolicy:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/QuotaPolicyResponse'
+    CommonResponseQuotaPolicyPage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/QuotaPolicyPageResponse'
+    ConfigDependentJobResponse:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+    ConfigDependenciesResponse:
+      type: object
+      required: [configType, configCode, dependentJobs, dependentJobCount]
+      properties:
+        configType: { type: string }
+        configCode: { type: string }
+        dependentJobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigDependentJobResponse'
+        dependentJobCount: { type: integer, format: int32 }
+    CommonResponseConfigDependencies:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConfigDependenciesResponse'
+    ConfigReleaseDiffResponse:
+      type: object
+      required: [releaseA, releaseB, payloadChanged, grayScopeChanged, statusChanged]
+      properties:
+        releaseA: { $ref: '#/components/schemas/ConsoleConfigReleaseResponse' }
+        releaseB: { $ref: '#/components/schemas/ConsoleConfigReleaseResponse' }
+        payloadChanged: { type: boolean }
+        payloadA: { nullable: true }
+        payloadB: { nullable: true }
+        grayScopeChanged: { type: boolean }
+        statusChanged: { type: boolean }
+    CommonResponseConfigReleaseDiff:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConfigReleaseDiffResponse'
+    ConfigSyncSummaryResponse:
+      type: object
+      required: [jobDefinitions, workflowDefinitions, pipelineDefinitions, fileChannels, fileTemplates]
+      properties:
+        jobDefinitions: { type: integer, format: int32 }
+        workflowDefinitions: { type: integer, format: int32 }
+        pipelineDefinitions: { type: integer, format: int32 }
+        fileChannels: { type: integer, format: int32 }
+        fileTemplates: { type: integer, format: int32 }
+    ConfigSyncExportResponse:
+      type: object
+      required: [sourceTenantId, sourceEnv, targetEnv, summary, bundle]
+      properties:
+        sourceTenantId: { type: string }
+        sourceEnv: { type: string }
+        targetEnv: { type: string }
+        summary: { $ref: '#/components/schemas/ConfigSyncSummaryResponse' }
+        bundle: { $ref: '#/components/schemas/ConfigSyncBundlePayload' }
+    ConfigSyncPreviewResponse:
+      type: object
+      required: [tenantId, sourceTenantId, sourceEnv, targetEnv, summary]
+      properties:
+        tenantId: { type: string }
+        sourceTenantId: { type: string }
+        sourceEnv: { type: string }
+        targetEnv: { type: string }
+        summary: { $ref: '#/components/schemas/ConfigSyncSummaryResponse' }
+    ConfigSyncImportResponse:
+      type: object
+      required: [syncLogId, summary, result]
+      properties:
+        syncLogId: { type: integer, format: int64 }
+        summary: { $ref: '#/components/schemas/ConfigSyncSummaryResponse' }
+        result: { $ref: '#/components/schemas/TenantConfigBatchInitResponse' }
+    ConfigSyncLogResponse:
+      type: object
+      required: [id, tenantId, syncDirection, totalItems, successItems, failedItems, skippedItems, syncStatus]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        syncDirection: { type: string }
+        sourceEnv: { type: string, nullable: true }
+        targetEnv: { type: string, nullable: true }
+        configTypes: { type: string, nullable: true }
+        totalItems: { type: integer, format: int32 }
+        successItems: { type: integer, format: int32 }
+        failedItems: { type: integer, format: int32 }
+        skippedItems: { type: integer, format: int32 }
+        syncStatus: { type: string }
+        detailJson: { nullable: true }
+        operatorId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time, nullable: true }
+    CommonResponseConfigSyncExport:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConfigSyncExportResponse' }
+    CommonResponseConfigSyncPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConfigSyncPreviewResponse' }
+    CommonResponseConfigSyncImport:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConfigSyncImportResponse' }
+    CommonResponseConfigSyncLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConfigSyncLogResponse'
+    CapacityProfileResponse:
+      type: object
+      required: [generatedAt, tenantId, window, groupBy, scope, rows, totals, coverage]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        tenantId: { type: string }
+        window:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        groupBy: { type: string, enum: [TENANT, JOB, WORKER] }
+        scope: { type: string }
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapacityProfileRow'
+        totals: { $ref: '#/components/schemas/CapacityProfileTotals' }
+        coverage: { $ref: '#/components/schemas/CapacityProfileCoverage' }
+    CapacityProfileRow:
+      type: object
+      required: [instanceCount, taskCount, successCount, failureCount, totalDurationMs, avgDurationMs, p95DurationMs, totalFileBytes, processedRecords, recordsPerSecond, mbPerSecond]
+      properties:
+        tenantId: { type: string, nullable: true }
+        jobCode: { type: string, nullable: true }
+        workerCode: { type: string, nullable: true }
+        workerGroup: { type: string, nullable: true }
+        instanceCount: { type: integer, format: int64 }
+        taskCount: { type: integer, format: int64 }
+        successCount: { type: integer, format: int64 }
+        failureCount: { type: integer, format: int64 }
+        totalDurationMs: { type: integer, format: int64 }
+        avgDurationMs: { type: integer, format: int64 }
+        p95DurationMs: { type: integer, format: int64 }
+        totalFileBytes: { type: integer, format: int64 }
+        processedRecords: { type: integer, format: int64 }
+        recordsPerSecond: { type: number, format: double }
+        mbPerSecond: { type: number, format: double }
+    CapacityProfileTotals:
+      type: object
+      required: [instanceCount, taskCount, successCount, failureCount, totalDurationMs, totalFileBytes, processedRecords]
+      properties:
+        instanceCount: { type: integer, format: int64 }
+        taskCount: { type: integer, format: int64 }
+        successCount: { type: integer, format: int64 }
+        failureCount: { type: integer, format: int64 }
+        totalDurationMs: { type: integer, format: int64 }
+        totalFileBytes: { type: integer, format: int64 }
+        processedRecords: { type: integer, format: int64 }
+    CapacityProfileCoverage:
+      type: object
+      properties:
+        evidenceSource: { type: string, nullable: true }
+        knownGaps: { type: array, items: { type: string } }
+        rejectedScopes: { type: array, items: { type: string } }
+    CommonResponseCapacityProfile:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/CapacityProfileResponse' }
+    LineageCoverage:
+      type: object
+      required: [scope, resultVersionId, sources, jobInstanceFound, payloadFileResolved, pipelineInstanceCount, fileRecordCount, dispatchRecordCount, knownGaps]
+      properties:
+        scope: { type: string }
+        resultVersionId: { type: integer, format: int64 }
+        sources:
+          type: object
+          additionalProperties: { type: string }
+        jobInstanceFound: { type: boolean }
+        payloadFileId: { type: integer, format: int64, nullable: true }
+        payloadFileResolved: { type: boolean }
+        pipelineInstanceCount: { type: integer, format: int32 }
+        fileRecordCount: { type: integer, format: int32 }
+        dispatchRecordCount: { type: integer, format: int32 }
+        knownGaps: { type: array, items: { type: string } }
+    LineageEvidenceResponse:
+      type: object
+      required: [resultVersion, pipelineInstances, fileRecords, dispatchRecords, coverage]
+      properties:
+        resultVersion: { type: object, additionalProperties: true }
+        jobInstance: { type: object, additionalProperties: true, nullable: true }
+        pipelineInstances:
+          type: array
+          items: { type: object, additionalProperties: true }
+        fileRecords:
+          type: array
+          items: { type: object, additionalProperties: true }
+        dispatchRecords:
+          type: array
+          items: { type: object, additionalProperties: true }
+        coverage: { $ref: '#/components/schemas/LineageCoverage' }
+    CommonResponseLineageEvidence:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/LineageEvidenceResponse' }
     AssetFreshnessPolicy:
       type: object
       description: JOB asset freshness SLA 策略。只服务 readiness/freshness 告警，不表达数据目录或业务正确性裁定。
