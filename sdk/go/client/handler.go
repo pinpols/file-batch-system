@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 // Handler SPI — the tenant-implemented surface. Mirrors the Java SDK

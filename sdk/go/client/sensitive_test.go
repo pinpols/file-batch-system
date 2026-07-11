@@ -3,7 +3,7 @@ package client
 import (
 	"testing"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 // Register body with a non-empty password -> error (fail-fast).

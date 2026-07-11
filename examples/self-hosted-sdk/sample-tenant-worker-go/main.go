@@ -1,9 +1,10 @@
 // Command sample-tenant-worker-go is a minimal, runnable self-hosted worker
-// built on the Go BYO SDK (github.com/pinpols/file-batch-system/batch-worker-sdk-go).
+// built on the Go BYO SDK (github.com/pinpols/file-batch-system/sdk/go).
 //
 // It demonstrates the smallest end-to-end wiring a tenant needs:
 //   - read config + credentials from the environment (never from payloads),
-//   - build the HTTP control-plane transport (API key via an Authorization header),
+//   - build the HTTP control-plane transport (API key via the X-Batch-Api-Key
+//     header the platform actually authenticates — client.WithAPIKey),
 //   - build the real Kafka consumer adapter (PLAINTEXT or SASL/SCRAM-SHA-512),
 //   - register an echo-style TaskHandler,
 //   - run until SIGINT/SIGTERM with a graceful drain.
@@ -17,13 +18,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/client"
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/kafka"
+	"github.com/pinpols/file-batch-system/sdk/go/client"
+	"github.com/pinpols/file-batch-system/sdk/go/kafka"
 )
 
 func main() {
@@ -34,13 +33,13 @@ func main() {
 		logger.Fatalf("FATAL config error: %v", err)
 	}
 
-	// (2) HTTP control-plane transport. The SDK has no built-in API-key option,
-	// so inject the key via a RoundTripper that stamps the Authorization header
-	// on every control-plane request. Keep the SDK's 10s client timeout (the §4
-	// Go pit) by wrapping http.DefaultTransport rather than replacing the client.
+	// (2) HTTP control-plane transport. Authenticate with the worker API key via
+	// the SDK's built-in client.WithAPIKey, which sends the X-Batch-Api-Key header
+	// the platform actually checks (NOT Authorization: Bearer). NewHTTPTransport
+	// already applies the mandatory 10s client timeout (the §4 Go pit).
 	transport := client.NewHTTPTransport(
 		cfg.BaseURL,
-		client.WithHTTPClient(newAuthedHTTPClient(cfg.APIKey)),
+		client.WithAPIKey(cfg.APIKey),
 	)
 
 	// (3) Real Kafka consumer adapter (nested module). PLAINTEXT locally; when
@@ -156,29 +155,4 @@ func loadConfig() (config, error) {
 		SASLUsername: os.Getenv("KAFKA_SASL_USERNAME"),
 		SASLPassword: os.Getenv("KAFKA_SASL_PASSWORD"),
 	}, nil
-}
-
-// ---------------------------------------------------------------------------
-// API-key auth transport
-// ---------------------------------------------------------------------------
-
-// authRoundTripper stamps the bearer API key on every outbound request.
-type authRoundTripper struct {
-	apiKey string
-	next   http.RoundTripper
-}
-
-func (a *authRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
-	return a.next.RoundTrip(req)
-}
-
-// newAuthedHTTPClient returns an http.Client that keeps the SDK's mandatory 10s
-// timeout (§4 Go pit — never leave the client with no timeout) and injects the
-// API-key header via a RoundTripper.
-func newAuthedHTTPClient(apiKey string) *http.Client {
-	return &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: &authRoundTripper{apiKey: apiKey, next: http.DefaultTransport},
-	}
 }

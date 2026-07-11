@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 const ErrorCodeIdempotentInFlight protocol.ErrorCode = "IDEMPOTENT_IN_FLIGHT"

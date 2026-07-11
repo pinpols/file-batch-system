@@ -12,7 +12,7 @@
 ## 它做什么
 
 1. 从环境变量读取配置 + 凭据(凭据**只走 env**,绝不从消息体读),缺必填变量时一次性列全并 fail-fast。
-2. 构建 HTTP 控制面 transport(`client.NewHTTPTransport`),经自定义 `RoundTripper` 注入 `Authorization: Bearer <API_KEY>`(SDK 无内置 API-key 选项),保留 SDK 强制的 10s 超时。
+2. 构建 HTTP 控制面 transport(`client.NewHTTPTransport`),用内置 `client.WithAPIKey` 注入平台实际校验的 `X-Batch-Api-Key` 头(**不是** `Authorization: Bearer`),`NewHTTPTransport` 已内置 10s 超时。
 3. 构建真实 Kafka 消费者(`kafka.NewConsumer`,嵌套模块):无 SASL 变量时走 PLAINTEXT,两个 SASL 变量都设置时走 SASL/SCRAM-SHA-512。
 4. 注册一个 echo 风格 `TaskHandler`:打日志 + 把 `effectiveConfig` 原样回吐到 `Outputs`,对齐 Java/Python 的 `echo` sample。
 5. `worker.RunUntilSignal(ctx)`:阻塞到 SIGINT/SIGTERM,然后 `Stop(30s)` 优雅排空。
@@ -22,8 +22,8 @@
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `BATCH_BASE_URL` | ✅ | 控制面 base URL,如 `https://batch.example.com` |
-| `BATCH_API_KEY` | ✅ | 控制面 API key(注入为 `Authorization: Bearer`) |
-| `BATCH_TENANT_ID` | ✅ | 租户 ID,作 Kafka 主题前缀 + 消费组 + §1.9 自检 |
+| `BATCH_API_KEY` | ✅ | 控制面 API key(注入为 `X-Batch-Api-Key` 头) |
+| `BATCH_TENANT_ID` | ✅ | 租户 ID,作消费组 + §1.9 租户自检 |
 | `BATCH_WORKER_CODE` | ✅ | worker 标识,如 `xyz-sample-go-1` |
 | `KAFKA_BOOTSTRAP` | ✅ | broker 列表,逗号分隔,如 `kafka.example.com:9092` |
 | `KAFKA_SASL_USERNAME` | ⬜ | 设置后启用 SASL/SCRAM-SHA-512(须同时设 password) |
@@ -50,7 +50,9 @@ GOROOT=/usr/local/opt/go/libexec go run .
 ```
 
 > 实际连接需要**活的控制面 + broker**(`kafka.NewConsumer` 启动即做主题发现,
-> 没有匹配的 `batch.task.dispatch.<tenant>.*` 主题或 broker 不可达会直接报错)。
+> 没有匹配的 node-direct 主题 `batch.task.dispatch.<workerType>.node.<workerCode>`
+> 或 broker 不可达会直接报错;编排器按 ADR-035 §2 把 SDK 自托管任务派到该 node 主题,
+> 旧的 tenant-first `batch.task.dispatch.<tenant>.*` 从不投递)。
 > 离线只能验证编译:
 
 ```bash

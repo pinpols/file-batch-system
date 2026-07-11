@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 // FakePlatform is an in-memory Transport that scripts responses and records

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 // Record is a raw consumed dispatch message (one Kafka record). Value is the

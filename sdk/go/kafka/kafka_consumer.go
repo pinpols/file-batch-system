@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/client"
+	"github.com/pinpols/file-batch-system/sdk/go/client"
 	kgo "github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
