@@ -51,7 +51,7 @@
 | 表 | 一句话 |
 |---|---|
 | `batch.subscription_rule` | **租户订阅规则**：租户自己设"我要接收哪些事件类型 / 严重度的通知"，决定**哪些事件 → 推给我** |
-| `batch.alert_routing_config` | **平台告警路由配置**：按 team / alert_group / severity 把告警路由到 receiver，含分组/抑制/重复间隔策略，决定**告警 → 怎么发出去**|
+| `batch.alert_routing_config` | **预留的平台告警路由配置**：已具备 CRUD 和数据模型，但当前没有运行时消费者，配置不会影响实际告警投递 |
 
 ### 字段对比
 
@@ -60,28 +60,31 @@
 | 触发源 | **业务事件**（job 完成、文件入库、SLA 到点等）| **告警事件**（SLA breach、worker offline、积压超阈值等） |
 | 关注维度 | 租户 + `event_types` + `severity_filter` + `job_code_filter` | 租户 + `team` + `alert_group` + `severity` |
 | 投递目标 | `channel_code` → JOIN `notification_channel`（钉钉 / 邮件 / webhook 等）| `receiver`（路由到具体接收者，例如 oncall team / 邮件组） |
-| 是否含分组策略 | ❌（来一个发一个） | ✅（`group_by` / `group_wait_seconds` / `group_interval_seconds` / `repeat_interval_seconds`，Prometheus AlertManager 风格） |
-| 类比 | RSS subscription | Prometheus AlertManager routing tree |
-| 主消费者 | `NotificationDispatchService`（事件驱动）| `AlertRoutingResolver`（告警驱动） |
-| 模块 | `batch-console-api`（`SubscriptionRuleMapper`）| `batch-console-api`（`AlertRoutingConfigMapper`），由 alert pipeline 读取 |
+| 是否含分组策略 | ❌（来一个发一个） | 数据模型预留 Alertmanager 风格字段，但当前未执行 |
+| 类比 | RSS subscription | 未来可能映射到 Alertmanager routing tree，目前只是配置草案 |
+| 主消费者 | `NotificationDispatchService`（事件驱动）| **无**；不存在 `AlertRoutingResolver` 运行时实现 |
+| 模块 | `batch-console-api`（`SubscriptionRuleMapper`）| `batch-console-api`（`AlertRoutingConfigMapper`），当前仅 CRUD |
 
 ### 为什么不合并
 
 1. **消费域不同**：subscription 在 **业务事件域**（batch 完成、文件归档），alert 在 **告警事件域**（SLA / 健康度）
-2. **投递语义不同**：subscription 是"推给订阅人"（fan-out），alert 是"分组抑制后发给 oncall"（debounce + dedup）
+2. **目标投递语义不同**：subscription 是"推给订阅人"（fan-out）；alert 预留目标是分组抑制后发给 oncall，但尚未落地
 3. **配置粒度不同**：subscription 是租户级 self-service，alert 是平台级 ops 配置
-4. **失败重试不同**：subscription 失败走通用 retry；alert 走 AlertManager 重发间隔（`repeat_interval_seconds`）
+4. **当前运行状态不同**：subscription 已有消费者；alert routing 只有配置 CRUD，不能用其字段推断实际重试或通知行为
 
 ### 何时该看哪张
 
 | 场景 | 看哪张 |
 |---|---|
 | 租户配置"job_X 完成时通知我钉钉" | `subscription_rule` |
-| 平台配置"SLA breach 告警发给 ops-team" | `alert_routing_config` |
+| 平台配置"SLA breach 告警发给 ops-team" | 当前走 Prometheus/Alertmanager 静态模板或告警升级 webhook；`alert_routing_config` 尚不生效 |
 | 租户配置"任何 job 失败都给我邮件" | `subscription_rule`（`event_types` 含 `JOB_FAILED`） |
-| 平台配置"严重告警分组 5 分钟一次" | `alert_routing_config`（`group_interval_seconds=300`） |
+| 平台配置"严重告警分组 5 分钟一次" | 当前修改 Alertmanager 模板；不能只改 `alert_routing_config` |
 | 用户问"为什么我没收到通知" | 先查 `subscription_rule.enabled` + `notification_channel.enabled` |
-| 运维问"为什么 oncall 没被 page" | 先查 `alert_routing_config` 的 routing tree + receiver 配置 |
+| 运维问"为什么 oncall 没被 page" | 查 Prometheus 规则、Alertmanager 静态路由和 webhook；不要把 `alert_routing_config` 当运行时证据 |
+
+> **边界决策（2026-07-11）**：Alertmanager 基础设施和静态模板继续使用；应用内 `alert_event` / `alert_routing_config`
+> 向 Alertmanager 动态路由迁移暂缓到上线前出现真实告警流量后再评估。当前不得新增消费者或宣传该配置已生效。
 
 ---
 
