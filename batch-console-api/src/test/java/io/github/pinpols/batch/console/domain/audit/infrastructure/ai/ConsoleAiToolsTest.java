@@ -11,6 +11,8 @@ import io.github.pinpols.batch.console.domain.job.web.query.JobExecutionLogQuery
 import io.github.pinpols.batch.console.domain.job.web.query.JobInstanceQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobExecutionLogResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
+import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
 import java.time.Instant;
@@ -176,5 +178,70 @@ class ConsoleAiToolsTest {
   void getClusterDiagnosticsHandlesEmptyResult() {
     when(diagnosticService.diagnose(eq(TENANT))).thenReturn(Map.of());
     assertThat(tools().getClusterDiagnostics()).isNotBlank();
+  }
+
+  private ConsoleAlertEventResponse alert(
+      Long id, String alertType, String severity, String status, Integer occurrenceCount) {
+    return new ConsoleAlertEventResponse(
+        id,
+        TENANT,
+        "orchestrator",
+        alertType,
+        severity,
+        alertType + " title",
+        "{}",
+        "fp-" + id,
+        occurrenceCount,
+        Instant.now(),
+        Instant.now(),
+        "trace-" + id,
+        status,
+        Instant.now(),
+        Instant.now());
+  }
+
+  @Test
+  void getOpenAlertsBindsTenantAndOpenStatus() {
+    when(queryService.alertEvents(any()))
+        .thenReturn(
+            new PageResponse<>(
+                1, 1, 10, List.of(alert(5L, "JOB_SLA_VIOLATION", "CRITICAL", "OPEN", 7))));
+
+    String out = tools().getOpenAlerts();
+
+    assertThat(out)
+        .contains("id=5")
+        .contains("JOB_SLA_VIOLATION")
+        .contains("CRITICAL")
+        .contains("occurrenceCount=7");
+    ArgumentCaptor<AlertEventQueryRequest> captor =
+        ArgumentCaptor.forClass(AlertEventQueryRequest.class);
+    verify(queryService).alertEvents(captor.capture());
+    // 租户由构造绑定,模型不传租户;强制只读当前租户的 OPEN 告警
+    assertThat(captor.getValue().getTenantId()).isEqualTo(TENANT);
+    assertThat(captor.getValue().getStatus()).isEqualTo("OPEN");
+  }
+
+  @Test
+  void getOpenAlertsReturnsEmptyMessageWhenNone() {
+    when(queryService.alertEvents(any())).thenReturn(new PageResponse<>(0, 1, 10, List.of()));
+    assertThat(tools().getOpenAlerts()).contains("无").contains("OPEN");
+  }
+
+  @Test
+  void getRecentAlertsBindsTenantWithoutStatusFilter() {
+    when(queryService.alertEvents(any()))
+        .thenReturn(
+            new PageResponse<>(
+                1, 1, 10, List.of(alert(9L, "ASSET_FRESHNESS_STALE", "WARN", "ACKED", 2))));
+
+    String out = tools().getRecentAlerts();
+
+    assertThat(out).contains("id=9").contains("ASSET_FRESHNESS_STALE").contains("status=ACKED");
+    ArgumentCaptor<AlertEventQueryRequest> captor =
+        ArgumentCaptor.forClass(AlertEventQueryRequest.class);
+    verify(queryService).alertEvents(captor.capture());
+    assertThat(captor.getValue().getTenantId()).isEqualTo(TENANT);
+    assertThat(captor.getValue().getStatus()).isNull();
   }
 }
