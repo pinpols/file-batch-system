@@ -1,0 +1,116 @@
+name: orchestrator-internal-openapi-drift
+
+# =============================================================================
+# 评审 R5:docs/api/orchestrator-internal.openapi.yaml ↔ 真实 orchestrator internal
+# controller 之间是人肉同步链。本 wf 加一个机器化守护(log-only 起步)。
+#
+# 现状与取舍:
+#   - 该 openapi 是 SDK-facing 的**精选子集**(workers/tasks/files/readiness/
+#     batch-day-replay),不是全部 25 个 internal controller 的镜像。故只能做
+#     **spec → controller 路径存在性**校验(spec 声明的每条 /internal 路径必须对应
+#     一个真实 controller mapping;否则说明 spec 引用了已改名/删除的幽灵端点)。
+#     反向(controller 新增未文档化)是子集设计,不校验。
+#   - **字段级 request/response schema diff** 需要 springdoc 在运行期产真 spec 再比对;
+#     springdoc 当前不在 batch-orchestrator 依赖里,引入 + 启动期产 spec 工程量大,
+#     列为收口 follow-up(见 docs/api/orchestrator-internal-openapi-sync.md)。本 wf
+#     先用无需启动应用的静态路径存在性守护兜住最常见的 spec→controller 漂移。
+#
+# 起步 log-only:continue-on-error,只在 job summary 报告漂移,不 gate。稳定后转硬失败。
+# =============================================================================
+
+on:
+  pull_request:
+    paths:
+      - 'docs/api/orchestrator-internal.openapi.yaml'
+      - 'batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/**'
+      - '.github/workflows/orchestrator-internal-openapi-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  openapi-path-drift:
+    name: internal openapi ↔ controller path drift (log-only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check spec paths exist as controller mappings
+        # 无需启动应用:静态解析 controller 的 @RequestMapping 基路径 + 方法 mapping 组装全路径,
+        # 与 openapi 的 paths: 逐条比对(路径参数名归一为 {} 后匹配)。spec 有、controller 无 → 漂移。
+        run: |
+          python3 - <<'PY'
+          import re, sys, glob, pathlib
+
+          SPEC = "docs/api/orchestrator-internal.openapi.yaml"
+          CTRL_GLOB = "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/*.java"
+
+          def norm(p: str) -> str:
+              # 归一路径参数名({workerCode} → {}),去尾斜杠,便于跨源匹配。
+              p = re.sub(r"\{[^}]+\}", "{}", p)
+              if len(p) > 1 and p.endswith("/"):
+                  p = p[:-1]
+              return p
+
+          # 1) spec 里的 /internal 路径(paths: 下缩进 2 空格的 key)。
+          spec_paths = set()
+          in_paths = False
+          for line in pathlib.Path(SPEC).read_text().splitlines():
+              if re.match(r"^paths:\s*$", line):
+                  in_paths = True; continue
+              if in_paths and re.match(r"^\S", line):
+                  in_paths = False
+              if in_paths:
+                  m = re.match(r"^  (/\S+):\s*$", line)
+                  if m:
+                      spec_paths.add(norm(m.group(1)))
+
+          # 2) controller 的全路径 = class @RequestMapping 基路径 + 方法 mapping value。
+          MAP_ANN = re.compile(r'@(?:Get|Post|Put|Delete|Patch|Request)Mapping\(\s*(?:value\s*=\s*)?"([^"]*)"')
+          REQ_BASE = re.compile(r'@RequestMapping\(\s*(?:value\s*=\s*)?"([^"]*)"')
+          ctrl_paths = set()
+          for f in glob.glob(CTRL_GLOB):
+              text = pathlib.Path(f).read_text()
+              # 类级基路径:取第一个出现在 class 声明前的 @RequestMapping。
+              base = ""
+              cls_idx = text.find("class ")
+              head = text[:cls_idx] if cls_idx > 0 else text
+              bm = REQ_BASE.search(head)
+              if bm:
+                  base = bm.group(1)
+              body = text[cls_idx:] if cls_idx > 0 else text
+              for m in MAP_ANN.finditer(body):
+                  sub = m.group(1)
+                  full = base.rstrip("/") + ("/" + sub.lstrip("/") if sub else "")
+                  if not full.startswith("/"):
+                      full = "/" + full
+                  ctrl_paths.add(norm(full))
+
+          orphans = sorted(p for p in spec_paths if p not in ctrl_paths)
+          summary = pathlib.Path("openapi-drift-summary.md")
+          lines = ["## internal openapi ↔ controller path drift (log-only)", "",
+                   f"- spec /internal paths: {len(spec_paths)}",
+                   f"- controller mapped paths: {len(ctrl_paths)}", ""]
+          if orphans:
+              lines.append("### ⚠ spec paths with NO matching controller mapping:")
+              lines += [f"- `{p}`" for p in orphans]
+              print("DRIFT: spec paths without controller mapping:", *orphans, sep="\n  ")
+          else:
+              lines.append("✅ every spec /internal path maps to a controller.")
+              print("OK: all spec /internal paths have a matching controller mapping.")
+          summary.write_text("\n".join(lines) + "\n")
+          gh = __import__("os").environ.get("GITHUB_STEP_SUMMARY")
+          if gh:
+              open(gh, "a").write(summary.read_text())
+          # log-only 起步:漂移只警告不失败(continue-on-error 亦兜底)。稳定后把下行改 sys.exit(1)。
+          sys.exit(0)
+          PY

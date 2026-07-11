@@ -163,11 +163,13 @@ async def test_report_failure_body_uses_result_summary_not_error_message(
     body = json.loads(httpx_mock.get_request().content)
     assert body["success"] is False
     # resultSummary 是平台 jsonb 列 → {code,message} JSON 对象(非裸串)。
+    # #P2 errorCode 词表统一:no-handler / handler 抛错的兜底码从语言私有 "SdkDispatchError"
+    # 收敛到 protocol 常量 EXECUTION_FAILED(对齐 Java/Go/TS/Rust),平台告警可跨语言聚合。
     assert json.loads(body["resultSummary"]) == {
-        "code": "SdkDispatchError",
+        "code": "EXECUTION_FAILED",
         "message": "no handler for type=demo",
     }
-    assert body["errorCode"] == "SdkDispatchError"
+    assert body["errorCode"] == "EXECUTION_FAILED"
     # 已废字段必须不出现
     assert "errorMessage" not in body
     assert "status" not in body

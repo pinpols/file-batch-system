@@ -165,14 +165,17 @@ class TaskDispatcherTest {
 
     ArgumentCaptor<Map<String, Object>> reportBody = mapCaptor();
     verify(http).report(eq(42L), anyString(), reportBody.capture());
+    // #P2 errorCode 词表统一:未捕获 handler 异常 → 统一 protocol 常量 EXECUTION_FAILED
+    // (不再是异常类 SimpleName "RuntimeException");原异常类名保留在 resultSummary.message 里可诊断。
     assertThat(reportBody.getValue())
         .containsEntry("success", false)
-        .containsEntry("message", "biz boom")
-        .containsEntry("errorCode", "RuntimeException");
+        .containsEntry("message", "biz boom") // 顶层 message 仍是业务原因(不变)
+        .containsEntry("errorCode", "EXECUTION_FAILED");
     // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是裸串(否则平台解析 500)
     assertThat(reportBody.getValue().get("resultSummary").toString())
-        .contains("\"code\":\"RuntimeException\"")
-        .contains("\"message\":\"biz boom\"");
+        .contains("\"code\":\"EXECUTION_FAILED\"")
+        .contains("biz boom")
+        .contains("RuntimeException"); // 类名折进 resultSummary.message 维持可诊断性
   }
 
   @Test

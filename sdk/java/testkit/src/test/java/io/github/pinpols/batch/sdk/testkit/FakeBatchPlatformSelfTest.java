@@ -93,7 +93,9 @@ class FakeBatchPlatformSelfTest {
 
       RecordedReport report = platform.awaitReport(202L, Duration.ofSeconds(5));
       assertThat(report.success()).isFalse();
-      assertThat(report.errorCode()).isEqualTo("IllegalStateException");
+      // errorCode 词表统一(本次改动):未捕获 handler 异常统一 protocol 常量 EXECUTION_FAILED,
+      // 原异常类名折进 message 保留可诊断性。
+      assertThat(report.errorCode()).isEqualTo("EXECUTION_FAILED");
       assertThat(report.message()).contains("kaboom");
     } finally {
       client.stop();

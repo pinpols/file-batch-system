@@ -13,6 +13,7 @@ import io.github.pinpols.batch.sdk.retry.RetryOn;
 import io.github.pinpols.batch.sdk.retry.SdkRetryableHandler;
 import io.github.pinpols.batch.sdk.task.CancellationSignal;
 import io.github.pinpols.batch.sdk.task.ProgressReporter;
+import io.github.pinpols.batch.sdk.task.SdkErrorCode;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
@@ -699,12 +700,13 @@ public class TaskDispatcher {
       putPartitionInvocation(body, msg);
       body.put("success", false);
       body.put("message", message);
-      String code = error != null ? error.getClass().getSimpleName() : "FAILED";
-      if (error != null) {
-        body.put("errorCode", code);
-      }
-      // result_summary 是 JSONB:发 {code,message} 对象(裸串 → invalid input syntax for type json → 500)
-      body.put("resultSummary", resultSummaryJson(code, message));
+      // errorCode 统一收敛到 protocol 常量 EXECUTION_FAILED(no-handler / dispatcher 级失败的默认分类),
+      // 不再用异常类 SimpleName —— 否则平台按 errorCode 聚合告警时跨语言 SDK 碎片化(#P2 errorCode 词表统一)。
+      String code = SdkErrorCode.EXECUTION_FAILED;
+      body.put("errorCode", code);
+      // result_summary 是 JSONB:发 {code,message} 对象(裸串 → invalid input syntax for type json → 500)。
+      // 原异常类名保留在 resultSummary.message 里维持可诊断性(平台读 resultSummary;errorMessage 字段是红线,禁发)。
+      body.put("resultSummary", resultSummaryJson(code, diagnosticMessage(message, error)));
       reportWithRetry(msg.taskId(), idem, body);
     } catch (Exception ex) {
       log.error("reportFailure failed for taskId={}: {}", msg.taskId(), ex.getMessage());
@@ -724,15 +726,51 @@ public class TaskDispatcher {
     body.put("success", result.success());
     body.put("message", result.message());
     body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
-    String code;
-    if (result.error() != null) {
-      code = result.error().getClass().getSimpleName();
+    String code = resolveErrorCode(result);
+    // 失败时一律带 errorCode(protocol 常量或 handler 显式业务码);成功不下发(平台读 success=true)。
+    if (!result.success()) {
       body.put("errorCode", code);
-    } else {
-      code = result.success() ? "SUCCESS" : "FAILED";
     }
-    body.put("resultSummary", resultSummaryJson(code, result.message()));
+    // 原异常类名保留在 resultSummary.message(平台读 resultSummary,不是 errorMessage —— 后者是红线字段禁发)。
+    body.put(
+        "resultSummary",
+        resultSummaryJson(code, diagnosticMessage(result.message(), result.error())));
     return body;
+  }
+
+  /**
+   * 解析 report 的 {@code errorCode}(#P2 词表统一,向 Go/TS/Rust 的 protocol 常量收敛)。优先级:
+   *
+   * <ol>
+   *   <li>handler / atomic executor 经 {@code output['errorCode']} 显式给的业务/协议码(如 {@code CANCELLED} /
+   *       {@code SECURITY_REJECTED})—— 以业务码为准
+   *   <li>成功 → {@link SdkErrorCode#SUCCESS}
+   *   <li>其余失败(含未捕获 handler 异常、业务 {@code fail(message)} 无码)→ {@link SdkErrorCode#EXECUTION_FAILED}
+   *       规范回退,<b>不再</b>用异常类 SimpleName(那样跨语言 SDK 告警聚合碎片化)
+   * </ol>
+   */
+  private static String resolveErrorCode(SdkTaskResult result) {
+    Map<String, Object> output = result.output();
+    if (output != null && output.get("errorCode") instanceof String s && !s.isBlank()) {
+      return s;
+    }
+    if (result.success()) {
+      return SdkErrorCode.SUCCESS;
+    }
+    return SdkErrorCode.EXECUTION_FAILED;
+  }
+
+  /**
+   * 把原异常类名折进 resultSummary 的可读 message,维持可诊断性(errorCode 已收敛成 protocol 常量,类名信息不能丢)。 无异常时原样返回
+   * message。
+   */
+  private static String diagnosticMessage(String message, Throwable error) {
+    if (error == null) {
+      return message;
+    }
+    String cls = error.getClass().getSimpleName();
+    String base = message == null ? "" : message;
+    return base.contains(cls) ? base : (base.isEmpty() ? cls : base + " (" + cls + ")");
   }
 
   /**

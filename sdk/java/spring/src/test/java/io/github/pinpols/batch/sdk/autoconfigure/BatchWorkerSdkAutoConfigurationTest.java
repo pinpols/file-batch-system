@@ -48,7 +48,9 @@ class BatchWorkerSdkAutoConfigurationTest {
             "batch.worker-sdk.client-error-fail-fast-threshold=6",
             "batch.worker-sdk.kafka-security-protocol=SASL_SSL",
             "batch.worker-sdk.kafka-sasl-mechanism=SCRAM-SHA-512",
-            "batch.worker-sdk.kafka-sasl-jaas-config=jaas")
+            "batch.worker-sdk.kafka-sasl-jaas-config=jaas",
+            "batch.worker-sdk.strict-timing-validation=false",
+            "batch.worker-sdk.request-signing-enabled=true")
         .run(
             context -> {
               assertThat(context).hasSingleBean(BatchPlatformClientConfig.class);
@@ -72,6 +74,9 @@ class BatchWorkerSdkAutoConfigurationTest {
               assertThat(config.getKafkaSecurityProtocol()).isEqualTo("SASL_SSL");
               assertThat(config.getKafkaSaslMechanism()).isEqualTo("SCRAM-SHA-512");
               assertThat(config.getKafkaSaslJaasConfig()).isEqualTo("jaas");
+              // P2:补齐缺键 —— Spring 用户此前无法开启请求签名 / 降级时序校验。
+              assertThat(config.isStrictTimingValidation()).isFalse();
+              assertThat(config.isRequestSigningEnabled()).isTrue();
             });
   }
 
