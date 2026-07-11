@@ -29,10 +29,12 @@ import {
   MessagePipeline,
   assignmentOf,
   consoleLogger,
+  dispositionOf,
   type Consumer,
   type ConsumerRecord,
   type DispatchMessage,
   type Logger,
+  type MessageDisposition,
 } from "./consumer.ts";
 import {
   SimpleCancellationSignal,
@@ -271,12 +273,17 @@ export class WorkerLifecycle {
     );
   }
 
-  async #onRecord(record: ConsumerRecord): Promise<void> {
+  async #onRecord(record: ConsumerRecord): Promise<MessageDisposition> {
     if (this.#draining) {
-      // draining: refuse new messages (do not commit so a fresh worker re-reads)
-      return;
+      // draining: refuse new messages — withhold so the offset is NOT committed
+      // and a fresh worker re-reads the message (never crossed by a later commit).
+      return "withhold";
     }
-    await this.#pipeline.onMessage(record);
+    const outcome = await this.#pipeline.onMessage(record);
+    // hand the Kafka adapter the offset policy (commit / withhold+pause /
+    // backpressure+pause). The old production start() path ignored this and never
+    // committed, so every restart replayed the whole partition from the start.
+    return dispositionOf(outcome);
   }
 
   /** claim → execute → report for one accepted, in-tenant message. */
@@ -298,10 +305,36 @@ export class WorkerLifecycle {
           return;
         }
 
-        const claim = await this.#transport.claim(msg.taskId, idemKey);
+        // ADR-014: partitionInvocationId travels FROM the dispatch message — every
+        // peer SDK (Go/Python/Rust/Java) reads it out of runtimeAttributes and
+        // sends it in the claim body; the platform CAS-checks a stale invocation.
+        // The claim response may also echo it; prefer the message value, fall back
+        // to the response.
+        const msgInvocationId =
+          (msg.runtimeAttributes?.partitionInvocationId as string | undefined) ??
+          null;
+
+        const claim = await this.#transport.claim(
+          msg.taskId,
+          idemKey,
+          msgInvocationId,
+        );
+        if (claim.idempotent) {
+          // claim 409 = already claimed (redelivery, or another worker won the
+          // race): NOT ours to execute. Skip the handler + report so we never
+          // double-run (aligned with Go `if claim.Idempotent { return }`).
+          this.#logger.info(
+            "claim idempotent (already claimed); skipping execution",
+            { taskId: msg.taskId },
+          );
+          return;
+        }
         // record the ADR-014 invocation token so renew/report can echo it
         const tracked = this.#inFlight.get(msg.taskId);
-        if (tracked) tracked.partitionInvocationId = claim.partitionInvocationId ?? null;
+        if (tracked) {
+          tracked.partitionInvocationId =
+            msgInvocationId ?? claim.partitionInvocationId ?? null;
+        }
         const progress = new NoopProgressReporter();
         const resume = new ResumeSupport({
           taskId: msg.taskId,
