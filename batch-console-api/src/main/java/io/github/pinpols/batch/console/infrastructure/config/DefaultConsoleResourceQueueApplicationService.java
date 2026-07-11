@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.web.request.config.ResourceQueueCreateRequest;
 import io.github.pinpols.batch.console.web.request.config.ResourceQueueUpdateRequest;
+import io.github.pinpols.batch.console.web.response.config.ResourceQueueResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,7 @@ public class DefaultConsoleResourceQueueApplicationService
   private final ConsoleTenantGuard tenantGuard;
 
   @Override
-  public PageResponse<Map<String, Object>> list(
+  public PageResponse<ResourceQueueResponse> list(
       String tenantId,
       String queueCode,
       String queueType,
@@ -36,13 +37,17 @@ public class DefaultConsoleResourceQueueApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     PageRequest pageRequest = new PageRequest(pageNo, pageSize);
     long total = resourceQueueMapper.countByQuery(resolved, queueCode, queueType, enabled);
-    List<Map<String, Object>> items =
-        resourceQueueMapper.selectByQuery(resolved, queueCode, queueType, enabled, pageRequest);
+    List<ResourceQueueResponse> items =
+        resourceQueueMapper
+            .selectByQuery(resolved, queueCode, queueType, enabled, pageRequest)
+            .stream()
+            .map(ResourceQueueResponse::from)
+            .toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
   @Override
-  public Map<String, Object> create(ResourceQueueCreateRequest request) {
+  public ResourceQueueResponse create(ResourceQueueCreateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         resourceQueueMapper.selectByUniqueKey(tenantId, request.getQueueCode());
@@ -75,11 +80,11 @@ public class DefaultConsoleResourceQueueApplicationService
     params.put("description", request.getDescription());
     resourceQueueMapper.insert(params);
     Long id = ((Number) params.get("id")).longValue();
-    return resourceQueueMapper.selectById(tenantId, id);
+    return ResourceQueueResponse.from(resourceQueueMapper.selectById(tenantId, id));
   }
 
   @Override
-  public Map<String, Object> update(Long id, ResourceQueueUpdateRequest request) {
+  public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(
@@ -127,7 +132,7 @@ public class DefaultConsoleResourceQueueApplicationService
         "description",
         request.getDescription() != null ? request.getDescription() : existing.get("description"));
     resourceQueueMapper.update(params);
-    return resourceQueueMapper.selectById(tenantId, id);
+    return ResourceQueueResponse.from(resourceQueueMapper.selectById(tenantId, id));
   }
 
   @Override

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.web.request.config.QuotaPolicySaveRequest;
+import io.github.pinpols.batch.console.web.response.config.QuotaPolicyResponse;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -27,18 +28,20 @@ public class DefaultConsoleQuotaPolicyApplicationService
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
   @Override
-  public PageResponse<Map<String, Object>> list(
+  public PageResponse<QuotaPolicyResponse> list(
       String tenantId, String policyCode, Boolean enabled, int pageNo, int pageSize) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     PageRequest pageRequest = new PageRequest(pageNo, pageSize);
     long total = quotaPolicyMapper.countByQuery(resolved, policyCode, enabled);
-    List<Map<String, Object>> items =
-        quotaPolicyMapper.selectByQuery(resolved, policyCode, enabled, pageRequest);
+    List<QuotaPolicyResponse> items =
+        quotaPolicyMapper.selectByQuery(resolved, policyCode, enabled, pageRequest).stream()
+            .map(QuotaPolicyResponse::from)
+            .toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
   @Override
-  public Map<String, Object> create(QuotaPolicySaveRequest request) {
+  public QuotaPolicyResponse create(QuotaPolicySaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         quotaPolicyMapper.selectByUniqueKey(tenantId, request.getPolicyCode());
@@ -69,11 +72,12 @@ public class DefaultConsoleQuotaPolicyApplicationService
             .build();
     quotaPolicyMapper.insert(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
-    return quotaPolicyMapper.selectByUniqueKey(tenantId, param.getPolicyCode());
+    return QuotaPolicyResponse.from(
+        quotaPolicyMapper.selectByUniqueKey(tenantId, param.getPolicyCode()));
   }
 
   @Override
-  public Map<String, Object> update(Long id, QuotaPolicySaveRequest request) {
+  public QuotaPolicyResponse update(Long id, QuotaPolicySaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(quotaPolicyMapper.selectById(tenantId, id), "quota policy not found");
@@ -108,7 +112,7 @@ public class DefaultConsoleQuotaPolicyApplicationService
             .build();
     quotaPolicyMapper.update(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
-    return quotaPolicyMapper.selectById(tenantId, id);
+    return QuotaPolicyResponse.from(quotaPolicyMapper.selectById(tenantId, id));
   }
 
   @Override

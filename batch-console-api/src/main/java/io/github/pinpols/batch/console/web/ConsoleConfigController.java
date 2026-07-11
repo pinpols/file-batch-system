@@ -12,11 +12,12 @@ import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
 import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
+import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -123,7 +124,7 @@ public class ConsoleConfigController {
   /** 查询配置项的依赖关系。 */
   @GetMapping("/dependencies")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> configDependencies(
+  public CommonResponse<ConfigDependenciesResponse> configDependencies(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("configType") String configType,
       @RequestParam("configCode") String configCode) {
@@ -134,7 +135,7 @@ public class ConsoleConfigController {
   /** 对比两个配置发布版本的差异。 */
   @GetMapping("/releases/diff")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> diffConfigReleases(
+  public CommonResponse<ConfigReleaseDiffResponse> diffConfigReleases(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("releaseIdA") Long releaseIdA,
       @RequestParam("releaseIdB") Long releaseIdB) {

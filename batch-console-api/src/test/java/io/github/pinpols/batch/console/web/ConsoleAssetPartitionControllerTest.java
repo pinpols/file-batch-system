@@ -21,11 +21,10 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.github.pinpols.batch.console.web.response.ops.AssetPartitionReadinessResponse;
 import java.time.LocalDate;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -63,24 +62,19 @@ class ConsoleAssetPartitionControllerTest {
     doReturn(getUriSpec).when(restClient).get();
     doReturn(getSpec).when(getUriSpec).uri(anyString(), any(Object[].class));
     when(getSpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(any(ParameterizedTypeReference.class)))
+    when(responseSpec.body(AssetPartitionReadinessResponse.class))
         .thenReturn(
-            Map.of(
-                "ready",
+            new AssetPartitionReadinessResponse(
                 true,
-                "reason",
                 "READY",
-                "assetCode",
                 "asset-settlement-daily",
-                "bizDate",
+                LocalDate.parse("2026-06-30"),
                 "2026-06-30",
-                "versionNo",
-                3,
-                "freshnessStatus",
+                "job:settlement_daily:2026-06-30",
                 "EFFECTIVE",
-                "payloadStorage",
+                3,
+                9L,
                 "OBJECT_STORE",
-                "payloadRef",
                 "s3://bucket/path/result.csv"));
 
     mockMvc =

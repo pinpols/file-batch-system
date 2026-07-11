@@ -18,9 +18,9 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.github.pinpols.batch.console.web.response.config.QuotaPolicyResponse;
 import java.time.Clock;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,7 +76,8 @@ class ConsoleTenantSelfServiceControllerTest {
 
   @Test
   void shouldReturnQuota() throws Exception {
-    Map<String, Object> policy = Map.of("policyCode", "max-jobs", "limit", 100);
+    QuotaPolicyResponse policy =
+        new QuotaPolicyResponse(1L, "t1", "max-jobs", 100, 0, 0, 1, true, null, null, null);
     when(quotaPolicyService.list("t1", null, null, 1, 100))
         .thenReturn(new PageResponse<>(1, 1, 100, List.of(policy)));
 

@@ -7,10 +7,11 @@ import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
 import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
+import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
 import java.util.List;
-import java.util.Map;
 
 public interface ConsoleConfigApplicationService {
 
@@ -34,8 +35,9 @@ public interface ConsoleConfigApplicationService {
 
   ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId);
 
-  Map<String, Object> diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB);
+  ConfigReleaseDiffResponse diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB);
 
   /** 返回引用了 channel/template/calendar/window/queue 的 job 和 workflow。 */
-  Map<String, Object> configDependencies(String tenantId, String configType, String configCode);
+  ConfigDependenciesResponse configDependencies(
+      String tenantId, String configType, String configCode);
 }

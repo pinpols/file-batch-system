@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import java.util.Map;
+import io.github.pinpols.batch.console.web.response.ops.CapacityProfileResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,14 +24,14 @@ public class ConsoleCapacityProfileController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<Map<String, Object>> query(
+  public CommonResponse<CapacityProfileResponse> query(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam(value = "from", required = false) String from,
       @RequestParam(value = "to", required = false) String to,
       @RequestParam(value = "groupBy", required = false, defaultValue = "TENANT") String groupBy,
       @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> resp =
+    CommonResponse<CapacityProfileResponse> resp =
         proxyClient()
             .get()
             .uri(
@@ -51,7 +51,7 @@ public class ConsoleCapacityProfileController {
                   return builder.build();
                 })
             .retrieve()
-            .body(unwrapToMap());
+            .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -59,7 +59,8 @@ public class ConsoleCapacityProfileController {
     return orchestratorInternalRestClient.build();
   }
 
-  private static ParameterizedTypeReference<Map<String, Object>> unwrapToMap() {
+  private static ParameterizedTypeReference<CommonResponse<CapacityProfileResponse>>
+      typedResponse() {
     return new ParameterizedTypeReference<>() {};
   }
 }

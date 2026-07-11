@@ -28,6 +28,8 @@ import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
 import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
+import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
 import java.time.Instant;
@@ -348,10 +350,10 @@ class DefaultConsoleConfigApplicationServiceTest {
     when(dashboardQueryMapper.jobsByQueueCode(TENANT, "q1"))
         .thenReturn(List.of(new ConfigDependentView(1L, "JOB-1", "Job One")));
 
-    Map<String, Object> result = service.configDependencies(TENANT, "QUEUE", "q1");
+    ConfigDependenciesResponse result = service.configDependencies(TENANT, "QUEUE", "q1");
 
-    assertThat(result.get("dependentJobCount")).isEqualTo(1);
-    assertThat(result.get("configType")).isEqualTo("QUEUE");
+    assertThat(result.dependentJobCount()).isEqualTo(1);
+    assertThat(result.configType()).isEqualTo("QUEUE");
   }
 
   @Test
@@ -359,29 +361,30 @@ class DefaultConsoleConfigApplicationServiceTest {
     when(dashboardQueryMapper.jobsByCalendarCode(TENANT, "c1"))
         .thenReturn(List.of(new ConfigDependentView(2L, "JOB-2", null)));
 
-    Map<String, Object> result = service.configDependencies(TENANT, "BUSINESS_CALENDAR", "c1");
-    assertThat(result.get("dependentJobCount")).isEqualTo(1);
+    ConfigDependenciesResponse result =
+        service.configDependencies(TENANT, "BUSINESS_CALENDAR", "c1");
+    assertThat(result.dependentJobCount()).isEqualTo(1);
   }
 
   @Test
   void shouldReturnConfigDependencies_forWindowType() {
     when(dashboardQueryMapper.jobsByWindowCode(TENANT, "w1")).thenReturn(List.of());
-    Map<String, Object> result = service.configDependencies(TENANT, "BATCH_WINDOW", "w1");
-    assertThat(result.get("dependentJobCount")).isEqualTo(0);
+    ConfigDependenciesResponse result = service.configDependencies(TENANT, "BATCH_WINDOW", "w1");
+    assertThat(result.dependentJobCount()).isZero();
   }
 
   @Test
   void shouldReturnConfigDependencies_forWorkerGroupType() {
     when(dashboardQueryMapper.jobsByWorkerGroup(TENANT, "g1"))
         .thenReturn(List.of(new ConfigDependentView(3L, "JOB-3", "Three")));
-    Map<String, Object> result = service.configDependencies(TENANT, "WORKER_GROUP", "g1");
-    assertThat(result.get("dependentJobCount")).isEqualTo(1);
+    ConfigDependenciesResponse result = service.configDependencies(TENANT, "WORKER_GROUP", "g1");
+    assertThat(result.dependentJobCount()).isEqualTo(1);
   }
 
   @Test
   void shouldReturnEmptyDependencies_forUnknownType() {
-    Map<String, Object> result = service.configDependencies(TENANT, "UNKNOWN", "x");
-    assertThat(result.get("dependentJobCount")).isEqualTo(0);
+    ConfigDependenciesResponse result = service.configDependencies(TENANT, "UNKNOWN", "x");
+    assertThat(result.dependentJobCount()).isZero();
   }
 
   @Test
@@ -396,12 +399,13 @@ class DefaultConsoleConfigApplicationServiceTest {
     b.setConfigStatus("ROLLED_BACK");
     when(configReleaseMapper.selectById(anyMap())).thenReturn(a, b);
 
-    Map<String, Object> result = service.diffConfigReleases(TENANT, 1L, 2L);
+    ConfigReleaseDiffResponse result = service.diffConfigReleases(TENANT, 1L, 2L);
 
-    assertThat(result.get("payloadChanged")).isEqualTo(true);
-    assertThat(result.get("grayScopeChanged")).isEqualTo(true);
-    assertThat(result.get("statusChanged")).isEqualTo(true);
-    assertThat(result).containsKeys("payloadA", "payloadB");
+    assertThat(result.payloadChanged()).isTrue();
+    assertThat(result.grayScopeChanged()).isTrue();
+    assertThat(result.statusChanged()).isTrue();
+    assertThat(result.payloadA()).isNotNull();
+    assertThat(result.payloadB()).isNotNull();
   }
 
   @Test
@@ -416,10 +420,10 @@ class DefaultConsoleConfigApplicationServiceTest {
     b.setGrayScope("[broken");
     when(configReleaseMapper.selectById(anyMap())).thenReturn(a, b);
 
-    Map<String, Object> result = service.diffConfigReleases(TENANT, 1L, 2L);
+    ConfigReleaseDiffResponse result = service.diffConfigReleases(TENANT, 1L, 2L);
 
-    assertThat(result.get("payloadChanged")).isEqualTo(true); // null vs {"a":2}
-    assertThat(result.get("grayScopeChanged")).isEqualTo(true); // {"x":1} vs null
+    assertThat(result.payloadChanged()).isTrue(); // null vs {"a":2}
+    assertThat(result.grayScopeChanged()).isTrue(); // {"x":1} vs null
   }
 
   @Test
@@ -428,11 +432,11 @@ class DefaultConsoleConfigApplicationServiceTest {
     ConfigReleaseEntity b = release(2L, "JOB", "k", 2);
     when(configReleaseMapper.selectById(anyMap())).thenReturn(a, b);
 
-    Map<String, Object> result = service.diffConfigReleases(TENANT, 1L, 2L);
+    ConfigReleaseDiffResponse result = service.diffConfigReleases(TENANT, 1L, 2L);
 
-    assertThat(result.get("payloadChanged")).isEqualTo(false);
-    assertThat(result.get("grayScopeChanged")).isEqualTo(false);
-    assertThat(result.get("statusChanged")).isEqualTo(false);
+    assertThat(result.payloadChanged()).isFalse();
+    assertThat(result.grayScopeChanged()).isFalse();
+    assertThat(result.statusChanged()).isFalse();
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

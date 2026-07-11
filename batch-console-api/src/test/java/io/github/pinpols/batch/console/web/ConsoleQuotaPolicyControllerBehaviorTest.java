@@ -20,8 +20,8 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.config.QuotaPolicySaveRequest;
+import io.github.pinpols.batch.console.web.response.config.QuotaPolicyResponse;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -81,8 +81,7 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
 
   @Test
   void createShouldReturnRow() throws Exception {
-    when(service.create(any(QuotaPolicySaveRequest.class)))
-        .thenReturn(Map.of("id", 1L, "policyCode", "QP_NEW"));
+    when(service.create(any(QuotaPolicySaveRequest.class))).thenReturn(policy(1L, "QP_NEW"));
     mockMvc
         .perform(
             post("/api/console/quota-policies")
@@ -94,7 +93,7 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
 
   @Test
   void updateShouldPassPathId() throws Exception {
-    when(service.update(eq(7L), any(QuotaPolicySaveRequest.class))).thenReturn(Map.of("id", 7L));
+    when(service.update(eq(7L), any(QuotaPolicySaveRequest.class))).thenReturn(policy(7L, "QP_U"));
     mockMvc
         .perform(
             put("/api/console/quota-policies/7")
@@ -113,5 +112,9 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
                 .param("enabled", "false"))
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", false);
+  }
+
+  private static QuotaPolicyResponse policy(Long id, String policyCode) {
+    return new QuotaPolicyResponse(id, "ta", policyCode, 10, 0, 100, 1, true, null, null, null);
   }
 }

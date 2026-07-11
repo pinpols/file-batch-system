@@ -28,11 +28,19 @@ for spec in "${SPECS[@]}"; do
     continue
   fi
   base_tmp="$(mktemp)"
+  clarification_ignore_tmp="$(mktemp)"
   git show "${BASE_REF}:${spec}" > "$base_tmp"
   echo "===== $spec(vs $BASE_REF)====="
+  # 旧 schema 完全未声明 data 类型时,补成实际 object/array 只是契约澄清,不会改变 wire。
+  # oasdiff 会把 blank -> object/array 误判为 response-property-type-changed ERR。
+  # 仅动态忽略这一种精确形态;已有明确类型之间的变化仍由 breaking gate 拦截。
+  oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
+    | grep -E 'response.s property type/format changed from ``/`` to `(object|array)`/``.*\[response-property-type-changed\]' \
+      > "$clarification_ignore_tmp" || true
   # 仅 ERR 级 breaking 才 fail;成功时静默(该 spec 有重复参数定义,oasdiff 会刷大量
   # request-parameter-removed 的 WARN 噪音,失败时才打全量便于定位)。
-  out="$(oasdiff breaking "$base_tmp" "$spec" --fail-on ERR 2>&1)" && rc=0 || rc=$?
+  out="$(oasdiff breaking "$base_tmp" "$spec" --fail-on ERR \
+    --err-ignore "$clarification_ignore_tmp" 2>&1)" && rc=0 || rc=$?
   if [[ "$rc" -eq 0 ]]; then
     echo "✅ 无 ERR 级破坏性变更"
   else
@@ -40,7 +48,7 @@ for spec in "${SPECS[@]}"; do
     echo "❌ $spec 存在 ERR 级破坏性变更(见上)。如确为有意 breaking,需走版本化端点 + 弃用流程。"
     fail=1
   fi
-  rm -f "$base_tmp"
+  rm -f "$base_tmp" "$clarification_ignore_tmp"
   echo
 done
 

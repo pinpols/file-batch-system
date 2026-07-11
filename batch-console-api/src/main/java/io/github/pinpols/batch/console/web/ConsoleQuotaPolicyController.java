@@ -6,8 +6,8 @@ import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyAppl
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.QuotaPolicySaveRequest;
+import io.github.pinpols.batch.console.web.response.config.QuotaPolicyResponse;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -25,7 +25,7 @@ public class ConsoleQuotaPolicyController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<QuotaPolicyResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "policyCode", required = false) String policyCode,
       @RequestParam(value = "enabled", required = false) Boolean enabled,
@@ -36,13 +36,13 @@ public class ConsoleQuotaPolicyController {
   }
 
   @PostMapping
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<QuotaPolicyResponse> create(
       @Valid @RequestBody QuotaPolicySaveRequest request) {
     return responseFactory.success(quotaPolicyApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
-  public CommonResponse<Map<String, Object>> update(
+  public CommonResponse<QuotaPolicyResponse> update(
       @PathVariable Long id, @Valid @RequestBody QuotaPolicySaveRequest request) {
     return responseFactory.success(quotaPolicyApplicationService.update(id, request));
   }

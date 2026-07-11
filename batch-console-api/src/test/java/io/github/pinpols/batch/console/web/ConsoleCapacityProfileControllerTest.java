@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -19,7 +20,8 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Map;
+import io.github.pinpols.batch.console.web.response.ops.CapacityProfileResponse;
+import java.util.List;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,7 +63,10 @@ class ConsoleCapacityProfileControllerTest {
     doReturn(getSpec).when(getUriSpec).uri(any(Function.class));
     when(getSpec.retrieve()).thenReturn(responseSpec);
     when(responseSpec.body(any(ParameterizedTypeReference.class)))
-        .thenReturn(Map.of("data", Map.of("scope", "BFS_HOT_TABLES", "groupBy", "JOB")));
+        .thenReturn(
+            CommonResponse.success(
+                new CapacityProfileResponse(
+                    null, "ta", null, "JOB", "BFS_HOT_TABLES", List.of(), null, null)));
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
