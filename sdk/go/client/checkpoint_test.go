@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 // load on first run returns (nil, nil); after Save, Load reads it back.

@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 // Config is the worker's static configuration.
@@ -104,6 +104,7 @@ func NewWorker(cfg Config, transport Transport, consumer Consumer, handler TaskH
 		WithHeartbeatInFlight(registry.Count),
 		WithHeartbeatLogger(logger),
 		WithOnDrain(w.beginDrain),
+		WithOnFatal(w.onHeartbeatFatal),
 	)
 	w.lease = NewLeaseRenewalScheduler(transport, registry, cfg.WorkerCode, cfg.TenantID,
 		WithLeaseInterval(cfg.LeaseRenewInterval),
@@ -187,8 +188,16 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 			msg, disp := w.pipeline.OnMessage(rec)
 			switch disp {
 			case DispositionAccepted:
-				w.dispatch(ctx, msg)
-				w.consumer.Commit()
+				// dispatch() reports whether the offset is safe to commit: claim
+				// succeeded / 409 already-claimed / 404 drop-and-forget => commit;
+				// a hard claim failure (5xx exhausted / transport) => withhold, so
+				// the platform's lease/timeout redelivers instead of leaving an
+				// "offset committed but task never claimed" black hole.
+				if w.dispatch(ctx, msg) {
+					w.consumer.Commit()
+				} else {
+					w.consumer.Withhold()
+				}
 			case DispositionDecodeError:
 				// poison record (undecodable): commit-skip to advance past it.
 				// Withholding would let one corrupt message head-of-line block the
@@ -198,7 +207,11 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 				// partition paused; leave offset uncommitted, retry later.
 				w.consumer.Pause()
 			case DispositionRejectedSchema, DispositionDroppedForeignTenant:
-				// do NOT commit offset (§1.9 / §A); valid-but-deferred, redeliverable.
+				// §1.9 / §A: valid-but-deferred, redeliverable. Withhold (NOT a
+				// no-op): the offset must never be committed AND no later commit on
+				// the partition may cross it, else a subsequent Accepted record's
+				// Commit() would silently skip this rejected/foreign message.
+				w.consumer.Withhold()
 			}
 		}
 	}
@@ -207,7 +220,16 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 // dispatch claims, validates parameters, runs the handler, and reports the
 // terminal result. Runs the handler in a goroutine bounded by maxConcurrent via
 // the in-flight registry (backpressure gate already enforced upstream).
-func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
+//
+// It returns commit=true when the Kafka offset is safe to advance, commit=false
+// when it must be withheld (redelivered):
+//   - claim succeeded (fresh)              -> commit (we own the task)
+//   - claim 409 (already claimed/reclaimed) -> commit (someone else owns it / redelivery)
+//   - claim 404 (task gone)                 -> commit (drop-and-forget; nothing to redeliver)
+//   - claim hard failure (5xx exhausted / transport / non-409 4xx) -> WITHHOLD:
+//     the task was never claimed, so committing would strand it forever; leave
+//     the offset uncommitted so the platform lease/timeout redelivers it.
+func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit bool) {
 	invID := partitionInvocationID(msg)
 	// Mint a FRESH Idempotency-Key per distinct write (fixture 24); do NOT reuse
 	// the Kafka delivery key (which is also empty when the platform omits it).
@@ -218,16 +240,20 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 	})
 	if err != nil {
 		if _, ok := errAsDrop(err); ok {
+			// 404: the task no longer exists; commit-skip (nothing to redeliver).
 			w.logger.Printf("WARN claim dropped taskId=%s: %v", msg.TaskID, err)
-			return
+			return true
 		}
-		w.logger.Printf("WARN claim failed taskId=%s: %v", msg.TaskID, err)
-		return
+		// Hard failure (5xx exhausted / transport / non-409 4xx): NOT claimed.
+		// Withhold the offset so the task is redelivered, never black-holed.
+		w.logger.Printf("WARN claim failed taskId=%s (withholding offset for redelivery): %v", msg.TaskID, err)
+		return false
 	}
 	if claim.Idempotent {
-		// 409: already claimed by another worker; treat as no-op success (§B).
+		// 409: already claimed by another worker; treat as no-op success (§B) and
+		// commit-skip so we don't re-read a task we don't own.
 		w.logger.Printf("INFO claim idempotent (already claimed) taskId=%s", msg.TaskID)
-		return
+		return true
 	}
 
 	sig := NewCancellationSignal(ctx)
@@ -289,6 +315,10 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) {
 		}
 		w.report(msg, result)
 	}()
+	// Claim succeeded and the handler is now in-flight: the offset is safe to
+	// commit (the task is durably owned via the lease; the async report lands
+	// independently of the Kafka offset).
+	return true
 }
 
 // stoppedResult maps an SdkTaskStopped sentinel to a CANCELLED terminal result
@@ -357,6 +387,16 @@ func errAsDrop(err error) (*NotFoundError, bool) {
 // configured budget (invoked from the heartbeat DRAINING directive, §1.5).
 func (w *Worker) beginDrain() {
 	w.fsm.SetState(StateDraining)
+	go w.Stop(w.cfg.StopTimeout)
+}
+
+// onHeartbeatFatal stops the whole worker after a fatal (401/403) heartbeat
+// error. Continuing to consume once the heartbeat is dead guarantees a
+// double-run: the platform declares the worker dead after its liveness window
+// and redispatches every in-flight task. Stop() is launched async (it Waits on
+// the scheduler goroutines, including the heartbeat goroutine invoking us, so a
+// synchronous call would self-deadlock).
+func (w *Worker) onHeartbeatFatal() {
 	go w.Stop(w.cfg.StopTimeout)
 }
 

@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/client"
+	"github.com/pinpols/file-batch-system/sdk/go/client"
 	kgo "github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
@@ -130,11 +130,24 @@ type Consumer struct {
 	// acknowledge exactly the offsets the pipeline accepted.
 	pending []kgo.Message
 
+	// withheld is the per-partition commit ceiling: the LOWEST offset that was
+	// withheld (schema-rejected / foreign-tenant / hard claim failure). Commit()
+	// never acknowledges an offset at or past the ceiling for that partition, so
+	// a withheld record's offset can never be crossed by a later record's commit
+	// (the effect of the Java SDK's seek-back, achieved without a seek API).
+	withheld map[tpKey]int64
+
 	resumeCh chan struct{} // signaled on Resume()/Wakeup() to unpark a paused Poll
 	ctx      context.Context
 	cancel   context.CancelFunc
 
 	lastRefresh time.Time
+}
+
+// tpKey identifies a topic-partition for the per-partition commit ceiling.
+type tpKey struct {
+	topic     string
+	partition int
 }
 
 // compile-time assertion that *Consumer satisfies the phase-2 SPI.
@@ -178,6 +191,7 @@ func NewConsumer(cfg Config) (*Consumer, error) {
 		resumeCh: make(chan struct{}, 1),
 		ctx:      ctx,
 		cancel:   cancel,
+		withheld: map[tpKey]int64{},
 	}
 
 	topics, err := c.discoverTopics()
@@ -305,6 +319,9 @@ func (c *Consumer) maybeRefreshTopics() (old *kgo.Reader) {
 	c.reader = c.newReader(topics)
 	c.topics = topics
 	c.pending = nil
+	// Uncommitted pending is dropped (redelivered); the ceilings referenced those
+	// dropped offsets, so clear them too — nothing remains that they must guard.
+	c.withheld = map[tpKey]int64{}
 	return old
 }
 
@@ -420,10 +437,18 @@ func (c *Consumer) Commit() {
 		c.mu.Unlock()
 		return
 	}
-	msgs := c.pending
+	// Enforce the per-partition ceiling: never acknowledge an offset at or past a
+	// withheld record. Anything at/past the ceiling is dropped from the commit set
+	// (it stays uncommitted → redelivered), so a later record can never silently
+	// skip a withheld one on the same partition.
+	msgs := committable(c.pending, c.withheld)
 	c.pending = nil
 	reader := c.reader
 	c.mu.Unlock()
+
+	if len(msgs) == 0 {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
 	defer cancel()
@@ -443,6 +468,56 @@ func (c *Consumer) DropPending() {
 	c.mu.Lock()
 	c.pending = nil
 	c.mu.Unlock()
+}
+
+// Withhold marks the LAST fetched record (the one the pipeline just judged) as
+// valid-but-deferred and enforces the client.Consumer contract: its offset is
+// never committed and no later commit on the same partition may cross it.
+//
+// Because Poll returns one record per call, the record just judged is the tail
+// of pending. We record its offset as the partition's commit ceiling (keeping
+// the LOWEST if several are withheld) and drop everything at/past the ceiling
+// from pending. kafka-go has no seek on a GroupReader, so we cannot re-read the
+// record; instead we simply never commit past it, so the group resumes from the
+// last committed offset (before the withheld record) on the next rebalance /
+// restart and redelivers it — the same net effect as the Java SDK's seek-back.
+//
+// SPI limitation (documented, not a bug): client.Consumer has no per-partition
+// pause, so — unlike the Java SDK, which pause()s only the poisoned partition —
+// this adapter keeps fetching. Correctness is unaffected (the ceiling guarantees
+// no offset is ever crossed); the only cost is that later records on a poisoned
+// partition may be processed and then redelivered on restart (bounded, and
+// harmless under claim idempotency). Full parity needs a per-partition SPI.
+func (c *Consumer) Withhold() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.pending) == 0 {
+		return
+	}
+	m := c.pending[len(c.pending)-1]
+	k := tpKey{topic: m.Topic, partition: m.Partition}
+	if cur, ok := c.withheld[k]; !ok || m.Offset < cur {
+		c.withheld[k] = m.Offset
+	}
+	c.pending = committable(c.pending, c.withheld)
+}
+
+// committable returns the subset of msgs whose offset is strictly below their
+// partition's withheld ceiling (or whose partition has no ceiling). It is pure
+// (no receiver, no IO) so the offset-crossing invariant is unit-testable without
+// a broker. Order is preserved.
+func committable(msgs []kgo.Message, withheld map[tpKey]int64) []kgo.Message {
+	if len(withheld) == 0 {
+		return msgs
+	}
+	out := msgs[:0:0] // fresh backing array; never alias the caller's slice
+	for _, m := range msgs {
+		if ceil, ok := withheld[tpKey{topic: m.Topic, partition: m.Partition}]; ok && m.Offset >= ceil {
+			continue // at/past the withheld ceiling → never commit
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 // Wakeup interrupts an in-progress Poll (graceful stop, §1.6). Idempotent and

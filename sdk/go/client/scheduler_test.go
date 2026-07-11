@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 func strp(s string) *string { return &s }

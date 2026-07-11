@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 // §1.2 conformance runner: load all 12 contract fixtures, drive the decision

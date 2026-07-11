@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 func TestWithRetryRetriesRetryableResult(t *testing.T) {

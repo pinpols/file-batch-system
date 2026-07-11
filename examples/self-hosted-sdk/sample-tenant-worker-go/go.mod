@@ -3,8 +3,8 @@ module github.com/example/sample-tenant-worker-go
 go 1.25
 
 require (
-	github.com/pinpols/file-batch-system/batch-worker-sdk-go v0.0.0-00010101000000-000000000000
-	github.com/pinpols/file-batch-system/batch-worker-sdk-go/kafka v0.0.0-00010101000000-000000000000
+	github.com/pinpols/file-batch-system/sdk/go v0.0.0-00010101000000-000000000000
+	github.com/pinpols/file-batch-system/sdk/go/kafka v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -17,6 +17,6 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 )
 
-replace github.com/pinpols/file-batch-system/batch-worker-sdk-go => ../../../sdk/go
+replace github.com/pinpols/file-batch-system/sdk/go => ../../../sdk/go
 
-replace github.com/pinpols/file-batch-system/batch-worker-sdk-go/kafka => ../../../sdk/go/kafka
+replace github.com/pinpols/file-batch-system/sdk/go/kafka => ../../../sdk/go/kafka

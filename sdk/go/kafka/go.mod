@@ -5,12 +5,12 @@
 // never imports a broker library). The replace directive points the parent
 // module path at ../ so this adapter can import the parent's client/protocol
 // packages directly from source.
-module github.com/pinpols/file-batch-system/batch-worker-sdk-go/kafka
+module github.com/pinpols/file-batch-system/sdk/go/kafka
 
 go 1.25
 
 require (
-	github.com/pinpols/file-batch-system/batch-worker-sdk-go v0.0.0-00010101000000-000000000000
+	github.com/pinpols/file-batch-system/sdk/go v0.0.0-00010101000000-000000000000
 	github.com/segmentio/kafka-go v0.4.51
 )
 
@@ -23,4 +23,4 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 )
 
-replace github.com/pinpols/file-batch-system/batch-worker-sdk-go => ../
+replace github.com/pinpols/file-batch-system/sdk/go => ../

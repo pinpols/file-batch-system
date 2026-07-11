@@ -2,12 +2,13 @@ package client
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/pinpols/file-batch-system/batch-worker-sdk-go/protocol"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 func testConfig() Config {
@@ -202,6 +203,159 @@ func TestWorker_StopIdempotent(t *testing.T) {
 	w.Stop(time.Second)
 	if len(fp.DeactivateCalls) != 1 {
 		t.Fatalf("Stop must be idempotent, deactivate count=%d", len(fp.DeactivateCalls))
+	}
+}
+
+// badSchemaRecord is a valid-tenant record with an unknown-major schemaVersion
+// (v3) — the pipeline classifies it REJECTED_SCHEMA (§A).
+func badSchemaRecord(taskID string) Record {
+	return Record{
+		Topic: "batch.task.dispatch.http.node.w1",
+		Value: []byte(`{"taskId":"` + taskID + `","tenantId":"t1","schemaVersion":"v3","idempotencyKey":"idem-` + taskID + `"}`),
+	}
+}
+
+// P0: an unknown-schema (v3) record must be WITHHELD, never committed. The old
+// code left the RejectedSchema branch a no-op, so a following Accepted record's
+// Commit() would silently skip past the withheld offset.
+func TestWorker_RejectedSchemaWithholdsOffset(t *testing.T) {
+	fp := NewFakePlatform()
+	consumer := NewFakeConsumer([]Record{badSchemaRecord("v3-1")})
+	w := NewWorker(testConfig(), fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult {
+			t.Error("handler must not run for an unknown-schema record")
+			return Success(nil, "")
+		}), nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { return consumer.withholds() >= 1 })
+	w.Stop(time.Second)
+
+	if len(fp.ClaimCalls) != 0 {
+		t.Fatalf("unknown-schema record must not be claimed, got %d claims", len(fp.ClaimCalls))
+	}
+	if consumer.commits() != 0 {
+		t.Fatalf("unknown-schema record must NOT commit its offset, got %d commits", consumer.commits())
+	}
+	if consumer.withholds() != 1 {
+		t.Fatalf("unknown-schema record must withhold exactly once, got %d", consumer.withholds())
+	}
+}
+
+// P0: a foreign-tenant record must be WITHHELD (offset never committed), not a
+// silent no-op that a later commit can cross.
+func TestWorker_ForeignTenantWithholdsOffset(t *testing.T) {
+	fp := NewFakePlatform()
+	foreign := Record{Topic: "x", Value: []byte(`{"taskId":"f1","tenantId":"OTHER","schemaVersion":"v1"}`)}
+	consumer := NewFakeConsumer([]Record{foreign})
+	w := NewWorker(testConfig(), fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult { return Success(nil, "") }), nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { return consumer.withholds() >= 1 })
+	w.Stop(time.Second)
+
+	if consumer.commits() != 0 {
+		t.Fatalf("foreign-tenant record must NOT commit, got %d commits", consumer.commits())
+	}
+	if consumer.withholds() != 1 {
+		t.Fatalf("foreign-tenant record must withhold once, got %d", consumer.withholds())
+	}
+}
+
+// P1: a hard claim failure (5xx exhausted) must WITHHOLD the offset, not commit
+// it — else the task is "offset committed but never claimed" and lost forever.
+func TestWorker_ClaimHardFailureWithholdsOffset(t *testing.T) {
+	fp := NewFakePlatform()
+	fp.ClaimErr = &RetryExhaustedError{Op: "claim", Last: errors.New("http 500")}
+	consumer := NewFakeConsumer([]Record{dispatchRecord("task-1")})
+	w := NewWorker(testConfig(), fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult {
+			t.Error("handler must not run when claim fails")
+			return Success(nil, "")
+		}), nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { return consumer.withholds() >= 1 })
+	w.Stop(time.Second)
+
+	if consumer.commits() != 0 {
+		t.Fatalf("hard claim failure must NOT commit the offset, got %d commits", consumer.commits())
+	}
+	if consumer.withholds() != 1 {
+		t.Fatalf("hard claim failure must withhold once, got %d", consumer.withholds())
+	}
+}
+
+// A 409 (already claimed by another worker) is NOT a failure: commit-skip so we
+// don't re-read a task we don't own.
+func TestWorker_ClaimIdempotentCommits(t *testing.T) {
+	fp := NewFakePlatform()
+	fp.ClaimResp = ClaimResult{Idempotent: true}
+	consumer := NewFakeConsumer([]Record{dispatchRecord("task-1")})
+	w := NewWorker(testConfig(), fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult {
+			t.Error("handler must not run on a 409 idempotent claim")
+			return Success(nil, "")
+		}), nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { return consumer.commits() >= 1 })
+	w.Stop(time.Second)
+
+	if consumer.withholds() != 0 {
+		t.Fatalf("409 claim must commit-skip, not withhold, got %d withholds", consumer.withholds())
+	}
+}
+
+// A 404 (task gone) is drop-and-forget: commit-skip (nothing to redeliver).
+func TestWorker_ClaimNotFoundCommits(t *testing.T) {
+	fp := NewFakePlatform()
+	fp.ClaimErr = &NotFoundError{Op: "claim"}
+	consumer := NewFakeConsumer([]Record{dispatchRecord("task-1")})
+	w := NewWorker(testConfig(), fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult { return Success(nil, "") }), nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { return consumer.commits() >= 1 })
+	w.Stop(time.Second)
+
+	if consumer.withholds() != 0 {
+		t.Fatalf("404 claim must commit-skip (drop-and-forget), not withhold, got %d withholds", consumer.withholds())
+	}
+}
+
+// P1: a FATAL (401/403) heartbeat error must stop the WHOLE worker, not just the
+// heartbeat scheduler. A dead heartbeat means the platform will declare us dead
+// and redispatch in-flight tasks; continuing to consume would double-run them.
+func TestWorker_FatalHeartbeatStopsWorker(t *testing.T) {
+	fp := NewFakePlatform()
+	// First heartbeat returns a fatal auth error.
+	fp.ScriptHeartbeat(protocol.HeartbeatResponse{}, &FatalError{Status: 401, Op: "heartbeat"})
+
+	cfg := testConfig()
+	cfg.HeartbeatInterval = time.Millisecond // fire immediately
+	consumer := NewFakeConsumer()
+	w := NewWorker(cfg, fp, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult { return Success(nil, "") }), nil, quietLogger())
+
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	// The fatal heartbeat must escalate to a full worker Stop -> deactivate once.
+	waitFor(t, 2*time.Second, func() bool { return len(fp.DeactivateCalls) == 1 })
+	if !consumer.closed() {
+		t.Fatalf("fatal heartbeat must stop (close) the consumer")
 	}
 }
 
