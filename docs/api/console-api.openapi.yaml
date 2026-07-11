@@ -12034,17 +12034,37 @@ components:
     AiChatResponse:
       type: object
       properties:
+        requestId:
+          type: string
+          description: 本次请求 id（沿用请求元数据 requestId，缺失时后端生成）。
+        traceId:
+          type: string
+          description: 链路追踪 id。
+        sessionId:
+          type: string
+          description: 会话 id，用于多轮对话续接（请求未带时回退为 requestId）。前端多轮对话请回传此值。
+        promptCategory:
+          type: string
+          description: 提示词门禁分类（AiPromptCategory）。
+          enum: [PLATFORM, FILE_GOVERNANCE, WORKFLOW, OPERATIONS, OUT_OF_SCOPE]
+        promptDecision:
+          type: string
+          description: >-
+            提示词门禁决策（AiPromptDecision）。APPROVED=通过并作答；REJECTED_SCOPE=超出范围；
+            REJECTED_AUTH=权限不足；REJECTED_DISABLED=功能关闭；REJECTED_SAFETY=安全策略拒绝；FAILED=失败。
+            前端据此判断是否被拒。
+          enum: [APPROVED, REJECTED_SCOPE, REJECTED_AUTH, REJECTED_DISABLED, REJECTED_SAFETY, FAILED]
+        modelName:
+          type: string
+          description: 实际使用的模型名（来自服务端配置）。
         answer:
           type: string
-        conversationId:
+          description: 助手回答；被门禁拒绝时为对应的拒绝提示文案。
+        refusalReason:
           type: string
-        model:
-          type: string
-        promptTokens:
-          type: integer
-        completionTokens:
-          type: integer
-      required: [answer]
+          nullable: true
+          description: 拒绝原因；APPROVED 时为 null，被门禁拒绝时给出原因。
+      required: [requestId, traceId, sessionId, promptCategory, promptDecision, modelName, answer]
     AiAuditLogResponse:
       type: object
       properties:
