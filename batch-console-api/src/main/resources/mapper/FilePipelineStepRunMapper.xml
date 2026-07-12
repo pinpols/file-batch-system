@@ -13,6 +13,7 @@
             s.pipeline_instance_id,
             s.step_code,
             s.stage_code,
+            s.step_status,
             pr.processed_count as rows_processed,
             null::bigint as total_rows_hint,
             pr.updated_at as last_heartbeat_at
@@ -25,6 +26,35 @@
         where p.tenant_id = #{tenantId}
           and s.pipeline_instance_id = #{pipelineInstanceId}
         order by s.run_seq asc, s.id asc
+    </select>
+
+    <!-- 缺口2:pipeline 级文件名透出。一个 pipeline_instance 对应一个 file_record(可空)。 -->
+    <select id="selectFileInfoByPipelineInstance" resultType="map">
+        select
+            p.file_id as file_id,
+            fr.file_name as file_name
+        from batch.pipeline_instance p
+        left join batch.file_record fr on fr.id = p.file_id
+        where p.tenant_id = #{tenantId}
+          and p.id = #{pipelineInstanceId}
+    </select>
+
+    <!--
+      缺口1:解析该 pipeline 当前运行中分区的 worker,用于服务端桥接实时行数 cache。
+      链路:pipeline_instance.related_job_instance_id → job_instance → job_partition(运行态且已领取)。
+      取最近更新的一个运行态分区的 worker_code;无运行态分区则返回 null(调用方跳过桥接)。
+    -->
+    <select id="selectRunningWorkerCode" resultType="string">
+        select jp.worker_code
+        from batch.pipeline_instance p
+        join batch.job_instance ji on ji.id = p.related_job_instance_id
+        join batch.job_partition jp on jp.job_instance_id = ji.id
+        where p.tenant_id = #{tenantId}
+          and p.id = #{pipelineInstanceId}
+          and jp.partition_status in ('RUNNING', 'RETRYING')
+          and jp.worker_code is not null
+        order by jp.updated_at desc, jp.id desc
+        limit 1
     </select>
 
     <select id="selectByQuery" resultType="map">

@@ -17,13 +17,28 @@
         <result column="error_message" property="errorMessage"/>
         <result column="error_key" property="errorKey"/>
         <result column="error_args" property="errorArgs"/>
+        <result column="related_pipeline_instance_id" property="relatedPipelineInstanceId"/>
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
     </resultMap>
 
+    <!--
+      缺口4:作业入口→pipeline 观测跳转。反查 pipeline_instance.related_job_instance_id 得到该 step 所属 job
+      的 pipeline_instance id;文件类 job 才有值,普通 job 为 null。相关性由 (tenant_id, related_job_instance_id)
+      索引支撑,取最近一个。
+    -->
+    <sql id="relatedPipelineInstanceIdColumn">
+        (select pi.id
+         from batch.pipeline_instance pi
+         where pi.related_job_instance_id = s.job_instance_id
+           and pi.tenant_id = s.tenant_id
+         order by pi.id desc
+         limit 1) as related_pipeline_instance_id
+    </sql>
+
     <select id="selectByQuery" resultMap="JobStepInstanceResultMap">
-        select *
-        from batch.job_step_instance
+        select s.*, <include refid="relatedPipelineInstanceIdColumn"/>
+        from batch.job_step_instance s
         where tenant_id = #{tenantId}
         <if test="cursorId != null">
             and id &lt; #{cursorId}
@@ -52,8 +67,8 @@
     </select>
 
     <select id="selectById" resultMap="JobStepInstanceResultMap">
-        select *
-        from batch.job_step_instance
+        select s.*, <include refid="relatedPipelineInstanceIdColumn"/>
+        from batch.job_step_instance s
         where tenant_id = #{tenantId}
           and id = #{id}
     </select>

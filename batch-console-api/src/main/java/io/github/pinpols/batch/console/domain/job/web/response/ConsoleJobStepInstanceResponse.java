@@ -16,5 +16,6 @@ public record ConsoleJobStepInstanceResponse(
     String resultSummary,
     String errorCode,
     String errorMessage,
+    Long relatedPipelineInstanceId,
     Instant startedAt,
     Instant finishedAt) {}

@@ -234,7 +234,9 @@ public class ConsoleJobQueryService {
         display(entity.getBusinessKey()),
         entity.getLeaseExpireAt(),
         entity.getStartedAt(),
-        entity.getFinishedAt());
+        entity.getFinishedAt(),
+        display(entity.getErrorCode()),
+        display(entity.getErrorMessage()));
   }
 
   private ConsoleJobDefinitionResponse toJobDefinitionResponse(JobDefinitionEntity entity) {
@@ -319,6 +321,7 @@ public class ConsoleJobQueryService {
         entity.getResultSummary(),
         display(entity.getErrorCode()),
         display(errorMessage),
+        entity.getRelatedPipelineInstanceId(),
         entity.getStartedAt(),
         entity.getFinishedAt());
   }

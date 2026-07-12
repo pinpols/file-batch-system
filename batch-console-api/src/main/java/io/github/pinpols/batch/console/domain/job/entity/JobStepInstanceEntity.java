@@ -22,6 +22,9 @@ public class JobStepInstanceEntity extends AbstractLocalizedErrorEntity {
   private String resultSummary;
   private String errorCode;
 
+  /** 缺口4:反查 pipeline_instance.related_job_instance_id 得到的 pipeline 观测入口 id(可空)。 */
+  private Long relatedPipelineInstanceId;
+
   private Instant startedAt;
   private Instant finishedAt;
 }

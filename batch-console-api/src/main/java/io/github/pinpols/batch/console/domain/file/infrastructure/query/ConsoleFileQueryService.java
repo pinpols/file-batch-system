@@ -38,6 +38,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
+import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.TenantScope;
 import io.github.pinpols.batch.console.web.query.FileChainQueryRequest;
@@ -62,10 +63,13 @@ public class ConsoleFileQueryService {
   private static final String KEY_TO_TIME = "toTime";
   private static final String KEY_ID = "id";
 
+  private static final String STEP_STATUS_RUNNING = "RUNNING";
+
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleFileQueryMappers fileMappers;
   private final BatchSecurityProperties batchSecurityProperties;
   private final LocalizedErrorRenderer localizedErrorRenderer;
+  private final ConsoleOrchestratorProxyService orchestratorProxy;
 
   public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
@@ -154,17 +158,60 @@ public class ConsoleFileQueryService {
         fileMappers.filePipelineStepRunMapper.selectTenantIdByPipelineInstanceId(
             pipelineInstanceId);
     if (tenantId == null) {
-      return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, List.of());
+      return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, null, null, List.of());
     }
     tenantGuard.assertTenantAllowed(tenantId);
+    List<Map<String, Object>> rawSteps =
+        fileMappers.filePipelineStepRunMapper.selectProgressByPipelineInstance(
+            tenantId, pipelineInstanceId);
+    // 缺口1:某运行中 step 的持久 rows_processed 为 null 时(未开 checkpoint),
+    // 服务端解析该 pipeline 当前 worker 再查 orchestrator 内存 cache 补上实时行数。
+    // 前端契约不变(仍按 pipelineInstanceId 查),桥接完全在服务端完成。
+    Long liveRowsProcessed = resolveLiveRowsProcessed(tenantId, pipelineInstanceId, rawSteps);
     List<ConsoleFilePipelineStepProgressResponse> steps =
-        fileMappers
-            .filePipelineStepRunMapper
-            .selectProgressByPipelineInstance(tenantId, pipelineInstanceId)
-            .stream()
-            .map(this::toFilePipelineStepProgressResponse)
+        rawSteps.stream()
+            .map(row -> toFilePipelineStepProgressResponse(row, liveRowsProcessed))
             .toList();
-    return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, steps);
+    // 缺口2:文件名是 pipeline 级(一个 instance 一个文件),放响应顶层。
+    Map<String, Object> fileInfo =
+        fileMappers.filePipelineStepRunMapper.selectFileInfoByPipelineInstance(
+            tenantId, pipelineInstanceId);
+    Long fileId = fileInfo == null ? null : longOrNull(fileInfo, "file_id");
+    String fileName = fileInfo == null ? null : stringValue(fileInfo, "file_name");
+    return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, fileId, fileName, steps);
+  }
+
+  /**
+   * 缺口1 桥接:仅当存在「运行中且持久 rows_processed 为 null」的 step 时才触发。命中时多一次 DB 查询解析当前 worker (便宜的单行索引查询),再查
+   * orchestrator 进程内 cache(内存,便宜)。解析不到运行中分区则跳过、不报错。
+   */
+  private Long resolveLiveRowsProcessed(
+      String tenantId, Long pipelineInstanceId, List<Map<String, Object>> rawSteps) {
+    boolean needsBridge =
+        rawSteps.stream()
+            .anyMatch(
+                row ->
+                    STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"))
+                        && row.get("rows_processed") == null);
+    if (!needsBridge) {
+      return null;
+    }
+    String workerCode =
+        fileMappers.filePipelineStepRunMapper.selectRunningWorkerCode(tenantId, pipelineInstanceId);
+    if (workerCode == null) {
+      return null;
+    }
+    List<Map<String, Object>> cache =
+        orchestratorProxy.pipelineProgress(tenantId, List.of(workerCode));
+    if (cache.isEmpty()) {
+      return null;
+    }
+    return longOrNull(cache.get(0), "rowsProcessed");
+  }
+
+  private static Long longOrNull(Map<String, Object> row, String key) {
+    Object value = row == null ? null : row.get(key);
+    return value instanceof Number number ? number.longValue() : null;
   }
 
   public PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(
@@ -399,15 +446,22 @@ public class ConsoleFileQueryService {
   }
 
   private ConsoleFilePipelineStepProgressResponse toFilePipelineStepProgressResponse(
-      Map<String, Object> row) {
+      Map<String, Object> row, Long liveRowsProcessed) {
     Instant lastHeartbeatAt = instantValue(row, "last_heartbeat_at");
+    // 仅当持久值为 null 且该 step 运行中时,才用 cache 桥接的实时行数;total 保持 null(不做百分比)。
+    Long rowsProcessed = longOrNull(row, "rows_processed");
+    if (rowsProcessed == null
+        && liveRowsProcessed != null
+        && STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"))) {
+      rowsProcessed = liveRowsProcessed;
+    }
     return new ConsoleFilePipelineStepProgressResponse(
         longValue(row, "step_id"),
         longValue(row, "pipeline_instance_id"),
         stringValue(row, "step_code"),
         stringValue(row, "stage_code"),
-        longValue(row, "rows_processed"),
-        longValue(row, "total_rows_hint"),
+        rowsProcessed,
+        longOrNull(row, "total_rows_hint"),
         lastHeartbeatAt == null ? null : lastHeartbeatAt.toEpochMilli());
   }
 

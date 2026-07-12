@@ -26,4 +26,12 @@ public interface FilePipelineStepRunMapper {
 
   List<Map<String, Object>> selectProgressByPipelineInstance(
       @Param("tenantId") String tenantId, @Param("pipelineInstanceId") Long pipelineInstanceId);
+
+  /** 缺口2:返回 pipeline 级文件信息(file_id + file_name),文件缺失时 file_name 为 null。 */
+  Map<String, Object> selectFileInfoByPipelineInstance(
+      @Param("tenantId") String tenantId, @Param("pipelineInstanceId") Long pipelineInstanceId);
+
+  /** 缺口1:解析该 pipeline 当前运行中分区的 worker_code,无运行态分区返回 null。 */
+  String selectRunningWorkerCode(
+      @Param("tenantId") String tenantId, @Param("pipelineInstanceId") Long pipelineInstanceId);
 }

@@ -15,4 +15,6 @@ public record ConsoleJobPartitionResponse(
     String businessKey,
     Instant leaseExpireAt,
     Instant startedAt,
-    Instant finishedAt) {}
+    Instant finishedAt,
+    String errorCode,
+    String errorMessage) {}
