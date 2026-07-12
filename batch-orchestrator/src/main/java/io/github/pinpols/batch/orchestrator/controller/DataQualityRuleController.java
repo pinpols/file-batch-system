@@ -44,8 +44,9 @@ public class DataQualityRuleController {
   }
 
   @PostMapping
-  public CommonResponse<DataQualityRuleEntity> create(@RequestBody DataQualityRuleEntity rule) {
-    return CommonResponse.success(ruleService.create(rule));
+  public CommonResponse<DataQualityRuleEntity> create(
+      @RequestParam("tenantId") String tenantId, @RequestBody DataQualityRuleEntity rule) {
+    return CommonResponse.success(ruleService.create(tenantId, rule));
   }
 
   @PutMapping("/{id}")

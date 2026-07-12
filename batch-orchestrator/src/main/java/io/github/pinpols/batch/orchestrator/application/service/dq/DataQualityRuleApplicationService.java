@@ -25,7 +25,9 @@ public class DataQualityRuleApplicationService {
   }
 
   @Transactional
-  public DataQualityRuleEntity create(DataQualityRuleEntity rule) {
+  public DataQualityRuleEntity create(String tenantId, DataQualityRuleEntity rule) {
+    // 与 update 同一纵深防御:租户来自受信调用上下文,不接受 body 覆盖。
+    rule.setTenantId(tenantId);
     ruleMapper.insert(rule);
     return rule;
   }
