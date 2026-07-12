@@ -12,8 +12,10 @@
 --     - Import LOAD:position_marker = 已处理到的行号(staging 文件 append-only,行号稳定)
 --     - Export GENERATE:position_marker = 序列化的 cursor(plugin 的 nextCursor)
 --
---   续跑契约(决策二):chunk / page 业务写与本表位点更新合到同一事务,
---   保证不重不漏。Export 写文件非事务,走"分片临时文件 + 已确认页位点"补偿。
+--   续跑契约(决策二,实施修正):Import 业务写落租户业务库、本表位点落平台库,
+--   跨库无 1PC。真实语义是"业务先 commit → 位点后 advance + 插件幂等"的补偿式最终一致,
+--   崩溃窗口重做 <=1 chunk、由 plugin 幂等吸收不双写(非同事务原子)。
+--   Export 写文件非事务,走"分片临时文件 + 已确认页位点"补偿。
 --
 --   兼容性:无记录时退化为今天的行为(从 0 跑),老任务无感知。
 --   灰度开关 batch.worker.checkpoint.enabled (默认 false) 在 P2/P3 加。
@@ -50,7 +52,7 @@ COMMENT ON COLUMN batch.pipeline_progress.stage           IS
 COMMENT ON COLUMN batch.pipeline_progress.position_marker IS
     'Import=已处理到的行号(字符串化);Export=plugin 的 nextCursor 序列化';
 COMMENT ON COLUMN batch.pipeline_progress.processed_count IS
-    '已成功处理记录数(chunk/page 提交时累加,与 position_marker 同事务推进)';
+    '已成功处理记录数(chunk/page 业务写 commit 后随 position_marker 一并 advance;Import 跨库故为补偿式一致,非同事务)';
 COMMENT ON COLUMN batch.pipeline_progress.completed       IS
     'true 表示该 stage 在本 pipeline 实例已整体完成(幂等跳过)';
 

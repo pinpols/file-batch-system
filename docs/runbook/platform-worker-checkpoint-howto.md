@@ -1,6 +1,7 @@
 # 平台 Worker 续跑位点 howto (ADR-038 / Phase 4.5)
 
-> Status: **P1 + P2 + P3 已就绪**(P1/P2 = 2026-06-02;P3 Export GENERATE 续跑 = 2026-06-05)。
+> Status: **P1 + P2 + P3 已就绪**(P1/P2 = 2026-06-02;P3 Export GENERATE 续跑 = 2026-06-05);
+> **P0 生产化**(2026-07):默认值翻 `true`、补观测埋点、跨库补偿窗口加固 IT。
 
 ## 解决的问题
 
@@ -16,12 +17,23 @@
 
 | 配置 | 默认 | 含义 |
 |---|---|---|
-| `batch.worker.checkpoint.enabled` | `false` | ADR-038 续跑位点总开关。**关闭时行为与未引入本特性完全一致**(从 0 跑、不写位点)。 |
+| `batch.worker.checkpoint.enabled` | `true`(P0,2026-07)| ADR-038 续跑位点总开关。默认启用;显式设 **`false`** + worker 重启即回滚到未引入本特性的行为(从 0 跑、不写位点)。 |
 
-灰度建议:
-1. dev 环境长期开 → 跑日常用例验证不破坏正路径
-2. staging 灰度 1~2 周,看 `batch.pipeline_progress` 表行数 / 重派任务命中续跑次数
-3. prod 按租户 profile 渐进打开;**先在百万行级业务的租户上开**,小数据量租户继续 false 即可
+**P0 默认启用说明**:系统尚未上线(AM 迁移影子期同因取消),故无需影子期 / 按租户 profile 渐进灰度 —— sim/e2e
+全链验证通过后直接把默认值翻 `true`,开关保留作**回滚手段**。`PARTITION_REPLACE_COPY` 模板与行级续跑互斥,
+在续跑开启下会被 `IMPORT_LOAD_CONFIG_INVALID` 拒跑(见前置校验),这类模板须显式 `batch.worker.checkpoint.enabled=false`。
+
+**多分区任务自动降级(P0 守卫)**:`partitionCount > 1`(mod 切片分区 / ADR-046 bundle 展开的 K 个 file partition)时,
+各 partition 任务共享同一 `pipeline_instance`(UPSERT 幂等键是 `related_job_instance_id`),位点行
+`(tenant, pipeline_instance_id, stage)` 会被各 partition **交叉读写**:LOAD 的行号 marker 让别的 partition 跳错行、
+GENERATE 的 markCompleted 让别的 partition 误判已完成 + 确定化文件 `inst-<id>.<ext>` 撞路径(bundle export e2e 实测
+`NoSuchFileException` 致任务死信)。因此 LOAD / GENERATE 对多分区任务**整体自动降级为不续跑**(行为同开关关,
+留 DEBUG 日志),无需配置;多分区的崩溃恢复由 `job_partition` 分区级重跑覆盖(与本特性正交,见设计文档 §1.8)。
+**续跑只对单分区任务生效** —— 即设计主场景「单个超大文件 / 单大结果集」。按 partition 拆位点键属 P1+,P0 不做。
+
+> 回滚:显式 `false` + worker 重启即完全退回今天行为;已写位点行无害保留(见 §关闭 / 回滚)。
+> 上线前 checklist(非 P0 阻塞):非 `GenericJdbcMappedImportLoadPlugin` 的自定义 plugin 逐个核 `idempotencyCapability()`、
+> 生产观测面板接告警、真实数据量下续跑命中率 / 跳过行数首周复盘。
 
 专用指标：`batch.worker.checkpoint.operations.total{stage,operation,outcome}`。标签均为固定枚举，不带 tenant/instance：
 
@@ -29,7 +41,11 @@
 - `operation=advance,outcome=success|failure`：位点推进结果；
 - `operation=complete,outcome=success|failure`：完成标记结果。
 
-灰度期间至少观察 `load/resumable` 是否出现，以及 `outcome=failure` 是否持续为 0；表行数只能证明位点写入，不能替代失败指标。
+配套 counter `batch.worker.checkpoint.resume.skipped.records.total{stage}`：命中续跑时被跳过(上次执行已提交)的记录数,
+按 stage 累加已处理 count。用 `increase()` 观测某时段续跑省下的重复处理量 —— `operations{outcome=resumable}` 回答
+「续跑有没有在起作用、命中率多少」,本 counter 回答「省下了多少重复工作」。命中但已处理数为 0 时只计命中次数、本 counter 不增。
+
+至少观察 `load/resumable` 是否出现，以及 `outcome=failure` 是否持续为 0；表行数只能证明位点写入，不能替代失败指标。
 Prometheus 规则 `BatchWorkerCheckpointPersistenceFailed` 会在 5 分钟窗口出现失败时告警，并沿现有
 `alert_group=worker` 静态路由发送；收到告警后应停止扩大灰度，先检查平台 PostgreSQL 和 worker 日志。
 
@@ -119,8 +135,9 @@ ORDER BY updated_at DESC LIMIT 20;
 
 ### 启用步骤
 
-1. 验证 plugin 是 `GenericJdbcMappedImportLoadPlugin` 且 `strict-idempotency=true`
-2. 配置 worker:`batch.worker.checkpoint.enabled=true`(application-<profile>.yml)
+1. 续跑默认已开(P0)。验证 plugin 是 `GenericJdbcMappedImportLoadPlugin` 且 `strict-idempotency=true`;
+   自定义 plugin 须自报 `idempotencyCapability()`,否则续跑开启下自动拒跑
+2. 只有需**关闭**时才显式配 `batch.worker.checkpoint.enabled=false`(如 `PARTITION_REPLACE_COPY` 模板)
 3. 重启 worker(配置非热加载)
 4. 观察 `batch.pipeline_progress` 表行数增长 = 正常工作
 

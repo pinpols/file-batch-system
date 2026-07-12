@@ -321,14 +321,31 @@ public class GenerateStep implements ExportStageStep {
   }
 
   /**
-   * ADR-038 P3:续跑启用时返回 {@code null}(不续跑),否则返回 pipelineInstanceId。续跑要求:开关开 + 有正的 pipelineInstanceId
-   * + 非 Excel(SXSSF zip 工作簿无法 append/truncate,不参与续跑,见 runbook)。
+   * ADR-038 P3:续跑启用时返回 pipelineInstanceId,否则返回 {@code null}(不续跑)。续跑要求:开关开 + 有正的 pipelineInstanceId
+   * + 非 Excel(SXSSF zip 工作簿无法 append/truncate,不参与续跑,见 runbook)+ 单分区任务。
+   *
+   * <p>多分区降级(P0 守卫):partitionCount > 1(ADR-046 bundle export 的 K 个 file partition 等)时,各 partition
+   * 任务共享同一 {@code pipeline_instance}(UPSERT 幂等键是 {@code related_job_instance_id}),GENERATE 位点行会被
+   * 交叉读写 —— A 的 markCompleted 会让 B 误判"已完成"、advance marker(字节偏移@cursor)互相覆盖后续跑会 truncate/续写错位。P0
+   * 保守整体降级为不续跑(行为同开关关);bundle 的崩溃恢复由 {@code job_partition} 分区级重跑覆盖,分区内行级续跑要按 partition 拆位点键,属 P1+
+   * 不在 P0 做。
    */
   private Long resolveCheckpointInstanceId(ExportJobContext context, String fileFormatType) {
     if (checkpointProperties == null
         || !checkpointProperties.isEnabled()
         || positionStore == null
         || "EXCEL".equalsIgnoreCase(fileFormatType)) {
+      return null;
+    }
+    int partitionCount =
+        intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
+    if (partitionCount > 1) {
+      log.debug(
+          "export GENERATE checkpoint resume degraded (multi-partition task shares"
+              + " pipeline_instance): tenantId={}, jobCode={}, partitionCount={}",
+          context.getTenantId(),
+          context.getJobCode(),
+          partitionCount);
       return null;
     }
     Long instanceId = toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));

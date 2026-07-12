@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
@@ -74,12 +75,7 @@ class LoadStepTest {
     objectMapper = new ObjectMapper();
     loadStep =
         new LoadStep(
-            registry,
-            runtimeRepository,
-            workerConfig,
-            objectMapper,
-            new io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties(),
-            null);
+            registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
   }
 
   @AfterEach
@@ -87,6 +83,16 @@ class LoadStepTest {
     for (Path p : tempPaths) {
       Files.deleteIfExists(p);
     }
+  }
+
+  /**
+   * 本类测的是**非续跑** LOAD 行为(positionStore=null)。checkpoint 默认值已在 P0 翻 true,故这些用例必须 显式关闭,否则会走续跑路径 +
+   * 触发幂等前置校验。续跑路径由 {@code LoadStepCheckpoint*Test} 专门覆盖。
+   */
+  private static WorkerCheckpointProperties disabledCheckpoint() {
+    WorkerCheckpointProperties props = new WorkerCheckpointProperties();
+    props.setEnabled(false);
+    return props;
   }
 
   // ── stage() ──
@@ -222,12 +228,7 @@ class LoadStepTest {
     registry = new ImportLoadPluginRegistry(List.of(plugin, custom));
     loadStep =
         new LoadStep(
-            registry,
-            runtimeRepository,
-            workerConfig,
-            objectMapper,
-            new io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties(),
-            null);
+            registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);

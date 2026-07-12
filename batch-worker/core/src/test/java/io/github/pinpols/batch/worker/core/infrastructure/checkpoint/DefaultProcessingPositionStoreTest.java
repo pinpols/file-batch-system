@@ -100,6 +100,24 @@ class DefaultProcessingPositionStoreTest {
     assertThat(pos.positionMarker()).isEqualTo("row:12345");
     assertThat(pos.processedCount()).isEqualTo(12345L);
     assertMetric("LOAD", "load", "resumable", 1.0);
+    // 命中续跑 → 跳过的记录数(=已处理 count)进入 resume.skipped counter
+    assertResumeSkipped("LOAD", 12345.0);
+  }
+
+  @Test
+  @DisplayName("resume skipped:命中续跑但 processedCount=0(位点在但无已提交记录)不增 skipped counter")
+  void shouldNotRecordResumeSkipped_whenProcessedCountZero() {
+    PipelineProgressEntity row =
+        new PipelineProgressEntity(
+            3L, TENANT, INSTANCE, "LOAD", "row:0", 0L, false, null, OffsetDateTime.now(), null);
+    when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(row);
+
+    store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
+
+    // 命中次数仍计,但跳过记录数为 0 时不注册 skipped counter(避免 0 值噪声)
+    assertMetric("LOAD", "load", "resumable", 1.0);
+    assertThat(meterRegistry.find(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED).counter())
+        .isNull();
   }
 
   @Test
@@ -141,6 +159,16 @@ class DefaultProcessingPositionStoreTest {
 
     // findByInstanceAndStage 触发(by when()),advance / markCompleted 不触发
     verify(mapper).findByInstanceAndStage(TENANT, INSTANCE, "LOAD");
+  }
+
+  private void assertResumeSkipped(String stage, double expected) {
+    assertThat(
+            meterRegistry
+                .get(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
+                .tags("stage", stage)
+                .counter()
+                .count())
+        .isEqualTo(expected);
   }
 
   private void assertMetric(String stage, String operation, String outcome, double expected) {

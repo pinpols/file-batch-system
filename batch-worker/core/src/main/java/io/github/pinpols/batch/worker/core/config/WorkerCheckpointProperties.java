@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * ADR-038 平台 worker 续跑位点配置。
  *
- * <p>默认 {@code enabled=false} — 灰度开关:无开关时 LoadStep / GenerateStep 行为与今天完全一致(从 0 跑、不写位点)。
+ * <p>默认 {@code enabled=true}(P0 生产化,2026-07)—— 系统未上线故无需影子期/租户渐进灰度,验证走 sim/e2e 全链; 开关保留作**回滚手段**:显式设
+ * {@code batch.worker.checkpoint.enabled=false} + worker 重启即完全退回未引入本功能的行为 (从 0 跑、不写位点)。
  *
  * <p>开关打开后,LOAD / GENERATE 阶段会:
  *
@@ -25,6 +26,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.checkpoint")
 public class WorkerCheckpointProperties {
 
-  /** ADR-038 续跑位点总开关。默认 false,行为与未引入本功能时一致。 */
-  private boolean enabled = false;
+  /** ADR-038 续跑位点总开关。默认 true(P0 生产化);显式设 false 即回滚到未引入本功能时的行为。 */
+  private boolean enabled = true;
 }
