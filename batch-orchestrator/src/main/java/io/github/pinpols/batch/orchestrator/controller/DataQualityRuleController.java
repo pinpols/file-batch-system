@@ -38,8 +38,9 @@ public class DataQualityRuleController {
   }
 
   @GetMapping("/{id}")
-  public CommonResponse<DataQualityRuleEntity> get(@PathVariable("id") Long id) {
-    return CommonResponse.success(ruleService.get(id));
+  public CommonResponse<DataQualityRuleEntity> get(
+      @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
+    return CommonResponse.success(ruleService.get(tenantId, id));
   }
 
   @PostMapping
@@ -49,7 +50,9 @@ public class DataQualityRuleController {
 
   @PutMapping("/{id}")
   public CommonResponse<DataQualityRuleEntity> update(
-      @PathVariable("id") Long id, @RequestBody DataQualityRuleEntity rule) {
-    return CommonResponse.success(ruleService.update(id, rule));
+      @PathVariable("id") Long id,
+      @RequestParam("tenantId") String tenantId,
+      @RequestBody DataQualityRuleEntity rule) {
+    return CommonResponse.success(ruleService.update(tenantId, id, rule));
   }
 }

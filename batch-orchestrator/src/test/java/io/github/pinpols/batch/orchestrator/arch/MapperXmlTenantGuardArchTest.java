@@ -45,8 +45,6 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "BatchDayInstanceMapper#updateWithCas",
         "BatchDayReplayEntryMapper#updateStatus",
         "QuotaRuntimeStateMapper#updateWithCas",
-        // 内部 DQ 规则 CRUD(/internal/orchestrator/dq/rules):console-api 代理层强制 tenant,内部按 id 改
-        "DataQualityRuleMapper#update",
         // 跨租后台 reaper:按状态/时间全表扫僵尸行,加 tenant 谓词会破坏(by-design 跨租)
         "CompensationCommandMapper#markStaleRunningFailed",
         "OutboxEventMapper#resetStalePublishing",
