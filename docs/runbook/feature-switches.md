@@ -53,7 +53,9 @@
 渐进灰度：sim/e2e 全链验证通过后直接默认启用，开关保留作回滚（显式 `false` + 重启即退回今天行为）。
 Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD_CONFIG_INVALID` 拒跑，不能绕过。
 `PARTITION_REPLACE_COPY` 与行号续跑互斥，须对该模板显式设 `false`。
-多分区任务（`partitionCount>1`，含 ADR-046 bundle 展开）自动降级不续跑（共享 `pipeline_instance` 位点会互撞），无需配置——续跑只对单分区任务生效。
+多分区任务（`partitionCount>1`，含 ADR-046 bundle 展开）自动降级不续跑（共享 `pipeline_instance` 位点会互撞），无需配置——续跑只对单分区任务生效；`partitionCount` **缺失**=单分区放行（常态），**present 但非法**（非数字/`<=0`）走 fail-closed 降级（2026-07 数据正确性补丁）。
+
+**与 `compensate_on_failure` 的交互（2026-07）**：`compensate_on_failure=true` 模板 + 本开关开是**安全组合**——反向补偿前先作废该实例 checkpoint 位点，成功后才允许删本 run 业务数据。位点作废失败则停止反向删除，避免“业务数据已删但重试仍跳过”。无需额外配置，详见 howto「与 compensate_on_failure / 多分区 / 文件指纹的交互」。
 
 上线后观测：`batch.worker.checkpoint.operations.total{operation="load",outcome="resumable"}`（命中率）、
 `batch.worker.checkpoint.resume.skipped.records.total`（省下的重复处理量）、全部 `outcome="failure"` 是否持续为 0。

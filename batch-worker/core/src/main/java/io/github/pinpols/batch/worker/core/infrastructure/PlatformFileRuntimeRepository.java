@@ -310,6 +310,38 @@ public class PlatformFileRuntimeRepository {
     return stepCodes == null || stepCodes.isEmpty() ? Set.of() : new HashSet<>(stepCodes);
   }
 
+  /**
+   * P1-1 阶段级续跑回灌:读该实例某 {@code stepCode} 最近一次 SUCCESS 的 {@code output_summary}(jsonb)解析为 map。
+   *
+   * <p>跳过 COMPUTE/VALIDATE 时不重算,其产出(highWaterMarkOut / processedCount 等)只活在上次成功的 step_run
+   * output_summary 里;不回灌则 report 水位为 null → 保留旧值 → 下周期 INCREMENTAL 重读重发。无记录 / 解析失败 → 返回空
+   * map(调用方降级为不回灌)。
+   */
+  public Map<String, Object> loadLatestSucceededStepOutputSummary(
+      Long pipelineInstanceId, String stepCode) {
+    if (pipelineInstanceId == null || !Texts.hasText(stepCode)) {
+      return Map.of();
+    }
+    String json =
+        platformFileRuntimeMapper.selectLatestSucceededStepOutputSummary(
+            params(KEY_PIPELINE_INSTANCE_ID, pipelineInstanceId, "stepCode", stepCode));
+    if (!Texts.hasText(json)) {
+      return Map.of();
+    }
+    try {
+      Map<String, Object> parsed = JsonUtils.fromJson(json, Map.class);
+      return parsed == null ? Map.of() : parsed;
+    } catch (RuntimeException ex) {
+      log.warn(
+          "failed to parse pipeline_step_run output_summary for skip carry-forward:"
+              + " pipelineInstanceId={}, stepCode={}, message={}",
+          pipelineInstanceId,
+          stepCode,
+          ex.getMessage());
+      return Map.of();
+    }
+  }
+
   public Long startStepRun(
       Long pipelineInstanceId, String stepCode, String stageCode, Object inputSummary) {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {

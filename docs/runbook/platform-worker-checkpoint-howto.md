@@ -122,6 +122,19 @@ ORDER BY updated_at DESC LIMIT 20;
 `position_marker` 形如 `<byteOffset>@L|<cursorValue>`(类型标签:`L`=Long、`TS`=Timestamp、`S`=String…)。
 观察残文件:`ls -l $TMPDIR/file-batch-export/inst-*.<ext>`。
 
+## 与 compensate_on_failure / 多分区 / 文件指纹的交互(2026-07 数据正确性补丁)
+
+- **compensate_on_failure × checkpoint(P0)**:`compensate_on_failure=true` 模板 + checkpoint 开是**安全组合**。
+  `PipelineCompensationHook` 在反向删本 run 业务行**之前**先清该实例全部 stage 位点,使后续重试从头全量重做。
+  位点清理失败时不执行反向删除并记 `FAILED` 审计;位点已清后反向动作即使 `SKIPPED/FAILED`,重试也会从头跑,由幂等 plugin 吸收已存数据。运维信号:位点作废会落
+  `pipeline compensation invalidated checkpoint positions before reverse` info 日志。
+- **多分区降级 fail-closed(P2)**:`PARTITION_COUNT` **缺失**=非分区任务=单分区,续跑放行(常态);**present 但非法**
+  (非数字 / `<=0`)= 拓扑不可判定 → **fail-closed 降级为不续跑 / 不跳过**(`CheckpointPartitionGuard`),宁可全量重跑也不冒交叉读写损数据。
+- **Export GENERATE 文件指纹(P1)**:完成 marker 记录最终文件字节数;`GenerateStep` 幂等跳过前校验残文件 `Files.size()` 与指纹一致,
+  不符(双故障半写残文件)则拒绝跳过、退化全量重写,杜绝上传半截文件。
+- **stage-skip 回灌水位(P1)**:跳过 COMPUTE/VALIDATE 时从上次 SUCCESS `pipeline_step_run.output_summary` 回灌
+  `highWaterMarkOut` / `processedCount` 等到 attributes,使 report 正常推水位,避免下周期 INCREMENTAL 重读重发。
+
 ## 反例(don't)
 
 ❌ **位点 advance 不能写到业务 DB** —— 跨库唯一约束 / RLS / 升级耦合,违反"位点是 worker 内部记录"

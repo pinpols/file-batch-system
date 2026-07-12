@@ -39,6 +39,8 @@ public interface PlatformFileRuntimeMapper {
 
   List<String> selectSucceededStepCodes(Map<String, Object> params);
 
+  String selectLatestSucceededStepOutputSummary(Map<String, Object> params);
+
   int insertStepRun(Map<String, Object> params);
 
   int finishStepRun(Map<String, Object> params);

@@ -33,4 +33,12 @@ public interface ProcessingPositionStore {
 
   /** 阶段整体完成时调用;completed=true 后续 advance 不再回写位点。 */
   void markCompleted(String tenantId, long pipelineInstanceId, ProcessingStage stage);
+
+  /**
+   * 作废某 pipeline 实例的**全部 stage 位点**(ADR-038 P0 补偿协同)。
+   *
+   * <p>安全增量补偿(compensate_on_failure)反向删除本 run 的业务行后调用:advance 已推进的位点指向被删数据, 必须一并作废,否则重试复用同一 {@code
+   * pipelineInstanceId} 续跑会跳过已删 chunk 造成数据永久缺失。
+   */
+  void deleteAllStages(String tenantId, long pipelineInstanceId);
 }

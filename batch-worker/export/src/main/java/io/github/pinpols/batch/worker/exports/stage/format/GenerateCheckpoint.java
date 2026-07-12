@@ -151,22 +151,55 @@ public final class GenerateCheckpoint {
   }
 
   /**
-   * 阶段整体完成:先把终页那段未记的行数补进位点表(终页 cursor==null 不走 {@link #advance},否则 processedCount 会少最后一页), 再 {@code
-   * markCompleted}。补记用 offset=0 的哨兵 marker —— 万一在「补记」与「markCompleted」之间崩溃,{@code open} 见 offset==0
-   * 即判定不可续跑、退化为全量重跑(truncate 重写),不会基于哨兵 marker 错误续跑。
+   * 完成 marker 的 cursor 哨兵:类型标签 {@code C} <b>不是</b> {@link GenerateCursorCodec} 的合法解码标签(合法为
+   * L/I/BI/D/B/TS/LDT/DT/S)。故完成 marker 的 byteOffset 位可安全复用为「最终文件字节数」指纹:一旦「补记指纹」与「{@code
+   * markCompleted}」之间崩溃,{@code open} 尝试 {@code decodeCursor} 会因未知标签 {@code C} 抛错 → 退化为全量重跑(truncate
+   * 重写),绝不会基于完成哨兵错误续跑。
+   */
+  static final String COMPLETED_CURSOR_SENTINEL = "C|__completed__";
+
+  /**
+   * 阶段整体完成:补记终页未记的行数(终页 cursor==null 不走 {@link #advance},否则 processedCount 会少最后一页),并把**最终文件字节数**
+   * 写进完成 marker(offset 位),再 {@code markCompleted}。
+   *
+   * <p>P1-2 文件指纹:{@code GenerateStep} 幂等跳过前用该字节数与残文件 {@code Files.size()} 比对——双故障(GENERATE 完→STORE
+   * 前崩→重派 fresh 半写→再崩→completed+残文件)下字节数不符即拒绝跳过、退化全量重写,杜绝上传半截文件。
    *
    * @param finalRecordCount generate 返回的真实总行数(含续跑前已写)
+   * @param finalFileSizeBytes 生成文件最终字节数(完整性指纹)
    */
-  public void complete(long finalRecordCount) {
+  public void complete(long finalRecordCount, long finalFileSizeBytes) {
+    long increment = 0L;
     if (!disabled && finalRecordCount > lastReportedCount) {
-      store.advance(
-          tenantId,
-          pipelineInstanceId,
-          ProcessingStage.GENERATE,
-          codec.encodeMarker(0L, "S|__completed__"),
-          finalRecordCount - lastReportedCount);
+      increment = finalRecordCount - lastReportedCount;
       lastReportedCount = finalRecordCount;
     }
+    // 始终写含字节数指纹的完成 marker(即便无新增行数,也要落 fileSize 指纹供跳过前校验)。
+    store.advance(
+        tenantId,
+        pipelineInstanceId,
+        ProcessingStage.GENERATE,
+        codec.encodeMarker(finalFileSizeBytes, COMPLETED_CURSOR_SENTINEL),
+        increment);
     store.markCompleted(tenantId, pipelineInstanceId, ProcessingStage.GENERATE);
+  }
+
+  /**
+   * 解析完成 marker 里的文件字节数指纹;非完成哨兵格式 / 解析失败 → 返回 {@code -1}(调用方据此拒绝幂等跳过、退化全量重写)。 兼容旧哨兵({@code
+   * 0@S|__completed__},无真实字节数)—— 其 offset=0 与真实文件字节数不符,自然触发重写(安全)。
+   */
+  public static long parseCompletedFileSize(GenerateCursorCodec codec, String marker) {
+    if (marker == null) {
+      return -1L;
+    }
+    try {
+      GenerateCursorCodec.Marker parsed = codec.decodeMarker(marker);
+      if (!COMPLETED_CURSOR_SENTINEL.equals(parsed.encodedCursor())) {
+        return -1L;
+      }
+      return parsed.byteOffset();
+    } catch (RuntimeException ex) {
+      return -1L;
+    }
   }
 }

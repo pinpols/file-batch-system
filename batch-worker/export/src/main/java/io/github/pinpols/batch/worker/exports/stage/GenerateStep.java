@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
+import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -135,8 +136,23 @@ public class GenerateStep implements ExportStageStep {
             positionStore.load(
                 context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
         if (pos.completed() && Files.exists(generatedFile)) {
-          // 幂等跳过:GENERATE 已整体完成且文件仍在(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
-          return completeWithoutRegenerate(context, batch, generatedFile, pos.processedCount());
+          // P1-2 文件指纹校验:GENERATE 已 completed,但完成 marker 记录的字节数须与残文件实际字节数一致
+          // 才幂等跳过。双故障(完成后 fresh 半写又崩)下字节数不符 → 拒绝跳过、落到下面走全量重写(安全)。
+          long expectedSize =
+              GenerateCheckpoint.parseCompletedFileSize(cursorCodec, pos.positionMarker());
+          long actualSize = Files.size(generatedFile);
+          if (expectedSize >= 0 && actualSize == expectedSize) {
+            // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
+            return completeWithoutRegenerate(context, batch, generatedFile, pos.processedCount());
+          }
+          log.warn(
+              "export GENERATE completed-marker file fingerprint mismatch, regenerating fresh:"
+                  + " tenantId={}, instanceId={}, expectedBytes={}, actualBytes={}",
+              context.getTenantId(),
+              checkpointInstanceId,
+              expectedSize,
+              actualSize);
+          // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
         }
         checkpoint =
             GenerateCheckpoint.open(
@@ -165,8 +181,8 @@ public class GenerateStep implements ExportStageStep {
       long recordCount = strategy.generate(formatCtx);
 
       if (checkpoint != null) {
-        // 整体完成 → 补记终页行数 + 标记 completed;此后该实例重派会走上面的幂等跳过分支。
-        checkpoint.complete(recordCount);
+        // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
+        checkpoint.complete(recordCount, Files.size(generatedFile));
       }
 
       attrs.put("exportBatch", batch);
@@ -337,15 +353,15 @@ public class GenerateStep implements ExportStageStep {
         || "EXCEL".equalsIgnoreCase(fileFormatType)) {
       return null;
     }
-    int partitionCount =
-        intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
-    if (partitionCount > 1) {
+    Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);
+    // P2 fail-closed:缺失=单分区放行;present 但非法=拓扑不可判定→降级(见 CheckpointPartitionGuard)。
+    if (CheckpointPartitionGuard.shouldDegrade(rawPartitionCount)) {
       log.debug(
-          "export GENERATE checkpoint resume degraded (multi-partition task shares"
-              + " pipeline_instance): tenantId={}, jobCode={}, partitionCount={}",
+          "export GENERATE checkpoint resume degraded (multi-partition or illegal partition count):"
+              + " tenantId={}, jobCode={}, partitionCount={}",
           context.getTenantId(),
           context.getJobCode(),
-          partitionCount);
+          rawPartitionCount);
       return null;
     }
     Long instanceId = toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));

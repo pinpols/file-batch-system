@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -42,11 +43,19 @@ public class PipelineCompensationHook {
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ObjectProvider<PipelineCompensator> compensatorProvider;
 
+  /**
+   * ADR-038 P0:反向补偿前作废 checkpoint 位点用。可选注入(语义同 compensatorProvider):无 store bean(测试 / 未装配续跑基础设施)时为
+   * null,{@link #invalidateCheckpointBeforeReverse} 直接视为无位点可清。
+   */
+  private final ProcessingPositionStore positionStore;
+
   public PipelineCompensationHook(
       PlatformFileRuntimeRepository runtimeRepository,
-      ObjectProvider<PipelineCompensator> compensatorProvider) {
+      ObjectProvider<PipelineCompensator> compensatorProvider,
+      ObjectProvider<ProcessingPositionStore> positionStoreProvider) {
     this.runtimeRepository = runtimeRepository;
     this.compensatorProvider = compensatorProvider;
+    this.positionStore = positionStoreProvider.getIfAvailable();
   }
 
   /**
@@ -77,7 +86,17 @@ public class PipelineCompensationHook {
       Long fileId = runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
       // ① 进入 COMPENSATING 中间态(adapter 随后落 FAILED 终态)。
       runtimeRepository.markPipelineCompensating(pipelineInstanceId);
-      // ② 执行反向动作(compensator 内部已吞咽异常,但此处再兜一层防御)。
+      // ② 先作废位点,再反向删业务数据。跨库无 1PC 时必须选择这个顺序:
+      //    - 位点清理失败:不执行反向删除,业务数据+位点仍一致;
+      //    - 位点清理成功后反向失败:重试从头跑,由 plugin 幂等约束吸收已存数据。
+      // 反过来“先删业务数据、再 best-effort 清位点”会在第二步失败时静默缺数。
+      if (!invalidateCheckpointBeforeReverse(tenantId, pipelineInstanceId)) {
+        CompensationResult result =
+            CompensationResult.failed("checkpoint invalidation failed; reverse not attempted");
+        audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
+        return true;
+      }
+      // ③ 执行反向动作(compensator 内部已吞咽异常,但此处再兜一层防御)。
       CompensationResult result;
       try {
         result = compensator.compensate(tenantId, pipelineInstanceId, fileId, attributes);
@@ -92,7 +111,7 @@ public class PipelineCompensationHook {
             ex);
         result = CompensationResult.failed("compensator threw: " + ex.getMessage());
       }
-      // ③ 审计每条反向动作。
+      // ④ 审计每条反向动作。
       audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
       return true;
     } catch (RuntimeException ex) {
@@ -102,6 +121,34 @@ public class PipelineCompensationHook {
               + " tenantId={}, pipelineType={}, pipelineInstanceId={}",
           tenantId,
           pipelineType,
+          pipelineInstanceId,
+          ex);
+      return false;
+    }
+  }
+
+  /**
+   * 反向动作前作废该 pipeline 实例的全部 checkpoint 位点。返回 false 时调用方必须停止反向删除, 保证不会出现“业务数据已删、位点仍跳过”的静默缺数窗口。无
+   * positionStore bean / 无 instance id 表示无可清位点,视为成功。
+   */
+  private boolean invalidateCheckpointBeforeReverse(String tenantId, Long pipelineInstanceId) {
+    if (positionStore == null || pipelineInstanceId == null) {
+      return true;
+    }
+    try {
+      positionStore.deleteAllStages(tenantId, pipelineInstanceId);
+      log.info(
+          "pipeline compensation invalidated checkpoint positions before reverse: tenantId={},"
+              + " pipelineInstanceId={}",
+          tenantId,
+          pipelineInstanceId);
+      return true;
+    } catch (RuntimeException ex) {
+      log.error(
+          "pipeline compensation cannot invalidate checkpoint positions; reverse aborted:"
+              + " tenantId={},"
+              + " pipelineInstanceId={}",
+          tenantId,
           pipelineInstanceId,
           ex);
       return false;

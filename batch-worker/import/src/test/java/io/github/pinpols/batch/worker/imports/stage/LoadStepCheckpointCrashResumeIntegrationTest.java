@@ -323,6 +323,11 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
       rows.put(
           key(tenantId, instanceId, stage), ProcessingPosition.completed(current.processedCount()));
     }
+
+    @Override
+    public void deleteAllStages(String tenantId, long instanceId) {
+      rows.keySet().removeIf(k -> k.startsWith(tenantId + '|' + instanceId + '|'));
+    }
   }
 
   /** 明确非幂等(NONE)且 loadChunk 真写库 —— 只在前置校验失效时才会污染表,便于断言拒跑成立。 */

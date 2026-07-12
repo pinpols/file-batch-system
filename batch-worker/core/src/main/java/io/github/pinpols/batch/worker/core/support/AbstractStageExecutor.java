@@ -7,6 +7,7 @@ import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -91,6 +92,9 @@ public abstract class AbstractStageExecutor<
         context
             .getAttributes()
             .put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
+        // P1-1:跳过时从上次 SUCCESS step_run 的 output_summary 回灌关键产出(如 highWaterMarkOut /
+        // processedCount)。否则跳过 COMPUTE 后 report 水位为 null → 保留旧值 → 下周期 INCREMENTAL 重读重发。
+        carryForwardSkippedStageOutputs(context, currentStep, pipelineInstanceId);
         log.info(
             "stage-skip: idempotently skipping already-succeeded stage stepCode={} stageCode={} "
                 + "pipelineInstanceId={}",
@@ -152,17 +156,55 @@ public abstract class AbstractStageExecutor<
    * 粒度不一致,保守整体降级为不跳(行为同开关关);多分区崩溃恢复本就由 {@code job_partition} 分区级重跑覆盖(设计文档 §1.8)。
    */
   private boolean stageSkipDegradedByMultiPartition(C context, Long pipelineInstanceId) {
-    Long partitionCount =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-    if (partitionCount == null || partitionCount <= 1L) {
+    Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);
+    // P2 fail-closed:缺失=单分区放行;present 但非法=拓扑不可判定→降级(见 CheckpointPartitionGuard)。
+    if (!CheckpointPartitionGuard.shouldDegrade(rawPartitionCount)) {
       return false;
     }
     log.debug(
-        "stage-skip degraded (multi-partition task shares pipeline_instance while side effects"
-            + " are task-scoped): pipelineInstanceId={}, partitionCount={}",
+        "stage-skip degraded (multi-partition or illegal partition count; side effects are"
+            + " task-scoped): pipelineInstanceId={}, partitionCount={}",
         pipelineInstanceId,
-        partitionCount);
+        rawPartitionCount);
     return true;
+  }
+
+  /**
+   * P1-1 阶段级续跑跳过时回灌产出:从上一 attempt 该 stepCode 的 SUCCESS {@code output_summary} 读回 {@link
+   * #skippedStageCarryForwardKeys()} 声明的键,{@code putIfAbsent} 进 attributes(不覆盖本次已运行 stage 写入的 live
+   * 值)。默认键集空 → no-op;子类(如 PROCESS)override 声明 highWaterMarkOut / processedCount 等需要传递给 report / 下游
+   * NODE_OUTPUTS 的产出键。
+   */
+  private void carryForwardSkippedStageOutputs(
+      C context, PipelineStepDefinition currentStep, Long pipelineInstanceId) {
+    Set<String> keys = skippedStageCarryForwardKeys();
+    if (keys.isEmpty() || pipelineInstanceId == null) {
+      return;
+    }
+    Map<String, Object> summary =
+        runtimeRepository.loadLatestSucceededStepOutputSummary(
+            pipelineInstanceId, currentStep.stepCode());
+    if (summary.isEmpty()) {
+      return;
+    }
+    Map<String, Object> attributes = context.getAttributes();
+    for (String key : keys) {
+      Object value = summary.get(key);
+      if (value != null) {
+        attributes.putIfAbsent(key, value);
+      }
+    }
+  }
+
+  /**
+   * 阶段级续跑跳过时,需从上次 SUCCESS 记录回灌进 attributes 的 {@code output_summary} 键集。默认**空集**——即使 stage
+   * 被跳过也不回灌任何产出。
+   *
+   * <p>只有把关键产出(水位 / 计数)传给 report 或下游 workflow 节点的 pipeline 才 override(键名须与 {@link
+   * #buildOutputSummary} 写入的键一致,回灌到同名 attribute)。避免在基类硬编码 process 专属键。
+   */
+  protected Set<String> skippedStageCarryForwardKeys() {
+    return Set.of();
   }
 
   private void injectCurrentStepAttributes(C context, PipelineStepDefinition currentStep) {

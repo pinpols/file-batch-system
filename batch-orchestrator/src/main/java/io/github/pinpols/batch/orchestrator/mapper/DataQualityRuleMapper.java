@@ -11,7 +11,7 @@ public interface DataQualityRuleMapper {
   List<DataQualityRuleEntity> selectEnabledByBusinessKey(
       @Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
 
-  DataQualityRuleEntity selectById(@Param("id") Long id);
+  DataQualityRuleEntity selectById(@Param("id") Long id, @Param("tenantId") String tenantId);
 
   int insert(DataQualityRuleEntity entity);
 

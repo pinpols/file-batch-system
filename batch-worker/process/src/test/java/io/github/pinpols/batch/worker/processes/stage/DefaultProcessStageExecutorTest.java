@@ -398,6 +398,40 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  void stageSkip_carriesForwardWatermarkFromPriorSuccessOutputSummary() {
+    // P1-1:跳过 COMPUTE 时,须从上次 SUCCESS 的 output_summary 回灌 highWaterMarkOut / processedCount 到
+    // attributes,否则 report 水位 null → 下周期 INCREMENTAL 重读重发。
+    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+        .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
+    when(runtimeRepository.loadLatestSucceededStepOutputSummary(
+            PIPELINE_INSTANCE_ID, "PROCESS_COMPUTE"))
+        .thenReturn(Map.of("highWaterMarkOut", "20260708120000", "processedCount", 42));
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("dailySummary");
+
+    DefaultProcessStageExecutor executor =
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(),
+            List.of(plugin),
+            runtimeRepository,
+            ProcessMetrics.noop(),
+            enabledStageSkip());
+
+    ProcessJobContext context = newContext();
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+    executor.execute(context);
+
+    // COMPUTE 被跳过,但其上次成功产出的水位/计数已回灌 attributes(供 report 正常推水位)。
+    assertThat(context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT))
+        .isEqualTo("20260708120000");
+    assertThat(context.getAttributes().get("processedCount")).isEqualTo(42);
+    verify(plugin, never()).compute(any());
+  }
+
+  @Test
   void stageSkip_runsFullPipeline_whenNoPriorSuccess() {
     // 首次运行(无历史 SUCCESS 记录):即使开关开,也全量跑(回归保护)。
     when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());

@@ -93,7 +93,8 @@
             <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- PG JDBC 驱动:mapper IT 直连 Testcontainers PG 跑真 XML SQL(worker-core 库模块无 runtime 驱动依赖) -->
+        <!-- PG JDBC 驱动:mapper IT 直连 Testcontainers PG 跑真 XML SQL(worker-core 库模块无 runtime 驱动依赖);含 checkpoint 位点 SQL 与 P0 deleteByInstance -->
+
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>

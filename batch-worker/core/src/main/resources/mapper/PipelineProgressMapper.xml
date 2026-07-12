@@ -84,4 +84,15 @@
                 updated_at = excluded.updated_at
     </insert>
 
+    <!--
+       deleteByInstance: 作废某 pipeline 实例的全部 stage 位点(ADR-038 P0 补偿协同)。
+       补偿(compensate_on_failure)反向删除本 run 业务行后调用,防止重试续跑跳过已删 chunk。
+       带 tenant_id 谓词(表有该列)纵深防御;pipeline_instance_id 全局唯一,单独即可定位。
+    -->
+    <delete id="deleteByInstance">
+        delete from batch.pipeline_progress
+        where tenant_id = #{tenantId}
+          and pipeline_instance_id = #{pipelineInstanceId}
+    </delete>
+
 </mapper>

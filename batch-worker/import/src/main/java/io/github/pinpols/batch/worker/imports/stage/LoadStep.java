@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -238,6 +239,13 @@ public class LoadStep implements ImportStageStep {
    * chunk 会双写。开关关时不校验(plugin 不会被重做)。
    *
    * <p>详见 {@code docs/runbook/platform-worker-checkpoint-howto.md} §前置校验。
+   *
+   * <p>TODO(ADR-038 P2-1 已知局限,YAGNI 后置):本校验按 <b>plugin 粒度</b>(plugin 自报 {@code
+   * idempotencyCapability()})。但真实幂等取决于<b>模板级</b> {@code conflict_columns} —— 同一 {@code
+   * IDEMPOTENT_BY_UNIQUE_CONSTRAINT} plugin,若某模板未配唯一约束列,崩溃窗口重做 chunk 仍会双写。当前靠 {@code
+   * JdbcMappedImportSecurityProperties.strictIdempotency=true} 在 plugin 内兜底(无 conflict_columns
+   * 直接拒跑),故 plugin 粒度校验+strict 兜底组合已闭合安全窗口。若后续要更细的诊断,可把校验下沉到 spec 级 (按模板 conflict_columns 判定);改动涉及
+   * plugin SPI 扩展,收益有限,暂只记为已知局限。
    */
   private void requireIdempotentPluginIfCheckpointEnabled(ImportLoadPlugin plugin) {
     if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
@@ -331,17 +339,17 @@ public class LoadStep implements ImportStageStep {
    * §1.8);分区内行级续跑要按 partition 拆位点键,属 P1+ 新逻辑,不在 P0 做。
    */
   private boolean checkpointDegradedByMultiPartition(ImportJobContext context) {
-    long partitionCount =
-        numberValue(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-    if (partitionCount <= 1L) {
+    Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);
+    // P2 fail-closed:缺失=单分区放行;present 但非法(非数字/<=0)=拓扑不可判定→降级(见 CheckpointPartitionGuard)。
+    if (!CheckpointPartitionGuard.shouldDegrade(rawPartitionCount)) {
       return false;
     }
     log.debug(
-        "checkpoint resume degraded (multi-partition task shares pipeline_instance):"
-            + " tenantId={}, fileId={}, partitionCount={}",
+        "checkpoint resume degraded (multi-partition or illegal partition count, task shares"
+            + " pipeline_instance): tenantId={}, fileId={}, partitionCount={}",
         context.getTenantId(),
         context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-        partitionCount);
+        rawPartitionCount);
     return true;
   }
 

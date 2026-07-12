@@ -28,7 +28,9 @@
     </select>
 
     <select id="selectById" resultMap="DqRuleResultMap">
-        select * from batch.data_quality_rule where id = #{id}
+        select * from batch.data_quality_rule
+         where id = #{id}
+           and tenant_id = #{tenantId}
     </select>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity"
@@ -63,5 +65,6 @@
                description = #{description},
                updated_at = current_timestamp
          where id = #{id}
+           and tenant_id = #{tenantId}
     </update>
 </mapper>

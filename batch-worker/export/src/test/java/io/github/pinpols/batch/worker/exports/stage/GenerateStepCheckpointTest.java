@@ -60,7 +60,8 @@ class GenerateStepCheckpointTest {
     @Override
     public ProcessingPosition load(String t, long id, ProcessingStage s) {
       if (completed) {
-        return ProcessingPosition.completed(count);
+        // P1-2:completed 保留 marker(含文件字节数指纹),与 DefaultProcessingPositionStore 一致。
+        return new ProcessingPosition(marker, count, true);
       }
       return marker == null
           ? ProcessingPosition.empty()
@@ -77,6 +78,13 @@ class GenerateStepCheckpointTest {
     @Override
     public void markCompleted(String t, long id, ProcessingStage s) {
       this.completed = true;
+    }
+
+    @Override
+    public void deleteAllStages(String t, long id) {
+      this.marker = null;
+      this.count = 0;
+      this.completed = false;
     }
   }
 
@@ -199,6 +207,32 @@ class GenerateStepCheckpointTest {
     assertThat(result.success()).isTrue();
     assertThat(rerun.getAttributes().get("recordCount")).isEqualTo(1L);
     assertThat(positionStore.advanceCalls).isEqualTo(advancesAfterFirst);
+  }
+
+  @Test
+  void completedButFileFingerprintMismatch_regeneratesFreshInsteadOfSkipping() throws Exception {
+    // 先正常完整跑一遍(单页结束)→ 完成 marker 记录了真实文件字节数指纹。
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+    assertThat(generateStep.execute(buildContext()).success()).isTrue();
+    long fullSize = Files.size(deterministicFile);
+    assertThat(fullSize).isGreaterThan(0);
+
+    // 模拟双故障:completed=true 但残文件被 fresh 半写截断(字节数 < 指纹)。
+    Files.writeString(deterministicFile, "{ half");
+    assertThat(Files.size(deterministicFile)).isNotEqualTo(fullSize);
+    int advancesBefore = positionStore.advanceCalls;
+
+    // 重派:字节数指纹不符 → 不幂等跳过,而是全量重写(truncate + 重新生成)。
+    ExportJobContext rerun = buildContext();
+    ExportStageResult result = generateStep.execute(rerun);
+
+    assertThat(result.success()).isTrue();
+    // 全量重写发生:重新读明细页 + 重新 complete(至少一次 advance),文件恢复为完整字节数。
+    assertThat(positionStore.advanceCalls).isGreaterThan(advancesBefore);
+    assertThat(Files.size(deterministicFile)).isEqualTo(fullSize);
+    Map<?, ?> parsed = new ObjectMapper().readValue(Files.readString(deterministicFile), Map.class);
+    assertThat((List<?>) parsed.get("details")).hasSize(1);
   }
 
   @Test
