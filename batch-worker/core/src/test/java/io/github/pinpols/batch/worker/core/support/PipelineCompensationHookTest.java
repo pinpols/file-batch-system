@@ -2,6 +2,8 @@ package io.github.pinpols.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,7 +65,7 @@ class PipelineCompensationHookTest {
   }
 
   @Test
-  @DisplayName("开关 on 且注册了 compensator：先 COMPENSATING → 调 compensator → 审计")
+  @DisplayName("开关 on 且注册了 compensator：先清位点 → 反向动作 → 审计")
   void onWithCompensator_marksCompensatingAndReverses() {
     RecordingCompensator compensator = new RecordingCompensator("IMPORT");
     compensator.result = CompensationResult.reversed(3L, "deleted 3 rows");
@@ -81,13 +83,15 @@ class PipelineCompensationHookTest {
     verify(runtimeRepository).appendAudit(audit.capture());
     assertThat(audit.getValue().getOperationType()).isEqualTo("PIPELINE_COMPENSATE");
     assertThat(audit.getValue().getOperationResult()).isEqualTo("REVERSED");
-    // ADR-038 P0:反向删业务行成功 → 作废该实例全部 checkpoint 位点(否则重试续跑跳过已删 chunk)。
-    verify(positionStore).deleteAllStages("t1", 99L);
+    // 跨库无 1PC:位点必须在反向删业务数据前成功作废,否则第二步失败会静默缺数。
+    var ordered = inOrder(runtimeRepository, positionStore);
+    ordered.verify(runtimeRepository).markPipelineCompensating(99L);
+    ordered.verify(positionStore).deleteAllStages("t1", 99L);
   }
 
   @Test
-  @DisplayName("补偿 SKIPPED(未能安全 scope,业务行原样保留):不清 checkpoint 位点")
-  void skippedCompensation_doesNotClearCheckpoint() {
+  @DisplayName("补偿 SKIPPED:位点已预先清理,重试从头跑并由幂等约束吸收已存数据")
+  void skippedCompensation_stillInvalidatesCheckpointBeforeAttempt() {
     RecordingCompensator compensator = new RecordingCompensator("IMPORT");
     compensator.result = CompensationResult.skipped("no run-scope column");
     PipelineCompensationHook hook = hook(compensator);
@@ -96,12 +100,12 @@ class PipelineCompensationHookTest {
     boolean triggered = hook.runCompensation("t1", "IMPORT", 99L, attributes);
 
     assertThat(triggered).isTrue();
-    verify(positionStore, never()).deleteAllStages(any(), org.mockito.ArgumentMatchers.anyLong());
+    verify(positionStore).deleteAllStages("t1", 99L);
   }
 
   @Test
-  @DisplayName("补偿 FAILED(反向出错,状态不明):不清 checkpoint 位点,保持可诊断")
-  void failedCompensation_doesNotClearCheckpoint() {
+  @DisplayName("补偿 FAILED:位点已预先清理,重试从头跑避免跳过状态不明的副作用")
+  void failedCompensation_stillInvalidatesCheckpointBeforeAttempt() {
     RecordingCompensator compensator = new RecordingCompensator("IMPORT");
     compensator.result = CompensationResult.failed("delete errored");
     PipelineCompensationHook hook = hook(compensator);
@@ -110,7 +114,27 @@ class PipelineCompensationHookTest {
     boolean triggered = hook.runCompensation("t1", "IMPORT", 99L, attributes);
 
     assertThat(triggered).isTrue();
-    verify(positionStore, never()).deleteAllStages(any(), org.mockito.ArgumentMatchers.anyLong());
+    verify(positionStore).deleteAllStages("t1", 99L);
+  }
+
+  @Test
+  @DisplayName("位点作废失败:不执行反向删除,防止业务数据已删但重试仍跳过")
+  void checkpointInvalidationFailure_abortsReverse() {
+    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+    compensator.result = CompensationResult.reversed(3L, "deleted 3 rows");
+    PipelineCompensationHook hook = hook(compensator);
+    Map<String, Object> attributes = attributesWithTemplate(true);
+    doThrow(new IllegalStateException("platform db unavailable"))
+        .when(positionStore)
+        .deleteAllStages("t1", 99L);
+
+    boolean triggered = hook.runCompensation("t1", "IMPORT", 99L, attributes);
+
+    assertThat(triggered).isTrue();
+    assertThat(compensator.calls).isZero();
+    ArgumentCaptor<FileAuditParam> audit = ArgumentCaptor.forClass(FileAuditParam.class);
+    verify(runtimeRepository).appendAudit(audit.capture());
+    assertThat(audit.getValue().getOperationResult()).isEqualTo("FAILED");
   }
 
   @Test

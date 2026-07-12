@@ -2,6 +2,8 @@ package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -36,5 +38,12 @@ class CheckpointPartitionGuardTest {
     assertThat(CheckpointPartitionGuard.shouldDegrade(0)).isTrue();
     assertThat(CheckpointPartitionGuard.shouldDegrade(-3)).isTrue();
     assertThat(CheckpointPartitionGuard.shouldDegrade("  ")).isTrue();
+    assertThat(CheckpointPartitionGuard.shouldDegrade(1.5D)).isTrue();
+    assertThat(CheckpointPartitionGuard.shouldDegrade(Double.NaN)).isTrue();
+    assertThat(CheckpointPartitionGuard.shouldDegrade(new BigDecimal("1.1"))).isTrue();
+    assertThat(
+            CheckpointPartitionGuard.shouldDegrade(
+                BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE)))
+        .isTrue();
   }
 }

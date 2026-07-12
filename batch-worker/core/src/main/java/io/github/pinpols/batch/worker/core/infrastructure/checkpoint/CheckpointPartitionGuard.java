@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
 /**
  * ADR-038 续跑 / 阶段跳过的多分区降级判定(P2:fail-open → fail-closed 收口)。
  *
@@ -41,8 +44,36 @@ public final class CheckpointPartitionGuard {
   }
 
   private static Long parseLongOrNull(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
+    if (value instanceof Byte || value instanceof Short || value instanceof Integer) {
+      return ((Number) value).longValue();
+    }
+    if (value instanceof Long number) {
+      return number;
+    }
+    if (value instanceof BigInteger number) {
+      try {
+        return number.longValueExact();
+      } catch (ArithmeticException ex) {
+        return null;
+      }
+    }
+    if (value instanceof BigDecimal number) {
+      try {
+        return number.longValueExact();
+      } catch (ArithmeticException ex) {
+        return null;
+      }
+    }
+    if (value instanceof Float || value instanceof Double) {
+      double number = ((Number) value).doubleValue();
+      if (!Double.isFinite(number)) {
+        return null;
+      }
+      try {
+        return BigDecimal.valueOf(number).longValueExact();
+      } catch (ArithmeticException ex) {
+        return null;
+      }
     }
     String text = String.valueOf(value).trim();
     if (text.isEmpty()) {

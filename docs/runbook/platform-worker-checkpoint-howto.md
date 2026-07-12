@@ -125,10 +125,9 @@ ORDER BY updated_at DESC LIMIT 20;
 ## 与 compensate_on_failure / 多分区 / 文件指纹的交互(2026-07 数据正确性补丁)
 
 - **compensate_on_failure × checkpoint(P0)**:`compensate_on_failure=true` 模板 + checkpoint 开是**安全组合**。
-  补偿(`JdbcMappedImportCompensator`)反向删本 run 业务行**成功(REVERSED)后**,`PipelineCompensationHook` 会**自动清该实例全部
-  stage 位点**(`ProcessingPositionStore.deleteAllStages`),使重试从头全量重做被删 chunk;否则续跑会跳过已删 chunk → 数据永久缺失。
-  补偿 `SKIPPED`(未能安全 scope、业务行原样保留)/ `FAILED`(反向出错)时**不清位点**(保持可诊断)。运维信号:补偿清位点会落
-  `pipeline compensation cleared checkpoint positions after reverse` info 日志。
+  `PipelineCompensationHook` 在反向删本 run 业务行**之前**先清该实例全部 stage 位点,使后续重试从头全量重做。
+  位点清理失败时不执行反向删除并记 `FAILED` 审计;位点已清后反向动作即使 `SKIPPED/FAILED`,重试也会从头跑,由幂等 plugin 吸收已存数据。运维信号:位点作废会落
+  `pipeline compensation invalidated checkpoint positions before reverse` info 日志。
 - **多分区降级 fail-closed(P2)**:`PARTITION_COUNT` **缺失**=非分区任务=单分区,续跑放行(常态);**present 但非法**
   (非数字 / `<=0`)= 拓扑不可判定 → **fail-closed 降级为不续跑 / 不跳过**(`CheckpointPartitionGuard`),宁可全量重跑也不冒交叉读写损数据。
 - **Export GENERATE 文件指纹(P1)**:完成 marker 记录最终文件字节数;`GenerateStep` 幂等跳过前校验残文件 `Files.size()` 与指纹一致,

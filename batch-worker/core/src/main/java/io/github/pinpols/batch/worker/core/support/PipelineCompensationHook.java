@@ -44,8 +44,8 @@ public class PipelineCompensationHook {
   private final ObjectProvider<PipelineCompensator> compensatorProvider;
 
   /**
-   * ADR-038 P0:补偿删业务行后清 checkpoint 位点用。可选注入(语义同 compensatorProvider): 无 store bean(测试 /
-   * 未装配续跑基础设施)时为 null,{@link #clearCheckpointAfterReverse} 直接跳过。
+   * ADR-038 P0:反向补偿前作废 checkpoint 位点用。可选注入(语义同 compensatorProvider):无 store bean(测试 / 未装配续跑基础设施)时为
+   * null,{@link #invalidateCheckpointBeforeReverse} 直接视为无位点可清。
    */
   private final ProcessingPositionStore positionStore;
 
@@ -86,7 +86,17 @@ public class PipelineCompensationHook {
       Long fileId = runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
       // ① 进入 COMPENSATING 中间态(adapter 随后落 FAILED 终态)。
       runtimeRepository.markPipelineCompensating(pipelineInstanceId);
-      // ② 执行反向动作(compensator 内部已吞咽异常,但此处再兜一层防御)。
+      // ② 先作废位点,再反向删业务数据。跨库无 1PC 时必须选择这个顺序:
+      //    - 位点清理失败:不执行反向删除,业务数据+位点仍一致;
+      //    - 位点清理成功后反向失败:重试从头跑,由 plugin 幂等约束吸收已存数据。
+      // 反过来“先删业务数据、再 best-effort 清位点”会在第二步失败时静默缺数。
+      if (!invalidateCheckpointBeforeReverse(tenantId, pipelineInstanceId)) {
+        CompensationResult result =
+            CompensationResult.failed("checkpoint invalidation failed; reverse not attempted");
+        audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
+        return true;
+      }
+      // ③ 执行反向动作(compensator 内部已吞咽异常,但此处再兜一层防御)。
       CompensationResult result;
       try {
         result = compensator.compensate(tenantId, pipelineInstanceId, fileId, attributes);
@@ -101,14 +111,8 @@ public class PipelineCompensationHook {
             ex);
         result = CompensationResult.failed("compensator threw: " + ex.getMessage());
       }
-      // ③ 审计每条反向动作。
+      // ④ 审计每条反向动作。
       audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
-      // ④ ADR-038 P0:仅在**确实反向删除了业务行**(REVERSED)后作废 checkpoint 位点。
-      //    补偿删了本 run 的行,advance 已推进的位点会指向被删数据;不清则重试续跑跳过已删 chunk → 数据永久缺失。
-      //    SKIPPED(未能安全 scope,业务行原样保留)/ FAILED(反向出错,状态不明,保持可诊断)时**不清位点**。
-      if (result.outcome() == CompensationResult.Outcome.REVERSED) {
-        clearCheckpointAfterReverse(tenantId, pipelineInstanceId);
-      }
       return true;
     } catch (RuntimeException ex) {
       // 钩子自身永不把异常透传到 pipeline 主链路(否则掩盖原始失败 / 破坏 SLA)。
@@ -124,28 +128,30 @@ public class PipelineCompensationHook {
   }
 
   /**
-   * 补偿反向删除业务行成功后,作废该 pipeline 实例的全部 checkpoint 位点。best-effort:清位点失败只 warn 不上抛
-   * (原始失败与补偿已落定;残留位点最坏是重试续跑跳过——但业务行已删,续跑幂等 plugin 会重写,不造成额外数据缺失)。 无 positionStore
-   * bean(未装配续跑基础设施)时整体跳过。
+   * 反向动作前作废该 pipeline 实例的全部 checkpoint 位点。返回 false 时调用方必须停止反向删除, 保证不会出现“业务数据已删、位点仍跳过”的静默缺数窗口。无
+   * positionStore bean / 无 instance id 表示无可清位点,视为成功。
    */
-  private void clearCheckpointAfterReverse(String tenantId, Long pipelineInstanceId) {
+  private boolean invalidateCheckpointBeforeReverse(String tenantId, Long pipelineInstanceId) {
     if (positionStore == null || pipelineInstanceId == null) {
-      return;
+      return true;
     }
     try {
       positionStore.deleteAllStages(tenantId, pipelineInstanceId);
       log.info(
-          "pipeline compensation cleared checkpoint positions after reverse: tenantId={},"
+          "pipeline compensation invalidated checkpoint positions before reverse: tenantId={},"
               + " pipelineInstanceId={}",
           tenantId,
           pipelineInstanceId);
+      return true;
     } catch (RuntimeException ex) {
-      log.warn(
-          "pipeline compensation failed to clear checkpoint positions (best-effort): tenantId={},"
+      log.error(
+          "pipeline compensation cannot invalidate checkpoint positions; reverse aborted:"
+              + " tenantId={},"
               + " pipelineInstanceId={}",
           tenantId,
           pipelineInstanceId,
           ex);
+      return false;
     }
   }
 
