@@ -289,6 +289,23 @@ public class PlatformFileRuntimeRepository {
             PipelineRunStatus.FAILED.name()));
   }
 
+  /**
+   * P1 阶段级续跑读取侧:返回该 pipeline 实例下**曾经成功过**的 stepCode 集合(跨 attempt 去重)。
+   *
+   * <p>{@code pipeline_step_run} 的 SUCCESS 记录在 stage 副作用完成后写、且跨重派持久( {@code pipeline_instance} 按
+   * {@code related_job_instance_id} 复用同一行,故 {@code pipelineInstanceId} 跨重派稳定)。 {@code
+   * AbstractStageExecutor.runStageLoop} 进循环前读一次,命中的跳过安全 stage 幂等跳过。
+   */
+  public Set<String> loadSucceededStepCodes(Long pipelineInstanceId) {
+    if (pipelineInstanceId == null) {
+      return Set.of();
+    }
+    List<String> stepCodes =
+        platformFileRuntimeMapper.selectSucceededStepCodes(
+            params(KEY_PIPELINE_INSTANCE_ID, pipelineInstanceId));
+    return stepCodes == null || stepCodes.isEmpty() ? Set.of() : new HashSet<>(stepCodes);
+  }
+
   public Long startStepRun(
       Long pipelineInstanceId, String stepCode, String stageCode, Object inputSummary) {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {

@@ -28,4 +28,25 @@ public class WorkerCheckpointProperties {
 
   /** ADR-038 续跑位点总开关。默认 true(P0 生产化);显式设 false 即回滚到未引入本功能时的行为。 */
   private boolean enabled = true;
+
+  /** P1 阶段级续跑(ADR-038 §决策四)子开关。 */
+  private final StageSkip stageSkip = new StageSkip();
+
+  /**
+   * 阶段级续跑(P1):多 stage pipeline 崩溃重派时,跳过上一 attempt 已成功且副作用可从持久状态重建的 stage, 而非从首 stage 全量重来。
+   *
+   * <p><b>本 PR 默认 {@code enabled=false}</b>——只交付能力 + 开关关,验证充分后另 PR 议翻 true, 降低合入风险。关开关即完全退回「从首
+   * stage 全量重跑」的原行为(回归保护)。
+   *
+   * <p>安全边界:该开关只对**跳过安全**的 stage 生效(见 {@code
+   * AbstractStageExecutor#skipSafeStages()});其副作用必须已持久化到可由稳定键重建的位置 (如 PROCESS 的 {@code
+   * process_staging} 按 {@code batch-<taskId>} 键)。 靠内存 attribute 传递中间产物(import/export/dispatch 的
+   * file path 等)的 stage 不在跳过范围, 跳过会丢失下游输入。
+   */
+  @Data
+  public static class StageSkip {
+
+    /** 阶段级续跑总开关。默认 false(本 PR 只交付能力,不默认启用)。 */
+    private boolean enabled = false;
+  }
 }
