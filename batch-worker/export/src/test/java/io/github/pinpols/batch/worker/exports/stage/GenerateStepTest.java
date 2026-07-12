@@ -74,14 +74,17 @@ class GenerateStepTest {
                 new DelimitedExportFormat(objectMapper),
                 new ExcelExportFormat(objectMapper),
                 new FixedWidthExportFormat(objectMapper)));
-    // 续跑默认禁用(WorkerCheckpointProperties.enabled=false)→ positionStore 不会被调用,行为同今天。
+    // 本类测非续跑 GENERATE 行为。checkpoint 默认值已在 P0 翻 true,故显式关闭 → positionStore 不会被调用,
+    // 行为同未引入本特性;续跑路径由 GenerateStepCheckpointTest 覆盖。
+    WorkerCheckpointProperties checkpointDisabled = new WorkerCheckpointProperties();
+    checkpointDisabled.setEnabled(false);
     generateStep =
         new GenerateStep(
             pluginRegistry,
             formatStrategyRegistry,
             config,
             objectMapper,
-            new WorkerCheckpointProperties(),
+            checkpointDisabled,
             mock(ProcessingPositionStore.class),
             new GenerateCursorCodec());
   }

@@ -24,7 +24,7 @@
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
 | `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；**`SQLITE`** 时需 PVC 指向 `sqlite-path` |
 | `batch.worker.lease.renew-batch-max-items` | worker（ADR-016） | **256** | **256**（继承 yml） | 🟢 低 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS`：单 `renew-batch` HTTP 最多携带任务数，超出自动拆单 |
-| `batch.worker.checkpoint.enabled` | worker-import / worker-export | **false** | **false** | 🟡 中 | `BATCH_WORKER_CHECKPOINT_ENABLED`；开启 Import 前要求 load plugin 明确声明幂等能力；Export 仅 JSON/DELIMITED/FIXED_WIDTH 且 cursor 可序列化时续跑，详见 [`platform-worker-checkpoint-howto.md`](./platform-worker-checkpoint-howto.md) |
+| `batch.worker.checkpoint.enabled` | worker-import / worker-export | **true**（P0 生产化，2026-07；旧默认 false） | **true** | 🟡 中 | `BATCH_WORKER_CHECKPOINT_ENABLED`；Import 要求 load plugin 明确声明幂等能力（`NONE/UNKNOWN` 拒跑）；`PARTITION_REPLACE_COPY` 与续跑互斥须显式设 false；Export 仅 JSON/DELIMITED/FIXED_WIDTH 且 cursor 可序列化时续跑，详见 [`platform-worker-checkpoint-howto.md`](./platform-worker-checkpoint-howto.md) |
 | `batch.datasource.business.routing.enabled` | import/export/process worker | **false**（单片无损，全租户落 shard-0=现库） | **false** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED`；开后按 `placement-source`（CONFIG/TABLE）+ `shards[*]` 路由,详见 [`biz-tenant-routing.md`](./biz-tenant-routing.md) §8 |
 | `batch.datasource.business.routing.placement-source` | 同上 | **CONFIG**（hash+silo） | **CONFIG** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE`=CONFIG/TABLE；TABLE 读 `batch.business_tenant_placement`（在线维护,见 console `/api/console/ops/tenant-placements`） |
 | ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
@@ -43,13 +43,15 @@
 >
 > **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读(#578/580/582/584)是模板/渠道级配置(`trailer_template` / control-total rule / `readback_verify_enabled`),归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md);本表只收全局 yml/env 开关。
 
-### 1.4 Worker checkpoint 灰度
+### 1.4 Worker checkpoint（P0 默认启用）
 
-`batch.worker.checkpoint.enabled` 默认关闭且需要重启 worker 生效。Import 开启后会在 LOAD 前校验插件幂等能力；
-`NONE/UNKNOWN` 会以 `IMPORT_LOAD_CONFIG_INVALID` 拒跑，不能通过“先开再观察”绕过。`PARTITION_REPLACE_COPY` 与行号续跑互斥。
+`batch.worker.checkpoint.enabled` 默认 **true**（P0，2026-07），改动需重启 worker 生效。系统未上线故不做影子期 / 按租户
+渐进灰度：sim/e2e 全链验证通过后直接默认启用，开关保留作回滚（显式 `false` + 重启即退回今天行为）。
+Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD_CONFIG_INVALID` 拒跑，不能绕过。
+`PARTITION_REPLACE_COPY` 与行号续跑互斥，须对该模板显式设 `false`。
 
-推荐顺序：dev 真实崩溃复验 → staging 按大文件租户灰度 → 观察
-`batch.worker.checkpoint.operations.total{operation="load",outcome="resumable"}` 和全部 `outcome="failure"` → 再逐租户扩大。
+上线后观测：`batch.worker.checkpoint.operations.total{operation="load",outcome="resumable"}`（命中率）、
+`batch.worker.checkpoint.resume.skipped.records.total`（省下的重复处理量）、全部 `outcome="failure"` 是否持续为 0。
 关闭开关不会删除 `batch.pipeline_progress`，下次开启仍可读取未完成位点。完整约束、SQL 验证与回滚见
 [`platform-worker-checkpoint-howto.md`](./platform-worker-checkpoint-howto.md)。
 

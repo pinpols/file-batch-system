@@ -258,13 +258,15 @@ ensure_core_runtime() {
 # sim:全量阶段 04→25
 # restart_import:为特定 stage 切换 worker-import 互斥配置。
 #   default    = checkpoint off + no skip(17 PARTITION_REPLACE_COPY 需 checkpoint=false)
+#                注:checkpoint 默认值已在 P0 翻 true,故 default 基线必须**显式** -D=false,
+#                否则 17 会撞"PARTITION_REPLACE_COPY 与续跑开关互斥"拒跑。
 #   skip       = skip-profile(23 import-stage2d 的 skip 阈值场景)
 #   checkpoint = checkpoint=true(25 import-stage2e 真实崩溃续跑)
 # 用 build/runtime-jars(与 start-all 一致);env 由调用方子 shell 的 source env-common 提供。
 restart_import() {
-  local mode="${1:-default}" extra=""
+  local mode="${1:-default}" extra="-Dbatch.worker.checkpoint.enabled=false"
   case "$mode" in
-    skip) extra="-Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.skip.error-sink-type=ERROR_TABLE" ;;
+    skip) extra="-Dbatch.worker.checkpoint.enabled=false -Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.skip.error-sink-type=ERROR_TABLE" ;;
     checkpoint) extra="-Dbatch.worker.checkpoint.enabled=true" ;;
   esac
   local pid; pid="$(process_listen_pids "$WORKER_IMPORT_PORT" | head -1)"
