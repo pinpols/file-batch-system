@@ -417,6 +417,7 @@ class ConsoleQueryControllerTest {
                 "ok",
                 null,
                 null,
+                null,
                 Instant.EPOCH,
                 Instant.EPOCH));
 
