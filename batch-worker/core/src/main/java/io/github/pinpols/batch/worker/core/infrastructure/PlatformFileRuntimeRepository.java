@@ -290,7 +290,11 @@ public class PlatformFileRuntimeRepository {
   }
 
   /**
-   * P1 阶段级续跑读取侧:返回该 pipeline 实例下**曾经成功过**的 stepCode 集合(跨 attempt 去重)。
+   * P1 阶段级续跑读取侧:返回该 pipeline 实例下**每个 stepCode 最新一次 run 为 SUCCESS** 的 stepCode 集合。
+   *
+   * <p>语义(2026-07 修复):判定"可跳过"看**最新一次 attempt 的终态**而非"历史上曾成功过"——某 step 若 SUCCESS 后重跑 FAILED(失败重跑清空 /
+   * 半覆盖 staging),不得再判其可跳过,否则 COMMIT 会静默少发布。SQL 按 (step_code) 分区取 run_seq(tie-break id)最新一行,仅最新为
+   * SUCCESS 才纳入。
    *
    * <p>{@code pipeline_step_run} 的 SUCCESS 记录在 stage 副作用完成后写、且跨重派持久( {@code pipeline_instance} 按
    * {@code related_job_instance_id} 复用同一行,故 {@code pipelineInstanceId} 跨重派稳定)。 {@code
