@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -29,21 +31,54 @@ public class DefaultProcessStageExecutor
     extends AbstractStageExecutor<ProcessJobContext, ProcessStageResult>
     implements ProcessStageExecutor, PipelineStepTemplateProvider {
 
+  /**
+   * P1 阶段级续跑对 PROCESS 的跳过安全 stage 集。仅这三个:
+   *
+   * <ul>
+   *   <li>{@code COMPUTE}——写 staging(按稳定 {@code batch-<taskId>} 键),成功后重派可跳过、不重算(P1 头号收益); DIRECT
+   *       模式无 staging 副作用,跳过更是纯 no-op。
+   *   <li>{@code VALIDATE}——只读 staging 跑质量规则,成功即"已过闸";跳到 COMMIT 即设计意图"COMPUTE 成功 → 跳到 COMMIT"。
+   *   <li>{@code PREPARE} 不入集:保留其 plugin-not-found fail-fast 每次重派都跑,成本可忽略。
+   * </ul>
+   *
+   * <p><b>COMMIT/FEEDBACK 恒不跳</b>:COMMIT 是 staging→target 的原子发布决策点,每次重派都必须重新做 (重跑 COMMIT 幂等:staging
+   * 已被上次成功 COMMIT 同事务清空则发布 0 行);FEEDBACK 清 staging/推水位同理恒跑。
+   */
+  private static final Set<String> SKIP_SAFE_STAGES =
+      Set.of(ProcessStage.COMPUTE.name(), ProcessStage.VALIDATE.name());
+
   private final Map<String, ProcessComputePlugin> pluginsByImplCode;
   private final Map<ProcessStage, ProcessStageStep> stepsByStage;
   private final List<PipelineStepTemplate> defaultStepDefinitions;
   private final ProcessMetrics metrics;
+  private final WorkerCheckpointProperties checkpointProperties;
 
   public DefaultProcessStageExecutor(
       List<ProcessStageStep> steps,
       List<ProcessComputePlugin> plugins,
       PlatformFileRuntimeRepository runtimeRepository,
-      ProcessMetrics metrics) {
+      ProcessMetrics metrics,
+      WorkerCheckpointProperties checkpointProperties) {
     super(runtimeRepository);
     this.pluginsByImplCode = indexPlugins(plugins);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
     this.metrics = metrics;
+    this.checkpointProperties = checkpointProperties;
+  }
+
+  /**
+   * P1 阶段级续跑:PROCESS 副作用落 {@code process_staging}(稳定 {@code batch-<taskId>} 键,COMMIT/VALIDATE
+   * 均从该键重建),故可安全开启。开关默认 false(本 PR 只交付能力)。
+   */
+  @Override
+  protected boolean stageSkipEnabled() {
+    return checkpointProperties != null && checkpointProperties.getStageSkip().isEnabled();
+  }
+
+  @Override
+  protected Set<String> skipSafeStages() {
+    return SKIP_SAFE_STAGES;
   }
 
   @Override
