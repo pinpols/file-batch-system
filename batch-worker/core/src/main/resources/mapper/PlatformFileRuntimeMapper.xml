@@ -233,6 +233,21 @@
           and latest.step_status = 'SUCCESS'
     </select>
 
+    <!--
+      P1-1 阶段级续跑跳过时回灌输出:取该实例某 stepCode 最近一次 SUCCESS 的 output_summary(jsonb→text)。
+      跳过 COMPUTE/VALIDATE 时不重算,水位/计数等产出须从上次成功记录回灌 attributes,否则 report 水位 null
+      → 保留旧值 → 下周期 INCREMENTAL 重读重发。按已认领 pipeline_instance_id 过滤(worker 系统组件,无 tenant_id 列)。
+    -->
+    <select id="selectLatestSucceededStepOutputSummary" resultType="java.lang.String">
+        select output_summary::text
+        from batch.pipeline_step_run
+        where pipeline_instance_id = #{pipelineInstanceId}
+          and step_code = #{stepCode}
+          and step_status = 'SUCCESS'
+        order by run_seq desc
+        limit 1
+    </select>
+
     <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         with step_run_lock as (
             select pg_advisory_xact_lock(

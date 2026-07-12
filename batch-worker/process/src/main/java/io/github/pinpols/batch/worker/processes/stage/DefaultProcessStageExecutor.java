@@ -81,6 +81,19 @@ public class DefaultProcessStageExecutor
     return SKIP_SAFE_STAGES;
   }
 
+  /**
+   * P1-1:跳过 COMPUTE/VALIDATE 时,从上次 SUCCESS 的 output_summary 回灌这些产出到 attributes —— 否则跳过 COMPUTE 后
+   * highWaterMarkOut 为 null,report 保留旧水位,下周期 INCREMENTAL 重读重发;processedCount/staged/published
+   * 也需回灌以让 NODE_OUTPUTS 与不跳过时一致。键名与 {@link #buildOutputSummary} 写入的一致。
+   */
+  private static final Set<String> SKIP_CARRY_FORWARD_KEYS =
+      Set.of("highWaterMarkOut", "processedCount", "stagedCount", "publishedCount");
+
+  @Override
+  protected Set<String> skippedStageCarryForwardKeys() {
+    return SKIP_CARRY_FORWARD_KEYS;
+  }
+
   @Override
   public List<ProcessStageResult> execute(ProcessJobContext context) {
     List<PipelineStepDefinition> steps = loadConfiguredSteps(context);
