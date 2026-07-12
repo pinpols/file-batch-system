@@ -310,11 +310,14 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   }
 
   private ConsolePresignDownloadResponse submitApproval(ApprovalSubmitContext ctx) {
-    // 保留 File 版原有租户处理：直接取 body tenantId（不经 tenantGuard.resolveTenant），仅消除复制。
+    // P0 (adv-review 2026-07-13)：审批提交必须经 tenantGuard.resolveTenant 校验/覆盖 body 声明的
+    // tenantId，与 presignDownload 带 approvalId 分支一致；否则租户 A 会话可借 body tenantId=B
+    // 向租户 B 的审批队列注入攻击者可控审批单（跨租户写越权）。
+    String tenantId = tenantGuard.resolveTenant(extractTenantId(ctx.payload()));
     String approvalNo =
         approvalClient.submitApproval(
             ApprovalSubmitCommand.builder()
-                .tenantId(extractTenantId(ctx.payload()))
+                .tenantId(tenantId)
                 .approvalType(ctx.approvalType())
                 .actionType(ctx.actionType())
                 .targetType(ctx.targetType())

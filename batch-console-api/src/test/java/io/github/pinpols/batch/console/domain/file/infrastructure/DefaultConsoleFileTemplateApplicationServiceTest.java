@@ -114,4 +114,32 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
     assertThat(captor.getValue().getPluginRefs().getExportDataRef())
         .isEqualTo("sql_template_export");
   }
+
+  @Test
+  void update_shouldIgnoreIncomingVersionAndPinToExistingRow() {
+    // #9 (adv-review 2026-07-13):update 携带新 version 不得改 upsert 的 version 键,
+    // 否则 on conflict(tenant,code,version)不命中 path id 的现有行 → INSERT 幽灵行(新 id),
+    // 而回读仍按旧 id 取回陈旧行。此处断言 upsert 用的是现有行的 version(1),回读按 path id。
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    when(mapper.selectById("t1", 1L))
+        .thenReturn(
+            Map.ofEntries(
+                Map.entry("template_code", "IMP-ORDER"),
+                Map.entry("version", 1),
+                Map.entry("template_name", "orders"),
+                Map.entry("enabled", true)));
+    FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
+    request.setTenantId("t1");
+    request.setVersion(9);
+    request.setTemplateName("orders-renamed");
+
+    service.update(1L, request);
+
+    ArgumentCaptor<FileTemplateConfigUpsertParam> captor =
+        ArgumentCaptor.forClass(FileTemplateConfigUpsertParam.class);
+    verify(mapper).upsertFileTemplateConfig(captor.capture());
+    assertThat(captor.getValue().getBasicInfo().getVersion()).isEqualTo(1);
+    // 回读按 path id 命中被就地更新的同一行(而非幽灵新行)。
+    verify(mapper, org.mockito.Mockito.times(2)).selectById("t1", 1L);
+  }
 }
