@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
@@ -16,7 +17,9 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -564,8 +567,24 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         continue;
       }
       try {
+        URI probeUri = URI.create(trimmed);
+        String host = probeUri.getHost();
+        if (host == null) {
+          findings.add(
+              DryRunFinding.warn(
+                  "EXEC_ENDPOINT_BLOCKED",
+                  SCOPE_EXECUTION,
+                  key + " endpoint URL has no host; reachability probe skipped",
+                  trimmed));
+          continue;
+        }
+        // SSRF 出口守卫:外呼前解析 host 的每个 IP,任一落入受限网段(回环/私网/link-local/ULA/云 metadata)即拒,
+        // 绝不 send()——否则认证用户可借 dry-run 探针把内网可达性变成 oracle(打 169.254.169.254 / 内网端口)。
+        if (!endpointEgressAllowed(key, trimmed, host, findings)) {
+          continue;
+        }
         HttpRequest req =
-            HttpRequest.newBuilder(URI.create(trimmed))
+            HttpRequest.newBuilder(probeUri)
                 .method("HEAD", HttpRequest.BodyPublishers.noBody())
                 .timeout(HTTP_PROBE_TIMEOUT)
                 .build();
@@ -602,6 +621,39 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       }
     }
     return probed;
+  }
+
+  /**
+   * 出口 SSRF 守卫:解析 endpoint host 的所有 IP,任一落入 {@link DnsResolveGuard#isBlocked(InetAddress)} 受限网段 (回环
+   * / 私网 / link-local / fc00::/7 ULA / IPv4-mapped metadata)即判定为被出口安全策略拒绝,绝不外呼。 host 解析失败同样按拒绝处理(不
+   * send)。finding 只说明"被出口策略拒绝",不泄漏内部解析细节。
+   *
+   * @return {@code true} 允许外呼探测;{@code false} 已拒绝并写入 finding
+   */
+  private boolean endpointEgressAllowed(
+      String key, String url, String host, List<DryRunFinding> findings) {
+    try {
+      for (InetAddress addr : InetAddress.getAllByName(host)) {
+        if (DnsResolveGuard.isBlocked(addr)) {
+          findings.add(
+              DryRunFinding.warn(
+                  "EXEC_ENDPOINT_BLOCKED",
+                  SCOPE_EXECUTION,
+                  key + " target rejected by egress security policy; reachability probe skipped",
+                  url));
+          return false;
+        }
+      }
+      return true;
+    } catch (UnknownHostException e) {
+      findings.add(
+          DryRunFinding.warn(
+              "EXEC_ENDPOINT_UNREACHABLE",
+              SCOPE_EXECUTION,
+              key + " host unresolvable; reachability probe skipped",
+              url));
+      return false;
+    }
   }
 
   private static String stringValue(Map<String, Object> params, String key) {

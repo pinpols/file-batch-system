@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.atomic.http;
 
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CredentialEnvResolver;
+import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
@@ -10,7 +11,6 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.IOException;
-import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -334,46 +334,14 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   }
 
   /**
-   * 判定一个 {@link InetAddress} 是否属于必须拒绝的网段:回环 / link-local / site-local / any-local / 组播 /
-   * 169.254.0.0/16,以及其 IPv4-mapped-IPv6 形态({@code ::ffff:a.b.c.d})。 package-private 以便单测直接对 IP
-   * literal 校验,无需联网。
+   * 判定一个 {@link InetAddress} 是否属于必须拒绝的网段。收敛到 batch-common 的 canonical {@link
+   * DnsResolveGuard#isBlocked(InetAddress)}(覆盖回环 / 私网 / link-local / IPv4-mapped-IPv6 / <b>fc00::/7
+   * ULA</b> 等,原本地私有副本漏了 ULA,导致 {@code fd00:ec2::254} 等 IPv6 metadata 被放行)。额外保留 any-local ({@code
+   * 0.0.0.0} / {@code ::})与组播判定——canonical guard 未覆盖这两类。 package-private 以便单测直接对 IP literal
+   * 校验,无需联网。
    */
   static boolean isBlockedAddress(InetAddress addr) {
-    if (addr.isLoopbackAddress()
-        || addr.isLinkLocalAddress()
-        || addr.isSiteLocalAddress()
-        || addr.isAnyLocalAddress()
-        || addr.isMulticastAddress()) {
-      return true;
-    }
-    // 169.254.0.0/16 (含 IPv4-mapped IPv6 的 ::ffff:169.254.x.x:取地址末 4 字节判定 v4 段)
-    byte[] raw = addr.getAddress();
-    byte[] v4 = null;
-    if (raw.length == 4) {
-      v4 = raw;
-    } else if (raw.length == 16 && (addr instanceof Inet6Address i6) && isIpv4Mapped(i6)) {
-      v4 = new byte[] {raw[12], raw[13], raw[14], raw[15]};
-    }
-    if (v4 != null) {
-      int b0 = v4[0] & 0xFF;
-      int b1 = v4[1] & 0xFF;
-      // 169.254.0.0/16 (link-local,某些映射形态 isLinkLocalAddress 可能漏判)
-      if (b0 == 169 && b1 == 254) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** {@code ::ffff:a.b.c.d} 形态:前 10 字节 0,第 11/12 字节为 0xFF。 */
-  private static boolean isIpv4Mapped(Inet6Address addr) {
-    byte[] b = addr.getAddress();
-    for (int i = 0; i < 10; i++) {
-      if (b[i] != 0) {
-        return false;
-      }
-    }
-    return (b[10] & 0xFF) == 0xFF && (b[11] & 0xFF) == 0xFF;
+    return DnsResolveGuard.isBlocked(addr) || addr.isAnyLocalAddress() || addr.isMulticastAddress();
   }
 
   /** 简化 glob:{@code *} = 匹配 0+ 个非 {@code .} 字符;其他字符精确。 */
