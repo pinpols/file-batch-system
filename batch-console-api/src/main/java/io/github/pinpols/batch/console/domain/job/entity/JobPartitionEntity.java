@@ -20,6 +20,12 @@ public class JobPartitionEntity {
   private Instant startedAt;
   private Instant finishedAt;
 
+  /** 缺口3:FAILED 分区最近一次失败 task 的错误码(JOIN job_task 透出,不落分区表列)。 */
+  private String errorCode;
+
+  /** 缺口3:FAILED 分区最近一次失败 task 的错误消息(JOIN job_task 透出)。 */
+  private String errorMessage;
+
   /** ADR-026 dry-run 演练标记。 */
   private Boolean dryRun;
 
