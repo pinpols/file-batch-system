@@ -7,6 +7,7 @@ import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -30,6 +31,13 @@ import java.util.Set;
  */
 final class TaskOutcomeSummaryBuilder {
 
+  /** 失败分片口径:FAILED / CANCELLED / TERMINATED 均计入(与 job_instance result_summary 一致)。 */
+  private static final Set<String> BROAD_FAILED_STATUSES =
+      Set.of(
+          PartitionStatus.FAILED.code(),
+          PartitionStatus.CANCELLED.code(),
+          PartitionStatus.TERMINATED.code());
+
   private TaskOutcomeSummaryBuilder() {}
 
   static String buildOutputSummary(TaskOutcomeCommand command, JobTaskEntity task) {
@@ -51,15 +59,43 @@ final class TaskOutcomeSummaryBuilder {
       JobInstanceEntity jobInstance,
       List<JobPartitionEntity> partitions,
       TaskOutcomeCommand command) {
+    return buildJobInstanceResultSummary(
+        jobInstance,
+        countByStatus(partitions, PartitionStatus.SUCCESS.code()),
+        countFailedPartitions(partitions),
+        command);
+  }
+
+  /**
+   * perf(#5): 计数版重载 —— 直接接收已算好的 successPartitions / failedPartitions,不再要求把整批 {@code job_partition}
+   * 实体拉进内存。语义与 {@link #buildJobInstanceResultSummary(JobInstanceEntity, List, TaskOutcomeCommand)}
+   * 逐字段等价(successPartitions = 成功分片数;failedPartitions = FAILED/CANCELLED/TERMINATED
+   * 之和,由调用方按同一口径预先聚合)。
+   */
+  static String buildJobInstanceResultSummary(
+      JobInstanceEntity jobInstance,
+      long successPartitions,
+      long failedPartitions,
+      TaskOutcomeCommand command) {
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("jobInstanceId", jobInstance == null ? null : jobInstance.getId());
     summary.put("lastTaskId", command == null ? null : command.taskId());
-    summary.put("successPartitions", countByStatus(partitions, PartitionStatus.SUCCESS.code()));
-    summary.put("failedPartitions", countFailedPartitions(partitions));
+    summary.put("successPartitions", successPartitions);
+    summary.put("failedPartitions", failedPartitions);
     summary.put("lastErrorCode", command == null ? null : command.errorCode());
     summary.put("lastErrorMessage", command == null ? null : command.errorMessage());
     summary.put("updatedAt", BatchDateTimeSupport.utcNow().toString());
     return JsonUtils.toJson(summary);
+  }
+
+  /** perf(#5): FAILED/CANCELLED/TERMINATED 之和,供计数版 result summary 复用同一失败口径。 */
+  static long countBroadFailed(List<PartitionStatusRef> statusRefs) {
+    if (statusRefs == null) {
+      return 0L;
+    }
+    return statusRefs.stream()
+        .filter(r -> r != null && BROAD_FAILED_STATUSES.contains(r.partitionStatus()))
+        .count();
   }
 
   /**
@@ -143,13 +179,8 @@ final class TaskOutcomeSummaryBuilder {
     if (partitions == null) {
       return 0L;
     }
-    Set<String> failedStatuses =
-        Set.of(
-            PartitionStatus.FAILED.code(),
-            PartitionStatus.CANCELLED.code(),
-            PartitionStatus.TERMINATED.code());
     return partitions.stream()
-        .filter(p -> p != null && failedStatuses.contains(p.getPartitionStatus()))
+        .filter(p -> p != null && BROAD_FAILED_STATUSES.contains(p.getPartitionStatus()))
         .count();
   }
 

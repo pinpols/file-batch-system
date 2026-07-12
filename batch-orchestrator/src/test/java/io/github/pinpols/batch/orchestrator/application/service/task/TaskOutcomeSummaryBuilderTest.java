@@ -111,6 +111,64 @@ class TaskOutcomeSummaryBuilderTest {
   }
 
   @Test
+  @DisplayName("perf(#5): 计数版 buildJobInstanceResultSummary 与列表版逐字段等价")
+  void countBasedResultSummaryEqualsListBased() {
+    io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity jobInstance =
+        new io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity();
+    jobInstance.setId(77L);
+    List<JobPartitionEntity> partitions =
+        List.of(
+            partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of()),
+            partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of()),
+            partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of()),
+            partition(4L, 4, "p4", PartitionStatus.CANCELLED.code(), Map.of()),
+            partition(5L, 5, "p5", PartitionStatus.TERMINATED.code(), Map.of()),
+            partition(6L, 6, "p6", PartitionStatus.RUNNING.code(), Map.of()));
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder()
+            .tenantId("ta")
+            .taskId(10L)
+            .success(false)
+            .errorCode("E_X")
+            .errorMessage("boom")
+            .build();
+
+    // 轻量投影(与列表同一批分区状态)。
+    List<io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef> statusRefs =
+        partitions.stream()
+            .map(
+                p ->
+                    new io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef(
+                        p.getId(), p.getPartitionStatus()))
+            .toList();
+    long successCount =
+        statusRefs.stream()
+            .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
+            .count();
+
+    Map<?, ?> listBased =
+        JsonUtils.fromJson(
+            TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
+                jobInstance, partitions, command),
+            Map.class);
+    Map<?, ?> countBased =
+        JsonUtils.fromJson(
+            TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
+                jobInstance,
+                successCount,
+                TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
+                command),
+            Map.class);
+
+    assertThat(countBased.get("successPartitions")).isEqualTo(listBased.get("successPartitions"));
+    assertThat(countBased.get("failedPartitions")).isEqualTo(listBased.get("failedPartitions"));
+    assertThat(countBased.get("successPartitions")).isEqualTo(2);
+    assertThat(countBased.get("failedPartitions")).isEqualTo(3); // FAILED + CANCELLED + TERMINATED
+    assertThat(countBased.get("jobInstanceId")).isEqualTo(listBased.get("jobInstanceId"));
+    assertThat(countBased.get("lastErrorCode")).isEqualTo(listBased.get("lastErrorCode"));
+  }
+
+  @Test
   @DisplayName("filterPartitionsByIds: 只保留当前 workflow node 的分片")
   void filterPartitionsByIdsSelectsCurrentNodePartitions() {
     JobPartitionEntity first = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());

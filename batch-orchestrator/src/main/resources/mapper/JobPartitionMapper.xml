@@ -210,6 +210,22 @@
           and id = #{id}
     </select>
 
+    <!-- perf(#5): REPORT 路径的轻量分区计数投影,只取 (id, partition_status),不拉 output_summary 等大列。 -->
+    <resultMap id="PartitionStatusRefMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef">
+        <constructor>
+            <arg column="id" javaType="java.lang.Long"/>
+            <arg column="partition_status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectStatusRefsByInstance" resultMap="PartitionStatusRefMap">
+        select id, partition_status
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+    </select>
+
     <update id="claimPartition">
         update batch.job_partition
         set worker_code = #{workerCode},

@@ -29,6 +29,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
+import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
@@ -460,20 +461,24 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       Instant finishedAt) {
     // 并发 outcome 的分区计数一致性由入口处的 advisory lock(同 instance 串行化)保证,不再需要
     // whole-instance FOR UPDATE 行锁。此处普通读即可拿到一致快照(含本事务已写入的自身分区状态)。
-    List<JobPartitionEntity> partitions =
-        jobMappers.jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
+    // perf(#5): 常规 REPORT 只需各分区状态做计数,改用 (id, partition_status) 轻量投影,避免每次 REPORT 的
+    // select *(含 output_summary jsonb 大列)把 N 个分区全量拉进内存 —— 单 instance 万级 fan-out 下那是
+    // O(N)/REPORT × N REPORT = O(N²) 且被 advisory lock 串行的 report choke。output_summary 只在下面
+    // 「节点完成 / 实例终态」聚合产出时才按需全量再读。
+    List<PartitionStatusRef> statusRefs =
+        jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
+            command.tenantId(), task.getJobInstanceId());
     long successCount =
-        partitions.stream()
-            .filter(p -> PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus()))
+        statusRefs.stream()
+            .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
             .count();
     long failedCount =
-        partitions.stream()
-            .filter(p -> PartitionStatus.FAILED.code().equals(p.getPartitionStatus()))
+        statusRefs.stream()
+            .filter(r -> PartitionStatus.FAILED.code().equals(r.partitionStatus()))
             .count();
     long finishedPartitionCount = successCount + failedCount;
     boolean allPartitionsFinished =
-        !partitions.isEmpty() && finishedPartitionCount == partitions.size();
+        !statusRefs.isEmpty() && finishedPartitionCount == statusRefs.size();
     WorkflowRunEntity workflowRun =
         workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
             command.tenantId(), jobInstance.getId());
@@ -484,13 +489,15 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
             command.tenantId(), task.getJobInstanceId());
     NodePartitionProgress nodeProgress =
-        resolveNodePartitionProgress(partitions, nodeAssignments, currentNodeCode, workflowRun);
+        resolveNodePartitionProgress(statusRefs, nodeAssignments, currentNodeCode, workflowRun);
     Set<String> activeNodes =
         workflowRun == null
             ? new LinkedHashSet<>()
             : parseActiveNodes(workflowRun.getCurrentNodeCode());
 
     if (nodeProgress.allFinished() && workflowRun != null) {
+      // perf(#5): 节点完成时才需要 output_summary 做产出聚合,此处按需全量读(节点完成远少于每 REPORT)。
+      List<JobPartitionEntity> nodeCompletionPartitions = loadPartitions(command, task);
       DagAdvanceContext advanceCtx =
           DagAdvanceContext.builder()
               .command(command)
@@ -502,7 +509,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
               .nodeOutputs(
                   TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
                       TaskOutcomeSummaryBuilder.filterPartitionsByIds(
-                          partitions, nodeProgress.partitionIds()),
+                          nodeCompletionPartitions, nodeProgress.partitionIds()),
                       command))
               .activeNodes(activeNodes)
               .finishedAt(finishedAt)
@@ -553,7 +560,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .failedPartitionCount((int) failedCount)
                 .resultSummary(
                     TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
-                        jobInstance, partitions, command))
+                        jobInstance,
+                        successCount,
+                        TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
+                        command))
                 .finishedAt(jobFullyComplete ? finishedAt : null)
                 .failureClass(instanceFailureClass)
                 .expectedVersion(jobInstance.getVersion())
@@ -592,11 +602,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           .jobInstanceTerminalChildStateReconciler()
           .reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
       // ADR-017 Stage 2: SUCCESS / PARTIAL_FAILED → 落 result_version (writer 自身做幂等 + 非成功类终态 skip)
+      // perf(#5): 终态时才需要 output_summary 做产出聚合,此处按需全量读(实例终态每实例仅一次)。
       collaborators
           .resultVersionWriter()
           .writeOnTerminal(
               jobInstance,
-              TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(partitions, command));
+              TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+                  loadPartitions(command, task), command));
       // ADR-020 Stage 5: replay-driven 实例 → 反查 entry 推进 entry / session 状态
       if (jobInstance.getReplaySessionId() != null) {
         collaborators
@@ -882,19 +894,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   private NodePartitionProgress resolveNodePartitionProgress(
-      List<JobPartitionEntity> partitions,
+      List<PartitionStatusRef> statusRefs,
       List<NodePartitionAssignment> assignments,
       String nodeCode,
       WorkflowRunEntity workflowRun) {
     if (nodeCode == null || nodeCode.isBlank()) {
       return new NodePartitionProgress(0, 0, 0, Set.of());
     }
-    Map<Long, JobPartitionEntity> partitionsById = new LinkedHashMap<>();
-    for (JobPartitionEntity partition : partitions) {
-      if (partition == null || partition.getId() == null) {
+    // perf(#5): 只需 partitionId -> status 映射,来自轻量投影而非全量 job_partition 实体。
+    Map<Long, String> statusById = new LinkedHashMap<>();
+    for (PartitionStatusRef ref : statusRefs) {
+      if (ref == null || ref.id() == null) {
         continue;
       }
-      partitionsById.put(partition.getId(), partition);
+      statusById.put(ref.id(), ref.partitionStatus());
     }
     Set<Long> nodePartitionIds = new LinkedHashSet<>();
     for (NodePartitionAssignment assignment : assignments) {
@@ -909,18 +922,27 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     long nodeSuccessCount = 0L;
     long nodeFailedCount = 0L;
     for (Long partitionId : nodePartitionIds) {
-      JobPartitionEntity partition = partitionsById.get(partitionId);
-      if (partition == null) {
+      String status = statusById.get(partitionId);
+      if (status == null) {
         continue;
       }
-      if (PartitionStatus.SUCCESS.code().equals(partition.getPartitionStatus())) {
+      if (PartitionStatus.SUCCESS.code().equals(status)) {
         nodeSuccessCount++;
-      } else if (PartitionStatus.FAILED.code().equals(partition.getPartitionStatus())) {
+      } else if (PartitionStatus.FAILED.code().equals(status)) {
         nodeFailedCount++;
       }
     }
     return new NodePartitionProgress(
         nodePartitionIds.size(), nodeSuccessCount, nodeFailedCount, nodePartitionIds);
+  }
+
+  /**
+   * perf(#5): 按需全量读取该 instance 的 {@code job_partition}(含 {@code output_summary} 大列),只用于「节点完成 /
+   * 实例终态」的产出聚合。与常规 REPORT 计数路径(轻量投影)隔离,避免每次 REPORT 都拉全量。
+   */
+  private List<JobPartitionEntity> loadPartitions(TaskOutcomeCommand command, JobTaskEntity task) {
+    return jobMappers.jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
   }
 
   private String resolveTaskNodeCode(
