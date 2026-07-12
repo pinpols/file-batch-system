@@ -3651,6 +3651,8 @@ paths:
                     type: object
                     properties:
                       pipelineInstanceId: { type: integer, format: int64 }
+                      fileId: { type: integer, format: int64, nullable: true, description: 'pipeline 级源文件 id(EXPORT 等无源文件时为 null)' }
+                      fileName: { type: string, nullable: true, description: 'pipeline 级源文件名,便于观测直接展示文件而非纯 fileId 数字' }
                       steps:
                         type: array
                         items:
@@ -3660,7 +3662,7 @@ paths:
                             pipelineInstanceId: { type: integer, format: int64 }
                             stepCode: { type: string }
                             stageCode: { type: string }
-                            rowsProcessed: { type: integer, format: int64, nullable: true }
+                            rowsProcessed: { type: integer, format: int64, nullable: true, description: '实时已处理行数;持久 checkpoint 为空时服务端按当前 worker 从 orchestrator 内存 cache 桥接补上,均无则 null' }
                             totalRowsHint: { type: integer, format: int64, nullable: true }
                             lastHeartbeatAt: { type: integer, format: int64, nullable: true }
   /api/console/queries/alerts:
@@ -13412,6 +13414,11 @@ components:
           type: string
         errorMessage:
           type: string
+        relatedPipelineInstanceId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 反查 pipeline_instance.related_job_instance_id 得到的 pipeline 观测入口 id;文件类 job 才有值,普通 job 为 null,供作业详情跳转 pipeline 观测
         startedAt:
           type: string
           format: date-time
@@ -13456,6 +13463,14 @@ components:
         finishedAt:
           type: string
           format: date-time
+        errorCode:
+          type: string
+          nullable: true
+          description: FAILED 分区最近一次失败 job_task 的错误码(JOIN 透出,非失败分区为 null)
+        errorMessage:
+          type: string
+          nullable: true
+          description: FAILED 分区最近一次失败 job_task 的错误消息(JOIN 透出,非失败分区为 null)
       required: [id, tenantId, jobInstanceId, partitionNo, partitionKey, partitionStatus, workerGroup, workerCode, retryCount, businessKey, leaseExpireAt, startedAt, finishedAt]
     ConsoleWorkflowDefinitionResponse:
       type: object
