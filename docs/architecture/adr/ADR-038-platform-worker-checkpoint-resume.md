@@ -1,4 +1,9 @@
-# ADR-038 · 平台 Worker 分片级断点续跑与 chunk 位点同事务(Import / Export)
+# ADR-038 · 平台 Worker 分片级断点续跑与 chunk 位点补偿式续跑(Import / Export)
+
+> **措辞校正(2026-07,P0 R-1)**:本 ADR 早期在标题、范围边界和决策二里写「chunk 业务写与位点更新**同事务**」。
+> 实施确认 Import 业务数据落**租户业务库**、位点落**平台库**,**跨库无 1PC**,该措辞失真。真实语义是
+> **业务先 commit → 位点后 advance + 插件幂等** 的**补偿式最终一致**(崩溃窗口重做 ≤1 chunk,由 plugin 幂等约束吸收,
+> 不双写)。下文凡出现"同事务"处均以 §决策二「实施修正」为准;不改任何运行行为,只校正文档措辞。
 
 - **Status**: Accepted(2026-06-02 改判,详见 §评估记录)
 - **Date**: 2026-06-01(初评) · 2026-06-02(改判)
@@ -39,7 +44,7 @@
 ## 范围边界
 
 - 「**平台 worker 在重派 / 崩溃后从已处理位点续跑**」√
-- 「**chunk 业务写与位点更新同事务**」√
+- 「**chunk 业务写与位点更新补偿式一致**」√ —— 跨库无 1PC:业务先 commit、位点后 advance,崩溃窗口靠插件幂等吸收(详见 §决策二实施修正)。**不是**单事务原子。
 - 「**worker 直接写 `job_instance` / `pipeline_instance` 状态**」✗ —— 维持 CLAUDE.md 架构硬约束:Orchestrator 是唯一状态主机,worker 仍只 HTTP REPORT;本 ADR 的"位点"持久化落在 **worker 自己可写的 pipeline 内部记录 / file_record**,不碰 orchestrator 状态机
 - 「**worker 内并行**」✗ —— 已有 orchestrator 层 `lineNo % partitionCount` 逻辑分区(ParseStep),不重复造 worker 内并行
 - 「**orchestrator 主动取消信号**」✗ —— 现有超时 → `Thread.interrupt()` → watchdog(`cancelGraceSeconds`)已足够,不在本 ADR 范围
@@ -63,7 +68,8 @@
 
 ## 决策
 
-给 Import LOAD 与 Export GENERATE 增加**位点持久化 + 续跑**,并把 **chunk 业务写与位点更新合到同一事务**。
+给 Import LOAD 与 Export GENERATE 增加**位点持久化 + 续跑**。原设计意图是把 **chunk 业务写与位点更新合到同一事务**,
+但实施确认 Import 跨库无 1PC,已在 §决策二修正为**补偿式一致(业务先 commit → 位点后 advance + 插件幂等)**。
 
 ### 决策一:位点模型 `ProcessingPosition`
 
@@ -122,7 +128,7 @@ flushChunkWithPosition(plugin, chunk, position):
 |---|---|---|
 | 位点 | 已处理**行号**(staging file 是 append-only,行号稳定可定位) | 序列化的 **cursor**(plugin 的 `nextCursor`) |
 | 续跑 | 重读 staging file,`skip` 到 `行号` 后继续 | 从存的 cursor 调 `loadDetailPage(cursor)` 续页 |
-| 同事务 | ✓ chunk 业务写 + 行号位点,DB 同事务 | △ 文件写非事务;按"分片临时文件 + 已确认页位点"补偿,续跑时丢弃未确认的尾部重写 |
+| 一致性 | △ 业务写落**租户业务库**、行号位点落**平台库**,跨库无 1PC;业务先 commit → 位点后 advance,崩溃窗口重做 ≤1 chunk,靠插件幂等吸收(见 §决策二) | △ 文件写非事务;按"分片临时文件 + 已确认页位点"补偿,续跑时丢弃未确认的尾部重写 |
 | 幂等前提 | plugin `loadChunk` 需幂等或目标表有唯一键(多租已强制 `UNIQUE(tenant_id, ...)`)防重复 | 续跑重写从 cursor 起,临时文件覆盖,最终 STORE 阶段才落正式文件 |
 
 Import 的幂等天然有多租唯一约束回退;Export 因为只在 STORE 阶段才产出正式文件,GENERATE 续跑重写临时分片是安全的。
