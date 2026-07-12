@@ -209,15 +209,28 @@
     </select>
 
     <!--
-      P1 阶段级续跑读取侧:该 pipeline 实例下曾成功过的 stepCode(跨 attempt 去重)。
+      P1 阶段级续跑读取侧:该 pipeline 实例下**每个 stepCode 最新一次 run 为 SUCCESS** 的 stepCode 集。
+      契约(2026-07 语义修复):判定"可跳过"必须看**最新一次 attempt 的终态**,不能看"历史上曾成功过"——
+      若某 step 曾 SUCCESS 后重跑 FAILED(失败重跑已清 / 半覆盖 staging),旧的 distinct-SUCCESS 会误判其可跳过,
+      导致 COMMIT 静默少发布。故按 (step_code) 分区、run_seq 降序(tie-break id 降序)取每 step 最新一行,
+      仅当该最新行 step_status='SUCCESS' 才纳入可跳过集;最新为 FAILED/RETRYING/RUNNING 一律不跳、强制重跑。
       pipeline_step_run 无 tenant_id 列,按已认领的 pipeline_instance_id 过滤(与 selectNextStepRunSeq 一致);
-      instance id 由认领任务下发,worker 是系统组件。SUCCESS 记录在 stage 副作用完成后写,故命中即代表副作用已持久化。
+      instance id 由认领任务下发,worker 是系统组件。SUCCESS 记录在 stage 副作用完成后写,故最新命中即代表副作用已持久化。
     -->
     <select id="selectSucceededStepCodes" resultType="java.lang.String">
-        select distinct step_code
-        from batch.pipeline_step_run
-        where pipeline_instance_id = #{pipelineInstanceId}
-          and step_status = 'SUCCESS'
+        select step_code
+        from (
+            select step_code,
+                   step_status,
+                   row_number() over (
+                       partition by step_code
+                       order by run_seq desc, id desc
+                   ) as rn
+            from batch.pipeline_step_run
+            where pipeline_instance_id = #{pipelineInstanceId}
+        ) latest
+        where latest.rn = 1
+          and latest.step_status = 'SUCCESS'
     </select>
 
     <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
