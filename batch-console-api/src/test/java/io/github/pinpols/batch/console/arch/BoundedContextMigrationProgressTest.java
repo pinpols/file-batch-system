@@ -52,8 +52,12 @@ class BoundedContextMigrationProgressTest {
    * orchestratorProxy 读 orchestrator 进程内进度 cache(设计文档要求前端不按 workerCode 查,桥接必须服务端做); 引入 file→ops
    * 只读跨域依赖 +6(1716→1722)。桥接是缺口1的必需路径(实时进度只存 orchestrator 内存), 依赖合理、不为降数字破坏观测设计;照 #795/#770/#779
    * 先例上调预算而非挪包。
+   *
+   * <p>2026-07-13(对抗审查 #2):presign-download 审批提交分支修跨租户写越权,submitApproval 新增一处 {@code
+   * tenantGuard.resolveTenant(...)} 校验(会话身份覆盖 body 声明的 tenantId,与带 approvalId 分支一致); file 域→tenant
+   * guard 只读跨域依赖 +1(1722→1723)。该调用是消灭跨租户审批注入的必需路径(安全修复), 依赖合理、不为降数字牺牲越权防护;照 #795/#811 先例上调预算。
    */
-  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1722;
+  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1723;
 
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 
