@@ -102,6 +102,28 @@ class DefaultConsoleFileApplicationServiceTest {
     verify(approvalClient).submitApproval(captor.capture());
     assertThat(captor.getValue().targetType()).isEqualTo("FILE");
     assertThat(captor.getValue().targetId()).isEqualTo("100");
+    // P0 回归:提交审批的 tenantId 必须来自 tenantGuard.resolveTenant(会话身份),而非裸取 body。
+    assertThat(captor.getValue().tenantId()).isEqualTo("t1");
+    verify(tenantGuard).resolveTenant("t1");
+  }
+
+  @Test
+  void shouldRejectCrossTenantApprovalSubmission_whenBodyTenantMismatchesSession() {
+    // P0 (adv-review 2026-07-13):租户 A 会话带 body tenantId=victimB 且无 approvalId → 走
+    // submitApproval;必须经 tenantGuard.resolveTenant 拦截(不匹配抛 FORBIDDEN),
+    // 不得把攻击者可控审批单写入租户 B 的审批队列。
+    when(tenantGuard.resolveTenant("victimB"))
+        .thenThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"));
+    PresignDownloadFileRequest request = new PresignDownloadFileRequest();
+    request.setTenantId("victimB");
+    request.setFileId(100L);
+    request.setReason("audit");
+
+    assertThatThrownBy(() -> service.presignDownload(request, "idem-1"))
+        .isInstanceOf(BizException.class)
+        .extracting(e -> ((BizException) e).getCode())
+        .isEqualTo(ResultCode.FORBIDDEN);
+    verify(approvalClient, org.mockito.Mockito.never()).submitApproval(any());
   }
 
   /** stub 校验通过后紧接的 /internal/files/{fileId}/presign REST 链(返回 null body 即可)。 */
