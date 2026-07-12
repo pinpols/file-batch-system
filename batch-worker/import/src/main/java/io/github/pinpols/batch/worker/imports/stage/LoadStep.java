@@ -112,9 +112,11 @@ public class LoadStep implements ImportStageStep {
         requireSinglePartitionForPartitionReplace(context);
         requireCheckpointDisabledForPartitionReplace(plugin);
         ((GenericJdbcMappedImportLoadPlugin) plugin).preparePartitionReplace(loadCtx);
-      } else {
+      } else if (!checkpointDegradedByMultiPartition(context)) {
         // ADR-038 R3-3:续跑开关开时,plugin 必须自报幂等能力(NONE/UNKNOWN 拒跑)。跨库无 1PC,
         // 崩溃窗口重做最后一个 chunk 的数据安全完全靠 plugin 幂等回退。
+        // 多分区降级时续跑不会启用(见 checkpointDegradedByMultiPartition),补偿窗口不存在,不做该前置拒跑
+        // —— 否则默认开关翻 true 后,多分区 + 非幂等 plugin 的既有任务会被无益地拒跑。
         requireIdempotentPluginIfCheckpointEnabled(plugin);
       }
       int chunkSize = resolveChunkSize(context);
@@ -296,11 +298,14 @@ public class LoadStep implements ImportStageStep {
   // ADR-038 P2 续跑位点辅助 ─────────────────────────────────────────────────────
 
   /**
-   * 启动续跑入口:开关关闭 / pipelineInstanceId 缺失 → 返回 null,走"无位点"原路径(从 0 跑、不写位点)。 开关开 + 有 instance id →
-   * 加载已存位点(可能 empty / completed / 中途位点)。
+   * 启动续跑入口:开关关闭 / pipelineInstanceId 缺失 / 多分区任务 → 返回 null,走"无位点"原路径(从 0 跑、不写位点)。 开关开 + 有 instance
+   * id → 加载已存位点(可能 empty / completed / 中途位点)。
    */
   private CheckpointHandle openCheckpoint(ImportJobContext context) {
     if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
+      return null;
+    }
+    if (checkpointDegradedByMultiPartition(context)) {
       return null;
     }
     Long pipelineInstanceId =
@@ -314,6 +319,30 @@ public class LoadStep implements ImportStageStep {
     long startLineNo = parseLineNo(pos.positionMarker());
     return new CheckpointHandle(
         tenantId, pipelineInstanceId, startLineNo, pos.processedCount(), pos.completed());
+  }
+
+  /**
+   * ADR-038 P0 多分区降级守卫:partitionCount > 1(mod 切片分区 / ADR-046 bundle 展开)时,K 个 partition 任务共享同一
+   * {@code pipeline_instance}(UPSERT 幂等键是 {@code related_job_instance_id},见
+   * PlatformFileRuntimeMapper.insertPipelineInstance),位点行 {@code (tenant, pipelineInstanceId,
+   * LOAD)} 会被各 partition 交叉读写:A 的行号 marker 会让 B 续跑时跳错行、A 的 markCompleted 会让 B 整段误跳过 —— 是数据正确性风险。
+   *
+   * <p>P0 保守处理:多分区整体降级为不续跑(行为同开关关)。多分区场景的崩溃恢复本就由 {@code job_partition} 分区级重跑覆盖(二者正交,见设计文档
+   * §1.8);分区内行级续跑要按 partition 拆位点键,属 P1+ 新逻辑,不在 P0 做。
+   */
+  private boolean checkpointDegradedByMultiPartition(ImportJobContext context) {
+    long partitionCount =
+        numberValue(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    if (partitionCount <= 1L) {
+      return false;
+    }
+    log.debug(
+        "checkpoint resume degraded (multi-partition task shares pipeline_instance):"
+            + " tenantId={}, fileId={}, partitionCount={}",
+        context.getTenantId(),
+        context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+        partitionCount);
+    return true;
   }
 
   /** chunk 写入数据库后推进位点;handle=null 时为关闭态,no-op。 */

@@ -204,6 +204,27 @@ class LoadStepCheckpointTest {
   }
 
   @Test
+  @DisplayName("开关开 + partitionCount>1:多分区共享 pipelineInstanceId,位点会互撞 → 降级为不续跑")
+  void checkpointEnabled_multiPartition_degradesToDisabled() throws Exception {
+    checkpointProps.setEnabled(true);
+    Path validated = writeNdjson(List.of(row("C1"), row("C2")));
+    ImportJobContext ctx = streamingContext(validated);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
+    when(plugin.loadChunk(any(), any())).thenReturn(2);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    // K 个 partition 共享同一 pipeline_instance(UPSERT on related_job_instance_id),
+    // (tenant, instanceId, LOAD) 位点行会跨 partition 互写 → 必须整体降级,不读不写位点。
+    verify(positionStore, never()).load(any(), anyLong(), any());
+    verify(positionStore, never()).advance(any(), anyLong(), any(), any(), anyLong());
+    verify(positionStore, never()).markCompleted(any(), anyLong(), any());
+  }
+
+  @Test
   @DisplayName("开关开 + pipelineInstanceId 缺失:退化为开关关行为(不读/写位点)")
   void checkpointEnabled_butMissingPipelineInstanceId_degradesToDisabled() throws Exception {
     checkpointProps.setEnabled(true);

@@ -23,6 +23,14 @@
 全链验证通过后直接把默认值翻 `true`,开关保留作**回滚手段**。`PARTITION_REPLACE_COPY` 模板与行级续跑互斥,
 在续跑开启下会被 `IMPORT_LOAD_CONFIG_INVALID` 拒跑(见前置校验),这类模板须显式 `batch.worker.checkpoint.enabled=false`。
 
+**多分区任务自动降级(P0 守卫)**:`partitionCount > 1`(mod 切片分区 / ADR-046 bundle 展开的 K 个 file partition)时,
+各 partition 任务共享同一 `pipeline_instance`(UPSERT 幂等键是 `related_job_instance_id`),位点行
+`(tenant, pipeline_instance_id, stage)` 会被各 partition **交叉读写**:LOAD 的行号 marker 让别的 partition 跳错行、
+GENERATE 的 markCompleted 让别的 partition 误判已完成 + 确定化文件 `inst-<id>.<ext>` 撞路径(bundle export e2e 实测
+`NoSuchFileException` 致任务死信)。因此 LOAD / GENERATE 对多分区任务**整体自动降级为不续跑**(行为同开关关,
+留 DEBUG 日志),无需配置;多分区的崩溃恢复由 `job_partition` 分区级重跑覆盖(与本特性正交,见设计文档 §1.8)。
+**续跑只对单分区任务生效** —— 即设计主场景「单个超大文件 / 单大结果集」。按 partition 拆位点键属 P1+,P0 不做。
+
 > 回滚:显式 `false` + worker 重启即完全退回今天行为;已写位点行无害保留(见 §关闭 / 回滚)。
 > 上线前 checklist(非 P0 阻塞):非 `GenericJdbcMappedImportLoadPlugin` 的自定义 plugin 逐个核 `idempotencyCapability()`、
 > 生产观测面板接告警、真实数据量下续跑命中率 / 跳过行数首周复盘。

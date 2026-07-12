@@ -202,6 +202,27 @@ class GenerateStepCheckpointTest {
   }
 
   @Test
+  void multiPartition_degradesToNonResumableFullRun() throws Exception {
+    // ADR-046 bundle export / 多分区任务:K 个 partition 共享同一 pipelineInstanceId
+    // (pipeline_instance UPSERT on related_job_instance_id),GENERATE 位点行会跨 partition 互写
+    // (A 的 markCompleted 让 B 误判跳过 / advance marker 互相覆盖)→ partitionCount>1 必须整体降级。
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+
+    ExportJobContext ctx = buildContext();
+    ctx.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+    ExportStageResult result = generateStep.execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    // 不进位点路径:不 advance 也不 markCompleted(store 状态保持 empty)
+    assertThat(positionStore.advanceCalls).isZero();
+    assertThat(positionStore.load("tenant-gen-test", INSTANCE_ID, ProcessingStage.GENERATE))
+        .isEqualTo(ProcessingPosition.empty());
+    // 不用确定化路径(随机 temp),不留 inst-* 文件
+    assertThat(deterministicFile).doesNotExist();
+  }
+
+  @Test
   void delimitedTrailerAfterResume_usesBatchControlTotal() throws Exception {
     when(dataPlugin.loadBatch(any()))
         .thenReturn(Map.of("id", 1L, "batchCode", "B001", "total_amount", "60.00"));
