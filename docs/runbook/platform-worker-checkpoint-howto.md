@@ -169,11 +169,25 @@ ORDER BY completed_at DESC;
 
 | 项 | 跟进 PR |
 |---|---|
-| **阶段级续跑**(ADR-038 §决策四 P4) | 与 ADR-020 batch-day-replay 语义重叠,需对齐后再做。本 PR 暂不实现。 |
 | **确定化残文件清理**(GENERATE 崩溃后从未重派的孤儿 `inst-*.<ext>`) | 走 tmp 目录,OS / 容器重启即清;若要主动清,后续可加按 mtime 的定期清扫(低优先,YAGNI)。 |
 
-> P4 当前为明确冻结项，不是默认待办。只有生产/同构 staging 证据表明“已完成 stage 被重复执行”成为显著 SLA 或数据库成本后，
-> 才重新评估；不得仅因 ADR 中存在设计草案就实施。
+## 阶段级续跑(P4,#812 已实现骨架 · 默认关)
+
+**状态**:执行骨架**已实现**并合入(#812)——`AbstractStageExecutor` 对跳过安全 stage + 读取侧
+`PlatformFileRuntimeRepository.loadSucceededStepCodes`;真 PG staging 恢复由 `ProcessStageSkipCrashResumeIntegrationTest`
+验证。**默认未启用**:`batch.worker.checkpoint.stage-skip.enabled=false`(`WorkerCheckpointProperties.StageSkip`)。
+
+**能力边界**:
+
+- 仅对 **PROCESS 的 COMPUTE + VALIDATE** 生效:副作用落 `batch.process_staging`、按稳定 `process-<taskId>` 键可重建。
+- **Import / Export / Dispatch 明确不跳过**:靠内存中间产物(file path 等)传递,跳过会丢失下游输入。
+- **多分片任务(`partitionCount>1`)自动降级不跳过**:共享 `pipeline_instance` 位点会互撞。
+
+**翻开关前置**:判定语义已在 2026-07 修正为"**每个 stepCode 最新一次 run 为 SUCCESS 才可跳过**"——旧的"历史上曾成功过"
+(`selectSucceededStepCodes` 的 distinct-SUCCESS)会把 SUCCESS 后重跑 FAILED 的 step 误判可跳过,导致 COMMIT 静默少发布。
+修复见 `PlatformFileRuntimeMapper.selectSucceededStepCodes`(窗口函数取每 step 最新一行)+ 反例护栏
+`PlatformFileRuntimeMapperStageSkipIntegrationTest`。跨阶段重复计算是否已成显著 SLA / DB 成本仍需真实负载证据后才建议开启,
+不得仅因设计草案存在就默认打开。
 
 ## 相关
 

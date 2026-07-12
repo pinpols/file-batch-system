@@ -13,8 +13,17 @@
 
 > **实施勘误（2026-07-11）**：P1（位点模型）、P2（Import LOAD）和 P3（Export GENERATE）已交付；
 > Import 的真实进程崩溃、lease 回收和同实例续跑已由 `scripts/sim/25-import-stage2e-checkpoint-crash.sh`
-> 验证。P4 阶段级续跑未实现，因与 ADR-020 replay 语义重叠而冻结，除非真实负载证明跨阶段重复计算已成为主要成本，
-> 否则不启动。运行现状以 `docs/runbook/platform-worker-checkpoint-howto.md` 为准。
+> 验证。运行现状以 `docs/runbook/platform-worker-checkpoint-howto.md` 为准。
+>
+> **P4 阶段级续跑更新（2026-07，#812）**：执行骨架**已实现**（`AbstractStageExecutor` 跳过安全 stage +
+> `PlatformFileRuntimeRepository.loadSucceededStepCodes` 读取侧），真 PG staging 恢复已由
+> `ProcessStageSkipCrashResumeIntegrationTest` 验证；**默认未启用**（`batch.worker.checkpoint.stage-skip.enabled=false`，
+> 见 `WorkerCheckpointProperties.StageSkip`）。**能力边界**：仅对 PROCESS 的 COMPUTE + VALIDATE 生效（副作用落
+> `process_staging`、按稳定 `process-<taskId>` 键可重建）；Import / Export / Dispatch 靠内存中间产物（file path 等）
+> 传递,**明确不跳过**；多分片任务（`partitionCount>1`）自动降级不跳过（共享 `pipeline_instance` 位点会互撞）。
+> **翻开关前置**：判定语义已在 2026-07 修正为"每个 stepCode 最新一次 run 为 SUCCESS 才可跳过"（旧的"历史曾成功"会把
+> SUCCESS 后重跑 FAILED 的 step 误判可跳过 → COMMIT 静默少发布），见 `PlatformFileRuntimeMapper.selectSucceededStepCodes`
+> 与 `PlatformFileRuntimeMapperStageSkipIntegrationTest`。跨阶段重复计算是否成为主要成本仍需真实负载验证后才建议启用。
 
 ## 评估记录
 
