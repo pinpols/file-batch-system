@@ -63,4 +63,34 @@ class HttpTaskExecutorIpBlockTest {
   void accepts_public_literal() {
     assertThat(blocked("8.8.8.8")).isFalse();
   }
+
+  @Test
+  void accepts_public_literal_ipv6() {
+    assertThat(blocked("2001:4860:4860::8888")).isFalse();
+  }
+
+  /**
+   * 回归:原本地私有副本用 {@code isSiteLocalAddress()}(仅匹配废弃的 fec0::/10),放行了 fc00::/7 ULA —— 包括 AWS IPv6
+   * metadata {@code fd00:ec2::254}。收敛到 canonical {@link
+   * io.github.pinpols.batch.common.security.DnsResolveGuard} 后必须拦截。
+   */
+  @Test
+  void rejects_ipv6_ula_aws_metadata() {
+    assertThat(blocked("fd00:ec2::254")).isTrue();
+  }
+
+  @Test
+  void rejects_ipv6_ula_fc00_range() {
+    assertThat(blocked("fc00::1")).isTrue();
+  }
+
+  @Test
+  void rejects_ipv6_ula_fd_range() {
+    assertThat(blocked("fd12:3456:789a::1")).isTrue();
+  }
+
+  @Test
+  void rejects_ipv6_link_local() {
+    assertThat(blocked("fe80::1")).isTrue();
+  }
 }
