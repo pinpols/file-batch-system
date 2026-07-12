@@ -38,8 +38,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 样式,但覆盖 stage 之间的跳过(而非 stage 内行号续跑)。
  *
  * <p>用**真实 PG(Testcontainers)** 跑 {@link SqlTransformComputePlugin} 的 WAP staging → target 发布, 驱动完整
- * {@link DefaultProcessStageExecutor} 跨两次 attempt(同稳定 {@code batch-<taskId>} 键 = 同 staging)。 {@link
- * PlatformFileRuntimeRepository} 用 mock 模拟持久到平台库的 {@code pipeline_step_run}——{@code
+ * {@link DefaultProcessStageExecutor} 跨两次 attempt(同稳定 {@code process-<taskId>} 键 = 同 staging)。
+ * {@link PlatformFileRuntimeRepository} 用 mock 模拟持久到平台库的 {@code pipeline_step_run}——{@code
  * loadSucceededStepCodes} 返回上一 attempt 已成功的 stepCode 集,即 P1 读取侧的输入。
  *
  * <p>验证三条 P1 契约:

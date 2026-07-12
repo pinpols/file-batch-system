@@ -59,7 +59,12 @@ public abstract class AbstractStageExecutor<
     // 一次性读上一 attempt 已成功的 stepCode 集(pipeline_step_run 成功记录跨重派持久,
     // pipeline_instance 复用 → 同 pipelineInstanceId → 读得到)。命中即幂等跳过,不重算。
     // 集合在进循环前读一次,只含**历史** attempt 的成功记录;本次 attempt 尚未写 SUCCESS,不会自跳。
-    boolean stageSkipEnabled = stageSkipEnabled() && pipelineInstanceId != null;
+    // 多分区守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):partitionCount>1 时
+    // 整体降级为不跳,防兄弟 partition 的 SUCCESS 记录误判(共享 pipeline_instance,粒度不一致)。
+    boolean stageSkipEnabled =
+        stageSkipEnabled()
+            && pipelineInstanceId != null
+            && !stageSkipDegradedByMultiPartition(context, pipelineInstanceId);
     Set<String> skipSafeStages = stageSkipEnabled ? skipSafeStages() : Set.of();
     Set<String> priorSucceededStepCodes =
         (stageSkipEnabled && !skipSafeStages.isEmpty())
@@ -137,6 +142,29 @@ public abstract class AbstractStageExecutor<
     return results;
   }
 
+  /**
+   * P1 阶段级续跑多分区降级守卫(与 ADR-038 P0 {@code LoadStep.checkpointDegradedByMultiPartition} 对称)。
+   *
+   * <p>{@code partitionCount > 1}(mod 切片分区 / ADR-046 bundle 展开)时,K 个 partition task 共享同一 {@code
+   * pipeline_instance}(UPSERT 幂等键是 {@code related_job_instance_id}),而 skip-safe stage 的副作用是 **task
+   * 级**(如 PROCESS staging 键 {@code process-<taskId>}):partition A 的 COMPUTE SUCCESS step_run 会让
+   * partition B 误判"已成功"而跳过 → B 的 staging 从未生成 → COMMIT 读 0 行**静默少发布**。
+   * 粒度不一致,保守整体降级为不跳(行为同开关关);多分区崩溃恢复本就由 {@code job_partition} 分区级重跑覆盖(设计文档 §1.8)。
+   */
+  private boolean stageSkipDegradedByMultiPartition(C context, Long pipelineInstanceId) {
+    Long partitionCount =
+        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    if (partitionCount == null || partitionCount <= 1L) {
+      return false;
+    }
+    log.debug(
+        "stage-skip degraded (multi-partition task shares pipeline_instance while side effects"
+            + " are task-scoped): pipelineInstanceId={}, partitionCount={}",
+        pipelineInstanceId,
+        partitionCount);
+    return true;
+  }
+
   private void injectCurrentStepAttributes(C context, PipelineStepDefinition currentStep) {
     Map<String, Object> attributes = context.getAttributes();
     attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE, currentStep.stepCode());
@@ -176,7 +204,7 @@ public abstract class AbstractStageExecutor<
   /**
    * P1 阶段级续跑总开关。默认 {@code false} —— 任何 pipeline 都退回「从首 stage 全量重跑」。
    *
-   * <p>只有副作用可从持久状态重建的 pipeline(如 PROCESS:staging 按稳定 {@code batch-<taskId>} 键)才覆盖为读配置开关; 靠内存
+   * <p>只有副作用可从持久状态重建的 pipeline(如 PROCESS:staging 按稳定 {@code process-<taskId>} 键)才覆盖为读配置开关; 靠内存
    * attribute 传中间产物的 pipeline 不得开启(跳过会丢下游输入)。
    */
   protected boolean stageSkipEnabled() {

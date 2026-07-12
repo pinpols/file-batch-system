@@ -40,7 +40,7 @@ public class WorkerCheckpointProperties {
    *
    * <p>安全边界:该开关只对**跳过安全**的 stage 生效(见 {@code
    * AbstractStageExecutor#skipSafeStages()});其副作用必须已持久化到可由稳定键重建的位置 (如 PROCESS 的 {@code
-   * process_staging} 按 {@code batch-<taskId>} 键)。 靠内存 attribute 传递中间产物(import/export/dispatch 的
+   * process_staging} 按 {@code process-<taskId>} 键)。 靠内存 attribute 传递中间产物(import/export/dispatch 的
    * file path 等)的 stage 不在跳过范围, 跳过会丢失下游输入。
    */
   @Data

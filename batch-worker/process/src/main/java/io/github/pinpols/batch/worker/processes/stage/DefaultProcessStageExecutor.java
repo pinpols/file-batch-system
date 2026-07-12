@@ -35,7 +35,7 @@ public class DefaultProcessStageExecutor
    * P1 阶段级续跑对 PROCESS 的跳过安全 stage 集。仅这三个:
    *
    * <ul>
-   *   <li>{@code COMPUTE}——写 staging(按稳定 {@code batch-<taskId>} 键),成功后重派可跳过、不重算(P1 头号收益); DIRECT
+   *   <li>{@code COMPUTE}——写 staging(按稳定 {@code process-<taskId>} 键),成功后重派可跳过、不重算(P1 头号收益); DIRECT
    *       模式无 staging 副作用,跳过更是纯 no-op。
    *   <li>{@code VALIDATE}——只读 staging 跑质量规则,成功即"已过闸";跳到 COMMIT 即设计意图"COMPUTE 成功 → 跳到 COMMIT"。
    *   <li>{@code PREPARE} 不入集:保留其 plugin-not-found fail-fast 每次重派都跑,成本可忽略。
@@ -68,7 +68,7 @@ public class DefaultProcessStageExecutor
   }
 
   /**
-   * P1 阶段级续跑:PROCESS 副作用落 {@code process_staging}(稳定 {@code batch-<taskId>} 键,COMMIT/VALIDATE
+   * P1 阶段级续跑:PROCESS 副作用落 {@code process_staging}(稳定 {@code process-<taskId>} 键,COMMIT/VALIDATE
    * 均从该键重建),故可安全开启。开关默认 false(本 PR 只交付能力)。
    */
   @Override

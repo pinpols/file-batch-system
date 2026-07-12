@@ -46,8 +46,23 @@ class DefaultProcessStageExecutorTest {
 
   @BeforeEach
   void setUp() {
-    when(runtimeRepository.toLong(any())).thenReturn(PIPELINE_INSTANCE_ID);
+    // 真实转换而非恒返 PIPELINE_INSTANCE_ID:多分区守卫要用 toLong 读 PARTITION_COUNT,
+    // 恒返 100 会让守卫把任何 attribute 都当 partitionCount=100 误降级。
+    when(runtimeRepository.toLong(any())).thenAnswer(inv -> realToLong(inv.getArgument(0)));
     when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
+  }
+
+  private static Long realToLong(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    if (value instanceof String string && !string.isBlank()) {
+      return Long.valueOf(string);
+    }
+    return null;
   }
 
   @Test
@@ -467,6 +482,69 @@ class DefaultProcessStageExecutorTest {
         .extracting(ProcessStageResult::stage)
         .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
     verify(plugin).commit(context); // COMMIT 恒跑
+  }
+
+  @Test
+  void stageSkip_degradedByMultiPartition_siblingSuccessDoesNotCauseSkip() {
+    // Critical 守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):
+    // partitionCount=2 时 K 个 partition task 共享同一 pipeline_instance,但 staging 副作用是
+    // task 级(process-<taskId>)。兄弟 partition 的 COMPUTE SUCCESS step_run 不得让本 task 跳过
+    // COMPUTE(否则本 task 的 staging 从未生成 → COMMIT 读 0 行静默少发布)。
+    // 期望:多分区整体降级为不跳 —— 全量跑,且从不查历史成功记录。
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("dailySummary");
+    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+
+    DefaultProcessStageExecutor executor =
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(),
+            List.of(plugin),
+            runtimeRepository,
+            ProcessMetrics.noop(),
+            enabledStageSkip());
+
+    ProcessJobContext context = newContext();
+    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results).hasSize(5); // 全量跑,零跳过
+    verify(plugin).compute(context); // COMPUTE 未被兄弟 SUCCESS 误跳
+    verify(plugin).validate(context);
+    verify(runtimeRepository, never()).loadSucceededStepCodes(any()); // 降级后甚至不查历史
+  }
+
+  @Test
+  void stageSkip_singlePartition_partitionCountOne_stillSkips() {
+    // 边界:partitionCount=1(显式单分区)不触发降级,跳过逻辑照常生效。
+    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+        .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("dailySummary");
+
+    DefaultProcessStageExecutor executor =
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(),
+            List.of(plugin),
+            runtimeRepository,
+            ProcessMetrics.noop(),
+            enabledStageSkip());
+
+    ProcessJobContext context = newContext();
+    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 1);
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("dailySummary"));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results)
+        .extracting(ProcessStageResult::stage)
+        .containsExactly(ProcessStage.PREPARE, ProcessStage.COMMIT, ProcessStage.FEEDBACK);
+    verify(plugin, never()).compute(any());
   }
 
   private WorkerCheckpointProperties disabledStageSkip() {
