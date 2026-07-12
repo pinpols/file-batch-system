@@ -205,12 +205,20 @@ batch:
     # QUEUE_DEFER=有界队列+背压（默认，峰值流量不误拒）；REJECT=恢复旧的硬拒默认。仅作用于未显式配策略的租户。
     default-exceeded-strategy: ${BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY:QUEUE_DEFER}
   rate-limit:
-    # 是否启用显式限流（时间窗/令牌桶）：默认关闭，避免影响现有行为
-    enabled: ${BATCH_RATE_LIMIT_ENABLED:false}
-    # 每租户每分钟最大新建（launch）请求数：<=0 表示关闭该维度
-    max-new-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_NEW_PER_TENANT_PER_MINUTE:0}
-    # 每租户每分钟最大释放（waiting partition dispatch release）请求数：<=0 表示关闭该维度
-    max-release-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_RELEASE_PER_TENANT_PER_MINUTE:0}
+    # 按租户固定窗口限流总开关：默认开启（2026-06-24 起防接口盗刷；旧默认 false）。
+    # 与 RateLimitProperties 类默认(true)、feature-switches.md §1 对齐；紧急关闸经 env 置 false。
+    enabled: ${BATCH_RATE_LIMIT_ENABLED:true}
+    # 各维度阈值为高水位("只拦 runaway"),与 feature-switches.md §1 文档口径一致；<=0 表示关闭该维度。
+    # 每租户每分钟最大新建（launch）请求数：默认 3000（=50/s）。
+    max-new-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_NEW_REQUESTS_PER_TENANT_PER_MINUTE:3000}
+    # 每租户每分钟最大 worker 注册请求数：默认 300（=5/s，低频动作）。
+    max-register-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_REGISTER_REQUESTS_PER_TENANT_PER_MINUTE:300}
+    # 每租户每分钟最大释放（waiting partition dispatch release）请求数：默认 3000（=50/s）。
+    max-release-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_RELEASE_REQUESTS_PER_TENANT_PER_MINUTE:3000}
+    # 每租户每分钟最大 task claim 请求数（热路径）：默认 12000（=200/s）。
+    max-claim-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_CLAIM_REQUESTS_PER_TENANT_PER_MINUTE:12000}
+    # 每租户每分钟最大 task report 请求数（热路径）：默认 12000（=200/s）。
+    max-report-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_REPORT_REQUESTS_PER_TENANT_PER_MINUTE:12000}
   sla:
     # SLA 监控开关（超时/延迟等规则）
     enabled: ${BATCH_SLA_ENABLED:true}
