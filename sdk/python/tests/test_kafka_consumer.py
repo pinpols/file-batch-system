@@ -338,3 +338,16 @@ async def test_handle_record_skips_invalid_json(
         assert any("failed to parse" in r.message for r in caplog.records)
     finally:
         await consumer._dispatcher._http.close()
+
+
+@pytest.mark.asyncio
+async def test_poll_loop_crash_sets_crashed_flag() -> None:
+    """poll 循环因非取消异常死亡 → crashed=True, running=False(供 client.metrics 判活)。"""
+    consumer, _dispatcher, mock = await _make_consumer()
+    # getmany 抛非 CancelledError → 命中 _poll_loop 的 `except Exception` 崩溃分支
+    mock.getmany.side_effect = RuntimeError("broker gone")
+    consumer._running = True
+    assert consumer.crashed is False
+    await consumer._poll_loop()
+    assert consumer.crashed is True
+    assert consumer.running is False

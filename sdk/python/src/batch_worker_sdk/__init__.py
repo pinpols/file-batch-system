@@ -31,6 +31,7 @@ from __future__ import annotations
 from batch_worker_sdk._version import __version__
 from batch_worker_sdk.client.client import BatchPlatformClient
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.client.metrics import SdkClientMetrics
 from batch_worker_sdk.constants import (
     SCHEMA_VERSIONS_SUPPORTED,
     SENSITIVE_KEYWORDS,
@@ -99,6 +100,7 @@ __all__: list[str] = [
     "SdkAbstractTaskHandler",
     "SdkCheckpoint",
     "SdkCheckpointState",
+    "SdkClientMetrics",
     "SdkIdempotencyEntity",
     "SdkIdempotencyStore",
     "SdkIdempotentHandler",

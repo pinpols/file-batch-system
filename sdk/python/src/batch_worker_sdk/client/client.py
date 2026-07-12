@@ -31,6 +31,7 @@ from datetime import timedelta
 from typing import Any, Protocol
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.client.metrics import SdkClientMetrics
 from batch_worker_sdk.handler.handler import SdkTaskHandler
 from batch_worker_sdk.idempotent import SdkIdempotencyStore, wrap_idempotent
 from batch_worker_sdk.internal import _fingerprint, _lifecycle
@@ -51,6 +52,9 @@ class _KafkaConsumerLike(Protocol):
 
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
+
+    @property
+    def crashed(self) -> bool: ...
 
 
 # 工厂别名 —— 集中放在这里,方便统一调整类型
@@ -139,6 +143,37 @@ class BatchPlatformClient:
     def http(self) -> PlatformHttpClient:
         """底层 HTTP client,暴露给测试和高级用户。"""
         return self._http
+
+    def metrics(self) -> SdkClientMetrics:
+        """运行时指标快照(对齐 Java ``BatchPlatformClient.metrics()``)。
+
+        供租户接自家 Prometheus / OpenTelemetry。不做 IO,读已有状态,可随时调用。
+        """
+        fatal = self._dispatcher is not None and self._dispatcher.is_fatal
+        draining = self._dispatcher is not None and self._dispatcher.is_draining
+        crashed = self._kafka is not None and self._kafka.crashed
+        in_flight = self._dispatcher.in_flight_count() if self._dispatcher is not None else 0
+        return SdkClientMetrics(
+            tenant_id=self._config.tenant_id,
+            worker_code=self._config.worker_code,
+            started=self._started,
+            healthy=self._started and not fatal and not crashed,
+            in_flight_task_count=in_flight,
+            max_concurrent_tasks=self._config.max_concurrent_tasks,
+            registered_handler_count=len(self._handlers),
+            dispatcher_fatal=fatal,
+            dispatcher_draining=draining,
+            consumer_crashed=crashed,
+            kafka_consumer_lag=-1,
+        )
+
+    def is_healthy(self) -> bool:
+        """liveness/readiness 信号(对齐 Java ``isHealthy()``):``True`` = 仍在正常接派单。
+
+        未 start / dispatcher fatal(CLAIM 401/403)/ Kafka poll 崩溃 → ``False``;
+        drain 中仍 ``True``(优雅状态,lease 续约未停)。
+        """
+        return self.metrics().healthy
 
     # ─── 生命周期 ────────────────────────────────────────────────────
 
