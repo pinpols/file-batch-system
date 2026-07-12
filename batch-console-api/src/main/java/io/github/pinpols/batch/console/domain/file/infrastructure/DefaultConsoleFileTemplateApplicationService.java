@@ -35,7 +35,9 @@ import org.springframework.stereotype.Service;
  * 文件模板配置的 CRUD：list / get / create / update / toggle。
  *
  * <p>唯一键：{@code (tenantId, templateCode, version)}——允许同 code 多版本并存，用于灰度发布或滚动升级。 create 时若同 (code,
- * version) 已存在抛 {@code CONFLICT}；update 默认沿用现有 version 但允许入参覆盖， 便于"就地升版"或"平移到新版号"两种语义。
+ * version) 已存在抛 {@code CONFLICT}；update 固定沿用现有行的 version，<b>忽略</b>入参携带的 version 覆盖—— 否则 upsert 的
+ * {@code on conflict (tenant_id, template_code, version)} 不命中 path id 指向的现有行， 会 INSERT 一条新 version
+ * 幽灵行(新 id)，而回读仍按旧 id 取回陈旧行。新版号应走 create 而非 update。
  *
  * <p>与 {@link DefaultConsoleJobDefinitionApplicationService} 不同，本类不调 cache invalidation—— 文件模板不在
  * orchestrator launch 热路径上读取（由 worker 导入/导出阶段按需拉取），无需前置失效 Redis 缓存。
@@ -101,10 +103,11 @@ public class DefaultConsoleFileTemplateApplicationService
         Guard.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
     String operator = requestMetadataResolver.current().operatorId();
     String templateCode = (String) existing.get("template_code");
+    // #9 (adv-review 2026-07-13)：update 不得改 version —— upsert 的 on conflict 键含 version，
+    // 入参携带新 version 时不命中 path id 指向的现有行，反而 INSERT 一条新 version 幽灵行(新 id)，
+    // 而回读仍按旧 id 取回陈旧行。update 语义固定就地作用于现有行，忽略入参的 version 覆盖。
     int version =
-        request.getVersion() != null
-            ? request.getVersion()
-            : existing.get("version") != null ? ((Number) existing.get("version")).intValue() : 1;
+        existing.get("version") != null ? ((Number) existing.get("version")).intValue() : 1;
     mapper.upsertFileTemplateConfig(
         buildUpdateParam(tenantId, templateCode, version, operator, request, existing));
     return mapper.selectById(tenantId, id);
