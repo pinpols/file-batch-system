@@ -51,7 +51,9 @@ class _Kafka:
         return self._crashed
 
 
-def _client_with(dispatcher: Any = None, kafka: Any = None, started: bool = True) -> BatchPlatformClient:
+def _client_with(
+    dispatcher: Any = None, kafka: Any = None, started: bool = True
+) -> BatchPlatformClient:
     c = BatchPlatformClient(_cfg(), http=_http_mock())
     c.register_handler(_h("t-import"))
     c.register_handler(_h("t-export"))
