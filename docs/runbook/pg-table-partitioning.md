@@ -129,6 +129,41 @@ DROP TABLE batch.outbox_event_p_2025_01;
 // 同 P3-3 archive 调度器模式
 ```
 
+## 故障处置：DEFAULT 分区已捕获目标月数据
+
+`03-add-future-partitions.sql` 每个 (表, 月) 独立成块并捕获异常：单月失败不再级联中止其余
+月份与另一张表，且失败会 `RAISE WARNING` + 末尾汇总 `RAISE EXCEPTION` 让脚本非零退出（cron/
+告警可感知）。**但脚本不会自动修复**下面这种最常见失败——需人工介入。
+
+**症状**：脚本报 `partition create failed ... default partition would be violated by some row`。
+**根因**：某月的常规分区还没建，而 DEFAULT 分区已经收了属于该月的行（漏跑一次 cron，或
+`biz_date` 被 backfill / 前置到未来窗口之外）。此时 `CREATE ... PARTITION OF` 需扫 DEFAULT，
+发现有行落在新分区区间内即报错。
+
+**手工修复（维护窗口内，注意并发写）**，以 `job_instance` 的 `2026_09` 月为例：
+
+```sql
+BEGIN;
+-- 1. 摘掉 DEFAULT（此后落该区间的新写入会直接失败,故务必在维护窗口/低峰做,时间尽量短）
+ALTER TABLE batch.job_instance DETACH PARTITION batch.job_instance_p_default;
+-- 2. 建目标月常规分区（DEFAULT 已摘,不再触发校验）
+CREATE TABLE IF NOT EXISTS batch.job_instance_p_2026_09
+    PARTITION OF batch.job_instance FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
+-- 3. 把错落在旧 DEFAULT 里的该月行迁回主表（自动路由进新分区）
+INSERT INTO batch.job_instance
+    SELECT * FROM batch.job_instance_p_default
+    WHERE biz_date >= '2026-09-01' AND biz_date < '2026-10-01';
+DELETE FROM batch.job_instance_p_default
+    WHERE biz_date >= '2026-09-01' AND biz_date < '2026-10-01';
+-- 4. 重新挂回 DEFAULT
+ALTER TABLE batch.job_instance ATTACH PARTITION batch.job_instance_p_default DEFAULT;
+COMMIT;
+```
+
+`outbox_event` 同理，分区键换成 `created_at`。修完重跑 `03-add-future-partitions.sql` 确认全绿。
+**预防**：保证 cron 按时跑（每月 1 号）；任何把 `biz_date` 前置到 `months_ahead` 窗口之外的
+backfill / catch-up，须先手工建好目标月分区再写入。
+
 ## 回滚
 
 **步骤二完成后基本不可逆**——只能从 legacy 表手工重建：
