@@ -7629,11 +7629,31 @@ paths:
         - name: templateCode
           in: query
           required: false
+          description: Fuzzy match on template code.
           schema:
             type: string
-        - name: fileType
+        - name: templateName
           in: query
           required: false
+          description: Fuzzy match on template name.
+          schema:
+            type: string
+        - name: templateType
+          in: query
+          required: false
+          description: Exact match on template type.
+          schema:
+            type: string
+        - name: bizType
+          in: query
+          required: false
+          description: Exact match on business type.
+          schema:
+            type: string
+        - name: keyword
+          in: query
+          required: false
+          description: Fuzzy keyword across template code/name.
           schema:
             type: string
         - name: enabled
