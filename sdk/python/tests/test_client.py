@@ -69,6 +69,14 @@ class _RecordingDispatcher:
     def apply_platform_directive(self, directive: Any) -> None:
         return None
 
+    @property
+    def is_fatal(self) -> bool:
+        return False
+
+    @property
+    def is_draining(self) -> bool:
+        return False
+
     def mark_cancel_requested(self, task_id: int, reason: str) -> None:
         return None
 
@@ -86,6 +94,10 @@ class _RecordingKafka:
 
     async def stop(self) -> None:
         self.stopped = True
+
+    @property
+    def crashed(self) -> bool:
+        return False
 
 
 def _cfg() -> BatchPlatformClientConfig:

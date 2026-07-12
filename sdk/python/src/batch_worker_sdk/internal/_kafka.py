@@ -122,6 +122,10 @@ class KafkaTaskConsumer:
         self._consumer: AIOKafkaConsumer | None = consumer
         self._owns_consumer = consumer is None
         self._running: bool = False
+        # poll 循环因非 CancelledError 异常死亡时置 True(对齐 Java hasCrashed):
+        # 正常 stop() 也把 _running 置 False,靠本标志区分「优雅停」与「崩溃停」,
+        # 供 client.metrics()/is_healthy() 判活(消费已停但 liveness 仍误报 UP 是隐患)。
+        self._crashed: bool = False
         # 两套独立的 pause 账本(对齐 Java 但拆分维度,见 apply_backpressure /
         # _poll_loop 注释):
         #   _capacity_paused —— 容量 / 平台维度的「整 assignment pause」缓存,
@@ -292,6 +296,7 @@ class KafkaTaskConsumer:
             raise
         except Exception:
             logger.exception("KafkaTaskConsumer poll loop died")
+            self._crashed = True
             self._running = False
 
     async def _handle_record(self, tp: TopicPartition, rec: Any) -> DispatchDisposition:
@@ -408,3 +413,8 @@ class KafkaTaskConsumer:
     @property
     def running(self) -> bool:
         return self._running
+
+    @property
+    def crashed(self) -> bool:
+        """poll 循环是否因异常(非取消/非优雅停)死亡。对齐 Java ``hasCrashed()``。"""
+        return self._crashed
