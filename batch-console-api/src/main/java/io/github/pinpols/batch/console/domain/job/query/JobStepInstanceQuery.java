@@ -9,4 +9,10 @@ public record JobStepInstanceQuery(
     String stepCode,
     String stepStatus,
     PageRequest pageRequest,
-    Long cursorId) {}
+    Long cursorId) {
+
+  /** 仅按 (tenantId, jobInstanceId) 取全部 step 的最小查询;其余过滤/分页字段留空。 */
+  public static JobStepInstanceQuery forJobInstance(String tenantId, Long jobInstanceId) {
+    return new JobStepInstanceQuery(tenantId, jobInstanceId, null, null, null, null, null);
+  }
+}

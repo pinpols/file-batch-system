@@ -66,9 +66,8 @@ class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTe
         tenantId, jobInstanceId, successPartition, "SUCCESS", null, null, "2026-07-11T00:00:00Z");
 
     // act
-    List<JobPartitionEntity> rows =
-        jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(tenantId, jobInstanceId, null, null, null));
+    JobPartitionQuery query = JobPartitionQuery.forJobInstance(tenantId, jobInstanceId);
+    List<JobPartitionEntity> rows = jobPartitionMapper.selectByQuery(query);
 
     // assert
     JobPartitionEntity failed =

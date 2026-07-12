@@ -47,8 +47,13 @@ class BoundedContextMigrationProgressTest {
    * ConsoleAlertEventResponse), 引入 audit→notification 只读跨域依赖 +5(1711→1716)。AI
    * 工具本质就是跨域**只读**聚合各域数据(诊断/告警), 该依赖合理、不为降数字破坏工具设计;照 #770/#779 先例上调预算而非挪包(AI tools 属 audit 域业务工具,非
    * shared 基建)。
+   *
+   * <p>2026-07-12(#811):4 类 worker 执行可观测性补全。file 域 ConsoleFilePipelineQuery 服务端桥接实时行数, 经 ops 域
+   * orchestratorProxy 读 orchestrator 进程内进度 cache(设计文档要求前端不按 workerCode 查,桥接必须服务端做); 引入 file→ops
+   * 只读跨域依赖 +6(1716→1722)。桥接是缺口1的必需路径(实时进度只存 orchestrator 内存), 依赖合理、不为降数字破坏观测设计;照 #795/#770/#779
+   * 先例上调预算而非挪包。
    */
-  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1716;
+  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1722;
 
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

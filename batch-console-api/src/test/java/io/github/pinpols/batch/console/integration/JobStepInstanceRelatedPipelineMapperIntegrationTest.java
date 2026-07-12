@@ -59,9 +59,8 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
   }
 
   private JobStepInstanceEntity selectStep(String tenantId, long jobInstanceId, long stepId) {
-    List<JobStepInstanceEntity> rows =
-        jobStepInstanceMapper.selectByQuery(
-            new JobStepInstanceQuery(tenantId, jobInstanceId, null, null, null, null, null));
+    JobStepInstanceQuery query = JobStepInstanceQuery.forJobInstance(tenantId, jobInstanceId);
+    List<JobStepInstanceEntity> rows = jobStepInstanceMapper.selectByQuery(query);
     return rows.stream().filter(r -> r.getId().equals(stepId)).findFirst().orElseThrow();
   }
 

@@ -35,6 +35,7 @@ class QueryRecordConstructionConventionTest {
           // record 内部工厂自身的 raw new 允许(允许工厂 implementation)
           "/domain/job/query/JobTaskQuery.java",
           "/domain/job/query/JobPartitionQuery.java",
+          "/domain/job/query/JobStepInstanceQuery.java",
           "/domain/job/query/JobExecutionLogQuery.java",
           "/domain/notification/query/AlertEventQuery.java",
           "/domain/query/JobTaskQuery.java",
