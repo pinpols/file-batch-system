@@ -5,8 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.github.pinpols.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
+import io.github.pinpols.batch.common.tenant.routing.HashAndSiloPlacementResolver;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import java.util.List;
+import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -42,6 +46,11 @@ class RlsClosedWorldCheckIntegrationTest {
   private static HikariDataSource dataSource;
   private static JdbcTemplate jdbc;
 
+  /** 第二个物理库,模拟多分片部署下的另一片(shard-1),验证闭世界不再只扫默认片。 */
+  private static HikariDataSource shard1DataSource;
+
+  private static JdbcTemplate shard1Jdbc;
+
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() {
@@ -62,10 +71,25 @@ class RlsClosedWorldCheckIntegrationTest {
     jdbc = new JdbcTemplate(dataSource);
 
     jdbc.execute("CREATE SCHEMA IF NOT EXISTS biz");
+
+    // 第二个物理库(shard-1):同容器另建一个 database,独立 biz schema,模拟多分片。
+    jdbc.execute("CREATE DATABASE shard_one");
+    HikariConfig shard1Cfg = new HikariConfig();
+    shard1Cfg.setJdbcUrl(
+        postgres.getJdbcUrl().replace("/" + postgres.getDatabaseName(), "/shard_one"));
+    shard1Cfg.setUsername(postgres.getUsername());
+    shard1Cfg.setPassword(postgres.getPassword());
+    shard1Cfg.setMaximumPoolSize(4);
+    shard1DataSource = new HikariDataSource(shard1Cfg);
+    shard1Jdbc = new JdbcTemplate(shard1DataSource);
+    shard1Jdbc.execute("CREATE SCHEMA IF NOT EXISTS biz");
   }
 
   @AfterAll
   static void stopContainer() {
+    if (shard1DataSource != null) {
+      shard1DataSource.close();
+    }
     if (dataSource != null) {
       dataSource.close();
     }
@@ -78,20 +102,30 @@ class RlsClosedWorldCheckIntegrationTest {
   void dropAllBizTables() {
     jdbc.execute("DROP SCHEMA IF EXISTS biz CASCADE");
     jdbc.execute("CREATE SCHEMA biz");
+    shard1Jdbc.execute("DROP SCHEMA IF EXISTS biz CASCADE");
+    shard1Jdbc.execute("CREATE SCHEMA biz");
   }
 
   // ─── 建表 + 施 policy 套路(对齐 rls-phase-a.sql) ──────────────────────────
 
   private void createPlainTableWithRls(String table) {
-    jdbc.execute(
+    createPlainTableWithRls(jdbc, table);
+  }
+
+  private void createPlainTableWithRls(JdbcTemplate target, String table) {
+    target.execute(
         "CREATE TABLE biz."
             + table
             + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
-    applyRls("biz." + table);
+    applyRls(target, "biz." + table);
   }
 
   private void createPlainTableNoRls(String table) {
-    jdbc.execute(
+    createPlainTableNoRls(jdbc, table);
+  }
+
+  private void createPlainTableNoRls(JdbcTemplate target, String table) {
+    target.execute(
         "CREATE TABLE biz."
             + table
             + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
@@ -120,9 +154,13 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   private void applyRls(String fqTable) {
-    jdbc.execute("ALTER TABLE " + fqTable + " ENABLE ROW LEVEL SECURITY");
-    jdbc.execute("ALTER TABLE " + fqTable + " FORCE ROW LEVEL SECURITY");
-    jdbc.execute(
+    applyRls(jdbc, fqTable);
+  }
+
+  private void applyRls(JdbcTemplate target, String fqTable) {
+    target.execute("ALTER TABLE " + fqTable + " ENABLE ROW LEVEL SECURITY");
+    target.execute("ALTER TABLE " + fqTable + " FORCE ROW LEVEL SECURITY");
+    target.execute(
         "CREATE POLICY tenant_isolation_transition ON "
             + fqTable
             + " AS PERMISSIVE FOR ALL TO PUBLIC"
@@ -227,6 +265,71 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   // ─── P1-2:同名但语义坏的 policy 必须 DOWN(只验名存在发现不了) ─────────────
+
+  // ─── 多分片(tenant-routing):必须逐片扫,不能只扫路由默认片 ────────────────────
+
+  @Test
+  @DisplayName("⑨ 多分片:默认片(shard-0)干净但 shard-1 缺 policy → 逐片扫查出 shard-1:biz.bar 缺失(旧实现只扫默认片会漏)")
+  void multiShard_scansAllShardsNotOnlyDefault() {
+    // shard-0(路由默认片,无租户上下文的归宿):全部配好 RLS。
+    createPlainTableWithRls(jdbc, "customer_account");
+    // shard-1:一张表漏配 policy —— 旧实现只扫默认片,该片行级隔离缺失会被静默放行。
+    createPlainTableWithRls(shard1Jdbc, "customer_account");
+    createPlainTableNoRls(shard1Jdbc, "bar");
+
+    DataSource routing =
+        BusinessRoutingDataSourceFactory.multiShard(
+            Map.of(
+                HashAndSiloPlacementResolver.DEFAULT_KEY, dataSource, "shard-1", shard1DataSource),
+            new HashAndSiloPlacementResolver(2, Map.of()));
+
+    Health health = new RlsPolicyHealthIndicator(routing).health();
+
+    assertThat(health.getStatus()).as("shard-1 缺 policy,逐片扫应报 DOWN").isEqualTo(Status.DOWN);
+    @SuppressWarnings("unchecked")
+    List<String> missing = (List<String>) health.getDetails().get("missingRlsTables");
+    assertThat(missing)
+        .as("缺失明细须标注是哪个片缺哪张表,且干净的 shard-0 不进 missing")
+        .contains("shard-1:biz.bar")
+        .noneMatch(t -> t.startsWith("shard-0:") || !t.contains(":"));
+  }
+
+  @Test
+  @DisplayName("⑩ 多分片:所有片都配好 → health UP(逐片扫无回归)")
+  void multiShard_allShardsClean_healthUp() {
+    createPlainTableWithRls(jdbc, "customer_account");
+    createPlainTableWithRls(shard1Jdbc, "customer_account");
+
+    DataSource routing =
+        BusinessRoutingDataSourceFactory.multiShard(
+            Map.of(
+                HashAndSiloPlacementResolver.DEFAULT_KEY, dataSource, "shard-1", shard1DataSource),
+            new HashAndSiloPlacementResolver(2, Map.of()));
+
+    Health health = new RlsPolicyHealthIndicator(routing).health();
+
+    assertThat(health.getStatus()).isEqualTo(Status.UP);
+    assertThat(health.getDetails()).doesNotContainKey("missingRlsTables");
+  }
+
+  @Test
+  @DisplayName("⑪ 单片路由(singleShard 包装):等价单 DS,缺失不带片前缀,startup-fail-fast 能查出")
+  void singleShardRouting_noRegression() {
+    createPlainTableWithRls(jdbc, "customer_account");
+    createPlainTableNoRls(jdbc, "foo");
+
+    DataSource routing = BusinessRoutingDataSourceFactory.singleShard(dataSource);
+
+    Health health = new RlsPolicyHealthIndicator(routing).health();
+    assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+    @SuppressWarnings("unchecked")
+    List<String> missing = (List<String>) health.getDetails().get("missingRlsTables");
+    assertThat(missing).as("单片不加片前缀").contains("biz.foo").doesNotContain("biz.customer_account");
+
+    assertThatThrownBy(() -> new RlsStartupFailFastCheck(routing, List.of()).checkOnStartup())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("biz.foo");
+  }
 
   @Test
   @DisplayName("⑥ 同名 policy 但 USING(true) 放行全表 → health DOWN(防只验名)")

@@ -5,12 +5,15 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 
 /**
  * Phase A · RLS 闭世界守护(closed-world)。
@@ -26,6 +29,13 @@ import org.springframework.jdbc.datasource.DataSourceUtils;
  * schema 前缀)加进豁免清单。
  *
  * <p>{@code batch.process_staging} 在 batch schema(不在 biz),单独以固定全名检查。
+ *
+ * <p><b>多分片(tenant-routing)</b>:生产 {@code businessDataSource} 恒为 {@link AbstractRoutingDataSource}
+ * (单片也被 {@code BusinessRoutingDataSourceFactory.singleShard} 包了一层)。<b>致命盲区</b>:{@code check()} 无
+ * {@code TenantContext},路由 {@code determineCurrentLookupKey} 解析 tenant=null → 落 {@code
+ * DEFAULT_KEY}(shard-0),于是<b>只扫默认片</b>。多片部署下,某个新扩 shard/silo 漏跑建策略 SQL 时,该片 biz.* 无行级隔离(同片多租户互读写),
+ * 而启动 fail-fast / health 仍判绿。故本检查器遇路由 DS 时,<b>枚举其全部 target 分片</b>(绕过路由,直接对每片取连接)逐一闭世界校验, 缺失明细以
+ * {@code shard-key:biz.table} 标注是哪个片缺哪张表;非路由的普通单 DS 走原逻辑(单片)。
  *
  * <p>本类无状态、线程安全,被 health indicator 与启动期 fail-fast 守护共享,避免逻辑复制。
  */
@@ -122,50 +132,93 @@ public class RlsClosedWorldChecker {
     List<String> missingForce = new ArrayList<>();
     List<String> missingPolicy = new ArrayList<>();
 
-    Connection conn = DataSourceUtils.getConnection(businessDataSource);
-    try {
-      // 1. 闭世界扫真实 biz 表(已排除分区子表),减去豁免清单。
-      Set<String> bizTables = new TreeSet<>();
-      try (PreparedStatement ps = conn.prepareStatement(LIST_BIZ_TABLES_SQL)) {
-        ps.setString(1, BIZ_SCHEMA);
-        try (ResultSet rs = ps.executeQuery()) {
-          while (rs.next()) {
-            String table = rs.getString(1);
-            if (!exemptBizTables.contains(table)) {
-              bizTables.add(table);
-            }
-          }
+    if (businessDataSource instanceof AbstractRoutingDataSource routing) {
+      // 多分片:枚举全部 target 分片逐一校验,而非只走路由默认片。无租户上下文时路由会落 shard-0,
+      // 漏扫其余 shard/silo(漏配 RLS 的片会静默放行 → 同片跨租户互读写),这里绕过路由直接对每片取连接。
+      Map<DataSource, String> shards = distinctShards(routing);
+      boolean labelShards = shards.size() > 1;
+      for (Map.Entry<DataSource, String> entry : shards.entrySet()) {
+        String shardLabel = labelShards ? entry.getValue() : null;
+        try (Connection conn = entry.getKey().getConnection()) {
+          scanConnection(conn, shardLabel, missingEnable, missingForce, missingPolicy);
         }
       }
-      for (String table : bizTables) {
-        inspectTable(conn, BIZ_SCHEMA, table, missingEnable, missingForce, missingPolicy);
+    } else {
+      // 普通单 DS(非路由):保持原逻辑,经 DataSourceUtils 参与可能的环境事务。
+      Connection conn = DataSourceUtils.getConnection(businessDataSource);
+      try {
+        scanConnection(conn, null, missingEnable, missingForce, missingPolicy);
+      } finally {
+        DataSourceUtils.releaseConnection(conn, businessDataSource);
       }
-
-      // 2. batch.process_staging 单独检查(在 batch schema,非闭世界扫描范围);不存在则跳过(单 worker 部署)。
-      if (tableExists(conn, PROCESS_STAGING_SCHEMA, PROCESS_STAGING_TABLE)) {
-        inspectTable(
-            conn,
-            PROCESS_STAGING_SCHEMA,
-            PROCESS_STAGING_TABLE,
-            missingEnable,
-            missingForce,
-            missingPolicy);
-      }
-    } finally {
-      DataSourceUtils.releaseConnection(conn, businessDataSource);
     }
     return new Result(missingEnable, missingForce, missingPolicy);
   }
 
+  /**
+   * 枚举路由 DS 的全部去重 target 分片(placement key → DataSource;不同 key 指向同一物理库时合并 key 标签,避免重复扫同一库)。 一并纳入
+   * resolvedDefaultDataSource,防装配方把 default 设成不在 targets 里的额外库时漏扫。
+   */
+  private static Map<DataSource, String> distinctShards(AbstractRoutingDataSource routing) {
+    Map<DataSource, String> shards = new LinkedHashMap<>();
+    routing
+        .getResolvedDataSources()
+        .forEach((key, ds) -> shards.merge(ds, String.valueOf(key), (a, b) -> a + "," + b));
+    DataSource defaultDs = routing.getResolvedDefaultDataSource();
+    if (defaultDs != null) {
+      shards.putIfAbsent(defaultDs, "default");
+    }
+    return shards;
+  }
+
+  /** 对单条连接跑一次完整闭世界扫描(biz.* + batch.process_staging)。shardLabel 非空时给缺失表全名加 {@code 片:} 前缀。 */
+  private void scanConnection(
+      Connection conn,
+      String shardLabel,
+      List<String> missingEnable,
+      List<String> missingForce,
+      List<String> missingPolicy)
+      throws SQLException {
+    // 1. 闭世界扫真实 biz 表(已排除分区子表),减去豁免清单。
+    Set<String> bizTables = new TreeSet<>();
+    try (PreparedStatement ps = conn.prepareStatement(LIST_BIZ_TABLES_SQL)) {
+      ps.setString(1, BIZ_SCHEMA);
+      try (ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) {
+          String table = rs.getString(1);
+          if (!exemptBizTables.contains(table)) {
+            bizTables.add(table);
+          }
+        }
+      }
+    }
+    for (String table : bizTables) {
+      inspectTable(conn, shardLabel, BIZ_SCHEMA, table, missingEnable, missingForce, missingPolicy);
+    }
+
+    // 2. batch.process_staging 单独检查(在 batch schema,非闭世界扫描范围);不存在则跳过(单 worker 部署)。
+    if (tableExists(conn, PROCESS_STAGING_SCHEMA, PROCESS_STAGING_TABLE)) {
+      inspectTable(
+          conn,
+          shardLabel,
+          PROCESS_STAGING_SCHEMA,
+          PROCESS_STAGING_TABLE,
+          missingEnable,
+          missingForce,
+          missingPolicy);
+    }
+  }
+
   private void inspectTable(
       Connection conn,
+      String shardLabel,
       String schema,
       String table,
       List<String> missingEnable,
       List<String> missingForce,
       List<String> missingPolicy)
       throws SQLException {
-    String fqTable = schema + "." + table;
+    String fqTable = (shardLabel == null ? "" : shardLabel + ":") + schema + "." + table;
     try (PreparedStatement ps = conn.prepareStatement(CHECK_ENABLE_FORCE_SQL)) {
       ps.setString(1, schema);
       ps.setString(2, table);
