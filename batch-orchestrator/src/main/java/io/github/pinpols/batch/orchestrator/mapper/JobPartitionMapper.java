@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
@@ -18,6 +19,15 @@ import org.apache.ibatis.annotations.Param;
 public interface JobPartitionMapper {
 
   List<JobPartitionEntity> selectByQuery(JobPartitionQuery query);
+
+  /**
+   * perf(#5): 只投影 (id, partition_status) 的轻量列,用于 REPORT 路径的分区计数/按节点计分区,避免 {@link
+   * #selectByQuery(JobPartitionQuery)} 的 {@code select *} 每次 REPORT 把 N 个分区(含 {@code
+   * output_summary} jsonb 大列)全量拉进内存 —— 那是单 instance 万级 fan-out 下 O(N)/REPORT × N REPORT = O(N²) 的
+   * report choke。
+   */
+  List<PartitionStatusRef> selectStatusRefsByInstance(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   // C-2: row-level lock to serialize concurrent partition counting during task outcome processing
   List<JobPartitionEntity> selectByQueryForUpdate(JobPartitionQuery query);

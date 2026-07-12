@@ -28,6 +28,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
+import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -214,7 +215,9 @@ class DefaultTaskOutcomeServiceTest {
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
     when(jobTaskMapper.finishTask(any())).thenReturn(1);
-    when(jobPartitionMapper.selectByQuery(any())).thenReturn(List.of(partition));
+    // perf(#5): 常规 REPORT 计数改走轻量 (id, status) 投影,不再每次 REPORT select * 全量拉分区。
+    when(jobPartitionMapper.selectStatusRefsByInstance("t1", 10L))
+        .thenReturn(List.of(new PartitionStatusRef(99L, PartitionStatus.RUNNING.code())));
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(jobTaskMapper.selectNodeAssignmentsByInstance(eq("t1"), eq(10L)))
         .thenReturn(List.of(new NodePartitionAssignment(99L, null)));
