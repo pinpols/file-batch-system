@@ -208,6 +208,18 @@
           and step_code = #{stepCode}
     </select>
 
+    <!--
+      P1 阶段级续跑读取侧:该 pipeline 实例下曾成功过的 stepCode(跨 attempt 去重)。
+      pipeline_step_run 无 tenant_id 列,按已认领的 pipeline_instance_id 过滤(与 selectNextStepRunSeq 一致);
+      instance id 由认领任务下发,worker 是系统组件。SUCCESS 记录在 stage 副作用完成后写,故命中即代表副作用已持久化。
+    -->
+    <select id="selectSucceededStepCodes" resultType="java.lang.String">
+        select distinct step_code
+        from batch.pipeline_step_run
+        where pipeline_instance_id = #{pipelineInstanceId}
+          and step_status = 'SUCCESS'
+    </select>
+
     <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         with step_run_lock as (
             select pg_advisory_xact_lock(

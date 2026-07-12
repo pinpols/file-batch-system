@@ -37,6 +37,8 @@ public interface PlatformFileRuntimeMapper {
 
   Integer selectNextStepRunSeq(Map<String, Object> params);
 
+  List<String> selectSucceededStepCodes(Map<String, Object> params);
+
   int insertStepRun(Map<String, Object> params);
 
   int finishStepRun(Map<String, Object> params);
