@@ -73,7 +73,8 @@ class DefaultProcessingPositionStoreTest {
 
     assertThat(pos.completed()).isTrue();
     assertThat(pos.processedCount()).isEqualTo(999L);
-    assertThat(pos.positionMarker()).isNull(); // completed() 不带 marker
+    // P1-2:completed 行保留 position_marker(Export 完成 marker 含文件字节数指纹供跳过前校验)。
+    assertThat(pos.positionMarker()).isEqualTo("stale-marker");
     assertMetric("GENERATE", "load", "completed", 1.0);
   }
 
@@ -136,6 +137,26 @@ class DefaultProcessingPositionStoreTest {
 
     verify(mapper).markCompleted(eq(TENANT), eq(INSTANCE), eq("GENERATE"));
     assertMetric("GENERATE", "complete", "success", 1.0);
+  }
+
+  @Test
+  @DisplayName("deleteAllStages:透传到 mapper.deleteByInstance,记 stage=ALL 指标(补偿清位点)")
+  void shouldDelegateDeleteAllStages() {
+    store.deleteAllStages(TENANT, INSTANCE);
+
+    verify(mapper).deleteByInstance(eq(TENANT), eq(INSTANCE));
+    assertMetric("ALL", "delete", "success", 1.0);
+  }
+
+  @Test
+  @DisplayName("deleteAllStages 存储异常:记 failure 指标并保留原异常")
+  void deleteAllStages_recordsFailureAndRethrows() {
+    IllegalStateException failure = new IllegalStateException("database unavailable");
+    doThrow(failure).when(mapper).deleteByInstance(TENANT, INSTANCE);
+
+    assertThatThrownBy(() -> store.deleteAllStages(TENANT, INSTANCE)).isSameAs(failure);
+
+    assertMetric("ALL", "delete", "failure", 1.0);
   }
 
   @Test

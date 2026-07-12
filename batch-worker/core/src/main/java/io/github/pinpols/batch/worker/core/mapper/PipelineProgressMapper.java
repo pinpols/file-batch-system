@@ -33,4 +33,16 @@ public interface PipelineProgressMapper {
       @Param("tenantId") String tenantId,
       @Param("pipelineInstanceId") long pipelineInstanceId,
       @Param("stage") String stage);
+
+  /**
+   * 删除某 pipeline 实例的**全部 stage 位点**(ADR-038 P0 补偿协同)。
+   *
+   * <p>安全增量补偿(compensate_on_failure)反向删除了本 run 的业务行后,advance 已推进的位点会指向被删数据; 若不作废,重试复用同一 {@code
+   * pipelineInstanceId} 续跑会跳过已删 chunk → 数据永久缺失。故补偿成功后必须清位点, 让重试从头全量重做。带 {@code tenant_id}
+   * 谓词纵深防御(表有该列);{@code pipelineInstanceId} 本身全局唯一。
+   *
+   * @return 删除行数
+   */
+  int deleteByInstance(
+      @Param("tenantId") String tenantId, @Param("pipelineInstanceId") long pipelineInstanceId);
 }

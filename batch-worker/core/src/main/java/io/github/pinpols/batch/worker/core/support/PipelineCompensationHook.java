@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -42,11 +43,19 @@ public class PipelineCompensationHook {
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ObjectProvider<PipelineCompensator> compensatorProvider;
 
+  /**
+   * ADR-038 P0:补偿删业务行后清 checkpoint 位点用。可选注入(语义同 compensatorProvider): 无 store bean(测试 /
+   * 未装配续跑基础设施)时为 null,{@link #clearCheckpointAfterReverse} 直接跳过。
+   */
+  private final ProcessingPositionStore positionStore;
+
   public PipelineCompensationHook(
       PlatformFileRuntimeRepository runtimeRepository,
-      ObjectProvider<PipelineCompensator> compensatorProvider) {
+      ObjectProvider<PipelineCompensator> compensatorProvider,
+      ObjectProvider<ProcessingPositionStore> positionStoreProvider) {
     this.runtimeRepository = runtimeRepository;
     this.compensatorProvider = compensatorProvider;
+    this.positionStore = positionStoreProvider.getIfAvailable();
   }
 
   /**
@@ -94,6 +103,12 @@ public class PipelineCompensationHook {
       }
       // ③ 审计每条反向动作。
       audit(tenantId, pipelineType, pipelineInstanceId, fileId, attributes, result);
+      // ④ ADR-038 P0:仅在**确实反向删除了业务行**(REVERSED)后作废 checkpoint 位点。
+      //    补偿删了本 run 的行,advance 已推进的位点会指向被删数据;不清则重试续跑跳过已删 chunk → 数据永久缺失。
+      //    SKIPPED(未能安全 scope,业务行原样保留)/ FAILED(反向出错,状态不明,保持可诊断)时**不清位点**。
+      if (result.outcome() == CompensationResult.Outcome.REVERSED) {
+        clearCheckpointAfterReverse(tenantId, pipelineInstanceId);
+      }
       return true;
     } catch (RuntimeException ex) {
       // 钩子自身永不把异常透传到 pipeline 主链路(否则掩盖原始失败 / 破坏 SLA)。
@@ -105,6 +120,32 @@ public class PipelineCompensationHook {
           pipelineInstanceId,
           ex);
       return false;
+    }
+  }
+
+  /**
+   * 补偿反向删除业务行成功后,作废该 pipeline 实例的全部 checkpoint 位点。best-effort:清位点失败只 warn 不上抛
+   * (原始失败与补偿已落定;残留位点最坏是重试续跑跳过——但业务行已删,续跑幂等 plugin 会重写,不造成额外数据缺失)。 无 positionStore
+   * bean(未装配续跑基础设施)时整体跳过。
+   */
+  private void clearCheckpointAfterReverse(String tenantId, Long pipelineInstanceId) {
+    if (positionStore == null || pipelineInstanceId == null) {
+      return;
+    }
+    try {
+      positionStore.deleteAllStages(tenantId, pipelineInstanceId);
+      log.info(
+          "pipeline compensation cleared checkpoint positions after reverse: tenantId={},"
+              + " pipelineInstanceId={}",
+          tenantId,
+          pipelineInstanceId);
+    } catch (RuntimeException ex) {
+      log.warn(
+          "pipeline compensation failed to clear checkpoint positions (best-effort): tenantId={},"
+              + " pipelineInstanceId={}",
+          tenantId,
+          pipelineInstanceId,
+          ex);
     }
   }
 

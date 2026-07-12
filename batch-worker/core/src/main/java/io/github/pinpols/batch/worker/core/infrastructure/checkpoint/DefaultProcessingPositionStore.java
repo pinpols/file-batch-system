@@ -50,7 +50,9 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
       }
       if (row.completed()) {
         record(stage, "load", "completed");
-        return ProcessingPosition.completed(row.processedCount());
+        // P1-2:completed 行保留 position_marker(Export 完成 marker 含文件字节数指纹,GenerateStep
+        // 幂等跳过前须据此校验残文件完整性);LOAD completed 路径只用 processedCount,保留 marker 无副作用。
+        return new ProcessingPosition(row.positionMarker(), row.processedCount(), true);
       }
       record(stage, "load", "resumable");
       recordResumeSkipped(stage, row.processedCount());
@@ -89,11 +91,31 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
     }
   }
 
+  @Override
+  public void deleteAllStages(String tenantId, long pipelineInstanceId) {
+    try {
+      mapper.deleteByInstance(tenantId, pipelineInstanceId);
+      // 实例级操作,无单一 stage 维度:用固定 "ALL" 标签保持低基数。
+      recordAllStages("delete", "success");
+    } catch (RuntimeException exception) {
+      recordAllStages("delete", "failure");
+      throw exception;
+    }
+  }
+
   private void record(ProcessingStage stage, String operation, String outcome) {
     if (meterRegistry != null) {
       meterRegistry
           .counter(
               METRIC_OPERATIONS, "stage", stage.code(), "operation", operation, "outcome", outcome)
+          .increment();
+    }
+  }
+
+  private void recordAllStages(String operation, String outcome) {
+    if (meterRegistry != null) {
+      meterRegistry
+          .counter(METRIC_OPERATIONS, "stage", "ALL", "operation", operation, "outcome", outcome)
           .increment();
     }
   }

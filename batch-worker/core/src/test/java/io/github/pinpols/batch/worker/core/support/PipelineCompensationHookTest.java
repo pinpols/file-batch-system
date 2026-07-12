@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -27,9 +28,11 @@ import org.springframework.beans.factory.ObjectProvider;
 class PipelineCompensationHookTest {
 
   @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock private ProcessingPositionStore positionStore;
 
   private PipelineCompensationHook hook(PipelineCompensator... compensators) {
-    return new PipelineCompensationHook(runtimeRepository, provider(compensators));
+    return new PipelineCompensationHook(
+        runtimeRepository, provider(compensators), new SingleValueProvider<>(positionStore));
   }
 
   @Test
@@ -78,6 +81,36 @@ class PipelineCompensationHookTest {
     verify(runtimeRepository).appendAudit(audit.capture());
     assertThat(audit.getValue().getOperationType()).isEqualTo("PIPELINE_COMPENSATE");
     assertThat(audit.getValue().getOperationResult()).isEqualTo("REVERSED");
+    // ADR-038 P0:反向删业务行成功 → 作废该实例全部 checkpoint 位点(否则重试续跑跳过已删 chunk)。
+    verify(positionStore).deleteAllStages("t1", 99L);
+  }
+
+  @Test
+  @DisplayName("补偿 SKIPPED(未能安全 scope,业务行原样保留):不清 checkpoint 位点")
+  void skippedCompensation_doesNotClearCheckpoint() {
+    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+    compensator.result = CompensationResult.skipped("no run-scope column");
+    PipelineCompensationHook hook = hook(compensator);
+    Map<String, Object> attributes = attributesWithTemplate(true);
+
+    boolean triggered = hook.runCompensation("t1", "IMPORT", 99L, attributes);
+
+    assertThat(triggered).isTrue();
+    verify(positionStore, never()).deleteAllStages(any(), org.mockito.ArgumentMatchers.anyLong());
+  }
+
+  @Test
+  @DisplayName("补偿 FAILED(反向出错,状态不明):不清 checkpoint 位点,保持可诊断")
+  void failedCompensation_doesNotClearCheckpoint() {
+    RecordingCompensator compensator = new RecordingCompensator("IMPORT");
+    compensator.result = CompensationResult.failed("delete errored");
+    PipelineCompensationHook hook = hook(compensator);
+    Map<String, Object> attributes = attributesWithTemplate(true);
+
+    boolean triggered = hook.runCompensation("t1", "IMPORT", 99L, attributes);
+
+    assertThat(triggered).isTrue();
+    verify(positionStore, never()).deleteAllStages(any(), org.mockito.ArgumentMatchers.anyLong());
   }
 
   @Test
@@ -187,6 +220,35 @@ class PipelineCompensationHookTest {
     @Override
     public PipelineCompensator getIfUnique() {
       return list.size() == 1 ? list.get(0) : null;
+    }
+  }
+
+  /** 极简 ObjectProvider:仅 getIfAvailable() 返回固定单值(hook 唯一用到的能力)。 */
+  private static final class SingleValueProvider<T> implements ObjectProvider<T> {
+    private final T value;
+
+    SingleValueProvider(T value) {
+      this.value = value;
+    }
+
+    @Override
+    public T getObject(Object... args) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public T getObject() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public T getIfAvailable() {
+      return value;
+    }
+
+    @Override
+    public T getIfUnique() {
+      return value;
     }
   }
 }
