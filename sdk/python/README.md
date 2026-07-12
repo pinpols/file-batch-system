@@ -3,7 +3,7 @@
 **file-batch-system** worker 协议的 Python SDK —— Java 版
 [`batch-worker-sdk/`](../java/core/) 的 async-only 对等实现。
 
-> **状态(2026-06-03)**: Phase 0-5 全部交付。Public API 稳定(`BatchPlatformClient` / `@batch_task` / `FakeBatchPlatform`),12 个跨 SDK 契约 fixture 全过(Lane P drift guard);PyPI 待 1.0 发布。可用于内测与 staging 跑通,生产使用前请确认契约 fixture 对自家场景已覆盖。
+> **状态(2026-06-03)**: Phase 0-5 全部交付,版本 `0.5.0a0`(**Pre-Alpha,API 尚未冻结,1.0 前可能有破坏性调整**)。核心入口(`BatchPlatformClient` / `@batch_task` / `FakeBatchPlatform`)已成形,12 个跨 SDK 契约 fixture 全过(Lane P drift guard);PyPI 待 1.0 发布。可用于内测与 staging 跑通,生产使用前请确认契约 fixture 对自家场景已覆盖。
 
 ## 状态
 

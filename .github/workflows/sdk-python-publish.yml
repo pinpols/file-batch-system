@@ -33,6 +33,19 @@ jobs:
       - name: Install hatch
         run: pip install --upgrade pip hatch
 
+      # 防「打 sdk-python-v1.2.3 却发 __version__=0.5.0a0」的漂移:tag 推送时断言
+      # git tag 后缀 == _version.py 的 __version__,不一致直接失败(dry-run 跳过)。
+      - name: Assert tag matches package __version__ (tag push)
+        if: startsWith(github.ref, 'refs/tags/sdk-python-v')
+        working-directory: sdk/python
+        run: |
+          tag_ver="${GITHUB_REF_NAME#sdk-python-v}"
+          pkg_ver="$(sed -nE "s/^__version__: *str *= *['\"]([^'\"]+)['\"].*/\1/p" src/batch_worker_sdk/_version.py)"
+          echo "tag=${tag_ver} package=${pkg_ver}"
+          [ "$tag_ver" = "$pkg_ver" ] || {
+            echo "FAIL: tag sdk-python-v${tag_ver} != package __version__ ${pkg_ver};" \
+                 "bump src/batch_worker_sdk/_version.py before tagging."; exit 1; }
+
       - name: Build wheel + sdist
         working-directory: sdk/python
         run: hatch build --clean

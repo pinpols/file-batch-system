@@ -18,14 +18,14 @@
 # 前置:基础设施 + orchestrator + trigger 已起(scripts/docker/up-apps.sh),
 #   health UP;psql / docker / openssl 可用。
 #
-# 用法:bash scripts/ci/run-sdk-orchestrator-e2e.sh <go|python>
+# 用法:bash scripts/ci/run-sdk-orchestrator-e2e.sh <go|python|java|typescript|rust>
 # 环境(均有默认,CI 可覆盖):
 #   BATCH_PLATFORM_DB_PASSWORD(必填)、POSTGRES_PORT(15432)、KAFKA_HOST_PORT(19092)、
 #   ORCH_PORT(18082)、TRIGGER_PORT(18081)、KAFKA_CONTAINER(kafka)、TENANT(default-tenant)
 # =============================================================================
 set -euo pipefail
 
-LANG_ID="${1:?usage: run-sdk-orchestrator-e2e.sh <go|python>}"
+LANG_ID="${1:?usage: run-sdk-orchestrator-e2e.sh <go|python|java|typescript|rust>}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
@@ -127,8 +127,27 @@ case "$LANG_ID" in
       java -jar "$JAR" ) > "$WORKER_LOG" 2>&1 &
     WPID=$!
     ;;
+  typescript)
+    # TS 样例经相对路径引 SDK 源码(../../../../sdk/typescript/src),仅需装样例自身
+    # 依赖(kafkajs);运行用 node 的 --experimental-strip-types 直跑 .ts,无需构建。
+    ( cd examples/self-hosted-sdk/sample-tenant-worker-typescript \
+      && npm install --no-audit --no-fund --silent \
+      && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$RAW_KEY" BATCH_TENANT_ID="$TENANT" \
+         BATCH_WORKER_CODE="$WORKER_CODE" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
+         npm start ) > "$WORKER_LOG" 2>&1 &
+    WPID=$!
+    ;;
+  rust)
+    # Rust 样例经 path 依赖引 SDK(../../../sdk/rust,features=kafka,http);cargo run
+    # 会一并编译 SDK。kafka feature 需 cmake(工作流 rust 腿已装)。
+    ( cd examples/self-hosted-sdk/sample-tenant-worker-rust \
+      && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$RAW_KEY" BATCH_TENANT_ID="$TENANT" \
+         BATCH_WORKER_CODE="$WORKER_CODE" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
+         cargo run --release ) > "$WORKER_LOG" 2>&1 &
+    WPID=$!
+    ;;
   *)
-    echo "FAIL: unsupported lang '${LANG_ID}' (go|python|java)"; exit 2 ;;
+    echo "FAIL: unsupported lang '${LANG_ID}' (go|python|java|typescript|rust)"; exit 2 ;;
 esac
 
 # ── 4. 阶段 A 硬断言:worker 注册 + 心跳落 worker_registry ─────────────────
