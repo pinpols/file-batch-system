@@ -7,7 +7,6 @@ import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -70,8 +69,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private final AtomicBoolean fatalAuthFailure = new AtomicBoolean(false);
 
   /**
-   * 未知 schema 大版本被拒后走 RETRY_LATER(§A 不提交 offset)→ seek+pause,分区 resume 后会反复重读重拒; 节流该 WARN(同 key 60s
-   * 一条),避免一条 v3 poison 造成日志过载。
+   * 未知 schema 大版本被拒后走 WITHHOLD(§A 不提交 offset,记 commit 天花板后继续消费);rebalance / 重启后该 v3 会从旧 commit
+   * 位点再次投递并被拒,节流该 WARN(同 key 60s 一条),避免持续重投造成日志过载。
    */
   private final ThrottledLogger throttledLog = ThrottledLogger.create(log, Duration.ofSeconds(60));
 
@@ -83,19 +82,20 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
 
   /**
    * P0 hardening:**容量维度** pause —— in-flight 达上限(或平台 PAUSED/DRAINING)时 pause 整个 assignment;掉下来再
-   * resume。Zeebe maxJobsActive 模式。仅记账容量/平台这一类 pause,**不**覆盖 poison/RETRY_LATER 的 per-partition
-   * pause(见 {@link #poisonPausedPartitions}),否则容量 resume 会误把 poison 分区一起 resume → 重读被 seek 的 poison
-   * 记录 → RETRY_LATER 忙旋转。
+   * resume。Zeebe maxJobsActive 模式。瞬时背压(容量 / 平台 / RETRY_LATER 的 per-partition seek+pause)也走此标志, 恢复后由
+   * {@link #applyBackpressure()} resume。WITHHOLD(foreign-tenant / 未知 schema)**不** pause 分区,只记
+   * commit 天花板(见 {@link #withheldCeilings}),故与本标志无关。
    */
   private volatile boolean paused = false;
 
   /**
-   * #9 修复:被 RETRY_LATER(未知 schema / dispatcher 暂留)seek + pause 的 poison 分区集合,与容量/平台 pause({@link
-   * #paused}) 分开记账。容量 resume **只** resume 非 poison 分区,绝不动这里的分区,避免「容量正常→resume 整个 assignment→重 poll
-   * 到被 seek 的 poison 记录→再 RETRY_LATER」的忙旋转。这类分区维持 HOL 暂停,直到 SDK 升级 / 平台回退(§A fail-loud 本意)。 poll
-   * 线程与 rebalance 回调单线程触碰, 但单测从测试线程调 {@link #applyBackpressure()},故用线程安全 set。
+   * 每分区 commit 天花板 —— WITHHOLD(foreign-tenant / 未知 schema 大版本)记录的 **最低** withheld offset。对齐 Go
+   * {@code Consumer.withheld} / TS #826 {@code #withheld}:天花板之上(offset >= ceiling)的记录永不 commit, 保证
+   * withheld 记录不会被后到的 accepted 记录的 commit 悄悄跨过(§A / §1.9);而分区**继续消费**,不 head-of-line 阻塞同分区其它
+   * 租户的正常消息。天花板不 pause 分区,仅约束 commit。分区被 revoke 时清除(重分配后从 last commit < ceiling 重读会重新记账)。 poll 线程与
+   * rebalance 回调单线程触碰,但单测从测试线程驱动,故用线程安全 map。
    */
-  private final Set<TopicPartition> poisonPausedPartitions = ConcurrentHashMap.newKeySet();
+  private final Map<TopicPartition, Long> withheldCeilings = new ConcurrentHashMap<>();
 
   /**
    * P7-1:最近一次 poll 后读到的 Kafka {@code records-lag-max}(所有 assigned partition 的最大滞后条数)。 {@code -1}
@@ -244,35 +244,22 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
             dispatcher.platformState());
       }
     } else if (paused && !platformPaused && capacityResumeOk) {
-      // #9 修复:容量 resume **只** resume 非 poison 分区。若 resume 整个 assignment,会把被 RETRY_LATER seek+pause
-      // 的
-      // poison 分区一起放开,下一轮 poll 重读被 seek 的 poison 记录再 RETRY_LATER → 忙旋转。poison 分区维持 HOL 暂停。
-      Set<TopicPartition> toResume = resumableCapacityPartitions();
-      if (!toResume.isEmpty()) {
-        consumer.resume(toResume);
+      // 容量 / 平台恢复 → resume 整个 assignment(含被 RETRY_LATER seek+pause 的瞬时背压分区)。WITHHOLD 不再 pause
+      // 分区(只记 commit 天花板),故不存在「resume 后重读 poison 忙旋转」的问题,无需排除任何分区。
+      Set<TopicPartition> assignment = consumer.assignment();
+      if (!assignment.isEmpty()) {
+        consumer.resume(assignment);
       }
       paused = false;
       log.info(
-          "consumer resume: inFlight={} max={} platformState={} resumed={} poisonPaused={} "
-              + "(below {}*0.5 hysteresis)",
+          "consumer resume: inFlight={} max={} platformState={} resumed={} (below {}*0.5"
+              + " hysteresis)",
           inFlight,
           max,
           dispatcher.platformState(),
-          toResume.size(),
-          poisonPausedPartitions.size(),
+          assignment.size(),
           max);
     }
-  }
-
-  /** 当前 assignment 去掉 poison-paused 的分区集合 —— 容量 resume 的目标(不放开 poison 分区)。 */
-  private Set<TopicPartition> resumableCapacityPartitions() {
-    Set<TopicPartition> assignment = consumer.assignment();
-    if (poisonPausedPartitions.isEmpty()) {
-      return assignment;
-    }
-    Set<TopicPartition> out = new HashSet<>(assignment);
-    out.removeAll(poisonPausedPartitions);
-    return out;
   }
 
   /**
@@ -303,13 +290,31 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   boolean handleRecordAndMaybeCommit(ConsumerRecord<String, byte[]> rec) {
     TaskDispatcher.DispatchDecision decision = handleRecord(rec);
     TopicPartition tp = new TopicPartition(rec.topic(), rec.partition());
+
+    if (decision == TaskDispatcher.DispatchDecision.WITHHOLD) {
+      // Go / TS #826 对齐:foreign-tenant / 未知 schema —— 不提交、不 pause,记该分区 commit 天花板(取最低 withheld
+      // offset)后**继续消费**。天花板之上的 offset 永不 commit(见下方 commit 分支),withheld 记录随 rebalance / 重启重投
+      // (at-least-once);同分区其它租户的正常消息不被 head-of-line 阻塞。
+      long ceiling = withheldCeilings.merge(tp, rec.offset(), Math::min);
+      throttledLog.warn(
+          "withhold_" + tp,
+          "offset withheld (commit ceiling={} set, still consuming) topic={}, partition={},"
+              + " offset={}",
+          ceiling,
+          rec.topic(),
+          rec.partition(),
+          rec.offset());
+      return true;
+    }
+
     if (decision == TaskDispatcher.DispatchDecision.RETRY_LATER) {
+      // 瞬时背压(容量满 / 平台 PAUSED / draining / executor 拒收):seek 回本条 + pause 分区,使本条及其后的记录在
+      // resume 后重投(否则 poll 已推进 position,批内后续记录会丢到重启)。**可恢复** —— 置 paused 让
+      // applyBackpressure() 在容量 / 平台恢复后 resume 整个 assignment,从本 offset 续消费。
       try {
         consumer.seek(tp, rec.offset());
         consumer.pause(Set.of(tp));
-        // #9 修复:记进 poison 集而非置容量 paused=true。容量 resume 据此排除该分区,避免被一并 resume 后重读
-        // 被 seek 的 poison 记录 → 再 RETRY_LATER 忙旋转。
-        poisonPausedPartitions.add(tp);
+        paused = true;
       } catch (Exception ex) {
         log.warn(
             "failed to seek/pause retry-later record topic={}, partition={}, offset={}: {}",
@@ -319,6 +324,22 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
             ex.getMessage());
       }
       return false;
+    }
+
+    // commit 分支(SUBMITTED / DROP_TERMINAL):先过天花板过滤 —— 该分区若有 withheld 天花板且本条 offset >= 天花板,
+    // 则不 commit(commit 会推进过 withheld 记录,悄悄跳过它,§A / §1.9)。天花板之下正常前移。对齐 Go committable
+    // (m.Offset >= ceil → drop)。继续消费。
+    Long ceiling = withheldCeilings.get(tp);
+    if (ceiling != null && rec.offset() >= ceiling) {
+      throttledLog.warn(
+          "commit_blocked_" + tp,
+          "commit withheld: offset {} at/past partition commit ceiling {} topic={}, partition={}"
+              + " (still consuming, not committing)",
+          rec.offset(),
+          ceiling,
+          rec.topic(),
+          rec.partition());
+      return true;
     }
     try {
       consumer.commitSync(Map.of(tp, new OffsetAndMetadata(rec.offset() + 1)));
@@ -351,20 +372,21 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       return TaskDispatcher.DispatchDecision.DROP_TERMINAL;
     }
     // Phase 0 §2.1:reject 未知 major schema(避免老 SDK 误解平台新 v3 消息)。
-    // wire-protocol §A 硬契约:未知大版本 **不提交 offset**(RETRY_LATER),而非 DROP_TERMINAL——
-    // 提交会静默跳过该 v3 任务;不提交则该消息 HOL 阻塞分区直到 SDK 升级(§A 本意:fail-loud,
-    // 逼迫升级)。对齐 Go(DispositionRejectedSchema 不提交)+ Python(RETRY_LATER)。正常情况下
-    // v3 本不该被投到 v2-only worker(consumer-group / 能力协商前置拦截),此分支只在协商失效时触发。
+    // wire-protocol §A 硬契约:未知大版本 **不提交 offset**(WITHHOLD),而非 DROP_TERMINAL——
+    // 提交会静默跳过该 v3 任务。对齐 Go(DispositionRejectedSchema)+ TS #826:记 commit 天花板后继续消费,
+    // 不冻结分区(§A 只要求不 commit,不要求 HOL 阻塞;天花板保证 v3 offset 不被跨过,随重启重投等 SDK 升级)。
+    // 正常情况下 v3 本不该被投到 v2-only worker(consumer-group / 能力协商前置拦截),此分支只在协商失效时触发。
     if (!msg.isSchemaSupported()) {
       throttledLog.warn(
           "unsupported_schema",
           "rejecting kafka task dispatch message with unsupported schemaVersion={} at topic={},"
-              + " offset={}, taskId={}; offset withheld per wire-protocol §A, upgrade SDK",
+              + " offset={}, taskId={}; offset withheld (commit ceiling) per wire-protocol §A,"
+              + " upgrade SDK",
           msg.schemaVersion(),
           rec.topic(),
           rec.offset(),
           msg.taskId());
-      return TaskDispatcher.DispatchDecision.RETRY_LATER;
+      return TaskDispatcher.DispatchDecision.WITHHOLD;
     }
     TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(msg);
     return decision == null ? TaskDispatcher.DispatchDecision.RETRY_LATER : decision;
@@ -462,8 +484,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
       log.info("kafka partitions revoked: {}", partitions);
-      // #9:撤走的分区不再归我们,清掉其 poison 记账(重新分配后会从平台/新 SDK 重新决策)。
-      poisonPausedPartitions.removeAll(partitions);
+      // 撤走的分区不再归我们,清掉其 commit 天花板(对齐 Go 在 reader 重建时清 withheld)。若重新分配回来,会从 last
+      // commit(< 天花板)重读,重新遇到 withheld 记录再记账。
+      partitions.forEach(withheldCeilings::remove);
     }
 
     @Override
@@ -472,22 +495,13 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       if (partitions.isEmpty()) {
         return;
       }
-      // 容量/平台 backpressure 仍生效 → 重新 pause 全部新分区(Kafka rebalance 后默认 RESUMED)。
+      // 容量/平台 backpressure 仍生效 → 重新 pause 全部新分区(Kafka rebalance 后默认 RESUMED)。WITHHOLD 不 pause
+      // 分区(只记 commit 天花板),故 rebalance 无需为 withheld 分区做任何重新 pause。
       if (paused) {
         consumer.pause(partitions);
         log.info(
             "re-paused {} newly assigned partition(s) after rebalance (backpressure still active)",
             partitions.size());
-        return;
-      }
-      // #9:即使容量正常,仍要保持 poison 分区 pause —— 否则 rebalance 会让其默认 RESUMED 进而重读 poison 记录。
-      Set<TopicPartition> poisonReassigned = new HashSet<>(partitions);
-      poisonReassigned.retainAll(poisonPausedPartitions);
-      if (!poisonReassigned.isEmpty()) {
-        consumer.pause(poisonReassigned);
-        log.info(
-            "re-paused {} poison-paused partition(s) after rebalance (HOL block until SDK upgrade)",
-            poisonReassigned.size());
       }
     }
   }

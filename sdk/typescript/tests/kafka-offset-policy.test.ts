@@ -4,8 +4,7 @@
  *   - "commit" advances PAST the record (offset + 1, kafkajs commit semantics).
  *   - "withhold" records the record's own offset as the partition commit CEILING
  *     and KEEPS consuming; no later commit may cross it (§A/§1.9, mirrors the Go
- *     SDK's `committable` ceiling — reaches Java's seek-back invariant without a
- *     head-of-line-blocking pause).
+ *     SDK's `committable` ceiling; Java/Python/Rust use the same invariant).
  *   - "backpressure" seeks BACK to the record's own offset + pauses (temporary).
  *   - fromBeginning defaults to false (latest), parity with the other 4 SDKs; the
  *     old default of true replayed the whole topic on every new group.

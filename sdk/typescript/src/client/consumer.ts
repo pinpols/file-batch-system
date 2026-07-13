@@ -52,9 +52,9 @@ export interface Assignment {
  *   - "commit"       — advance past this offset (accepted task, or a poison
  *                      record commit-skipped so it can't head-of-line block the
  *                      partition; §4.5 / fixture 30).
- *   - "withhold"     — do NOT commit; seek back + pause so this offset is NEVER
- *                      crossed by a later commit (rejected schema / foreign tenant
- *                      / not-for-us; §A / §1.9). A fixed deploy re-reads it.
+ *   - "withhold"     — do NOT commit; record a per-partition commit ceiling and
+ *                      keep consuming (rejected schema / foreign tenant / not-for-us;
+ *                      §A / §1.9). A rebalance/restart re-reads it.
  *   - "backpressure" — at capacity; seek back + pause the partition, resume when a
  *                      slot frees (§1.5 / §2). The message is redelivered.
  */
@@ -80,7 +80,7 @@ export interface Consumer {
   /**
    * Begin subscription; deliver each record to the supplied pipeline. The
    * callback returns the {@link MessageDisposition} the adapter applies to the
-   * record's offset (commit / withhold+pause / backpressure+pause).
+   * record's offset (commit / withhold ceiling / backpressure+pause).
    */
   start(
     onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,

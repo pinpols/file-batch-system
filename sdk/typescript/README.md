@@ -14,7 +14,7 @@ A tenant-facing Bring-Your-Own worker SDK for the file-batch-system platform, bu
 import { KafkaConsumerAdapter } from "@batch/worker-sdk/kafka";
 ```
 
-装了可选依赖 `kafkajs` 才可用。适配器把每条记录喂给 `MessagePipeline` 并按结果做 **手动 offset 提交 / seek+pause**:accepted→commit、rejected/foreign-tenant/backpressure→seek 回退 + pause(offset 绝不被后续 commit 越过)、poison→commit-skip。消费起点默认 `latest`(`fromBeginning` 默认 `false`,与其余四语言 SDK 对齐),显式传 `fromBeginning: true` 才从头消费。
+装了可选依赖 `kafkajs` 才可用。适配器把每条记录喂给 `MessagePipeline` 并执行手动 offset 策略:accepted→commit;rejected/foreign-tenant→记录分区 commit ceiling 后继续消费(后续 commit 不能跨过该 offset,避免 HOL 阻塞);backpressure→seek 回退 + 临时 pause;poison→commit-skip。消费起点默认 `latest`(`fromBeginning` 默认 `false`,与其余四语言 SDK 对齐),显式传 `fromBeginning: true` 才从头消费。
 
 ## Running the tests
 

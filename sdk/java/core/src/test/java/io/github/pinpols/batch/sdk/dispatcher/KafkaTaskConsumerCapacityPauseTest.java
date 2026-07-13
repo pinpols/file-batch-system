@@ -158,25 +158,21 @@ class KafkaTaskConsumerCapacityPauseTest {
     }
   }
 
-  /**
-   * #9 回归:一条 poison(未知 schema v3)记录被 RETRY_LATER seek+pause 该分区后,容量维度的 pause→resume 周期 **不得** 把这个
-   * poison 分区一起 resume —— 否则下一轮 poll 会重读被 seek 的 poison 记录再 RETRY_LATER,形成忙旋转。poison 分区维持 HOL
-   * 暂停,只有非 poison 分区随容量 resume。
-   */
+  /** withhold 不再 pause 分区;容量 pause/resume 仍必须完整覆盖 assignment。 */
   @Test
-  @DisplayName("#9:容量 resume 不放开 poison(RETRY_LATER)分区,避免重读 poison 记录忙旋转")
-  void capacityResumeDoesNotResumePoisonPausedPartition() {
-    TopicPartition poison = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+  @DisplayName("withhold ceiling 不干扰容量维度 pause/resume")
+  void capacityResumeCoversWithheldPartition() {
+    TopicPartition withheld = new TopicPartition("batch.task.dispatch.tx.t0", 0);
     TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
     // 容量先满(pause 整个 assignment),再跌破阈值(resume)
     when(dispatcher.submittedCount()).thenReturn(2, 0);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
     try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
-      mockConsumer.assign(List.of(poison, healthy));
+      mockConsumer.assign(List.of(withheld, healthy));
       try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-        // arrange: 一条 v3 poison 记录落到 t0 → RETRY_LATER → seek+pause + 记入 poison 集
+        // 一条 v3 落到 t0 → WITHHOLD commit ceiling,继续消费且不 pause。
         byte[] v3 =
             ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
                     + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
@@ -184,16 +180,15 @@ class KafkaTaskConsumerCapacityPauseTest {
         boolean keepGoing =
             consumer.handleRecordAndMaybeCommit(
                 new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
-        assertThat(keepGoing).isFalse();
-        assertThat(mockConsumer.paused()).contains(poison);
+        assertThat(keepGoing).isTrue();
+        assertThat(mockConsumer.paused()).isEmpty();
 
         // act: 容量满 → pause 整个 assignment;再跌破 → resume
         consumer.applyBackpressure(); // pause
-        assertThat(mockConsumer.paused()).contains(poison, healthy);
-        consumer.applyBackpressure(); // resume 仅非 poison
+        assertThat(mockConsumer.paused()).contains(withheld, healthy);
+        consumer.applyBackpressure(); // resume 全 assignment
 
-        // assert: poison 分区仍 paused,healthy 分区已 resume
-        assertThat(mockConsumer.paused()).containsExactly(poison);
+        assertThat(mockConsumer.paused()).isEmpty();
       }
     }
   }

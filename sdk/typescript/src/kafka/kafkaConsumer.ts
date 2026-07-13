@@ -176,7 +176,7 @@ export class KafkaConsumerAdapter implements Consumer {
    * `MessagePipeline.onMessage` through it). It returns a {@link MessageDisposition}
    * the adapter acts on AFTER the record is handled:
    *   - "commit"       → advance past this offset (accepted task / poison skip)
-   *   - "withhold"     → seek back + pause; the offset is NEVER crossed (§A/§1.9)
+   *   - "withhold"     → record commit ceiling + keep consuming; the offset is NEVER crossed (§A/§1.9)
    *   - "backpressure" → seek back + pause; resumed when a slot frees (§1.5/§2)
    *
    * This replaces the old `start()` that only forwarded records and never
@@ -262,8 +262,8 @@ export class KafkaConsumerAdapter implements Consumer {
           // record the commit ceiling and KEEP consuming (no pause): the withheld
           // offset is never committed → redelivered later, while subsequent records
           // on this partition still flow (no head-of-line block). Mirrors the Go
-          // SDK's `withheld` ceiling; reaches the same invariant as Java's seek-back
-          // WITHOUT stalling the partition on a poison/foreign record.
+          // SDK's `withheld` ceiling; Java/Python/Rust use the same invariant,
+          // without stalling the partition on a schema/foreign record.
           this.#withheld.set(key, loweredCeiling(this.#withheld.get(key), action.offset));
           this.#logger.warn("offset withheld (ceiling set, still consuming)", {
             topic: action.topic,

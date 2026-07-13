@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -49,16 +50,20 @@ class KafkaTaskConsumerCommitDecisionTest {
 
   @Test
   void retryLaterDoesNotCommitOffsetAndSeeksBack() throws Exception {
+    // RETRY_LATER = 瞬时背压(容量满 / 平台 PAUSED / draining):seek 回本条 + pause 分区(可恢复,由
+    // applyBackpressure 在恢复后 resume)。这不是 withhold —— withhold 不 seek 不 pause(见下方 schema 测)。
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.RETRY_LATER);
     @SuppressWarnings("unchecked")
     Consumer<String, byte[]> consumer = mock(Consumer.class);
+    boolean keepGoing;
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.handleRecordAndMaybeCommit(record(11, message("tx")));
+      keepGoing = kafka.handleRecordAndMaybeCommit(record(11, message("tx")));
     }
 
     TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+    assertThat(keepGoing).as("RETRY_LATER breaks the batch").isFalse();
     verify(consumer, never())
         .commitSync(org.mockito.ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
     verify(consumer).seek(tp, 11);
@@ -84,10 +89,11 @@ class KafkaTaskConsumerCommitDecisionTest {
   }
 
   @Test
-  void unsupportedSchemaWithholdsOffsetAndSeeksBack() {
-    // wire-protocol §A:未知大版本(v3)**不提交** offset(RETRY_LATER → seek+pause),
-    // 而非 DROP_TERMINAL 静默跳过。schema 校验在 dispatcher.onMessage 之前拦截。
+  void unsupportedSchemaSetsCeilingAndDoesNotBlockLaterRecord() throws Exception {
+    // wire-protocol §A:未知大版本(v3)**不提交** offset,但也不 seek/pause 冻结分区。
+    // 后续正常记录继续送达 dispatcher,只是其 commit 被最低 withheld ceiling 拦住。
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
     @SuppressWarnings("unchecked")
     Consumer<String, byte[]> consumer = mock(Consumer.class);
     byte[] v3 =
@@ -95,18 +101,24 @@ class KafkaTaskConsumerCommitDecisionTest {
                 + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
             .getBytes(StandardCharsets.UTF_8);
 
+    boolean withholdKeepsGoing;
+    boolean laterKeepsGoing;
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.handleRecordAndMaybeCommit(
-          new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
+      withholdKeepsGoing =
+          kafka.handleRecordAndMaybeCommit(
+              new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
+      laterKeepsGoing = kafka.handleRecordAndMaybeCommit(record(6, message("tx")));
     }
 
     TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    verify(dispatcher, never()).onMessage(any());
+    assertThat(withholdKeepsGoing).isTrue();
+    assertThat(laterKeepsGoing).isTrue();
+    verify(dispatcher).onMessage(any());
     verify(consumer, never())
         .commitSync(org.mockito.ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
-    verify(consumer).seek(tp, 5);
-    verify(consumer).pause(Set.of(tp));
+    verify(consumer, never()).seek(tp, 5);
+    verify(consumer, never()).pause(Set.of(tp));
   }
 
   private static ConsumerRecord<String, byte[]> record(long offset, TaskDispatchMessage msg)

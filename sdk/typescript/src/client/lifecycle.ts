@@ -280,7 +280,7 @@ export class WorkerLifecycle {
       return "withhold";
     }
     const outcome = await this.#pipeline.onMessage(record);
-    // hand the Kafka adapter the offset policy (commit / withhold+pause /
+    // hand the Kafka adapter the offset policy (commit / withhold ceiling /
     // backpressure+pause). The old production start() path ignored this and never
     // committed, so every restart replayed the whole partition from the start.
     return dispositionOf(outcome);

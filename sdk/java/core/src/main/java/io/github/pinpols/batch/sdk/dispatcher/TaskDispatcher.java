@@ -218,8 +218,21 @@ public class TaskDispatcher {
     SUBMITTED,
     /** 消息本身不可恢复,跳过并提交 offset,避免 poison message 卡住分区。 */
     DROP_TERMINAL,
-    /** 当前 worker 暂不应消费该消息,offset 不前移,留待平台恢复或人工处理。 */
-    RETRY_LATER
+    /**
+     * 瞬时背压(容量满 / 平台 PAUSED / draining / executor 拒收):offset 不前移。Kafka consumer 据此 seek 回本条 + pause
+     * 分区(**可恢复**),容量 / 平台 / HTTP 恢复后由 {@link
+     * io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer#applyBackpressure()} resume,从原
+     * offset 续消费,不丢任务。
+     */
+    RETRY_LATER,
+    /**
+     * 有效但当前 worker 不该处理、可重投的消息(纵深防御 ACL 漂移的 foreign-tenant / 未知 schema 大版本)。对齐 Go {@code
+     * DispositionDroppedForeignTenant / DispositionRejectedSchema} 与 TS #826:**不提交 offset、不 pause
+     * 分区** —— Kafka consumer 记该分区 commit 天花板(取最低 withheld offset)后**继续消费**,天花板之上的 offset
+     * 永不提交(withheld 记录随 rebalance / 重启重投,at-least-once),同分区其它租户的正常消息不被 head-of-line 阻塞。§A
+     * 硬契约只要求「reject + 不 commit offset」,天花板已满足,无需冻结分区。
+     */
+    WITHHOLD
   }
 
   /** 收到一条派单消息 — 提交到线程池异步处理(返回快,Kafka consumer 不阻塞)。 */
@@ -250,17 +263,19 @@ public class TaskDispatcher {
       return DispatchDecision.DROP_TERMINAL;
     }
     // Lane J §J1:租户自检 fail-safe。Kafka topic 模式 `batch.task.dispatch.<tenant>.*` + consumer group
-    // + ACL 已隔离;若 consumer group 配置失误或 ACL 漂移导致拿到非本租户消息,这里 ERROR + drop,
+    // + ACL 已隔离;若 consumer group 配置失误或 ACL 漂移导致拿到非本租户消息,这里 ERROR + WITHHOLD:
     // 不 ack offset 留给后续 redeliver / 人工介入,本进程不处理避免串任务。
+    // 对齐 Go DispositionDroppedForeignTenant / TS #826:**不置 fatal、不冻结分区** —— consumer 记该分区
+    // commit 天花板后继续消费,同分区其它租户的正常消息不被 head-of-line 阻塞;该 foreign 消息永不提交(可重投)。
     if (!config.getTenantId().equals(msg.tenantId())) {
-      fatal.set(true);
-      log.error(
-          "tenant_mismatch_fatal: configured={} got={} taskId={} — possible ACL drift or"
+      throttledLog.error(
+          "tenant_mismatch",
+          "foreign-tenant message withheld: configured={} got={} taskId={} — possible ACL drift or"
               + " consumer group misconfiguration; offset will not be committed",
           config.getTenantId(),
           msg.tenantId(),
           msg.taskId());
-      return DispatchDecision.RETRY_LATER;
+      return DispatchDecision.WITHHOLD;
     }
     // P0 backpressure:提交前占容量 permit(涵盖 queued+claiming+running)。占满 → 不提交,offset 不前移,
     // KafkaTaskConsumer 据 RETRY_LATER 做 seek+pause,平台/HTTP 恢复后从原 offset 续消费,不丢任务。
