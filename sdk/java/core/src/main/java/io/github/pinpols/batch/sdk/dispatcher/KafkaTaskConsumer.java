@@ -7,6 +7,7 @@ import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -170,11 +171,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         ConsumerRecords<String, byte[]> records = consumer.poll(config.getKafkaPollInterval());
         refreshConsumerLag();
         if (records.isEmpty()) continue;
-        for (ConsumerRecord<String, byte[]> rec : records) {
-          if (!handleRecordAndMaybeCommit(rec)) {
-            break;
-          }
-        }
+        processPolledRecords(records);
       }
     } catch (AuthenticationException authEx) {
       // Lane E #4-Java:Kafka SASL 凭据错 —— 不可恢复,fail-fast。
@@ -206,6 +203,23 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         log.warn("kafka consumer close error: {}", e.getMessage());
       }
       log.info("KafkaTaskConsumer stopped");
+    }
+  }
+
+  /**
+   * 处理一次 poll 返回的批次。某分区遇到 RETRY_LATER 后,seek 回失败 offset 并跳过该分区在本批内的剩余记录;其它分区继续处理。 Kafka poll
+   * 已推进所有返回分区的 position,若直接 break 整个批次,其它分区未处理记录可能被后续 commit 跨过。
+   */
+  void processPolledRecords(Iterable<ConsumerRecord<String, byte[]>> records) {
+    Set<TopicPartition> deferredPartitions = new HashSet<>();
+    for (ConsumerRecord<String, byte[]> rec : records) {
+      TopicPartition tp = new TopicPartition(rec.topic(), rec.partition());
+      if (deferredPartitions.contains(tp)) {
+        continue;
+      }
+      if (!handleRecordAndMaybeCommit(rec)) {
+        deferredPartitions.add(tp);
+      }
     }
   }
 
@@ -311,18 +325,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       // 瞬时背压(容量满 / 平台 PAUSED / draining / executor 拒收):seek 回本条 + pause 分区,使本条及其后的记录在
       // resume 后重投(否则 poll 已推进 position,批内后续记录会丢到重启)。**可恢复** —— 置 paused 让
       // applyBackpressure() 在容量 / 平台恢复后 resume 整个 assignment,从本 offset 续消费。
-      try {
-        consumer.seek(tp, rec.offset());
-        consumer.pause(Set.of(tp));
-        paused = true;
-      } catch (Exception ex) {
-        log.warn(
-            "failed to seek/pause retry-later record topic={}, partition={}, offset={}: {}",
-            rec.topic(),
-            rec.partition(),
-            rec.offset(),
-            ex.getMessage());
-      }
+      seekAndPause(rec, tp, "retry-later");
       return false;
     }
 
@@ -346,12 +349,32 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       return true;
     } catch (Exception ex) {
       log.warn(
-          "kafka commitSync failed topic={}, partition={}, offset={} (will retry next poll): {}",
+          "kafka commitSync failed topic={}, partition={}, offset={} (seeking back for retry): {}",
           rec.topic(),
           rec.partition(),
           rec.offset(),
           ex.getMessage());
+      // commit 结果未确认时按 at-least-once 处理:seek 回本条并临时 pause。即便 broker 端实际已
+      // commit,重投也由 task 幂等兜底;若不 seek,consumer position 已越过本批记录,后续 commit
+      // 可能把失败记录静默跨过。
+      seekAndPause(rec, tp, "commit-failure");
       return false;
+    }
+  }
+
+  private void seekAndPause(ConsumerRecord<String, byte[]> rec, TopicPartition tp, String reason) {
+    try {
+      consumer.seek(tp, rec.offset());
+      consumer.pause(Set.of(tp));
+      paused = true;
+    } catch (Exception ex) {
+      log.warn(
+          "failed to seek/pause {} record topic={}, partition={}, offset={}: {}",
+          reason,
+          rec.topic(),
+          rec.partition(),
+          rec.offset(),
+          ex.getMessage());
     }
   }
 

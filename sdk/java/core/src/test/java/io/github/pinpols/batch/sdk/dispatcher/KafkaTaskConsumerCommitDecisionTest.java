@@ -2,14 +2,17 @@ package io.github.pinpols.batch.sdk.dispatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -63,11 +66,66 @@ class KafkaTaskConsumerCommitDecisionTest {
     }
 
     TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    assertThat(keepGoing).as("RETRY_LATER breaks the batch").isFalse();
+    assertThat(keepGoing).as("RETRY_LATER defers the current partition").isFalse();
     verify(consumer, never())
         .commitSync(org.mockito.ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
     verify(consumer).seek(tp, 11);
     verify(consumer).pause(Set.of(tp));
+  }
+
+  @Test
+  void retryLaterSkipsOnlyCurrentPartitionAndProcessesOtherPartitions() throws Exception {
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    when(dispatcher.onMessage(any()))
+        .thenReturn(
+            TaskDispatcher.DispatchDecision.RETRY_LATER, TaskDispatcher.DispatchDecision.SUBMITTED);
+    @SuppressWarnings("unchecked")
+    Consumer<String, byte[]> consumer = mock(Consumer.class);
+    TopicPartition deferred = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+    TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
+
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      kafka.processPolledRecords(
+          List.of(
+              record(deferred.topic(), 5, message("tx")),
+              record(deferred.topic(), 6, message("tx")),
+              record(healthy.topic(), 7, message("tx"))));
+    }
+
+    // t0 的 offset 6 被留给 seek(5)后的重投;同一 poll 中的 t1 仍正常处理并提交。
+    verify(dispatcher, times(2)).onMessage(any());
+    verify(consumer).seek(deferred, 5);
+    verify(consumer).pause(Set.of(deferred));
+    verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
+  }
+
+  @Test
+  void commitFailureSeeksBackAndDoesNotBlockOtherPartitions() throws Exception {
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
+    @SuppressWarnings("unchecked")
+    Consumer<String, byte[]> consumer = mock(Consumer.class);
+    doThrow(new IllegalStateException("broker timeout"))
+        .doNothing()
+        .when(consumer)
+        .commitSync(org.mockito.ArgumentMatchers.anyMap());
+    TopicPartition failed = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+    TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
+
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      kafka.processPolledRecords(
+          List.of(
+              record(failed.topic(), 5, message("tx")),
+              record(failed.topic(), 6, message("tx")),
+              record(healthy.topic(), 7, message("tx"))));
+    }
+
+    verify(dispatcher, times(2)).onMessage(any());
+    verify(consumer).seek(failed, 5);
+    verify(consumer).pause(Set.of(failed));
+    verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
   }
 
   @Test
@@ -123,9 +181,13 @@ class KafkaTaskConsumerCommitDecisionTest {
 
   private static ConsumerRecord<String, byte[]> record(long offset, TaskDispatchMessage msg)
       throws Exception {
+    return record("batch.task.dispatch.tx.t0", offset, msg);
+  }
+
+  private static ConsumerRecord<String, byte[]> record(
+      String topic, long offset, TaskDispatchMessage msg) throws Exception {
     ObjectMapper mapper = new ObjectMapper();
-    return new ConsumerRecord<>(
-        "batch.task.dispatch.tx.t0", 0, offset, "k", mapper.writeValueAsBytes(msg));
+    return new ConsumerRecord<>(topic, 0, offset, "k", mapper.writeValueAsBytes(msg));
   }
 
   private static TaskDispatchMessage message(String tenantId) {
