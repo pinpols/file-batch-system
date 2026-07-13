@@ -196,9 +196,19 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             .taskId(job.taskId)
             .errorCode("SIMULATED_ERROR")
             .errorMessage("boundary test")
+            // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(R3-P1-10 report invocation fence)。
+            .partitionInvocationId(currentInvocationId(job.partitionId))
             .build();
     taskExecutionService.applyTaskOutcome(failureOutcome);
     return job;
+  }
+
+  /** 读回 partition CLAIM 时写入的 current_invocation_id,复现真 worker 在 report 携带该值。 */
+  private String currentInvocationId(Long partitionId) {
+    if (partitionId == null) {
+      return null;
+    }
+    return jobPartitionMapper.selectById(TENANT, partitionId).getCurrentInvocationId();
   }
 
   /** 启动任务并让其进入 RUNNING 状态（走完 launch → claim）。 */
@@ -375,6 +385,8 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             .taskId(taskId)
             .errorCode("EXHAUST_ERROR")
             .errorMessage("exhaust retries")
+            // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(R3-P1-10 report invocation fence)。
+            .partitionInvocationId(currentInvocationId(partitionId))
             .build();
     taskExecutionService.applyTaskOutcome(exhaustOutcome);
 

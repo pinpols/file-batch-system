@@ -105,13 +105,21 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
 
-    // 3) Report success
+    // 3) Report success —— 镜像生产:worker CLAIM 时确立的 invocationId 必须随 report 回填。
+    // 服务端 assignWorker 在 CLAIM 时把 current_invocation_id 写进 partition;真 worker 持此值并在 report
+    // 携带。测试从 partition 读回该值填入命令,复现生产回填(否则触发 R3-P1-10 report invocation fence)。
+    String invocationId =
+        jdbcTemplate.queryForObject(
+            "select current_invocation_id from batch.job_partition where id = ?",
+            String.class,
+            claimed.getJobPartitionId());
     TaskOutcomeCommand successOutcome =
         TaskOutcomeCommand.builder()
             .tenantId(TENANT)
             .taskId(claimed.getId())
             .success(true)
             .resultSummary("{\"status\":\"processed ok\"}")
+            .partitionInvocationId(invocationId)
             .build();
     taskExecutionService.applyTaskOutcome(successOutcome);
 

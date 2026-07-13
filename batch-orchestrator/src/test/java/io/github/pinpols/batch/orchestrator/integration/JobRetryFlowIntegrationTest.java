@@ -157,12 +157,16 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     taskExecutionService.assignWorker(TENANT, task.getId(), workerCode);
 
     // 3) Report failure → retry should be scheduled
+    // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(见 R3-P1-10 report invocation fence)。
+    // partition 在 CLAIM 后才写入 current_invocation_id,故重读该行取回值。
+    JobPartitionEntity claimedPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
     TaskOutcomeCommand failureOutcome =
         TaskOutcomeCommand.builder()
             .tenantId(TENANT)
             .taskId(task.getId())
             .errorCode("SIMULATED_ERROR")
             .errorMessage("retry flow test")
+            .partitionInvocationId(claimedPartition.getCurrentInvocationId())
             .build();
     taskExecutionService.applyTaskOutcome(failureOutcome);
 
