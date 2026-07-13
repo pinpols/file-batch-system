@@ -734,13 +734,11 @@ async def _assert_kafka_decode_commit_skip() -> None:
 
 
 async def _assert_paused_drop_fixture(fixture_id: str) -> None:
-    """28-kafka-paused-task-type-drop 的契约断言(当前 Python 未实现 → xfail)。
+    """28-kafka-paused-task-type-drop 的真实 dispatcher 契约断言。
 
     契约:收到 workerType ∈ pausedTaskTypes 的消息时,**丢弃且不 CLAIM**(平台
     unpause 后重投)。这里驱动真实 dispatcher.on_message,断言这类消息**没有**
-    触发 CLAIM。Python dispatcher 当前不在 on_message 里看 pausedTaskTypes,会照
-    常 CLAIM → 断言失败 → 被 deferred strict xfail 捕获。补 per-message drop 后
-    本断言转绿。
+    触发 CLAIM。该 fixture 已转硬,不再通过 deferred xfail 掩盖回归。
     """
     payload = _PAYLOADS[fixture_id]
     given = payload.get("given") or {}

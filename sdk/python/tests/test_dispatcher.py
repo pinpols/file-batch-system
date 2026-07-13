@@ -10,6 +10,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
+from batch_worker_sdk.dispatcher.dispatcher import DispatchDisposition
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._directive import parse_directive
 from batch_worker_sdk.task.context import SdkTaskContext
@@ -49,7 +50,8 @@ async def test_tenant_mismatch_drops_message(
     dispatcher, http = await _make()
     try:
         caplog.set_level("ERROR", logger="batch_worker_sdk.dispatcher.dispatcher")
-        await dispatcher.on_message(_msg(task_id=42, tenant="other-tenant"))
+        disposition = await dispatcher.on_message(_msg(task_id=42, tenant="other-tenant"))
+        assert disposition is DispatchDisposition.WITHHOLD
         assert dispatcher.in_flight_count() == 0
         assert any("tenant_mismatch_drop" in r.message for r in caplog.records)
         # 没有发出任何 HTTP 请求。
@@ -71,7 +73,8 @@ async def test_fatal_silently_drops_subsequent_messages(httpx_mock: HTTPXMock) -
         assert dispatcher.is_fatal is True
         # 新消息应被丢弃,不再发 HTTP。
         before = len(httpx_mock.get_requests())
-        await dispatcher.on_message(_msg(task_id=2))
+        disposition = await dispatcher.on_message(_msg(task_id=2))
+        assert disposition is DispatchDisposition.RETRY_LATER
         assert dispatcher.in_flight_count() == 0
         assert len(httpx_mock.get_requests()) == before
     finally:
@@ -130,7 +133,8 @@ async def test_apply_platform_directive_sets_state(httpx_mock: HTTPXMock) -> Non
         dispatcher.apply_platform_directive({"runtimeState": "DRAINING"})
         assert dispatcher.runtime_state == WorkerRuntimeState.DRAINING
         assert dispatcher.accepts_new_tasks() is False
-        await dispatcher.on_message(_msg(task_id=7))
+        disposition = await dispatcher.on_message(_msg(task_id=7))
+        assert disposition is DispatchDisposition.RETRY_LATER
         assert dispatcher.in_flight_count() == 0
     finally:
         await http.close()

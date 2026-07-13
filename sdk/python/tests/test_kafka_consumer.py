@@ -362,7 +362,7 @@ async def _drive_one_batch(
     """驱动 poll 循环消费**一个** batch 后退出,返回(处理过的 offset 顺序, commit 的 offsets)。
 
     ``_handle_record`` 被 stub 成按 offset 查表返回 disposition,以便精确控制
-    valid / withhold(RETRY_LATER)/ drop 组合,聚焦验证 offset 天花板与 commit 过滤。
+    valid / WITHHOLD / RETRY_LATER / drop 组合,聚焦验证 offset 天花板与 commit 过滤。
     """
     handled: list[int] = []
 
@@ -406,8 +406,8 @@ async def test_withhold_no_hol_keeps_consuming_and_sets_ceiling() -> None:
         batch = {tp: [_rec(10), _rec(11), _rec(12)]}
         dispositions = {
             10: DispatchDisposition.ACCEPTED,
-            11: DispatchDisposition.RETRY_LATER,  # foreign tenant → withhold
-            12: DispatchDisposition.RETRY_LATER,  # unknown schema v3 → withhold
+            11: DispatchDisposition.WITHHOLD,  # foreign tenant → withhold
+            12: DispatchDisposition.WITHHOLD,  # unknown schema v3 → withhold
         }
         handled, committed = await _drive_one_batch(consumer, mock, batch, dispositions)
 
@@ -437,7 +437,7 @@ async def test_withhold_first_record_commits_nothing_no_clamp() -> None:
         tp = "p0"
         batch = {tp: [_rec(5), _rec(6), _rec(7)]}
         dispositions = {
-            5: DispatchDisposition.RETRY_LATER,  # 首条即 withhold
+            5: DispatchDisposition.WITHHOLD,  # 首条即 withhold
             6: DispatchDisposition.ACCEPTED,
             7: DispatchDisposition.ACCEPTED,
         }
@@ -450,6 +450,34 @@ async def test_withhold_first_record_commits_nothing_no_clamp() -> None:
             f"nothing below ceiling → partition must not be committed (no clamp to ceiling-1), "
             f"got {committed}"
         )
+    finally:
+        await consumer._dispatcher._http.close()
+
+
+async def test_retry_later_seeks_pauses_and_stops_partition_batch() -> None:
+    """瞬时 RETRY_LATER 不得固化成 commit ceiling。
+
+    平台 PAUSED / draining / fatal 的 poll 竞态要 seek 回本条并临时 pause;
+    同分区后续记录留待恢复后重投,且不污染 withhold ceiling。
+    """
+    consumer, dispatcher, mock = await _make_consumer()
+    try:
+        dispatcher.apply_platform_directive({"runtimeState": "PAUSED"})
+        tp = "p0"
+        batch = {tp: [_rec(5), _rec(6)]}
+        dispositions = {
+            5: DispatchDisposition.RETRY_LATER,
+            6: DispatchDisposition.ACCEPTED,
+        }
+        handled, committed = await _drive_one_batch(consumer, mock, batch, dispositions)
+
+        assert handled == [5]
+        mock.seek.assert_called_once_with(tp, 5)
+        # poll 前平台态先 pause 整个 assignment;竞态记录再精确 pause 当前分区。
+        mock.pause.assert_any_call(tp)
+        assert consumer.paused is True
+        assert consumer.withheld_ceilings == {}
+        assert committed == {}
     finally:
         await consumer._dispatcher._http.close()
 

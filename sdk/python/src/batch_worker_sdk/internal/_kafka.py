@@ -274,9 +274,12 @@ class KafkaTaskConsumer:
                     continue
                 # 按分区累积「可提交到哪」的 offset。对齐 Go ``committable`` /
                 # TS #826:
-                #   - RETRY_LATER(withhold)→ 记该 tp 的 commit 天花板(最低
+                #   - WITHHOLD → 记该 tp 的 commit 天花板(最低
                 #     withheld offset),**不 seek、不 pause、不 break**,继续处理
                 #     本批后续记录 → 消除 head-of-line 冻结。
+                #   - RETRY_LATER(平台 PAUSED / draining / fatal 的瞬时竞态)→
+                #     seek 回本条 + 临时 pause,条件恢复后由 apply_backpressure
+                #     resume;不把瞬时背压固化成长期 commit ceiling。
                 #   - ACCEPTED / DROP_TERMINAL → 候选前移 offset,但仅当本条
                 #     offset **严格小于** 该 tp 天花板时才提交(offset >= 天花板
                 #     一律不提交,留待重投);绝不夹逼到「天花板-1」(那会提交没
@@ -285,9 +288,14 @@ class KafkaTaskConsumer:
                 for tp, records in batches.items():
                     for rec in records:
                         disposition = await self._handle_record(tp, rec)
-                        if disposition is DispatchDisposition.RETRY_LATER:
+                        if disposition is DispatchDisposition.WITHHOLD:
                             self._lower_ceiling(tp, rec.offset)
                             continue
+                        if disposition is DispatchDisposition.RETRY_LATER:
+                            self._consumer.seek(tp, rec.offset)
+                            self._consumer.pause(tp)
+                            self._capacity_paused = True
+                            break
                         # ACCEPTED / DROP_TERMINAL:仅在天花板之下才推进 offset。
                         ceiling = self._withheld_ceilings.get(tp)
                         if ceiling is not None and rec.offset >= ceiling:

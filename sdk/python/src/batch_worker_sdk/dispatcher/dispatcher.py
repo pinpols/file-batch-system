@@ -137,10 +137,13 @@ class DispatchDisposition(Enum):
     ACCEPTED = "ACCEPTED"
     #: 消息不可恢复(解码失败 / taskId 非法);跳过并提交 offset,避免 poison 卡分区。
     DROP_TERMINAL = "DROP_TERMINAL"
-    #: 当前 worker 不应消费(fatal / draining / 平台暂停 / 跨租户 / 未知 schema 大版本);
-    #: offset **不前移**,留待平台恢复或 SDK 升级后从原位重投。未知 schema 大版本不
-    #: 提交 offset 是 wire-protocol §A 的硬契约(避免按错版本反序列化字段错乱)。
+    #: 瞬时运行态背压(fatal / draining / 平台暂停);consumer seek 回本条并临时
+    #: pause,条件恢复后 resume。
     RETRY_LATER = "RETRY_LATER"
+    #: 有效但当前 worker 不应处理的消息(跨租户 / 未知 schema 大版本 / 暂停类型);
+    #: consumer 记录每分区最低 commit ceiling 后继续消费,offset 不前移且后续 commit
+    #: 不得跨过该记录。未知 schema 不提交是 wire-protocol §A 的硬契约。
+    WITHHOLD = "WITHHOLD"
 
 
 class TaskDispatcher:
@@ -342,17 +345,18 @@ class TaskDispatcher:
             return DispatchDisposition.RETRY_LATER
 
         # pausedTaskTypes per-message drop(wire-protocol §2.1):workerType 命中平台
-        # 暂停集合 → drop 且不提交 offset(RETRY_LATER),平台 unpause 后重投。对齐
+        # 暂停集合 → withhold 且不提交 offset,后续 rebalance / worker 重启后重投。对齐
         # 决策核 decidePausedTaskType。早于 schema/tenant 校验:暂停期连解析都不必。
         if self._paused_task_types:
             worker_type = msg.get("workerType")
             if isinstance(worker_type, str) and worker_type in self._paused_task_types:
                 logger.info(
-                    "workerType=%s paused, dropping taskId=%s without commit (redelivered on unpause)",
+                    "workerType=%s paused, dropping taskId=%s without commit "
+                    "(redelivered after rebalance/restart)",
                     worker_type,
                     msg.get("taskId"),
                 )
-                return DispatchDisposition.RETRY_LATER
+                return DispatchDisposition.WITHHOLD
 
         # schemaVersion 校验:缺字段 / 空白按 v1 解析(对齐 Java + fixture 16),
         # 仅未知大版本(如 v3)才拒;且拒时不提交 offset(§A),避免老 SDK 按错
@@ -370,7 +374,7 @@ class TaskDispatcher:
                 schema,
                 msg.get("taskId"),
             )
-            return DispatchDisposition.RETRY_LATER
+            return DispatchDisposition.WITHHOLD
 
         # 租户自检 fail-safe(对齐 Java §J1 / Go DROPPED_FOREIGN_TENANT):Kafka topic
         # pattern + consumer group + ACL 已做租户隔离,但任何一处漂移都可能让跨租户
@@ -383,7 +387,7 @@ class TaskDispatcher:
                 msg_tenant,
                 msg.get("taskId"),
             )
-            return DispatchDisposition.RETRY_LATER
+            return DispatchDisposition.WITHHOLD
 
         task_id_raw = msg.get("taskId")
         if not isinstance(task_id_raw, int):
