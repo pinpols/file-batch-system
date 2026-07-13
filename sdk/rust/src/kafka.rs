@@ -40,11 +40,15 @@
 //!   **commit-skip** (fixture 30): an undecodable / deterministically-panicking
 //!   record is unrecoverable poison, so we advance past it rather than let one
 //!   corrupt message head-of-line block the partition forever.
-//! * **RewindBlock** (`RejectedSchema` §A, `DroppedForeignTenant` §1.9) — the
+//! * **Withhold** (`RejectedSchema` §A, `DroppedForeignTenant` §1.9) — the
 //!   record is valid-but-unconsumable-now (an unknown schema major / a foreign
-//!   tenant); re-delivery to a *fixed* deployment is meaningful. We `seek` the
-//!   position back to the record and `pause` that partition so the committed
-//!   offset never advances past it and no later commit skips it.
+//!   tenant); re-delivery to a *fixed* deployment is meaningful. We record the
+//!   record's own offset as that partition's **commit ceiling** (the LOWEST
+//!   withheld offset) and **keep consuming** — subsequent records still flow, so
+//!   one withheld record never head-of-line blocks the partition. No later commit
+//!   may cross the ceiling, so the withheld offset is never committed and is
+//!   redelivered on the next rebalance / restart. This mirrors the Go SDK's
+//!   `committable` ceiling exactly; we do NOT `seek` back and do NOT `pause`.
 //! * **RewindRetry** (`Backpressure` §1.5, `HandlerRetryLater`) — a valid record
 //!   deferred by capacity or a transient handler error; `seek` back so it is
 //!   re-read on the next cycle / after capacity resume, without a per-partition
@@ -62,7 +66,7 @@
 
 #![cfg(feature = "kafka")]
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::panic::AssertUnwindSafe;
 use std::time::Duration;
 
@@ -288,10 +292,11 @@ pub enum RecordDisposition {
     /// At capacity — assignment paused, offset withheld + rewound (re-read on
     /// resume).
     Backpressure,
-    /// Unknown schemaVersion major — rejected; offset withheld, partition paused
-    /// until a fixed deploy re-reads it (§A).
+    /// Unknown schemaVersion major — rejected; offset withheld (partition commit
+    /// ceiling set, consumption continues) until a fixed deploy re-reads it (§A).
     RejectedSchema,
-    /// Foreign tenant — dropped; offset withheld, partition paused (§1.9).
+    /// Foreign tenant — dropped; offset withheld (partition commit ceiling set,
+    /// consumption continues) (§1.9).
     DroppedForeignTenant,
     /// Empty or non-JSON payload — undecodable poison; **commit-skip** past it so
     /// one corrupt message cannot head-of-line block the partition (fixture 30).
@@ -309,20 +314,26 @@ pub enum RecordDisposition {
 ///
 /// Making this explicit (rather than a single `committed()` bool) is the fix for
 /// the offset-withhold bug: a `BaseConsumer`'s position advances on every poll, so
-/// a withheld record must be actively rewound (and, when unconsumable-until-
-/// redeploy, its partition paused) or a later commit silently skips past it.
+/// a withheld record must set a commit ceiling (a valid-but-unconsumable record)
+/// or be actively rewound (a deferred record) — otherwise a later commit silently
+/// skips past it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OffsetAction {
     /// Commit `offset+1` — real progress (`Accepted`) or commit-skip past poison
-    /// (`DecodeError` / `HandlerPanicked`, fixture 30).
+    /// (`DecodeError` / `HandlerPanicked`, fixture 30). Suppressed when this
+    /// record's offset is at/above the partition's withheld ceiling (a lower
+    /// record was withheld earlier), so no commit ever crosses a withheld offset.
     Advance,
     /// Withhold: rewind the position to this record so it is re-read next cycle /
     /// after capacity resume. Committed offset is NOT advanced.
     RewindRetry,
-    /// Withhold + pause: rewind AND pause this partition until a fixed deployment
-    /// re-reads the record. Committed offset is NOT advanced and no later record
-    /// on another partition can commit past it.
-    RewindBlock,
+    /// Withhold via commit ceiling: record this (topic, partition)'s LOWEST
+    /// withheld offset and **keep consuming** subsequent records (no seek, no
+    /// pause). The committed offset is never advanced across the ceiling, so the
+    /// withheld record is redelivered on the next rebalance / restart while later
+    /// records still flow — no head-of-line block. Mirrors the Go SDK's
+    /// `committable` ceiling.
+    Withhold,
 }
 
 impl RecordDisposition {
@@ -333,9 +344,10 @@ impl RecordDisposition {
             RecordDisposition::Accepted
             | RecordDisposition::DecodeError
             | RecordDisposition::HandlerPanicked => OffsetAction::Advance,
-            // Valid-but-unconsumable-now → block the partition until a redeploy.
+            // Valid-but-unconsumable-now → set the partition commit ceiling and
+            // keep consuming (redelivered after a fixed redeploy).
             RecordDisposition::RejectedSchema | RecordDisposition::DroppedForeignTenant => {
-                OffsetAction::RewindBlock
+                OffsetAction::Withhold
             }
             // Deferred / transient → rewind and re-read soon.
             RecordDisposition::Backpressure | RecordDisposition::HandlerRetryLater => {
@@ -347,6 +359,29 @@ impl RecordDisposition {
     /// Whether this disposition advanced the committed offset (`Advance`).
     pub fn committed(&self) -> bool {
         matches!(self.offset_action(), OffsetAction::Advance)
+    }
+}
+
+/// Lower a partition's withheld commit ceiling to include `record_offset`, keeping
+/// the LOWEST offset ever withheld on that partition. Returns the new ceiling.
+/// Pure — the analog of the TS `loweredCeiling` / Go `committable` lowest-offset
+/// rule, unit-testable without a broker.
+fn lowered_ceiling(current: Option<i64>, record_offset: i64) -> i64 {
+    match current {
+        Some(c) => c.min(record_offset),
+        None => record_offset,
+    }
+}
+
+/// Whether committing a record at `record_offset` would cross the partition's
+/// withheld ceiling. A commit advances PAST the record, so any record at or after
+/// the withheld offset must NOT be committed (its commit would silently skip the
+/// withheld one). Pure — mirrors the Go SDK's `committable` drop rule
+/// (`m.Offset >= ceil`) and the TS `commitBlockedByWithheld`.
+fn commit_blocked_by_withheld(ceiling: Option<i64>, record_offset: i64) -> bool {
+    match ceiling {
+        Some(c) => record_offset >= c,
+        None => false,
     }
 }
 
@@ -365,14 +400,16 @@ pub struct KafkaTaskConsumer<H: MessageHandler> {
     handler: H,
     /// Cached capacity-pause state — avoids issuing a pause/resume RPC every poll
     /// (mirrors the Java `paused` flag and the Python `_paused` cache). This is the
-    /// *capacity* (§1.5) pause of the whole assignment; it is separate from the
-    /// per-partition `blocked_partitions` withhold.
+    /// *capacity* (§1.5) pause of the whole assignment; it is independent of the
+    /// per-partition withhold ceiling below.
     paused: bool,
-    /// Partitions parked by a `RewindBlock` withhold (unknown schema major /
-    /// foreign tenant). They stay paused until a fixed deployment re-reads them, so
-    /// capacity-`resume` must skip them (else it would un-park a still-blocked
-    /// partition and let it hot-loop the unconsumable record).
-    blocked_partitions: HashSet<(String, i32)>,
+    /// Per-partition commit CEILING: the LOWEST offset withheld (unknown schema
+    /// major / foreign tenant) on that partition. No commit may cross it, so the
+    /// withheld record is never committed (redelivered on the next rebalance /
+    /// restart) while subsequent records still flow — the head-of-line-block fix.
+    /// This does NOT pause the partition; consumption continues normally. Mirrors
+    /// the Go SDK's `committable` ceiling and the TS `#withheld` map.
+    withheld_ceilings: HashMap<(String, i32), i64>,
 }
 
 impl<H: MessageHandler> KafkaTaskConsumer<H> {
@@ -386,7 +423,7 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
             consumer,
             handler,
             paused: false,
-            blocked_partitions: HashSet::new(),
+            withheld_ceilings: HashMap::new(),
         })
     }
 
@@ -403,7 +440,7 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
             consumer,
             handler,
             paused: false,
-            blocked_partitions: HashSet::new(),
+            withheld_ceilings: HashMap::new(),
         })
     }
 
@@ -457,15 +494,30 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
         let (payload, topic, partition, offset) = extracted;
 
         let disp = self.handle_payload(payload.as_deref(), in_flight());
+        let key = (topic.clone(), partition);
         match disp.offset_action() {
             OffsetAction::Advance => {
                 // Commit this record's offset (next offset = offset + 1),
                 // mirroring the Java `commitSync(Map.of(tp, offset+1))`. Manual
                 // commit (enable.auto.commit=false) → real progress (`Accepted`)
                 // or commit-skip past unrecoverable poison / panic (fixture 30).
-                let mut tpl = TopicPartitionList::new();
-                tpl.add_partition_offset(&topic, partition, Offset::Offset(offset + 1))?;
-                self.consumer.commit(&tpl, CommitMode::Sync)?;
+                //
+                // BUT never commit a record at/above a withheld ceiling on this
+                // partition (a lower record was withheld earlier): committing would
+                // advance PAST — and thus silently skip — the withheld record. Below
+                // the ceiling, advance normally by the record's OWN offset (never
+                // clamped to ceiling-1, which would drop unprocessed records).
+                if commit_blocked_by_withheld(self.withheld_ceilings.get(&key).copied(), offset) {
+                    log::warn!(
+                        "kafka commit withheld: {topic}[{partition}]@{offset} at/above \
+                         partition ceiling {:?} → not committed (redelivered later)",
+                        self.withheld_ceilings.get(&key)
+                    );
+                } else {
+                    let mut tpl = TopicPartitionList::new();
+                    tpl.add_partition_offset(&topic, partition, Offset::Offset(offset + 1))?;
+                    self.consumer.commit(&tpl, CommitMode::Sync)?;
+                }
             }
             OffsetAction::RewindRetry => {
                 // Withhold a valid-but-deferred record (capacity / transient
@@ -474,14 +526,20 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
                 // a later record can never commit past it.
                 self.rewind_to(&topic, partition, offset);
             }
-            OffsetAction::RewindBlock => {
-                // Withhold + park a valid-but-unconsumable-now record (unknown
-                // schema major / foreign tenant): rewind AND pause this partition
-                // until a fixed deploy re-reads it. Without this, the position
-                // would advance and a later commit would silently skip the rejected
-                // record (the P0 offset-withhold bug).
-                self.rewind_to(&topic, partition, offset);
-                self.pause_partition(&topic, partition);
+            OffsetAction::Withhold => {
+                // Withhold a valid-but-unconsumable-now record (unknown schema
+                // major / foreign tenant): record this partition's commit CEILING
+                // (its LOWEST withheld offset) and KEEP consuming. No later commit
+                // crosses the ceiling, so the withheld record is redelivered on the
+                // next rebalance / restart while subsequent records still flow — no
+                // head-of-line block, no partition pause, no seek-back.
+                let new_ceiling =
+                    lowered_ceiling(self.withheld_ceilings.get(&key).copied(), offset);
+                self.withheld_ceilings.insert(key, new_ceiling);
+                log::warn!(
+                    "kafka withhold: {topic}[{partition}]@{offset} → commit ceiling {new_ceiling} \
+                     (still consuming; record redelivered later)"
+                );
             }
         }
         Ok(Some(disp))
@@ -502,19 +560,6 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
                  committed offset unchanged"
             );
         }
-    }
-
-    /// Pause a single partition and record it in `blocked_partitions` so the
-    /// capacity `resume` will not un-park it.
-    fn pause_partition(&mut self, topic: &str, partition: i32) {
-        let mut tpl = TopicPartitionList::new();
-        // add_partition cannot fail for a well-formed (topic, partition).
-        let _ = tpl.add_partition(topic, partition);
-        if let Err(e) = self.consumer.pause(&tpl) {
-            log::warn!("kafka withhold: pause {topic}[{partition}] failed: {e}");
-        }
-        self.blocked_partitions
-            .insert((topic.to_string(), partition));
     }
 
     /// Decode an owned payload, run it through the pipeline, and (on accept)
@@ -555,7 +600,7 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
             MessageOutcome::RejectSchema => {
                 log::warn!(
                     "kafka reject: unknown schemaVersion major {:?} for task {} → \
-                     withhold + pause partition (§A)",
+                     withhold (commit ceiling; keep consuming) (§A)",
                     decoded.schema_version,
                     decoded.task_id_str()
                 );
@@ -564,7 +609,7 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
             MessageOutcome::DropForeignTenant => {
                 log::warn!(
                     "kafka drop: foreign tenant {:?} (worker tenant {}) for task {} → \
-                     withhold + pause partition (§1.9)",
+                     withhold (commit ceiling; keep consuming) (§1.9)",
                     decoded.tenant_id,
                     self.config.tenant_id,
                     decoded.task_id_str()
@@ -648,23 +693,12 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
         }
     }
 
-    /// Resume every currently-assigned partition **except** those parked by a
-    /// `RewindBlock` withhold (unknown schema / foreign tenant). Un-parking a
-    /// still-blocked partition would let it hot-loop the unconsumable record, so
-    /// capacity resume must leave blocked partitions paused.
+    /// Resume every currently-assigned partition after a capacity pause. Withheld
+    /// records no longer pause their partition (they set a commit ceiling and keep
+    /// consuming), so this simply resumes the whole assignment — the analog of the
+    /// Java/Python capacity resume.
     fn resume_assignment(&mut self) {
-        if let Ok(assignment) = self.consumer.assignment() {
-            if assignment.count() == 0 {
-                self.paused = false;
-                return;
-            }
-            let mut tpl = TopicPartitionList::new();
-            for elem in assignment.elements() {
-                let key = (elem.topic().to_string(), elem.partition());
-                if !self.blocked_partitions.contains(&key) {
-                    let _ = tpl.add_partition(elem.topic(), elem.partition());
-                }
-            }
+        if let Ok(tpl) = self.consumer.assignment() {
             if tpl.count() > 0 {
                 let _ = self.consumer.resume(&tpl);
             }
@@ -816,21 +850,54 @@ mod tests {
     }
 
     #[test]
-    fn offset_action_withholds_and_blocks_unconsumable_records() {
-        // Unknown schema major / foreign tenant: withhold AND pause the partition
-        // (RewindBlock) so a later commit never skips past the rejected record —
-        // the exact P0 bug (previously these did nothing → silent skip).
+    fn offset_action_withholds_unconsumable_records_via_ceiling() {
+        // Unknown schema major / foreign tenant: Withhold — record the partition's
+        // commit CEILING and KEEP consuming (no seek, no pause), so a later commit
+        // never crosses (skips past) the withheld record AND subsequent records
+        // still flow (no head-of-line block). This is the HOL-block fix: the old
+        // RewindBlock paused the partition forever.
         assert_eq!(
             RecordDisposition::RejectedSchema.offset_action(),
-            OffsetAction::RewindBlock
+            OffsetAction::Withhold
         );
         assert_eq!(
             RecordDisposition::DroppedForeignTenant.offset_action(),
-            OffsetAction::RewindBlock
+            OffsetAction::Withhold
         );
         // These must NOT count as committed.
         assert!(!RecordDisposition::RejectedSchema.committed());
         assert!(!RecordDisposition::DroppedForeignTenant.committed());
+    }
+
+    // ── Pure commit-ceiling logic (the HOL-block / no-skip invariant) ──────
+
+    #[test]
+    fn lowered_ceiling_keeps_lowest_withheld_offset() {
+        // First withhold on a partition sets the ceiling.
+        assert_eq!(lowered_ceiling(None, 7), 7);
+        // A later, LOWER withhold lowers it (the lowest offer must win so nothing
+        // at/after it is ever committed).
+        assert_eq!(lowered_ceiling(Some(7), 3), 3);
+        // A later, HIGHER withhold does NOT raise it.
+        assert_eq!(lowered_ceiling(Some(3), 9), 3);
+        assert_eq!(lowered_ceiling(Some(3), 3), 3);
+    }
+
+    #[test]
+    fn commit_blocked_only_at_or_above_ceiling() {
+        // No ceiling → nothing is blocked.
+        assert!(!commit_blocked_by_withheld(None, 0));
+        assert!(!commit_blocked_by_withheld(None, 100));
+        // Below the ceiling → commit allowed (advance by its OWN offset; the
+        // withheld record at the ceiling is never reached by such a commit).
+        assert!(!commit_blocked_by_withheld(Some(5), 4));
+        // AT the ceiling → blocked (committing offset+1 would skip the withheld
+        // record itself).
+        assert!(commit_blocked_by_withheld(Some(5), 5));
+        // ABOVE the ceiling → blocked (a later record must not commit past the
+        // withheld one — the exact bug the ceiling prevents; NOT clamped to
+        // ceiling-1, which would drop unprocessed records).
+        assert!(commit_blocked_by_withheld(Some(5), 6));
     }
 
     #[test]
@@ -985,50 +1052,63 @@ mod tests {
             assigned_topics(&assignment)
         );
 
-        // Produce a good record then a foreign-tenant record on the SAME (single)
-        // partition. A withhold (foreign-tenant / bad-schema) seeks back AND pauses
-        // the partition, so at most ONE withheld disposition is observable per run
-        // on one partition — a subsequent record after the pause is never delivered.
-        // We therefore assert good→Accepted+committed and foreign→dropped+not-advanced.
-        // RejectedSchema is the *same* RewindBlock plumbing as DroppedForeignTenant
+        // Produce good(1), foreign-tenant(2), good(3) on the SAME (single)
+        // partition. A withhold (foreign-tenant / bad-schema) records a per-partition
+        // commit CEILING and KEEPS consuming — it does NOT pause or seek back — so a
+        // record AFTER the withheld one must still be delivered. Task 3 proves the
+        // head-of-line block is gone; task 2 must never be dispatched (§1.9). This is
+        // the exact bug the old RewindBlock (pause-forever) plumbing caused.
+        // RejectedSchema is the *same* Withhold plumbing as DroppedForeignTenant
         // (see `offset_action`); its unit coverage is
-        // `offset_action_withholds_and_blocks_unconsumable_records`.
-        let good =
+        // `offset_action_withholds_unconsumable_records_via_ceiling`.
+        let good1 =
             br#"{"taskId":1,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#;
         let foreign =
             br#"{"taskId":2,"tenantId":"tenant-b","schemaVersion":"v1","workerType":"import"}"#;
-        for payload in [good.as_slice(), foreign.as_slice()] {
+        let good3 =
+            br#"{"taskId":3,"tenantId":"tenant-a","schemaVersion":"v1","workerType":"import"}"#;
+        for payload in [good1.as_slice(), foreign.as_slice(), good3.as_slice()] {
             send_record(&producer, &topic, payload);
         }
 
-        // Poll for up to ~15s or until both decisions have been observed.
+        // Poll for up to ~15s or until all decisions have been observed.
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         let mut dispositions = Vec::<String>::new();
-        let mut saw_good = false;
+        let mut saw_good1 = false;
+        let mut saw_good3 = false;
         let mut saw_foreign = false;
         while std::time::Instant::now() < deadline {
             let disp = consumer.poll_once(&if_read).expect("poll");
             dispositions.push(format!("{disp:?}"));
             match disp {
                 Some(RecordDisposition::Accepted) => {
-                    saw_good = accepted.lock().unwrap().iter().any(|t| t == "1");
+                    let acc = accepted.lock().unwrap();
+                    saw_good1 = acc.iter().any(|t| t == "1");
+                    saw_good3 = acc.iter().any(|t| t == "3");
                 }
                 Some(RecordDisposition::DroppedForeignTenant) => saw_foreign = true,
                 _ => {}
             }
-            if saw_good && saw_foreign {
+            if saw_good1 && saw_good3 && saw_foreign {
                 break;
             }
         }
 
         let got = accepted.lock().unwrap().clone();
         assert!(
-            saw_good && got.contains(&"1".to_string()),
-            "good record must be accepted; got={got:?}; dispositions={dispositions:?}"
+            saw_good1 && got.contains(&"1".to_string()),
+            "good record 1 must be accepted; got={got:?}; dispositions={dispositions:?}"
         );
         assert!(
             saw_foreign,
             "foreign-tenant record must be dropped; dispositions={dispositions:?}"
+        );
+        // The head-of-line-block fix: a record AFTER the withheld foreign-tenant one
+        // is STILL delivered (the withhold set a commit ceiling, it did not pause).
+        assert!(
+            saw_good3 && got.contains(&"3".to_string()),
+            "good record 3 (after the withheld record) must still be delivered — no \
+             head-of-line block; got={got:?}; dispositions={dispositions:?}"
         );
         assert!(
             !got.contains(&"2".to_string()),
