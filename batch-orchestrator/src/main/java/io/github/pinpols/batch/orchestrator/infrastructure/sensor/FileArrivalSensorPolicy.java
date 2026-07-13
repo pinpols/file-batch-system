@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -76,7 +77,10 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
           pattern,
           e.getMessage());
       return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of("FILE_ARRIVAL", e.getMessage()));
+          "error.workflow.sensor_probe_failed",
+          List.of(
+              "FILE_ARRIVAL",
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
   }
 

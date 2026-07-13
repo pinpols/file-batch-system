@@ -172,6 +172,25 @@ class DefaultTaskExecutionWrapperTest {
     verify(activeTaskLeaseRegistry).remove("1002");
   }
 
+  /**
+   * 回归:第三方插件返回的 StepExecutionResponse 允许 message / code 为 null(record 无 @NotNull, 字面失败构造器 {@code
+   * new StepExecutionResponse(false, code, message)} 契约就允许)。 resultSummary 曾用 Map.of("code", code,
+   * "message", message) 构造 → null 时 NPE,把干净的失败 上报掩盖成执行崩溃。见 DefaultTaskExecutionWrapper 的
+   * resultSummary 构造。
+   */
+  @Test
+  void shouldReportFailureWhenResponseMessageNull_withoutNpe() {
+    PulledTask task = sampleTask("1014", "t1", "w1");
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenReturn(new StepExecutionResponse(false, "ERR_PARSE", null));
+
+    WorkerExecutionResult result = wrapper.execute(task);
+
+    assertThat(result.success()).isFalse();
+    verify(taskExecutionClient).report(argThat(report -> "ERR_PARSE".equals(report.getCode())));
+    verify(activeTaskLeaseRegistry).remove("1014");
+  }
+
   @Test
   void shouldAbortReportWhenLeaseLostBeforeCompletion() {
     PulledTask task = sampleTask("1009", "t1", "w1");

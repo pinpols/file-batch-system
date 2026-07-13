@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -142,7 +143,10 @@ public class SensorStateMachine {
           e.toString());
       result =
           SensorProbeResult.error(
-              "error.workflow.sensor_probe_failed", List.of(cfg.sensorType.code(), e.getMessage()));
+              "error.workflow.sensor_probe_failed",
+              List.of(
+                  cfg.sensorType.code(),
+                  Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
 
     apply(wfRun, nodeRun, cfg, result, now);

@@ -119,6 +119,20 @@ class SensorStateMachineTest {
   }
 
   @Test
+  void probeThrowsExceptionWithNullMessage_doesNotNpe() {
+    // 回归:policy.probe 抛出无 message 的异常(getMessage()==null,如 new RuntimeException())时,
+    // catch 内构造 List.of(cfg.sensorType.code(), e.getMessage()) 曾 NPE,把探针错误掩盖成崩溃。
+    // 见 SensorStateMachine#probeAndAdvance catch 分支。
+    seedHappyPath();
+    when(filePolicy.probe(any())).thenThrow(new RuntimeException()); // getMessage() == null
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW); // 1st error, below threshold → 仅记探针状态,不 finish
+
+    verify(taskOutcomeService, never()).recordNodeRunFinish(any());
+    verify(nodeRunMapper).updateSensorProbeState(eq(99L), any(), eq(NOW), eq(1), eq(1));
+  }
+
+  @Test
   void error_atThreshold_triggersFailure() {
     seedHappyPath();
     when(filePolicy.probe(any()))
