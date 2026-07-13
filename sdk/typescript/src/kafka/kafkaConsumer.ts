@@ -35,7 +35,12 @@ import {
   type MessageDisposition,
   consoleLogger,
 } from "../client/consumer.ts";
-import { offsetAction, resolveFromBeginning } from "./offsetPolicy.ts";
+import {
+  offsetAction,
+  resolveFromBeginning,
+  loweredCeiling,
+  commitBlockedByWithheld,
+} from "./offsetPolicy.ts";
 
 /** SASL config (only SCRAM-SHA-512 is supported per byo-sdk-guide §1.2). */
 export interface KafkaSaslConfig {
@@ -105,6 +110,16 @@ export class KafkaConsumerAdapter implements Consumer {
   #paused = false;
   /** topics actually matched by the wildcard regex (learned at GROUP_JOIN). */
   readonly #assignedTopics = new Set<string>();
+  /**
+   * Per-partition commit CEILING: the LOWEST offset withheld (rejected schema /
+   * foreign tenant / not-for-us) on that partition. No later commit may cross it,
+   * so the withheld record is redelivered on the next rebalance/restart. Keyed by
+   * `${topic}/${partition}`. This is the kafkajs equivalent of the Go SDK's
+   * `withheld` ceiling — it lets the consumer KEEP fetching subsequent records
+   * (no head-of-line block) while guaranteeing the withheld offset is never
+   * silently skipped.
+   */
+  readonly #withheld = new Map<string, string>();
 
   constructor(config: KafkaConsumerConfig, logger: Logger = consoleLogger) {
     this.#config = config;
@@ -216,6 +231,7 @@ export class KafkaConsumerAdapter implements Consumer {
         };
 
         const disposition = await onEach(record);
+        const key = `${payload.topic}/${payload.partition}`;
         const action = offsetAction(
           disposition,
           payload.topic,
@@ -224,15 +240,42 @@ export class KafkaConsumerAdapter implements Consumer {
         );
 
         if (action.type === "commit") {
+          // never commit past a record withheld earlier on this partition — that
+          // would silently skip it (§A/§1.9). Below the ceiling → advance normally.
+          if (commitBlockedByWithheld(this.#withheld.get(key), payload.message.offset)) {
+            this.#logger.warn("commit withheld: offset at/past partition ceiling", {
+              topic: action.topic,
+              partition: action.partition,
+              offset: payload.message.offset,
+              ceiling: this.#withheld.get(key),
+            });
+            return;
+          }
           // manual commit: advance past this offset (offset + 1 per kafkajs)
           await this.#consumer.commitOffsets([
             { topic: action.topic, partition: action.partition, offset: action.offset },
           ]);
           return;
         }
-        // seek BACK to this offset then pause the partition, so (a) this message
-        // is redelivered on resume and (b) NO later commit can cross this offset
-        // (§A/§1.9 — parity with the Go/Java seek+pause semantics).
+
+        if (action.type === "withhold") {
+          // record the commit ceiling and KEEP consuming (no pause): the withheld
+          // offset is never committed → redelivered later, while subsequent records
+          // on this partition still flow (no head-of-line block). Mirrors the Go
+          // SDK's `withheld` ceiling; reaches the same invariant as Java's seek-back
+          // WITHOUT stalling the partition on a poison/foreign record.
+          this.#withheld.set(key, loweredCeiling(this.#withheld.get(key), action.offset));
+          this.#logger.warn("offset withheld (ceiling set, still consuming)", {
+            topic: action.topic,
+            partition: action.partition,
+            offset: action.offset,
+          });
+          return;
+        }
+
+        // backpressure: seek BACK to this offset then pause the partition, so (a)
+        // this message is redelivered on resume and (b) NO later commit crosses it.
+        // Unlike withhold, this pause is TEMPORARY — resumed when a slot frees.
         this.#consumer.seek({
           topic: action.topic,
           partition: action.partition,
@@ -242,7 +285,7 @@ export class KafkaConsumerAdapter implements Consumer {
           { topic: action.topic, partitions: [action.partition] },
         ]);
         this.#paused = true;
-        this.#logger.warn("seek-back + pause partition (offset withheld)", {
+        this.#logger.warn("seek-back + pause partition (backpressure)", {
           topic: action.topic,
           partition: action.partition,
           offset: action.offset,
