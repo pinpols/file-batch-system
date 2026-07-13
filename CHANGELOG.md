@@ -12,6 +12,34 @@
 
 ---
 
+## [1.2.0] - 2026-07-13
+
+> 自 1.1.0(2026-06-24)累计 1,700+ commits;发布前 BE 全链路验收 12/12 PASS(strict-verify 20/20)。
+
+### Added
+- **Console AI 助手生产收口**:只读诊断/告警分诊/DQ 草稿工具 + 诊断 RAG 语料;token 成本计量、每租户+用户限流(`ai:chat:tenant:{t}:user:{u}`)、模型故障优雅降级(#786-800)。
+- **Checkpoint 断点续跑**:P0 默认启用 LOAD 行号/GENERATE 字节偏移续跑(补观测+幂等守护 IT,#806/#810);P1 阶段级续跑能力(PROCESS COMPUTE/VALIDATE 跳过,多分区降级守卫,开关默认关,#812-814)。
+- **开源组件替换**:resilience4j 熔断、Bucket4j 分布式限流、Alertmanager 通知 sink(#774-777)。
+- Worker 执行可观测性:实时行数/当前文件/分区失败/作业跳转 + checkpoint 命中指标(#806/#811/#816+)。
+
+### Changed
+- **console Map 响应收敛**:105 处 `CommonResponse<Map>` 换类型化 record + OpenAPI 真 schema(4 批 #801-804),前端 gen:api 契约漂移类 bug 根治;16 处真动态 key 保留并注明。
+- REPORT 分区计数改轻量投影,消除 O(N²) report choke(#820);launch 消费扩容等控制面吞吐优化。
+- ADR-038/V164 文档措辞校正:checkpoint 为「业务先 commit→位点后 advance+插件幂等」补偿式最终一致。
+- 发布 `1.2.0`,同步应用版本、部署镜像标签、OpenAPI 与 SDK 文档。
+
+### Fixed
+- **安全**:dry-run 分号堆叠 RCE、租户 IDOR×3、SSRF 编码变体焊死(IPv6/十进制/IPv4-mapped)、通知限流补 tenant key、IM/SMS SSRF pin(#779-790)。
+- **正确性**:outbox 任一 send 失败卡整批(B2)、outcome-vs-reclaim 残留死锁(NOWAIT 断环)、trigger outbox 守卫、apikey 缓存过期旁路(#783/#792 等)。
+- **SDK 五语言**:offset withhold 失效(Go/TS/Rust)、TS 生产接线永不提交 offset、schemaVersion 畸形值统一 reject(#796-799)。
+- `Map.of`/`List.of` 可空值 NPE 类定向清扫 + CI 守护(唯一反复复发的生产 NPE 模式,#822)。
+- AiChat OpenAPI 契约漂移(sessionId 会话断/拒绝原因丢,#794)。
+
+### Docs
+- Checkpoint/断点续跑设计与分期施工、Alertmanager 直切迁移方案(#807);LOC 快照 2026-07-13(529k 行,test/main 0.77,#815/#823)。
+
+---
+
 ## [1.1.0] - 2026-06-24
 
 ### Added
