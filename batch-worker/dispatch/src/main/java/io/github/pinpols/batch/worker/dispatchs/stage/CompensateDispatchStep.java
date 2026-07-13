@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /** 分发补偿阶段：在投递彻底失败后将分发记录标记为 COMPENSATED，并写入审计日志。 */
@@ -69,7 +70,9 @@ public class CompensateDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     runtimeRepository.updateFileStatus(
-        fileId, "FAILED", Map.of("channelCode", dispatchPayload.channelCode()));
+        fileId,
+        "FAILED",
+        Map.of("channelCode", Objects.requireNonNullElse(dispatchPayload.channelCode(), "")));
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put("channelCode", dispatchPayload.channelCode());
     detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());

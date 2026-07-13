@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -406,8 +407,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     report.setResultSummary(
         JsonUtils.toJson(
             Map.of(
-                "code", response.code(),
-                "message", response.message())));
+                "code", Objects.requireNonNullElse(response.code(), ""),
+                "message", Objects.requireNonNullElse(response.message(), ""))));
     // INCREMENTAL pipeline 在 attributes 写出新水位 → 透传给 orchestrator;
     // 业务没显式写就保持 null,orchestrator 跳过持久化(保留旧值)。
     Object highWaterMarkOut = executionContext.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT);

@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -80,7 +81,10 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
       SensorSqlValidator.validate(sql, props.getDbAllowedSchemas());
     } catch (IllegalArgumentException e) {
       return SensorProbeResult.error(
-          "error.workflow.sensor_spec_invalid", List.of("DB_ROW_EXISTS", e.getMessage()));
+          "error.workflow.sensor_spec_invalid",
+          List.of(
+              "DB_ROW_EXISTS",
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
 
     Map<String, Object> params = resolveParams(spec, ctx);
@@ -98,7 +102,10 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
     } catch (Exception e) {
       log.warn("DB_ROW_EXISTS probe error tenant={} err={}", ctx.tenantId(), e.toString());
       return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of("DB_ROW_EXISTS", e.getMessage()));
+          "error.workflow.sensor_probe_failed",
+          List.of(
+              "DB_ROW_EXISTS",
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
   }
 

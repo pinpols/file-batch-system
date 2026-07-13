@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -96,7 +97,10 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
           partition,
           e.getMessage());
       return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of("KAFKA_OFFSET", e.getMessage()));
+          "error.workflow.sensor_probe_failed",
+          List.of(
+              "KAFKA_OFFSET",
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     } catch (ExecutionException e) {
       log.warn(
           "KAFKA_OFFSET probe error topic={} partition={} err={}",
@@ -104,11 +108,17 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
           partition,
           e.getMessage());
       return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of("KAFKA_OFFSET", e.getMessage()));
+          "error.workflow.sensor_probe_failed",
+          List.of(
+              "KAFKA_OFFSET",
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     } catch (Exception e) {
       log.warn("KAFKA_OFFSET unexpected error topic={} err={}", topic, e.toString());
       return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of("KAFKA_OFFSET", e.getMessage()));
+          "error.workflow.sensor_probe_failed",
+          List.of(
+              "KAFKA_OFFSET",
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
   }
 }

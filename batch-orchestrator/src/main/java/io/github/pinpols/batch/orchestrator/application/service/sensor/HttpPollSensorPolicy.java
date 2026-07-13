@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -111,7 +112,10 @@ public class HttpPollSensorPolicy implements SensorPolicy {
     } catch (Exception e) {
       log.warn("HTTP_POLL probe error url={} err={}", url, e.toString());
       return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", List.of("HTTP_POLL", e.getMessage()));
+          "error.workflow.sensor_probe_failed",
+          List.of(
+              "HTTP_POLL",
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
   }
 

@@ -73,6 +73,29 @@ class CompensateDispatchStepTest {
   }
 
   @Test
+  void execute_succeedsWhenChannelCodeNull_withoutNpe() {
+    // 回归:channelCode 为 null(DispatchPayload.channelCode 是可空 String,无 @NotBlank)时,
+    // updateFileStatus 内构造 Map.of("channelCode", channelCode) 曾 NPE,把补偿冲正掩盖成 500。
+    // 见 CompensateDispatchStep#execute。
+    when(runtimeRepository.toLong(any())).thenReturn(10L);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
+
+    DispatchPayload payload =
+        new DispatchPayload("10", null, null, "target", null, null, null, null, null, null);
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    context.setWorkerId("w1");
+    context.getAttributes().put("dispatchPayload", payload);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
+    context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    verify(runtimeRepository).updateFileStatus(eq(10L), eq("FAILED"), any());
+  }
+
+  @Test
   void execute_writesAuditLog() {
     when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
