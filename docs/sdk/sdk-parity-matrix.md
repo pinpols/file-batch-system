@@ -68,10 +68,12 @@
 |---|---|---|
 | 成功受理 / 重复投递(ACCEPTED) | ✅ 提交 | 已受理,offset 前移 |
 | 缺失 / 空白 schemaVersion | ✅ 提交(按 v1) | fixture 16:缺省按 v1 **accept** |
-| **未知大版本(v3+)** | **❌ 不提交** | **fixture 18 硬契约 `do NOT commit`** / `sdkMustNot: commit offset for a rejected message`。withhold → HOL 阻塞直到 SDK 升级(fail-loud) |
-| fatal / draining / 平台 PAUSED\|DRAINING / 跨租户 | ❌ 不提交 | 瞬态 / 需重投到正确租户;seek 回本条 + pause 分区 |
+| **未知大版本(v3+)** | **❌ 不提交** | **fixture 18 硬契约 `do NOT commit`** / `sdkMustNot: commit offset for a rejected message`。记录分区 commit ceiling 后继续消费,重启 / rebalance 后重投,不再永久 HOL 阻塞 |
+| 跨租户 | ❌ 不提交 | 安全 fail-closed:不 claim / 不执行;记录分区 commit ceiling 后继续服务本租户消息,重启 / rebalance 后重投 |
+| draining / 平台 PAUSED\|DRAINING / 容量背压 | ❌ 不提交 | 瞬态:seek 回本条 + 临时 pause 分区,条件恢复后 resume |
+| fatal(认证 / 不可恢复协议错误) | ❌ 不提交 | worker fail-fast 停止,由部署修复后重启;broker 从旧 committed offset 重投 |
 
-> Rust/TS(薄档)同样实现以上 4 行:Rust `MessageOutcome::{RejectSchema,DropForeignTenant}` + `should_commit_offset()`(测试 `rejects_unknown_schema_version` 断言 `!should_commit_offset()`、`null_and_empty_schema_treated_as_v1`);TS `PipelineOutcome` 各分支带 `committed` 标志(`rejected-schema`/`dropped-tenant`/`backpressure` 均 `committed:false`)。
+> 五语言 Kafka 适配器对 schema-reject / foreign-tenant 统一采用每分区最低 withheld offset 作为 commit ceiling:后续合法消息继续处理,但其 commit 不得跨过 ceiling;重启 / rebalance 从旧 committed offset 重投。仅瞬时 backpressure 使用 seek + pause + resume。
 
 **decode / parse-error —— 已钉死为 commit-skip(fixture 30,五语言对齐)**
 
@@ -102,4 +104,3 @@
 **该对齐的维度(协议引擎 / ADR-037 / 幂等 / 富档 batteries / Kafka offset-commit 契约)五语言已对齐,无需改代码的缺口。** 差异项要么是两档定位的有意设计(薄档无 typed/atomic/builtin、可观测 BYO),要么是发布动作(尚未 publish)。
 
 > offset-commit 契约**五行全部钉死、五语言对齐**(见 §4.5):4 行 schema/paused/tenant 由 fixture 16/17/18/28 + PR #545/#546 闭环;decode/parse-error 行由 fixture 30 钉成 commit-skip,Go/TS 已对齐。
-

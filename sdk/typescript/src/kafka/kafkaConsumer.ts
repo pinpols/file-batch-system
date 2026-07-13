@@ -176,7 +176,7 @@ export class KafkaConsumerAdapter implements Consumer {
    * `MessagePipeline.onMessage` through it). It returns a {@link MessageDisposition}
    * the adapter acts on AFTER the record is handled:
    *   - "commit"       → advance past this offset (accepted task / poison skip)
-   *   - "withhold"     → seek back + pause; the offset is NEVER crossed (§A/§1.9)
+   *   - "withhold"     → record commit ceiling + keep consuming; the offset is NEVER crossed (§A/§1.9)
    *   - "backpressure" → seek back + pause; resumed when a slot frees (§1.5/§2)
    *
    * This replaces the old `start()` that only forwarded records and never
