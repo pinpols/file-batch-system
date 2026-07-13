@@ -67,9 +67,9 @@ async def test_unsupported_schema_versions_dropped(
     dispatcher = TaskDispatcher(cfg, http)
     try:
         caplog.set_level("WARNING", logger="batch_worker_sdk.dispatcher.dispatcher")
-        # 未知大版本:不进 in-flight、不发 HTTP,且 offset 不提交(RETRY_LATER)——§A 契约。
+        # 未知大版本:不进 in-flight、不发 HTTP,且 offset 不提交(WITHHOLD)——§A 契约。
         disposition = await dispatcher.on_message(_msg(99, schema))
-        assert disposition is DispatchDisposition.RETRY_LATER
+        assert disposition is DispatchDisposition.WITHHOLD
         assert dispatcher.in_flight_count() == 0
         assert httpx_mock.get_requests() == []
         assert any("unsupported schemaVersion" in r.message for r in caplog.records)
@@ -92,7 +92,7 @@ async def test_malformed_schema_versions_rejected(
     try:
         caplog.set_level("WARNING", logger="batch_worker_sdk.dispatcher.dispatcher")
         disposition = await dispatcher.on_message(_msg(55, schema))
-        assert disposition is DispatchDisposition.RETRY_LATER
+        assert disposition is DispatchDisposition.WITHHOLD
         assert dispatcher.in_flight_count() == 0
         assert httpx_mock.get_requests() == []
         assert any("unsupported schemaVersion" in r.message for r in caplog.records)

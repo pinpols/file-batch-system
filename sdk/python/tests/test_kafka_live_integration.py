@@ -46,6 +46,57 @@ async def _wait_until(predicate, timeout_s: float = 20.0) -> None:
     raise AssertionError("timed out waiting for live SDK pipeline")
 
 
+def _dispatch_payload(
+    tenant: str,
+    task_id: int,
+    value: str,
+    invocation_id: str,
+    *,
+    schema_version: str = "v2",
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": schema_version,
+        "tenantId": tenant,
+        "taskId": task_id,
+        "workerType": "echo",
+        "parameters": {"value": value},
+        "runtimeAttributes": {"partitionInvocationId": invocation_id},
+        "traceId": "trace-live-python",
+    }
+
+
+def _assert_live_results(
+    claims: list[dict[str, Any]],
+    reports: list[dict[str, Any]],
+    tenant: str,
+    worker_code: str,
+) -> None:
+    claims_by_task = {claim["_taskId"]: claim for claim in claims}
+    reports_by_task = {report["taskId"]: report for report in reports}
+
+    assert set(claims_by_task) == {9001, 9004}
+    assert set(reports_by_task) == {9001, 9004}
+    assert 9002 not in claims_by_task, "foreign-tenant record must never CLAIM"
+    assert 9003 not in claims_by_task, "unknown-schema record must never CLAIM"
+
+    first_claim = claims_by_task[9001]
+    assert first_claim["tenantId"] == tenant
+    assert first_claim["workerId"] == worker_code
+    assert first_claim["partitionInvocationId"] == "pinv-live-1"
+
+    first_report = reports_by_task[9001]
+    assert first_report["tenantId"] == tenant
+    assert first_report["workerId"] == worker_code
+    assert first_report["success"] is True
+    assert first_report["outputs"] == {"echo": "hello-live"}
+    assert first_report["partitionInvocationId"] == "pinv-live-1"
+
+    after_report = reports_by_task[9004]
+    assert after_report["success"] is True
+    assert after_report["outputs"] == {"echo": "after-withhold"}
+    assert after_report["partitionInvocationId"] == "pinv-live-4"
+
+
 @pytest.mark.skipif(
     not os.getenv("KAFKA_BOOTSTRAP"),
     reason="KAFKA_BOOTSTRAP not set; live broker integration skipped",
@@ -83,33 +134,31 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
             await consumer.start()
             await asyncio.sleep(1.0)
 
-            payload: dict[str, Any] = {
-                "schemaVersion": "v2",
-                "tenantId": tenant,
-                "taskId": 9001,
-                "workerType": "echo",
-                "parameters": {"value": "hello-live"},
-                "runtimeAttributes": {"partitionInvocationId": "pinv-live-1"},
-                "traceId": "trace-live-python",
-            }
+            payload = _dispatch_payload(tenant, 9001, "hello-live", "pinv-live-1")
             await producer.send_and_wait(topic, json.dumps(payload).encode("utf-8"))
 
-            await _wait_until(lambda: len(platform.get_reports()) >= 1)
+            # 横向对齐 Go / TS #826 / Rust:同一分区在正常消息之后连续遇到
+            # foreign-tenant 与未知 schema 大版本时,两条都必须 withhold(不提交),
+            # 但不能 pause 分区。最后一条本租户 v2 任务必须继续到达 handler。
+            # topic 默认单分区且 send_and_wait 串行,因此顺序稳定。
+            foreign = _dispatch_payload(
+                "foreign-tenant", 9002, "must-not-run-foreign", "pinv-live-2"
+            )
+            unsupported = _dispatch_payload(
+                tenant,
+                9003,
+                "must-not-run-v3",
+                "pinv-live-3",
+                schema_version="v3",
+            )
+            after_withhold = _dispatch_payload(tenant, 9004, "after-withhold", "pinv-live-4")
+            for message in (foreign, unsupported, after_withhold):
+                await producer.send_and_wait(topic, json.dumps(message).encode("utf-8"))
+
+            await _wait_until(lambda: len(platform.get_reports()) >= 2)
             await _wait_until(lambda: dispatcher.in_flight_count() == 0)
 
-            claims = platform.get_claims()
-            reports = platform.get_reports()
-            assert claims, "dispatcher must CLAIM before handler execution"
-            assert claims[0]["tenantId"] == tenant
-            assert claims[0]["workerId"] == worker_code
-            assert claims[0]["partitionInvocationId"] == "pinv-live-1"
-
-            report = reports[0]
-            assert report["tenantId"] == tenant
-            assert report["workerId"] == worker_code
-            assert report["success"] is True
-            assert report["outputs"] == {"echo": "hello-live"}
-            assert report["partitionInvocationId"] == "pinv-live-1"
+            _assert_live_results(platform.get_claims(), platform.get_reports(), tenant, worker_code)
         finally:
             if consumer is not None:
                 await consumer.stop()

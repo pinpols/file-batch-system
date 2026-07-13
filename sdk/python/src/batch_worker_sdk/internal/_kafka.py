@@ -67,13 +67,18 @@ def _jaas_field(jaas: str, field: str) -> str | None:
 
 
 class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
-    """rebalance 钩子 —— 分区分配变化时清空 paused 缓存。
+    """rebalance 钩子 —— 分区分配变化时清空容量 paused 缓存。
 
     aiokafka 的 ``pause(...)`` 是按 TopicPartition 维度的,在 poll 之间会
     保留但在 **rebalance** 时失效。因此 rebalance 后我们把容量维度的
-    ``_capacity_paused`` 重置为 ``False`` 并清空 poison/平台单分区 pause 账本
-    ``_poison_paused``;若仍处饱和状态,下一次 ``apply_backpressure`` 会
-    重新 pause。
+    ``_capacity_paused`` 重置为 ``False``;若仍处饱和状态,下一次
+    ``apply_backpressure`` 会重新 pause。
+
+    withhold(未知 schema / 外租户 / 不可处理)**不再** pause 分区,而是记
+    每分区 commit 天花板并继续消费(见 :class:`KafkaTaskConsumer`),因此
+    rebalance 无需清任何 poison 账本 —— 天花板从不 commit,revoke 后由后续
+    rebalance/重启从原位重投,保留旧天花板既无害也不需要主动清理(对齐 TS
+    #826 的 ``#withheld`` 生命周期)。
     """
 
     def __init__(self, parent: KafkaTaskConsumer) -> None:
@@ -84,12 +89,10 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
 
     async def on_partitions_assigned(self, assigned: set[TopicPartition]) -> None:
         logger.info("kafka rebalance: partitions assigned=%s", sorted(map(str, assigned)))
-        # aiokafka 的 pause 状态是按 partition 维度的;清空缓存,让下一次
-        # backpressure tick 在新分配上重新评估。容量维度与 poison/平台单分区
-        # 维度都要清(rebalance 后 Kafka 把所有新分配的分区默认置为 RESUMED,
-        # 旧的 poison pause 也不再对应新分区集合)。
+        # aiokafka 的 pause 状态是按 partition 维度的;清容量缓存,让下一次
+        # backpressure tick 在新分配上重新评估(rebalance 后 Kafka 把所有新
+        # 分配的分区默认置为 RESUMED)。
         self._parent._capacity_paused = False
-        self._parent._poison_paused.clear()
 
 
 class KafkaTaskConsumer:
@@ -126,15 +129,17 @@ class KafkaTaskConsumer:
         # 正常 stop() 也把 _running 置 False,靠本标志区分「优雅停」与「崩溃停」,
         # 供 client.metrics()/is_healthy() 判活(消费已停但 liveness 仍误报 UP 是隐患)。
         self._crashed: bool = False
-        # 两套独立的 pause 账本(对齐 Java 但拆分维度,见 apply_backpressure /
-        # _poll_loop 注释):
-        #   _capacity_paused —— 容量 / 平台维度的「整 assignment pause」缓存,
-        #     带 hysteresis,由 apply_backpressure 独占翻转。
-        #   _poison_paused   —— poison / 未知 schema / 平台单分区 RETRY_LATER 触发
-        #     的「单分区 pause」集合;容量维度 resume **不得** 清掉它,否则会把
-        #     poison 分区重新 resume 导致忙旋转重读重拒(fixture 30 / schema-reject)。
+        # 容量 / 平台维度的「整 assignment pause」缓存,带 hysteresis,由
+        # apply_backpressure 独占翻转(见其注释)。这是**唯一**会 pause 分区的
+        # 路径,且总有配对的 resume。
         self._capacity_paused: bool = False
-        self._poison_paused: set[TopicPartition] = set()
+        # 每分区 commit 天花板(对齐 Go ``committable`` / TS #826 ``#withheld``):
+        # withhold(未知 schema 大版本 / 外租户 / 不可处理)不 pause、不 seek,而是
+        # 把该 tp 遇到的**最低** withheld offset 记为天花板并继续消费;commit 时
+        # offset >= 天花板者一律不提交(留待 rebalance/重启从原位重投),offset <
+        # 天花板者按自身 offset 提交。既消除首条 withhold 的 head-of-line 冻结,又
+        # 保证 at-least-once 不丢、不越过 withheld offset。
+        self._withheld_ceilings: dict[TopicPartition, int] = {}
         self._poll_task: asyncio.Task[None] | None = None
 
     # ─── 公共生命周期 ────────────────────────────────────────────────
@@ -267,24 +272,35 @@ class KafkaTaskConsumer:
                 batches = await self._consumer.getmany(timeout_ms=poll_ms, max_records=64)
                 if not batches:
                     continue
-                # 按分区累积「可提交到哪」的 offset:仅 ACCEPTED / DROP_TERMINAL 前移;
-                # 遇 RETRY_LATER 立刻 seek 回本条 + pause 该分区,停止处理该分区剩余记录,
-                # offset 不前移(对齐 Java seek+pause / 不再无差别 commit)。
+                # 按分区累积「可提交到哪」的 offset。对齐 Go ``committable`` /
+                # TS #826:
+                #   - WITHHOLD → 记该 tp 的 commit 天花板(最低
+                #     withheld offset),**不 seek、不 pause、不 break**,继续处理
+                #     本批后续记录 → 消除 head-of-line 冻结。
+                #   - RETRY_LATER(平台 PAUSED / draining / fatal 的瞬时竞态)→
+                #     seek 回本条 + 临时 pause,条件恢复后由 apply_backpressure
+                #     resume;不把瞬时背压固化成长期 commit ceiling。
+                #   - ACCEPTED / DROP_TERMINAL → 候选前移 offset,但仅当本条
+                #     offset **严格小于** 该 tp 天花板时才提交(offset >= 天花板
+                #     一律不提交,留待重投);绝不夹逼到「天花板-1」(那会提交没
+                #     处理的中间 offset = 丢消息)。
                 commit_offsets: dict[TopicPartition, int] = {}
                 for tp, records in batches.items():
                     for rec in records:
                         disposition = await self._handle_record(tp, rec)
+                        if disposition is DispatchDisposition.WITHHOLD:
+                            self._lower_ceiling(tp, rec.offset)
+                            continue
                         if disposition is DispatchDisposition.RETRY_LATER:
                             self._consumer.seek(tp, rec.offset)
                             self._consumer.pause(tp)
-                            # 记到 poison/平台单分区账本(**不是** 容量账本):
-                            # 容量维度 resume 必须跳过这些分区,否则容量正常时
-                            # 会被全量 resume 导致忙旋转重读重拒(同一条 poison /
-                            # 未知 schema 反复投递)。该分区靠 rebalance(清账)
-                            # 或平台恢复重投后正常推进。
-                            self._poison_paused.add(tp)
+                            self._capacity_paused = True
                             break
-                        # 下一条待消费 offset = 本条 + 1
+                        # ACCEPTED / DROP_TERMINAL:仅在天花板之下才推进 offset。
+                        ceiling = self._withheld_ceilings.get(tp)
+                        if ceiling is not None and rec.offset >= ceiling:
+                            # 越过/等于天花板:提交会静默跳过 withheld offset → 不提交。
+                            continue
                         commit_offsets[tp] = rec.offset + 1
                 if commit_offsets:
                     try:
@@ -334,6 +350,17 @@ class KafkaTaskConsumer:
             return DispatchDisposition.DROP_TERMINAL
         return await self._dispatcher.on_message(msg)
 
+    def _lower_ceiling(self, tp: TopicPartition, offset: int) -> None:
+        """把分区 ``tp`` 的 commit 天花板降到不高于 ``offset``(保留最低 withheld)。
+
+        对齐 TS #826 ``loweredCeiling`` / Go ``committable`` 的最低 offset 语义:
+        一个分区可能先后 withhold 多条(乱序 offset),天花板须取其中**最低**者,
+        才能保证任何一条 withheld 都不会被后续 commit 越过。
+        """
+        current = self._withheld_ceilings.get(tp)
+        if current is None or offset < current:
+            self._withheld_ceilings[tp] = offset
+
     # ─── 容量感知的分区暂停 ───────────────────────────────────────────
 
     def apply_backpressure(self) -> None:
@@ -354,10 +381,10 @@ class KafkaTaskConsumer:
         未处理消息的 offset 永不提交,Kafka 会在 resume 后重投递。
 
         ``_capacity_paused`` 缓存上次容量/平台决策,避免每次 poll 都发
-        pause/resume RPC;rebalance 时由 listener 清空。**poison/平台单分区
-        pause(``_poison_paused``)与容量维度分开记账**:容量 resume 只
-        resume「assignment 减去 poison 分区」,绝不把 poison 分区一并 resume
-        (否则忙旋转重读重拒)。
+        pause/resume RPC;rebalance 时由 listener 清空。这是唯一 pause 分区的
+        路径且 pause/resume 成对;withhold 不再 pause(改走 commit 天花板,见
+        ``_poll_loop`` / ``_withheld_ceilings``),故 resume 直接覆盖整个
+        assignment,无需再排除任何「poison 分区」。
         """
         assert self._consumer is not None
         max_in_flight = self._config.max_concurrent_tasks
@@ -379,11 +406,9 @@ class KafkaTaskConsumer:
                 self._dispatcher.runtime_state,
             )
         elif self._capacity_paused and not platform_paused and capacity_resume_ok:
-            # 只 resume 非 poison 分区:poison/平台单分区 pause 由各自路径
-            # (rebalance 清账 / 平台重投)推进,容量恢复不该把它们 resume。
-            resumable = assignment - self._poison_paused
-            if resumable:
-                self._consumer.resume(*resumable)
+            # 容量恢复:resume 整个 assignment。withhold 不再 pause 分区(改走
+            # commit 天花板),故这里无需排除任何分区。
+            self._consumer.resume(*assignment)
             self._capacity_paused = False
             logger.info(
                 "kafka consumer resume: inFlight=%d max=%d state=%s (below max//2 hysteresis)",
@@ -398,17 +423,19 @@ class KafkaTaskConsumer:
     def paused(self) -> bool:
         """最近一次缓存的**容量 / 平台维度** pause 决策(供测试 + 诊断)。
 
-        不反映 poison/平台单分区 pause(见 :meth:`poison_paused_partitions`)。
+        withhold 不再 pause 分区(见 :meth:`withheld_ceilings`)。
         """
         return self._capacity_paused
 
     @property
-    def poison_paused_partitions(self) -> frozenset[TopicPartition]:
-        """当前因 poison / 未知 schema / 平台单分区 RETRY_LATER 被 pause 的分区快照。
+    def withheld_ceilings(self) -> dict[TopicPartition, int]:
+        """每分区 commit 天花板快照:``tp → 最低 withheld offset``(供测试 + 诊断)。
 
-        与容量维度账本分开(供测试 + 诊断);容量维度 resume 不会清空此集合。
+        withhold(未知 schema 大版本 / 外租户 / 不可处理)记天花板并继续消费;
+        offset >= 天花板者永不提交(留待 rebalance/重启重投),消除 head-of-line
+        冻结的同时保证不丢、不越过 withheld offset。
         """
-        return frozenset(self._poison_paused)
+        return dict(self._withheld_ceilings)
 
     @property
     def running(self) -> bool:
