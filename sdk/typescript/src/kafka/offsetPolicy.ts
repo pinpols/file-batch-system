@@ -12,7 +12,7 @@
  *     commit on that partition may cross the ceiling, so the withheld record is
  *     redelivered on the next rebalance/restart while subsequent records still
  *     flow (no head-of-line block). This mirrors the Go SDK's `committable`
- *     ceiling exactly; the Java SDK reaches the same invariant via seek-back.
+ *     ceiling exactly; Java/Python/Rust use the same per-partition invariant.
  *   - a "backpressure" disposition seeks BACK to the record's own offset and
  *     pauses the partition — that pause is TEMPORARY, resumed when a slot frees
  *     (§1.5 / §2). This is the only disposition that pauses.
