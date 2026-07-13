@@ -13,7 +13,6 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
@@ -282,12 +281,19 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     Instant finishedAt = BatchDateTimeSupport.utcNow();
     JobPartitionEntity partition =
         jobMappers.jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId());
-    if (task.getJobPartitionId() != null && Texts.hasText(command.partitionInvocationId())) {
-      if (partition == null
-          || partition.getCurrentInvocationId() == null
-          || !partition.getCurrentInvocationId().equals(command.partitionInvocationId())) {
-        throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
-      }
+    // R3-P1-10 一致性:report 纳入 partition invocation fence,与 renew/updateOutputSummary 同一守卫宇宙。
+    // partition-bound 且该 partition 已被 CLAIM(current_invocation_id 非空)的任务,其 report 必须携带
+    // 匹配的 invocationId —— 缺失或不匹配即拒(error.task.invocation_mismatch)。此前 report 是唯一"带
+    // invocationId 才校验,缺就跳过"的租约操作:reclaim 重派后陈旧 worker 的迟到 report(不带/带旧
+    // invocationId)会绕过 fence,用旧结果通过 finishTask CAS(RUNNING+version 为报告时重读的当前值)终结
+    // 已被 I2 重新领取的任务,造成 double-executor 且 I2 真结果被丢。收紧后陈旧 report 在写任何状态前即被拒。
+    // 豁免语义与 renew 对齐:虚拟父任务(ADR-009)/尚未 CLAIM 的 partition 其 current_invocation_id 恒为
+    // null → null 放行,不强制携带 invocationId(signalParentVirtualTask 的内部 report 天然满足)。
+    if (task.getJobPartitionId() != null
+        && partition != null
+        && partition.getCurrentInvocationId() != null
+        && !partition.getCurrentInvocationId().equals(command.partitionInvocationId())) {
+      throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
     }
     JobInstanceEntity jobInstance =
         jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
