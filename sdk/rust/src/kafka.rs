@@ -324,8 +324,8 @@ pub enum OffsetAction {
     /// record's offset is at/above the partition's withheld ceiling (a lower
     /// record was withheld earlier), so no commit ever crosses a withheld offset.
     Advance,
-    /// Withhold: rewind the position to this record so it is re-read next cycle /
-    /// after capacity resume. Committed offset is NOT advanced.
+    /// Transient retry: rewind the position to this record so it is re-read next
+    /// cycle / after capacity resume. Committed offset is NOT advanced.
     RewindRetry,
     /// Withhold via commit ceiling: record this (topic, partition)'s LOWEST
     /// withheld offset and **keep consuming** subsequent records (no seek, no
@@ -520,8 +520,8 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
                 }
             }
             OffsetAction::RewindRetry => {
-                // Withhold a valid-but-deferred record (capacity / transient
-                // handler error): rewind so it is re-read on the next cycle /
+                // Retry a valid-but-deferred record (capacity / transient handler
+                // error): rewind so it is re-read on the next cycle /
                 // after capacity resume. The committed offset is NOT advanced, so
                 // a later record can never commit past it.
                 self.rewind_to(&topic, partition, offset);
