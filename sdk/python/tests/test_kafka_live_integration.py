@@ -151,18 +151,14 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
                 "pinv-live-3",
                 schema_version="v3",
             )
-            after_withhold = _dispatch_payload(
-                tenant, 9004, "after-withhold", "pinv-live-4"
-            )
+            after_withhold = _dispatch_payload(tenant, 9004, "after-withhold", "pinv-live-4")
             for message in (foreign, unsupported, after_withhold):
                 await producer.send_and_wait(topic, json.dumps(message).encode("utf-8"))
 
             await _wait_until(lambda: len(platform.get_reports()) >= 2)
             await _wait_until(lambda: dispatcher.in_flight_count() == 0)
 
-            _assert_live_results(
-                platform.get_claims(), platform.get_reports(), tenant, worker_code
-            )
+            _assert_live_results(platform.get_claims(), platform.get_reports(), tenant, worker_code)
         finally:
             if consumer is not None:
                 await consumer.stop()
