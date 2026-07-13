@@ -16,8 +16,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Lane J §J1:租户自检 fail-safe — Kafka ACL 漂移 / consumer group 配置失误导致拿到非本租户消息时, onMessage 在 fatal /
- * draining / 平台态 / validate 检查后,立即 ERROR log + drop, 不投递到 executor 也不调用 HTTP claim,本进程不串任务。
+ * Lane J §J1:租户自检 fail-safe — Kafka ACL 漂移 / consumer group 配置失误导致拿到非本租户消息时,立即 ERROR log +
+ * WITHHOLD,不投递到 executor 也不调用 HTTP claim,本进程不串任务;consumer 继续服务本租户消息。
  */
 class TaskDispatcherTenantMismatchTest {
 
@@ -54,11 +54,11 @@ class TaskDispatcherTenantMismatchTest {
     TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(foreign);
 
     // 断言: 既不 claim 也不调 handler.execute
-    assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
+    assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
     verify(http, never()).claim(anyLong(), anyString(), any());
     verify(handler, never()).execute(any());
-    // tenant mismatch 是 ACL / consumer group 漂移信号:进入 fatal,让 liveness/运维介入,offset 不前移。
-    assertThat(dispatcher.isFatal()).isTrue();
+    // 安全仍 fail-closed(不 claim/不 commit),但不 fail-stop 整个 worker。
+    assertThat(dispatcher.isFatal()).isFalse();
     assertThat(dispatcher.isDraining()).isFalse();
   }
 
