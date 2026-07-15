@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from aiokafka import AIOKafkaProducer
+from aiokafka.admin import AIOKafkaAdminClient, NewTopic
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher
 from batch_worker_sdk.internal._http import PlatformHttpClient
@@ -121,13 +122,17 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
             kafka_poll_interval=timedelta(milliseconds=100),
         )
         http = PlatformHttpClient(cfg)
+        admin = AIOKafkaAdminClient(bootstrap_servers=bootstrap)
         producer = AIOKafkaProducer(bootstrap_servers=bootstrap)
         consumer: KafkaTaskConsumer | None = None
         try:
+            await admin.start()
+            # Apache Kafka 镜像默认可能关闭自动建 topic。显式建临时 topic，避免
+            # 测试依赖 broker 的 auto.create.topics.enable 默认值或 metadata race。
+            await admin.create_topics(
+                [NewTopic(name=topic, num_partitions=1, replication_factor=1)]
+            )
             await producer.start()
-            # 先写 seed 让 broker 创建 topic;consumer 使用 latest,后续只消费真正测试消息。
-            await producer.send_and_wait(topic, b'{"seed":true}')
-            await asyncio.sleep(1.0)
 
             dispatcher = TaskDispatcher(cfg, http, {"echo": EchoHandler()})
             consumer = KafkaTaskConsumer(cfg, dispatcher)
@@ -163,4 +168,5 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
             if consumer is not None:
                 await consumer.stop()
             await producer.stop()
+            await admin.close()
             await http.close()

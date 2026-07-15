@@ -16,7 +16,8 @@
 # 红线 license(命中即 fail):
 #   - GNU General Public License (GPL) without "Classpath Exception" / "CPE"
 #   - GNU Affero General Public License (AGPL)
-#   - 任何 commons-clause / SSPL(Server-Side Public License)
+#   - 任何 Commons-Clause / SSPL(Server-Side Public License)
+#   - Business Source License / Elastic License / CC-BY-NC 等商用限制许可
 #
 # 允许的双许可路径(grep 出现时不报警,因为我们已在 NOTICE / license-risk 中声明走 OR 的另一边):
 #   - JSqlParser: LGPL-2.1 OR Apache-2.0 → 走 Apache-2.0
@@ -61,6 +62,12 @@ RED_LINE_PATTERNS=(
   'Server[ -]Side Public License'
   'SSPL'
   'Commons Clause'
+  'Business Source License'
+  'BUSL'
+  'Elastic License'
+  'Elastic-2\.0'
+  'CC-BY-NC'
+  'Creative Commons.*NonCommercial'
 )
 
 VIOLATIONS=()
