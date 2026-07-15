@@ -15,7 +15,18 @@
 ### 一次性脚本(批量幂等)
 
 ```bash
-psql -d batch_business -f scripts/db/business/rls-phase-a.sql
+# 密码由运维 / secret 后端(Vault / K8s Secret)注入,脚本不含默认密码;
+# 缺 -v writer_password / admin_password 会 fail-safe RAISE 报错(不会建弱密码角色)。
+psql -d batch_business -v ON_ERROR_STOP=1 \
+  -v writer_password="$BIZ_WRITER_PASSWORD" \
+  -v admin_password="$BIZ_ADMIN_PASSWORD" \
+  -f scripts/db/business/rls-phase-a.sql
+
+# 只读排故角色(readonly = RLS 生效;readonly_all = BYPASSRLS 跨租只读)
+psql -d batch_business -v ON_ERROR_STOP=1 \
+  -v readonly_password="$BIZ_READONLY_PASSWORD" \
+  -v readonly_all_password="$BIZ_READONLY_ALL_PASSWORD" \
+  -f scripts/db/business/diagnostic-readonly-role.sql
 ```
 
 效果:
@@ -250,7 +261,7 @@ o.p.util.PSQLException: ERROR: new row violates row-level security policy
 {"rls":{"status":"DOWN","details":{"missingPolicy":["biz.foo"]}}}
 ```
 
-**修复**:跑 `psql -d batch_business -f scripts/db/business/rls-phase-a.sql`(脚本幂等),或检查新加表是否补了 migration(见 §5)。
+**修复**:跑 `psql -d batch_business -v ON_ERROR_STOP=1 -v writer_password="$BIZ_WRITER_PASSWORD" -v admin_password="$BIZ_ADMIN_PASSWORD" -f scripts/db/business/rls-phase-a.sql`(脚本幂等;密码由运维/secret 后端注入,缺失会 fail-safe 报错不建弱角色),或检查新加表是否补了 migration(见 §5)。
 
 ## 7. 性能影响
 
