@@ -1,0 +1,35 @@
+name: license-review
+
+# License allowlist gate (Task A).
+#
+# Blocks a build that contains a dependency under a strong-copyleft or a
+# commercial-restricted license. The repository already owns a deterministic
+# Maven license gate; run that gate here instead of relying on GitHub's
+# optional Dependency Review service, which is unavailable in some repository
+# plans and otherwise makes this required check fail before it can inspect code.
+#
+# 关键修正:只拦**强 copyleft + 商用限制**许可。**不拦 LGPL / EPL / MPL** ——
+# 这些弱 copyleft 许可对 jar 形式的依赖分发是安全的(以库/jar 依赖分发不触发传染),
+# 而 Logback 走 EPL-1.0 / LGPL-2.1 双许可,是标准安全 jar 依赖。若把 LGPL 放进 deny,
+# 会误伤未来 Logback 升级 PR。故弱 copyleft 一律不拦。
+
+on:
+  # PR 触发 only; the full CI gate also runs the same script on main.
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  license-review:
+    name: dependency license review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: License compliance
+        run: bash scripts/ci/check-dependency-licenses.sh

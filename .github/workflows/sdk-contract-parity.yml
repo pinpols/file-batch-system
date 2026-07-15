@@ -253,44 +253,54 @@ jobs:
       - name: Install native build deps
         run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev libssl-dev netcat-openbsd
 
-      - name: Start Redpanda Kafka broker
+      - name: Start Kafka broker (KRaft single node)
+        # apache/kafka(Apache-2.0)取代 redpandadata/redpanda(BSL)。KRaft 单节点、
+        # 无 ZooKeeper。端口映射保持 -p 19092:9092(host 19092 → container 9092),
+        # 与下游 KAFKA_BOOTSTRAP=localhost:19092 一致;broker 对外 advertise
+        # PLAINTEXT://localhost:19092,使 host 侧客户端收到可回连的地址。
         run: |
-          docker run -d --name sdk-live-redpanda \
+          docker run -d --name sdk-live-kafka \
             -p 19092:9092 \
-            docker.redpanda.com/redpandadata/redpanda:v24.2.17 \
-            redpanda start \
-              --overprovisioned \
-              --smp 1 \
-              --memory 768M \
-              --reserve-memory 0M \
-              --node-id 0 \
-              --check=false \
-              --kafka-addr PLAINTEXT://0.0.0.0:9092 \
-              --advertise-kafka-addr PLAINTEXT://127.0.0.1:19092
+            -e KAFKA_NODE_ID=0 \
+            -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=0@localhost:9093 \
+            -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS=1 \
+            -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            -e CLUSTER_ID=5L6g3nShT-eMCtK--X86sw \
+            apache/kafka:3.9.1
 
-      - name: Wait for Redpanda broker readiness
-        # 就绪等待 ONLY(绝不重试测试掩盖真 bug)。原先仅 `nc -z` 探端口:socket 一 bind
+      - name: Wait for Kafka broker readiness
+        # 就绪等待 ONLY(绝不重试测试掩盖真 bug)。仅 `nc -z` 探端口不够:socket 一 bind
         # 就通过——但此时 KRaft 还没选出 leader / Kafka API 尚不可服务,下游各语言 harness
-        # 的 waitFor 便偶发超时(nightly flake 根因)。改为轮询 `rpk cluster health` 直到
-        # 集群自报 healthy,再确认 runner 侧 advertised host:port 可达。放宽超时到 180s。
+        # 的 waitFor 便偶发超时(nightly flake 根因)。改为在容器内轮询
+        # kafka-broker-api-versions.sh 直到 broker 真正响应 Kafka API,再确认 runner 侧
+        # advertised host:port 可达。超时放宽到 240s(镜像冷拉 + KRaft 格式化更慢)。
         run: |
-          deadline=180
-          until docker exec sdk-live-redpanda rpk cluster health 2>/dev/null | grep -Eq 'Healthy:[[:space:]]+true'; do
+          deadline=240
+          until docker exec sdk-live-kafka \
+              /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1; do
             deadline=$((deadline - 3))
             if (( deadline <= 0 )); then
-              echo "Redpanda did not report healthy within timeout"
-              docker logs sdk-live-redpanda || true
+              echo "Kafka did not become ready within timeout"
+              docker logs sdk-live-kafka || true
               exit 1
             fi
             sleep 3
           done
-          # advertised endpoint 从 runner host 可达性二次确认(rpk 在容器内自查,这里查外侧映射)。
+          # advertised endpoint 从 runner host 可达性二次确认(上面在容器内自查,这里查外侧映射)。
           for _ in $(seq 1 30); do
-            nc -z 127.0.0.1 19092 && { echo "Redpanda healthy and reachable on 127.0.0.1:19092"; exit 0; }
+            nc -z 127.0.0.1 19092 && { echo "Kafka ready and reachable on 127.0.0.1:19092"; exit 0; }
             sleep 2
           done
-          echo "Redpanda healthy in-container but advertised port not reachable from runner"
-          docker logs sdk-live-redpanda || true
+          echo "Kafka ready in-container but advertised port not reachable from runner"
+          docker logs sdk-live-kafka || true
           exit 1
 
       - name: Run SDK live transport gate
@@ -301,7 +311,7 @@ jobs:
       - name: Dump broker logs on failure
         if: failure()
         run: |
-          echo "::group::redpanda"; docker logs sdk-live-redpanda --tail 200 2>/dev/null || true; echo "::endgroup::"
+          echo "::group::kafka"; docker logs sdk-live-kafka --tail 200 2>/dev/null || true; echo "::endgroup::"
           docker ps -a || true
 
   # Parity report — soft-mode: log diff between Java and Python pass sets,
