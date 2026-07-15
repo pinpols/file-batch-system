@@ -17,7 +17,13 @@ name: sdk-contract-parity
 #
 # Ruleset required(2026-06-22):validate-fixtures + {java,python,go,rust,typescript}
 # contract 已设为阻塞门禁。sdk-live-transport(真 kafka,偶发 flake)与 parity-report
-# 保持非必需信号。
+# 保持非必需信号(PR 上非阻塞)。
+#
+# nightly 常态化(2026-07-15):sdk-live-transport 这条五语言 live-Kafka 一致性 gate
+# 原先只在碰 sdk 路径的 PR 上跑 → 数周无 sdk PR 时长期 dormant,withhold/HOL 这类
+# 五语言集体回归会潜伏到某个偶然 PR 才暴露。故加 schedule cron:每天在 main 全跑一次
+# (含 live-transport),把潜伏回归压到 24h 内暴露。schedule 无 base diff → 走与
+# merge_group/workflow_dispatch 相同的「非 PR 事件回退全跑」路径(见 `changes` job)。
 
 on:
   # 2026-06-22:契约检查升为 ruleset required(阻塞合并)。required check 必须在
@@ -32,6 +38,11 @@ on:
     types:
       - checks_requested
   workflow_dispatch:
+  schedule:
+    # 每天 16:00 UTC(北京 00:00)在 main 全跑一次,专治 live-transport 长期 dormant。
+    # 低峰、每日一次(非每小时);与 sdk-orchestrator-e2e / staging-gate 的 18:00 错峰,
+    # 避免同时段抢 runner。schedule 事件默认在默认分支(main)上运行。
+    - cron: '0 16 * * *'
 
 permissions:
   contents: read
@@ -42,7 +53,9 @@ concurrency:
 
 jobs:
   # Job 0:探测 sdk 相关变更。PR 事件按 base diff 判定;非 PR 事件(merge_group /
-  # workflow_dispatch)无 base,filter 返回 true → 回退全跑(安全)。
+  # workflow_dispatch / schedule)无 base diff,dorny/paths-filter 对非 PR 事件返回
+  # true → 各下游 job 的 `if: ... || github.event_name != 'pull_request'` 再兜一层 →
+  # 回退全跑(安全)。schedule(nightly)即走此路径:全语言 contract + live-transport 都真跑。
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -254,21 +267,42 @@ jobs:
               --check=false \
               --kafka-addr PLAINTEXT://0.0.0.0:9092 \
               --advertise-kafka-addr PLAINTEXT://127.0.0.1:19092
-          deadline=60
-          while (( deadline > 0 )); do
-            if nc -z 127.0.0.1 19092; then
-              exit 0
+
+      - name: Wait for Redpanda broker readiness
+        # 就绪等待 ONLY(绝不重试测试掩盖真 bug)。原先仅 `nc -z` 探端口:socket 一 bind
+        # 就通过——但此时 KRaft 还没选出 leader / Kafka API 尚不可服务,下游各语言 harness
+        # 的 waitFor 便偶发超时(nightly flake 根因)。改为轮询 `rpk cluster health` 直到
+        # 集群自报 healthy,再确认 runner 侧 advertised host:port 可达。放宽超时到 180s。
+        run: |
+          deadline=180
+          until docker exec sdk-live-redpanda rpk cluster health 2>/dev/null | grep -Eq 'Healthy:[[:space:]]+true'; do
+            deadline=$((deadline - 3))
+            if (( deadline <= 0 )); then
+              echo "Redpanda did not report healthy within timeout"
+              docker logs sdk-live-redpanda || true
+              exit 1
             fi
-            sleep 1
-            deadline=$((deadline - 1))
+            sleep 3
           done
-          docker logs sdk-live-redpanda
+          # advertised endpoint 从 runner host 可达性二次确认(rpk 在容器内自查,这里查外侧映射)。
+          for _ in $(seq 1 30); do
+            nc -z 127.0.0.1 19092 && { echo "Redpanda healthy and reachable on 127.0.0.1:19092"; exit 0; }
+            sleep 2
+          done
+          echo "Redpanda healthy in-container but advertised port not reachable from runner"
+          docker logs sdk-live-redpanda || true
           exit 1
 
       - name: Run SDK live transport gate
         env:
           KAFKA_BOOTSTRAP: localhost:19092
         run: bash scripts/ci/run-sdk-live-transport-gate.sh
+
+      - name: Dump broker logs on failure
+        if: failure()
+        run: |
+          echo "::group::redpanda"; docker logs sdk-live-redpanda --tail 200 2>/dev/null || true; echo "::endgroup::"
+          docker ps -a || true
 
   # Parity report — soft-mode: log diff between Java and Python pass sets,
   # but never fail the build (Python is xfail until Lane Q lands). When

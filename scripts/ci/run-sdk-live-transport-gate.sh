@@ -24,6 +24,33 @@ fi
 
 echo "[sdk-live] KAFKA_BOOTSTRAP=${KAFKA_BOOTSTRAP}"
 echo "[sdk-live] Python=$("$PYTHON_BIN" -c 'import sys; print(sys.executable)')"
+
+# Broker readiness gate — READINESS WAIT ONLY (never a test retry; a genuine
+# broker/SDK bug must still fail loudly). The per-language live suites below
+# assume KAFKA_BOOTSTRAP already serves the Kafka API. Under CI the workflow
+# already polls `rpk cluster health`; this host-side TCP readiness loop is
+# defense-in-depth so a still-warming broker never surfaces as a spurious
+# per-language waitFor timeout — and so ad-hoc local runs (broker started by
+# hand) also wait instead of racing the first Kafka call.
+wait_for_kafka() {
+  local hostport="$1" host port deadline
+  host="${hostport%%:*}"
+  port="${hostport##*:}"
+  deadline="${KAFKA_READY_TIMEOUT:-120}"
+  echo "[sdk-live] waiting for Kafka at ${host}:${port} (timeout ${deadline}s)"
+  while (( deadline > 0 )); do
+    if (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; then
+      exec 3>&- 2>/dev/null || true
+      echo "[sdk-live] Kafka reachable at ${host}:${port}"
+      return 0
+    fi
+    sleep 2
+    deadline=$((deadline - 2))
+  done
+  echo "[sdk-live] ERROR: Kafka not reachable at ${host}:${port} within timeout" >&2
+  return 1
+}
+wait_for_kafka "$KAFKA_BOOTSTRAP"
 "$PYTHON_BIN" - <<'PY'
 import sys
 
