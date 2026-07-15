@@ -25,6 +25,14 @@ SECRETS_DIR="${BIZ_SHARD_SECRETS_DIR:-secrets/biz-shards}"
 CONTAINER="batch-postgres-biz-$KEY"
 PRIMARY_NAME="${PG_CONTAINER:-batch-postgres-primary}"
 
+# biz 角色密码:必须显式注入(SQL 脚本不再含默认密码)。本地默认复用本地 DB 密码;
+# prod 请 export BIZ_WRITER_PASSWORD / BIZ_ADMIN_PASSWORD / BIZ_READONLY_PASSWORD /
+# BIZ_READONLY_ALL_PASSWORD 覆盖为真实凭据(见 docs/runbook/multi-tenant-rls.md)。
+BIZ_WRITER_PASSWORD="${BIZ_WRITER_PASSWORD:-$POSTGRES_PASSWORD}"
+BIZ_ADMIN_PASSWORD="${BIZ_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
+BIZ_READONLY_PASSWORD="${BIZ_READONLY_PASSWORD:-$POSTGRES_PASSWORD}"
+BIZ_READONLY_ALL_PASSWORD="${BIZ_READONLY_ALL_PASSWORD:-$POSTGRES_PASSWORD}"
+
 echo "==> [${KEY}] 1/5 起 PG 容器(挂运行栈网络)"
 if ! docker ps --format '{{.Names}}' | grep -qx "$PRIMARY_NAME"; then
   echo "    ✗ 基线栈 $PRIMARY_NAME 未运行(取网络/镜像/凭据参照)" >&2
@@ -63,12 +71,16 @@ n_tables="$(docker exec "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" 
 echo "    就绪;biz 表数=$n_tables"
 
 echo "==> [${KEY}] 3/5 角色+授权+RLS(rls-phase-a,幂等)"
-docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 \
+  -v writer_password="$BIZ_WRITER_PASSWORD" -v admin_password="$BIZ_ADMIN_PASSWORD" \
+  -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   < scripts/db/business/rls-phase-a.sql >/dev/null
 echo "    writer/admin + grants + RLS 已施加"
 
 echo "==> [${KEY}] 4/5 只读排故角色(diagnostic-readonly-role,幂等)"
-docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 \
+  -v readonly_password="$BIZ_READONLY_PASSWORD" -v readonly_all_password="$BIZ_READONLY_ALL_PASSWORD" \
+  -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   < scripts/db/business/diagnostic-readonly-role.sql >/dev/null
 echo "    readonly / readonly_all 已建"
 

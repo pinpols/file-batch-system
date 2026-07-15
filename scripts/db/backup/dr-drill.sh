@@ -150,8 +150,12 @@ if [[ "$HAS_BUSINESS" == "1" ]]; then
   restore_db "$TGT_BUSINESS" "$INDB_DIR/$BUSINESS_DB.dump"
   # §2.1 step4:business 恢复后重跑 RLS(逻辑 dump 不保证 role/policy 完整)
   if [[ -f "$RLS_SQL" ]]; then
+    # rls-phase-a.sql 不再含默认密码,须显式注入(角色若已存在则跳过创建,仅重建 grants/policy)。
     docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
-      psql -U "$PG_USER" -d "$TGT_BUSINESS" -v ON_ERROR_STOP=0 < "$RLS_SQL" >/dev/null 2>&1 || true
+      psql -U "$PG_USER" -d "$TGT_BUSINESS" -v ON_ERROR_STOP=0 \
+      -v writer_password="${BIZ_WRITER_PASSWORD:-$PG_PASSWORD}" \
+      -v admin_password="${BIZ_ADMIN_PASSWORD:-$PG_PASSWORD}" \
+      < "$RLS_SQL" >/dev/null 2>&1 || true
     echo "  ✓ 已重跑 rls-phase-a.sql"
   else
     echo "  ${YELLOW}⚠ 未找到 $RLS_SQL,跳过 RLS 重建${RESET}"

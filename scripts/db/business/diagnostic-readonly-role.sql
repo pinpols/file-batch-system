@@ -18,25 +18,44 @@
 --   · 绝不要用 batch_business_writer 排故(会误写),更不要用 superuser(RLS 对它豁免=隔离失效)。
 -- =========================================================
 
--- RLS 生效的租户内只读。
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_readonly') THEN
-    CREATE ROLE batch_business_readonly LOGIN PASSWORD 'change_me_in_prod' NOBYPASSRLS;
-    COMMENT ON ROLE batch_business_readonly IS
-      'biz.* read-only, RLS enforced (per-tenant diagnostics). SELECT only.';
-  END IF;
-END $$;
+-- 密码必须由调用方显式注入,禁用已知默认密码(readonly_all 是 BYPASSRLS,尤须显式密码)。
+--   调用方须传:  psql -v readonly_password=... -v readonly_all_password=...  (建议 -v ON_ERROR_STOP=1)
+--   未传 / 为空 → RAISE EXCEPTION 失败退出,绝不退回弱默认密码。
+--   prod 由运维 / secret 后端注入;本地 / sim 由 provision-biz-shard.sh / sim-harness.sh 传本地值。
 
--- BYPASSRLS 的跨租户只读(只读,审计)。
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_readonly_all') THEN
-    CREATE ROLE batch_business_readonly_all LOGIN PASSWORD 'change_me_in_prod' BYPASSRLS;
-    COMMENT ON ROLE batch_business_readonly_all IS
-      'biz.* cross-tenant read-only, BYPASSRLS (audited diagnostics). SELECT only.';
-  END IF;
-END $$;
+-- RLS 生效的租户内只读。
+\if :{?readonly_password}
+  SELECT (:'readonly_password' = '') AS _ro_pw_empty \gset
+  \if :_ro_pw_empty
+    DO $$ BEGIN RAISE EXCEPTION 'readonly_password 为空 — 拒绝创建弱密码角色 batch_business_readonly'; END $$;
+  \else
+    SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_readonly') AS _mk_ro \gset
+    \if :_mk_ro
+      CREATE ROLE batch_business_readonly LOGIN PASSWORD :'readonly_password' NOBYPASSRLS;
+      COMMENT ON ROLE batch_business_readonly IS
+        'biz.* read-only, RLS enforced (per-tenant diagnostics). SELECT only.';
+    \endif
+  \endif
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'readonly_password 未注入 — 拒绝用默认密码创建 batch_business_readonly(psql -v readonly_password=...)'; END $$;
+\endif
+
+-- BYPASSRLS 的跨租户只读(只读,审计)。BYPASSRLS = 看全部租户,密码务必显式注入。
+\if :{?readonly_all_password}
+  SELECT (:'readonly_all_password' = '') AS _roa_pw_empty \gset
+  \if :_roa_pw_empty
+    DO $$ BEGIN RAISE EXCEPTION 'readonly_all_password 为空 — 拒绝创建弱密码 BYPASSRLS 角色 batch_business_readonly_all'; END $$;
+  \else
+    SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_readonly_all') AS _mk_roa \gset
+    \if :_mk_roa
+      CREATE ROLE batch_business_readonly_all LOGIN PASSWORD :'readonly_all_password' BYPASSRLS;
+      COMMENT ON ROLE batch_business_readonly_all IS
+        'biz.* cross-tenant read-only, BYPASSRLS (audited diagnostics). SELECT only.';
+    \endif
+  \endif
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'readonly_all_password 未注入 — 拒绝用默认密码创建 BYPASSRLS 角色 batch_business_readonly_all(psql -v readonly_all_password=...)'; END $$;
+\endif
 
 GRANT USAGE ON SCHEMA biz TO batch_business_readonly, batch_business_readonly_all;
 GRANT SELECT ON ALL TABLES IN SCHEMA biz
