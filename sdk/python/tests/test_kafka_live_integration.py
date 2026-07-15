@@ -127,7 +127,7 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
         consumer: KafkaTaskConsumer | None = None
         try:
             await admin.start()
-            # Apache Kafka 镜像默认可能关闭自动建 topic。显式建临时 topic，避免
+            # Apache Kafka 镜像默认可能关闭自动建 topic。显式建临时 topic,避免
             # 测试依赖 broker 的 auto.create.topics.enable 默认值或 metadata race。
             await admin.create_topics(
                 [NewTopic(name=topic, num_partitions=1, replication_factor=1)]
