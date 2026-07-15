@@ -22,24 +22,44 @@
 -- ---------------------------------------------------------
 -- 1. DB roles 拆分:应用 R/W(RLS 强制) vs 平台聚合(BYPASSRLS)
 -- ---------------------------------------------------------
+-- 密码必须由调用方显式注入,禁用已知默认密码(避免固定密码后门,BYPASSRLS 角色尤甚)。
+--   调用方须传:  psql -v writer_password=... -v admin_password=...  (并建议 -v ON_ERROR_STOP=1)
+--   未传 / 为空 → 脚本 RAISE EXCEPTION 失败退出,绝不退回弱默认密码。
+--   prod:由运维 / secret 后端(Vault / K8s Secret)注入真实密码,见 docs/runbook/multi-tenant-rls.md。
+--   本地 / sim:由 provision-biz-shard.sh / sim-harness.sh 传本地开发值。
+
 -- 应用 worker role(RLS 生效)。已有部署 batch_user 继续可用,新部署优先用此 role。
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_writer') THEN
-    CREATE ROLE batch_business_writer LOGIN PASSWORD 'change_me_in_prod';
-    COMMENT ON ROLE batch_business_writer IS 'biz.* R/W with RLS enforced. Phase A.';
-  END IF;
-END $$;
+\if :{?writer_password}
+  SELECT (:'writer_password' = '') AS _writer_pw_empty \gset
+  \if :_writer_pw_empty
+    DO $$ BEGIN RAISE EXCEPTION 'writer_password 为空 — 拒绝创建弱密码角色 batch_business_writer'; END $$;
+  \else
+    SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_writer') AS _mk_writer \gset
+    \if :_mk_writer
+      CREATE ROLE batch_business_writer LOGIN PASSWORD :'writer_password';
+      COMMENT ON ROLE batch_business_writer IS 'biz.* R/W with RLS enforced. Phase A.';
+    \endif
+  \endif
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'writer_password 未注入 — 拒绝用默认密码创建 batch_business_writer(psql -v writer_password=...)'; END $$;
+\endif
 
 -- 平台聚合 role(BYPASSRLS,跨租户报表 / forensic export 用)。
--- 严禁给业务 worker 用此 role。审计日志按 role 名标记区分。
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_admin') THEN
-    CREATE ROLE batch_business_admin LOGIN PASSWORD 'change_me_in_prod' BYPASSRLS;
-    COMMENT ON ROLE batch_business_admin IS 'BYPASSRLS for platform-wide aggregation only. Audited.';
-  END IF;
-END $$;
+-- 严禁给业务 worker 用此 role。审计日志按 role 名标记区分。BYPASSRLS = 绕过租户隔离,密码务必显式注入。
+\if :{?admin_password}
+  SELECT (:'admin_password' = '') AS _admin_pw_empty \gset
+  \if :_admin_pw_empty
+    DO $$ BEGIN RAISE EXCEPTION 'admin_password 为空 — 拒绝创建弱密码 BYPASSRLS 角色 batch_business_admin'; END $$;
+  \else
+    SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_admin') AS _mk_admin \gset
+    \if :_mk_admin
+      CREATE ROLE batch_business_admin LOGIN PASSWORD :'admin_password' BYPASSRLS;
+      COMMENT ON ROLE batch_business_admin IS 'BYPASSRLS for platform-wide aggregation only. Audited.';
+    \endif
+  \endif
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'admin_password 未注入 — 拒绝用默认密码创建 BYPASSRLS 角色 batch_business_admin(psql -v admin_password=...)'; END $$;
+\endif
 
 GRANT USAGE ON SCHEMA biz TO batch_business_writer, batch_business_admin;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA biz

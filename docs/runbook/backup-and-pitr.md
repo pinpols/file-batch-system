@@ -123,7 +123,12 @@ createdb -h $TARGET -U postgres batch_business
 pg_restore -h $TARGET -U postgres -d batch_platform -j4 --clean --if-exists batch_platform-<TS>.dump
 pg_restore -h $TARGET -U postgres -d batch_business -j4 --clean --if-exists batch_business-<TS>.dump
 # 4. business 库恢复后必须重跑 RLS(逻辑 dump 不带 role/policy 的完整保证)
-psql -h $TARGET -d batch_business -f scripts/db/business/rls-phase-a.sql
+#    密码由运维/secret 后端注入;缺 -v writer_password/admin_password 会 fail-safe 报错(不建弱角色)。
+#    角色若已存在(role 是 cluster-global,survives db restore)则脚本跳过创建,仅重建 grants/policy。
+psql -h $TARGET -d batch_business -v ON_ERROR_STOP=1 \
+  -v writer_password="$BIZ_WRITER_PASSWORD" \
+  -v admin_password="$BIZ_ADMIN_PASSWORD" \
+  -f scripts/db/business/rls-phase-a.sql
 # 5. 校验(见 §2.3)
 ```
 
