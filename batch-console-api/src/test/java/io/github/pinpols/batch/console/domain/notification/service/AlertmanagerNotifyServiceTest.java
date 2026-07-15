@@ -165,6 +165,54 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
+  void reverseLooksUpTenantFromCommonLabels() {
+    // §4/§7 硬前置:按 payload 的 tenant label 反查该租户渠道,而非一律落 system。
+    AlertmanagerWebhookPayload payload =
+        new AlertmanagerWebhookPayload(
+            "4",
+            "gk",
+            0,
+            "firing",
+            "batch-sla",
+            Map.of(),
+            Map.of("alertname", "X", "severity", "critical", "tenant", "ta"),
+            Map.of(),
+            null,
+            List.of(
+                new AlertmanagerAlert(
+                    "firing",
+                    Map.of("alertname", "X", "tenant", "ta"),
+                    Map.of(),
+                    null,
+                    null,
+                    null,
+                    "fp")));
+    when(channelMapper.selectByCode("ta", "batch-sla"))
+        .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+
+    AmNotifyOutcome outcome = service.deliver("batch-sla", payload);
+
+    assertThat(outcome.delivered()).isTrue();
+    // 反查命中租户 ta 的渠道,不是 system。
+    verify(channelMapper).selectByCode(eq("ta"), eq("batch-sla"));
+  }
+
+  @Test
+  void fallsBackToPropertiesTenantWhenNoTenantLabel() {
+    when(channelMapper.selectByCode("system", "batch-sla"))
+        .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+
+    // payload() 的 commonLabels 无 tenant → 回退到 properties.tenantId=system。
+    service.deliver("batch-sla", payload("batch-sla"));
+
+    verify(channelMapper).selectByCode(eq("system"), eq("batch-sla"));
+  }
+
+  @Test
   void routesWebhookChannelThroughDispatcher() {
     when(channelMapper.selectByCode("system", "batch-default"))
         .thenReturn(Map.of("channel_type", "WEBHOOK", "config_json", "{\"url\":\"https://hook\"}"));
