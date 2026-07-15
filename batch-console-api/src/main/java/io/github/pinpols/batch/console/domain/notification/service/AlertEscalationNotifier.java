@@ -55,7 +55,7 @@ import org.springframework.stereotype.Component;
     prefix = "batch.alert.escalation.notify",
     name = "enabled",
     havingValue = "true",
-    matchIfMissing = true)
+    matchIfMissing = false)
 public class AlertEscalationNotifier {
 
   /**
