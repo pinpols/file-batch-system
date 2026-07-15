@@ -10,13 +10,16 @@ import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,6 +39,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -516,13 +520,14 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     int statusCode;
     try (Response resp = call.newCall(req.build()).execute()) {
       statusCode = resp.code();
-      byte[] raw = resp.body() == null ? new byte[0] : resp.body().bytes();
       int max = props.getMaxResponseBytes();
-      boolean truncated = raw.length > max;
-      byte[] kept = raw;
+      ResponseBody respBody = resp.body();
+      // 流式读:最多读 max+1 字节即停,不再消费剩余流 —— 绝不把巨量 / 失控下游响应全量读进堆内存
+      // (原先 resp.body().bytes() 在截断前就全量物化,maxResponseBytes 形同虚设可致 OOM)。
+      byte[] read = respBody == null ? new byte[0] : readBounded(respBody, max);
+      boolean truncated = read.length > max;
+      byte[] kept = truncated ? Arrays.copyOf(read, max) : read;
       if (truncated) {
-        kept = new byte[max];
-        System.arraycopy(raw, 0, kept, 0, max);
         log.warn("http response truncated at {} bytes", max);
       }
       String responseBody = new String(kept, StandardCharsets.UTF_8);
@@ -544,6 +549,30 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           "status " + statusCode + " not in expected " + inv.expectedStatus);
     }
     return TaskResult.ok("status=" + statusCode, output);
+  }
+
+  /**
+   * 从响应流最多读取 {@code max + 1} 字节即停,不消费剩余流。多读的 1 字节仅用于判定"是否发生截断" (返回长度 &gt; max 即被截断)。这是 OOM
+   * 的硬内存上界:无论下游返回多大 / 谎报多大 Content-Length, 堆里最多驻留 max+1 字节。对 &lt;= max
+   * 的响应,读到的内容与全量读完全一致。try-with-resources 关闭 {@link Response} 会释放底层连接,未读完的剩余流不会阻塞。
+   */
+  private static byte[] readBounded(ResponseBody body, int max) throws IOException {
+    long limit = (long) max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
+    try (InputStream in = body.byteStream()) {
+      ByteArrayOutputStream buf = new ByteArrayOutputStream((int) Math.min(limit, 8192L));
+      byte[] chunk = new byte[8192];
+      long total = 0;
+      while (total < limit) {
+        int toRead = (int) Math.min((long) chunk.length, limit - total);
+        int n = in.read(chunk, 0, toRead);
+        if (n == -1) {
+          break;
+        }
+        buf.write(chunk, 0, n);
+        total += n;
+      }
+      return buf.toByteArray();
+    }
   }
 
   /** GET/HEAD 必须无 body;其余方法 body 缺省给空体(OkHttp 要求 POST/PUT/PATCH 非 null)。 */
