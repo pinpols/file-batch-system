@@ -1,0 +1,38 @@
+[
+  {
+    "route_code": "sla-critical",
+    "team": "batch-sla",
+    "alert_group": "sla",
+    "severity": "CRITICAL",
+    "receiver": "batch-pager",
+    "group_by": "alertname, tenant, severity",
+    "group_wait_seconds": 10,
+    "group_interval_seconds": 120,
+    "repeat_interval_seconds": 1800,
+    "enabled": true
+  },
+  {
+    "route_code": "dispatch-warn",
+    "team": "batch-dispatch",
+    "alert_group": "dispatch",
+    "severity": "WARN",
+    "receiver": "batch-dispatch",
+    "group_by": "",
+    "group_wait_seconds": 30,
+    "group_interval_seconds": 300,
+    "repeat_interval_seconds": 3600,
+    "enabled": true
+  },
+  {
+    "route_code": "freshness-disabled",
+    "team": "batch-data",
+    "alert_group": "freshness",
+    "severity": "ERROR",
+    "receiver": "batch-freshness",
+    "group_by": "",
+    "group_wait_seconds": 30,
+    "group_interval_seconds": 300,
+    "repeat_interval_seconds": 3600,
+    "enabled": false
+  }
+]
