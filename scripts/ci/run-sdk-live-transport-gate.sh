@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # 多语言 SDK live transport gate。
-# 预期外部已经启动 Kafka/Redpanda,并通过 KAFKA_BOOTSTRAP 暴露 PLAINTEXT broker。
+# 预期外部已经启动 Kafka(CI 用 apache/kafka KRaft 单节点),并通过 KAFKA_BOOTSTRAP
+# 暴露 PLAINTEXT broker。
 # 覆盖:
 #   Java       EmbeddedKafka + HTTP fake testkit
 #   Python     live Kafka + aiohttp FakeBatchPlatform
@@ -28,7 +29,8 @@ echo "[sdk-live] Python=$("$PYTHON_BIN" -c 'import sys; print(sys.executable)')"
 # Broker readiness gate — READINESS WAIT ONLY (never a test retry; a genuine
 # broker/SDK bug must still fail loudly). The per-language live suites below
 # assume KAFKA_BOOTSTRAP already serves the Kafka API. Under CI the workflow
-# already polls `rpk cluster health`; this host-side TCP readiness loop is
+# already polls kafka-broker-api-versions.sh in-container; this host-side TCP
+# readiness loop is
 # defense-in-depth so a still-warming broker never surfaces as a spurious
 # per-language waitFor timeout — and so ad-hoc local runs (broker started by
 # hand) also wait instead of racing the first Kafka call.
