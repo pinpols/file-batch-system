@@ -2,6 +2,8 @@ package io.github.pinpols.batch.common.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -45,5 +47,41 @@ class AlertLabelsTest {
     assertThat(AlertLabels.team("ASSET_FRESHNESS_X")).isEqualTo("batch-data");
     assertThat(AlertLabels.team("CAPACITY_X")).isEqualTo("batch-sre");
     assertThat(AlertLabels.team("OTHER")).isEqualTo("batch-ops");
+  }
+
+  @Test
+  @DisplayName("canonicalLabels 含 service:firing/resolved 共用,label 集须严格一致(I-1)")
+  void canonicalLabels_includesServiceForFiringResolvedParity() {
+    AlertEventEntity e = new AlertEventEntity();
+    e.setAlertType("JOB_SLA_BREACH");
+    e.setTenantId("ta");
+    e.setSeverity("CRITICAL");
+    e.setServiceName("batch-orchestrator");
+
+    Map<String, String> labels = AlertLabels.canonicalLabels(e);
+
+    // service 必须在:AM 以完整 label 集为指纹,漏 service 会让 resolved 匹配不到 firing(幽灵 resolved)。
+    assertThat(labels)
+        .containsEntry("alertname", "JOB_SLA_BREACH")
+        .containsEntry("tenant", "ta")
+        .containsEntry("severity", "critical")
+        .containsEntry("service", "batch-orchestrator")
+        .containsEntry("alert_group", "sla")
+        .containsEntry("team", "batch-sla");
+    // 高基数键绝不进 label 集。
+    assertThat(labels).doesNotContainKeys("resource", "trace_id", "alert_id", "fingerprint");
+  }
+
+  @Test
+  @DisplayName("canonicalLabels 空 tenant/service 时省略(firing/resolved 同一逻辑保持一致)")
+  void canonicalLabels_omitsBlankOptionalLabels() {
+    AlertEventEntity e = new AlertEventEntity();
+    e.setAlertType("WORKFLOW_X");
+    e.setSeverity("WARN");
+
+    Map<String, String> labels = AlertLabels.canonicalLabels(e);
+
+    assertThat(labels).doesNotContainKeys("tenant", "service");
+    assertThat(labels).containsEntry("severity", "warning").containsEntry("alert_group", "ops");
   }
 }

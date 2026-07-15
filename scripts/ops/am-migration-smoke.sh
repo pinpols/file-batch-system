@@ -69,10 +69,15 @@ echo "OK silence created id=$SID"
 echo "-- STEP: GET /api/v2/silences assert active --"
 curl -sf "http://localhost:${AMPORT}/api/v2/silences" | python3 -c "import sys,json;s=json.load(sys.stdin);m=[x for x in s if x['id']=='${SID}'];assert m,'silence missing';assert m[0]['status']['state'] in ('active','pending'),m[0]['status'];print('OK silence',m[0]['status']['state'])"
 
-echo "-- STEP: POST resolved (close bridge endsAt=now) --"
+echo "-- STEP: POST resolved (close bridge endsAt=now) — label 集须与 firing 严格一致(含 service) --"
+RESOLVED_AT="$(iso)"
 curl -sf -X POST "http://localhost:${AMPORT}/api/v2/alerts" -H 'Content-Type: application/json' \
-  -d "[{\"labels\":{\"alertname\":\"JOB_SLA_BREACH\",\"tenant\":\"ta\",\"severity\":\"critical\",\"alert_group\":\"sla\",\"team\":\"batch-sla\"},\"endsAt\":\"${NOW}\"}]"
+  -d "[{\"labels\":{\"alertname\":\"JOB_SLA_BREACH\",\"tenant\":\"ta\",\"severity\":\"critical\",\"service\":\"batch-orchestrator\",\"alert_group\":\"sla\",\"team\":\"batch-sla\"},\"endsAt\":\"${RESOLVED_AT}\"}]"
 echo "OK resolved accepted"
+
+echo "-- STEP: 回读断言 — 原 firing 真的转 resolved(不再 active),而非新建幽灵 --"
+sleep 1
+curl -sf "http://localhost:${AMPORT}/api/v2/alerts?active=true" | python3 -c "import sys,json;a=json.load(sys.stdin);names=[x['labels'].get('alertname') for x in a];assert 'JOB_SLA_BREACH' not in names, ('BUG: 原告警仍 active,resolved label 集与 firing 不一致(幽灵 resolved): '+str(names));print('OK 原告警已转 resolved,active 集中已消失')"
 
 echo "== [A] AM-contract smoke PASSED =="
 

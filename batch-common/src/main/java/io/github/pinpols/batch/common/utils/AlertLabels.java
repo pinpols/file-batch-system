@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.common.utils;
 
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * {@code alert_event} 字段 → Alertmanager label 的映射规则（emit 直连 / silence 桥接共用）。
@@ -66,6 +69,35 @@ public final class AlertLabels {
       return GROUP_CAPACITY;
     }
     return GROUP_DEFAULT;
+  }
+
+  /**
+   * 由 {@code alert_event} 行构造 AM 告警的**规范 label 集**（firing / resolved 共用同一套逻辑）。
+   *
+   * <p>关键不变量(见迁移方案 §6.1):AM 以**完整 label 集**为告警指纹。firing(emit publisher)与 resolved(close
+   * 桥接)必须产出<b>严格一致</b>的 label 集,否则 resolved 匹配不到原 firing —— 只新建一条幽灵"已 resolved"告警, 原告警仍要等 {@code
+   * resolve_timeout}(5m),废掉"console close 立即消解"的目的。故两侧一律经此方法构造。
+   *
+   * <p>只含低基数枚举(alertname/tenant/severity/service/alert_group/team),可进 group_by;高基数
+   * (resource/trace_id/alert_id/fingerprint)由调用方放 annotation,不进本集(§4/§8 基数守则)。
+   */
+  public static Map<String, String> canonicalLabels(AlertEventEntity entity) {
+    Map<String, String> labels = new LinkedHashMap<>();
+    labels.put("alertname", entity.getAlertType());
+    if (hasText(entity.getTenantId())) {
+      labels.put("tenant", entity.getTenantId());
+    }
+    labels.put("severity", amSeverity(entity.getSeverity()));
+    if (hasText(entity.getServiceName())) {
+      labels.put("service", entity.getServiceName());
+    }
+    labels.put("alert_group", alertGroup(entity.getAlertType()));
+    labels.put("team", team(entity.getAlertType()));
+    return labels;
+  }
+
+  private static boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   /** 由 alert_group 派生 team（v1 收敛：group→team 一一对应，供 route 二次分流/展示）。 */

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -107,6 +108,26 @@ public class AlertmanagerEmitPublisher {
     }
   }
 
+  /** 停机时优雅关闭线程池:停收新任务 + 有限等待 drain 已入队的 POST,超时才强制中断(不裸丢队列)。 */
+  @PreDestroy
+  public void shutdown() {
+    if (executor == null) {
+      return;
+    }
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+        log.warn("AlertmanagerEmitPublisher 线程池未在 5s 内 drain 完,强制中断");
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      SwallowedExceptionLogger.info(
+          AlertmanagerEmitPublisher.class, "catch:InterruptedException", e);
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
+  }
+
   private void sendQuietly(AlertEventEntity entity) {
     try {
       String body = JsonUtils.toJson(List.of(buildPostableAlert(entity)));
@@ -143,17 +164,9 @@ public class AlertmanagerEmitPublisher {
    * resource_key / trace_id / alert_id 一律进 annotations（§4/§8 基数守则）。不带 endsAt = firing。
    */
   Map<String, Object> buildPostableAlert(AlertEventEntity entity) {
-    Map<String, String> labels = new LinkedHashMap<>();
-    labels.put("alertname", entity.getAlertType());
-    if (Texts.hasText(entity.getTenantId())) {
-      labels.put("tenant", entity.getTenantId());
-    }
-    labels.put("severity", AlertLabels.amSeverity(entity.getSeverity()));
-    if (Texts.hasText(entity.getServiceName())) {
-      labels.put("service", entity.getServiceName());
-    }
-    labels.put("alert_group", AlertLabels.alertGroup(entity.getAlertType()));
-    labels.put("team", AlertLabels.team(entity.getAlertType()));
+    // 与 close 桥接的 resolved 共用同一套规范 label 集(AlertLabels.canonicalLabels),保证 firing/resolved
+    // label 集严格一致,否则 AM 匹配不到原 firing(见 canonicalLabels javadoc)。
+    Map<String, String> labels = AlertLabels.canonicalLabels(entity);
 
     Map<String, String> annotations = new LinkedHashMap<>();
     if (Texts.hasText(entity.getTitle())) {

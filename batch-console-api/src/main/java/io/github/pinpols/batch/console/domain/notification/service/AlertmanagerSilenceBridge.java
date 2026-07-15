@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -107,6 +108,26 @@ public class AlertmanagerSilenceBridge {
     submit(() -> sendResolved(alert), "resolve");
   }
 
+  /** 停机时优雅关闭线程池:停收新任务 + 有限等待 drain 已入队的 silence/resolved POST,超时才强制中断。 */
+  @PreDestroy
+  public void shutdown() {
+    if (executor == null) {
+      return;
+    }
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+        log.warn("AlertmanagerSilenceBridge 线程池未在 5s 内 drain 完,强制中断");
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      SwallowedExceptionLogger.info(
+          AlertmanagerSilenceBridge.class, "catch:InterruptedException", e);
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
+  }
+
   private void submit(Runnable task, String action) {
     try {
       executor.execute(task);
@@ -141,14 +162,9 @@ public class AlertmanagerSilenceBridge {
 
   private void sendResolved(AlertEventEntity alert) {
     Instant now = Instant.now();
-    Map<String, String> labels = new LinkedHashMap<>();
-    labels.put("alertname", alert.getAlertType());
-    if (Texts.hasText(alert.getTenantId())) {
-      labels.put("tenant", alert.getTenantId());
-    }
-    labels.put("severity", AlertLabels.amSeverity(alert.getSeverity()));
-    labels.put("alert_group", AlertLabels.alertGroup(alert.getAlertType()));
-    labels.put("team", AlertLabels.team(alert.getAlertType()));
+    // I-1:必须与 emit publisher 的 firing label 集严格一致(含 service),否则 AM 匹配不到原 firing,只新建
+    // 幽灵 resolved,原告警仍等 resolve_timeout。共用 AlertLabels.canonicalLabels 保证一致。
+    Map<String, String> labels = AlertLabels.canonicalLabels(alert);
     Map<String, Object> resolved = new LinkedHashMap<>();
     resolved.put("labels", labels);
     // endsAt=now → AM 立即判定 resolved,不必等 resolve_timeout。

@@ -15,6 +15,8 @@ import io.github.pinpols.batch.console.web.request.ops.AlertActionRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** {@link ConsoleAlertApplicationService} 的默认实现： 仅执行告警状态流转，不引入额外的告警事件表。 */
 @Service
@@ -76,6 +78,21 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   }
 
   private void bridgeToAlertmanager(AlertEventEntity entity, String nextStatus) {
+    // M-1:与 emit 直连一致,桥接放事务提交后 —— 提交失败时 AM 不该已收到 silence/resolved。
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              dispatchBridge(entity, nextStatus);
+            }
+          });
+    } else {
+      dispatchBridge(entity, nextStatus);
+    }
+  }
+
+  private void dispatchBridge(AlertEventEntity entity, String nextStatus) {
     if (STATUS_SUPPRESSED.equals(nextStatus)) {
       // 时长走桥接默认(AlertActionRequest 无时长维度);后续如需可扩展请求字段。
       alertmanagerSilenceBridge.silence(entity, null);
