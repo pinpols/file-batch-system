@@ -34,4 +34,11 @@ public interface AlertEventMapper {
       @Param("id") Long id,
       @Param("tenantId") String tenantId,
       @Param("expectedTier") int expectedTier);
+
+  /**
+   * 选出当前仍 OPEN 的告警,供 AM re-emit 周期重发维持 firing 状态(迁移方案 §6.1)。
+   *
+   * <p>按 last_seen_at 降序取最近的一批(control 单轮规模),AM 端按 label 集合幂等,重复 fire 无副作用。
+   */
+  List<AlertEventEntity> selectOpenForReemit(@Param("limit") int limit);
 }

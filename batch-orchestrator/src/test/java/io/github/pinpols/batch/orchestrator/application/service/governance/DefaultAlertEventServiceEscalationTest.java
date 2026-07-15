@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
@@ -25,8 +26,10 @@ class DefaultAlertEventServiceEscalationTest {
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
+  @Mock private AlertmanagerEmitPublisher alertmanagerEmitPublisher;
+
   private DefaultAlertEventService service() {
-    return new DefaultAlertEventService(alertEventMapper, meterRegistry);
+    return new DefaultAlertEventService(alertEventMapper, meterRegistry, alertmanagerEmitPublisher);
   }
 
   private static AlertEventEntity overdueAlert(long id, Integer tier) {
