@@ -37,7 +37,9 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           # 强 copyleft(GPL/AGPL)+ source-available 商用限制(SSPL/BUSL/
-          # Commons-Clause/Elastic-2.0)+ 非商用 CC。**刻意不含 LGPL/EPL/MPL**。
-          deny-licenses: 'GPL-2.0, GPL-3.0, AGPL-3.0, SSPL-1.0, BUSL-1.1, Commons-Clause, Elastic-2.0, CC-BY-NC-4.0'
+          # Elastic-2.0)+ 非商用 CC。Commons-Clause 不是 SPDX license identifier，
+          # dependency-review-action 不接受它作为 deny-licenses 值；如依赖元数据使用该自定义名称，
+          # 由 security/license tooling 另行拦截。**刻意不含 LGPL/EPL/MPL**。
+          deny-licenses: 'GPL-2.0, GPL-3.0, AGPL-3.0, SSPL-1.0, BUSL-1.1, Elastic-2.0, CC-BY-NC-4.0'
           # 命中 deny 时把违规依赖摘要贴回 PR,便于评审直接看到。
           comment-summary-in-pr: on-failure
