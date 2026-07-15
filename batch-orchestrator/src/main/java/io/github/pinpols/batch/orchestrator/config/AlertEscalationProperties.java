@@ -19,7 +19,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.alert.escalation")
 public class AlertEscalationProperties {
 
-  private boolean enabled = true;
+  /**
+   * 默认 false:AM 迁移(direct cutover)后,升级编排职责交给 AM 的 route + repeat_interval。 保留本开关作回滚路径——AM 出问题时
+   * {@code batch.alert.am-emit.enabled=false} + 本开关翻回 true 可秒级恢复自研升级链路(PR-2 才删净代码)。
+   */
+  private boolean enabled = false;
+
   private int slaMinutes = 30;
   private int maxTier = 3;
   private int batchLimit = 200;

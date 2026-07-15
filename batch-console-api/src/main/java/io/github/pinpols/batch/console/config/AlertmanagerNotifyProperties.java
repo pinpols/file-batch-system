@@ -28,4 +28,33 @@ public class AlertmanagerNotifyProperties {
 
   /** 正文逐条展开的告警数上限,防超大批量告警撑爆正文;超出折叠成摘要。 */
   private int maxAlerts = 50;
+
+  /**
+   * console silence/close ↔ AM 单向桥接配置(迁移方案 §3.5)。
+   *
+   * <p>console silence 作用于单条 {@code alert_event.status=SUPPRESSED},AM silence 作用于 label matcher。 自研
+   * notifier 退役后,console silence 若不桥接到 AM,只改 fbs 状态而 AM 照样 repeat 通知,语义破损。故 console silence 时由 fbs
+   * 调 AM {@code POST /api/v2/silences} 建等价 matcher;close 时发 resolved(endsAt)。 反向(AM UI 建的 silence
+   * 回写 console)不做。
+   */
+  private final Silence silence = new Silence();
+
+  @Data
+  public static class Silence {
+
+    /** 是否启用 silence/close → AM 单向桥接。false = 关闭桥接(只改 fbs 状态)。 */
+    private boolean enabled = true;
+
+    /** AM base URL(不含路径);桥接追加 {@code /api/v2/silences} 或 {@code /api/v2/alerts}。 */
+    private String apiBaseUrl = "http://localhost:9093";
+
+    /** silence/resolved 推送 HTTP 读超时(毫秒)。 */
+    private long timeoutMillis = 2000L;
+
+    /** 连接超时(毫秒)。 */
+    private long connectTimeoutMillis = 2000L;
+
+    /** console silence 未显式给时长时的默认静默时长(分钟)。 */
+    private int defaultDurationMinutes = 120;
+  }
 }

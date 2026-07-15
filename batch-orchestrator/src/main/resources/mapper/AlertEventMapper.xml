@@ -62,6 +62,15 @@
         limit #{limit}
     </select>
 
+    <select id="selectOpenForReemit"
+            resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
+        select *
+        from batch.alert_event
+        where status = 'OPEN'
+        order by last_seen_at desc
+        limit #{limit}
+    </select>
+
     <update id="markEscalated">
         update batch.alert_event
         set escalation_tier = escalation_tier + 1,

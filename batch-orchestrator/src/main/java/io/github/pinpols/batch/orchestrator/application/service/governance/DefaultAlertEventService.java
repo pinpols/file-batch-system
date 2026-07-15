@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -13,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 告警事件 emit 入口：把 orchestrator 内部各子系统（SLA / 熔断 / drain 等）的告警统一落 {@code alert_event} 表。
@@ -28,6 +31,7 @@ public class DefaultAlertEventService implements AlertEventService {
 
   private final AlertEventMapper alertEventMapper;
   private final MeterRegistry meterRegistry;
+  private final AlertmanagerEmitPublisher alertmanagerEmitPublisher;
 
   @Override
   @Transactional
@@ -62,6 +66,25 @@ public class DefaultAlertEventService implements AlertEventService {
         .counter(
             "batch.alert.events", Tags.of("alert_type", request.alertType(), "severity", severity))
         .increment();
+
+    // emit 直连 AM(迁移方案 §6.1):必须放事务提交后,否则回滚了 AM 却收到幽灵告警。
+    // publisher 自身失败隔离(异步 + swallow),DB 落库为准。
+    publishToAlertmanagerAfterCommit(entity);
+  }
+
+  private void publishToAlertmanagerAfterCommit(AlertEventEntity entity) {
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              alertmanagerEmitPublisher.publishFiring(entity);
+            }
+          });
+    } else {
+      // 无活跃事务(理论上 @Transactional 下不会走到);直接推,失败仍隔离。
+      alertmanagerEmitPublisher.publishFiring(entity);
+    }
   }
 
   @Override

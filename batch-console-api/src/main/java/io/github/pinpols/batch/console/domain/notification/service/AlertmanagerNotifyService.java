@@ -50,9 +50,12 @@ public class AlertmanagerNotifyService {
   public record AmNotifyOutcome(
       String receiver, String channelCode, boolean delivered, String status, String detail) {}
 
+  /** AM alert 携带租户维度的 label 名(见迁移方案 §4:AM 单实例靠 label 携带租户)。 */
+  private static final String LABEL_TENANT = "tenant";
+
   /** 接住一个 receiver 的 AM 告警并投递。绝不抛异常(off 关键路径),失败折叠进 outcome + 日志。 */
   public AmNotifyOutcome deliver(String receiver, AlertmanagerWebhookPayload payload) {
-    String tenantId = properties.getTenantId();
+    String tenantId = resolveTenant(payload);
     String channelCode = receiver;
     Map<String, Object> channel = channelMapper.selectByCode(tenantId, channelCode);
     if (channel == null) {
@@ -100,6 +103,33 @@ public class AlertmanagerNotifyService {
         channelCode,
         result.errorSummary());
     return new AmNotifyOutcome(receiver, channelCode, false, "FAILED", result.errorSummary());
+  }
+
+  /**
+   * 按 AM payload 的 {@code tenant} label 反查租户(迁移方案 §4/§7 硬前置):AM 单实例全局,租户维度只能靠 label 携带。
+   *
+   * <p>优先取 {@code commonLabels.tenant}(整批共享的租户);缺失时回退到首条 alert 的 {@code labels.tenant}; 再缺失才回退到配置的
+   * {@link AlertmanagerNotifyProperties#getTenantId()} fallback(默认 {@code system})。 不做反查会让所有租户的告警全落
+   * system 租户的渠道。
+   */
+  private String resolveTenant(AlertmanagerWebhookPayload payload) {
+    if (payload != null) {
+      Map<String, String> common = payload.commonLabels();
+      if (common != null && hasText(common.get(LABEL_TENANT))) {
+        return common.get(LABEL_TENANT).trim();
+      }
+      for (var alert : payload.safeAlerts()) {
+        String tenant = alert == null ? null : alert.label(LABEL_TENANT);
+        if (hasText(tenant)) {
+          return tenant.trim();
+        }
+      }
+    }
+    return properties.getTenantId();
+  }
+
+  private static boolean hasText(String value) {
+    return value != null && !value.isBlank();
   }
 
   private WebhookDeliveryResult deliver(
