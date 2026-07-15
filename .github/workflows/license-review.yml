@@ -1,0 +1,43 @@
+name: license-review
+
+# License allowlist gate (Task A).
+#
+# Blocks a PR that introduces a dependency under a strong-copyleft or a
+# commercial-restricted license. Uses GitHub's dependency-review-action, which
+# by nature diffs ONLY the PR's added/changed dependencies against the base ref —
+# existing dependencies are never re-scanned, so this can never retroactively
+# fail an unrelated PR on a pre-existing dependency.
+#
+# 关键修正:deny 只列**强 copyleft + 商用限制**许可。**不 deny LGPL / EPL / MPL** ——
+# 这些弱 copyleft 许可对 jar 形式的依赖分发是安全的(以库/jar 依赖分发不触发传染),
+# 而 Logback 走 EPL-1.0 / LGPL-2.1 双许可,是标准安全 jar 依赖。若把 LGPL 放进 deny,
+# 会误伤未来 Logback 升级 PR。故弱 copyleft 一律不拦。
+
+on:
+  # PR 触发 only:dependency-review 天然只比 PR diff,存量依赖不重扫。
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  # comment-summary-in-pr 需要写 PR 评论权限。
+  pull-requests: write
+
+jobs:
+  license-review:
+    name: dependency license review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Dependency license review
+        uses: actions/dependency-review-action@v4
+        with:
+          # 强 copyleft(GPL/AGPL)+ source-available 商用限制(SSPL/BUSL/
+          # Commons-Clause/Elastic-2.0)+ 非商用 CC。**刻意不含 LGPL/EPL/MPL**。
+          deny-licenses: 'GPL-2.0, GPL-3.0, AGPL-3.0, SSPL-1.0, BUSL-1.1, Commons-Clause, Elastic-2.0, CC-BY-NC-4.0'
+          # 命中 deny 时把违规依赖摘要贴回 PR,便于评审直接看到。
+          comment-summary-in-pr: on-failure
