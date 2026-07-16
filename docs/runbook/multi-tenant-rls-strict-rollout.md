@@ -1,36 +1,37 @@
 # Runbook · Phase A · 翻 strict 模式 操作手册
 
-> Phase A 收尾 — 把 RLS 从「transition 模式(未设 SET 回退允许)」翻到「strict 模式(未设 SET 强制拦截)」。
+> Phase A 收尾 — 当前默认已经是 strict 模式（未设 SET 强制拦截）。本文保留安装、验证和应急回滚步骤。
 >
 > 配套:`docs/runbook/multi-tenant-rls.md` §3 是设计依据,本文档是**翻转操作手册**(给 on-call 用)。
 
+> **当前实现状态（2026-07-16）**：strict 已由 `rls-phase-a.sql` 作为默认安装策略；`RlsTenantSessionSupport` 和 `RlsProperties` 已 fail-closed。下方历史“默认 transition/翻转前”文字仅用于解释迁移背景，当前上线按 strict 验收，transition 只允许事故回滚。
+
 ## 0. 现状与决策存档(2026-06-21「形式化落地」体检维度6)
 
-体检维度6 指出 biz RLS「DB 级返 0 行」的保证在**生产默认态/多节点态下并不成立**,据此明确以下现状与决策(本次**不翻默认**):
+体检维度6 暴露了 transition 默认会让漏接线回退为全表访问；当前已切换为 strict，并保留以下边界说明:
 
 | 维度 | 现状 | 含义 |
 |---|---|---|
-| **默认模式** | `transition`(GUC `app.tenant_id` 未设 → 放行全表) | 默认部署下 RLS 不是硬拦截;隔离实际靠应用层 mapper 列过滤 + 分片路由 |
-| **strict** | 非默认,需显式翻(本手册) | 翻了才有「DB 级强制 + 可证明」 |
+| **默认模式** | `strict`(GUC `app.tenant_id` 未设 → 不匹配任何行) | 默认部署即具备 DB 层 fail-closed 隔离 |
+| **transition** | 仅应急回滚脚本可安装 | 回滚期间 health DOWN，修复后必须恢复 strict |
 | **console-api** | **完全不调 RLS session**(`applyIfPresent` 只在 worker/orchestrator 数据面) | console 读 biz 不受 RLS 保护,只靠 `ConsoleTenantGuard` + 列过滤 |
 | **Citus 多节点** | RLS **实测坏**(GUC 跨节点不传播,返 0 行/写报错),仅单节点验过 | strict 默认开 = 等于绑定单机部署;多节点要先解 GUC 传播 |
 
-**决策(2026-06-21)**:**保持 transition 默认,不单机盲翻 strict**。理由:① 翻 strict 在多节点 Citus 上会坏,翻默认等于悄悄绑定单机;② console-api 未接 RLS,即便翻了 strict 这层也不在 RLS 覆盖内;③ 应用层(mapper 强制 `tenant_id` + 分片路由 + `requireTenant`)当前已守住跨租。**这层 DB 级保证要在真多节点环境验证 GUC 传播 + 给 console-api 接上 RLS session 之后,再按 §1 触发条件评估翻转**——属维度6 的环境验证项,非代码层能单方面完成。
+**决策:**批量 worker 使用普通 PostgreSQL 分片并默认 strict；Citus 多节点仍不在支持范围内。console-api 不直接访问 biz 数据源的 RLS 路径仍由 ConsoleTenantGuard + 列级租户约束保护，不能把本手册当作 console-api 的 RLS 证明。
 
-## 1. 决策 — 是否要现在翻
+## 1. 决策 — strict 已作为默认安全策略
 
-**默认不翻**(transition 已提供 80% 价值)。下列情况之一才考虑翻:
+**默认 strict**。以下项目仍需在真实环境完成验收:
 
 | 触发条件 | 紧迫性 |
 |---|---|
-| 合规审计要求「DB 层强制 + 可证明」(不能只说"我们应用层会过滤") | 🟥 高 |
-| 真实跨租户泄露事故复盘要求把 RLS 提到 strict | 🟥 高 |
-| 平台进入「正式 SaaS 多租」业务阶段 | 🟧 中 |
-| 单纯想"做完闭环" | 🟩 低,可缓 |
+| sim 全链路无 RLS 失败 | 🟥 上线门槛 |
+| prod-shadow 连续观察并保持 health UP | 🟥 上线门槛 |
+| Citus 多节点 GUC 传播验证 | 🟨 不在当前支持范围 |
 
-> **保守原则**:翻 strict 是单向门(回滚有应急脚本但是事故级别),非必要不翻。
+> **安全原则**:transition 只用于事故止血，回滚期间 health DOWN；修复后必须重新安装 strict。
 
-## 2. 翻转前置 checklist(全项 ✅ 才能开干)
+## 2. strict 上线验收 checklist
 
 - [x] **A. 接线完成**(PR #155/#158/#160)
   - 验证:`mvn test -pl batch-common -Dtest='Rls*'` → 全过(含 `RlsStrictModePreflightIntegrationTest`)
@@ -108,7 +109,7 @@ tail -f logs/console-api/console-api.log | grep -E "row-level security|RLS SET L
 
 本 PR 同时更新:
 
-- `RlsPolicyHealthIndicator.EXPECTED_POLICY_NAME` **接受 transition 或 strict 任一**(灰度兼容)
+- `RlsClosedWorldChecker` **只接受 strict policy**，并拒绝含 `IS NULL` 回退的策略
 - `RlsPhaseAMigrationCoverageTest` 校验 strict migration 覆盖全表
 - runbook `multi-tenant-rls.md` §3.1 标 transition「已废弃,留作回滚」+ strict 标「当前」
 
@@ -158,7 +159,7 @@ tail -f logs/console-api/console-api.log | grep "row-level security"
 
 如果聚合脚本之前用 `batch_user` role 跨租户查,翻 strict 后会**返 0 行**(每查一个 tenant 都要 SET LOCAL 切换)。
 
-**修复**(翻 strict 前完成):
+**修复**(strict 默认上线前完成):
 - 改用 `batch_business_admin` role(BYPASSRLS)
 - 见 `multi-tenant-rls.md` §4 「平台聚合查询」段
 
@@ -183,7 +184,7 @@ ThreadLocal 不传 — `RlsTenantContextHolder` 在子线程返 null → strict 
 ## 8. 关联
 
 - `docs/runbook/multi-tenant-rls.md`(总 runbook,设计依据)
-- `scripts/db/business/rls-phase-a.sql`(transition policy 安装 — 还能跑,幂等)
+- `scripts/db/business/rls-phase-a.sql`(strict policy 安装 — 幂等)
 - `scripts/db/business/rls-phase-a-strict.sql`(本翻转脚本)
 - `scripts/db/business/rls-phase-a-rollback-to-transition.sql`(回滚脚本)
 - `batch-common/src/test/java/io/github/pinpols/batch/common/rls/RlsStrictModePreflightIntegrationTest.java`(翻转前必过的 preflight)

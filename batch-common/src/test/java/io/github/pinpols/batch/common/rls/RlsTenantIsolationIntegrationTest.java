@@ -27,10 +27,10 @@ import org.testcontainers.utility.DockerImageName;
  * <p>验证 5 个关键行为(scripts/db/business/rls-phase-a.sql + RlsTenantSessionSupport):
  *
  * <ol>
- *   <li>未 SET app.tenant_id(transition 模式):SELECT 返所有租户行 — 向后兼容
+ *   <li>未 SET app.tenant_id(strict 模式):SELECT 返 0 行 — DB 层 fail-closed
  *   <li>SET app.tenant_id='ta':SELECT 只返 ta 行
  *   <li>SET app.tenant_id='ta' + INSERT tenant_id='tb':WITH CHECK 拒绝(POLICY 违反)
- *   <li>SET app.tenant_id='' 空串:transition 模式视为未设,返所有
+ *   <li>SET app.tenant_id='' 空串(strict 模式):SELECT 返 0 行
  *   <li>RlsTenantContextHolder + RlsTenantSessionSupport.applyIfPresent 集成
  * </ol>
  *
@@ -86,7 +86,7 @@ class RlsTenantIsolationIntegrationTest {
         )
         """);
 
-    // 2) 应用 RLS phase A 的 ENABLE + policy
+    // 2) 应用 RLS strict policy
     // Testcontainers batch_user 是 SUPERUSER,默认绕过 RLS。建非特权 role rls_app_user,后续 SET ROLE 切过去。
     JDBC.execute("CREATE ROLE rls_app_user NOSUPERUSER NOBYPASSRLS");
     JDBC.execute("GRANT USAGE ON SCHEMA biz TO rls_app_user");
@@ -96,23 +96,15 @@ class RlsTenantIsolationIntegrationTest {
     JDBC.execute("ALTER TABLE biz.customer_account FORCE ROW LEVEL SECURITY");
     JDBC.execute(
         """
-        CREATE POLICY tenant_isolation_transition ON biz.customer_account
+        CREATE POLICY tenant_isolation_strict ON biz.customer_account
           AS PERMISSIVE
           FOR ALL
           TO PUBLIC
-          USING (
-            current_setting('app.tenant_id', true) IS NULL
-            OR current_setting('app.tenant_id', true) = ''
-            OR tenant_id = current_setting('app.tenant_id', true)
-          )
-          WITH CHECK (
-            current_setting('app.tenant_id', true) IS NULL
-            OR current_setting('app.tenant_id', true) = ''
-            OR tenant_id = current_setting('app.tenant_id', true)
-          )
+          USING (tenant_id = current_setting('app.tenant_id', true))
+          WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
         """);
 
-    // 3) 种子:ta 3 条,tb 2 条(用 transition 默认允许直接插)
+    // 3) 种子:使用 superuser 建立测试数据；后续查询显式切到非特权 RLS role。
     JDBC.update(
         "INSERT INTO biz.customer_account (tenant_id, customer_no, customer_name) VALUES (?,?,?)",
         "ta",
@@ -152,13 +144,16 @@ class RlsTenantIsolationIntegrationTest {
   }
 
   @Test
-  @DisplayName("反例 1:未 SET app.tenant_id(transition)→ 返 5 行(向后兼容)")
-  void selectWithoutTenantContext_returnsAllRows() {
+  @DisplayName("安全性 1:未 SET app.tenant_id(strict)→ 返 0 行(DB 层拒绝全表读取)")
+  void selectWithoutTenantContext_returnsNoRows() {
     // 新 tx,未 SET LOCAL
     Long total =
         TX.execute(
-            status -> JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class));
-    assertThat(total).isEqualTo(5L);
+            status -> {
+              JDBC.execute("SET LOCAL ROLE rls_app_user");
+              return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+            });
+    assertThat(total).isEqualTo(0L);
   }
 
   @Test
@@ -203,8 +198,8 @@ class RlsTenantIsolationIntegrationTest {
   }
 
   @Test
-  @DisplayName("反例 4:SET app.tenant_id='' 空串 → transition 视为未设,返全部 5 行")
-  void selectWithEmptyTenantContext_returnsAllRows() {
+  @DisplayName("安全性 4:SET app.tenant_id='' 空串(strict)→ 返 0 行")
+  void selectWithEmptyTenantContext_returnsNoRows() {
     Long total =
         TX.execute(
             status -> {
@@ -212,7 +207,7 @@ class RlsTenantIsolationIntegrationTest {
               JDBC.execute("SET LOCAL app.tenant_id = ''");
               return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
             });
-    assertThat(total).isEqualTo(5L);
+    assertThat(total).isEqualTo(0L);
   }
 
   @Test

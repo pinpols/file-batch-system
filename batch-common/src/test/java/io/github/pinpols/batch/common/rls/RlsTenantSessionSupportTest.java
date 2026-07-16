@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.rls;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +11,27 @@ import org.junit.jupiter.api.Test;
  * <p>实际 set_config 语义走 {@code RlsTenantIsolationIntegrationTest}(连真 PG)。
  */
 class RlsTenantSessionSupportTest {
+
+  @Test
+  void applyWithoutTenantContext_failsClosedBeforeOpeningConnection() {
+    RlsTenantContextHolder.clear();
+
+    assertThatThrownBy(() -> RlsTenantSessionSupport.applyIfPresent(null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("tenant context is missing");
+  }
+
+  @Test
+  void applyWithInvalidTenantContext_failsClosedBeforeOpeningConnection() {
+    RlsTenantContextHolder.set("tenant with spaces");
+    try {
+      assertThatThrownBy(() -> RlsTenantSessionSupport.applyIfPresent(null))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("invalid shape");
+    } finally {
+      RlsTenantContextHolder.clear();
+    }
+  }
 
   @Test
   void tenantIdPattern_acceptsAsciiAlnumDashUnderscore() {

@@ -118,8 +118,8 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 **改造点(实现状态已标注)**:
 - ✅ `BatchPgSessionAutoConfiguration` / `HikariPgSessionSupport`(已有,管 statement_timeout / lock_timeout)→ 已扩展 `app.tenant_id` SET LOCAL
 - ✅ worker 写之前 `tenant_id` 经 `RlsTenantContextHolder` 包装到 connection-scoped session var(#158;**需复核是否覆盖 import/export/dispatch 全部直写路径**,目前确认到 pipeline step adapter + sql plugin)
-- ⚠️ 9 张 biz 表 + `batch.process_staging`(共 **10 张**)加 policy —— **不是 Flyway migration**,而是手工 psql 脚本 `scripts/db/business/rls-phase-a.sql`(`psql -d batch_business -f`);因 biz 表本身也非 Flyway 管(`create_biz_tables.sql` 由 ops/seed 脚本建)
-- ✅ 测试:新建 `RlsTenantIsolationIntegrationTest`(命中/绕过反例)+ `RlsPhaseAMigrationCoverageTest`(脚本覆盖白名单守护)—— **不是**「扩 `MultiTenantIsolationIntegrationTest`」
+- ⚠️ 所有包含 `tenant_id` 的 biz 租户表 + `batch.process_staging`加 policy —— **不是 Flyway migration**,而是手工 psql 脚本 `scripts/db/business/rls-phase-a.sql`(`psql -d batch_business -f`);脚本按真实 schema 动态发现表，因 biz 表本身也非 Flyway 管(`create_biz_tables.sql` 由 ops/seed 脚本建)
+- ✅ 测试:新建 `RlsTenantIsolationIntegrationTest`(命中/绕过反例)+ `RlsPhaseAMigrationCoverageTest`(三份脚本动态发现守护)—— **不是**「扩 `MultiTenantIsolationIntegrationTest`」
 - ⚠️ 平台运维聚合用 `BYPASSRLS` role —— 脚本创建的是 `batch_business_admin`(BYPASSRLS)+ `batch_business_writer`(应用,RLS 生效);**现役 `batch_user` 未收敛(R1)**
 
 **Phase 拆解(实际落地状态)**:
@@ -127,17 +127,17 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 |---|---|---|
 | A1 | DB role:脚本建 `batch_business_writer`(应用,RLS 生效)/ `batch_business_admin`(BYPASSRLS,平台聚合)| ⚠️ 部分 —— role 已建,但现役 `batch_user` 未迁移/未收敛(R1) |
 | A2 | `BatchPgSessionAutoConfiguration` / `RlsTenantContextHolder` 加 `app.tenant_id` SET LOCAL | ✅ 已落地(#158;待复核全写路径覆盖) |
-| A3 | 给 10 张表加 ENABLE+FORCE+policy —— **手工 psql 脚本** `rls-phase-a.sql`(非 Flyway)| ✅ 已落地(transition 模式) |
+| A3 | 给所有含 `tenant_id` 的租户表加 ENABLE+FORCE+policy —— **动态手工 psql 脚本** `rls-phase-a.sql`(非 Flyway)| ✅ 已落地(strict 模式) |
 | A4 | 单测:`RlsTenantIsolationIntegrationTest` 命中/绕过反例 | ✅ 已落地 |
-| A5 | POLICY 漏配守护 —— 现为白名单(`EXPECTED_RLS_TABLES`)| ⚠️ 白名单会漏新表(R3) |
-| A6 | `RlsPolicyHealthIndicator`(`pg_policies` healthcheck)| ✅ 已落地(但也是白名单,R3)|
+| A5 | POLICY 漏配守护 —— 运行期动态扫描真实 `biz.*` 表| ✅ 已落地；仅非租户元数据显式豁免 |
+| A6 | `RlsPolicyHealthIndicator`(`pg_policies` healthcheck)| ✅ 已落地(按真实 catalog 动态检查租户表)|
 
 **风险**:
 - 部分动态 SQL 拼接没走 session 变量 → 漏 policy → 反而被拒(应用报错而非泄露)。**好事,变可见错误**
 - 性能:RLS policy 加 `WHERE` 子句,索引必须含 `tenant_id` 作首字段(现有索引已有,审一遍)
 
 **出口(happy-path 部分已达成)**:
-- [x] 10 张表(9 biz + `batch.process_staging`)RLS 启用 + policy 部署(transition 模式)
+- [x] 所有带 `tenant_id` 的非分区 biz 表 + `batch.process_staging` 动态启用 RLS + strict policy
 - [x] `RlsTenantIsolationIntegrationTest` RLS 反例,全过
 - [x] `pg_policies` healthcheck 集成 actuator(`RlsPolicyHealthIndicator`)
 - [ ] runbook `docs/runbook/multi-tenant-rls.md` 写清 BYPASSRLS 何时用、policy 怎么 review
@@ -152,8 +152,8 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - [ ] **R2 · transition 模式必须翻成 strict —— 否则现在 fail-OPEN。**
   - 现状漏洞:policy `TO PUBLIC` 且 `current_setting('app.tenant_id', true) IS NULL OR = '' → 允许全部`。即**任何忘记 `SET LOCAL app.tenant_id` 的连接都放行全表**,而「应用 SQL bug / 漏带 tenant_id」正是 RLS 要回退的场景 → 当前模式下毫无回退,RLS 等于装了没开。
   - 进度:#158 已把 SET LOCAL 铺到 pipeline step 写入路径;达成标准 = 铺到**每一个** worker 写连接路径并验证后,删 `IS NULL/''` 逃逸分支转 strict(变量未设 → 0 行 / 拒写,fail-closed)。
-- [ ] **R3 · 守护从「白名单」翻成「闭世界」,且 fail-fast。**
-  - 现状漏洞:`RlsPolicyHealthIndicator.EXPECTED_RLS_TABLES` 是硬编码 Java 清单,`RlsPhaseAMigrationCoverageTest` 只校验「清单 ⊆ 脚本」。新增 `biz.foo` 若同时忘了加清单 + 忘了加脚本 → 该表 fail-open(跨租户可读),而 healthcheck 绿、test 绿、无报警。**biz 表会越来越多,白名单必漏且漏了静默泄露。**
+- [x] **R3 · 守护从「白名单」翻成「闭世界」,且 fail-fast。**
+  - 守护已改为按活动 catalog 动态发现带 `tenant_id` 的非分区 `biz` 租户表；新增租户业务表不需要维护 Java/SQL 数组，漏配 RLS 会进入 health/fail-fast 检查，而非静默放行。非租户元数据不属于扫描边界，只有明确含 `tenant_id` 但确认非租户时才使用显式豁免。
   - 达成标准:守护从**活动 catalog** 出发 —— 查 `pg_tables WHERE schemaname='biz'`,断言**每一张实际存在的表**都 `ENABLE+FORCE+有 policy`;硬编码清单退化为「已知豁免名单」(同 CLAUDE.md 4 张系统表豁免写法)。漏配 → 启动 fail-fast / CI 红,而非静默放行。
 
 **执行环节(R2/R3 判定逻辑在哪跑 —— 分层,主力是启动 fail-fast)**:
@@ -167,7 +167,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 | 持续 | **actuator healthcheck**(`RlsPolicyHealthIndicator` 改闭世界)| 抓运行期被加表 / policy 被 DROP 的漂移 |
 | 根因(可选)| **PG event trigger 自动入册**(`ddl_command_end` 在 `biz` 建表自动 ENABLE/FORCE + 套标准 policy)| 加表零 RLS 步骤,彻底消除「记得跑脚本」的顺序问题;代价是 superuser 隐式 + 模板不加区分,表真多了再上 |
 
-> 闭世界判定写**一份**共享逻辑(扫 biz schema vs pg_policies),启动 fail-fast / CI IT / healthcheck 都复用它 —— single source of truth,别三处各写清单(那又退回白名单老问题)。
+> 闭世界判定写**一份**共享逻辑(扫带 `tenant_id` 的 biz catalog vs pg_policies),启动 fail-fast / CI IT / healthcheck 都复用它 —— single source of truth,别三处各写清单(那又退回白名单老问题)。
 
 ---
 
@@ -304,7 +304,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 
 | 问题 | 说明 |
 |---|---|
-| **Flyway 复杂度急剧上升** | 9 张表 × N 个 schema = N 倍 migration,每次发版都要跑 N 遍,失败回滚复杂 |
+| **Flyway 复杂度急剧上升** | 动态 RLS 脚本已覆盖新增租户表，无需为每张表复制 N 个 schema migration |
 | **MyBatis XML 写不动** | `<select>` 里 `from biz.customer_account` 要变量化 schema 名,每个 mapper 都要改 |
 | **连接池切 schema 损耗** | session 切 `search_path` 频繁,HikariCP connection reuse 受损 |
 | **跨租户聚合 query 难写** | `SELECT ... FROM biz_ta.x UNION biz_tb.x UNION ...` 字符串拼接 N 段 |

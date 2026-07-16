@@ -24,19 +24,20 @@
 DO $$
 DECLARE
   t TEXT;
-  tables TEXT[] := ARRAY[
-    'biz.customer_account',
-    'biz.process_account_summary',
-    'biz.process_event_copy',
-    'biz.process_order_event',
-    'biz.risk_alert',
-    'biz.risk_score',
-    'biz.settlement_batch',
-    'biz.settlement_detail',
-    'biz.transaction'
-  ];
 BEGIN
-  FOREACH t IN ARRAY tables LOOP
+  FOR t IN
+    SELECT format('%I.%I', n.nspname, c.relname)
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN information_schema.columns col
+      ON col.table_schema = n.nspname
+     AND col.table_name = c.relname
+     AND col.column_name = 'tenant_id'
+    WHERE n.nspname = 'biz'
+      AND c.relkind IN ('r', 'p')
+      AND c.relispartition = false
+    ORDER BY c.relname
+  LOOP
     -- 存在性守护:缺表只跳过并告警,不让整个 DO 块回滚。
     IF to_regclass(t) IS NULL THEN
       RAISE NOTICE 'rls-phase-a-strict: skip missing table % (RLS not applied)', t;
@@ -72,4 +73,4 @@ END $$;
 -- 验证
 -- SELECT schemaname, tablename, policyname FROM pg_policies
 --   WHERE schemaname IN ('biz','batch') AND policyname='tenant_isolation_strict';
--- 期望:9 张 biz 表(含 process_event_copy)+ 1 张 batch.process_staging
+-- 期望:所有包含 tenant_id 的 biz 表 + batch.process_staging

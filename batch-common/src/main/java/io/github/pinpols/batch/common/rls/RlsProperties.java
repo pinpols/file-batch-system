@@ -8,9 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Phase A · RLS 闭世界守护配置（{@code batch.rls}）。
  *
- * <p>{@link #startupFailFast} 默认 {@code false}：启动期<b>不阻断</b>,只靠 {@link RlsPolicyHealthIndicator} 报
- * DOWN 可见。运维确认部署一定跑过 rls-phase-a 脚本后,可设 {@code batch.rls.startup-fail-fast=true} 让缺 RLS 直接
- * fail-fast 拒绝启动。
+ * <p>{@link #startupFailFast} 默认 {@code true}：业务数据源无法证明所有租户表已启用 RLS 时，启动直接失败。 非生产测试库若没有业务表或
+ * RLS，应显式关闭该守门并使用独立的测试配置；不能把默认安全策略降级为放行。
  *
  * <p>{@link #exemptTables} 默认只豁免 {@code __shard_identity} —— 它是本地/分片路由识别用的非租户元数据表。除这类 <b>非租户的 biz
  * 元数据表</b>外,业务表一律不豁免。
@@ -20,10 +19,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class RlsProperties {
 
   /**
-   * 启动期闭世界检查 fail-fast 开关。默认 {@code false}=不阻断启动(只 health DOWN 可见)；{@code true}=缺 RLS 时启动抛 {@code
-   * IllegalStateException}。
+   * 启动期闭世界检查 fail-fast 开关。默认 {@code true}=缺 RLS 或业务库不可达时启动抛 {@code
+   * IllegalStateException}；仅测试或明确的非业务上下文允许显式关闭。
    */
-  private boolean startupFailFast = false;
+  private boolean startupFailFast = true;
 
   /**
    * biz 表豁免清单（带或不带 {@code biz.} 前缀均可）。

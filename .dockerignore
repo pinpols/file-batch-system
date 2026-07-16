@@ -17,6 +17,16 @@ load-tests
 security-scan
 .claude
 .local
+**/target/**
+build/runtime-jars
+sdk/**/.venv
+sdk/**/.mypy_cache
+sdk/**/.pytest_cache
+sdk/**/.ruff_cache
+sdk/**/node_modules
+sdk/**/target
+examples/**/target
+examples/**/node_modules
 !batch-e2e-tests/
 !batch-e2e-tests/pom.xml
 docker/sftp/data

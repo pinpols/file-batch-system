@@ -10,6 +10,21 @@ x-app-runtime-env: &app-runtime-env
   BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
   LANG: ${BATCH_LOCALE:-C.UTF-8}
   LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+  # `local` profile is also used by the local container stack, but its
+  # datasource/Redis values target host-mapped ports for bare-JVM runs.
+  # These environment overrides keep container traffic on the Compose network.
+  SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
+  SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-batch_user}
+  SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
+  SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-valkey}
+  SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+  BATCH_DATASOURCE_BUSINESS_URL: ${BATCH_DATASOURCE_BUSINESS_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?reWriteBatchedInserts=true}
+  BATCH_DATASOURCE_BUSINESS_USERNAME: ${BATCH_DATASOURCE_BUSINESS_USERNAME:-batch_user}
+  BATCH_DATASOURCE_BUSINESS_PASSWORD: ${BATCH_DATASOURCE_BUSINESS_PASSWORD:-${BATCH_BUSINESS_DB_PASSWORD}}
+  BATCH_WORKER_TASK_CLIENT_BASE_URL: ${BATCH_WORKER_TASK_CLIENT_BASE_URL:-http://orchestrator:18082}
+  BATCH_CONSOLE_TRIGGER_BASE_URL: ${BATCH_CONSOLE_TRIGGER_BASE_URL:-http://trigger:18081}
+  BATCH_CONSOLE_ORCHESTRATOR_BASE_URL: ${BATCH_CONSOLE_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
   # /internal/** 服务间共享密钥;强制要求 .env.local 显式设置,防止落回默认 internal-secret(15 字符弱密钥)。
   BATCH_INTERNAL_SECRET: ${BATCH_INTERNAL_SECRET:?BATCH_INTERNAL_SECRET is required}
   BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-valkey}

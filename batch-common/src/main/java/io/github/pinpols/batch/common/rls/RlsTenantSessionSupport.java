@@ -17,10 +17,8 @@ import org.springframework.jdbc.datasource.DataSourceUtils;
  * <p>必须在事务内部调用(取的是 Spring 当前 tx 的同一 connection,SET LOCAL 跟 INSERT/UPDATE/SELECT 共享 tx 生命周期,tx
  * 提交/回滚后自动 reset)。
  *
- * <p>Phase A transition 模式:RLS policy 在 `app.tenant_id` 未设时允许全部(向后兼容);设了则强制等值。所以
- * **本工具调用失败也不影响**已有功能,只是 RLS 防御不生效。
- *
- * <p>未来 strict 模式:policy 去掉 IS NULL 分支,本工具不调 → INSERT 被 policy 拒绝(显式可见错误)。
+ * <p>strict 模式:policy 必须要求 `app.tenant_id` 存在且与行租户一致。本工具缺少有效上下文或无法写入 GUC
+ * 时立即失败，禁止业务事务在没有数据库租户隔离的情况下继续执行。
  */
 @Slf4j
 public final class RlsTenantSessionSupport {
@@ -41,7 +39,7 @@ public final class RlsTenantSessionSupport {
   private RlsTenantSessionSupport() {}
 
   /**
-   * 若 ThreadLocal 有 tenant_id,则执行 `SET LOCAL app.tenant_id = '?'` 写到当前事务。
+   * 执行 `SET LOCAL app.tenant_id = '?'` 写到当前事务。
    *
    * <p>SET LOCAL 等价于 transaction-scoped,事务结束(COMMIT / ROLLBACK)自动 reset,不会污染 connection pool
    * 内的下一个使用者。
@@ -52,13 +50,13 @@ public final class RlsTenantSessionSupport {
   public static void applyIfPresent(DataSource dataSource) {
     String tenantId = RlsTenantContextHolder.get();
     if (!Texts.hasText(tenantId)) {
-      return;
+      throw new IllegalStateException(
+          "RLS tenant context is missing; refusing to access tenant-scoped business data");
     }
     if (!TENANT_ID_PATTERN.matcher(tenantId).matches()) {
-      // 形态不合法即认为上游 @ValidTenantId 失守,不进 GUC 防 RLS policy 语义崩。
-      // 保留 WARN 让运维侧暴露(prod 会被 alerting 抓到)。
-      log.warn("RLS skip: tenantId shape rejected (len={})", tenantId.length());
-      return;
+      // 形态不合法即认为上游校验失守；继续执行会让 RLS 失去明确的租户边界。
+      throw new IllegalArgumentException(
+          "RLS tenant context has invalid shape (len=" + tenantId.length() + ")");
     }
     Connection conn = DataSourceUtils.getConnection(dataSource);
     boolean releaseAfter = !DataSourceUtils.isConnectionTransactional(conn, dataSource);
@@ -73,8 +71,8 @@ public final class RlsTenantSessionSupport {
         log.trace("RLS set_config {} = {}", SESSION_VAR_NAME, tenantId);
       }
     } catch (SQLException e) {
-      // Phase A transition 模式下 RLS 不严,SET 失败只是回退缺失,不阻断业务
-      log.warn("RLS set_config failed (tenant={}): {}", tenantId, e.getMessage());
+      // SET LOCAL 失败意味着本事务没有数据库级租户隔离，必须阻断而不是降级放行。
+      throw new IllegalStateException("RLS set_config failed; refusing tenant-scoped operation", e);
     } finally {
       if (releaseAfter) {
         DataSourceUtils.releaseConnection(conn, dataSource);
@@ -89,7 +87,7 @@ public final class RlsTenantSessionSupport {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("RESET " + SESSION_VAR_NAME);
     } catch (SQLException e) {
-      log.warn("RLS RESET {} failed: {}", SESSION_VAR_NAME, e.getMessage());
+      throw new IllegalStateException("RLS RESET " + SESSION_VAR_NAME + " failed", e);
     } finally {
       if (releaseAfter) {
         DataSourceUtils.releaseConnection(conn, dataSource);

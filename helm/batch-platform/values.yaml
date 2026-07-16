@@ -63,6 +63,7 @@ security:
   internalSecret: ""
   # Console JWT HMAC 密钥。生产必须提供强值。
   consoleJwtSecret: ""
+  enforceStrongSecrets: false
   # Console 登录请求体 RSA+AES 混合加密(对应 BE ConsoleLoginKeyPairService)。
   # multi-replica prod 必须显式提供 keypair —— 否则每个 pod 启动期各自生成,
   # FE 取到的公钥可能不匹配本次解密的私钥,登录概率性失败。
@@ -73,6 +74,9 @@ security:
     # 留空时 BE 启动期生成单实例密钥(单副本 dev OK)。
     privateKeyPem: ""
     publicKeyPem: ""
+
+canary:
+  enabled: false
 
 # 注入 ConfigMap 键 BATCH_TIMEZONE_DEFAULT_ZONE（与 batch-defaults / .env.example 一致）
 batchTimezoneDefaultZone: "Asia/Shanghai"
@@ -423,9 +427,15 @@ workerAtomic:
   javaOptsExtra: ""
   replicaCount: 1
   port: 18087
-  # 最小权限 hooks(ops 填;留空则回退共享 SA/secret 仅为不阻断起步,生产务必配独立的)
+  # 生产 overlay 必须把 productionIsolationRequired / requireIsolation / isolationAcknowledged
+  # 设为 true，并提供外部创建的独立 SA 与 Secret。默认值只服务本地开发 chart 渲染。
+  productionIsolationRequired: false
   serviceAccountName: ""
   envFromSecretName: ""
+  requireIsolation: false
+  isolationAcknowledged: false
+  # 生产可在 overlay 中显式声明 executor 开关；未声明时沿用镜像 application.yml 默认值。
+  executors: {}
   # 原子任务可能含外部调用(http/shell),给中等优雅停机
   gracefulShutdown:
     terminationGracePeriodSeconds: 120
@@ -455,7 +465,7 @@ workerAtomic:
     consumerGroup: "batch-worker-atomic"
     lagThreshold: "20"
   # ADR-029 出口最小权限:default-deny egress NetworkPolicy(模板 worker-atomic-networkpolicy.yaml)。
-  # 默认关 —— 向后兼容,不改现有集群行为;dual-use executor 启用前 ops 务必打开并填好放行项。
+  # 本地默认关；生产 overlay 必须打开，并将目标收窄到实际 DB/Kafka namespace 或 pod。
   networkPolicy:
     enabled: false
     egress:

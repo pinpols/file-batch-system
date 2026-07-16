@@ -7,6 +7,13 @@
 */ -}}
 {{- $component := "worker-atomic" }}
 {{- $svc := .Values.workerAtomic }}
+{{- if $svc.productionIsolationRequired }}
+  {{- if not $svc.serviceAccountName }}{{ fail "workerAtomic.serviceAccountName 必须提供：生产 atomic worker 禁止使用默认 ServiceAccount" }}{{ end }}
+  {{- if not $svc.envFromSecretName }}{{ fail "workerAtomic.envFromSecretName 必须提供：生产 atomic worker 禁止回退共享 Secret" }}{{ end }}
+  {{- if not $svc.requireIsolation }}{{ fail "workerAtomic.requireIsolation 必须为 true：生产 atomic worker 必须启用隔离启动门禁" }}{{ end }}
+  {{- if not $svc.isolationAcknowledged }}{{ fail "workerAtomic.isolationAcknowledged 必须为 true：生产隔离清单未确认" }}{{ end }}
+  {{- if not $svc.networkPolicy.enabled }}{{ fail "workerAtomic.networkPolicy.enabled 必须为 true：生产 atomic worker 必须启用 default-deny egress" }}{{ end }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -31,8 +38,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      {{- with .Values.workerAtomic.serviceAccountName }}
-      serviceAccountName: {{ . }}
+      {{- with $svc.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
       {{- end }}
       {{- include "batch-platform.imagePullSecrets" . | nindent 6 }}
       {{- include "batch-platform.gracefulShutdownPod" $svc.gracefulShutdown | nindent 6 }}
@@ -58,13 +65,33 @@ spec:
             # livenessProbe / Prometheus scrape 全部失效。管理端口真正隔离需 ADR + 单独 Service。
             - name: BATCH_MANAGEMENT_PORT
               value: {{ $svc.port | quote }}
+            - name: BATCH_WORKER_ATOMIC_REQUIRE_ISOLATION
+              value: {{ $svc.requireIsolation | quote }}
+            - name: BATCH_WORKER_ATOMIC_ISOLATION_ACKNOWLEDGED
+              value: {{ $svc.isolationAcknowledged | quote }}
+            {{- $executors := $svc.executors | default dict }}
+            {{- if hasKey $executors "shellEnabled" }}
+            - name: BATCH_WORKER_ATOMIC_SHELL_ENABLED
+              value: {{ index $executors "shellEnabled" | quote }}
+            {{- end }}
+            {{- if hasKey $executors "storedProcEnabled" }}
+            - name: BATCH_WORKER_ATOMIC_STORED_PROC_ENABLED
+              value: {{ index $executors "storedProcEnabled" | quote }}
+            {{- end }}
+            {{- if hasKey $executors "sqlEnabled" }}
+            - name: BATCH_WORKER_ATOMIC_SQL_ENABLED
+              value: {{ index $executors "sqlEnabled" | quote }}
+            {{- end }}
+            {{- if hasKey $executors "httpEnabled" }}
+            - name: BATCH_WORKER_ATOMIC_HTTP_ENABLED
+              value: {{ index $executors "httpEnabled" | quote }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "batch-platform.configmapName" . }}
-            # 最小权限:优先用 workerAtomic.envFromSecretName 指定的受限 secret;未配则回退共享 secret
-            # (回退仅为不阻断起步;生产强烈建议配独立受限 secret,见 ADR-029)。
+            # 最小权限:生产模板已通过上方 values 守卫禁止回退共享 secret。
             - secretRef:
-                name: {{ .Values.workerAtomic.envFromSecretName | default (include "batch-platform.secretName" .) }}
+                name: {{ $svc.envFromSecretName | default (include "batch-platform.secretName" .) | quote }}
           {{- with $svc.startupProbe }}
           startupProbe:
             {{- toYaml . | nindent 12 }}

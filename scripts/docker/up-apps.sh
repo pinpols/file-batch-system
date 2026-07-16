@@ -35,7 +35,7 @@ if ! docker network inspect "$APP_NETWORK_NAME" >/dev/null 2>&1; then
 fi
 
 DOCKER_LOG_DIR="$(log_current_dir "$ROOT" docker docker)"
-echo "应用容器文件日志目录: $DOCKER_LOG_DIR（兼容 logs/docker）"
+echo "应用容器文件日志目录: ${DOCKER_LOG_DIR}（兼容 logs/docker）"
 
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
@@ -43,4 +43,4 @@ docker compose \
   -f docker/compose/app.yml \
   --profile apps \
   --profile replica \
-  up -d --force-recreate --remove-orphans "$@"
+  up -d --force-recreate "$@"
