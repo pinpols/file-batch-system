@@ -71,9 +71,9 @@ RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g; s|http://se
 
 WORKDIR /app
 
-# R7-A4-P0:非 root(uid/gid 1000=batch),与 Helm podSecurityContext.runAsUser:1000 对齐
-RUN groupadd --system --gid 1000 batch \
-    && useradd --system --uid 1000 --gid batch --home-dir /app --shell /sbin/nologin batch
+# R7-A4-P0:非 root(uid/gid 10001=batch),使用高 UID 避免与宿主机用户冲突。
+RUN groupadd --system --gid 10001 batch \
+    && useradd --system --uid 10001 --gid batch --home-dir /app --shell /sbin/nologin batch
 
 # 从共享 builder 复制本 module target(过滤 sources/javadoc/original)。
 # 不写 `COPY --from=builder /workspace/${MODULE_DIR}/target/${MODULE}-*.jar /app/app.jar`:glob 命中多个时 docker COPY 失败
@@ -95,7 +95,7 @@ RUN mkdir -p /var/log/app /var/cache/app /logs /app/logs \
     && chmod +x /app/entrypoint.sh \
     && chown -R batch:batch /app /var/log/app /var/cache/app /logs /app/logs
 
-USER 1000
+USER 10001
 
 ENV JAVA_OPTS=""
 ENV JAVA_OPTS_EXTRA=""

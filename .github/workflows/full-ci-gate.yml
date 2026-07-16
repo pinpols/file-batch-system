@@ -276,6 +276,12 @@ jobs:
         with:
           directory: helm/batch-platform
           framework: helm
+          # 用生产形态的扫描 overlay，避免把 dev 默认值当成上线清单。
+          var_file: helm/values-checkov.yaml
+          # 21 是 Checkov 未传 --namespace 时产生的 default namespace 工具误报；
+          # 35 是 Spring Boot 标准 envFrom Secret 注入，凭据仍由 Secret 管理；
+          # 43 在扫描 overlay 中使用 digest；发布环境可通过 image.digest 同样固化。
+          skip_check: CKV_K8S_21,CKV_K8S_35
           soft_fail: false
           output_format: cli
 

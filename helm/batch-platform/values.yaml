@@ -8,6 +8,7 @@
 image:
   registry: ""          # 例如 registry.example.com/batch-platform
   tag: ""               # 为空则用 Chart.appVersion
+  digest: ""            # 非空时使用 registry/image@sha256:...，优先于 tag
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -74,6 +75,13 @@ security:
     # 留空时 BE 启动期生成单实例密钥(单副本 dev OK)。
     privateKeyPem: ""
     publicKeyPem: ""
+
+# 标准应用 Pod 的入站网络边界。默认关闭以保留本地开发集群的连通性；生产 overlay
+# 必须开启并显式列出 ingress controller、监控抓取和同命名空间来源。
+networkPolicy:
+  enabled: false
+  ingress:
+    from: []
 
 canary:
   enabled: false
@@ -571,8 +579,11 @@ podDisruptionBudget:
 podAnnotations: {}
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 1000
-  fsGroup: 1000
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
   allowPrivilegeEscalation: false

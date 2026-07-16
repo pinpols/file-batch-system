@@ -1,0 +1,41 @@
+# Checkov-only Helm overlay. It renders the chart in a production-shaped mode
+# without containing deployable credentials. CI never uses this file for install.
+image:
+  pullPolicy: Always
+  digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+security:
+  enforceStrongSecrets: true
+  internalSecret: checkov-placeholder-internal-secret-32-chars
+  consoleJwtSecret: checkov-placeholder-console-jwt-32-chars
+  loginEncryption:
+    required: "true"
+    privateKeyPem: checkov-placeholder-private-key
+    publicKeyPem: checkov-placeholder-public-key
+
+objectStorage:
+  accessKey: checkov-placeholder-access
+  secretKey: checkov-placeholder-secret
+
+networkPolicy:
+  enabled: true
+  ingress:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: batch
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: monitoring
+
+workerAtomic:
+  productionIsolationRequired: true
+  serviceAccountName: batch-worker-atomic
+  envFromSecretName: batch-worker-atomic-secret
+  requireIsolation: true
+  isolationAcknowledged: true
+  networkPolicy:
+    enabled: true
