@@ -107,11 +107,10 @@ class BatchSecurityPropertiesTest {
   @Test
   void prodProfile_defaultInternalSecret_throwsFatal() {
     BatchSecurityProperties props = newProps("prod", false);
-    // internalSecret 默认值 "internal-secret"（15 char）会先在长度校验处被拒
-    // （validateNotPlaceholder 内 MIN_SECRET_LENGTH=16 检查在 "仍为默认值" 等值比较之前）
+    // 生产默认值为空时必须先以“未配置”失败，避免依赖任何内置凭据。
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("密钥强度不足");
+        .hasMessageContaining("为空");
   }
 
   @Test

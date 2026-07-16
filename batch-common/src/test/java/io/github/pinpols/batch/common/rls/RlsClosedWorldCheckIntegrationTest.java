@@ -161,13 +161,11 @@ class RlsClosedWorldCheckIntegrationTest {
     target.execute("ALTER TABLE " + fqTable + " ENABLE ROW LEVEL SECURITY");
     target.execute("ALTER TABLE " + fqTable + " FORCE ROW LEVEL SECURITY");
     target.execute(
-        "CREATE POLICY tenant_isolation_transition ON "
+        "CREATE POLICY tenant_isolation_strict ON "
             + fqTable
             + " AS PERMISSIVE FOR ALL TO PUBLIC"
-            + " USING (current_setting('app.tenant_id', true) IS NULL"
-            + "   OR tenant_id = current_setting('app.tenant_id', true))"
-            + " WITH CHECK (current_setting('app.tenant_id', true) IS NULL"
-            + "   OR tenant_id = current_setting('app.tenant_id', true))");
+            + " USING (tenant_id = current_setting('app.tenant_id', true))"
+            + " WITH CHECK (tenant_id = current_setting('app.tenant_id', true))");
   }
 
   /** 建表 + ENABLE/FORCE RLS + 施一个**同名但语义坏**的 policy(policyClause 决定坏法)。 */
@@ -178,7 +176,7 @@ class RlsClosedWorldCheckIntegrationTest {
             + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
     jdbc.execute("ALTER TABLE biz." + table + " ENABLE ROW LEVEL SECURITY");
     jdbc.execute("ALTER TABLE biz." + table + " FORCE ROW LEVEL SECURITY");
-    jdbc.execute("CREATE POLICY tenant_isolation_transition ON biz." + table + " " + policyClause);
+    jdbc.execute("CREATE POLICY tenant_isolation_strict ON biz." + table + " " + policyClause);
   }
 
   // ─── 用例 ──────────────────────────────────────────────────────────────

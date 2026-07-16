@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -35,7 +36,8 @@ public class S3AutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public S3Client s3Client(S3StorageProperties p) {
+  public S3Client s3Client(S3StorageProperties p, Environment environment) {
+    validateCredentialsInProduction(p, environment);
     ApacheHttpClient.Builder http =
         ApacheHttpClient.builder()
             .connectionTimeout(Duration.ofMillis(p.getConnectTimeoutMs()))
@@ -92,6 +94,24 @@ public class S3AutoConfiguration {
         .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
         .region(StringUtils.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
         .build();
+  }
+
+  static void validateCredentialsInProduction(
+      S3StorageProperties properties, Environment environment) {
+    if (!BatchProfileSupport.isProductionProfile(environment)) {
+      return;
+    }
+    String accessKey = properties.getAccessKey() == null ? "" : properties.getAccessKey().trim();
+    String secretKey = properties.getSecretKey() == null ? "" : properties.getSecretKey().trim();
+    if (accessKey.isEmpty() || secretKey.isEmpty()) {
+      throw new IllegalStateException(
+          "FATAL: 生产环境对象存储凭据未配置，请通过 BATCH_S3_ACCESS_KEY / BATCH_S3_SECRET_KEY 注入");
+    }
+    if ("minioadmin".equals(accessKey)
+        || "minioadmin".equals(secretKey)
+        || "minioadmin123".equals(secretKey)) {
+      throw new IllegalStateException("FATAL: 生产环境对象存储仍使用已知 MinIO 默认凭据，请注入真实凭据");
+    }
   }
 
   @Bean("s3HealthIndicator")

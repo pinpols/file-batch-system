@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
@@ -25,10 +26,11 @@ import org.springframework.core.env.Environment;
  * <p>背景:Sql/StoredProc/Http/Shell/SparkSubmit executor 的安全防护链都允许"空白名单 = 放行全部"以满足 dev 开发, 但生产同样配置等于把
  * dual-use RCE 接口对内全开,与 ADR-029 atomic worker 隔离初衷背离。
  *
- * <p>触发范围:① active profile 含 "prod"(始终强制);② {@code batch.worker.executors.guard.enforce-profiles}
- * 列出的其它 profile(如 staging/uat);③ {@code batch.worker.executors.guard.always-enforce=true} 任意环境强制。
- * <b>未触发的环境若检出"空白名单=放行全部",不再静默——降级为 WARN 列出风险项</b>,让 staging/uat 运维即便没开强制 也能看到 dual-use 执行器是大开的(原先只
- * prod 拦、其它环境完全无声,是真实盲区)。dev/local/test 默认仍放行不报错。
+ * <p>触发范围:① prod-like profile(含 prod/staging/uat/preprod,以及未识别或未配置 profile 时的 fail-secure 默认); ②
+ * {@code batch.worker.executors.guard.enforce-profiles} 列出的其它 profile;③ {@code
+ * batch.worker.executors.guard.always-enforce=true} 任意环境强制。 <b>未触发的环境若检出"空白名单=放行全部",不再静默——降级为 WARN
+ * 列出风险项</b>,让 staging/uat 运维即便没开强制 也能看到 dual-use 执行器是大开的(原先只 prod 拦、其它环境完全无声,是真实盲区)。dev/local/test
+ * 默认仍放行不报错。
  *
  * <p>失败信息明确指向应配置的 yaml key,运维一眼能改。
  */
@@ -36,8 +38,6 @@ import org.springframework.core.env.Environment;
 @Configuration
 @RequiredArgsConstructor
 public class AtomicExecutorProductionGuard {
-
-  private static final String PROD_PROFILE = "prod";
 
   private final Environment environment;
   private final ObjectProvider<SqlExecutorProperties> sqlProps;
@@ -60,7 +60,7 @@ public class AtomicExecutorProductionGuard {
       throw new IllegalStateException(
           "atomic worker fail-closed check failed:\n - " + String.join("\n - ", violations));
     }
-    // 未强制的环境(staging/uat/未声明 profile)检出空白名单 = 放行全部:不静默,WARN 暴露风险,
+    // 明确非生产环境检出空白名单 = 放行全部:不静默,WARN 暴露风险,
     // 让运维即便没开强制也能看到 dual-use 执行器是大开的。要拦截:把本 profile 加进
     // batch.worker.executors.guard.enforce-profiles,或置 always-enforce=true。
     log.warn(
@@ -76,7 +76,7 @@ public class AtomicExecutorProductionGuard {
         "batch.worker.executors.guard.always-enforce", Boolean.class, false)) {
       return true;
     }
-    if (isProdProfile(activeProfiles)) {
+    if (BatchProfileSupport.isProductionProfile(environment)) {
       return true;
     }
     String configured =
@@ -142,25 +142,5 @@ public class AtomicExecutorProductionGuard {
               + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");
     }
     return violations;
-  }
-
-  private static boolean isProdProfile(String[] activeProfiles) {
-    if (activeProfiles == null) {
-      return false;
-    }
-    for (String p : activeProfiles) {
-      if (p != null && PROD_PROFILE.equalsIgnoreCase(p.trim())) {
-        return true;
-      }
-      // 同时允许常见复合命名,如 "prod-eu"、"prod_us":只要任一片段匹配 prod
-      if (p != null) {
-        for (String token : p.toLowerCase(Locale.ROOT).split("[\\-_,]")) {
-          if (PROD_PROFILE.equals(token)) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
   }
 }

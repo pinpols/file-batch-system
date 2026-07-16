@@ -4,16 +4,15 @@
 -- 见 docs/plans/multi-tenant-isolation-plan-2026-05-31.md §Phase A
 -- 见 docs/runbook/multi-tenant-rls.md
 --
--- 目标:在 biz.* 9 张表上加 PostgreSQL RLS,DB 层强制 `tenant_id` 过滤,
+-- 目标:在 biz.* 所有包含 tenant_id 的租户业务表上加 PostgreSQL RLS,DB 层强制 `tenant_id` 过滤,
 --      杜绝「应用 SQL bug → 跨租户数据泄露」。
 --
 -- 部署位置:batch_business 库(同 scripts/db/business/create_biz_tables.sql)。
 --   psql -d batch_business -f scripts/db/business/rls-phase-a.sql
 --
--- 策略模式:transition(过渡模式)— `current_setting('app.tenant_id', true)` 未设时允许
---   全部(向后兼容现有 worker),设了则强制 `tenant_id` 等于该值。
---   全部 worker 改造完成后,后续 PR 把 USING / WITH CHECK 的 IS NULL 分支去掉转为 strict
---   模式(显式 SET LOCAL 才能读写)。
+-- 策略模式:strict— `current_setting('app.tenant_id', true)` 未设或为空时不匹配任何行,
+--   显式 SET LOCAL 且 tenant_id 相等才允许读写。transition 只保留在
+--   rls-phase-a-rollback-to-transition.sql 中作为应急降级路径。
 --
 -- BYPASSRLS:`batch_business_admin` role(本脚本创建)用于平台跨租户聚合(forensic
 --   export / 跨租户报表)。普通应用 worker 不应使用此 role,审计日志会标记 role 名。
@@ -83,9 +82,9 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------
--- 2. 启用 RLS + 加 policy(9 张 biz 表 + 1 张 batch.process_staging)
+-- 2. 启用 RLS + 加 strict policy(动态发现 biz 租户表 + batch.process_staging)
 --
--- 策略:transition 模式 — `app.tenant_id` 未设时允许全部(向后兼容);设了则强制等值。
+-- 策略:strict 模式 — `app.tenant_id` 未设或为空时拒绝全部;设了则强制等值。
 --
 -- 关键点:
 --   - ENABLE 启动 RLS 检查
@@ -97,19 +96,21 @@ END $$;
 DO $$
 DECLARE
   t TEXT;
-  tables TEXT[] := ARRAY[
-    'biz.customer_account',
-    'biz.process_account_summary',
-    'biz.process_event_copy',
-    'biz.process_order_event',
-    'biz.risk_alert',
-    'biz.risk_score',
-    'biz.settlement_batch',
-    'biz.settlement_detail',
-    'biz.transaction'
-  ];
 BEGIN
-  FOREACH t IN ARRAY tables LOOP
+  -- 只处理非分区子表的普通表/分区父表;分区子表继承父表 RLS。
+  FOR t IN
+    SELECT format('%I.%I', n.nspname, c.relname)
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN information_schema.columns col
+      ON col.table_schema = n.nspname
+     AND col.table_name = c.relname
+     AND col.column_name = 'tenant_id'
+    WHERE n.nspname = 'biz'
+      AND c.relkind IN ('r', 'p')
+      AND c.relispartition = false
+    ORDER BY c.relname
+  LOOP
     -- 存在性守护:缺表只跳过并告警,不让整个 DO 块回滚(否则一张不存在的表会使
     -- 全部 biz 表都拿不到 policy)。to_regclass 对不存在的表返回 NULL。
     IF to_regclass(t) IS NULL THEN
@@ -118,22 +119,19 @@ BEGIN
     END IF;
     EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', t);
-    -- DROP 之前可能存在的同名 policy(幂等)
+    -- DROP 之前可能存在的旧 transition/strict policy(幂等升级)
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_transition ON %s', t);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_strict ON %s', t);
     EXECUTE format($p$
-      CREATE POLICY tenant_isolation_transition ON %s
+      CREATE POLICY tenant_isolation_strict ON %s
         AS PERMISSIVE
         FOR ALL
         TO PUBLIC
         USING (
-          current_setting('app.tenant_id', true) IS NULL
-          OR current_setting('app.tenant_id', true) = ''
-          OR tenant_id = current_setting('app.tenant_id', true)
+          tenant_id = current_setting('app.tenant_id', true)
         )
         WITH CHECK (
-          current_setting('app.tenant_id', true) IS NULL
-          OR current_setting('app.tenant_id', true) = ''
-          OR tenant_id = current_setting('app.tenant_id', true)
+          tenant_id = current_setting('app.tenant_id', true)
         )
     $p$, t);
   END LOOP;
@@ -147,19 +145,16 @@ BEGIN
     ALTER TABLE batch.process_staging ENABLE ROW LEVEL SECURITY;
     ALTER TABLE batch.process_staging FORCE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS tenant_isolation_transition ON batch.process_staging;
-    CREATE POLICY tenant_isolation_transition ON batch.process_staging
+    DROP POLICY IF EXISTS tenant_isolation_strict ON batch.process_staging;
+    CREATE POLICY tenant_isolation_strict ON batch.process_staging
       AS PERMISSIVE
       FOR ALL
       TO PUBLIC
       USING (
-        current_setting('app.tenant_id', true) IS NULL
-        OR current_setting('app.tenant_id', true) = ''
-        OR tenant_id = current_setting('app.tenant_id', true)
+        tenant_id = current_setting('app.tenant_id', true)
       )
       WITH CHECK (
-        current_setting('app.tenant_id', true) IS NULL
-        OR current_setting('app.tenant_id', true) = ''
-        OR tenant_id = current_setting('app.tenant_id', true)
+        tenant_id = current_setting('app.tenant_id', true)
       );
   END IF;
 END $$;
@@ -170,4 +165,4 @@ END $$;
 -- SELECT schemaname, tablename, policyname, permissive, cmd
 --   FROM pg_policies WHERE schemaname IN ('biz', 'batch') ORDER BY schemaname, tablename;
 --
--- 期望:每张表 1 行,policyname='tenant_isolation_transition',permissive='PERMISSIVE',cmd='ALL'
+-- 期望:每张表 1 行,policyname='tenant_isolation_strict',permissive='PERMISSIVE',cmd='ALL'

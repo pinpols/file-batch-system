@@ -46,6 +46,7 @@ objectStorage:
 
 security:
   bypassMode: "false"
+  enforceStrongSecrets: true
   internalSecret: ""
   consoleJwtSecret: ""
   # 2026-05-18 console 登录请求体 RSA+AES 混合加密(BE ConsoleLoginKeyPairService)。
@@ -160,10 +161,39 @@ workerDispatch:
     periodSeconds: 10
     failureThreshold: 18
 
-# ADR-029 专用 SPI worker(原子任务 shell/sql/stored-proc/http)。最小权限隔离:
-# 生产务必另配 workerAtomic.serviceAccountName / envFromSecretName(独立低权限凭据)。
+# ADR-029 专用 SPI worker(原子任务 shell/sql/stored-proc/http)。生产隔离为 chart 硬门禁:
+# 下面的 SA / Secret 由集群密钥与 RBAC 管理系统预先创建，不能复用平台共享身份；
+# executor 默认全部关闭，启用某类能力时必须在此 overlay 同时提供对应白名单。
 workerAtomic:
   replicaCount: 1
+  productionIsolationRequired: true
+  serviceAccountName: "batch-worker-atomic"
+  envFromSecretName: "batch-worker-atomic-secret"
+  requireIsolation: true
+  isolationAcknowledged: true
+  executors:
+    shellEnabled: false
+    storedProcEnabled: false
+    sqlEnabled: false
+    httpEnabled: false
+  networkPolicy:
+    enabled: true
+    egress:
+      postgresql:
+        enabled: true
+        port: 5432
+        to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: db
+      kafka:
+        enabled: true
+        port: 9092
+        to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: kafka
+      extra: []
   hpa:
     enabled: true
     minReplicas: 1

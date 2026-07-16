@@ -52,7 +52,8 @@ services:
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD", "/usr/bin/java", "-jar", "/libs/mockserver-netty-jar-with-dependencies.jar", "-version"]
+      # mockserver/mockserver:5.15.0 将 fat jar 放在根目录；该探针只验证测试辅助容器可执行。
+      test: ["CMD", "java", "-jar", "/mockserver-netty-jar-with-dependencies.jar", "-version"]
       interval: 10s
       timeout: 5s
       retries: 6

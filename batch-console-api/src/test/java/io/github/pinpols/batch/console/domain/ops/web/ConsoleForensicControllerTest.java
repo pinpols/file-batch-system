@@ -4,15 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
@@ -22,10 +25,12 @@ import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestrato
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.io.OutputStream;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
@@ -44,11 +49,16 @@ class ConsoleForensicControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata(
+                "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
     mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleForensicController(proxy, responseFactory))
+        MockMvcBuilders.standaloneSetup(
+                new ConsoleForensicController(proxy, responseFactory, requestMetadataResolver))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
@@ -87,15 +97,29 @@ class ConsoleForensicControllerTest {
                     """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.exportId").value("fx-001"));
-    verify(proxy).requestForensicExport(eq("t1"), any(), any(), any(), eq("BUNDLE"), eq("admin"));
+    verify(proxy)
+        .requestForensicExport(
+            eq("t1"), any(), any(), any(), eq("BUNDLE"), eq("authenticated-admin"));
   }
 
   @Test
   void downloadShouldReturnZipBytesWithAttachmentHeader() throws Exception {
     byte[] payload = new byte[] {1, 2, 3};
-    when(proxy.downloadForensicExport("t1", "fx-001")).thenReturn(payload);
+    doAnswer(
+            invocation -> {
+              invocation.getArgument(2, OutputStream.class).write(payload);
+              return null;
+            })
+        .when(proxy)
+        .downloadForensicExport(eq("t1"), eq("fx-001"), any(OutputStream.class));
+    MvcResult asyncResult =
+        mockMvc
+            .perform(get("/api/console/forensic/export/fx-001/download").param("tenantId", "t1"))
+            .andExpect(status().isOk())
+            .andExpect(request().asyncStarted())
+            .andReturn();
     mockMvc
-        .perform(get("/api/console/forensic/export/fx-001/download").param("tenantId", "t1"))
+        .perform(asyncDispatch(asyncResult))
         .andExpect(status().isOk())
         .andExpect(header().string("Content-Disposition", "attachment; filename=\"fx-001.zip\""))
         .andExpect(content().bytes(payload));

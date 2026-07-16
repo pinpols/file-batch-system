@@ -261,7 +261,7 @@ batch:
     # BATCH_SECURITY_BYPASS_MODE=true 覆盖；生产 profile 通过 @PostConstruct 守护拒绝 true。
     bypass-mode: ${BATCH_SECURITY_BYPASS_MODE:false}
     # 内部接口（/internal/**）共享密钥；生产环境必须通过 BATCH_INTERNAL_SECRET 注入强密钥
-    internal-secret: ${BATCH_INTERNAL_SECRET:internal-secret}
+    internal-secret: ${BATCH_INTERNAL_SECRET:}
     kms:
       # 默认密钥引用（key ref）
       default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
@@ -276,7 +276,7 @@ batch:
       # 访问地址（http/https）。AWS: https://s3.<region>.amazonaws.com;OSS: https://oss-<region>.aliyuncs.com
       endpoint: ${BATCH_S3_ENDPOINT:http://localhost:19000}
       # 访问密钥 ID（腾讯 COS 为 SecretId）
-      access-key: ${BATCH_S3_ACCESS_KEY:minioadmin}
+      access-key: ${BATCH_S3_ACCESS_KEY:}
       # 秘密访问密钥
       secret-key: ${BATCH_S3_SECRET_KEY:}
       # 默认 bucket

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -86,6 +87,7 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
 
   @BeforeEach
   void setUp() {
+    RlsTenantContextHolder.set(TENANT);
     dataSource = new DriverManagerDataSource();
     dataSource.setDriverClassName("org.postgresql.Driver");
     dataSource.setUrl(POSTGRES.getJdbcUrl() + "&stringtype=unspecified");
@@ -128,6 +130,7 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
 
   @AfterEach
   void cleanup() throws Exception {
+    RlsTenantContextHolder.clear();
     for (Path p : tempPaths) {
       Files.deleteIfExists(p);
     }

@@ -103,14 +103,17 @@ public class BusinessDataSourceConfiguration {
   }
 
   /**
-   * 启动期 RLS 闭世界 fail-fast 守门 —— opt-in。仅当 {@code batch.rls.startup-fail-fast=true} 装配(默认
-   * false=不阻断启动,只靠 health DOWN 可见),且上下文里有 business datasource。复用 health indicator 同一套闭世界检查逻辑。
+   * 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启。测试库必须显式设置 {@code batch.rls.startup-fail-fast=false}；上下文里有
+   * business datasource 时才装配，复用 health indicator 同一套闭世界检查逻辑。
    *
    * <p>{@code @ConditionalOnBean(processBusinessDataSource)} 守门:无 biz datasource 的上下文不装配本副作用
    * bean,避免牵连其他 worker 启动失败。
    */
   @Bean(name = "rlsStartupFailFastCheck")
-  @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true")
+  @ConditionalOnProperty(
+      name = "batch.rls.startup-fail-fast",
+      havingValue = "true",
+      matchIfMissing = true)
   @ConditionalOnBean(name = "processBusinessDataSource")
   public RlsStartupFailFastCheck rlsStartupFailFastCheck(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,

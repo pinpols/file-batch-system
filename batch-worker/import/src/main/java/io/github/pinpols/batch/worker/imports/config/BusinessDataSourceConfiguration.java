@@ -86,9 +86,12 @@ public class BusinessDataSourceConfiguration {
         importBusinessDataSource, rlsProperties);
   }
 
-  /** 启动期 RLS 闭世界 fail-fast 守门 —— opt-in(默认 false 不阻断),双守门避免牵连无 biz datasource 的上下文。 */
+  /** 启动期 RLS 闭世界 fail-fast 守门 —— 默认开启；测试库必须显式关闭。 */
   @Bean(name = "importRlsStartupFailFastCheck")
-  @ConditionalOnProperty(name = "batch.rls.startup-fail-fast", havingValue = "true")
+  @ConditionalOnProperty(
+      name = "batch.rls.startup-fail-fast",
+      havingValue = "true",
+      matchIfMissing = true)
   @ConditionalOnBean(name = "importBusinessDataSource")
   public RlsStartupFailFastCheck importRlsStartupFailFastCheck(
       @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource,

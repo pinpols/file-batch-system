@@ -8,6 +8,8 @@ spring:
     # platform-init.sql 仅建 schema；迁移由 classpath:db/migration 完整执行。
 
 batch:
+  rls:
+    startup-fail-fast: false
   shedlock:
     auto-create: true
   sla:

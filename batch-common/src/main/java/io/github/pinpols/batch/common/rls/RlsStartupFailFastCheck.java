@@ -13,9 +13,8 @@ import org.springframework.context.event.EventListener;
  * <p>{@link ApplicationReadyEvent} 触发时跑与 {@link RlsPolicyHealthIndicator} <b>同一套</b>闭世界检查({@link
  * RlsClosedWorldChecker});任何 biz 表缺 RLS(ENABLE/FORCE/policy)→ 抛 {@link IllegalStateException} 拒绝启动。
  *
- * <p><b>必须 opt-in + 守门</b>:本 bean 只在 {@code batch.rls.startup-fail-fast=true} 时装配,且要求上下文里有 business
- * datasource(见 {@code @ConditionalOnBean})。历史故障模式:副作用 bean 硬注入会牵连不装配该依赖的上下文启动失败。默认 false,只靠 health
- * DOWN 可见,不阻断启动。
+ * <p>本 bean 由 {@code batch.rls.startup-fail-fast} 控制；该配置默认开启。没有业务数据源的上下文不应装配此 bean，避免把 RLS
+ * 守门错误地施加到只使用平台库的模块。
  *
  * <p>biz 库不可达(SQLException)时同样 fail-fast:开了开关就表示该部署必须 RLS 就绪,连不上也不该静默放行。
  */
@@ -36,7 +35,7 @@ public class RlsStartupFailFastCheck {
     } catch (SQLException e) {
       throw new IllegalStateException(
           "RLS startup fail-fast: biz datasource unreachable while verifying closed-world RLS "
-              + "coverage — set batch.rls.startup-fail-fast=false if biz库 RLS 未就绪. cause="
+              + "coverage — configure the business database and RLS before starting. cause="
               + e.getMessage(),
           e);
     }

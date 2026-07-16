@@ -4,7 +4,7 @@
 
 ## 1. 它做什么
 
-在 `biz.*` 9 张表(+ `batch.process_staging`)上启用 PostgreSQL RLS,**DB 层强制 `tenant_id` 等于 session 变量 `app.tenant_id`**。
+在 `biz.*` 所有包含 `tenant_id` 的租户业务表(+ `batch.process_staging`)上启用 PostgreSQL RLS,**DB 层强制 `tenant_id` 等于 session 变量 `app.tenant_id`**。
 
 - 应用层 SQL 漏写 `WHERE tenant_id = ?` 时,DB 自己挡住跨租户读
 - 应用层试图 INSERT 别租户的行时,DB 拒绝(POLICY 违反)
@@ -31,7 +31,7 @@ psql -d batch_business -v ON_ERROR_STOP=1 \
 
 效果:
 - 创建 `batch_business_writer` role(RLS 生效)+ `batch_business_admin` role(BYPASSRLS,审计专用)
-- 9 张 biz 表 + `batch.process_staging` 启用 RLS + FORCE + `tenant_isolation_transition` policy
+- 所有包含 `tenant_id` 的 biz 表 + `batch.process_staging` 启用 RLS + FORCE + `tenant_isolation_strict` policy；分区子表继承父表策略
 
 ### 验证
 
@@ -57,39 +57,25 @@ SELECT n.nspname || '.' || c.relname AS tbl, c.relrowsecurity, c.relforcerowsecu
 
 `RlsPolicyHealthIndicator`(`batch-common`)注册到 `/actuator/health`,缺 ENABLE / FORCE / policy 任一即报 DOWN,details 列出缺哪张表。
 
-## 3. Phase A transition 模式 vs strict 模式
+## 3. Phase A strict 模式（当前默认）
 
 ### 3.1 两种模式 policy 对比
 
-**当前 policy(transition 模式 — 默认)**:
-
-```sql
-USING (
-  current_setting('app.tenant_id', true) IS NULL
-  OR current_setting('app.tenant_id', true) = ''
-  OR tenant_id = current_setting('app.tenant_id', true)
-)
-WITH CHECK (同上)
-```
-
-- `app.tenant_id` 未设 / 空 → 允许全部(向后兼容)
-- 设了 → 强制等值(已生效,不可绕)
-
-**目的**:渐进上线,生产升级期间 worker 代码不会一夜全挂。**transition 模式下,代码 bug 漏 SET 不会泄露**:
-- 读路径:漏 SET → 返所有租户行 → **业务依然按 `WHERE tenant_id=?` 过滤**,RLS 是回退没多加
-- 写路径:漏 SET → INSERT/UPDATE 允许 → 但漏写 `tenant_id` 列业务侧 ArchTest 已拦
-- 真正的 DB 层强制 = strict 模式
-
-**strict 模式 policy**(下一 PR,本节 §3.4 描述):
+**当前 policy(strict 模式 — 默认)**:
 
 ```sql
 USING (tenant_id = current_setting('app.tenant_id', true))
 WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
 ```
 
-去掉 IS NULL / 空串回退 — worker 必须 `SET LOCAL` 才能读写,否则:
+- `app.tenant_id` 未设 / 空 → 不匹配任何行
+- 设了 → 仅允许相同 tenant_id
+- worker 必须 `SET LOCAL` 才能读写,否则:
 - 读:返 0 行
 - 写:`new row violates row-level security policy` 异常
+
+`RlsTenantSessionSupport` 对缺失/非法上下文和 `set_config` 失败直接抛异常，不允许以 WARN 降级继续访问业务库。
+transition policy 已从正常安装脚本移除，仅保留在应急回滚脚本中；回滚期间健康检查会保持 DOWN，修复后必须重新安装 strict policy。
 
 ### 3.2 接线现状(2026-05-31)
 
@@ -104,22 +90,22 @@ WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
 | export | `SqlTemplateExportDataPlugin.loadDetailPage` | #160 | readonly tx + applyIfPresent + query |
 | dispatch | 不访问 biz.* | — | N/A |
 
-### 3.3 翻 strict 模式 前置 checklist
+### 3.3 strict 模式上线 checklist
 
 翻之前必须每一项 ✅:
 
 - [x] **A.** 所有 biz.* 写入/读取路径已接线(见 §3.2 表,4 个 plugin + 1 个 adapter)— PR #155/#158/#160
-- [ ] **B.** sim 跑全链路一遍,日志无 `RLS SET LOCAL failed` warn(`scripts/sim/05-load.sh + 07-atomic-load.sh`)— **待运维生产前跑**
-- [ ] **C.** 生产 prod-shadow 跑 ≥ 1 周,actuator/health 持续绿,无 `RLS SET LOCAL failed` log — **待运维**
-- [x] **D.** `RlsStrictModePreflightIntegrationTest` 7 个 test 覆盖 transition + strict + 漏 SET + 回滚 — PR(当前)
-- [x] **E.** Release notes / on-call 翻转手册 — `docs/runbook/multi-tenant-rls-strict-rollout.md`,回滚脚本 `rls-phase-a-rollback-to-transition.sql` — PR(当前)
+- [ ] **B.** sim 跑全链路一遍，确认没有 RLS 失败日志 — **部署环境验证项**
+- [ ] **C.** 生产 prod-shadow 跑 ≥ 1 周，actuator/health 持续绿 — **部署环境验证项**
+- [x] **D.** strict IT 覆盖未 SET、正确租户、跨租户写入和 set_config 接线
+- [x] **E.** strict 安装、启动 fail-fast、健康检查和应急回滚手册已落库
 - [x] **F.** runbook §6 已升级为「strict 模式标准排查路径」+ 5 步排查优先级 — PR #161
 
-**4/6 已完成,剩 B/C 是运维侧观察期任务**。代码侧 ready,部署侧择时翻。
+**代码与默认部署策略已切到 strict；B/C 仍是必须在真实 sim/staging 环境留证的运维验收项，不能用本地单测替代。**
 
-### 3.4 翻 strict 模式 PR 内容(预告)
+### 3.4 strict 落地内容
 
-下一 PR 题为 `feat(rls): Phase A strict 模式 — DB 层强制 tenant_id` 包含:
+当前实现包含:
 
 1. **新 migration** `scripts/db/business/rls-phase-a-strict.sql`(幂等):
    ```sql
@@ -140,24 +126,21 @@ WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
    END $$;
    ```
 
-2. **更新** `RlsPolicyHealthIndicator.EXPECTED_POLICY_NAME`:`tenant_isolation_transition` → `tenant_isolation_strict`
+2. **更新** `RlsClosedWorldChecker`：只接受 `tenant_isolation_strict`，并拒绝含 `IS NULL` 回退的策略
 
-3. **更新** `RlsPhaseAMigrationCoverageTest`:扫 `rls-phase-a-strict.sql` 而非 transition 版
+3. **更新** `RlsTenantSessionSupport`:缺 tenant、非法 tenant、`set_config` 失败均 fail-closed
 
-4. **更新** 本 runbook §3.1:把 transition 标「已废弃」+ strict 升为「当前」
+4. **更新** `RlsProperties.startupFailFast` 默认 `true`，生产缺 RLS 时拒绝启动
 
-5. **回滚预案**:同 PR 提交 `scripts/db/business/rls-phase-a-rollback-to-transition.sql`,一行 ALTER 即可退
+5. **回滚预案**:保留 `scripts/db/business/rls-phase-a-rollback-to-transition.sql`，仅用于事故止血，回滚后必须恢复 strict
 
-### 3.5 翻 strict 时机判断
+### 3.5 strict 验收判断
 
 | 情况 | 建议 |
 |---|---|
-| sim 跑通 + 单环境 prod-shadow ≥ 1 周 + 0 warn | ✅ 立刻翻 strict |
-| sim 跑通但生产没 shadow / 业务关键期(年终结算/大促) | ⏸ 等业务平期再翻 |
-| 任一路径 `RLS SET LOCAL failed` warn > 0 | ❌ 先定位修接线,再考虑翻 |
-| 新增 biz.* 表后 | ⏸ 等新表也接线 ≥ 1 周再翻 |
-
-**保守策略**:transition 模式本身已经提供 80% 价值(设了 SET 就强制),翻 strict 是把剩 20% 回退变硬。**不是必须立刻翻**。
+| sim 跑通 + 单环境 prod-shadow ≥ 1 周 + 0 RLS 失败 | ✅ 可签署上线 |
+| sim/staging 仍有 RLS 失败 | ❌ 阻断上线，修复接线或数据源配置 |
+| 新增 biz.* 表后 | ❌ 先补 RLS、闭世界检查和接线测试 |
 
 ## 4. 应用代码怎么用
 
@@ -211,12 +194,12 @@ jdbcTemplate(adminDs).queryForList("SELECT tenant_id, count(*) FROM biz.customer
 
 1. 表 DDL 包含 `tenant_id VARCHAR(64) NOT NULL` 列
 2. UNIQUE 约束含 `(tenant_id, ...)` 前缀
-3. 在 `scripts/db/business/rls-phase-a.sql` 的 `tables` 数组里追加 `'biz.foo'`
-4. 在 `RlsPolicyHealthIndicator.EXPECTED_RLS_TABLES` 加 `"biz.foo"`
-5. `RlsPhaseAMigrationCoverageTest` 必过(自动守护 3 和 4 同步)
+3. 新表创建后执行 `rls-phase-a.sql` 或 `rls-phase-a-strict.sql`；脚本会动态发现所有含 `tenant_id` 的非分区父表，不需要维护数组
+4. 非租户元数据表只能通过 `batch.rls.exempt-tables` 显式豁免，并在评审中说明原因
+5. `RlsPhaseAMigrationCoverageTest` 必过，确保三份脚本仍保持动态发现
 6. 上线后 `actuator/health` 必绿(自动验证 ENABLE + FORCE + policy)
 
-漏 3/4 任一 → ArchTest 红或 health DOWN,合并即拦截。
+漏 RLS 安装或误把租户表加入豁免 → health DOWN，启动 fail-fast 阻断部署。
 
 ## 6. 故障排查
 

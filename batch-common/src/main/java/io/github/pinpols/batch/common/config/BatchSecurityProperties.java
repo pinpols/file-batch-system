@@ -32,7 +32,7 @@ public class BatchSecurityProperties implements EnvironmentAware {
    * orchestrator 内部接口（/internal/**）的共享密钥。 客户端通过 X-Internal-Secret header 携带；bypassMode=true 时跳过校验。
    * 生产环境必须通过 BATCH_INTERNAL_SECRET 环境变量注入强密钥。
    */
-  private String internalSecret = "internal-secret";
+  private String internalSecret = "";
 
   // 注入 Environment 用于启动时 profile 检查;经 EnvironmentAware 框架回调注入(非 @Autowired field),
   // 容器内由 Spring 调 @Data 生成的 setEnvironment 注入;单测 new 该类时不调用 → environment 为 null,守护逻辑已 null-safe。

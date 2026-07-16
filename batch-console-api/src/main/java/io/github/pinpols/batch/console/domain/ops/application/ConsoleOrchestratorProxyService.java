@@ -2,6 +2,8 @@ package io.github.pinpols.batch.console.domain.ops.application;
 
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -93,6 +95,12 @@ public interface ConsoleOrchestratorProxyService {
    * <p>orchestrator 内部接口已经把 sha256 放在 `X-Forensic-Sha256` header；console 透传给前端。
    */
   byte[] downloadForensicExport(String tenantId, String exportId);
+
+  /** 流式下载 forensic bundle，避免 console 将整个 ZIP 缓存在堆内存。 */
+  default void downloadForensicExport(String tenantId, String exportId, OutputStream outputStream)
+      throws IOException {
+    outputStream.write(downloadForensicExport(tenantId, exportId));
+  }
 
   /**
    * 2026-06-03 拉取一组 worker 当前的 pipeline stage 行级进度(仅 IMPORT LOAD / EXPORT GENERATE 流式 stage 有值)。

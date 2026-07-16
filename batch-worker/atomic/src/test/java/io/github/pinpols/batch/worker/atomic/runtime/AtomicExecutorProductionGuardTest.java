@@ -264,12 +264,14 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
-  void shouldOnlyWarn_whenNonEnforcedProfileHasViolations() {
-    // staging 未列入 enforce-profiles:检出违规也不抛(降级 WARN),保持非强制环境可启动
+  void shouldFailFast_whenStagingProfileHasViolations() {
+    // staging 与生产同样按 prod-like 处理，不能因漏配 enforce-profiles 而放行。
     env.setActiveProfiles("staging");
     stubAllWith(enabledSqlEmptyAllowlist(), disabledSp(), disabledHttp(), disabledShell());
 
-    newGuard().verifyProductionFailClosed(); // 不抛,仅 WARN
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("allowed-data-source-beans");
   }
 
   private static SqlExecutorProperties enabledSqlEmptyAllowlist() {

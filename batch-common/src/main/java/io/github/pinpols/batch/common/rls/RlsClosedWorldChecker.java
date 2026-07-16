@@ -25,8 +25,8 @@ import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
  * 加在父表、子表通过分区继承生效。扫描用 {@code relispartition = false} 排除子表,{@code relkind IN ('r','p')} 只取普通表 +
  * 分区父表,避免把子表当成「缺 policy」误报。
  *
- * <p><b>豁免</b>:{@code exemptBizTables} 默认空 —— biz 目前全是业务表都要 RLS。仅当新增的是<b>非租户的 biz 元数据表</b>时,才把表名(不带
- * schema 前缀)加进豁免清单。
+ * <p><b>扫描边界</b>:只扫描真实存在、包含 {@code tenant_id} 的 biz 租户表。非租户元数据表不属于 RLS 闭世界；若某张表虽包含 {@code
+ * tenant_id} 但明确是非租户元数据,才把表名(不带 schema 前缀)加入 {@code exemptBizTables}。
  *
  * <p>{@code batch.process_staging} 在 batch schema(不在 biz),单独以固定全名检查。
  *
@@ -50,27 +50,8 @@ public class RlsClosedWorldChecker {
 
   public static final String PROCESS_STAGING_TABLE = "process_staging";
 
-  /** 翻转 transition → strict 期间,健康检查接受任一 policy 名(灰度兼容)。 */
-  public static final List<String> ACCEPTED_POLICY_NAMES =
-      List.of("tenant_isolation_transition", "tenant_isolation_strict");
-
-  /**
-   * <b>仅作参考 / 静态守护用</b>,运行期闭世界检查<b>不</b>读它 —— 闭世界直接扫真实 biz schema。保留它只为 {@code
-   * RlsPhaseAMigrationCoverageTest} 校验 rls-phase-a*.sql 三脚本相互一致(列出同一组表)。新增 biz
-   * 表无需更新本清单(闭世界自动覆盖),但若往 rls-phase-a 脚本加表,仍应同步更新此参考以保持脚本守护有效。
-   */
-  public static final List<String> REFERENCE_RLS_TABLES =
-      List.of(
-          "biz.customer_account",
-          "biz.process_account_summary",
-          "biz.process_event_copy",
-          "biz.process_order_event",
-          "biz.risk_alert",
-          "biz.risk_score",
-          "biz.settlement_batch",
-          "biz.settlement_detail",
-          "biz.transaction",
-          "batch.process_staging");
+  /** 运行期只接受 strict policy；transition 仅作为应急回滚脚本的临时状态。 */
+  public static final List<String> ACCEPTED_POLICY_NAMES = List.of("tenant_isolation_strict");
 
   /**
    * 闭世界扫真实 biz 表:只取普通表('r')+ 分区父表('p'),用 {@code relispartition=false} 排除分区子表(RLS 加父表、子表继承,不该被当缺
@@ -79,6 +60,9 @@ public class RlsClosedWorldChecker {
   private static final String LIST_BIZ_TABLES_SQL =
       "SELECT c.relname FROM pg_class c "
           + "JOIN pg_namespace n ON n.oid = c.relnamespace "
+          + "JOIN information_schema.columns col "
+          + "ON col.table_schema = n.nspname AND col.table_name = c.relname "
+          + "AND col.column_name = 'tenant_id' "
           + "WHERE n.nspname = ? AND c.relkind IN ('r','p') AND c.relispartition = false";
 
   private static final String CHECK_ENABLE_FORCE_SQL =
@@ -89,8 +73,8 @@ public class RlsClosedWorldChecker {
   /**
    * policy <b>语义合规</b>检查 —— 不只验同名 policy 存在,还验 policy 真的在做租户隔离(防误建的同名坏 policy): 必须 {@code
    * cmd='ALL'}(FOR ALL)、{@code permissive='PERMISSIVE'}、有 {@code WITH CHECK}、且 {@code USING} 表达式引用了
-   * {@code app.tenant_id}(防 {@code USING(true)} 放行全表)。接受 transition / strict 任一名(灰度兼容)。 任一性质不满足 →
-   * 该表算"缺合规 policy"(health DOWN)。占位符由 ACCEPTED_POLICY_NAMES 长度生成。
+   * {@code app.tenant_id}(防 {@code USING(true)} 放行全表)。transition policy 不再视为合规状态。任一性质不满足 → 该表算"缺合规
+   * policy"(health DOWN)。占位符由 ACCEPTED_POLICY_NAMES 长度生成。
    */
   private final String checkPolicySql;
 
@@ -109,8 +93,12 @@ public class RlsClosedWorldChecker {
             + "?)"
             // 语义合规:FOR ALL + PERMISSIVE + 有 WITH CHECK + USING 引用 app.tenant_id(防同名坏 policy)。
             // 'app.tenant_id' 是代码常量字面量,非外部输入,内联安全。
-            + " AND cmd = 'ALL' AND permissive = 'PERMISSIVE' AND with_check IS NOT NULL"
-            + " AND qual IS NOT NULL AND position('app.tenant_id' in qual) > 0";
+            + " AND cmd = 'ALL' AND permissive = 'PERMISSIVE'"
+            + " AND qual IS NOT NULL AND with_check IS NOT NULL"
+            + " AND position('app.tenant_id' in qual) > 0"
+            + " AND position('app.tenant_id' in with_check) > 0"
+            + " AND position('IS NULL' in upper(qual)) = 0"
+            + " AND position('IS NULL' in upper(with_check)) = 0";
   }
 
   private static List<String> stripSchemaPrefix(List<String> tables) {
@@ -179,7 +167,7 @@ public class RlsClosedWorldChecker {
       List<String> missingForce,
       List<String> missingPolicy)
       throws SQLException {
-    // 1. 闭世界扫真实 biz 表(已排除分区子表),减去豁免清单。
+    // 1. 闭世界扫真实 biz 租户表(带 tenant_id 且已排除分区子表),减去显式豁免清单。
     Set<String> bizTables = new TreeSet<>();
     try (PreparedStatement ps = conn.prepareStatement(LIST_BIZ_TABLES_SQL)) {
       ps.setString(1, BIZ_SCHEMA);

@@ -54,26 +54,35 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # 仅放行同 release 的 pod（orchestrator 注册回调 + Prometheus scrape）访问 actuator/http。
-    # kubelet 健康探针来自节点本身，不经 NetworkPolicy，无需显式放行。
+    # 仅放行 orchestrator 访问 worker；不要用 release label，否则同 release 的其它组件也能访问。
+    # kubelet 健康探针来自节点本身，不经 NetworkPolicy，无需显式放行；Prometheus 等
+    # 观测方必须通过 extraIngress 显式声明精确的 namespace/pod selector。
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/instance: {{ $root.Release.Name }}
+              app.kubernetes.io/component: orchestrator
+    {{- with $t.networkPolicy.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   egress:
     # DNS 必放，否则连不上任何服务名。
     - to:
-        - namespaceSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
           port: 53
-    # 其余出向（Kafka / Postgres / Redis / MinIO / orchestrator）。
-    # MVP 默认放行同 namespace + 集群内；锁到具体 CIDR（managed RDS/Kafka 在集群外时）
-    # 需补 ipBlock，见 networkPolicy.extraEgress。
+    # 只放行同 namespace 的 orchestrator；Kafka/Postgres/Redis/MinIO 等集群外依赖
+    # 必须通过 extraEgress 显式声明 ipBlock/namespaceSelector。
     - to:
-        - namespaceSelector: {}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $root.Release.Name }}
+              app.kubernetes.io/component: orchestrator
     {{- with $t.networkPolicy.extraEgress }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

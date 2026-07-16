@@ -5,6 +5,8 @@ spring:
 
 # 集成测常用 platform PG：未必迁出 batch.process_staging；禁用孤儿清理调度避免调度线程刷 ERROR。
 batch:
+  rls:
+    startup-fail-fast: false
   scheduling:
     # IT 不验证 Spring @Scheduled 线程池的优雅收尾；关闭时立即取消，避免 surefire fork 退出超时。
     wait-for-tasks-to-complete-on-shutdown: false

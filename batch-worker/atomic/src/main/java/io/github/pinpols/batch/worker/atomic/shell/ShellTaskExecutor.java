@@ -374,7 +374,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       long duration = System.currentTimeMillis() - start;
 
       if (!finished) {
-        proc.destroyForcibly();
+        destroyProcessTree(proc);
         return AtomicErrorCode.fail(
             AtomicErrorCode.TIMEOUT,
             "timed out after " + inv.timeout.toSeconds() + "s",
@@ -403,8 +403,22 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
           code, "exit=" + proc.exitValue() + " stderr=" + summarize(stderr));
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
-      proc.destroyForcibly();
+      destroyProcessTree(proc);
       return AtomicErrorCode.fail(AtomicErrorCode.KILLED, "interrupted", ie);
+    }
+  }
+
+  /** 终止父进程及其后代，避免 shell wrapper 留下实际业务子进程。 */
+  private void destroyProcessTree(Process process) {
+    List<ProcessHandle> descendants = process.toHandle().descendants().toList();
+    for (int i = descendants.size() - 1; i >= 0; i--) {
+      descendants.get(i).destroyForcibly();
+    }
+    process.destroyForcibly();
+    try {
+      process.waitFor(1, TimeUnit.SECONDS);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
     }
   }
 

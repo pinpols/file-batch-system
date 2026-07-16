@@ -9,6 +9,9 @@ spring:
       metadata-max-age-ms: 5000
 
 batch:
+  rls:
+    # E2E 使用独立测试库，RLS 由专门的 batch-common IT 验证；业务 worker 上下文显式关闭启动守门。
+    startup-fail-fast: false
   retry:
     # E2E 加快重试节奏（分区重试不必等待数分钟）。
     fixed-delay-seconds: 1

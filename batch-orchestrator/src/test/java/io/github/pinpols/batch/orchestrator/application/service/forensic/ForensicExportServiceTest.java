@@ -137,6 +137,21 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  void shouldRejectDateRangeBeyondConfiguredCap() {
+    properties.setMaxDateRangeDays(2);
+    assertThatThrownBy(
+            () ->
+                service.export(
+                    ForensicExportRequest.builder()
+                        .tenantId("t1")
+                        .bizDateFrom(LocalDate.of(2026, 3, 15))
+                        .bizDateTo(LocalDate.of(2026, 3, 17))
+                        .build()))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.forensic.date_range_too_large");
+  }
+
+  @Test
   void shouldRejectMissingTenantOrDate() {
     assertThatThrownBy(
             () ->
