@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.support.CompensationResult;
@@ -10,6 +11,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,7 @@ class JdbcMappedImportCompensatorIntegrationTest {
 
   @BeforeEach
   void setUp() {
+    RlsTenantContextHolder.set("t1");
     dataSource = new DriverManagerDataSource();
     dataSource.setDriverClassName("org.postgresql.Driver");
     dataSource.setUrl(POSTGRES.getJdbcUrl() + "&stringtype=unspecified");
@@ -66,6 +69,11 @@ class JdbcMappedImportCompensatorIntegrationTest {
     insert("t1", "BATCH-2", "C001", "other run");
     // 别的租户（同 batchNo）—— 不应被删
     insert("t2", "BATCH-1", "C001", "other tenant");
+  }
+
+  @AfterEach
+  void clearTenantContext() {
+    RlsTenantContextHolder.clear();
   }
 
   @Test

@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
 import java.sql.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,6 +39,7 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
 
   @BeforeEach
   void setUp() {
+    RlsTenantContextHolder.set("t1");
     dataSource = new DriverManagerDataSource();
     dataSource.setDriverClassName("org.postgresql.Driver");
     dataSource.setUrl(POSTGRES.getJdbcUrl() + "&stringtype=unspecified");
@@ -111,6 +114,11 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
         "old target",
         "1.00",
         "delete me");
+  }
+
+  @AfterEach
+  void clearTenantContext() {
+    RlsTenantContextHolder.clear();
   }
 
   @Test
