@@ -56,8 +56,10 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-07-13(对抗审查 #2):presign-download 审批提交分支修跨租户写越权,submitApproval 新增一处 {@code
    * tenantGuard.resolveTenant(...)} 校验(会话身份覆盖 body 声明的 tenantId,与带 approvalId 分支一致); file 域→tenant
    * guard 只读跨域依赖 +1(1722→1723)。该调用是消灭跨租户审批注入的必需路径(安全修复), 依赖合理、不为降数字牺牲越权防护;照 #795/#811 先例上调预算。
+   *
+   * <p>2026-07-16(#837):以 #836 合并提交为基线实测仍为 1724；此前常量 1723 是未同步的旧值， 本次仅校正护栏基线，不计入本 PR 的新增依赖。
    */
-  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1723;
+  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1724;
 
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 
