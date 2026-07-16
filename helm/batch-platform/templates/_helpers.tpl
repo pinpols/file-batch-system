@@ -55,13 +55,20 @@ app.kubernetes.io/component: {{ .component }}
 Image reference helper.  Usage: include "batch-platform.image" (dict "root" . "name" "batch-console-api")
 */}}
 {{/*
-  Tag 优先级：values.image.tag（显式覆盖）> Chart.AppVersion（默认）
+  Digest 优先级最高；无 digest 时 values.image.tag（显式覆盖）> Chart.AppVersion（默认）
   Chart.AppVersion 必须与 pom.xml <revision> 保持一致（两处同步改）。
 */}}
 {{- define "batch-platform.image" -}}
 {{- $reg := .root.Values.image.registry -}}
 {{- $tag := default .root.Chart.AppVersion .root.Values.image.tag -}}
+{{- $digest := default "" .root.Values.image.digest -}}
+{{- if $digest -}}
 {{- if $reg -}}
+{{- printf "%s/%s@%s" $reg .name $digest -}}
+{{- else -}}
+{{- printf "%s@%s" .name $digest -}}
+{{- end -}}
+{{- else if $reg -}}
 {{- printf "%s/%s:%s" $reg .name $tag -}}
 {{- else -}}
 {{- printf "%s:%s" .name $tag -}}
@@ -137,6 +144,15 @@ lifecycle:
     exec:
       command: ["/bin/sh", "-c", "sleep {{ $sleep }}"]
 {{- end }}
+{{- end }}
+
+{{/*
+Standard pod scheduling fields.
+*/}}
+{{- define "batch-platform.podSecurityDefaults" -}}
+automountServiceAccountToken: false
+securityContext:
+  {{- toYaml .Values.podSecurityContext | nindent 2 }}
 {{- end }}
 
 {{/*

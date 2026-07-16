@@ -11,6 +11,8 @@
 image:
   registry: "registry.example.com/batch-platform"
   tag: "1.2.0"
+  # 发布系统可将这里覆盖为镜像 digest；留空时使用固定版本 tag。
+  digest: ""
   pullPolicy: Always
 
 imagePullSecrets:
@@ -59,6 +61,22 @@ security:
     required: "true"
     privateKeyPem: ""   # 必填 (helm/Secret fail-fast 守卫)
     publicKeyPem: ""    # 必填 (helm/Secret fail-fast 守卫)
+
+# 标准应用 Pod 只接受平台命名空间内部、Ingress Controller 和监控抓取流量。
+# 若集群使用不同命名空间标签，部署前同步修改这些 namespaceSelector。
+networkPolicy:
+  enabled: true
+  ingress:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: batch
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: monitoring
 
 # R4-P0-4：K8s Service 实际端口 18082（见 chart values orchestrator.port），之前误用 docker-compose 内部端口 8082。
 # 修复后 worker / console-api 才能正确连到 orchestrator。

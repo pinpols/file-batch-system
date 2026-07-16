@@ -63,8 +63,7 @@ spec:
     spec:
       {{- include "batch-platform.imagePullSecrets" $root | nindent 6 }}
       terminationGracePeriodSeconds: {{ $pool.terminationGracePeriodSeconds | default 180 }}
-      securityContext:
-        {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      {{- include "batch-platform.podSecurityDefaults" $root | nindent 6 }}
       {{- with $pool.serviceAccountName }}
       serviceAccountName: {{ . }}
       {{- end }}
