@@ -29,7 +29,7 @@ done
 
 PG_CONTAINER=${PG_CONTAINER:-batch-postgres-primary}
 PG_USER=${POSTGRES_USER:-batch_user}
-PG_PASSWORD=${POSTGRES_PASSWORD:-batch_pass_123}
+PG_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
 PLATFORM_DB=${POSTGRES_DB:-batch_platform}
 BUSINESS_DB=${BUSINESS_DB_NAME:-batch_business}
 RLS_SQL="$REPO_ROOT/scripts/db/business/rls-phase-a.sql"
