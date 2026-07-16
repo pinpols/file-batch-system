@@ -6,6 +6,11 @@ useDefault = true
 
 [allowlist]
 description = "build artifacts + 测试 fixture + 文档示例(已审计,见 docs/analysis/security-scan-2026-05-16.md)"
+# 14fc5cb62 的文档曾使用 smoke-* 占位值；当前文件已改为强制从环境变量注入。
+# 保留历史提交可追溯性，同时不让已移除的文档示例阻断后续全历史扫描。
+commits = [
+    "14fc5cb62481584218ca5a929c188c494c8feb4b",
+]
 paths = [
     '''(.*/)?target/.*''',
     '''(.*/)?node_modules/.*''',

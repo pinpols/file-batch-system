@@ -8,6 +8,9 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerS
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -355,6 +358,35 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                             .build(exportId))
                 .retrieve()
                 .body(byte[].class));
+  }
+
+  @Override
+  public void downloadForensicExport(String tenantId, String exportId, OutputStream outputStream)
+      throws IOException {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    downstreamFallback.callOrThrow(
+        SVC,
+        "forensic-export-download-stream",
+        () ->
+            orchestratorInternalRestClient
+                .build()
+                .get()
+                .uri(
+                    uriBuilder ->
+                        uriBuilder
+                            .path("/internal/forensic/export/{exportId}/download")
+                            .queryParam(PARAM_TENANT_ID, resolved)
+                            .build(exportId))
+                .exchange(
+                    (request, response) -> {
+                      try (InputStream input = response.getBody()) {
+                        if (input == null) {
+                          throw new IOException("forensic export response body is empty");
+                        }
+                        input.transferTo(outputStream);
+                      }
+                      return null;
+                    }));
   }
 
   @Override

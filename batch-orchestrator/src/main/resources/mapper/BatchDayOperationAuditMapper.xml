@@ -61,9 +61,11 @@
 
     <select id="selectByCalendarBizDate" resultMap="BatchDayOperationAuditMap">
         select <include refid="columns"/>
-          from batch.batch_day_operation_audit
+         from batch.batch_day_operation_audit
          where tenant_id = #{tenantId}
+        <if test="calendarCode != null and calendarCode != ''">
            and calendar_code = #{calendarCode}
+        </if>
            and biz_date = #{bizDate}
          order by created_at desc, id desc
          limit #{limit}

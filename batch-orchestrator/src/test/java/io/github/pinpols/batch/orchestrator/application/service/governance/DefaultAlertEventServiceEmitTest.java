@@ -47,7 +47,8 @@ class DefaultAlertEventServiceEmitTest {
   @Test
   @DisplayName("无效请求(缺 tenant/alertType)不落库也不推 AM")
   void emit_skipsInvalidRequest() {
-    service().emit(AlertEmitRequest.builder().alertType("X").build());
+    AlertEmitRequest invalidRequest = AlertEmitRequest.builder().alertType("X").build();
+    service().emit(invalidRequest);
 
     verify(alertEventMapper, never()).insertOrMerge(any());
     verify(publisher, never()).publishFiring(any());

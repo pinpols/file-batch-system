@@ -274,7 +274,20 @@ public class FilesystemObjectStore implements BatchObjectStore {
       throw new ObjectStoreException(
           "filesystem object key resolved outside bucket root: bucket=" + bucket + ", key=" + key);
     }
+    rejectSymlinkPath(bucketRoot, resolved);
     return resolved;
+  }
+
+  /** 拒绝 bucket/key 路径中的符号链接，避免合法化路径绕过 root 边界。 */
+  private void rejectSymlinkPath(Path bucketRoot, Path resolved) {
+    Path current = bucketRoot;
+    for (Path part : bucketRoot.relativize(resolved)) {
+      current = current.resolve(part);
+      if (Files.isSymbolicLink(current)) {
+        throw new ObjectStoreException(
+            "filesystem object path must not contain symbolic link: " + current);
+      }
+    }
   }
 
   private Path resolveBucketRoot(String bucket) {

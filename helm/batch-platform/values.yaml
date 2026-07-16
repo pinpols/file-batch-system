@@ -671,6 +671,7 @@ tenantWorkerPools: []
 #         BATCH_S3_SECRET_KEY: "..."
 #     networkPolicy:
 #       enabled: true
+#       extraIngress: []                    # Prometheus 等观测方按 namespace/pod selector 显式放行
 #       extraEgress: []                     # 集群外 RDS/Kafka 时补 ipBlock
 #     resourceQuota:
 #       enabled: false                      # 仅 per-tenant-namespace 形态开启

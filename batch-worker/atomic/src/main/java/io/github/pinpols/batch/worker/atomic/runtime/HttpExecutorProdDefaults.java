@@ -1,17 +1,17 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 
 /**
- * Prod profile 下,把 {@link HttpExecutorProperties#isEnforceAllowlist()} 的 effective 默认从 false 翻成
- * true —— 当且仅当用户未在 yaml/env 显式配置过 {@code batch.worker.executors.http.enforce-allowlist} 时生效。
+ * 生产类 profile 下,把 {@link HttpExecutorProperties#isEnforceAllowlist()} 的 effective 默认从 false 翻成 true
+ * —— 当且仅当用户未在 yaml/env 显式配置过 {@code batch.worker.executors.http.enforce-allowlist} 时生效。
  *
  * <p>背景:Lane B 已在 {@link AtomicExecutorProductionGuard} 加 fail-fast(prod + http enabled + 空白名单 +
  * enforceAllowlist=false → 启动失败)。本组件把"必须由 ops 显式打开"降级为"隐式默认开",降低部署负担,同时保留 ops 主动显式置 false
@@ -29,7 +29,6 @@ import org.springframework.core.env.Environment;
  */
 @Slf4j
 @Configuration
-@Profile("prod")
 @RequiredArgsConstructor
 public class HttpExecutorProdDefaults {
 
@@ -40,6 +39,10 @@ public class HttpExecutorProdDefaults {
 
   @PostConstruct
   public void applyProdDefaults() {
+    if (!BatchProfileSupport.isProductionProfile(environment)) {
+      log.debug("http executor non-production profile, prod default skip");
+      return;
+    }
     HttpExecutorProperties props = httpProps.getIfAvailable();
     if (props == null) {
       log.debug("http executor properties not present, prod default skip");

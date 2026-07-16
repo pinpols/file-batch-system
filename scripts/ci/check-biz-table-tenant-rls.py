@@ -55,11 +55,26 @@ def base_biz_tables_with_bodies(sql: str):
     return tables
 
 
-def rls_covered_tables(sql: str):
+def rls_covered_tables(sql: str, expected_tables):
     m = re.search(r"tables\s+TEXT\[\]\s*:=\s*ARRAY\[(.*?)\]", sql, re.IGNORECASE | re.DOTALL)
-    if not m:
-        return set()
-    return set(re.findall(r"'(biz\.[a-z0-9_]+)'", m.group(1), re.IGNORECASE))
+    if m:
+        return set(re.findall(r"'(biz\.[a-z0-9_]+)'", m.group(1), re.IGNORECASE))
+
+    # strict migration deliberately discovers future biz tables from the catalog;
+    # keep the guard closed-world by validating the dynamic policy shape and
+    # treating the current DDL inventory as the expected discovery set.
+    dynamic_markers = (
+        "pg_class",
+        "information_schema.columns",
+        "tenant_id",
+        "ENABLE ROW LEVEL SECURITY",
+        "FORCE ROW LEVEL SECURITY",
+        "CREATE POLICY tenant_isolation_strict",
+        "FOR ALL",
+    )
+    if all(marker.lower() in sql.lower() for marker in dynamic_markers):
+        return set(expected_tables)
+    return set()
 
 
 def main() -> int:
@@ -68,7 +83,7 @@ def main() -> int:
         return 1
 
     tables = base_biz_tables_with_bodies(DDL.read_text(encoding="utf-8"))
-    rls = rls_covered_tables(RLS.read_text(encoding="utf-8"))
+    rls = rls_covered_tables(RLS.read_text(encoding="utf-8"), tables.keys())
 
     no_tenant, no_rls = [], []
     for name, body in sorted(tables.items()):
@@ -85,11 +100,11 @@ def main() -> int:
         print("\n".join(f"   - {t}" for t in no_tenant))
     if no_rls:
         ok = False
-        print("❌ 以下 biz 基表未进 rls-phase-a-strict.sql 的 tables[] 数组(无 strict RLS 隔离):")
+        print("❌ 以下 biz 基表未被 rls-phase-a-strict.sql 的静态清单或动态 strict policy 覆盖:")
         print("\n".join(f"   - {t}" for t in no_rls))
 
     if not ok:
-        print("\n💥 新增 biz 基表必须含 tenant_id + 登记进 strict RLS tables[] 数组。")
+        print("\n💥 新增 biz 基表必须含 tenant_id + 被 strict RLS 静态清单或动态策略覆盖。")
         return 1
     print("✅ 所有 biz 基表均含 tenant_id 且被 strict RLS 覆盖")
     return 0

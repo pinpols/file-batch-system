@@ -43,6 +43,8 @@ BEGIN
       RAISE NOTICE 'rls-phase-a-strict: skip missing table % (RLS not applied)', t;
       CONTINUE;
     END IF;
+    EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_transition ON %s', t);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_strict ON %s', t);
     EXECUTE format($p$
@@ -61,6 +63,8 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables
              WHERE table_schema='batch' AND table_name='process_staging') THEN
+    ALTER TABLE batch.process_staging ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE batch.process_staging FORCE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS tenant_isolation_transition ON batch.process_staging;
     DROP POLICY IF EXISTS tenant_isolation_strict ON batch.process_staging;
     CREATE POLICY tenant_isolation_strict ON batch.process_staging

@@ -16,6 +16,12 @@ public class ForensicExportProperties {
   /** 单次导出 instance 行数硬上限，防 unbounded（v0.1 默认 100k）。 */
   private int instanceRowCap = 100_000;
 
+  /** 单次导出允许覆盖的最大自然日数，避免同步导出占满数据库和磁盘。 */
+  private int maxDateRangeDays = 31;
+
+  /** 单次导出的 batch-day 审计行数上限。 */
+  private int auditRowCap = 100_000;
+
   /** v0.1 默认是否启用（false 时 export endpoint 返回 503）。 */
   private boolean enabled = true;
 }

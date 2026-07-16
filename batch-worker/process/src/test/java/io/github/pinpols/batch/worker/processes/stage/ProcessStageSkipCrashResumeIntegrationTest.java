@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -79,6 +81,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
 
   @BeforeEach
   void setUp() {
+    RlsTenantContextHolder.set(TENANT);
     dataSource =
         new DriverManagerDataSource(
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -130,6 +133,11 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     runtimeRepository = mock(PlatformFileRuntimeRepository.class);
     lenient().when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
     lenient().when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(9999L);
+  }
+
+  @AfterEach
+  void clearTenantContext() {
+    RlsTenantContextHolder.clear();
   }
 
   private void seedSource() {

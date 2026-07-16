@@ -5,8 +5,10 @@ import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestrato
 import io.github.pinpols.batch.console.domain.ops.web.request.ForensicExportRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
+import java.io.IOException;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
  * ADR-022 v0.1 Forensic 取证控制台入口。
@@ -39,6 +42,7 @@ public class ConsoleForensicController {
 
   private final ConsoleOrchestratorProxyService orchestratorProxyService;
   private final ConsoleResponseFactory responseFactory;
+  private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @PostMapping("/export")
   public CommonResponse<ConsoleForensicExportResponse> requestExport(
@@ -50,19 +54,26 @@ public class ConsoleForensicController {
             request.getBizDateTo(),
             request.getJobCodes(),
             request.getExportFormat() == null ? "BUNDLE" : request.getExportFormat(),
-            request.getRequestedBy());
+            requestMetadataResolver.current().operatorId());
     return responseFactory.success(ConsoleForensicExportResponse.from(result));
   }
 
   @GetMapping("/export/{exportId}/download")
-  public ResponseEntity<byte[]> download(
+  public ResponseEntity<StreamingResponseBody> download(
       @PathVariable String exportId, @RequestParam("tenantId") String tenantId) {
-    byte[] bytes = orchestratorProxyService.downloadForensicExport(tenantId, exportId);
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
+    StreamingResponseBody body =
+        outputStream -> {
+          try {
+            orchestratorProxyService.downloadForensicExport(tenantId, exportId, outputStream);
+          } catch (IOException exception) {
+            throw exception;
+          }
+        };
     return ResponseEntity.ok()
         .headers(headers)
         .contentType(MediaType.APPLICATION_OCTET_STREAM)
-        .body(bytes);
+        .body(body);
   }
 }

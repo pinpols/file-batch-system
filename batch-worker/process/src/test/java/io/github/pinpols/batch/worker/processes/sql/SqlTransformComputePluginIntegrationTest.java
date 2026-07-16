@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +61,7 @@ class SqlTransformComputePluginIntegrationTest {
 
   @BeforeEach
   void setUp() {
+    RlsTenantContextHolder.set("t1");
     org.springframework.jdbc.datasource.DriverManagerDataSource dataSource =
         new org.springframework.jdbc.datasource.DriverManagerDataSource(
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -113,6 +116,11 @@ class SqlTransformComputePluginIntegrationTest {
         "insert into biz.order_event values (?, ?, ?, ?)", "t1", "B", 3L, new BigDecimal("7.00"));
     jdbcTemplate.update(
         "insert into biz.order_event values (?, ?, ?, ?)", "t2", "X", 9L, new BigDecimal("99.00"));
+  }
+
+  @AfterEach
+  void clearTenantContext() {
+    RlsTenantContextHolder.clear();
   }
 
   @Test

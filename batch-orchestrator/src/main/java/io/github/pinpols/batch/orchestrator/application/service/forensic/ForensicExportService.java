@@ -22,6 +22,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -158,6 +159,10 @@ public class ForensicExportService {
     if (request.bizDateFrom().isAfter(request.bizDateTo())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.forensic.invalid_date_range");
     }
+    long dateRangeDays = ChronoUnit.DAYS.between(request.bizDateFrom(), request.bizDateTo()) + 1;
+    if (dateRangeDays > properties.getMaxDateRangeDays()) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.forensic.date_range_too_large");
+    }
   }
 
   private ExportResult doExport(ForensicExportRequest request, String exportId)
@@ -189,11 +194,15 @@ public class ForensicExportService {
       for (LocalDate cursor = request.bizDateFrom();
           !cursor.isAfter(request.bizDateTo());
           cursor = cursor.plusDays(1)) {
+        int remaining = properties.getAuditRowCap() - allAudits.size();
+        if (remaining <= 0) {
+          break;
+        }
         // calendar_code 在 v0.1 不参与过滤 — 同 tenant 同 bizDate 下所有 calendar 的治理动作一并取
-        // limit 1000 / 天足以覆盖正常运维节奏；超出表示有人在批量手动操作 → 单独审计
+        // limit 1000 / 天足以覆盖正常运维节奏；总量再受 auditRowCap 保护
         allAudits.addAll(
             batchDayOperationAuditMapper.selectByCalendarBizDate(
-                request.tenantId(), null, cursor, 1000));
+                request.tenantId(), null, cursor, Math.min(1000, remaining)));
       }
       writeEntry(zip, "batch-day-operation-audits.json", JsonUtils.toJson(allAudits));
       rowCounts.put("batch_day_operation_audits", allAudits.size());
@@ -208,6 +217,8 @@ public class ForensicExportService {
       manifest.put("bizDateTo", request.bizDateTo().toString());
       manifest.put("jobCodes", request.jobCodes());
       manifest.put("rowCap", properties.getInstanceRowCap());
+      manifest.put("auditRowCap", properties.getAuditRowCap());
+      manifest.put("maxDateRangeDays", properties.getMaxDateRangeDays());
       manifest.put("rowCounts", rowCounts);
       manifest.put("generatedAt", dateTimeSupport.nowInstant().toString());
       manifest.put("requestedBy", request.requestedBy());

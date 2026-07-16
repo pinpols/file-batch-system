@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicRuntimeStatus.HttpStatus;
@@ -12,7 +13,6 @@ import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProper
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Collection;
-import java.util.Locale;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -72,7 +72,7 @@ public class AtomicRuntimeStatusService {
     if (environment.containsProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST)) {
       source = "explicit";
     } else if (isProdProfile()) {
-      // prod profile 下未显式配置 → HttpExecutorProdDefaults 已隐式翻 true(若原为 true 则已是 true)。
+      // 生产类 profile 下未显式配置 → HttpExecutorProdDefaults 已隐式翻 true。
       source = "prod-default";
     } else {
       source = "dev-default";
@@ -104,24 +104,7 @@ public class AtomicRuntimeStatusService {
   }
 
   private boolean isProdProfile() {
-    String[] active = environment.getActiveProfiles();
-    if (active == null) {
-      return false;
-    }
-    for (String p : active) {
-      if (p == null) {
-        continue;
-      }
-      if ("prod".equalsIgnoreCase(p.trim())) {
-        return true;
-      }
-      for (String token : p.toLowerCase(Locale.ROOT).split("[\\-_,]")) {
-        if ("prod".equals(token)) {
-          return true;
-        }
-      }
-    }
-    return false;
+    return BatchProfileSupport.isProductionProfile(environment);
   }
 
   private static int safeSize(Collection<?> c) {
