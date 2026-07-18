@@ -8,21 +8,14 @@ import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
-import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
-import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpsertParam;
-import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpsertParam;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.console.domain.param.AlertRoutingConfigUpsertParam;
-import io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam;
-import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -54,7 +47,6 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -73,7 +65,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class TenantConfigInitApplyHandlers {
 
   private static final String KEY_ENABLED = "enabled";
@@ -87,15 +78,44 @@ public class TenantConfigInitApplyHandlers {
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
-  private final FileChannelConfigMapper fileChannelConfigMapper;
-  private final FileTemplateConfigMapper fileTemplateConfigMapper;
-  private final ResourceQueueMapper resourceQueueMapper;
-  private final BatchWindowMapper batchWindowMapper;
-  private final BusinessCalendarMapper businessCalendarMapper;
-  private final CalendarHolidayMapper calendarHolidayMapper;
-  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
-  private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final PlatformTransactionManager transactionManager;
+  private final TenantFileConfigApplySupport fileConfigSupport;
+  private final TenantOperationalConfigApplySupport operationalConfigSupport;
+
+  public TenantConfigInitApplyHandlers(
+      JobDefinitionMapper jobDefinitionMapper,
+      WorkflowDefinitionMapper workflowDefinitionMapper,
+      WorkflowNodeMapper workflowNodeMapper,
+      WorkflowEdgeMapper workflowEdgeMapper,
+      PipelineDefinitionMapper pipelineDefinitionMapper,
+      PipelineStepDefinitionMapper pipelineStepDefinitionMapper,
+      FileChannelConfigMapper fileChannelConfigMapper,
+      FileTemplateConfigMapper fileTemplateConfigMapper,
+      ResourceQueueMapper resourceQueueMapper,
+      BatchWindowMapper batchWindowMapper,
+      BusinessCalendarMapper businessCalendarMapper,
+      CalendarHolidayMapper calendarHolidayMapper,
+      TenantQuotaPolicyMapper tenantQuotaPolicyMapper,
+      AlertRoutingConfigMapper alertRoutingConfigMapper,
+      PlatformTransactionManager transactionManager) {
+    this.jobDefinitionMapper = jobDefinitionMapper;
+    this.workflowDefinitionMapper = workflowDefinitionMapper;
+    this.workflowNodeMapper = workflowNodeMapper;
+    this.workflowEdgeMapper = workflowEdgeMapper;
+    this.pipelineDefinitionMapper = pipelineDefinitionMapper;
+    this.pipelineStepDefinitionMapper = pipelineStepDefinitionMapper;
+    this.transactionManager = transactionManager;
+    this.fileConfigSupport =
+        new TenantFileConfigApplySupport(fileChannelConfigMapper, fileTemplateConfigMapper);
+    this.operationalConfigSupport =
+        new TenantOperationalConfigApplySupport(
+            resourceQueueMapper,
+            batchWindowMapper,
+            businessCalendarMapper,
+            calendarHolidayMapper,
+            tenantQuotaPolicyMapper,
+            alertRoutingConfigMapper);
+  }
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
   record ApplyContext(String tenantId, InitMode mode, String operator, boolean dryRun) {}
@@ -488,27 +508,8 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.upsertable(
             "channel",
             FileChannelSpec::getChannelCode,
-            (tid, s) ->
-                Optional.ofNullable(
-                    fileChannelConfigMapper.selectByUniqueKey(tid, s.getChannelCode())),
-            (c, s) -> upsertFileChannel(c.tenantId(), s, c.operator())));
-  }
-
-  private void upsertFileChannel(String tenantId, FileChannelSpec spec, String operator) {
-    FileChannelConfigUpsertParam param = new FileChannelConfigUpsertParam();
-    param.setTenantId(tenantId);
-    param.setChannelCode(spec.getChannelCode());
-    param.setChannelName(spec.getChannelName());
-    param.setChannelType(spec.getChannelType());
-    param.setTargetEndpoint(spec.getTargetEndpoint());
-    param.setAuthType(spec.getAuthType());
-    param.setConfigJson(spec.getConfigJson());
-    param.setReceiptPolicy(spec.getReceiptPolicy());
-    param.setTimeoutSeconds(spec.getTimeoutSeconds());
-    param.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
-    param.setCreatedBy(operator);
-    param.setUpdatedBy(operator);
-    fileChannelConfigMapper.upsertFileChannelConfig(param);
+            (tid, s) -> Optional.ofNullable(fileConfigSupport.findChannel(tid, s)),
+            (c, s) -> fileConfigSupport.upsertChannel(c.tenantId(), s, c.operator())));
   }
 
   ItemStats applyFileTemplates(List<FileTemplateSpec> specs, ApplyContext ctx) {
@@ -518,84 +519,8 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.upsertable(
             "template",
             FileTemplateSpec::getTemplateCode,
-            (tid, s) ->
-                Optional.ofNullable(
-                    fileTemplateConfigMapper.selectByUniqueKey(
-                        tid, s.getTemplateCode(), Nullables.coalesce(s.getVersion(), 1))),
-            (c, s) -> upsertFileTemplate(c.tenantId(), s, c.operator())));
-  }
-
-  private void upsertFileTemplate(String tenantId, FileTemplateSpec spec, String operator) {
-    FileTemplateConfigUpsertParam p = new FileTemplateConfigUpsertParam();
-    p.setTenantId(tenantId);
-    p.setTemplateCode(spec.getTemplateCode());
-
-    FileTemplateConfigUpsertParam.BasicInfo basicInfo =
-        new FileTemplateConfigUpsertParam.BasicInfo();
-    basicInfo.setTemplateName(spec.getTemplateName());
-    basicInfo.setTemplateType(spec.getTemplateType());
-    basicInfo.setBizType(spec.getBizType());
-    basicInfo.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
-    basicInfo.setVersion(Nullables.coalesce(spec.getVersion(), 1));
-    basicInfo.setDescription(spec.getDescription());
-    p.setBasicInfo(basicInfo);
-
-    FileTemplateConfigUpsertParam.FormatOptions format =
-        new FileTemplateConfigUpsertParam.FormatOptions();
-    format.setFileFormatType(spec.getFileFormatType());
-    format.setCharset(spec.getCharset());
-    format.setTargetCharset(spec.getTargetCharset());
-    format.setWithBom(spec.getWithBom());
-    format.setLineSeparator(spec.getLineSeparator());
-    format.setDelimiter(spec.getDelimiter());
-    format.setQuoteChar(spec.getQuoteChar());
-    format.setEscapeChar(spec.getEscapeChar());
-    format.setRecordLength(spec.getRecordLength());
-    format.setHeaderRows(spec.getHeaderRows());
-    format.setFooterRows(spec.getFooterRows());
-    format.setHeaderTemplateJson(spec.getHeaderTemplateJson());
-    format.setTrailerTemplateJson(spec.getTrailerTemplateJson());
-    format.setChecksumType(spec.getChecksumType());
-    format.setCompressType(spec.getCompressType());
-    format.setEncryptType(spec.getEncryptType());
-    format.setNamingRule(spec.getNamingRule());
-    format.setFieldMappingsJson(spec.getFieldMappingsJson());
-    format.setValidationRuleSetJson(spec.getValidationRuleSetJson());
-    p.setFormat(format);
-
-    FileTemplateConfigUpsertParam.QueryOptions query =
-        new FileTemplateConfigUpsertParam.QueryOptions();
-    query.setDefaultQueryCode(spec.getDefaultQueryCode());
-    query.setDefaultQuerySql(spec.getDefaultQuerySql());
-    query.setQueryParamSchemaJson(spec.getQueryParamSchemaJson());
-    p.setQuery(query);
-
-    FileTemplateConfigUpsertParam.RuntimeOptions runtime =
-        new FileTemplateConfigUpsertParam.RuntimeOptions();
-    runtime.setStreamingEnabled(spec.getStreamingEnabled());
-    runtime.setPageSize(spec.getPageSize());
-    runtime.setFetchSize(spec.getFetchSize());
-    runtime.setChunkSize(spec.getChunkSize());
-    p.setRuntime(runtime);
-
-    FileTemplateConfigUpsertParam.SecurityOptions security =
-        new FileTemplateConfigUpsertParam.SecurityOptions();
-    security.setPreviewMaskingEnabled(spec.getPreviewMaskingEnabled());
-    security.setErrorLineMaskingEnabled(spec.getErrorLineMaskingEnabled());
-    security.setLogMaskingEnabled(spec.getLogMaskingEnabled());
-    security.setContentEncryptionEnabled(spec.getContentEncryptionEnabled());
-    security.setEncryptionKeyRef(spec.getEncryptionKeyRef());
-    security.setDownloadRequiresApproval(spec.getDownloadRequiresApproval());
-    security.setMaskingRuleSet(spec.getMaskingRuleSet());
-    p.setSecurity(security);
-
-    FileTemplateConfigUpsertParam.AuditOptions audit =
-        new FileTemplateConfigUpsertParam.AuditOptions();
-    audit.setCreatedBy(operator);
-    audit.setUpdatedBy(operator);
-    p.setAudit(audit);
-
-    fileTemplateConfigMapper.upsertFileTemplateConfig(p);
+            (tid, s) -> Optional.ofNullable(fileConfigSupport.findTemplate(tid, s)),
+            (c, s) -> fileConfigSupport.upsertTemplate(c.tenantId(), s, c.operator())));
   }
 
   ItemStats applyResourceQueues(List<ResourceQueueSpec> specs, ApplyContext ctx) {
@@ -605,29 +530,8 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.upsertable(
             "queue",
             ResourceQueueSpec::getQueueCode,
-            (tid, s) ->
-                Optional.ofNullable(resourceQueueMapper.selectByUniqueKey(tid, s.getQueueCode())),
-            (c, s) -> upsertResourceQueue(c.tenantId(), s, c.operator())));
-  }
-
-  private void upsertResourceQueue(String tenantId, ResourceQueueSpec spec, String operator) {
-    ResourceQueueUpsertParam p = new ResourceQueueUpsertParam();
-    p.setTenantId(tenantId);
-    p.setQueueCode(spec.getQueueCode());
-    p.setQueueName(spec.getQueueName());
-    p.setQueueType(spec.getQueueType());
-    p.setMaxRunningJobs(spec.getMaxRunningJobs());
-    p.setMaxRunningPartitions(spec.getMaxRunningPartitions());
-    p.setMaxQps(spec.getMaxQps());
-    p.setWorkerGroup(spec.getWorkerGroup());
-    p.setResourceTag(spec.getResourceTag());
-    p.setPriorityPolicy(spec.getPriorityPolicy());
-    p.setFairShareWeight(spec.getFairShareWeight());
-    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
-    p.setDescription(spec.getDescription());
-    p.setCreatedBy(operator);
-    p.setUpdatedBy(operator);
-    resourceQueueMapper.upsertResourceQueue(p);
+            (tid, s) -> Optional.ofNullable(operationalConfigSupport.findResourceQueue(tid, s)),
+            (c, s) -> operationalConfigSupport.upsertResourceQueue(c.tenantId(), s, c.operator())));
   }
 
   ItemStats applyBatchWindows(List<BatchWindowSpec> specs, ApplyContext ctx) {
@@ -637,25 +541,8 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.upsertable(
             "window",
             BatchWindowSpec::getWindowCode,
-            (tid, s) ->
-                Optional.ofNullable(batchWindowMapper.selectByUniqueKey(tid, s.getWindowCode())),
-            (c, s) -> upsertBatchWindow(c.tenantId(), s)));
-  }
-
-  private void upsertBatchWindow(String tenantId, BatchWindowSpec spec) {
-    BatchWindowUpsertParam p = new BatchWindowUpsertParam();
-    p.setTenantId(tenantId);
-    p.setWindowCode(spec.getWindowCode());
-    p.setWindowName(spec.getWindowName());
-    p.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
-    p.setStartTime(spec.getStartTime());
-    p.setEndTime(spec.getEndTime());
-    p.setEndStrategy(spec.getEndStrategy());
-    p.setOutOfWindowAction(spec.getOutOfWindowAction());
-    p.setAllowCrossDay(Nullables.coalesce(spec.getAllowCrossDay(), false));
-    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
-    p.setDescription(spec.getDescription());
-    batchWindowMapper.upsertBatchWindow(p);
+            (tid, s) -> Optional.ofNullable(operationalConfigSupport.findBatchWindow(tid, s)),
+            (c, s) -> operationalConfigSupport.upsertBatchWindow(c.tenantId(), s)));
   }
 
   ItemStats applyBusinessCalendars(List<BusinessCalendarSpec> specs, ApplyContext ctx) {
@@ -665,52 +552,13 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.<BusinessCalendarSpec, Map<String, Object>>of(
             "calendar",
             BusinessCalendarSpec::getCalendarCode,
-            (tid, s) ->
-                Optional.ofNullable(
-                    businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-                        tid, s.getCalendarCode())),
-            (c, s) -> upsertBusinessCalendar(c.tenantId(), s, c.operator(), null),
+            (tid, s) -> Optional.ofNullable(operationalConfigSupport.findBusinessCalendar(tid, s)),
+            (c, s) ->
+                operationalConfigSupport.upsertBusinessCalendar(
+                    c.tenantId(), s, c.operator(), null),
             (c, s, existing) ->
-                upsertBusinessCalendar(
+                operationalConfigSupport.upsertBusinessCalendar(
                     c.tenantId(), s, c.operator(), ((Number) existing.get(KEY_ID)).longValue())));
-  }
-
-  private void upsertBusinessCalendar(
-      String tenantId, BusinessCalendarSpec spec, String operator, Long existingId) {
-    BusinessCalendarUpsertParam p = new BusinessCalendarUpsertParam();
-    p.setTenantId(tenantId);
-    p.setCalendarCode(spec.getCalendarCode());
-    p.setCalendarName(spec.getCalendarName());
-    p.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
-    p.setHolidayRollRule(spec.getHolidayRollRule());
-    p.setCatchUpPolicy(spec.getCatchUpPolicy());
-    p.setCatchUpMaxDays(spec.getCatchUpMaxDays());
-    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
-    p.setCreatedBy(operator);
-    p.setUpdatedBy(operator);
-    businessCalendarMapper.upsertBusinessCalendar(p);
-
-    if (spec.getHolidays() != null && !spec.getHolidays().isEmpty()) {
-      Map<String, Object> saved =
-          businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-              tenantId, spec.getCalendarCode());
-      if (saved != null) {
-        Long calendarId = ((Number) saved.get(KEY_ID)).longValue();
-        if (existingId != null) {
-          calendarHolidayMapper.deleteByCalendarId(calendarId);
-        }
-        List<Map<String, Object>> holidayRows = new ArrayList<>();
-        for (String date : spec.getHolidays()) {
-          Map<String, Object> row = new HashMap<>();
-          row.put("calendar_id", calendarId);
-          row.put("holiday_date", date);
-          row.put("holiday_type", "PUBLIC_HOLIDAY");
-          row.put("created_by", operator);
-          holidayRows.add(row);
-        }
-        calendarHolidayMapper.batchInsert(holidayRows);
-      }
-    }
   }
 
   ItemStats applyQuotaPolicies(List<TenantQuotaPolicySpec> specs, ApplyContext ctx) {
@@ -720,25 +568,8 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.upsertable(
             "quota",
             TenantQuotaPolicySpec::getPolicyCode,
-            (tid, s) ->
-                Optional.ofNullable(
-                    tenantQuotaPolicyMapper.selectByUniqueKey(tid, s.getPolicyCode())),
-            (c, s) -> upsertQuotaPolicy(c.tenantId(), s)));
-  }
-
-  private void upsertQuotaPolicy(String tenantId, TenantQuotaPolicySpec spec) {
-    TenantQuotaPolicyUpsertParam p =
-        TenantQuotaPolicyUpsertParam.builder()
-            .tenantId(tenantId)
-            .policyCode(spec.getPolicyCode())
-            .maxRunningJobsPerTenant(spec.getMaxRunningJobsPerTenant())
-            .maxPartitionsPerTenant(spec.getMaxPartitionsPerTenant())
-            .maxQpsPerTenant(spec.getMaxQpsPerTenant())
-            .fairShareWeight(spec.getFairShareWeight())
-            .enabled(Nullables.coalesce(spec.getEnabled(), true))
-            .description(spec.getDescription())
-            .build();
-    tenantQuotaPolicyMapper.upsertTenantQuotaPolicy(p);
+            (tid, s) -> Optional.ofNullable(operationalConfigSupport.findQuotaPolicy(tid, s)),
+            (c, s) -> operationalConfigSupport.upsertQuotaPolicy(c.tenantId(), s)));
   }
 
   ItemStats applyAlertRoutings(List<AlertRoutingSpec> specs, ApplyContext ctx) {
@@ -748,29 +579,7 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.upsertable(
             "alertRouting",
             AlertRoutingSpec::getRouteCode,
-            (tid, s) ->
-                Optional.ofNullable(
-                    alertRoutingConfigMapper.selectByUniqueKey(tid, s.getRouteCode())),
-            (c, s) -> upsertAlertRouting(c.tenantId(), s, c.operator())));
-  }
-
-  private void upsertAlertRouting(String tenantId, AlertRoutingSpec spec, String operator) {
-    AlertRoutingConfigUpsertParam p = new AlertRoutingConfigUpsertParam();
-    p.setTenantId(tenantId);
-    p.setRouteCode(spec.getRouteCode());
-    p.setRouteName(spec.getRouteName());
-    p.setTeam(spec.getTeam());
-    p.setAlertGroup(spec.getAlertGroup());
-    p.setSeverity(spec.getSeverity());
-    p.setReceiver(spec.getReceiver());
-    p.setGroupBy(spec.getGroupBy());
-    p.setGroupWaitSeconds(spec.getGroupWaitSeconds());
-    p.setGroupIntervalSeconds(spec.getGroupIntervalSeconds());
-    p.setRepeatIntervalSeconds(spec.getRepeatIntervalSeconds());
-    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
-    p.setDescription(spec.getDescription());
-    p.setCreatedBy(operator);
-    p.setUpdatedBy(operator);
-    alertRoutingConfigMapper.upsertAlertRoutingConfig(p);
+            (tid, s) -> Optional.ofNullable(operationalConfigSupport.findAlertRouting(tid, s)),
+            (c, s) -> operationalConfigSupport.upsertAlertRouting(c.tenantId(), s, c.operator())));
   }
 }
