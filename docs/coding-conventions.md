@@ -1065,7 +1065,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 辅助方法（名称已自解释的 `toXxx` / `resolveXxx` / `buildXxx` / `parseXxx`）不需要注释。
 
-### 19.4 当前覆盖基线（2026-04-18）
+### 19.4 历史覆盖基线（2026-04-18）
 
 对各模块核心逻辑类（Service / Executor / Handler 实现）的逻辑方法（≥3 行方法体）扫描结果：
 
@@ -1088,6 +1088,21 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 > 未覆盖的 48% 基本为命名自解释的辅助方法（`resolveXxx` / `toXxx` / `buildXxx` 等），
 > 不应为追求覆盖率而添加无效注释。**52% 是当前合理的目标终态。**
+
+该表是 2026-04-18 的扫描快照，不用于判断当前类规模。2026-07-18 完成职责拆分后，相关代码按下表归属；后续规模、注释和架构扫描必须扫描主类及承接类，不能只统计原主类。
+
+### 19.5 职责拆分后的代码归属（2026-07-18）
+
+| 模块 | 主类（当前行数） | 承接类（当前行数） | 职责边界 |
+| --- | --- | --- | --- |
+| batch-worker-core | `PlatformFileRuntimeRepository`（179） | `PlatformFileRecordRepository`（219）、`PlatformPipelineRunRepository`（252）、`PlatformPipelineDefinitionRepository`（167）、`PlatformFileAuditRepository`（105）、`PlatformRuntimeValues`（82） | 主类只保留兼容门面；记录、运行实例、定义、审计和运行时值分别维护 |
+| batch-orchestrator | `DefaultDryRunPlanService`（375） | `DryRunEndpointProbe`（138）、`DryRunObjectStorageProbe`（97）、`DryRunSqlProbe`（125） | 计划编排与 HTTP、对象存储、SQL 探测分离 |
+| batch-orchestrator | `FileGovernanceScheduler`（557） | `FileGovernanceStorageMaintenance`（311） | 调度与对象存储清理执行分离，调度锁仍由 Scheduler 持有 |
+| batch-orchestrator | `DefaultTaskOutcomeService`（1027） | `TaskOutcomeStatePolicy`（126） | 应用编排保留在主服务；无副作用的状态判定集中到策略类 |
+| batch-console-api | `SubscriptionRuleWebhookDispatcher`（453） | `SubscriptionRuleDispatchPolicy`（217） | Webhook 投递与订阅规则匹配、事件构造分离 |
+| batch-console-api | `TenantConfigInitApplyHandlers`（585） | `TenantFileConfigApplySupport`（117）、`TenantOperationalConfigApplySupport`（171） | 初始化编排与文件配置、运行配置写入分离 |
+
+行数用于定位规模变化，不是硬性质量指标。后续继续拆分时必须同时满足：公开契约不变、事务与 ShedLock 边界不外移、状态写入顺序不变，并更新本表。
 
 ## 20. 日期时间、时区与字符编码
 
