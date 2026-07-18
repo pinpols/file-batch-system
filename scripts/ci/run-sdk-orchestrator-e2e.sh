@@ -86,11 +86,13 @@ psqlp -c "INSERT INTO batch.api_key (tenant_id, key_name, key_prefix, key_hash, 
           VALUES ('${TENANT}', 'ci-e2e-${LANG_ID}-$$', '${KEY_PREFIX}', '${KEY_HASH}', 'sha256', '*', true, now())
           ON CONFLICT DO NOTHING;"
 
-# ── 2. pre-create 派单 topic(Go 消费器启动即要求 tenant 通配下至少一个 topic)──
-echo "==> pre-creating dispatch topic batch.task.dispatch.${TENANT}.echo"
+# ── 2. pre-create node-direct 派单 topic(消费器启动即发现当前 worker topic)──
+# topic 契约是 base-first:batch.task.dispatch.<workerType>.node.<workerCode>。
+# 旧 tenant-first topic 无法匹配五语言 SDK 的 node-direct 订阅模式。
+echo "==> pre-creating dispatch topic batch.task.dispatch.echo.node.${WORKER_CODE}"
 docker exec "${KAFKA_CONTAINER}" /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server kafka:29092 --create --if-not-exists \
-  --topic "batch.task.dispatch.${TENANT}.echo" --partitions 3 --replication-factor 1 \
+  --topic "batch.task.dispatch.echo.node.${WORKER_CODE}" --partitions 3 --replication-factor 1 \
   || echo "WARN: topic create returned non-zero (may already exist)"
 
 # ── 3. 起样例 worker(后台)───────────────────────────────────────────────
@@ -130,7 +132,8 @@ case "$LANG_ID" in
   typescript)
     # TS 样例经相对路径引 SDK 源码(../../../../sdk/typescript/src),仅需装样例自身
     # 依赖(kafkajs);运行用 node 的 --experimental-strip-types 直跑 .ts,无需构建。
-    ( cd examples/self-hosted-sdk/sample-tenant-worker-typescript \
+    ( npm install --prefix "$ROOT/sdk/typescript" --no-audit --no-fund --silent \
+      && cd examples/self-hosted-sdk/sample-tenant-worker-typescript \
       && npm install --no-audit --no-fund --silent \
       && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$RAW_KEY" BATCH_TENANT_ID="$TENANT" \
          BATCH_WORKER_CODE="$WORKER_CODE" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \

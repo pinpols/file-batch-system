@@ -29,7 +29,7 @@ import {
   KafkaConsumerAdapter,
   type KafkaConsumerConfig,
   type KafkaSaslConfig,
-} from "../../../../sdk/typescript/kafka/kafkaConsumer.ts";
+} from "../../../../sdk/typescript/src/kafka/kafkaConsumer.ts";
 
 const logger = consoleLogger;
 
