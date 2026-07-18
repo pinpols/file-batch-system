@@ -21,7 +21,8 @@
 # 用法:bash scripts/ci/run-sdk-orchestrator-e2e.sh <go|python|java|typescript|rust>
 # 环境(均有默认,CI 可覆盖):
 #   BATCH_PLATFORM_DB_PASSWORD(必填)、POSTGRES_PORT(15432)、KAFKA_HOST_PORT(19092)、
-#   ORCH_PORT(18082)、TRIGGER_PORT(18081)、KAFKA_CONTAINER(kafka)、TENANT(default-tenant)
+#   ORCH_PORT(18082)、TRIGGER_PORT(18081)、KAFKA_CONTAINER(kafka)、
+#   POSTGRES_CONTAINER(batch-postgres-primary)、TENANT(default-tenant)
 # =============================================================================
 set -euo pipefail
 
@@ -40,13 +41,21 @@ ORCH_PORT="${ORCH_PORT:-18082}"
 TRIGGER_PORT="${TRIGGER_PORT:-18081}"
 KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-19092}"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-kafka}"
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-batch-postgres-primary}"
 TENANT="${TENANT:-default-tenant}"
 ORCH_URL="http://localhost:${ORCH_PORT}"
 KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}"
 WORKER_CODE="ci-e2e-${LANG_ID}-$$"
 WORKER_LOG="/tmp/sdk-e2e-worker-${LANG_ID}.log"
 
-psqlp() { psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -tA "$@"; }
+psqlp() {
+  if command -v psql >/dev/null 2>&1; then
+    psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -tA "$@"
+  else
+    docker exec -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER" \
+      psql -h localhost -p 5432 -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -tA "$@"
+  fi
+}
 
 WPID=""
 dump_diagnostics() {

@@ -40,6 +40,29 @@ func TestHTTPTransport_RetryThenSuccess(t *testing.T) {
 	}
 }
 
+func TestHTTPTransport_SendsTenantAndAPIKeyHeaders(t *testing.T) {
+	gotHeaders := make(chan http.Header, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeaders <- r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	tr := NewHTTPTransport(srv.URL, WithTenantID("tenant-a"), WithAPIKey("secret-key"))
+	_, err := tr.Register(context.Background(), RegisterRequest{WorkerCode: "w1", TenantID: "tenant-a"})
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	headers := <-gotHeaders
+	if got := headers.Get("X-Batch-Tenant-Id"); got != "tenant-a" {
+		t.Fatalf("expected tenant header tenant-a, got %q", got)
+	}
+	if got := headers.Get("X-Batch-Api-Key"); got != "secret-key" {
+		t.Fatalf("expected API key header secret-key, got %q", got)
+	}
+}
+
 // 401 -> fatal, no retry.
 func TestHTTPTransport_FailFastOn401(t *testing.T) {
 	var calls int32

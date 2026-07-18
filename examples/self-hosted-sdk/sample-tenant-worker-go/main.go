@@ -34,12 +34,13 @@ func main() {
 	}
 
 	// (2) HTTP control-plane transport. Authenticate with the worker API key via
-	// the SDK's built-in client.WithAPIKey, which sends the X-Batch-Api-Key header
-	// the platform actually checks (NOT Authorization: Bearer). NewHTTPTransport
+	// the SDK's built-in options, which send the X-Batch-Api-Key and
+	// X-Batch-Tenant-Id headers the platform auth filter requires. NewHTTPTransport
 	// already applies the mandatory 10s client timeout (the §4 Go pit).
 	transport := client.NewHTTPTransport(
 		cfg.BaseURL,
 		client.WithAPIKey(cfg.APIKey),
+		client.WithTenantID(cfg.TenantID),
 	)
 
 	// (3) Real Kafka consumer adapter (nested module). PLAINTEXT locally; when
@@ -122,11 +123,11 @@ type config struct {
 // (BATCH_* family) plus KAFKA_* for broker settings.
 func loadConfig() (config, error) {
 	required := map[string]string{
-		"BATCH_BASE_URL":   os.Getenv("BATCH_BASE_URL"),
-		"BATCH_API_KEY":    os.Getenv("BATCH_API_KEY"),
-		"BATCH_TENANT_ID":  os.Getenv("BATCH_TENANT_ID"),
+		"BATCH_BASE_URL":    os.Getenv("BATCH_BASE_URL"),
+		"BATCH_API_KEY":     os.Getenv("BATCH_API_KEY"),
+		"BATCH_TENANT_ID":   os.Getenv("BATCH_TENANT_ID"),
 		"BATCH_WORKER_CODE": os.Getenv("BATCH_WORKER_CODE"),
-		"KAFKA_BOOTSTRAP":  os.Getenv("KAFKA_BOOTSTRAP"),
+		"KAFKA_BOOTSTRAP":   os.Getenv("KAFKA_BOOTSTRAP"),
 	}
 	var missing []string
 	for name, val := range required {

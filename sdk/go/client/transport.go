@@ -226,6 +226,10 @@ type HTTPTransport struct {
 	// apiKey is the worker's API key. When set it is sent as X-Batch-Api-Key on
 	// every request and used as the HMAC key when requestSigningEnabled is on.
 	apiKey string
+	// tenantID is sent as X-Batch-Tenant-Id on every control-plane request.
+	// The platform authenticates API keys within a tenant scope, so the body
+	// tenantId alone is not sufficient.
+	tenantID string
 	// requestSigningEnabled gates request signing (方案 A, opt-in, default false).
 	// When on AND apiKey is set, write requests (POST/PUT/PATCH/DELETE) carry the
 	// X-Batch-Timestamp / X-Batch-Nonce / X-Batch-Signature headers. The platform
@@ -258,6 +262,11 @@ func WithAPIKey(apiKey string) HTTPTransportOption {
 	return func(t *HTTPTransport) { t.apiKey = apiKey }
 }
 
+// WithTenantID sets the tenant scope required by the platform auth filter.
+func WithTenantID(tenantID string) HTTPTransportOption {
+	return func(t *HTTPTransport) { t.tenantID = tenantID }
+}
+
 // WithRequestSigning enables request signing (方案 A, opt-in, default off).
 // Signing only takes effect when an API key is also configured. Mirrors the
 // Java SDK's requestSigningEnabled flag.
@@ -270,6 +279,7 @@ func WithRequestSigning(enabled bool) HTTPTransportOption {
 // Env defaults (mirroring the Java SDK's BATCH_SDK_ prefix) are applied first,
 // then overridden by any explicit options:
 //   - BATCH_SDK_API_KEY              -> WithAPIKey
+//   - BATCH_SDK_TENANT_ID            -> WithTenantID
 //   - BATCH_SDK_REQUEST_SIGNING_ENABLED -> WithRequestSigning (false / 0 / no / off => off)
 func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTransport {
 	t := &HTTPTransport{
@@ -288,6 +298,9 @@ func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTranspor
 	}
 	if v := os.Getenv("BATCH_SDK_API_KEY"); v != "" {
 		t.apiKey = v
+	}
+	if v := os.Getenv("BATCH_SDK_TENANT_ID"); v != "" {
+		t.tenantID = v
 	}
 	if v := strings.TrimSpace(os.Getenv("BATCH_SDK_REQUEST_SIGNING_ENABLED")); v != "" {
 		t.requestSigningEnabled = parseSdkBool(v)
@@ -345,6 +358,9 @@ func (t *HTTPTransport) doJSON(ctx context.Context, method, path string, body an
 			req.Header.Set(HeaderSignatureNonce, nonce)
 			req.Header.Set(HeaderSignature, sig)
 		}
+	}
+	if t.tenantID != "" {
+		req.Header.Set("X-Batch-Tenant-Id", t.tenantID)
 	}
 	resp, err := t.httpClient.Do(req)
 	if err != nil {
