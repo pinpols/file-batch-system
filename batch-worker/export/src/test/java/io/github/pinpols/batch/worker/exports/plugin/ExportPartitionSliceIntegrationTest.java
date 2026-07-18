@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
@@ -15,7 +16,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -59,6 +62,16 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
   @Autowired SqlTemplateExportDataPlugin sqlTemplatePlugin;
 
   @Autowired GenericJdbcMappedExportDataPlugin jdbcMappedPlugin;
+
+  @BeforeEach
+  void setTenantContext() {
+    RlsTenantContextHolder.set(TENANT_ID);
+  }
+
+  @AfterEach
+  void clearTenantContext() {
+    RlsTenantContextHolder.clear();
+  }
 
   // ----------------------------------------------------------------
   //  Test-data bootstrap（执行一次，所有方法共享）
