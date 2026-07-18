@@ -11,7 +11,6 @@ import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhook
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
@@ -57,7 +57,7 @@ import org.springframework.stereotype.Component;
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
-public class WebhookDeliveryRelay {
+public class WebhookDeliveryRelay implements SmartLifecycle {
 
   private static final Duration LOCK_AT_MOST = Duration.ofMinutes(2);
   private static final Duration LOCK_AT_LEAST = Duration.ofSeconds(2);
@@ -99,8 +99,12 @@ public class WebhookDeliveryRelay {
             .register(meterRegistry);
   }
 
-  @PostConstruct
+  @Override
   public void start() {
+    if (executor != null && !executor.isShutdown()) {
+      return;
+    }
+    stopping.set(false);
     executor =
         Executors.newSingleThreadScheduledExecutor(
             r -> {
@@ -127,8 +131,20 @@ public class WebhookDeliveryRelay {
   }
 
   @PreDestroy
+  @Override
   public void stop() {
     stopExecutor("pre-destroy");
+  }
+
+  @Override
+  public boolean isRunning() {
+    return executor != null && !executor.isShutdown() && !stopping.get();
+  }
+
+  /** 先于 Redis/ShedLock 等默认 phase 组件停止，避免关闭过程中继续申请分布式锁。 */
+  @Override
+  public int getPhase() {
+    return Integer.MAX_VALUE;
   }
 
   private void stopExecutor(String source) {
@@ -172,7 +188,7 @@ public class WebhookDeliveryRelay {
       lockingTaskExecutor.executeWithLock(
           (LockingTaskExecutor.Task) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
-      if (stopping.get() && isShutdownNoise(dae)) {
+      if (isShutdownNoise(dae)) {
         log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", dae.getMessage());
         return;
       }
@@ -182,7 +198,7 @@ public class WebhookDeliveryRelay {
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
     } catch (Throwable t) {
-      if (stopping.get() && isShutdownNoise(t)) {
+      if (isShutdownNoise(t)) {
         log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", t.getMessage());
         return;
       }
@@ -192,12 +208,13 @@ public class WebhookDeliveryRelay {
     }
   }
 
-  private static boolean isShutdownNoise(Throwable throwable) {
+  static boolean isShutdownNoise(Throwable throwable) {
     Throwable current = throwable;
     while (current != null) {
       String message = current.getMessage();
       if (message != null
           && (message.contains("LettuceConnectionFactory is STOPPING")
+              || message.contains("LettuceConnectionFactory has been STOPPED")
               || message.contains("has been closed")
               || message.contains("Connection pool shut down"))) {
         return true;

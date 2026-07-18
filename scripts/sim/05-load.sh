@@ -82,6 +82,15 @@ EXPORT_BIZ_TYPES = {
 def run_cmd(args, input_text=None):
     return subprocess.run(args, input=input_text, capture_output=True, text=True)
 
+def minio_cmd(*args):
+    container = os.environ.get("MINIO_CONTAINER", "batch-minio")
+    return run_cmd([
+        "docker", "exec", container, "sh", "-c",
+        'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" '
+        '> /dev/null && exec mc "$@"',
+        "sh", *args,
+    ])
+
 def sql_value(sql):
     out = run_cmd(["docker","exec",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
         "-d",os.environ.get("PLATFORM_DB", "batch_platform"),"-t","-A","-c",sql])
@@ -114,8 +123,10 @@ def cleanup_outputs():
     run_cmd(["docker","exec","-i",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
         "-d",os.environ.get("PLATFORM_DB", "batch_platform"),"-v","ON_ERROR_STOP=1"], sql)
     for biz in biz_types:
-        run_cmd(["docker","exec",os.environ.get("MINIO_CONTAINER", "batch-minio"),"mc","rm","--recursive","--force",
-            f"local/{BUCKET}/outbound/{biz}/{BIZ}/{BATCH}"])
+        result = minio_cmd("rm", "--recursive", "--force",
+            f"local/{BUCKET}/outbound/{biz}/{BIZ}/{BATCH}")
+        if result.returncode != 0:
+            raise RuntimeError(f"MinIO cleanup failed for {biz}: {result.stderr.strip()[:160]}")
 
 def launch(tenant, job, params):
     params = dict(params)
@@ -129,8 +140,11 @@ def launch(tenant, job, params):
                  "X-Internal-Secret": SECRET, "Idempotency-Key": rid, "X-Request-Id": rid})
     try:
         r = urllib.request.urlopen(req, timeout=30)
-        ok = b'"SUCCESS"' in r.read() or r.status == 200
-        return ok, ""
+        payload = json.loads(r.read().decode("utf-8"))
+        code = payload.get("code")
+        if r.status == 200 and code == "SUCCESS":
+            return True, ""
+        return False, f"HTTP {r.status}, code={code}, message={payload.get('message', '')}"[:160]
     except Exception as e:
         return False, str(e)[:80]
 
@@ -169,7 +183,7 @@ def latest_file_id(tenant):
     v = sql_value(sql)
     return v if v.isdigit() else None
 
-def wait_latest_file_id(tenant, timeout=90):
+def wait_latest_file_id(tenant, timeout=int(os.environ.get("SIM_EXPORT_WAIT_SECONDS", "180"))):
     deadline = time.time() + timeout
     while time.time() < deadline:
         fid = latest_file_id(tenant)
@@ -198,8 +212,9 @@ for t in TENANTS:
             status = wait_dispatch_done(t, fid, channel)
             if status:
                 print(f"             └─ dispatch record {channel}: {status}")
-                if status == "FAILED":
-                    errors.append(f"DISPATCH {t}/{job} channel={channel} failed for fileId={fid}")
+                if status not in ("ACKED", "SENT"):
+                    errors.append(
+                        f"DISPATCH {t}/{job} channel={channel} ended as {status} for fileId={fid}")
             else:
                 errors.append(f"DISPATCH {t}/{job} channel={channel} did not create a terminal dispatch record")
         else:

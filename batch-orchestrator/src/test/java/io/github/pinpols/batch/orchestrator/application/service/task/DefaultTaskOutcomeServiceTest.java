@@ -54,6 +54,23 @@ import org.springframework.dao.DuplicateKeyException;
  */
 class DefaultTaskOutcomeServiceTest {
 
+  @Test
+  @DisplayName("active nodes:忽略已完成的 FORK/END，并保留最新一轮仍等待的节点")
+  void resolveActiveNodeCodesUsesLatestNodeRunState() {
+    WorkflowNodeRunEntity fork = nodeRun("FORK", 1, WorkflowNodeRunStatus.SUCCESS.code());
+    WorkflowNodeRunEntity end = nodeRun("END", 1, WorkflowNodeRunStatus.SUCCESS.code());
+    WorkflowNodeRunEntity oldBranch = nodeRun("BRANCH", 1, WorkflowNodeRunStatus.RUNNING.code());
+    WorkflowNodeRunEntity finishedBranch =
+        nodeRun("BRANCH", 2, WorkflowNodeRunStatus.SUCCESS.code());
+    WorkflowNodeRunEntity waiting =
+        nodeRun("WAITING", 1, WorkflowNodeRunStatus.WAITING_DEPENDENCY.code());
+
+    assertThat(
+            DefaultTaskOutcomeService.resolveActiveNodeCodes(
+                java.util.List.of(fork, end, oldBranch, finishedBranch, waiting)))
+        .containsExactly("WAITING");
+  }
+
   @Mock private JobInstanceMapper jobInstanceMapper;
   @Mock private JobPartitionMapper jobPartitionMapper;
   @Mock private JobTaskMapper jobTaskMapper;
@@ -210,5 +227,13 @@ class DefaultTaskOutcomeServiceTest {
     e.setRunSeq(seq);
     e.setNodeCode("n1");
     return e;
+  }
+
+  private static WorkflowNodeRunEntity nodeRun(String code, int runSeq, String status) {
+    WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
+    nodeRun.setNodeCode(code);
+    nodeRun.setRunSeq(runSeq);
+    nodeRun.setNodeStatus(status);
+    return nodeRun;
   }
 }

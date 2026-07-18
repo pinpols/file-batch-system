@@ -118,13 +118,13 @@ TEMPLATE_MAPPINGS: dict[str, list[dict[str, object]]] = {
 EXPORT_SQL: dict[str, str] = {
     "TA_EXPORT_REPORT_TPL":
         "SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status "
-        "FROM biz.customer_account WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)",
+        "FROM biz.customer_account WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL",
     "TB_EXPORT_STATEMENT_TPL":
         "SELECT id, tenant_id, txn_no, account_no, txn_type, amount, currency_code, txn_date, remark "
-        "FROM biz.transaction WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)",
+        "FROM biz.transaction WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL",
     "TC_EXPORT_RISK_ALERT_TPL":
         "SELECT id, tenant_id, entity_id, entity_type, score_value, score_band, score_date "
-        "FROM biz.risk_score WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)",
+        "FROM biz.risk_score WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL",
 }
 
 

@@ -49,10 +49,11 @@ services:
       MOCKSERVER_LOG_LEVEL: ${MOCKSERVER_LOG_LEVEL:-INFO}
     volumes:
       - ./docker/mockserver/expectations.json:/config/expectations.json:ro
+      - ./docker/mockserver/HealthCheck.java:/config/HealthCheck.java:ro
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD", "/usr/bin/java", "-jar", "/libs/mockserver-netty-jar-with-dependencies.jar", "-version"]
+      test: ["CMD", "java", "/config/HealthCheck.java"]
       interval: 10s
       timeout: 5s
       retries: 6
