@@ -90,6 +90,15 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  void shouldRecognizeRedisStoppedLifecycleNoise() {
+    assertThat(
+            WebhookDeliveryRelay.isShutdownNoise(
+                new IllegalStateException(
+                    "LettuceConnectionFactory has been STOPPED. Use start() to initialize it")))
+        .isTrue();
+  }
+
+  @Test
   void shouldSkipPollWhenNoEligibleRows() {
     when(deliveryLogRepository.findEligibleRetries(any(Instant.class), eq(50)))
         .thenReturn(List.of());

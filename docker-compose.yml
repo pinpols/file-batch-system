@@ -104,8 +104,8 @@ services:
       postgres-primary:
         condition: service_healthy
     healthcheck:
-      # 走 unix socket 用主库同名用户/库；standby 接受只读连接，pg_isready 只看 listening 不看 recovery 状态
-      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U $${POSTGRES_USER:-batch_user} -d $${POSTGRES_DB:-batch_platform}"]
+      # 不能只探端口：WAL 已丢时 standby 仍接受陈旧只读查询。必须确认 receiver 正在 streaming。
+      test: ["CMD-SHELL", "psql -h /var/run/postgresql -U $${POSTGRES_USER:-batch_user} -d $${POSTGRES_DB:-batch_platform} -Atqc \"select pg_is_in_recovery() and exists (select 1 from pg_stat_wal_receiver where status = 'streaming')\" | grep -qx t"]
       interval: 10s
       timeout: 5s
       retries: 12

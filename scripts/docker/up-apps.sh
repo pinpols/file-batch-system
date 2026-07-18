@@ -21,8 +21,27 @@ unset _DOCKER_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
+
+# env-common 的默认值服务于宿主机脚本，因此 S3 默认指向 localhost:19000。
+# 容器启动入口只保留调用方或 env 文件显式提供的 endpoint；未显式配置时 unset，
+# 让 compose 使用 minio:9000。这样外部 S3 配置仍可覆盖，默认本地拓扑也不会串线。
+_batch_s3_endpoint_explicit=0
+if [[ -v BATCH_S3_ENDPOINT ]]; then
+  _batch_s3_endpoint_explicit=1
+else
+  for _env_file in "$ROOT/.env" "$COMPOSE_ENV_FILE"; do
+    if [[ -f "$_env_file" ]] && grep -Eq '^[[:space:]]*(export[[:space:]]+)?BATCH_S3_ENDPOINT=' "$_env_file"; then
+      _batch_s3_endpoint_explicit=1
+      break
+    fi
+  done
+fi
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+if [[ "$_batch_s3_endpoint_explicit" -eq 0 ]]; then
+  unset BATCH_S3_ENDPOINT
+fi
+unset _batch_s3_endpoint_explicit _env_file
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"

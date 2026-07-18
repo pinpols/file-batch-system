@@ -11,6 +11,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 BIZ_DATE="${BIZ_DATE:-$(date +%Y%m%d)}"
+SFTP_CONTAINER="${SFTP_CONTAINER:-batch-sftp}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -47,9 +48,9 @@ for t in ta tb tc; do
     tb) f="tb-transaction-${BIZ_DATE}.csv" ;;
     tc) f="tc-risk-score-${BIZ_DATE}.csv" ;;
   esac
-  docker cp "$TMP/$f" "sftp:/home/$t/inbound/$f"
-  docker exec sftp chown "$t:users" "/home/$t/inbound/$f"
-  size=$(docker exec sftp stat -c %s "/home/$t/inbound/$f" 2>/dev/null || echo "?")
+  docker cp "$TMP/$f" "$SFTP_CONTAINER:/home/$t/inbound/$f"
+  docker exec "$SFTP_CONTAINER" chown "$t:users" "/home/$t/inbound/$f"
+  size=$(docker exec "$SFTP_CONTAINER" stat -c %s "/home/$t/inbound/$f" 2>/dev/null || echo "?")
   echo "  ✓ $t:/inbound/$f ($size bytes)"
 done
 
@@ -57,7 +58,7 @@ echo
 echo "==> SFTP /inbound 现状"
 for t in ta tb tc; do
   echo "── $t"
-  docker exec sftp ls -la "/home/$t/inbound/" 2>&1 | head
+  docker exec "$SFTP_CONTAINER" ls -la "/home/$t/inbound/" 2>&1 | head
 done
 
 echo

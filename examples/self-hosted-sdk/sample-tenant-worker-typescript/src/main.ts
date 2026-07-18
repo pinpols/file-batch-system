@@ -29,7 +29,7 @@ import {
   KafkaConsumerAdapter,
   type KafkaConsumerConfig,
   type KafkaSaslConfig,
-} from "../../../../sdk/typescript/kafka/kafkaConsumer.ts";
+} from "../../../../sdk/typescript/src/kafka/kafkaConsumer.ts";
 
 const logger = consoleLogger;
 
@@ -121,7 +121,7 @@ async function main(): Promise<void> {
     sasl: env.sasl ? "scram-sha-512" : "plaintext",
   });
 
-  // 1. control-plane transport (apiKey via Authorization header).
+  // 1. control-plane transport (API key via X-Batch-Api-Key).
   // tenantId/workerCode are REQUIRED: the transport injects them into claim/renew/
   // report bodies (TaskClaimRequest needs [tenantId, workerId]); omitting them makes
   // the claim body's tenantId undefined → orchestrator selectById(null) → 404.
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     baseUrl: env.baseUrl,
     tenantId: env.tenantId,
     workerCode: env.workerCode,
-    headers: { authorization: `Bearer ${env.apiKey}` },
+    apiKey: env.apiKey,
   });
 
   // 2. dispatch consumer (real kafkajs adapter; PLAINTEXT or SASL from env).

@@ -114,7 +114,7 @@ export class RevokedTransportError extends Error {
 
 export interface HttpTransportOptions {
   baseUrl: string; // e.g. "http://127.0.0.1:18080"
-  /** owning tenant — injected as `tenantId` into claim/renew/report/deactivate bodies. */
+  /** owning tenant — sent in the auth header and injected into control-plane bodies. */
   tenantId: string;
   /** this worker's code — injected as `workerId` (claim/renew/report) / `workerCode` (deactivate). */
   workerCode: string;
@@ -272,8 +272,9 @@ export class HttpTransport implements Transport {
           headers: {
             "content-type": "application/json",
             "content-length": Buffer.byteLength(payload),
-            ...this.#authHeaders(method, url.pathname, payload),
             ...this.#headers,
+            ...this.#authHeaders(method, url.pathname, payload),
+            "X-Batch-Tenant-Id": this.#tenantId,
             ...extraHeaders,
           },
         },

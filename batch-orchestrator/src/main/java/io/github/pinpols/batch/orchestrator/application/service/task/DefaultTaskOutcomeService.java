@@ -521,6 +521,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
               .finishedAt(finishedAt)
               .build();
       advanceDagNodes(advanceCtx);
+      // current_node_code 是派发期缓存，fan-out gateway 会递归创建分支但可能仍残留已完成的 FORK。
+      // 节点完成后以 workflow_node_run 的最新状态重建活跃集合，避免 END 已成功却永久 RUNNING。
+      activeNodes.clear();
+      activeNodes.addAll(
+          resolveActiveNodeCodes(
+              workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId())));
     }
 
     boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
@@ -980,6 +986,34 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       }
       activeNodes.add(nodeCode.trim());
     }
+    return activeNodes;
+  }
+
+  static Set<String> resolveActiveNodeCodes(List<WorkflowNodeRunEntity> nodeRuns) {
+    Map<String, WorkflowNodeRunEntity> latestByNode = new LinkedHashMap<>();
+    for (WorkflowNodeRunEntity nodeRun : nodeRuns) {
+      if (nodeRun == null || nodeRun.getNodeCode() == null) {
+        continue;
+      }
+      latestByNode.merge(
+          nodeRun.getNodeCode(),
+          nodeRun,
+          (left, right) ->
+              Optional.ofNullable(right.getRunSeq()).orElse(0)
+                      >= Optional.ofNullable(left.getRunSeq()).orElse(0)
+                  ? right
+                  : left);
+    }
+    Set<String> activeNodes = new LinkedHashSet<>();
+    latestByNode.forEach(
+        (nodeCode, nodeRun) -> {
+          String status = nodeRun.getNodeStatus();
+          if (WorkflowNodeRunStatus.READY.code().equals(status)
+              || WorkflowNodeRunStatus.WAITING_DEPENDENCY.code().equals(status)
+              || WorkflowNodeRunStatus.RUNNING.code().equals(status)) {
+            activeNodes.add(nodeCode);
+          }
+        });
     return activeNodes;
   }
 

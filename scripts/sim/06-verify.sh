@@ -32,6 +32,11 @@ fi
 PG_USER="${PG_USER:-batch_user}"
 psql_q() { docker exec "$PG" psql -U "$PG_USER" -d "$1" -tAc "$2" 2>/dev/null; }
 psql_b() { docker exec "$PG" psql -U "$PG_USER" -d batch_business -tAc "$1" 2>/dev/null; }
+minio_mc() {
+  docker exec "$MINIO" sh -c \
+    'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && exec mc "$@"' \
+    sh "$@"
+}
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' RST='\033[0m'
 hdr() { printf "\n${BLUE}── %s ──${RST}\n" "$1"; }
@@ -76,11 +81,11 @@ fi
 
 # (b) worker-export 进程是否在听 18084 / 容器是否在
 worker_ok=0
-if process_port_is_listening 18084; then
-  ok "worker-export :18084" "LISTEN(本地 mvn 进程)"
-  worker_ok=1
-elif docker ps --format '{{.Names}}' | grep -q '^batch-worker-export$'; then
+if docker ps --format '{{.Names}}' | grep -q '^batch-worker-export$'; then
   ok "worker-export 容器" "running"
+  worker_ok=1
+elif process_port_is_listening 18084; then
+  ok "worker-export :18084" "LISTEN(本地 mvn 进程)"
   worker_ok=1
 else
   ng "worker-export" "未运行,EXPORT step 会停在 READY → 60+min 后 FAILED;请启动 worker-export"
@@ -114,14 +119,14 @@ done
 
 hdr "EXPORT 产物(MinIO $BUCKET 各 tenant outbound)"
 for prefix in "outbound/TA_EXPORT_REPORT" "outbound/TB_EXPORT_STATEMENT" "outbound/TC_EXPORT_RISK_ALERT"; do
-  cnt=$(docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null \
+  cnt=$(minio_mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null \
         | grep -v '/$' \
         | grep -vc '\.keep$' \
         | tr -dc '0-9')
   cnt="${cnt:-0}"
   if [[ "$cnt" -gt 0 ]]; then
     ok "$prefix" "$cnt 文件"
-    docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null \
+    minio_mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null \
       | grep -v '/$' \
       | grep -v '\.keep$' \
       | head -3 | sed 's/^/      /'

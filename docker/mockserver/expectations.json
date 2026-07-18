@@ -13,6 +13,17 @@
   {
     "httpRequest": {
       "method": "POST",
+      "path": "/tb/ingest"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {"Content-Type": ["application/json"]},
+      "body": "{\"status\":\"ingested\",\"tenant\":\"tb\",\"channel\":\"tb_api_ingest\"}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
       "path": "/tc/ingest"
     },
     "httpResponse": {
