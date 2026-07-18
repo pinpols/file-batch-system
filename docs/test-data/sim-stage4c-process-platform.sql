@@ -106,7 +106,7 @@ WITH pd AS (
         jsonb_build_object(
           'sqlTransformCompute', jsonb_build_object(
             'sourceSql',
-            'SELECT src.tenant_id, src.scenario, src.account_id, src.biz_date, src.amount AS total_amount, 1::bigint AS event_count, src.event_id AS high_water_mark FROM biz.process_stage4_source src, pg_sleep(30) WHERE src.tenant_id = :tenantId AND src.biz_date = cast(:bizDate as date) AND src.scenario = ''CANCEL'' LIMIT 1',
+            'SELECT src.tenant_id, src.scenario, src.account_id, src.biz_date, src.amount AS total_amount, 1::bigint AS event_count, src.event_id AS high_water_mark FROM biz.process_stage4_source src CROSS JOIN biz.process_stage4_source spin1 CROSS JOIN biz.process_stage4_source spin2 CROSS JOIN biz.process_stage4_source spin3 CROSS JOIN biz.process_stage4_source spin4 CROSS JOIN biz.process_stage4_source spin5 CROSS JOIN biz.process_stage4_source spin6 WHERE src.tenant_id = :tenantId AND src.biz_date = cast(:bizDate as date) AND src.scenario = ''CANCEL'' ORDER BY spin1.event_id + spin2.event_id + spin3.event_id + spin4.event_id + spin5.event_id + spin6.event_id DESC LIMIT 1',
             'targetSchema', 'biz',
             'targetTable', 'process_stage4_target',
             'writeMode', 'UPSERT',

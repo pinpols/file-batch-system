@@ -306,7 +306,7 @@ WHERE psd.pipeline_definition_id = pd.id
 --    早期 fixture 只放占位 spec / demo SQL；当前 worker 需要：
 --      * IMPORT: query_param_schema.jdbcMappedImport + load_target_ref='jdbc_mapped'
 --      * EXPORT: export_data_ref='sql_template_export' + SELECT 列含 id + :batchNo 引用
---      * DISPATCH:受管 Docker 环境通过 Compose DNS 访问 mockserver:1080
+--      * DISPATCH:标准本地运行栈通过宿主机映射端口访问 MockServer
 -- ----------------------------------------------------------------------------
 UPDATE batch.file_template_config
 SET query_param_schema = '{
@@ -565,9 +565,9 @@ SET target_endpoint = m.endpoint,
     updated_at = CURRENT_TIMESTAMP
 FROM (
     VALUES
-      ('tb', 'tb_api_push',      'http://mockserver:1080/tb/callback'),
-      ('tb', 'tb_api_ingest',    'http://mockserver:1080/tb/ingest'),
-      ('tc', 'tc_api_risk_push', 'http://mockserver:1080/tc/ingest')
+      ('tb', 'tb_api_push',      format('http://localhost:%s/tb/callback', :'mockserver_host_port')),
+      ('tb', 'tb_api_ingest',    format('http://localhost:%s/tb/ingest', :'mockserver_host_port')),
+      ('tc', 'tc_api_risk_push', format('http://localhost:%s/tc/ingest', :'mockserver_host_port'))
 ) AS m(tenant_id, channel_code, endpoint)
 WHERE batch.file_channel_config.tenant_id = m.tenant_id
   AND batch.file_channel_config.channel_code = m.channel_code;

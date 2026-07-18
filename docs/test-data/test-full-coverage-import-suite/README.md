@@ -37,3 +37,4 @@ docker compose --profile apps --profile test up -d   # 连同 Java 服务一起
 - MockServer：POST `/ta/callback` / `/tb/callback` / `/tc/ingest` 均返回 200（定义在 `docker/mockserver/expectations.json`）
 
 宿主机端口默认：SFTP `12222`、MockServer `11080`（由 `.env` 的 `SFTP_HOST_PORT` / `MOCKSERVER_HOST_PORT` 覆盖）。
+标准本地 JVM SIM 会由 `sim-e2e-bootstrap.sql` 将 API channel 改写为宿主机映射端口；不改动 Excel 包中面向 Compose 应用的容器网络地址。
