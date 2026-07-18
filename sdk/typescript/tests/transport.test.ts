@@ -102,9 +102,11 @@ test("transport: 409 → idempotent success (register idempotent=true)", async (
 
 test("transport: sets Idempotency-Key + required tenantId/workerId on claim", async () => {
   let claimKey: string | undefined;
+  let tenantHeader: string | undefined;
   let claimBody = "";
   const srv = await startServer((req, res) => {
     claimKey = req.headers["idempotency-key"] as string | undefined;
+    tenantHeader = req.headers["x-batch-tenant-id"] as string | undefined;
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
     req.on("end", () => {
@@ -122,6 +124,7 @@ test("transport: sets Idempotency-Key + required tenantId/workerId on claim", as
   });
   await transport.claim("task-9", "my-idem-key");
   assert.equal(claimKey, "my-idem-key");
+  assert.equal(tenantHeader, "tenant-A");
   // TaskClaimRequest required fields: tenantId + workerId(==workerCode)
   assert.deepEqual(JSON.parse(claimBody), { tenantId: "tenant-A", workerId: "w1" });
 
