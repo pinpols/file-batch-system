@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
@@ -17,12 +16,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
-import java.net.InetAddress;
-import java.net.URI;
-import java.net.UnknownHostException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -33,20 +26,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.statement.Statement;
-import net.sf.jsqlparser.statement.Statements;
-import net.sf.jsqlparser.statement.select.Select;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 /**
  * ADR-026 §三层粒度 演练计划服务实现。priority-scope §ADR-026 红线：
@@ -59,39 +44,21 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
  *
  * <p><b>不做（FULL_SIMULATION 红线）</b>：真执行 + 事务回滚 / 真写文件后删 / 真发 Kafka 不消费。
  */
-@Slf4j
 @Service
 @SuppressWarnings("PMD.ExcessiveParameterList")
 public class DefaultDryRunPlanService implements DryRunPlanService {
 
-  /** L3 endpoint reachability HEAD timeout — 短超时避免 dry-run 长期停滞。 */
-  private static final Duration HTTP_PROBE_TIMEOUT = Duration.ofSeconds(5);
-
   private static final String SCOPE_JOB = "job";
   private static final String SCOPE_EXECUTION = "execution";
-
-  /** L3 effectiveParams 中可能的 SQL key 候选；命中即跑 EXPLAIN。 */
-  private static final Set<String> SQL_PARAM_KEYS =
-      Set.of("sql", "querySql", "sourceQuery", "validationSql", "selectSql");
-
-  /** L3 effectiveParams 中可能的 endpoint URL key 候选；命中即跑 HTTP HEAD。 */
-  private static final Set<String> ENDPOINT_PARAM_KEYS =
-      Set.of("endpointUrl", "callbackUrl", "channelEndpoint", "dispatchTarget");
-
-  /** S3 bucket 命名规则（DNS-style：3-63 字符，小写字母 / 数字 / `-`，不能 `-` 起止）。 */
-  private static final Pattern S3_BUCKET_PATTERN =
-      Pattern.compile("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$");
 
   private final OrchestratorConfigCacheService configCacheService;
   private final SchedulePlanBuilder schedulePlanBuilder;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final BatchTimezoneProvider timezoneProvider;
-  private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
-  private final ObjectProvider<S3Client> s3ClientProvider;
-  private final ObjectProvider<S3StorageProperties> s3PropertiesProvider;
-  private final HttpClient httpClient =
-      HttpClient.newBuilder().connectTimeout(HTTP_PROBE_TIMEOUT).build();
+  private final DryRunSqlProbe sqlProbe;
+  private final DryRunObjectStorageProbe objectStorageProbe;
+  private final DryRunEndpointProbe endpointProbe;
 
   public DefaultDryRunPlanService(
       OrchestratorConfigCacheService configCacheService,
@@ -107,9 +74,9 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     this.workflowNodeMapper = workflowNodeMapper;
     this.workflowEdgeMapper = workflowEdgeMapper;
     this.timezoneProvider = timezoneProvider;
-    this.jdbcTemplateProvider = jdbcTemplateProvider;
-    this.s3ClientProvider = s3ClientProvider;
-    this.s3PropertiesProvider = s3PropertiesProvider;
+    this.sqlProbe = new DryRunSqlProbe(jdbcTemplateProvider);
+    this.objectStorageProbe = new DryRunObjectStorageProbe(s3ClientProvider, s3PropertiesProvider);
+    this.endpointProbe = new DryRunEndpointProbe();
   }
 
   @Override
@@ -345,9 +312,9 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     Map<String, Object> summary = new LinkedHashMap<>(schedule.summary());
     Map<String, Object> params = request.params() == null ? Map.of() : request.params();
 
-    int sqlProbed = probeSqlExplain(params, findings);
-    int s3Probed = probeS3Bucket(params, findings);
-    int endpointProbed = probeEndpointReachability(params, findings);
+    int sqlProbed = sqlProbe.probe(params, findings);
+    int s3Probed = objectStorageProbe.probe(params, findings);
+    int endpointProbed = endpointProbe.probe(params, findings);
     summary.put("l3SqlProbed", sqlProbed);
     summary.put("l3S3Probed", s3Probed);
     summary.put("l3EndpointProbed", endpointProbed);
@@ -359,306 +326,6 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
               "no SQL / S3 / endpoint params to probe; L3 reduces to L2 result"));
     }
     return DryRunPlanResult.of(DryRunLevel.EXECUTION_PLAN, findings, summary);
-  }
-
-  /**
-   * R7-A1-P0：拒绝任何以 {@code EXPLAIN } / {@code EXPLAIN(} 起头的 payload。
-   *
-   * <p>原因：PG 下 {@code EXPLAIN (ANALYZE) <DML>} 会真正执行 DML/DDL；如果调用方提交 {@code params.sql = "(ANALYZE)
-   * DELETE FROM job_definition"}，本服务拼出来就是 {@code "EXPLAIN (ANALYZE) DELETE FROM
-   * job_definition"}，DELETE 真删表。
-   *
-   * <p>除了拒绝 EXPLAIN 关键字，还使用 {@code EXPLAIN (ANALYZE FALSE, COSTS FALSE)} 显式 双保险：即使后续语法变更，ANALYZE
-   * FALSE 也强制 planner 只计划不执行。
-   */
-  private static final Pattern EXPLAIN_PREFIX =
-      Pattern.compile("^\\s*EXPLAIN\\b", Pattern.CASE_INSENSITIVE);
-
-  // 纵深防御:dry-run 探测的 SQL 只允许 SELECT / WITH(CTE)开头。EXPLAIN (ANALYZE FALSE) 虽已是
-  // planner-only,但那是对 PG 实现细节的单层依赖(个别语句如 CREATE INDEX CONCURRENTLY / REFRESH
-  // MAT VIEW 历史上有越过 ANALYZE 标志真执行的分支)。此处先做语句类型白名单,把 DML/DDL 挡在
-  // EXPLAIN 之前。用首关键字而非 AST 解析:合法探测 SQL 本就是 SELECT/WITH,零误伤;WITH..DML 这类
-  // CTE 内嵌 DML 仍由下游 ANALYZE FALSE 回退。注释/前导空白由 \\s* + 关键字边界覆盖。
-  private static final Pattern SELECT_OR_WITH_PREFIX =
-      Pattern.compile("^\\s*(SELECT|WITH)\\b", Pattern.CASE_INSENSITIVE);
-
-  /** L3-1: 对 params 中匹配 SQL_PARAM_KEYS 的字符串调用 EXPLAIN(ANALYZE FALSE)，仅做计划探测。 */
-  private int probeSqlExplain(Map<String, Object> params, List<DryRunFinding> findings) {
-    JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-    if (jdbcTemplate == null) return 0;
-    int probed = 0;
-    for (String key : SQL_PARAM_KEYS) {
-      Object raw = params.get(key);
-      if (!(raw instanceof String sql) || !Texts.hasText(sql)) continue;
-      probed++;
-      String trimmed = sql.trim();
-      if (EXPLAIN_PREFIX.matcher(trimmed).find()) {
-        // R7-A1-P0：拒绝调用方手动塞 EXPLAIN（含 EXPLAIN (ANALYZE) <DML>），避免被嵌套执行 DML。
-        findings.add(
-            DryRunFinding.error(
-                "EXEC_SQL_EXPLAIN_REJECTED",
-                SCOPE_EXECUTION,
-                "payload starts with EXPLAIN — refusing to nest a second EXPLAIN; submit raw"
-                    + " SELECT",
-                key));
-        continue;
-      }
-      if (!SELECT_OR_WITH_PREFIX.matcher(trimmed).find()) {
-        // 纵深防御:非 SELECT/WITH(即 DML/DDL)在进入 EXPLAIN 之前直接拒绝,不依赖 ANALYZE FALSE 回退。
-        findings.add(
-            DryRunFinding.error(
-                "EXEC_SQL_NON_SELECT_REJECTED",
-                SCOPE_EXECUTION,
-                "dry-run SQL probe only accepts SELECT / WITH statements; refusing to EXPLAIN a"
-                    + " DML/DDL payload",
-                key));
-        continue;
-      }
-      // S1(stacked-query RCE)：首关键字白名单只看第一条,pgjdbc simple-query 执行 `EXPLAIN <trimmed>` 时允许分号堆叠
-      // → `SELECT 1; DROP TABLE job_definition` 里 DROP 真执行。用 AST 确认 trimmed 恰好是单条 SELECT/WITH,
-      // 否则不进 EXPLAIN。区分两类拒绝:真堆叠/多语句 vs jsqlparser 无法解析(合法 $tag$ dollar-quoting 等可能落此)。
-      SingleSelectCheck check = classifySingleSelect(trimmed);
-      if (check == SingleSelectCheck.UNPARSEABLE) {
-        findings.add(
-            DryRunFinding.error(
-                "EXEC_SQL_UNPARSEABLE_REJECTED",
-                SCOPE_EXECUTION,
-                "dry-run SQL probe could not be parsed to verify single-statement safety; refusing"
-                    + " to EXPLAIN via simple-query (may be valid PG-specific syntax jsqlparser"
-                    + " cannot parse — submit a parseable single SELECT/WITH)",
-                key));
-        continue;
-      }
-      if (check == SingleSelectCheck.MULTI_OR_NON_SELECT) {
-        findings.add(
-            DryRunFinding.error(
-                "EXEC_SQL_MULTISTATEMENT_REJECTED",
-                SCOPE_EXECUTION,
-                "dry-run SQL probe must be exactly one SELECT/WITH statement; refusing to EXPLAIN a"
-                    + " multi-statement / stacked-query payload",
-                key));
-        continue;
-      }
-      try {
-        // R7-A1-P0：ANALYZE FALSE + COSTS FALSE 显式强制 planner-only，零侧效；
-        // 即使 SQL 是 DML 也不会真正执行（与裸 EXPLAIN 不同，可对抗未来 PG 默认行为变化）。
-        jdbcTemplate.execute("EXPLAIN (ANALYZE FALSE, COSTS FALSE) " + trimmed);
-        findings.add(
-            DryRunFinding.pass(
-                "EXEC_SQL_EXPLAIN_OK", SCOPE_EXECUTION, "EXPLAIN passed for " + key));
-      } catch (RuntimeException ex) {
-        findings.add(
-            DryRunFinding.error(
-                "EXEC_SQL_EXPLAIN_FAILED",
-                SCOPE_EXECUTION,
-                "EXPLAIN failed for " + key + ": " + ex.getMessage(),
-                key));
-      }
-    }
-    return probed;
-  }
-
-  /** {@link #classifySingleSelect} 的三态结果：单条 Select 放行 / 多语句或非 Select 拒 / 无法解析拒。 */
-  private enum SingleSelectCheck {
-    SINGLE_SELECT,
-    MULTI_OR_NON_SELECT,
-    UNPARSEABLE
-  }
-
-  /**
-   * 用 jsqlparser 判定 SQL 是否恰好一条 {@link Select}。无法解析单独归类(合法但 jsqlparser 不支持的 PG 特有语法会落此,与真堆叠区分),
-   * 两类都拒——都无法证明单语句安全,绝不盲目走 pgjdbc simple-query 的 {@code EXPLAIN} 拼接。
-   */
-  private static SingleSelectCheck classifySingleSelect(String sql) {
-    Statements statements;
-    try {
-      statements = CCJSqlParserUtil.parseStatements(sql);
-    } catch (Exception e) {
-      return SingleSelectCheck.UNPARSEABLE;
-    }
-    List<Statement> list = statements.getStatements();
-    if (list != null && list.size() == 1 && list.get(0) instanceof Select) {
-      return SingleSelectCheck.SINGLE_SELECT;
-    }
-    return SingleSelectCheck.MULTI_OR_NON_SELECT;
-  }
-
-  /**
-   * L3-2: S3 bucket 探测。
-   *
-   * <ul>
-   *   <li>若 params.s3Bucket 缺失，回退到 S3StorageProperties.bucket 默认；
-   *   <li>校验 bucket 命名合法（DNS-style）；
-   *   <li>若 S3Client 可用，调用 headBucket；不可用降级为只校验命名规则。
-   * </ul>
-   */
-  private int probeS3Bucket(Map<String, Object> params, List<DryRunFinding> findings) {
-    String bucket = stringValue(params, "s3Bucket");
-    if (!Texts.hasText(bucket)) {
-      S3StorageProperties props = s3PropertiesProvider.getIfAvailable();
-      bucket = props == null ? null : props.getBucket();
-    }
-    if (!Texts.hasText(bucket)) return 0;
-    if (!S3_BUCKET_PATTERN.matcher(bucket).matches()) {
-      findings.add(
-          DryRunFinding.error(
-              "EXEC_S3_BUCKET_INVALID",
-              SCOPE_EXECUTION,
-              "s3 bucket name does not match DNS-style rule: " + bucket,
-              bucket));
-      return 1;
-    }
-    S3Client client = s3ClientProvider.getIfAvailable();
-    if (client == null) {
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_S3_CLIENT_UNAVAILABLE",
-              SCOPE_EXECUTION,
-              "S3Client bean unavailable; bucket name passed regex only",
-              bucket));
-      return 1;
-    }
-    try {
-      boolean exists;
-      try {
-        client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-        exists = true;
-      } catch (NoSuchBucketException notFound) {
-        exists = false;
-      }
-      if (exists) {
-        findings.add(
-            DryRunFinding.pass(
-                "EXEC_S3_BUCKET_OK", SCOPE_EXECUTION, "s3 bucket exists: " + bucket));
-      } else {
-        findings.add(
-            DryRunFinding.error(
-                "EXEC_S3_BUCKET_MISSING",
-                SCOPE_EXECUTION,
-                "s3 bucket not found: " + bucket,
-                bucket));
-      }
-    } catch (Exception ex) {
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_S3_PROBE_FAILED",
-              SCOPE_EXECUTION,
-              "s3 probe failed: " + ex.getMessage(),
-              bucket));
-    }
-    return 1;
-  }
-
-  /** L3-3: 对 params 中匹配 ENDPOINT_PARAM_KEYS 的 URL 做 HTTP HEAD（5s timeout，失败 WARN 不阻断）。 */
-  private int probeEndpointReachability(Map<String, Object> params, List<DryRunFinding> findings) {
-    int probed = 0;
-    for (String key : ENDPOINT_PARAM_KEYS) {
-      Object raw = params.get(key);
-      if (!(raw instanceof String url) || !Texts.hasText(url)) continue;
-      probed++;
-      String trimmed = url.trim();
-      if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-        findings.add(
-            DryRunFinding.warn(
-                "EXEC_ENDPOINT_NON_HTTP",
-                SCOPE_EXECUTION,
-                "endpoint not http/https; reachability probe skipped: " + key,
-                trimmed));
-        continue;
-      }
-      try {
-        URI probeUri = URI.create(trimmed);
-        String host = probeUri.getHost();
-        if (host == null) {
-          findings.add(
-              DryRunFinding.warn(
-                  "EXEC_ENDPOINT_BLOCKED",
-                  SCOPE_EXECUTION,
-                  key + " endpoint URL has no host; reachability probe skipped",
-                  trimmed));
-          continue;
-        }
-        // SSRF 出口守卫:外呼前解析 host 的每个 IP,任一落入受限网段(回环/私网/link-local/ULA/云 metadata)即拒,
-        // 绝不 send()——否则认证用户可借 dry-run 探针把内网可达性变成 oracle(打 169.254.169.254 / 内网端口)。
-        if (!endpointEgressAllowed(key, trimmed, host, findings)) {
-          continue;
-        }
-        HttpRequest req =
-            HttpRequest.newBuilder(probeUri)
-                .method("HEAD", HttpRequest.BodyPublishers.noBody())
-                .timeout(HTTP_PROBE_TIMEOUT)
-                .build();
-        HttpResponse<Void> resp = httpClient.send(req, HttpResponse.BodyHandlers.discarding());
-        int status = resp.statusCode();
-        if (status >= 200 && status < 500) {
-          findings.add(
-              DryRunFinding.pass(
-                  "EXEC_ENDPOINT_OK",
-                  SCOPE_EXECUTION,
-                  key + " reachable; HEAD returned " + status));
-        } else {
-          findings.add(
-              DryRunFinding.warn(
-                  "EXEC_ENDPOINT_5XX", SCOPE_EXECUTION, key + " HEAD returned " + status, trimmed));
-        }
-      } catch (InterruptedException ie) {
-        // 中断不是"endpoint 不可达":恢复中断位并停止探测循环,按现有方式返回已收集 findings。
-        Thread.currentThread().interrupt();
-        findings.add(
-            DryRunFinding.warn(
-                "EXEC_ENDPOINT_PROBE_INTERRUPTED",
-                SCOPE_EXECUTION,
-                key + " probe interrupted; remaining endpoint probes skipped",
-                trimmed));
-        break;
-      } catch (Exception ex) {
-        findings.add(
-            DryRunFinding.warn(
-                "EXEC_ENDPOINT_UNREACHABLE",
-                SCOPE_EXECUTION,
-                key + " probe failed: " + ex.getMessage(),
-                trimmed));
-      }
-    }
-    return probed;
-  }
-
-  /**
-   * 出口 SSRF 守卫:解析 endpoint host 的所有 IP,任一落入 {@link DnsResolveGuard#isBlocked(InetAddress)} 受限网段 (回环
-   * / 私网 / link-local / fc00::/7 ULA / IPv4-mapped metadata)即判定为被出口安全策略拒绝,绝不外呼。 host 解析失败同样按拒绝处理(不
-   * send)。finding 只说明"被出口策略拒绝",不泄漏内部解析细节。
-   *
-   * @return {@code true} 允许外呼探测;{@code false} 已拒绝并写入 finding
-   */
-  private boolean endpointEgressAllowed(
-      String key, String url, String host, List<DryRunFinding> findings) {
-    try {
-      for (InetAddress addr : InetAddress.getAllByName(host)) {
-        if (DnsResolveGuard.isBlocked(addr)) {
-          findings.add(
-              DryRunFinding.warn(
-                  "EXEC_ENDPOINT_BLOCKED",
-                  SCOPE_EXECUTION,
-                  key + " target rejected by egress security policy; reachability probe skipped",
-                  url));
-          return false;
-        }
-      }
-      return true;
-    } catch (UnknownHostException e) {
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_ENDPOINT_UNREACHABLE",
-              SCOPE_EXECUTION,
-              key + " host unresolvable; reachability probe skipped",
-              url));
-      return false;
-    }
-  }
-
-  private static String stringValue(Map<String, Object> params, String key) {
-    Object raw = params == null ? null : params.get(key);
-    return raw instanceof String s ? s : null;
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
