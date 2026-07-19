@@ -113,6 +113,7 @@ done
 echo
 echo "==> 应用 sim-e2e bootstrap(runtime config refresh)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 \
+  -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
   -f /dev/stdin < "$ROOT/docs/test-data/sim-e2e-bootstrap.sql" >/dev/null
 echo "  ✓ bootstrap OK"
 

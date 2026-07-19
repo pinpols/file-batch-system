@@ -499,7 +499,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     Set<String> activeNodes =
         workflowRun == null
             ? new LinkedHashSet<>()
-            : parseActiveNodes(workflowRun.getCurrentNodeCode());
+            : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
 
     if (nodeProgress.allFinished() && workflowRun != null) {
       // perf(#5): 节点完成时才需要 output_summary 做产出聚合,此处按需全量读(节点完成远少于每 REPORT)。
@@ -525,7 +525,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // 节点完成后以 workflow_node_run 的最新状态重建活跃集合，避免 END 已成功却永久 RUNNING。
       activeNodes.clear();
       activeNodes.addAll(
-          resolveActiveNodeCodes(
+          TaskOutcomeStatePolicy.resolveActiveNodeCodes(
               workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId())));
     }
 
@@ -543,12 +543,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       jobInstance.setInstanceStatus(freshInstance.getInstanceStatus());
     }
     String instanceEvent =
-        resolveInstanceEvent(
+        TaskOutcomeStatePolicy.resolveInstanceEvent(
             successCount,
             failedCount,
             allPartitionsFinished,
             dagContinues,
-            isDryRun(freshInstance != null ? freshInstance : jobInstance));
+            TaskOutcomeStatePolicy.isDryRun(freshInstance != null ? freshInstance : jobInstance));
     String instanceStatus =
         collaborators
             .stateMachine()
@@ -557,7 +557,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // ADR-012: instance 级 failure_class 仅在终态且失败类（FAILED / PARTIAL_FAILED）时填；
     // SUCCESS 终态保持 NULL。来源 = 当前命令本次推断的 class（合并 worker 上报 + classifier 回退）。
     String instanceFailureClass =
-        isTerminalJobInstanceStatus(instanceStatus)
+        TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)
                 && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
                     || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus))
             ? collaborators.failureClassifier().classify(command.failureClass(), null).code()
@@ -585,7 +585,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
     jobInstance.setInstanceStatus(instanceStatus);
-    if (isTerminalJobInstanceStatus(instanceStatus)) {
+    if (TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
       // ⑦ follow-up: worker REPORT 路径的终态切换也要算入 JobLifecycleMetrics,
       // 与 JobInstanceTerminalStatusApplicationService (运维/超时路径) 走同一 helper。
       // jobFullyComplete 决定 finishedAt 是否进入实例 — null 时 helper 走 afterCommit 时刻回退。
@@ -634,12 +634,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       }
     }
     // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
-    if (jobFullyComplete && isTerminalJobInstanceStatus(instanceStatus)) {
+    if (jobFullyComplete && TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
       signalParentVirtualTask(jobInstance, instanceStatus, command);
     }
     if (workflowRun != null) {
       String workflowEvent =
-          resolveWorkflowEvent(
+          TaskOutcomeStatePolicy.resolveWorkflowEvent(
               failedCount,
               allPartitionsFinished,
               dagContinues,
@@ -655,7 +655,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                   .id(workflowRun.getId())
                   .runStatus(workflowStatus)
                   .currentNodeCode(
-                      resolveWorkflowCurrentNode(activeNodes, workflowStatus, currentNodeCode))
+                      TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
+                          activeNodes, workflowStatus, currentNodeCode))
                   .finishedAt(workflowFinishedAt)
                   .expectedStatuses(WORKFLOW_RUN_LIVE_STATUSES)
                   .build());
@@ -866,16 +867,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
   }
 
-  private boolean isTerminalJobInstanceStatus(String status) {
-    return JobInstanceStatus.SUCCESS.code().equals(status)
-        || JobInstanceStatus.FAILED.code().equals(status)
-        || JobInstanceStatus.PARTIAL_FAILED.code().equals(status)
-        || JobInstanceStatus.CANCELLED.code().equals(status)
-        || JobInstanceStatus.TERMINATED.code().equals(status)
-        || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(status)
-        || JobInstanceStatus.FAILED_DRY_RUN.code().equals(status);
-  }
-
   private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
     String nodeCode =
         TaskOutcomePayloadSupport.payloadStringValue(
@@ -884,7 +875,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       return nodeCode;
     }
     Set<String> activeNodes =
-        workflowRun == null ? Set.of() : parseActiveNodes(workflowRun.getCurrentNodeCode());
+        workflowRun == null
+            ? Set.of()
+            : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
     // 多活动节点同时缺 workflowNodeCode 即数据错乱：fallback 到 iterator.first 会把错误节点结掉，必须拒绝。
     if (workflowRun != null && activeNodes.size() > 1) {
       throw BizException.of(
@@ -967,7 +960,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (workflowRun != null
         && workflowRun.getCurrentNodeCode() != null
         && !workflowRun.getCurrentNodeCode().isBlank()) {
-      Set<String> activeNodes = parseActiveNodes(workflowRun.getCurrentNodeCode());
+      Set<String> activeNodes =
+          TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
       if (activeNodes.size() == 1) {
         return activeNodes.iterator().next();
       }
@@ -975,46 +969,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return fallbackNodeCode;
   }
 
-  private Set<String> parseActiveNodes(String currentNodeCode) {
-    Set<String> activeNodes = new LinkedHashSet<>();
-    if (currentNodeCode == null || currentNodeCode.isBlank()) {
-      return activeNodes;
-    }
-    for (String nodeCode : currentNodeCode.split(",")) {
-      if (nodeCode == null || nodeCode.isBlank()) {
-        continue;
-      }
-      activeNodes.add(nodeCode.trim());
-    }
-    return activeNodes;
-  }
-
   static Set<String> resolveActiveNodeCodes(List<WorkflowNodeRunEntity> nodeRuns) {
-    Map<String, WorkflowNodeRunEntity> latestByNode = new LinkedHashMap<>();
-    for (WorkflowNodeRunEntity nodeRun : nodeRuns) {
-      if (nodeRun == null || nodeRun.getNodeCode() == null) {
-        continue;
-      }
-      latestByNode.merge(
-          nodeRun.getNodeCode(),
-          nodeRun,
-          (left, right) ->
-              Optional.ofNullable(right.getRunSeq()).orElse(0)
-                      >= Optional.ofNullable(left.getRunSeq()).orElse(0)
-                  ? right
-                  : left);
-    }
-    Set<String> activeNodes = new LinkedHashSet<>();
-    latestByNode.forEach(
-        (nodeCode, nodeRun) -> {
-          String status = nodeRun.getNodeStatus();
-          if (WorkflowNodeRunStatus.READY.code().equals(status)
-              || WorkflowNodeRunStatus.WAITING_DEPENDENCY.code().equals(status)
-              || WorkflowNodeRunStatus.RUNNING.code().equals(status)) {
-            activeNodes.add(nodeCode);
-          }
-        });
-    return activeNodes;
+    return TaskOutcomeStatePolicy.resolveActiveNodeCodes(nodeRuns);
   }
 
   private boolean isActiveNode(Long workflowRunId, String nodeCode) {
@@ -1040,68 +996,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       return workflowStartedAt;
     }
     return finishedAt;
-  }
-
-  private String resolveInstanceEvent(
-      long successCount,
-      long failedCount,
-      boolean allPartitionsFinished,
-      boolean dagContinues,
-      boolean dryRun) {
-    if (!allPartitionsFinished) {
-      return JobInstanceStatus.RUNNING.code();
-    }
-    if (dagContinues) {
-      return JobInstanceStatus.RUNNING.code();
-    }
-    if (failedCount > 0 && successCount > 0) {
-      // ADR-026: dry-run 走 PARTIAL_FAILED 同等语义但终态用 FAILED_DRY_RUN（不再 ALERT 实盘失败告警）
-      return dryRun
-          ? JobInstanceStatus.FAILED_DRY_RUN.code()
-          : JobInstanceStatus.PARTIAL_FAILED.code();
-    }
-    if (failedCount > 0) {
-      return dryRun ? JobInstanceStatus.FAILED_DRY_RUN.code() : JobInstanceStatus.FAILED.code();
-    }
-    return dryRun ? JobInstanceStatus.SUCCESS_DRY_RUN.code() : JobInstanceStatus.SUCCESS.code();
-  }
-
-  private static boolean isDryRun(JobInstanceEntity instance) {
-    return instance != null && Boolean.TRUE.equals(instance.getDryRun());
-  }
-
-  /** workflow_run 只允许进入 workflow 语义状态，不复用 job_instance 的 PARTIAL_FAILED 等口径。 */
-  private String resolveWorkflowEvent(
-      long failedCount, boolean allPartitionsFinished, boolean dagContinues, boolean dryRun) {
-    if (!allPartitionsFinished) {
-      return WorkflowRunStatus.RUNNING.code();
-    }
-    if (dagContinues) {
-      return WorkflowRunStatus.RUNNING.code();
-    }
-    if (failedCount > 0) {
-      return dryRun ? WorkflowRunStatus.FAILED_DRY_RUN.code() : WorkflowRunStatus.FAILED.code();
-    }
-    return dryRun ? WorkflowRunStatus.SUCCESS_DRY_RUN.code() : WorkflowRunStatus.SUCCESS.code();
-  }
-
-  private String resolveWorkflowCurrentNode(
-      Set<String> activeNodes, String workflowStatus, String fallbackNodeCode) {
-    if (activeNodes != null && !activeNodes.isEmpty()) {
-      return String.join(",", activeNodes);
-    }
-    if (isWorkflowTerminal(workflowStatus)) {
-      return WorkflowNodeCode.END.code();
-    }
-    return fallbackNodeCode;
-  }
-
-  private boolean isWorkflowTerminal(String workflowStatus) {
-    return WorkflowRunStatus.SUCCESS.code().equals(workflowStatus)
-        || WorkflowRunStatus.FAILED.code().equals(workflowStatus)
-        || WorkflowRunStatus.TERMINATED.code().equals(workflowStatus)
-        || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(workflowStatus)
-        || WorkflowRunStatus.FAILED_DRY_RUN.code().equals(workflowStatus);
   }
 
   private int nextRunSeq(Long workflowRunId, String nodeCode) {

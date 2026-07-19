@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 BIZ_DATE="${BIZ_DATE:-$(date +%Y%m%d)}"
-SFTP_CONTAINER="${SFTP_CONTAINER:-batch-sftp}"
+SFTP_CONTAINER="${SFTP_CONTAINER:-sftp}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

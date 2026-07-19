@@ -142,6 +142,34 @@ class TaskDispatcherTest {
     assertThat(dispatcher.partitionInvocation(42L)).isNull();
   }
 
+  @Test
+  void partitionInvocationFromClaimResponseIsThreadedToReport() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(Map.of("partitionInvocationId", "inv-from-claim"));
+    SdkTaskHandler handler =
+        new SdkTaskHandler() {
+          @Override
+          public String taskType() {
+            return "tt";
+          }
+
+          @Override
+          public SdkTaskResult execute(SdkTaskContext ctx) {
+            return SdkTaskResult.ok("done", Map.of());
+          }
+        };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+
+    dispatcher.processInWorkerThread(
+        new TaskDispatchMessage(42L, "tx", "job-1", "tt", "ti-9", Map.of(), Map.of()));
+
+    ArgumentCaptor<Map<String, Object>> reportBody = mapCaptor();
+    verify(http).report(eq(42L), anyString(), reportBody.capture());
+    assertThat(reportBody.getValue()).containsEntry("partitionInvocationId", "inv-from-claim");
+    assertThat(dispatcher.partitionInvocation(42L)).isNull();
+  }
+
   // ─── handler 异常回退 ────────────────────────────────────────────────────────
 
   @Test

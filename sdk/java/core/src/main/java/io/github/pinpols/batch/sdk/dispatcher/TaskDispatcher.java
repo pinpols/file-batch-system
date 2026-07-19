@@ -346,9 +346,16 @@ public class TaskDispatcher {
     if (partitionInvocationId != null) {
       claimBody.put("partitionInvocationId", partitionInvocationId);
     }
-    if (!claimWithRetry(msg, idemClaim, claimBody)) {
+    ClaimResult claimResult = claimWithRetry(msg, idemClaim, claimBody);
+    if (!claimResult.claimed()) {
       // claim 失败直接返回,不进 finally 清理块 —— partitionInvocations 必须在 claim 成功后才落,否则泄漏。
       return;
+    }
+    if (partitionInvocationId == null) {
+      Object claimedInvocation = claimResult.response().get("partitionInvocationId");
+      if (claimedInvocation != null && !claimedInvocation.toString().isBlank()) {
+        partitionInvocationId = claimedInvocation.toString();
+      }
     }
     if (partitionInvocationId != null) {
       // 留存供 renew(只有 taskId、拿不到 msg)+ report 带上,贯穿分区不变量。
@@ -464,8 +471,11 @@ public class TaskDispatcher {
   }
 
   /** 把 partitionInvocationId 放进 renew/report body(无则不放,兼容非分区任务)。 */
-  private static void putPartitionInvocation(Map<String, Object> body, TaskDispatchMessage msg) {
-    String pInv = extractPartitionInvocation(msg);
+  private void putPartitionInvocation(Map<String, Object> body, TaskDispatchMessage msg) {
+    String pInv = partitionInvocations.get(msg.taskId());
+    if (pInv == null) {
+      pInv = extractPartitionInvocation(msg);
+    }
     if (pInv != null) {
       body.put("partitionInvocationId", pInv);
     }
@@ -482,17 +492,17 @@ public class TaskDispatcher {
    *       仍失败则放弃(orchestrator 自然会因 lease 超时重派)
    * </ul>
    *
-   * @return true=CLAIM 成功可进入 EXECUTE;false=已分类处理,不应继续
+   * @return CLAIM 结果;成功时保留平台返回的生效配置，供 renew/report 回传 invocation fence
    */
-  boolean claimWithRetry(TaskDispatchMessage msg, String idemKey, Map<String, Object> body) {
+  ClaimResult claimWithRetry(TaskDispatchMessage msg, String idemKey, Map<String, Object> body) {
     int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
     long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
     int attempt = 0;
     while (true) {
       try {
-        httpClient.claim(msg.taskId(), idemKey, body);
+        Map<String, Object> response = httpClient.claim(msg.taskId(), idemKey, body);
         resetClientErrorStreak();
-        return true;
+        return new ClaimResult(true, response == null ? Map.of() : response);
       } catch (PlatformHttpException httpEx) {
         if (httpEx.isAuthError()) {
           // 鉴权失败:apiKey 配错 / 已 revoke → 重试无益,fail-fast 让运维介入(K8s liveness probe 拉起)
@@ -502,12 +512,12 @@ public class TaskDispatcher {
                   + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
               httpEx.statusCode(),
               msg.taskId());
-          return false;
+          return ClaimResult.notClaimed();
         }
         if (httpEx.isConflict()) {
           // 409:peer worker 已 claim,正常竞争,不 report(orchestrator 已 owned by peer)
           log.info("CLAIM 409 for taskId={} (taken by peer), skipping", msg.taskId());
-          return false;
+          return ClaimResult.notClaimed();
         }
         if (httpEx.isServerError()) {
           // 5xx:平台侧问题,指数退避重试。耗尽场景在平台抖动时会同时被 N 个 worker 命中,走 throttledLog 防刷屏。
@@ -519,7 +529,7 @@ public class TaskDispatcher {
                 httpEx.statusCode(),
                 msg.taskId(),
                 maxRetries);
-            return false;
+            return ClaimResult.notClaimed();
           }
           long delayMs =
               backoffWithJitter(baseDelayMs, attempt); // 200 / 400 / 800 ms ... + 0-10% jitter
@@ -529,7 +539,7 @@ public class TaskDispatcher {
               msg.taskId(),
               attempt + 1,
               delayMs);
-          if (!sleepInterruptible(delayMs)) return false;
+          if (!sleepInterruptible(delayMs)) return ClaimResult.notClaimed();
           attempt++;
           continue;
         }
@@ -542,7 +552,7 @@ public class TaskDispatcher {
             msg.taskId(),
             httpEx.getMessage());
         recordClientError(httpEx.statusCode(), msg.taskId(), "CLAIM");
-        return false;
+        return ClaimResult.notClaimed();
       } catch (IOException ioEx) {
         // 传输层错误(socket / read timeout / 中断包装)— 当 5xx 一样退避重试。网络故障同样会 N worker
         // 同时刷屏,走 throttledLog 节流。
@@ -553,7 +563,7 @@ public class TaskDispatcher {
               msg.taskId(),
               maxRetries,
               ioEx.getMessage());
-          return false;
+          return ClaimResult.notClaimed();
         }
         long delayMs = backoffWithJitter(baseDelayMs, attempt);
         log.info(
@@ -562,9 +572,15 @@ public class TaskDispatcher {
             attempt + 1,
             delayMs,
             ioEx.getMessage());
-        if (!sleepInterruptible(delayMs)) return false;
+        if (!sleepInterruptible(delayMs)) return ClaimResult.notClaimed();
         attempt++;
       }
+    }
+  }
+
+  record ClaimResult(boolean claimed, Map<String, Object> response) {
+    static ClaimResult notClaimed() {
+      return new ClaimResult(false, Map.of());
     }
   }
 

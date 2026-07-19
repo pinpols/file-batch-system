@@ -59,8 +59,12 @@ else
 fi
 
 echo "==> [${KEY}] 2/5 等待就绪(含 init 建库建表)"
-for i in $(seq 1 40); do
-  if docker exec "$CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$BUSINESS_DB" >/dev/null 2>&1; then
+for _ in $(seq 1 40); do
+  # 初始化期间 entrypoint 会短暂启动一个临时 PostgreSQL；pg_isready 在它即将关闭时也可能成功。
+  # 正式服务 exec 为容器 PID 1 后再做真实查询，避免首次 provision 的关闭窗口竞态。
+  if docker exec "$CONTAINER" sh -c 'test "$(head -n 1 "$PGDATA/postmaster.pid" 2>/dev/null)" = "1"' \
+      && docker exec "$CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$BUSINESS_DB" >/dev/null 2>&1 \
+      && docker exec "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" -tAc 'SELECT 1' >/dev/null 2>&1; then
     ready=1; break
   fi
   sleep 2

@@ -76,20 +76,13 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   void setUp() {
     TenantConfigInitApplyHandlers handlers =
         new TenantConfigInitApplyHandlers(
-            jobDefinitionMapper,
-            workflowDefinitionMapper,
-            workflowNodeMapper,
-            workflowEdgeMapper,
-            pipelineDefinitionMapper,
-            pipelineStepDefinitionMapper,
-            fileChannelConfigMapper,
-            fileTemplateConfigMapper,
-            resourceQueueMapper,
-            batchWindowMapper,
-            businessCalendarMapper,
-            calendarHolidayMapper,
-            tenantQuotaPolicyMapper,
-            alertRoutingConfigMapper,
+            new TenantDefinitionConfigMappers(
+                jobDefinitionMapper,
+                workflowDefinitionMapper,
+                workflowNodeMapper,
+                workflowEdgeMapper,
+                pipelineDefinitionMapper,
+                pipelineStepDefinitionMapper),
             new PlatformTransactionManager() {
               @Override
               public TransactionStatus getTransaction(TransactionDefinition definition) {
@@ -101,7 +94,15 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
               @Override
               public void rollback(TransactionStatus status) {}
-            });
+            },
+            new TenantFileConfigApplySupport(fileChannelConfigMapper, fileTemplateConfigMapper),
+            new TenantOperationalConfigApplySupport(
+                resourceQueueMapper,
+                batchWindowMapper,
+                businessCalendarMapper,
+                calendarHolidayMapper,
+                tenantQuotaPolicyMapper,
+                alertRoutingConfigMapper));
     ReflectionTestUtils.setField(handlers, "self", handlers);
     service = new DefaultConsoleTenantConfigInitApplicationService(handlers);
     ReflectionTestUtils.setField(service, "self", service);
