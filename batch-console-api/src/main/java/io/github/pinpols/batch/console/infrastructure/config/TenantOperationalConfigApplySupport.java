@@ -23,8 +23,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 /** 租户初始化中的资源、窗口、日历、配额和告警配置持久化协作者。 */
+@Component
 @RequiredArgsConstructor
 final class TenantOperationalConfigApplySupport {
 

@@ -6,23 +6,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
-import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
-import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
-import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
-import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
-import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
-import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
-import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
@@ -72,49 +58,20 @@ public class TenantConfigInitApplyHandlers {
 
   @Lazy @Autowired private TenantConfigInitApplyHandlers self;
 
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
-  private final WorkflowNodeMapper workflowNodeMapper;
-  private final WorkflowEdgeMapper workflowEdgeMapper;
-  private final PipelineDefinitionMapper pipelineDefinitionMapper;
-  private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
+  private final TenantDefinitionConfigMappers definitionMappers;
   private final PlatformTransactionManager transactionManager;
   private final TenantFileConfigApplySupport fileConfigSupport;
   private final TenantOperationalConfigApplySupport operationalConfigSupport;
 
   public TenantConfigInitApplyHandlers(
-      JobDefinitionMapper jobDefinitionMapper,
-      WorkflowDefinitionMapper workflowDefinitionMapper,
-      WorkflowNodeMapper workflowNodeMapper,
-      WorkflowEdgeMapper workflowEdgeMapper,
-      PipelineDefinitionMapper pipelineDefinitionMapper,
-      PipelineStepDefinitionMapper pipelineStepDefinitionMapper,
-      FileChannelConfigMapper fileChannelConfigMapper,
-      FileTemplateConfigMapper fileTemplateConfigMapper,
-      ResourceQueueMapper resourceQueueMapper,
-      BatchWindowMapper batchWindowMapper,
-      BusinessCalendarMapper businessCalendarMapper,
-      CalendarHolidayMapper calendarHolidayMapper,
-      TenantQuotaPolicyMapper tenantQuotaPolicyMapper,
-      AlertRoutingConfigMapper alertRoutingConfigMapper,
-      PlatformTransactionManager transactionManager) {
-    this.jobDefinitionMapper = jobDefinitionMapper;
-    this.workflowDefinitionMapper = workflowDefinitionMapper;
-    this.workflowNodeMapper = workflowNodeMapper;
-    this.workflowEdgeMapper = workflowEdgeMapper;
-    this.pipelineDefinitionMapper = pipelineDefinitionMapper;
-    this.pipelineStepDefinitionMapper = pipelineStepDefinitionMapper;
+      TenantDefinitionConfigMappers definitionMappers,
+      PlatformTransactionManager transactionManager,
+      TenantFileConfigApplySupport fileConfigSupport,
+      TenantOperationalConfigApplySupport operationalConfigSupport) {
+    this.definitionMappers = definitionMappers;
     this.transactionManager = transactionManager;
-    this.fileConfigSupport =
-        new TenantFileConfigApplySupport(fileChannelConfigMapper, fileTemplateConfigMapper);
-    this.operationalConfigSupport =
-        new TenantOperationalConfigApplySupport(
-            resourceQueueMapper,
-            batchWindowMapper,
-            businessCalendarMapper,
-            calendarHolidayMapper,
-            tenantQuotaPolicyMapper,
-            alertRoutingConfigMapper);
+    this.fileConfigSupport = fileConfigSupport;
+    this.operationalConfigSupport = operationalConfigSupport;
   }
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
@@ -255,7 +212,8 @@ public class TenantConfigInitApplyHandlers {
             "jobDef",
             JobDefinitionSpec::getJobCode,
             (tid, s) ->
-                Optional.ofNullable(jobDefinitionMapper.selectByUniqueKey(tid, s.getJobCode())),
+                Optional.ofNullable(
+                    definitionMappers.jobDefinition.selectByUniqueKey(tid, s.getJobCode())),
             (c, s) -> insertJobDefinition(c.tenantId(), s, c.operator()),
             (c, s, existing) -> updateJobDefinition(existing, s, c.operator())));
   }
@@ -299,7 +257,7 @@ public class TenantConfigInitApplyHandlers {
     entity.setWatermarkField(spec.getWatermarkField());
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);
-    jobDefinitionMapper.insert(entity);
+    definitionMappers.jobDefinition.insert(entity);
   }
 
   private void updateJobDefinition(
@@ -338,7 +296,7 @@ public class TenantConfigInitApplyHandlers {
     param.setWatermarkField(
         Nullables.coalesce(spec.getWatermarkField(), existing.getWatermarkField()));
     param.setUpdatedBy(operator);
-    jobDefinitionMapper.updateJobDefinitionMaintenance(param);
+    definitionMappers.jobDefinition.updateJobDefinitionMaintenance(param);
   }
 
   ItemStats applyWorkflowDefinitions(List<WorkflowDefinitionSpec> specs, ApplyContext ctx) {
@@ -350,7 +308,8 @@ public class TenantConfigInitApplyHandlers {
             WorkflowDefinitionSpec::getWorkflowCode,
             (tid, s) ->
                 Optional.ofNullable(
-                    workflowDefinitionMapper.selectByUniqueKey(tid, s.getWorkflowCode(), 1)),
+                    definitionMappers.workflowDefinition.selectByUniqueKey(
+                        tid, s.getWorkflowCode(), 1)),
             (c, s) -> self.upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
             (c, s, existing) ->
                 self.upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
@@ -368,10 +327,10 @@ public class TenantConfigInitApplyHandlers {
     param.setEnabled(spec.getEnabled() != null && spec.getEnabled());
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
-    workflowDefinitionMapper.upsertWorkflowDefinition(param);
+    definitionMappers.workflowDefinition.upsertWorkflowDefinition(param);
 
     WorkflowDefinitionEntity saved =
-        workflowDefinitionMapper.selectByUniqueKey(tenantId, spec.getWorkflowCode(), 1);
+        definitionMappers.workflowDefinition.selectByUniqueKey(tenantId, spec.getWorkflowCode(), 1);
     if (saved == null) {
       return;
     }
@@ -379,8 +338,8 @@ public class TenantConfigInitApplyHandlers {
 
     if (spec.getNodes() != null) {
       if (existingId != null) {
-        workflowNodeMapper.deleteByWorkflowDefinitionId(defId);
-        workflowEdgeMapper.deleteByWorkflowDefinitionId(defId);
+        definitionMappers.workflowNode.deleteByWorkflowDefinitionId(defId);
+        definitionMappers.workflowEdge.deleteByWorkflowDefinitionId(defId);
       }
       for (WorkflowDefinitionSpec.NodeSpec nodeSpec : spec.getNodes()) {
         WorkflowNodeUpsertParam nodeParam = new WorkflowNodeUpsertParam();
@@ -399,7 +358,7 @@ public class TenantConfigInitApplyHandlers {
         nodeParam.setTimeoutSeconds(nodeSpec.getTimeoutSeconds());
         nodeParam.setNodeParams(nodeSpec.getNodeParams());
         nodeParam.setEnabled(Nullables.coalesce(nodeSpec.getEnabled(), true));
-        workflowNodeMapper.upsertWorkflowNode(nodeParam);
+        definitionMappers.workflowNode.upsertWorkflowNode(nodeParam);
       }
       if (spec.getEdges() != null) {
         for (WorkflowDefinitionSpec.EdgeSpec edgeSpec : spec.getEdges()) {
@@ -411,7 +370,7 @@ public class TenantConfigInitApplyHandlers {
           edgeParam.setEdgeType(Nullables.coalesce(edgeSpec.getEdgeType(), "NORMAL"));
           edgeParam.setConditionExpr(edgeSpec.getConditionExpr());
           edgeParam.setEnabled(Nullables.coalesce(edgeSpec.getEnabled(), true));
-          workflowEdgeMapper.upsertWorkflowEdge(edgeParam);
+          definitionMappers.workflowEdge.upsertWorkflowEdge(edgeParam);
         }
       }
     }
@@ -426,7 +385,7 @@ public class TenantConfigInitApplyHandlers {
             s -> s.getJobCode() + ":" + s.getPipelineType(),
             (tid, s) -> {
               List<Map<String, Object>> rows =
-                  pipelineDefinitionMapper.selectByQuery(
+                  definitionMappers.pipelineDefinition.selectByQuery(
                       tid, s.getJobCode(), s.getPipelineType(), null, new PageRequest(1, 1));
               return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
             },
@@ -448,7 +407,7 @@ public class TenantConfigInitApplyHandlers {
     params.put("version", 1);
     params.put(KEY_ENABLED, spec.getEnabled() != null && spec.getEnabled());
     params.put("description", spec.getDescription());
-    pipelineDefinitionMapper.insert(params);
+    definitionMappers.pipelineDefinition.insert(params);
     Long defId = ((Number) params.get(KEY_ID)).longValue();
     insertPipelineSteps(defId, spec.getSteps());
   }
@@ -469,9 +428,9 @@ public class TenantConfigInitApplyHandlers {
     params.put(KEY_ENABLED, Nullables.coalesce(spec.getEnabled(), existing.get(KEY_ENABLED)));
     params.put(
         "description", Nullables.coalesce(spec.getDescription(), existing.get("description")));
-    pipelineDefinitionMapper.update(params);
+    definitionMappers.pipelineDefinition.update(params);
     if (spec.getSteps() != null) {
-      pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
+      definitionMappers.pipelineStepDefinition.deleteByPipelineDefinitionId(id);
       insertPipelineSteps(id, spec.getSteps());
     }
   }
@@ -498,7 +457,7 @@ public class TenantConfigInitApplyHandlers {
       stepParams.put(KEY_ENABLED, Nullables.coalesce(step.getEnabled(), true));
       rows.add(stepParams);
     }
-    pipelineStepDefinitionMapper.insertBatch(rows);
+    definitionMappers.pipelineStepDefinition.insertBatch(rows);
   }
 
   ItemStats applyFileChannels(List<FileChannelSpec> specs, ApplyContext ctx) {

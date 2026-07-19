@@ -9,8 +9,10 @@ import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitR
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 /** 租户初始化中的文件渠道与文件模板持久化协作者。 */
+@Component
 @RequiredArgsConstructor
 final class TenantFileConfigApplySupport {
 
