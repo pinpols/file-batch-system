@@ -2,7 +2,7 @@
 
 P0 Phase 4 示范:**业务方如何在主项目外开发 `BatchTaskExecutor` 插件 jar**。
 
-参考 [task-spi-design.md](../../docs/design/task-spi-design.md) §Phase 4。
+参考 [task-spi-design.md](../../../docs/design/task-spi-design.md) §Phase 4。
 
 ## 形态
 
@@ -14,10 +14,10 @@ P0 Phase 4 示范:**业务方如何在主项目外开发 `BatchTaskExecutor` 插
 ## 构建
 
 ```bash
-mvn install -f examples/sftp-push-executor/pom.xml
+mvn install -f examples/task-spi-plugin/sftp-push-executor/pom.xml
 ```
 
-产出:`examples/sftp-push-executor/target/sftp-push-executor-1.0.0-SNAPSHOT.jar`
+产出:`examples/task-spi-plugin/sftp-push-executor/target/sftp-push-executor-1.0.0-SNAPSHOT.jar`
 
 ## 部署 / 启用
 

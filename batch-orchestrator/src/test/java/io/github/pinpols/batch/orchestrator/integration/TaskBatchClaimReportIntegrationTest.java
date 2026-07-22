@@ -6,16 +6,16 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimItemPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimResultPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskExecutionReportDto;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportBatchResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportResultPayload;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -128,16 +128,16 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
 
     // act 1:一次 claim-batch 认领全部 3 个(各用各自 worker)
-    List<TaskClaimItemPayload> claimItems = new ArrayList<>();
+    List<TaskClaimItemCommand> claimItems = new ArrayList<>();
     for (LaunchedTask lt : launched) {
-      claimItems.add(new TaskClaimItemPayload(TENANT, lt.taskId(), lt.seed().workerCode(), null));
+      claimItems.add(new TaskClaimItemCommand(TENANT, lt.taskId(), lt.seed().workerCode(), null));
     }
-    TaskClaimBatchResponse claimResp =
-        taskControllerApplicationService.claimBatch(new TaskClaimBatchRequest(claimItems));
+    TaskClaimBatchResult claimResp =
+        taskControllerApplicationService.claimBatch(new TaskClaimBatchCommand(claimItems));
 
     // assert 1:逐项 claimed=true + config 非空,partition 全 RUNNING
     assertThat(claimResp.results()).hasSize(3);
-    assertThat(claimResp.results()).allMatch(TaskClaimResultPayload::claimed);
+    assertThat(claimResp.results()).allMatch(TaskClaimItemResult::claimed);
     assertThat(claimResp.results()).allMatch(r -> r.config() != null);
     for (LaunchedTask lt : launched) {
       JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
@@ -146,31 +146,56 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     }
 
     // act 2:report-batch —— 前 2 个成功,第 3 个失败(测批内部分失败隔离)
-    List<TaskExecutionReportDto> reportItems = new ArrayList<>();
+    List<TaskExecutionReportCommand> reportItems = new ArrayList<>();
     for (int i = 0; i < launched.size(); i++) {
       LaunchedTask lt = launched.get(i);
       JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
-      TaskExecutionReportDto dto = new TaskExecutionReportDto();
-      dto.setTaskId(lt.taskId());
-      dto.setTenantId(TENANT);
-      dto.setWorkerId(lt.seed().workerCode());
-      dto.setPartitionInvocationId(p.getCurrentInvocationId());
       if (i < 2) {
-        dto.setSuccess(true);
-        dto.setResultSummary("{\"records\":" + (i + 1) + "}");
+        reportItems.add(
+            new TaskExecutionReportCommand(
+                lt.taskId(),
+                TENANT,
+                lt.seed().workerCode(),
+                true,
+                null,
+                null,
+                "{\"records\":" + (i + 1) + "}",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                p.getCurrentInvocationId(),
+                null,
+                null));
       } else {
-        dto.setSuccess(false);
-        dto.setCode("E_IT_FAIL");
-        dto.setMessage("intentional failure for per-item isolation");
+        reportItems.add(
+            new TaskExecutionReportCommand(
+                lt.taskId(),
+                TENANT,
+                lt.seed().workerCode(),
+                false,
+                "E_IT_FAIL",
+                "intentional failure for per-item isolation",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                p.getCurrentInvocationId(),
+                null,
+                null));
       }
-      reportItems.add(dto);
     }
-    TaskReportBatchResponse reportResp =
-        taskControllerApplicationService.reportBatch(new TaskReportBatchRequest(reportItems));
+    TaskReportBatchResult reportResp =
+        taskControllerApplicationService.reportBatch(new TaskReportBatchCommand(reportItems));
 
     // assert 2:三项 outcome 都成功推进(ok=true,含失败上报本身也是合法推进)
     assertThat(reportResp.results()).hasSize(3);
-    assertThat(reportResp.results()).allMatch(TaskReportResultPayload::ok);
+    assertThat(reportResp.results()).allMatch(TaskReportItemResult::ok);
 
     // assert 3:成功项 partition→SUCCESS、失败项 partition→FAILED(逐项独立、互不影响)
     assertThat(
@@ -203,20 +228,20 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     assertThat(claimedA).isNotNull();
 
     // claim-batch 用「另一个 worker」尝试认领 a + b:a 已被领走 → claimed=false;b 正常 → claimed=true
-    List<TaskClaimItemPayload> items =
+    List<TaskClaimItemCommand> items =
         List.of(
-            new TaskClaimItemPayload(TENANT, a.taskId(), b.seed().workerCode(), null),
-            new TaskClaimItemPayload(TENANT, b.taskId(), b.seed().workerCode(), null));
-    TaskClaimBatchResponse resp =
-        taskControllerApplicationService.claimBatch(new TaskClaimBatchRequest(items));
+            new TaskClaimItemCommand(TENANT, a.taskId(), b.seed().workerCode(), null),
+            new TaskClaimItemCommand(TENANT, b.taskId(), b.seed().workerCode(), null));
+    TaskClaimBatchResult resp =
+        taskControllerApplicationService.claimBatch(new TaskClaimBatchCommand(items));
 
     assertThat(resp.results()).hasSize(2);
-    TaskClaimResultPayload ra =
+    TaskClaimItemResult ra =
         resp.results().stream()
             .filter(r -> r.taskId().equals(a.taskId()))
             .findFirst()
             .orElseThrow();
-    TaskClaimResultPayload rb =
+    TaskClaimItemResult rb =
         resp.results().stream()
             .filter(r -> r.taskId().equals(b.taskId()))
             .findFirst()

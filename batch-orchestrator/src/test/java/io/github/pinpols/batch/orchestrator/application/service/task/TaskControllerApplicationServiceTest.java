@@ -16,20 +16,19 @@ import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskHeartbeatCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
 import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
-import io.github.pinpols.batch.orchestrator.controller.TaskController.TaskClaimRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskCancelRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimItemPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskExecutionReportDto;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskHeartbeatRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskHeartbeatResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportBatchResponse;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -80,7 +79,7 @@ class TaskControllerApplicationServiceTest {
   void claimThrowsNotFoundWhenAssignReturnsNull() {
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(null);
 
-    assertThatThrownBy(() -> service.claim(100L, new TaskClaimRequest("ta", "w1", "inv-1")))
+    assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class);
     verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
@@ -91,7 +90,7 @@ class TaskControllerApplicationServiceTest {
     JobTaskEntity task = task(TaskStatus.READY.code(), "w1");
     when(taskExecutionService.assignWorker(eq("ta"), eq(100L), eq("w1"))).thenReturn(task);
 
-    assertThatThrownBy(() -> service.claim(100L, new TaskClaimRequest("ta", "w1", "inv-1")))
+    assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class);
     verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
@@ -102,7 +101,7 @@ class TaskControllerApplicationServiceTest {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w-other");
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(task);
 
-    assertThatThrownBy(() -> service.claim(100L, new TaskClaimRequest("ta", "w1", "inv-1")))
+    assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class);
   }
 
@@ -114,7 +113,7 @@ class TaskControllerApplicationServiceTest {
     // PERF(5.2b): claim 成功后复用 assignWorker 返回的 task 实体拉 config,不再按 id 重查
     when(taskExecutionService.loadEffectiveConfig(eq("ta"), same(task))).thenReturn(null);
 
-    EffectiveTaskConfig result = service.claim(100L, new TaskClaimRequest("ta", "w1", "inv-1"));
+    EffectiveTaskConfig result = service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1"));
     assertThat(result).isNull();
     verify(taskExecutionService).loadEffectiveConfig(eq("ta"), same(task));
   }
@@ -135,13 +134,13 @@ class TaskControllerApplicationServiceTest {
     // task 3:不存在(assignWorker 返 null)
     when(taskExecutionService.assignWorker(eq("ta"), eq(3L), eq("w1"), any())).thenReturn(null);
 
-    TaskClaimBatchResponse resp =
+    TaskClaimBatchResult resp =
         service.claimBatch(
-            new TaskClaimBatchRequest(
+            new TaskClaimBatchCommand(
                 List.of(
-                    new TaskClaimItemPayload("ta", 1L, "w1", "inv-1"),
-                    new TaskClaimItemPayload("ta", 2L, "w1", "inv-2"),
-                    new TaskClaimItemPayload("ta", 3L, "w1", "inv-3"))));
+                    new TaskClaimItemCommand("ta", 1L, "w1", "inv-1"),
+                    new TaskClaimItemCommand("ta", 2L, "w1", "inv-2"),
+                    new TaskClaimItemCommand("ta", 3L, "w1", "inv-3"))));
 
     assertThat(resp.results()).hasSize(3);
     assertThat(resp.results().get(0).taskId()).isEqualTo(1L);
@@ -162,11 +161,11 @@ class TaskControllerApplicationServiceTest {
     assertThatThrownBy(
             () ->
                 service.claimBatch(
-                    new TaskClaimBatchRequest(
+                    new TaskClaimBatchCommand(
                         List.of(
-                            new TaskClaimItemPayload("ta", 1L, "w1", "i1"),
-                            new TaskClaimItemPayload("ta", 2L, "w1", "i2"),
-                            new TaskClaimItemPayload("ta", 3L, "w1", "i3")))))
+                            new TaskClaimItemCommand("ta", 1L, "w1", "i1"),
+                            new TaskClaimItemCommand("ta", 2L, "w1", "i2"),
+                            new TaskClaimItemCommand("ta", 3L, "w1", "i3")))))
         .isInstanceOf(BizException.class);
     verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString());
     verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString(), any());
@@ -175,7 +174,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("claimBatch: 空/null 入参 → 空结果")
   void claimBatchEmptyInputReturnsEmpty() {
-    assertThat(service.claimBatch(new TaskClaimBatchRequest(null)).results()).isEmpty();
+    assertThat(service.claimBatch(new TaskClaimBatchCommand(null)).results()).isEmpty();
     assertThat(service.claimBatch(null).results()).isEmpty();
   }
 
@@ -195,9 +194,9 @@ class TaskControllerApplicationServiceTest {
               return null;
             });
 
-    TaskReportBatchResponse resp =
+    TaskReportBatchResult resp =
         service.reportBatch(
-            new TaskReportBatchRequest(List.of(reportDto(1L), reportDto(2L), reportDto(3L))));
+            new TaskReportBatchCommand(List.of(reportDto(1L), reportDto(2L), reportDto(3L))));
 
     assertThat(resp.results()).hasSize(3);
     assertThat(resp.results().get(0).ok()).isTrue();
@@ -216,7 +215,7 @@ class TaskControllerApplicationServiceTest {
     assertThatThrownBy(
             () ->
                 service.reportBatch(
-                    new TaskReportBatchRequest(
+                    new TaskReportBatchCommand(
                         List.of(reportDto(1L), reportDto(2L), reportDto(3L)))))
         .isInstanceOf(BizException.class);
     verify(taskExecutionService, never()).applyTaskOutcome(any());
@@ -225,7 +224,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("reportBatch: 空/null 入参 → 空结果")
   void reportBatchEmptyInputReturnsEmpty() {
-    assertThat(service.reportBatch(new TaskReportBatchRequest(null)).results()).isEmpty();
+    assertThat(service.reportBatch(new TaskReportBatchCommand(null)).results()).isEmpty();
     assertThat(service.reportBatch(null).results()).isEmpty();
   }
 
@@ -240,10 +239,10 @@ class TaskControllerApplicationServiceTest {
     when(taskExecutionService.assignWorker(eq("ta"), eq(2L), eq("w1"), any()))
         .thenReturn(task(TaskStatus.RUNNING.code(), "w-other"));
     service.claimBatch(
-        new TaskClaimBatchRequest(
+        new TaskClaimBatchCommand(
             List.of(
-                new TaskClaimItemPayload("ta", 1L, "w1", "i1"),
-                new TaskClaimItemPayload("ta", 2L, "w1", "i2"))));
+                new TaskClaimItemCommand("ta", 1L, "w1", "i1"),
+                new TaskClaimItemCommand("ta", 2L, "w1", "i2"))));
 
     assertThat(meterRegistry.summary("batch.task.batch_claim.size").count()).isEqualTo(1);
     assertThat(meterRegistry.summary("batch.task.batch_claim.size").totalAmount()).isEqualTo(2.0);
@@ -268,7 +267,7 @@ class TaskControllerApplicationServiceTest {
               }
               return null;
             });
-    service.reportBatch(new TaskReportBatchRequest(List.of(reportDto(1L), reportDto(2L))));
+    service.reportBatch(new TaskReportBatchCommand(List.of(reportDto(1L), reportDto(2L))));
 
     assertThat(meterRegistry.summary("batch.task.batch_report.size").totalAmount()).isEqualTo(2.0);
     assertThat(
@@ -281,13 +280,8 @@ class TaskControllerApplicationServiceTest {
         .isEqualTo(1.0);
   }
 
-  private static TaskExecutionReportDto reportDto(Long taskId) {
-    TaskExecutionReportDto dto = new TaskExecutionReportDto();
-    dto.setTaskId(taskId);
-    dto.setTenantId("ta");
-    dto.setWorkerId("w1");
-    dto.setSuccess(true);
-    return dto;
+  private static TaskExecutionReportCommand reportDto(Long taskId) {
+    return reportCommand(taskId, true, null, null, null, null, null);
   }
 
   // ===== report =====
@@ -295,12 +289,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("report: success=true → errorCode/message 强制 null,即使 DTO 里有")
   void reportSuccessClearsErrorFields() {
-    TaskExecutionReportDto dto = new TaskExecutionReportDto();
-    dto.setTenantId("ta");
-    dto.setWorkerId("w1");
-    dto.setSuccess(true);
-    dto.setErrorCode("OLD");
-    dto.setErrorMessage("msg");
+    TaskExecutionReportCommand dto = reportCommand(null, true, null, null, "OLD", "msg", null);
 
     service.report(100L, dto);
 
@@ -313,12 +302,8 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("report: success=false + errorCode 优先于旧 code 字段")
   void reportFailureUsesNewFieldFirst() {
-    TaskExecutionReportDto dto = new TaskExecutionReportDto();
-    dto.setSuccess(false);
-    dto.setErrorCode("NEW_ERR");
-    dto.setCode("OLD_ERR");
-    dto.setErrorMessage("new msg");
-    dto.setMessage("old msg");
+    TaskExecutionReportCommand dto =
+        reportCommand(null, false, "OLD_ERR", "old msg", "NEW_ERR", "new msg", null);
 
     service.report(100L, dto);
 
@@ -331,10 +316,8 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("report: success=false + 仅旧 code 字段 → 回退到 code")
   void reportFailureFallsBackToOldField() {
-    TaskExecutionReportDto dto = new TaskExecutionReportDto();
-    dto.setSuccess(false);
-    dto.setCode("OLD_ERR");
-    dto.setMessage("old msg");
+    TaskExecutionReportCommand dto =
+        reportCommand(null, false, "OLD_ERR", "old msg", null, null, null);
 
     service.report(100L, dto);
 
@@ -347,8 +330,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("report: success=false 且都没填 → 降级 UNKNOWN")
   void reportFailureFallsBackToUnknown() {
-    TaskExecutionReportDto dto = new TaskExecutionReportDto();
-    dto.setSuccess(false);
+    TaskExecutionReportCommand dto = reportCommand(null, false, null, null, null, null, null);
 
     service.report(100L, dto);
 
@@ -361,9 +343,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("report: success=false → verifierFailures 强制 null(失败路径不再带 verifier 信息)")
   void reportFailureDropsVerifierFailures() {
-    TaskExecutionReportDto dto = new TaskExecutionReportDto();
-    dto.setSuccess(false);
-    dto.setVerifierFailures(List.of());
+    TaskExecutionReportCommand dto = reportCommand(null, false, null, null, null, null, List.of());
 
     service.report(100L, dto);
 
@@ -380,7 +360,7 @@ class TaskControllerApplicationServiceTest {
     when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(false, false));
     assertThatThrownBy(
-            () -> service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null)))
+            () -> service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null)))
         .isInstanceOf(BizException.class);
   }
 
@@ -389,8 +369,7 @@ class TaskControllerApplicationServiceTest {
   void renewSucceedsWithoutCancel() {
     when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
-    TaskHeartbeatResponse resp =
-        service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null));
+    var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
     assertThat(resp.cancelRequested()).isFalse();
   }
 
@@ -399,8 +378,7 @@ class TaskControllerApplicationServiceTest {
   void renewReturnsCancelRequested() {
     when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, true));
-    TaskHeartbeatResponse resp =
-        service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null));
+    var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
     assertThat(resp.cancelRequested()).isTrue();
   }
 
@@ -411,7 +389,7 @@ class TaskControllerApplicationServiceTest {
         .thenReturn(new TaskHeartbeatResult(true, false));
     service.renew(
         100L,
-        new TaskHeartbeatRequest("ta", "w1", "inv-1", Map.of("processed", 5000, "total", 50000)));
+        new TaskHeartbeatCommand("ta", "w1", "inv-1", Map.of("processed", 5000, "total", 50000)));
     ArgumentCaptor<String> detailsCaptor = ArgumentCaptor.forClass(String.class);
     verify(taskExecutionService)
         .recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), detailsCaptor.capture());
@@ -423,7 +401,7 @@ class TaskControllerApplicationServiceTest {
   void renewWithoutDetailsPassesNull() {
     when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
-    service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null));
+    service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
     verify(taskExecutionService).recordHeartbeat("ta", 100L, "w1", "inv-1", null);
   }
 
@@ -433,7 +411,7 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("cancel: 委托 requestCancel;非 RUNNING / 不存在也不抛(幂等)")
   void cancelDelegatesAndSwallows() {
     when(taskExecutionService.requestCancel("ta", 100L)).thenReturn(false);
-    service.cancel(100L, new TaskCancelRequest("ta", "manual abort"));
+    service.cancel(100L, new TaskCancelCommand("ta", "manual abort"));
     verify(taskExecutionService).requestCancel("ta", 100L);
   }
 
@@ -443,8 +421,8 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("renewBatch: null/空 入参 → 返空 list,不调底层")
   void renewBatch_empty_input() {
     assertThat(service.renewBatch(null).results()).isEmpty();
-    assertThat(service.renewBatch(new TaskLeaseRenewBatchRequest(null)).results()).isEmpty();
-    assertThat(service.renewBatch(new TaskLeaseRenewBatchRequest(List.of())).results()).isEmpty();
+    assertThat(service.renewBatch(new TaskLeaseRenewBatchCommand(null)).results()).isEmpty();
+    assertThat(service.renewBatch(new TaskLeaseRenewBatchCommand(List.of())).results()).isEmpty();
     verify(taskExecutionService, never()).renewLeaseBatch(any());
   }
 
@@ -458,13 +436,13 @@ class TaskControllerApplicationServiceTest {
                 new TaskAssignmentService.TaskHeartbeatResult(false, false),
                 new TaskAssignmentService.TaskHeartbeatResult(true, true)));
 
-    TaskLeaseRenewBatchResponse resp =
+    TaskLeaseRenewBatchResult resp =
         service.renewBatch(
-            new TaskLeaseRenewBatchRequest(
+            new TaskLeaseRenewBatchCommand(
                 List.of(
-                    new TaskLeaseRenewItemPayload("ta", 1L, "w1", "inv-1"),
-                    new TaskLeaseRenewItemPayload("ta", 2L, "w1", "inv-2"),
-                    new TaskLeaseRenewItemPayload("ta", 3L, "w1", "inv-3"))));
+                    new TaskLeaseRenewItemCommand("ta", 1L, "w1", "inv-1"),
+                    new TaskLeaseRenewItemCommand("ta", 2L, "w1", "inv-2"),
+                    new TaskLeaseRenewItemCommand("ta", 3L, "w1", "inv-3"))));
 
     assertThat(resp.results()).hasSize(3);
     assertThat(resp.results().get(0).taskId()).isEqualTo(1L);
@@ -492,5 +470,32 @@ class TaskControllerApplicationServiceTest {
     t.setTaskStatus(status);
     t.setAssignedWorkerCode(workerCode);
     return t;
+  }
+
+  private static TaskExecutionReportCommand reportCommand(
+      Long taskId,
+      boolean success,
+      String code,
+      String message,
+      String errorCode,
+      String errorMessage,
+      List<Map<String, Object>> verifierFailures) {
+    return new TaskExecutionReportCommand(
+        taskId,
+        "ta",
+        "w1",
+        success,
+        code,
+        message,
+        null,
+        errorCode,
+        errorMessage,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        verifierFailures);
   }
 }

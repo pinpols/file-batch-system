@@ -21,4 +21,4 @@
 
 - 幂等：使用 `ON CONFLICT DO NOTHING`
 - 目标环境专用：默认只在压测环境执行一次，不要求每次压测前重复导入
-- 与系统测试种子分离：系统测试使用 [../system-test/README.md](../system-test/README.md)
+- 与系统测试种子分离：系统测试使用 [../test-seed/README.md](../test-seed/README.md)

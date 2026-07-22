@@ -33,17 +33,17 @@ class ConfigPackageWorkbookGuidanceTest {
   @Test
   void fourWorkerExampleSheetExistsWithFourRowsAndHeaders() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
-      Sheet sheet = wb.getSheet(ConfigPackageExcelWorkbookWriter.SHEET_NAME_FOUR_WORKER);
+      Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FOUR_WORKER);
       assertThat(sheet).as("四类Worker示例 sheet 必须存在").isNotNull();
       // row0 = 提示行, row1 = 表头, row2..row5 = 4 类 worker
       Row header = sheet.getRow(1);
       List<String> headerValues = new ArrayList<>();
-      for (int c = 0; c < ConfigPackageExcelWorkbookWriter.FOUR_WORKER_HEADERS.length; c++) {
+      for (int c = 0; c < ConfigPackageWorkbookSupplementWriter.FOUR_WORKER_HEADERS.length; c++) {
         headerValues.add(header.getCell(c).getStringCellValue());
       }
       assertThat(headerValues)
-          .containsExactly(ConfigPackageExcelWorkbookWriter.FOUR_WORKER_HEADERS);
-      assertThat(ConfigPackageExcelWorkbookWriter.FOUR_WORKER_ROWS).hasSize(4);
+          .containsExactly(ConfigPackageWorkbookSupplementWriter.FOUR_WORKER_HEADERS);
+      assertThat(ConfigPackageWorkbookSupplementWriter.FOUR_WORKER_ROWS).hasSize(4);
       List<String> workerTypes = new ArrayList<>();
       List<String> pipelineTypes = new ArrayList<>();
       for (int r = 0; r < 4; r++) {
@@ -63,15 +63,16 @@ class ConfigPackageWorkbookGuidanceTest {
   @Test
   void bundleExampleSheetExistsWithThreeBundleTypesAndManifestExamples() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
-      Sheet sheet = wb.getSheet(ConfigPackageExcelWorkbookWriter.SHEET_NAME_BUNDLE);
+      Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE);
       assertThat(sheet).as("文件束示例 sheet 必须存在").isNotNull();
       Row header = sheet.getRow(1);
       List<String> headerValues = new ArrayList<>();
-      for (int c = 0; c < ConfigPackageExcelWorkbookWriter.BUNDLE_HEADERS.length; c++) {
+      for (int c = 0; c < ConfigPackageWorkbookSupplementWriter.BUNDLE_HEADERS.length; c++) {
         headerValues.add(header.getCell(c).getStringCellValue());
       }
-      assertThat(headerValues).containsExactly(ConfigPackageExcelWorkbookWriter.BUNDLE_HEADERS);
-      assertThat(ConfigPackageExcelWorkbookWriter.BUNDLE_ROWS).hasSize(3);
+      assertThat(headerValues)
+          .containsExactly(ConfigPackageWorkbookSupplementWriter.BUNDLE_HEADERS);
+      assertThat(ConfigPackageWorkbookSupplementWriter.BUNDLE_ROWS).hasSize(3);
       List<String> jobTypes = new ArrayList<>();
       List<String> manifestExamples = new ArrayList<>();
       for (int r = 0; r < 3; r++) {
@@ -101,7 +102,7 @@ class ConfigPackageWorkbookGuidanceTest {
   @Test
   void dependencySheetExistsWithHeadersAndCoreRows() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
-      Sheet sheet = wb.getSheet(ConfigPackageExcelWorkbookWriter.SHEET_NAME_DEPENDENCY);
+      Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_DEPENDENCY);
       assertThat(sheet).as("依赖说明 sheet 必须存在").isNotNull();
       Row header = sheet.getRow(1);
       assertThat(header.getCell(0).getStringCellValue()).isEqualTo("source_sheet");
@@ -109,7 +110,7 @@ class ConfigPackageWorkbookGuidanceTest {
       // 关键引用关系行必须在(job->queue / step->channel / default_params.templateCode->file_template)。
       List<String> firstCol = new ArrayList<>();
       List<String> targets = new ArrayList<>();
-      for (String[] r : ConfigPackageExcelWorkbookWriter.DEPENDENCY_ROWS) {
+      for (String[] r : ConfigPackageWorkbookSupplementWriter.DEPENDENCY_ROWS) {
         firstCol.add(r[0]);
         targets.add(r[2]);
       }

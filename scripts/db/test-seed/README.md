@@ -1,7 +1,7 @@
 # 系统测试种子包
 
 这里放系统测试用的可重复种子 SQL。
-推荐的测试分层说明见 [docs/testing/test-strategy.md](../../testing/test-strategy.md)。
+推荐的测试分层说明见 [docs/testing/README.md](../../../docs/testing/README.md)。
 
 ## 包含内容
 
@@ -25,10 +25,10 @@ scripts/data/load-system-test-data.sh
 Or run the SQL directly:
 
 ```bash
-psql -U batch_user -d batch_platform -f docs/sql/system-test/platform_seed.sql
-psql -U batch_user -d batch_platform -f docs/sql/system-test/platform_edge_cases.sql
-psql -U batch_user -d batch_business -f docs/sql/system-test/business_seed.sql
-psql -U batch_user -d batch_business -f docs/sql/system-test/business_edge_cases.sql
+psql -U batch_user -d batch_platform -f scripts/db/test-seed/platform_seed.sql
+psql -U batch_user -d batch_platform -f scripts/db/test-seed/platform_edge_cases.sql
+psql -U batch_user -d batch_business -f scripts/db/test-seed/business_seed.sql
+psql -U batch_user -d batch_business -f scripts/db/test-seed/business_edge_cases.sql
 ```
 
 基础种子脚本对专用测试库是幂等的：会先清理覆盖范围内的表，再写入一组固定数据。边界样本在基础种子上叠加额外覆盖。

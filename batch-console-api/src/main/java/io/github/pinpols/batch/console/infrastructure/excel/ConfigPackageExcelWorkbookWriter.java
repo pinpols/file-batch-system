@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.*;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.createOptionalMarkStyle;
-import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.createRequiredMarkStyle;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.requiredColumn;
@@ -223,9 +222,11 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private final List<SheetDef> sheetDefs;
   private final MessageSource messageSource;
+  private final ConfigPackageWorkbookSupplementWriter supplementWriter;
 
   public ConfigPackageExcelWorkbookWriter(MessageSource messageSource) {
     this.messageSource = messageSource;
+    this.supplementWriter = new ConfigPackageWorkbookSupplementWriter(messageSource);
     this.sheetDefs =
         List.of(
             new SheetDef(
@@ -303,10 +304,10 @@ public class ConfigPackageExcelWorkbookWriter {
         SheetDef def = sheetDefs.get(i);
         writeDataSheet(wb, def, sheetDataList.get(i), locale, implRegistry);
       }
-      createReadmeSheet(wb, locale);
-      createDependencyGuideSheet(wb);
-      createFourWorkerExampleSheet(wb);
-      createBundleExampleSheet(wb);
+      supplementWriter.createReadmeSheet(wb, locale);
+      supplementWriter.createDependencyGuideSheet(wb);
+      supplementWriter.createFourWorkerExampleSheet(wb);
+      supplementWriter.createBundleExampleSheet(wb);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -336,10 +337,10 @@ public class ConfigPackageExcelWorkbookWriter {
       for (SheetDef def : sheetDefs) {
         writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
-      createReadmeSheet(wb, locale);
-      createDependencyGuideSheet(wb);
-      createFourWorkerExampleSheet(wb);
-      createBundleExampleSheet(wb);
+      supplementWriter.createReadmeSheet(wb, locale);
+      supplementWriter.createDependencyGuideSheet(wb);
+      supplementWriter.createFourWorkerExampleSheet(wb);
+      supplementWriter.createBundleExampleSheet(wb);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -486,112 +487,6 @@ public class ConfigPackageExcelWorkbookWriter {
           copied.put(module, List.copyOf(beans));
         });
     return copied.isEmpty() ? Map.of() : Collections.unmodifiableMap(copied);
-  }
-
-  /**
-   * 填写说明 sheet 内容总行数（标题 1 行 + line1..lineN）。详见 messages.properties。 内容含：sheet 范围 / 跨 sheet 依赖 / 5 类
-   * Worker (IMPORT/EXPORT/PROCESS/DISPATCH/GENERAL) + WORKFLOW 完整配置 / Apply 流程 / UPSERT 行为。
-   */
-  private static final int README_LINE_COUNT = 86;
-
-  static final String SHEET_NAME_DEPENDENCY = "依赖说明";
-  static final String SHEET_NAME_FOUR_WORKER = "四类Worker示例";
-  static final String SHEET_NAME_BUNDLE = "文件束示例";
-
-  /** 「依赖说明」sheet 表头。取自 9+2 设计文档 §依赖说明 Sheet 结构。 只读说明 sheet，不参与上传解析与 apply。 */
-  static final String[] DEPENDENCY_HEADERS = GUIDANCE.sheet("dependency").headers();
-
-  /**
-   * 「依赖说明」内置依赖行（job→template/channel/queue 引用关系 + DB fallback 规则）。 取自 9+2 设计文档 §依赖说明 Sheet
-   * 建议内置依赖行表，与跨 sheet 校验规则 1:1。
-   */
-  static final List<String[]> DEPENDENCY_ROWS = GUIDANCE.sheet("dependency").rows();
-
-  /** 「四类Worker示例」sheet 表头。取自 9+2 设计文档 §四类Worker示例 Sheet 建议列。 */
-  static final String[] FOUR_WORKER_HEADERS = GUIDANCE.sheet("fourWorker").headers();
-
-  /**
-   * 「四类Worker示例」内置 4 行（IMPORT/EXPORT/PROCESS/DISPATCH 各一份填好的整行配置范例）。 key_params 列值取自 e2e fixture /
-   * import-suite；stage_chain 与 STAGE_CODE_DROPDOWN 收窄集合一致。 只读说明 sheet，不参与导入解析。
-   */
-  static final List<String[]> FOUR_WORKER_ROWS = GUIDANCE.sheet("fourWorker").rows();
-
-  /** 只读说明 sheet（依赖说明 / 四类Worker示例）顶部统一提示行。 */
-  private static final String READONLY_SHEET_HINT =
-      "本 sheet 为只读说明，不参与导入解析与 apply；请复制片段到对应数据 sheet 后修改。";
-
-  private void createDependencyGuideSheet(Workbook wb) {
-    createReadOnlyTableSheet(wb, SHEET_NAME_DEPENDENCY, DEPENDENCY_HEADERS, DEPENDENCY_ROWS);
-  }
-
-  private void createFourWorkerExampleSheet(Workbook wb) {
-    createReadOnlyTableSheet(wb, SHEET_NAME_FOUR_WORKER, FOUR_WORKER_HEADERS, FOUR_WORKER_ROWS);
-  }
-
-  /** 「文件束示例」sheet 表头(ADR-046):束作业一次配置、每次提交投一份 .batch.json 清单声明本批。 */
-  static final String[] BUNDLE_HEADERS = GUIDANCE.sheet("bundle").headers();
-
-  /**
-   * 「文件束示例」内置 3 行(BUNDLE_IMPORT/EXPORT/DISPATCH 各一份)。束 = 一次配作业(job sheet,job_type=BUNDLE_*、
-   * shard_strategy=DYNAMIC)+ 各表模板/各下游渠道(file_template/file_channel sheet);每次提交投一份 .batch.json v2
-   * 清单声明「这批哪些文件→哪个模板/渠道」(清单是数据非配置,不进配置包)。只读说明 sheet,不参与上传解析。
-   *
-   * <p>ADR-046 提交清单(.batch.json v2)完整可抄片段已随行内容外置到 /config-package-guidance.json: 导入/分发投数据文件 +
-   * 清单;导出仅投清单(无数据文件、无 requiredFiles)。
-   */
-  static final List<String[]> BUNDLE_ROWS = GUIDANCE.sheet("bundle").rows();
-
-  private void createBundleExampleSheet(Workbook wb) {
-    createReadOnlyTableSheet(wb, SHEET_NAME_BUNDLE, BUNDLE_HEADERS, BUNDLE_ROWS);
-  }
-
-  /** 通用只读说明表 sheet 渲染：顶部提示行 + 表头 + 数据行；冻结首两行、表头样式、自动列宽。 */
-  private void createReadOnlyTableSheet(
-      Workbook wb, String sheetName, String[] headers, List<String[]> rows) {
-    Sheet sheet = wb.createSheet(sheetName);
-    Row hintRow = sheet.createRow(0);
-    hintRow.createCell(0).setCellValue(READONLY_SHEET_HINT);
-    CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
-    CellStyle bodyStyle = ConsoleExcelStyles.createDataStyle(wb);
-    bodyStyle.setWrapText(true);
-    Row headerRow = sheet.createRow(1);
-    for (int c = 0; c < headers.length; c++) {
-      Cell cell = headerRow.createCell(c);
-      cell.setCellValue(headers[c]);
-      cell.setCellStyle(headerStyle);
-    }
-    int rowIdx = 2;
-    for (String[] data : rows) {
-      Row row = sheet.createRow(rowIdx++);
-      for (int c = 0; c < headers.length; c++) {
-        Cell cell = row.createCell(c);
-        cell.setCellValue(c < data.length && data[c] != null ? data[c] : EMPTY);
-        cell.setCellStyle(bodyStyle);
-      }
-    }
-    sheet.createFreezePane(0, 2);
-    for (int c = 0; c < headers.length; c++) {
-      sheet.setColumnWidth(c, 12000);
-    }
-  }
-
-  private void createReadmeSheet(Workbook wb, Locale locale) {
-    Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
-    sheet.setColumnWidth(0, 28000);
-    CellStyle title = createReadmeTitleStyle(wb);
-    // 标题 + line1..line46（v3 9+2 完整说明：sheet 范围 / 跨 sheet 依赖 /
-    // 四类 Worker 填哪些 sheet / Apply 流程 / UPSERT 行为）
-    Row titleRow = sheet.createRow(0);
-    Cell titleCell = titleRow.createCell(0);
-    String titleKey = "excel.package.readme.title";
-    titleCell.setCellValue(messageSource.getMessage(titleKey, null, titleKey, locale));
-    titleCell.setCellStyle(title);
-    for (int i = 1; i <= README_LINE_COUNT; i++) {
-      String key = "excel.package.readme.line" + i;
-      Row row = sheet.createRow(i);
-      Cell cell = row.createCell(0);
-      cell.setCellValue(messageSource.getMessage(key, null, key, locale));
-    }
   }
 
   private void createFieldGuideSheet(Workbook wb) {

@@ -1,26 +1,26 @@
 # sample-tenant-worker-python — ADR-035 自托管 worker(Python)示范
 
 Python 版自托管 worker 最小示范,集成
-[`batch-worker-sdk`(Python)](../../batch-worker-sdk-python/),用 `@batch_task` 装饰器注册 handler。
+[`batch-worker-sdk`(Python)](../../../sdk/python/),用 `@batch_task` 装饰器注册 handler。
 **Python 3.12+,async-only**。
 
 > **同一自托管能力的 4 种接入,按租户技术栈选**:
-> - [`../sample-tenant-worker`](../sample-tenant-worker/) — 纯 Java + 手写 `main` wiring
-> - [`../sample-tenant-worker-spring`](../sample-tenant-worker-spring/) — Java + Spring Boot starter
+> - [`../sample-tenant-worker-java`](../sample-tenant-worker-java/) — 纯 Java + 手写 `main` wiring
+> - [`../sample-tenant-worker-java-spring`](../sample-tenant-worker-java-spring/) — Java + Spring Boot starter
 > - **`sample-tenant-worker-python`(本目录)** — Python + asyncio
-> - [`../batch-worker-sdk-template`](../batch-worker-sdk-template/) — Java 生产 fork 起点(Dockerfile + CI 全套)
+> - [`../sample-tenant-worker-java-spring`](../sample-tenant-worker-java-spring/) — Java + Spring Boot 生产 fork 起点
 >
-> 其它语言(Go / Rust / Node)请走 [BYO SDK guide](../../docs/sdk/byo-sdk-guide.md) 自研,跑通
-> [`docs/api/sdk-contract-fixtures/`](../../docs/api/sdk-contract-fixtures/) 的 12 个契约即可。
+> 其它语言(Go / Rust / Node)请走 [BYO SDK guide](../../../docs/sdk/byo-sdk-guide.md) 自研,跑通
+> [`docs/api/sdk-contract-fixtures/`](../../../docs/api/sdk-contract-fixtures/) 的 12 个契约即可。
 
 ## Quickstart(5 分钟)
 
 ```bash
 # 1. SDK editable install(在 repo root 跑)
-pip install -e sdk-python
+pip install -e sdk/python
 
 # 2. 本 sample editable install
-pip install -e examples/sample-tenant-worker-python
+pip install -e examples/self-hosted-sdk/sample-tenant-worker-python
 
 # 3. 设环境变量(用 BATCH_SDK_* 前缀对齐 BatchPlatformClientConfig.from_env())
 export BATCH_SDK_BASE_URL=https://batch.example.com
@@ -34,7 +34,7 @@ python -m sample_tenant_worker
 ```
 
 > **env 前缀提醒**:Java sample 用 `BATCH_*`(自己写的 `requireEnv`),Python `BatchPlatformClientConfig.from_env()` 默认 `BATCH_SDK_*`,**两套不能混**。
-> 见 [`docs/sdk/troubleshooting.md`](../../docs/sdk/troubleshooting.md) §1。
+> 见 [`docs/sdk/troubleshooting.md`](../../../docs/sdk/troubleshooting.md) §1。
 
 ## 注册的 handler
 
@@ -68,7 +68,7 @@ class ImportEchoHandler:
 ```
 
 声明后 register 上报、console 查询、派单合并的链路与 Java sample 完全一致,见
-[`../sample-tenant-worker/README.md#descriptor-端到端`](../sample-tenant-worker/README.md#descriptor-端到端)。
+[`../sample-tenant-worker-java/README.md#descriptor-端到端`](../sample-tenant-worker-java/README.md#descriptor-端到端)。
 
 > **凭据纪律(强制)**:SDK 在 `register` 上报 descriptor 时 BE 端的
 > `SensitiveDataValidator` 会拦截含 `password / secret / token / apikey / credential` 等关键字的字段。
@@ -101,7 +101,7 @@ async def main():
 asyncio.run(main())
 ```
 
-完整 testkit 用法见 [`batch-worker-sdk-python/tests/testkit/`](../../batch-worker-sdk-python/tests/testkit/)。
+完整 testkit 用法见 [`sdk/python/tests/testkit/`](../../../sdk/python/tests/testkit/)。
 
 ## Java sample 等价对照(快速 mental map)
 
@@ -127,8 +127,8 @@ asyncio.run(main())
 
 ## 关联文档
 
-- [`docs/sdk/quickstart.md`](../../docs/sdk/quickstart.md) — 5 分钟 quickstart
-- [`docs/sdk/wire-protocol.md`](../../docs/sdk/wire-protocol.md) — 通讯协议(任何语言 SDK 必须实装)
-- [`docs/sdk/onboarding-journey.md`](../../docs/sdk/onboarding-journey.md) — 从 0 到第一个 task 完整 checklist
-- [`docs/sdk/troubleshooting.md`](../../docs/sdk/troubleshooting.md) — 排障
-- [`batch-worker-sdk-python/README.md`](../../batch-worker-sdk-python/README.md) — Python SDK 全 Roadmap + Public API
+- [`docs/sdk/quickstart.md`](../../../docs/sdk/quickstart.md) — 5 分钟 quickstart
+- [`docs/sdk/wire-protocol.md`](../../../docs/sdk/wire-protocol.md) — 通讯协议(任何语言 SDK 必须实装)
+- [`docs/sdk/onboarding-journey.md`](../../../docs/sdk/onboarding-journey.md) — 从 0 到第一个 task 完整 checklist
+- [`docs/sdk/troubleshooting.md`](../../../docs/sdk/troubleshooting.md) — 排障
+- [`sdk/python/README.md`](../../../sdk/python/README.md) — Python SDK 全 Roadmap + Public API

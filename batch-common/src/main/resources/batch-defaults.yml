@@ -340,6 +340,8 @@ batch:
       process-dispatch: ${BATCH_TOPIC_PROCESS_DISPATCH:batch.task.dispatch.process}
       # Dispatch 派发 Topic
       dispatch-dispatch: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
+      # Atomic 派发 Topic
+      atomic-dispatch: ${BATCH_TOPIC_DISPATCH_ATOMIC:batch.task.dispatch.atomic}
       # 任务结果 Topic（worker → orchestrator）
       task-result: ${BATCH_TOPIC_TASK_RESULT:batch.task.result}
       # 任务重试 Topic

@@ -2,7 +2,7 @@
 # =========================================================
 # build-apps.sh - 本地联调应用模块单独构建入口
 # 说明：
-# 1) 仅打包六个 Java 应用模块，不启动 Docker、不启动本地进程。
+# 1) 仅打包 8 个 Java 应用模块，不启动 Docker、不启动本地进程。
 # 2) 默认执行 Maven package -DskipTests，供 start-all.sh / 手工联调复用。
 # 3) 默认增量构建（不 clean），Maven 自身会基于 mtime 决定是否重编；
 #    若出现「类文件在偏移 0 处截断」、repackage 失败、或 *-exec.jar 体积极小，

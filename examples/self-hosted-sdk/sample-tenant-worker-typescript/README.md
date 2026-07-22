@@ -6,12 +6,12 @@ Minimal runnable self-hosted tenant worker built on the **TypeScript BYO SDK**
 `WorkerLifecycle` FSM with a `SensitiveDataValidator` and graceful SIGTERM.
 
 > **Same self-hosted capability, multiple stacks** — pick by tenant tech:
-> - [`../sample-tenant-worker`](../sample-tenant-worker/) — Java + hand-written `main`
-> - [`../sample-tenant-worker-spring`](../sample-tenant-worker-spring/) — Java + Spring Boot starter
+> - [`../sample-tenant-worker-java`](../sample-tenant-worker-java/) — Java + hand-written `main`
+> - [`../sample-tenant-worker-java-spring`](../sample-tenant-worker-java-spring/) — Java + Spring Boot starter
 > - [`../sample-tenant-worker-python`](../sample-tenant-worker-python/) — Python 3.12+ + asyncio
 > - **`sample-tenant-worker-typescript` (this dir)** — Node + native TS type-stripping
 >
-> Other languages → [BYO SDK guide](../../docs/sdk/byo-sdk-guide.md).
+> Other languages → [BYO SDK guide](../../../docs/sdk/byo-sdk-guide.md).
 
 ## What it does
 

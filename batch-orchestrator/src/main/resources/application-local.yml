@@ -131,6 +131,7 @@ batch:
       export-dispatch: batch.task.dispatch.export
       process-dispatch: batch.task.dispatch.process
       dispatch-dispatch: batch.task.dispatch.dispatch
+      atomic-dispatch: batch.task.dispatch.atomic
       task-result: batch.task.result
       task-retry: batch.task.retry
       dead-letter: batch.task.dead-letter

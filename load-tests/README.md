@@ -247,7 +247,7 @@ select id as taskId, tenant_id as tenantId, 'synthetic-worker-1' as workerId
 
 ## 与文档的对应关系
 
-- [压测种子数据说明](../docs/sql/load-test/README.md)
+- [压测种子数据说明](../scripts/db/load-test-seed/README.md)
 - [压测维度矩阵](../docs/testing/load-test-dimensions.md)
 - [测试文档索引](../docs/testing/README.md)
 

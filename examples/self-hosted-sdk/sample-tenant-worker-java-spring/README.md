@@ -1,13 +1,12 @@
-# sample-tenant-worker-spring
+# sample-tenant-worker-java-spring
 
 ADR-035 租户自托管 worker 的 **Spring Boot 接入示范**,经
-[`batch-worker-sdk-spring-boot-starter`](../../batch-worker-sdk-spring-boot-starter/) 自动装配。
+[`batch-worker-sdk-spring-boot-starter`](../../../sdk/java/spring/) 自动装配。
 
 > **同一自托管能力的 4 种接入,按租户技术栈选**:
-> - [`../sample-tenant-worker`](../sample-tenant-worker/) — 纯 Java + 手写 `main` wiring
-> - **`sample-tenant-worker-spring`(本目录)** — Java + Spring Boot starter(自动装配)
+> - [`../sample-tenant-worker-java`](../sample-tenant-worker-java/) — 纯 Java + 手写 `main` wiring
+> - **`sample-tenant-worker-java-spring`(本目录)** — Java + Spring Boot starter(自动装配)
 > - [`../sample-tenant-worker-python`](../sample-tenant-worker-python/) — Python 3.12+ + asyncio
-> - [`../batch-worker-sdk-template`](../batch-worker-sdk-template/) — Java 生产 fork 起点(Dockerfile + CI)
 >
 > core SDK 本身始终 framework-free(Java SDK Spring-free / Python SDK 无 web framework 依赖);本示范多依赖一个可选 starter。
 > 下方"两种接入对比"指 Java 域内的 plain vs Spring,Python 版本另见上链。
@@ -16,11 +15,11 @@ ADR-035 租户自托管 worker 的 **Spring Boot 接入示范**,经
 
 ```bash
 # 方式一:dev 直接跑
-mvn spring-boot:run -f examples/sample-tenant-worker-spring/pom.xml
+mvn spring-boot:run -f examples/self-hosted-sdk/sample-tenant-worker-java-spring/pom.xml
 
 # 方式二:打包后跑
-mvn package -f examples/sample-tenant-worker-spring/pom.xml
-java -jar examples/sample-tenant-worker-spring/target/sample-tenant-worker-spring-1.0.0-SNAPSHOT.jar
+mvn package -f examples/self-hosted-sdk/sample-tenant-worker-java-spring/pom.xml
+java -jar examples/self-hosted-sdk/sample-tenant-worker-java-spring/target/sample-tenant-worker-spring-1.0.0-SNAPSHOT.jar
 ```
 
 平台连接参数走环境变量(见 [`application.yml`](src/main/resources/application.yml)):
@@ -29,7 +28,7 @@ java -jar examples/sample-tenant-worker-spring/target/sample-tenant-worker-sprin
 ## 接入只需 3 步(零 wiring 代码)
 
 1. 依赖 `batch-worker-sdk-spring-boot-starter`(见 [`pom.xml`](pom.xml))。
-2. 把每个 `SdkTaskHandler` 实现声明成 `@Component`(见 [`EchoHandler`](src/main/java/io/github/pinpols/batch/ext/sample/spring/EchoHandler.java))。
+2. 把每个 `SdkTaskHandler` 实现声明成 `@Component`(见 [`EchoHandler`](src/main/java/io/github/pinpols/batch/ext/sample/spring/handlers/EchoHandler.java))。
 3. 在 `application.yml` 填 `batch.worker-sdk.*`。
 
 starter 自动完成:properties → `BatchPlatformClientConfig` 绑定、收集所有 `SdkTaskHandler` bean 注册、

@@ -57,7 +57,7 @@
 
 ### 优先级 + 范围边界纪律
 
-> ADR-012 / 021..027 的"做不做 / 什么时候做 / 边界在哪"决策档：[`docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+> ADR-012 / 021..027 的"做不做 / 什么时候做 / 边界在哪"决策档已归档：[`docs/archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 >
 > 系统定位一句话：**"批量运行控制面 + 文件 / 任务交付闭环"，不扩张为"企业数据治理 + 容器资源编排 + 合规审计平台"**。
 

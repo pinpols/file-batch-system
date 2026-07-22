@@ -56,5 +56,5 @@ helm upgrade --install batch-platform ./helm/batch-platform \
 
 - [../README.md](../README.md)
 - [../../docs/testing/release-gate.md](../../docs/testing/release-gate.md)
-- [../../docs/testing/staging-live-deploy-smoke-checklist.md](../../docs/testing/staging-live-deploy-smoke-checklist.md)
-- [../../docs/observability/otel-integration.md](../../docs/observability/otel-integration.md)
+- [../../docs/runbook/go-live-staging-execution.md](../../docs/runbook/go-live-staging-execution.md)
+- [../../docs/runbook/distributed-tracing.md](../../docs/runbook/distributed-tracing.md)
