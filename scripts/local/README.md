@@ -5,6 +5,9 @@
 ## 脚本列表
 
 - `start-all.sh`：一键启动本地联调环境（基础依赖 + 8 个 Java 应用模块）
+  - 建表后幂等应用业务库 RLS，避免 Worker 因租户策略缺失启动失败
+  - 裸 JVM 自动使用宿主机 PostgreSQL / replica 地址，并映射 `.env.local` 的数据库凭据
+  - 任一应用未通过最终健康检查时返回非零退出码
 - `stop-all.sh`：分阶段停止本地 Java 进程
 - `health-check-infra.sh`：基建健康检查(PG primary/replica / Kafka / Redis / MinIO)。
   协议层探测 + env-var 驱动,**任何环境可用**(本机走 `.env` 默认,staging/CI 覆盖

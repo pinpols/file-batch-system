@@ -27,6 +27,7 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+batch_configure_local_jvm_database_env
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh
@@ -356,7 +357,20 @@ if docker exec -i "$PG_CONTAINER" psql -U "${POSTGRES_USER:-batch_user}" -d "${B
      < "$ROOT/scripts/db/business/create_biz_tables.sql" >/dev/null 2>&1; then
   echo "  业务库 DDL 已 apply"
 else
-  echo "  ⚠️  业务库 DDL apply 失败（不阻塞启动；详见 docker logs $PG_CONTAINER）"
+  echo "ERROR: 业务库 DDL apply 失败（详见 docker logs $PG_CONTAINER）" >&2
+  exit 1
+fi
+
+echo "==> 应用业务库 RLS（roles / grants / tenant policies）..."
+if docker exec -i "$PG_CONTAINER" psql -U "${POSTGRES_USER:-batch_user}" -d "${BUSINESS_DB_NAME:-batch_business}" \
+     -v ON_ERROR_STOP=1 \
+     -v writer_password="${BIZ_WRITER_PASSWORD:-$POSTGRES_PASSWORD}" \
+     -v admin_password="${BIZ_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}" \
+     < "$ROOT/scripts/db/business/rls-phase-a.sql" >/dev/null 2>&1; then
+  echo "  业务库 RLS 已 apply"
+else
+  echo "ERROR: 业务库 RLS apply 失败" >&2
+  exit 1
 fi
 
 if [[ "${BUILD:-0}" == "1" ]]; then
@@ -590,4 +604,4 @@ _build_check_list() {
   echo "$list"
 }
 
-wait_all_apps_healthy "$(_build_check_list)" || true
+wait_all_apps_healthy "$(_build_check_list)"
