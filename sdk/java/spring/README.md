@@ -31,7 +31,7 @@ core SDK 继续保持 Spring-free。
 
 3. **在 `application.yml` 填 `batch.worker-sdk.*`**(见下方)。
 
-**不需要 `@Enable` 注解**,放进 classpath 即生效。完整可跑示范:[`examples/sample-tenant-worker-spring/`](../examples/sample-tenant-worker-spring/) 和 [`examples/batch-worker-sdk-template/`](../examples/batch-worker-sdk-template/)(生产 fork 起点 + Dockerfile + CI)。
+**不需要 `@Enable` 注解**,放进 classpath 即生效。完整可跑示范:[`examples/self-hosted-sdk/sample-tenant-worker-java-spring/`](../../../examples/self-hosted-sdk/sample-tenant-worker-java-spring/)(生产 fork 起点)。
 
 ## 使用方式
 
@@ -107,11 +107,10 @@ v1 只面向仓库当前基线 Spring Boot 4.x。Boot 3.x 兼容性不承诺;如
 ## 文档索引
 
 - [`batch-worker-sdk/README.md`](../core/README.md) —— core SDK 完整 API + 配置项 + 安全约束
-- [`examples/sample-tenant-worker-spring/`](../examples/sample-tenant-worker-spring/) —— 最小示范
-- [`examples/batch-worker-sdk-template/`](../examples/batch-worker-sdk-template/) —— 生产 fork 起点(Dockerfile + run.sh + CI)
-- [`docs/sdk/quickstart.md`](../docs/sdk/quickstart.md) —— 5 分钟起跑(starter 路径)
-- [`docs/sdk/troubleshooting.md`](../docs/sdk/troubleshooting.md) —— 排障
+- [`examples/self-hosted-sdk/sample-tenant-worker-java-spring/`](../../../examples/self-hosted-sdk/sample-tenant-worker-java-spring/) —— 最小示范
+- [`docs/sdk/quickstart.md`](../../../docs/sdk/quickstart.md) —— 5 分钟起跑(starter 路径)
+- [`docs/sdk/troubleshooting.md`](../../../docs/sdk/troubleshooting.md) —— 排障
 
 ## License
 
-Apache-2.0,与主仓一致。见 [`LICENSE`](../LICENSE)。
+Apache-2.0,与主仓一致。见 [`LICENSE`](../../../LICENSE)。

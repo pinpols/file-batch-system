@@ -70,7 +70,8 @@ class ConfigPackageWorkbookGuidanceTest {
       for (int c = 0; c < ConfigPackageWorkbookSupplementWriter.BUNDLE_HEADERS.length; c++) {
         headerValues.add(header.getCell(c).getStringCellValue());
       }
-      assertThat(headerValues).containsExactly(ConfigPackageWorkbookSupplementWriter.BUNDLE_HEADERS);
+      assertThat(headerValues)
+          .containsExactly(ConfigPackageWorkbookSupplementWriter.BUNDLE_HEADERS);
       assertThat(ConfigPackageWorkbookSupplementWriter.BUNDLE_ROWS).hasSize(3);
       List<String> jobTypes = new ArrayList<>();
       List<String> manifestExamples = new ArrayList<>();

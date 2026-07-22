@@ -9,7 +9,7 @@
 - `scripts/ops/`：运维巡检与自愈（inspect-*、heal-*、trigger-compensation）
 - `scripts/data/`：数据初始化与加载（init-kafka、init-minio、load-*）
 - `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
-- `scripts/db/`：数据库维护（Flyway 历史重置等）
+- `scripts/db/`：数据库维护、种子数据、备份恢复和分区迁移演练
 
 ## 主要入口
 
@@ -34,4 +34,4 @@
 
 - [docs/testing/README.md](../docs/testing/README.md)
 - [docs/testing/release-gate.md](../docs/testing/release-gate.md)
-- [docs/testing/staging-live-deploy-smoke-checklist.md](../docs/testing/staging-live-deploy-smoke-checklist.md)
+- [docs/runbook/go-live-staging-execution.md](../docs/runbook/go-live-staging-execution.md)

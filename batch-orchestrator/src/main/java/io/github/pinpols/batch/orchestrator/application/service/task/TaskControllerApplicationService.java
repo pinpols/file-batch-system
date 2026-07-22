@@ -147,8 +147,7 @@ public class TaskControllerApplicationService {
       // (delay~maxDelay 间随机)打散并发重试,吸收瞬时死锁,避免落到 SYSTEM 死信。
       backoff = @Backoff(delay = 50, maxDelay = 1000, multiplier = 2.0, random = true))
   public void report(Long taskId, TaskExecutionReportCommand request) {
-    String errorCode =
-        resolveFailureField(request.errorCode(), request.code(), request.success());
+    String errorCode = resolveFailureField(request.errorCode(), request.code(), request.success());
     String errorMessage =
         resolveFailureField(request.errorMessage(), request.message(), request.success());
     TaskOutcomeCommand command =

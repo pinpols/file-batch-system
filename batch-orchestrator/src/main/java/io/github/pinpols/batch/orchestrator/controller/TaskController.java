@@ -9,16 +9,13 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemCommand;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskHeartbeatCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemCommand;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.controller.request.TaskCancelRequest;
 import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchRequest;
@@ -94,7 +91,8 @@ public class TaskController {
       @PathVariable Long taskId,
       @RequestBody TaskHeartbeatRequest request,
       HttpServletRequest httpRequest) {
-    var result = taskControllerApplicationService.renew(taskId, toCommand(normalize(request, httpRequest)));
+    var result =
+        taskControllerApplicationService.renew(taskId, toCommand(normalize(request, httpRequest)));
     return new TaskHeartbeatResponse(result.cancelRequested());
   }
 
@@ -117,7 +115,8 @@ public class TaskController {
   @PostMapping("/leases/renew-batch")
   public TaskLeaseRenewBatchResponse renewBatch(
       @RequestBody TaskLeaseRenewBatchRequest request, HttpServletRequest httpRequest) {
-    return toResponse(taskControllerApplicationService.renewBatch(toCommand(normalize(request, httpRequest))));
+    return toResponse(
+        taskControllerApplicationService.renewBatch(toCommand(normalize(request, httpRequest))));
   }
 
   /**
@@ -130,7 +129,8 @@ public class TaskController {
     // 批量端点按绑定 api_key 的租户限流(一次 HTTP 调用计 1 次);items 大小另由 body-size / 批量上限约束。
     rateLimit(
         InternalRequestTenantGuard.resolveTenant(httpRequest, null), RateLimitAction.TASK_CLAIM);
-    return toResponse(taskControllerApplicationService.claimBatch(toCommand(normalize(request, httpRequest))));
+    return toResponse(
+        taskControllerApplicationService.claimBatch(toCommand(normalize(request, httpRequest))));
   }
 
   /**
@@ -142,7 +142,8 @@ public class TaskController {
       @RequestBody TaskReportBatchRequest request, HttpServletRequest httpRequest) {
     rateLimit(
         InternalRequestTenantGuard.resolveTenant(httpRequest, null), RateLimitAction.TASK_REPORT);
-    return toResponse(taskControllerApplicationService.reportBatch(toCommand(normalize(request, httpRequest))));
+    return toResponse(
+        taskControllerApplicationService.reportBatch(toCommand(normalize(request, httpRequest))));
   }
 
   /** 按绑定 api_key 的租户对热路径动作限流;超额即 429。tenantId 为空(无法归属)时由限流器放行。 */
@@ -276,7 +277,8 @@ public class TaskController {
     if (request == null || request.items() == null) {
       return new TaskReportBatchCommand(null);
     }
-    return new TaskReportBatchCommand(request.items().stream().map(TaskController::toCommand).toList());
+    return new TaskReportBatchCommand(
+        request.items().stream().map(TaskController::toCommand).toList());
   }
 
   private static TaskReportBatchResponse toResponse(TaskReportBatchResult result) {

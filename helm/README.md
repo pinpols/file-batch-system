@@ -4,7 +4,7 @@
 
 ## 目录分工
 
-- `batch-platform/`：主 Helm Chart，包含 orchestrator、trigger、console-api 和三个 worker 的部署清单
+- `batch-platform/`：主 Helm Chart，包含 orchestrator、trigger、console-api 和四个 worker 的部署清单
 - `values-prod.yaml`：生产或类生产环境的覆盖值示例
 
 ## 使用顺序
@@ -17,6 +17,6 @@
 
 - [batch-platform/README.md](./batch-platform/README.md)
 - [values-prod.yaml](./values-prod.yaml)
-- [docs/testing/staging-live-deploy-smoke-checklist.md](../docs/testing/staging-live-deploy-smoke-checklist.md)
-- [docs/testing/deployment-verification-report.md](../docs/testing/deployment-verification-report.md)
-- [docs/observability/otel-integration.md](../docs/observability/otel-integration.md)
+- [docs/runbook/go-live-staging-execution.md](../docs/runbook/go-live-staging-execution.md)
+- [docs/testing/release-gate.md](../docs/testing/release-gate.md)
+- [docs/runbook/distributed-tracing.md](../docs/runbook/distributed-tracing.md)

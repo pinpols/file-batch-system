@@ -369,8 +369,7 @@ class TaskControllerApplicationServiceTest {
   void renewSucceedsWithoutCancel() {
     when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
-    var resp =
-        service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
+    var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
     assertThat(resp.cancelRequested()).isFalse();
   }
 
@@ -379,8 +378,7 @@ class TaskControllerApplicationServiceTest {
   void renewReturnsCancelRequested() {
     when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, true));
-    var resp =
-        service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
+    var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
     assertThat(resp.cancelRequested()).isTrue();
   }
 

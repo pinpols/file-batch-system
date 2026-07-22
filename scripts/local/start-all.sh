@@ -2,7 +2,7 @@
 # =========================================================s s
 # start-all.sh - 一键启动本地联调环境
 # 说明：
-# 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及六个 Java 模块。
+# 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及 8 个 Java 应用模块。
 # 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
 # 4) PID 写入 logs/pids/start-all.pids（兼容软链 logs/start-all.pids），日志写入 logs/current/app/<module>.log。
@@ -41,7 +41,7 @@ MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 MINIO_INIT_CONTAINER="${MINIO_INIT_CONTAINER:-batch-minio-init}"
 REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
 
-# 本地 dev 启动加速 JVM 参数（6 个模块并发起 Spring Boot fat jar 慢的主因是类扫描+JIT）：
+# 本地 dev 启动加速 JVM 参数（8 个应用模块并发起 Spring Boot fat jar 慢的主因是类扫描+JIT）：
 #   TieredStopAtLevel=1  只做 C1 编译，跳过 C2（启动 -30~50%，稳态吞吐 -20~30%，local 无所谓）
 #   UseSerialGC          本地负载小，Serial 比 G1 启动开销更低
 # （JDK 13+ 已弃用 -Xverify:none / -noverify，默认不再注入，避免告警）
@@ -217,7 +217,7 @@ wait_container_exited_zero() {
 
 wait_kafka_topics_ready() {
   echo "==> 等待 Kafka topic 初始化完成..."
-  local expected_topics="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter}"
+  local expected_topics="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter}"
   local i all_ready listed
   for i in $(seq 1 60); do
     listed="$(docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>/dev/null || true)"

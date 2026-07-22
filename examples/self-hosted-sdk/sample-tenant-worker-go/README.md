@@ -1,6 +1,6 @@
 # sample-tenant-worker-go — Go BYO SDK 示范
 
-租户自托管 Worker 的最小可运行 Go 示范,直接用 [BYO SDK](../../docs/sdk/byo-sdk-guide.md)
+租户自托管 Worker 的最小可运行 Go 示范,直接用 [BYO SDK](../../../docs/sdk/byo-sdk-guide.md)
 (`sdk/go`)手写 `main` wiring。业务方复制本目录到自己 repo,把 `echoHandler`
 换成业务实现即可。
 
