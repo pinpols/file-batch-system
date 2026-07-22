@@ -10,23 +10,22 @@ import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskHeartbeatCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
-import io.github.pinpols.batch.orchestrator.controller.TaskController.TaskClaimRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskCancelRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimBatchResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimItemPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskClaimResultPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskExecutionReportDto;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskHeartbeatRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskHeartbeatResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskLeaseRenewResultPayload;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportBatchRequest;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportBatchResponse;
-import io.github.pinpols.batch.orchestrator.controller.request.TaskReportResultPayload;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.annotation.Timed;
@@ -74,7 +73,7 @@ public class TaskControllerApplicationService {
       value = "batch.task.claim.duration",
       description = "Worker task claim latency on orchestrator",
       histogram = true)
-  public EffectiveTaskConfig claim(Long taskId, TaskClaimRequest request) {
+  public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
     JobTaskEntity task =
         Guard.requireFound(
             taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId()),
@@ -96,8 +95,8 @@ public class TaskControllerApplicationService {
    *
    * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝(保护 orchestrator)。
    */
-  public TaskClaimBatchResponse claimBatch(TaskClaimBatchRequest request) {
-    List<TaskClaimItemPayload> items =
+  public TaskClaimBatchResult claimBatch(TaskClaimBatchCommand request) {
+    List<TaskClaimItemCommand> items =
         request == null || request.items() == null ? List.of() : request.items();
     int cap = batchClaimProperties.effectiveBatchSize();
     if (items.size() > cap) {
@@ -106,12 +105,12 @@ public class TaskControllerApplicationService {
           "error.common.invalid_argument_detail",
           "claim batch size " + items.size() + " exceeds max " + cap);
     }
-    List<TaskClaimResultPayload> results = new ArrayList<>(items.size());
+    List<TaskClaimItemResult> results = new ArrayList<>(items.size());
     int claimed = 0;
     // PERF(5.2c): 请求级 memo —— 同一批内同 (tenant,workerCode) 的 worker_registry 解析只查一次库。
     TaskAssignmentService.WorkerLookupMemo workerMemo =
         new TaskAssignmentService.WorkerLookupMemo();
-    for (TaskClaimItemPayload item : items) {
+    for (TaskClaimItemCommand item : items) {
       JobTaskEntity task =
           taskExecutionService.assignWorker(
               item.tenantId(), item.taskId(), item.workerId(), workerMemo);
@@ -119,10 +118,10 @@ public class TaskControllerApplicationService {
         // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
         EffectiveTaskConfig config =
             taskExecutionService.loadEffectiveConfig(item.tenantId(), task);
-        results.add(new TaskClaimResultPayload(item.taskId(), true, config));
+        results.add(new TaskClaimItemResult(item.taskId(), true, config));
         claimed++;
       } else {
-        results.add(new TaskClaimResultPayload(item.taskId(), false, null));
+        results.add(new TaskClaimItemResult(item.taskId(), false, null));
       }
     }
     // 2.4 观测:批大小分布(看 K 实际多大=churn 省多少)+ 逐项 outcome 计数
@@ -137,7 +136,7 @@ public class TaskControllerApplicationService {
               BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "skipped")
           .increment(items.size() - claimed);
     }
-    return new TaskClaimBatchResponse(results);
+    return new TaskClaimBatchResult(results);
   }
 
   @Retryable(
@@ -147,27 +146,27 @@ public class TaskControllerApplicationService {
       // 原 3 次/50ms→100ms 窗口太窄,等长退避还会让两个 report 同步重投再撞。改 5 次 + random jitter
       // (delay~maxDelay 间随机)打散并发重试,吸收瞬时死锁,避免落到 SYSTEM 死信。
       backoff = @Backoff(delay = 50, maxDelay = 1000, multiplier = 2.0, random = true))
-  public void report(Long taskId, TaskExecutionReportDto request) {
+  public void report(Long taskId, TaskExecutionReportCommand request) {
     String errorCode =
-        resolveFailureField(request.getErrorCode(), request.getCode(), request.isSuccess());
+        resolveFailureField(request.errorCode(), request.code(), request.success());
     String errorMessage =
-        resolveFailureField(request.getErrorMessage(), request.getMessage(), request.isSuccess());
+        resolveFailureField(request.errorMessage(), request.message(), request.success());
     TaskOutcomeCommand command =
         TaskOutcomeCommand.builder()
-            .tenantId(request.getTenantId())
+            .tenantId(request.tenantId())
             .taskId(taskId)
-            .workerId(request.getWorkerId())
-            .success(request.isSuccess())
-            .resultSummary(request.getResultSummary())
+            .workerId(request.workerId())
+            .success(request.success())
+            .resultSummary(request.resultSummary())
             .errorCode(errorCode)
             .errorMessage(errorMessage)
-            .errorKey(request.getErrorKey())
-            .errorArgs(request.getErrorArgs())
-            .highWaterMarkOut(request.getHighWaterMarkOut())
-            .outputs(request.getOutputs())
-            .partitionInvocationId(request.getPartitionInvocationId())
-            .failureClass(request.isSuccess() ? null : request.getFailureClass())
-            .verifierFailures(request.isSuccess() ? request.getVerifierFailures() : null)
+            .errorKey(request.errorKey())
+            .errorArgs(request.errorArgs())
+            .highWaterMarkOut(request.highWaterMarkOut())
+            .outputs(request.outputs())
+            .partitionInvocationId(request.partitionInvocationId())
+            .failureClass(request.success() ? null : request.failureClass())
+            .verifierFailures(request.success() ? request.verifierFailures() : null)
             .build();
     taskExecutionService.applyTaskOutcome(command);
   }
@@ -185,8 +184,8 @@ public class TaskControllerApplicationService {
    *
    * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝。
    */
-  public TaskReportBatchResponse reportBatch(TaskReportBatchRequest request) {
-    List<TaskExecutionReportDto> items =
+  public TaskReportBatchResult reportBatch(TaskReportBatchCommand request) {
+    List<TaskExecutionReportCommand> items =
         request == null || request.items() == null ? List.of() : request.items();
     int cap = batchClaimProperties.effectiveBatchSize();
     if (items.size() > cap) {
@@ -195,18 +194,18 @@ public class TaskControllerApplicationService {
           "error.common.invalid_argument_detail",
           "report batch size " + items.size() + " exceeds max " + cap);
     }
-    List<TaskReportResultPayload> results = new ArrayList<>(items.size());
+    List<TaskReportItemResult> results = new ArrayList<>(items.size());
     int ok = 0;
-    for (TaskExecutionReportDto item : items) {
-      Long taskId = item.getTaskId();
+    for (TaskExecutionReportCommand item : items) {
+      Long taskId = item.taskId();
       try {
         self.report(taskId, item);
-        results.add(new TaskReportResultPayload(taskId, true, null));
+        results.add(new TaskReportItemResult(taskId, true, null));
         ok++;
       } catch (RuntimeException e) {
         // 逐项独立:该项失败不影响其余项;worker 只重报 ok=false 的项
         log.warn("batch report item failed: taskId={} err={}", taskId, e.toString());
-        results.add(new TaskReportResultPayload(taskId, false, e.getMessage()));
+        results.add(new TaskReportItemResult(taskId, false, e.getMessage()));
       }
     }
     // 2.4 观测:批大小分布 + 逐项 outcome(批内部分失败可观测)
@@ -220,14 +219,14 @@ public class TaskControllerApplicationService {
               BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "failed")
           .increment(items.size() - ok);
     }
-    return new TaskReportBatchResponse(results);
+    return new TaskReportBatchResult(results);
   }
 
   /**
    * ORCH-P4-1：心跳 = 续租 + 进度上报 + 取消感知。续租失败 → 409;成功则(可选)落 details 并回带 {@code cancelRequested}, SDK
    * 据此主动停长循环(不等 lease 超时)。
    */
-  public TaskHeartbeatResponse renew(Long taskId, TaskHeartbeatRequest request) {
+  public TaskControlPayloads.TaskHeartbeatResult renew(Long taskId, TaskHeartbeatCommand request) {
     String detailsJson = serializeDetails(taskId, request.details());
     TaskHeartbeatResult result =
         taskExecutionService.recordHeartbeat(
@@ -239,11 +238,11 @@ public class TaskControllerApplicationService {
     if (!result.leaseRenewed()) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
     }
-    return new TaskHeartbeatResponse(result.cancelRequested());
+    return new TaskControlPayloads.TaskHeartbeatResult(result.cancelRequested());
   }
 
   /** ORCH-P4-1：运维 / 平台请求取消 RUNNING task;非 RUNNING / 不存在则静默成功(幂等,无需让运维区分)。 */
-  public void cancel(Long taskId, TaskCancelRequest request) {
+  public void cancel(Long taskId, TaskCancelCommand request) {
     boolean marked = taskExecutionService.requestCancel(request.tenantId(), taskId);
     log.info(
         "task cancel requested: tenant={} taskId={} reason={} marked={}",
@@ -272,30 +271,30 @@ public class TaskControllerApplicationService {
    *
    * <p>ORCH-P4-1:批量续租同时返回 {@code cancelRequested};worker-core 据此中断长时间运行的 task, 而不必等待租约超时。
    */
-  public TaskLeaseRenewBatchResponse renewBatch(TaskLeaseRenewBatchRequest request) {
-    List<TaskLeaseRenewItemPayload> items =
+  public TaskLeaseRenewBatchResult renewBatch(TaskLeaseRenewBatchCommand request) {
+    List<TaskLeaseRenewItemCommand> items =
         request == null || request.items() == null ? List.of() : request.items();
     if (items.isEmpty()) {
-      return new TaskLeaseRenewBatchResponse(List.of());
+      return new TaskLeaseRenewBatchResult(List.of());
     }
     // PERF(5.3): set-based —— N 项一条 UPDATE ... RETURNING 完成续租 + cancelRequested 回读;
     // 丢租约的项按原逐项语义返回 renewed=false(结果与入参逐位对齐)。
     List<TaskAssignmentService.LeaseRenewCommand> commands = new ArrayList<>(items.size());
-    for (TaskLeaseRenewItemPayload item : items) {
+    for (TaskLeaseRenewItemCommand item : items) {
       commands.add(
           new TaskAssignmentService.LeaseRenewCommand(
               item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()));
     }
     List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
         taskExecutionService.renewLeaseBatch(commands);
-    List<TaskLeaseRenewResultPayload> results = new ArrayList<>(items.size());
+    List<TaskLeaseRenewItemResult> results = new ArrayList<>(items.size());
     for (int i = 0; i < items.size(); i++) {
       TaskAssignmentService.TaskHeartbeatResult result = outcomes.get(i);
       results.add(
-          new TaskLeaseRenewResultPayload(
+          new TaskLeaseRenewItemResult(
               items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
     }
-    return new TaskLeaseRenewBatchResponse(results);
+    return new TaskLeaseRenewBatchResult(results);
   }
 
   private boolean isClaimedBy(JobTaskEntity task, String workerId) {
