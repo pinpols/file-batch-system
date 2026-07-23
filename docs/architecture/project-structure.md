@@ -163,6 +163,5 @@ scripts/
 |---|---|
 | `main` | 唯一发布分支,所有 PR 合到这 |
 | `feature/<topic>` | 业务开发 / bug fix / 测试 / 文档(标准 PR → main) |
-| `feature/docker-deploy` | 本地 Docker 部署相关(**不 PR 进 main**,只接 main → deploy 单向 sync) |
 | `fix/<topic>` | bug 修复(同上,PR → main) |
 | `docs/<topic>` | 纯文档变更(PR → main) |

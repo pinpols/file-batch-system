@@ -222,4 +222,4 @@ EOF
 - `playbooks/pg-primary-failover.md` — 主库故障切主(HA;本 runbook 补它 §方案C 的 PITR TODO)
 - `pg-table-partitioning.md` — process_staging 分区 DROP 回收空间
 - `read-replica.md` — 读写分离 / standby 语义(为何 standby 不是备份)
-- `docs/analysis/2026-06-10-full-audit.md` — 本 runbook 的来源(P1-7 / P2-7)
+- `docs/archive/analysis/2026-06-10-full-audit.md` — 本 runbook 的来源(P1-7 / P2-7)

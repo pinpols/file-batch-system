@@ -53,7 +53,7 @@ T2 崩溃(进程被杀等)→ instance 滞留 `CREATED` 且**零 partition**(T2 
 
 > 注:`maybeShortCircuitDuplicate` 本身**不要**改成内联重驱——并发重复请求窗口会双重派发。恢复必须走带时间阈值的独立调度。
 
-### B. ✅/📋 HIGH-2 prod fail-secure — 跨分支协调(业务侧已改,部署分支待补)
+### B. ✅/📋 HIGH-2 prod fail-secure — 部署配置待补
 
 **业务侧(✅ 本 PR)**:`BatchProfileSupport.isProductionProfile` 改 fail-secure——
 - 含 prod-like profile → 生产;
@@ -62,9 +62,9 @@ T2 崩溃(进程被杀等)→ instance 滞留 `CREATED` 且**零 partition**(T2 
 
 防"部署到生产却忘配 `SPRING_PROFILES_ACTIVE`"时 fail-open 放行 bypass-mode/弱密钥。已同步更新 `BatchSecurityPropertiesTest`(`unknownProfile`/`emptyProfile` 现期望抛、新增 `e2eProfile` 放行)。
 
-**⚠️ 部署分支待补(📋,在 `feature/docker-deploy` 上做,顺序见下)**:当前 Docker compose(`docker/compose/app.yml`)6 个服务只设 `BATCH_SECURITY_BYPASS_MODE`、**不设 `SPRING_PROFILES_ACTIVE`**,而 `.env.local` 里 `BYPASS_MODE=true`。本 PR 合并并部署后,fail-secure 会判该部署为"生产"→ 启动期守护抛 `IllegalStateException` **拖垮线上部署**。
+**⚠️ 部署配置待补(📋)**:当前 Docker compose(`docker/compose/app.yml`)6 个服务只设 `BATCH_SECURITY_BYPASS_MODE`、**不设 `SPRING_PROFILES_ACTIVE`**,而 `.env.local` 里 `BYPASS_MODE=true`。本 PR 合并并部署后,fail-secure 会判该部署为"生产"→ 启动期守护抛 `IllegalStateException` **拖垮线上部署**。
 
-必须在 `feature/docker-deploy` 上补(本业务分支**不能**碰 compose,CLAUDE.md 两分支绝不互 PR):
+必须在 compose / 本地环境配置中补:
 ```yaml
 # docker/compose/app.yml —— 6 个 batch-* 服务的 environment 各加一行
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
