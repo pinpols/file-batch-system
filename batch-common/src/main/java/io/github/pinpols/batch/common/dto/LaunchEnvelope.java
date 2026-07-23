@@ -13,7 +13,7 @@ import java.time.Instant;
  *
  * <ul>
  *   <li>{@code dedupKey} — trigger 已计算过的 dedup key,避免 orchestrator 重复算
- *   <li>{@code sourceFireTime} — Quartz / wheel 实际 fire 时刻,supports 链路审计与 latency 统计
+ *   <li>{@code sourceFireTime} — Quartz 实际 fire 时刻,supports 链路审计与 latency 统计
  *   <li>{@code envelopeVersion} — 协议演进时 consumer 兼容多版本(v1 现行)
  * </ul>
  *

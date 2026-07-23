@@ -3,30 +3,11 @@
 --
 -- 本 fixture 假定 sim-stage6c-trigger-fixtures.sql 已经创建了
 -- TA_TRIGGER_STAGE6C_* 调度作业与 pipeline。Stage6d 收紧 cron 节奏并重置
--- 运行态,以便本地做确定性验证。
+-- Quartz 运行态,以便本地做确定性验证。
 
-WITH targets AS (
-  SELECT id
-  FROM batch.job_definition
-  WHERE tenant_id = 'ta'
-    AND job_code IN ('TA_TRIGGER_STAGE6C_SCHEDULED', 'TA_TRIGGER_STAGE6C_MISFIRE')
-),
-old_states AS (
-  SELECT id
-  FROM batch.trigger_runtime_state
-  WHERE job_definition_id IN (SELECT id FROM targets)
-)
-DELETE FROM batch.trigger_misfire_pending p
-USING old_states s
-WHERE p.trigger_runtime_state_id = s.id;
-
-DELETE FROM batch.trigger_runtime_state
-WHERE job_definition_id IN (
-  SELECT id
-  FROM batch.job_definition
-  WHERE tenant_id = 'ta'
-    AND job_code IN ('TA_TRIGGER_STAGE6C_SCHEDULED', 'TA_TRIGGER_STAGE6C_MISFIRE')
-);
+DELETE FROM batch.trigger_misfire_pending
+WHERE tenant_id = 'ta'
+  AND job_code IN ('TA_TRIGGER_STAGE6C_SCHEDULED', 'TA_TRIGGER_STAGE6C_MISFIRE');
 
 DELETE FROM batch.trigger_request
 WHERE tenant_id = 'ta'
@@ -49,38 +30,6 @@ SET enabled = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'ta'
   AND job_code = 'TA_TRIGGER_STAGE6C_MISFIRE';
-
-WITH clock AS (
-  SELECT now() AS ts
-),
-fires AS (
-  SELECT
-    date_trunc('second', ts) + interval '2 seconds' AS scheduled_fire,
-    date_trunc('minute', ts) - interval '120 seconds' AS misfire
-  FROM clock
-),
-defs AS (
-  SELECT id, tenant_id, job_code, timezone
-  FROM batch.job_definition
-  WHERE tenant_id = 'ta'
-    AND job_code IN ('TA_TRIGGER_STAGE6C_SCHEDULED', 'TA_TRIGGER_STAGE6C_MISFIRE')
-)
-INSERT INTO batch.trigger_runtime_state (
-    job_definition_id, tenant_id, job_code, next_fire_time,
-    misfire_count, version, schedule_timezone,
-    scheduled_local_date, scheduled_local_time, fire_sequence
-)
-SELECT defs.id,
-       defs.tenant_id,
-       defs.job_code,
-       CASE WHEN defs.job_code = 'TA_TRIGGER_STAGE6C_MISFIRE' THEN fires.misfire ELSE fires.scheduled_fire END,
-       0,
-       1,
-       defs.timezone,
-       (CASE WHEN defs.job_code = 'TA_TRIGGER_STAGE6C_MISFIRE' THEN fires.misfire ELSE fires.scheduled_fire END AT TIME ZONE defs.timezone)::date,
-       (CASE WHEN defs.job_code = 'TA_TRIGGER_STAGE6C_MISFIRE' THEN fires.misfire ELSE fires.scheduled_fire END AT TIME ZONE defs.timezone)::time,
-       1
-FROM defs CROSS JOIN fires;
 
 INSERT INTO batch.trigger_request (
     tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,

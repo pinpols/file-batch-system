@@ -39,7 +39,6 @@
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |
 | `batch.console.security.rate-limit.file-op-user-limit-per-minute` | console-api | **60** | **60** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE`；`/api/console/files/` 子树（下载/错误导出/归档/重派/到达组）按用户限流，fail-open；前缀可配 `file-op-path-prefixes` |
 | `batch.request-signing.enabled` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_REQUEST_SIGNING_ENABLED`；开后对 api_key 鉴权的 `/internal/tasks·workers` 写请求强制 HMAC 签名+ts+nonce 防重放，详见 §1.3。灰度须先升级 SDK（`BATCH_SDK_REQUEST_SIGNING_ENABLED=true`）再开服务端 |
-| `batch.trigger.scheduler-impl` | trigger | **wheel**（时间轮，2026-04-26 起默认；旧默认 quartz） | **wheel** | 🟡 中 | `BATCH_TRIGGER_SCHEDULER_IMPL`=wheel/quartz；`wheel` 时 Quartz Scheduler `autoStartup=false` 让位时间轮，设 `quartz` 回退旧调度器，详见 [`quartz-replacement-design.md`](../architecture/quartz-replacement-design.md) |
 | `batch.storage.backend` | orchestrator + 所有 worker + console | **s3**（`matchIfMissing`，S3 协议对象存储 MinIO/OSS/COS） | **s3** | 🟡 中 | `BATCH_STORAGE_BACKEND`=s3/filesystem；`filesystem` 时用 `batch.storage.filesystem.root` 本地目录并装配 console presign 直发端点，仅单机/测试用 |
 | `batch.sensor.enabled` | orchestrator | **true**（`matchIfMissing`，ADR-028 Sensor 轮询调度总开关） | **true** | 🟢 低 | `BATCH_SENSOR_ENABLED`；false 时 `SensorPollScheduler` 不调度（SPI bean 仍可人工/测试调用），不影响已有 WAIT 节点数据。注:Kafka offset sensor 另有 `batch.sensor.kafka-offset.enabled`（默认 true） |
 
@@ -236,7 +235,7 @@ docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 --list | 
 
 **Quartz 当前部署形态**：JobStore 表（11 张 `QRTZ_*`）落在 `batch_platform.quartz` schema，与业务表共享主 PG 实例。当前业务量级（< 100 万 fire/天）下完全够用。
 
-**演进路径**：业务量级接近 1000 万 fire/天 拐点时，**直接换时间轮**（Netty `HashedWheelTimer` + 滑动窗口扫库 + ShedLock），跳过"独立库"中间过渡。完整方案见 [`docs/architecture/quartz-replacement-evaluation.md`](../architecture/quartz-replacement-evaluation.md)。
+调度器不再作为功能开关暴露。`batch-trigger` 统一使用 Quartz JDBC JobStore；变更调度实现必须通过新的 ADR 和数据迁移方案实施。
 
 ---
 

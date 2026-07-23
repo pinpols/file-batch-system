@@ -25,14 +25,6 @@ class TriggerMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTe
         "TriggerOutboxEventMapper#markPublishing",
         "TriggerOutboxEventMapper#markPublished",
         "TriggerOutboxEventMapper#markFailed",
-        "TriggerOutboxEventMapper#resetStalePublishing",
-        // 触发运行态调度器:按全局 id(+version CAS)认领/推进;releaseStaleMarkers 为跨租僵尸标记 reaper;
-        // deleteByJobDefinitionId 为父 job_definition 删除时的级联(父定义已按 tenant 校验)
-        "TriggerRuntimeStateMapper#claimForSchedule",
-        "TriggerRuntimeStateMapper#advanceAfterFire",
-        "TriggerRuntimeStateMapper#deferForReadiness",
-        "TriggerRuntimeStateMapper#releaseStaleMarkers",
-        "TriggerRuntimeStateMapper#rescheduleNextFireTime",
-        "TriggerRuntimeStateMapper#deleteByJobDefinitionId");
+        "TriggerOutboxEventMapper#resetStalePublishing");
   }
 }

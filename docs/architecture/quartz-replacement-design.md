@@ -1,4 +1,4 @@
-> 注:本文为实施前时点快照,wheel scheduler 现已落地并切为默认,以代码与 ADR-033 为准。
+> 状态：**Superseded**。Wheel 运行路径已于 2026-07-23 移除，当前统一使用 Quartz JDBC JobStore。本文仅保留为历史设计记录。
 
 # Quartz 替换为时间轮 — 生产级实施设计
 

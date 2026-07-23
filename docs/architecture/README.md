@@ -17,7 +17,7 @@
 | 07 | [workflow-dependency-guide.md](./workflow-dependency-guide.md) | DAG / GATEWAY / joinMode (ALL / ANY / N_OF) / CONDITION 边的编排指南 | 配 Workflow 前 |
 | 08 | [scalability-assessment.md](./scalability-assessment.md) | 千万级承载力评估（绿/黄/红 + 改造路线图，2026-04-25） | 容量规划 / 上量评估 |
 | 09 | [rework-classification.md](./rework-classification.md) | scalability 评估的"改什么"分类（代码 / 配置 / 数据 / 运维 / SQL / 部署 / 文档） | 决定哪些项目立项、哪些当下办 |
-| 10 | [quartz-replacement-design.md](./quartz-replacement-design.md) | Quartz → HashedWheelTimer 生产级实施设计 | 调度器选型 / 上线 |
+| 10 | [quartz-replacement-design.md](./quartz-replacement-design.md) | 已撤销的 Quartz → Wheel 实施设计 | 历史决策 |
 | 11 | [quartz-replacement-evaluation.md](./quartz-replacement-evaluation.md) | Quartz 替换可行性评估 + 落地路径 | 同上，看决策上下文 |
 | 12 | [pipeline-vs-workflow-boundary.md](./pipeline-vs-workflow-boundary.md) | `pipeline_*` 与 `workflow_*` 职责边界（命名相似但不重叠） | 看到 pipeline / workflow 表名困惑时 |
 | 13 | [governance-tables-boundary.md](./governance-tables-boundary.md) | `config_approval` vs `approval_command` / `subscription_rule` vs `alert_routing_config` 职责边界 | 看到 governance 表对疑似重叠时 |

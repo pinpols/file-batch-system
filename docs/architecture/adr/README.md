@@ -40,7 +40,7 @@
 | 030 | [ADR-030-content-verifier-spi.md](./ADR-030-content-verifier-spi.md)                     | 产物内容验收 SPI：`ContentVerifier` + `ContentVerifierRegistry` + Micrometer Timer/Counter；首发实现 ExportFileNonEmptyVerifier；stage hot path 接入由后续 PR 按需做（Accepted）   |
 | 031 | [ADR-031-dual-track-pagination.md](./ADR-031-dual-track-pagination.md)                   | 双轨分页：列表用 offset 分页(可跳页),大数据导出 / 深翻用 cursor(keyset)分页,二者并存按场景选（Accepted） |
 | 032 | [ADR-032-four-role-rbac-redesign.md](./ADR-032-four-role-rbac-redesign.md)               | 控制台 4 角色 RBAC 重设计:平台 vs 租户 × 写 vs 只读 二维矩阵(`ROLE_ADMIN`/`ROLE_AUDITOR`/`ROLE_TENANT_ADMIN`/`ROLE_TENANT_USER`);`ROLE_USER` 保留为兼容常量,新代码禁用（Accepted） |
-| 033 | [ADR-033-quartz-to-wheel-scheduler.md](./ADR-033-quartz-to-wheel-scheduler.md)           | 调度器由 Quartz 替换为时间轮(HashedWheelTimer),去掉 Quartz 表 / 线程池开销,贴合海量短延时定时触发（Accepted） |
+| 033 | [ADR-033-quartz-to-wheel-scheduler.md](./ADR-033-quartz-to-wheel-scheduler.md)           | Quartz 替换为时间轮方案（Superseded，运行路径已移除） |
 | 034 | [ADR-034-cap-positioning.md](./ADR-034-cap-positioning.md)                               | CAP 定位:核心调度链路 = **CP**(任务 CLAIM / 状态机 / outbox / RBAC / 租户 / 审批必须强一致,牺牲可用),只读 / 观测层 = **AP**(Dashboard / trigger list 等走 `DownstreamFallback` 降级,允许 stale)。例外 + 落地机制 + 何时升级见 ADR(Accepted) |
 | 035 | [ADR-035-tenant-self-hosted-worker-sdk.md](./ADR-035-tenant-self-hosted-worker-sdk.md)   | 平台定位收敛为「纯调度面」,租户 worker 走 `batch-worker-sdk` 自托管:调度面(trigger/orchestrator/console)+ 平台内建 worker 代运维,租户进程引 SDK 只经 HTTP + Kafka 接调度（Accepted） |
 | 036 | [ADR-036-sdk-task-handler-templates.md](./ADR-036-sdk-task-handler-templates.md)         | SDK 在 `SdkTaskHandler` 之上提供 5 个抽象基类(Atomic/Import/Export/Process/Dispatch),template method 锁执行序(`final execute` + protected 钩子),租户只填钩子（Accepted） |

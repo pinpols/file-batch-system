@@ -94,8 +94,7 @@ public class DefaultTriggerService implements TriggerService {
       return skipScheduled(command);
     }
     if (!upstreamReady(command, launchRequest)) {
-      // ADR-043:依赖未就绪不再返回 skipped 直接丢批,改抛 UpstreamNotReadyException,
-      // 由 wheel 调度器走 readiness defer(窗口内同 bizDate 重检 / 超窗 give-up),防日批晚到上游丢当天。
+      // ADR-043:依赖未就绪不返回 skipped，QuartzLaunchJob 会用 one-shot trigger 延迟重检。
       throw new UpstreamNotReadyException(
           launchRequest.tenantId(),
           command.descriptor().getJobCode(),
@@ -328,11 +327,10 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private void linkMisfirePending(ScheduledTriggerCommand command, TriggerRequestEntity request) {
-    if (command == null || command.triggerRuntimeStateId() == null || request == null) {
+    if (command == null || request == null) {
       return;
     }
     TriggerMisfirePendingEntity pending = new TriggerMisfirePendingEntity();
-    pending.setTriggerRuntimeStateId(command.triggerRuntimeStateId());
     pending.setTenantId(command.descriptor().getTenantId());
     pending.setJobCode(command.descriptor().getJobCode());
     pending.setScheduledFireTime(command.fireTime());
@@ -340,8 +338,10 @@ public class DefaultTriggerService implements TriggerService {
       triggerMisfirePendingMapper.insertPending(pending);
     } catch (DuplicateKeyException dup) {
       pending =
-          triggerMisfirePendingMapper.selectByRuntimeStateAndFireTime(
-              command.triggerRuntimeStateId(), command.fireTime());
+          triggerMisfirePendingMapper.selectBySchedule(
+              command.descriptor().getTenantId(),
+              command.descriptor().getJobCode(),
+              command.fireTime());
     }
     if (pending != null && pending.getId() != null && request.getId() != null) {
       triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
@@ -463,7 +463,7 @@ public class DefaultTriggerService implements TriggerService {
     String status = tenantStatusMapper.selectStatus(tenantId);
     if ("SUSPENDED".equals(status)) {
       // R-arch-audit-2026-05-23 P1: 用 ResultCode.TENANT_SUSPENDED 替代 BUSINESS_ERROR + 字符串后缀，
-      // 让上游（QuartzLaunchJob / Wheel fire）能通过 getCode() 枚举比较识别租户暂停语义，
+      // 让 QuartzLaunchJob 能通过 getCode() 枚举比较识别租户暂停语义，
       // 不再依赖脆弱的 e.getMessage().contains("tenant is suspended")。
       throw BizException.of(
           ResultCode.TENANT_SUSPENDED,

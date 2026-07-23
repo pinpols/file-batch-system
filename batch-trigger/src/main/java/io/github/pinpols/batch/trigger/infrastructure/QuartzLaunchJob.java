@@ -10,15 +10,21 @@ import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
+import org.quartz.SchedulerException;
+import org.quartz.SimpleScheduleBuilder;
+import org.quartz.TriggerBuilder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -54,11 +60,16 @@ public class QuartzLaunchJob implements Job {
   public static final String DEPENDS_ON_JOB_CODE = "dependsOnJobCode";
   public static final String CATCH_UP_POLICY = "catchUpPolicy";
   public static final String CATCH_UP_MAX_DAYS = "catchUpMaxDays";
+  public static final String MISFIRE_ORIGINAL_FIRE_TIME = "misfireOriginalFireTime";
+  static final String READINESS_ORIGINAL_FIRE_TIME = "readinessOriginalFireTime";
+  static final String READINESS_DEFERRED_SINCE = "readinessDeferredSince";
+  static final String READINESS_TRIGGER_TYPE = "readinessTriggerType";
 
   private final TriggerService triggerService;
   private final MisfireHandler misfireHandler;
   private final TriggerRuntimeProperties triggerRuntimeProperties;
   private final TriggerRegistrationService triggerRegistrationService;
+  private final MeterRegistry meterRegistry;
 
   @Override
   public void execute(JobExecutionContext context) throws JobExecutionException {
@@ -75,9 +86,10 @@ public class QuartzLaunchJob implements Job {
     descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
     descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
     descriptor.setEnabled(true);
-    Instant scheduledFireTime = context.getScheduledFireTime().toInstant();
+    Instant scheduledFireTime = resolveScheduledFireTime(context, jobDataMap);
     Instant actualFireTime = context.getFireTime().toInstant();
-    if (requiresManualApproval(descriptor, scheduledFireTime, actualFireTime)) {
+    boolean readinessRetry = jobDataMap.containsKey(READINESS_ORIGINAL_FIRE_TIME);
+    if (!readinessRetry && requiresManualApproval(descriptor, scheduledFireTime, actualFireTime)) {
       misfireHandler.handle(descriptor.getTenantId() + ":" + descriptor.getJobCode());
       triggerService.createPendingCatchUp(
           new ScheduledTriggerCommand(
@@ -88,7 +100,10 @@ public class QuartzLaunchJob implements Job {
               IdGenerator.newTraceId()));
       return;
     }
-    TriggerType triggerType = resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
+    TriggerType triggerType =
+        readinessRetry
+            ? TriggerType.valueOf(jobDataMap.getString(READINESS_TRIGGER_TYPE))
+            : resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
     try {
       triggerService.launchScheduled(
           new ScheduledTriggerCommand(
@@ -110,6 +125,78 @@ public class QuartzLaunchJob implements Job {
       } else {
         throw new JobExecutionException(e, false);
       }
+    } catch (UpstreamNotReadyException e) {
+      scheduleReadinessRetry(
+          context, jobDataMap, scheduledFireTime, actualFireTime, triggerType, e);
+    }
+  }
+
+  private Instant resolveScheduledFireTime(JobExecutionContext context, JobDataMap jobDataMap) {
+    if (jobDataMap.containsKey(READINESS_ORIGINAL_FIRE_TIME)) {
+      return Instant.ofEpochMilli(jobDataMap.getLongValue(READINESS_ORIGINAL_FIRE_TIME));
+    }
+    if (jobDataMap.containsKey(MISFIRE_ORIGINAL_FIRE_TIME)) {
+      return Instant.ofEpochMilli(jobDataMap.getLongValue(MISFIRE_ORIGINAL_FIRE_TIME));
+    }
+    return context.getScheduledFireTime().toInstant();
+  }
+
+  private void scheduleReadinessRetry(
+      JobExecutionContext context,
+      JobDataMap jobDataMap,
+      Instant originalFireTime,
+      Instant actualFireTime,
+      TriggerType triggerType,
+      UpstreamNotReadyException cause)
+      throws JobExecutionException {
+    Instant deferredSince =
+        jobDataMap.containsKey(READINESS_DEFERRED_SINCE)
+            ? Instant.ofEpochMilli(jobDataMap.getLongValue(READINESS_DEFERRED_SINCE))
+            : actualFireTime;
+    Duration waited = Duration.between(deferredSince, actualFireTime);
+    if (waited.getSeconds() >= triggerRuntimeProperties.getReadinessWindowSeconds()) {
+      meterRegistry.counter("batch.trigger.quartz.readiness.timeout").increment();
+      log.error(
+          "upstream readiness window exceeded, giving up scheduled fire: tenantId={}, jobCode={},"
+              + " dependsOn={}, bizDate={}, originalFireTime={}, waitedSeconds={}",
+          cause.getTenantId(),
+          cause.getJobCode(),
+          cause.getDependsOnJobCode(),
+          cause.getBizDate(),
+          originalFireTime,
+          waited.getSeconds());
+      return;
+    }
+
+    JobDataMap retryData = new JobDataMap(jobDataMap);
+    retryData.put(READINESS_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
+    retryData.put(READINESS_DEFERRED_SINCE, deferredSince.toEpochMilli());
+    retryData.put(READINESS_TRIGGER_TYPE, triggerType.name());
+    Instant retryAt =
+        actualFireTime.plusSeconds(triggerRuntimeProperties.getReadinessRecheckIntervalSeconds());
+    org.quartz.Trigger retryTrigger =
+        TriggerBuilder.newTrigger()
+            .withIdentity("readiness-retry-" + UUID.randomUUID(), TriggerSchedulerFacade.JOB_GROUP)
+            .forJob(context.getJobDetail().getKey())
+            .usingJobData(retryData)
+            .startAt(java.util.Date.from(retryAt))
+            .withSchedule(
+                SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
+            .build();
+    try {
+      context.getScheduler().scheduleJob(retryTrigger);
+      meterRegistry.counter("batch.trigger.quartz.readiness.deferred").increment();
+      log.info(
+          "upstream not ready, scheduled Quartz readiness retry: tenantId={}, jobCode={},"
+              + " dependsOn={}, bizDate={}, retryAt={}",
+          cause.getTenantId(),
+          cause.getJobCode(),
+          cause.getDependsOnJobCode(),
+          cause.getBizDate(),
+          retryAt);
+    } catch (SchedulerException schedulerException) {
+      throw new JobExecutionException(
+          "failed to schedule upstream readiness retry", schedulerException);
     }
   }
 

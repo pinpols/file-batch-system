@@ -16,10 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 // 排除 UserDetailsServiceAutoConfiguration:trigger 走 InternalSecretFilter 共享密钥认证,
 // 不挂任何 UserDetailsManager bean。autoconfig 会在缺省时生成 "Using generated security
 // password: ..." 启动 WARN — 噪声且可能误导。
-// @EnableScheduling: HashedWheelTriggerScheduler / WheelTriggerReconciler / TriggerOutboxRelay 等
-// 周期任务用 Spring @Scheduled, 缺这个注解 fixedDelay/cron 不会被代理 → 只 @EventListener
-// initial run 跑一次后再不触发。docker 实测发现 wheel reconciler 5h 内只跑了 1 次 (启动时),
-// PROBE FIXED_RATE job 永不进 trigger_runtime_state → 永不 fire。补上即可。
+// @EnableScheduling:TriggerReconciler / TriggerOutboxRelay 等周期任务使用 Spring @Scheduled。
 @SpringBootApplication(
     scanBasePackages = "io.github.pinpols.batch",
     exclude = UserDetailsServiceAutoConfiguration.class)

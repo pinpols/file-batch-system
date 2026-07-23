@@ -4,12 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
-import io.github.pinpols.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
-import io.github.pinpols.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -30,11 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private TriggerMisfirePendingMapper mapper;
-  @Autowired private TriggerRuntimeStateMapper runtimeStateMapper;
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  private long jobDefId;
-  private long runtimeStateId;
   private String tenantId;
   private String jobCode;
 
@@ -47,29 +42,6 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
             + " conflict do nothing",
         tenantId,
         tenantId);
-    jobDefId =
-        jdbcTemplate.queryForObject(
-            """
-            insert into batch.job_definition (
-              tenant_id, job_code, job_name, job_type,
-              schedule_type, schedule_expr, timezone,
-              enabled, created_by, updated_by
-            ) values (?, ?, ?, 'GENERAL',
-              'CRON', '0 0 * * * ?', 'Asia/Shanghai',
-              true, 'it', 'it')
-            returning id
-            """,
-            Long.class,
-            tenantId,
-            jobCode,
-            jobCode);
-    TriggerRuntimeStateEntity rs = new TriggerRuntimeStateEntity();
-    rs.setJobDefinitionId(jobDefId);
-    rs.setTenantId(tenantId);
-    rs.setJobCode(jobCode);
-    rs.setNextFireTime(BatchDateTimeSupport.utcNow().plusSeconds(60));
-    runtimeStateMapper.insertOnReconcile(rs);
-    runtimeStateId = rs.getId();
   }
 
   @Test
@@ -192,7 +164,6 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   private TriggerMisfirePendingEntity newPending(Instant scheduledFireTime) {
     TriggerMisfirePendingEntity e = new TriggerMisfirePendingEntity();
-    e.setTriggerRuntimeStateId(runtimeStateId);
     e.setTenantId(tenantId);
     e.setJobCode(jobCode);
     e.setScheduledFireTime(scheduledFireTime);

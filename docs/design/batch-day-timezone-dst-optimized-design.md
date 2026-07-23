@@ -16,8 +16,8 @@
 - `business_calendar.sla_offset_min`
 - `batch_day_instance`
 - `batch_day_instance.timezone_snapshot`
-- `trigger_runtime_state.next_fire_time` 使用 `timestamptz`
-- Java 侧 `trigger_runtime_state.nextFireTime` 使用 `Instant`
+- Quartz JDBC JobStore 使用 epoch millis 保存下一次触发时间
+- Java 触发链路使用 `Instant` 传递计划时间
 - `BatchTimezoneProvider`
 - `CalendarBizDateResolver`
 - `BatchDayCutoffScheduler`
@@ -38,7 +38,7 @@
 ```text
 事件时间：Instant / timestamptz，统一按 UTC 语义存储和比较
 业务日期：LocalDate，由 business_calendar.timezone + cutoff_time 裁决
-调度时间：cron + schedule timezone -> Instant，落 trigger_runtime_state.next_fire_time
+调度时间：cron + schedule timezone -> Instant，由 Quartz JDBC JobStore 持久化
 批量日：batch_day_instance 是运行态一等对象，保存 timezone_snapshot
 worker：只消费 orchestrator 下发的 bizDate / batchDayId，不自行计算业务日期
 console：只展示转换后的时间，不参与裁决
@@ -72,7 +72,7 @@ business_calendar.timezone
 business_calendar.cutoff_time
 batch_day_instance.timezone_snapshot
 job_instance.calendar_code 快照
-trigger_runtime_state.next_fire_time
+Quartz `QRTZ_TRIGGERS.NEXT_FIRE_TIME`
 CalendarBizDateResolver
 BatchTimezoneProvider
 BatchDayCutoffScheduler
@@ -145,7 +145,7 @@ timezone_snapshot
 
 | 能力 | 当前状态 | 当前依据 | 主要缺口 |
 |---|---|---|---|
-| 调度初始化为 `trigger_runtime_state.next_fire_time` | 已具备 | `trigger_runtime_state.next_fire_time`、wheel reconciler；V104 `schedule_timezone / scheduled_local_date / scheduled_local_time / fire_sequence` cron 路径回写 | 无 |
+| Quartz 调度初始化 | 已具备 | `QRTZ_TRIGGERS.NEXT_FIRE_TIME` + `TriggerReconciler` | 无 |
 | 触发后创建 `job_instance / workflow_run / partition / task` | 已具备 | `DefaultLaunchService` 主链路 | 无 |
 | `bizDate` 按 `timezone + cutoff_time` 计算 | 已具备 | `CalendarBizDateResolver`、`business_calendar.timezone/cutoff_time`；DST 策略由 V102 + `BatchDayTimePolicyResolver` 显式化 | 无 |
 | `batch_day_instance` 建模 | 已具备 | V32 / V62 / V101 / V102 / V107，含 `timezone_snapshot`、`dst_policy_snapshot`、治理字段、`SETTLING` 中间态、`version` | 无 |
@@ -812,7 +812,10 @@ scheduled_fire_time_utc
 
 ### 9.3 建议写入数据库审计字段
 
-`trigger_runtime_state` 当前已有 `next_fire_time`，但缺少本地计划审计信息。建议后续增加：
+> 历史说明：以下字段曾随 Wheel 运行态落入 `trigger_runtime_state`。当前调度统一由 Quartz
+> JDBC JobStore 承担，该表不再是运行路径；本段只用于解释 V104 的历史设计。
+
+`trigger_runtime_state` 曾增加以下本地计划审计字段：
 
 ```sql
 ALTER TABLE batch.trigger_runtime_state
@@ -946,12 +949,13 @@ misfireCount
 
 ### Phase 5：DST 策略显式化
 
-状态：cutoff 侧 DST 策略已显式化，trigger cron 审计字段和 Console 展示未接入。提交 `f34b2828`。
+状态：cutoff 侧 DST 策略已显式化；V104 的 trigger runtime-state 审计字段已随 Wheel
+运行路径退役，Quartz 状态由管理接口展示。提交 `f34b2828`。
 
 ```text
 1. 固化默认 DST 策略；
 2. 必要时增加 dst_gap_policy / dst_overlap_policy；
-3. trigger_runtime_state 增加 schedule timezone 和 scheduled local 字段；
+3. Quartz JobDataMap 保存 schedule timezone，管理接口展示 prev/next fire；
 4. Console 展示 DST 调整结果。
 ```
 
@@ -1040,7 +1044,7 @@ DDL 迁移：
 | `V101__batch_day_operation_governance.sql` | `batch_day_instance` 治理字段（`blocked_reason / manual_release_* / skip_* / frozen_* / closed_*`）、状态扩展 `SKIPPED / MANUAL_RELEASED` |
 | `V102__batch_day_dst_policy.sql` | `business_calendar.dst_gap_policy / dst_overlap_policy`、`batch_day_instance.dst_policy_snapshot` |
 | `V103__job_instance_rerun_config_snapshot.sql` | `job_definition_version`、`job_instance.rerun_policy_snapshot`、`params_snapshot` 增加 job definition version |
-| `V104__trigger_runtime_state_local_audit.sql` | `trigger_runtime_state` 增 `schedule_timezone / scheduled_local_date / scheduled_local_time / fire_sequence` |
+| `V104__trigger_runtime_state_local_audit.sql` | 历史 Wheel 审计字段；迁移保留，现役 Quartz 不再读写 |
 | `V105__batch_day_operation_audit.sql` | 新建独立 `batch_day_operation_audit` 表 + 索引 |
 | `V106__job_definition_group_code.sql` | `job_definition.job_group_code` + partial index, 给 `SAME_JOB_GROUP` 用 |
 | `V107__batch_day_settling_status.sql` | `ck_batch_day_instance_status` 加入 `SETTLING` 中间态 |
@@ -1058,7 +1062,7 @@ DDL 迁移：
 | `BatchDaySettleScheduler` | 两阶段 settle：`claimSettling` (tx1) → `finalizeSettling` (tx2)，崩溃中段 SETTLING 行下次扫描幂等恢复 |
 | `BatchDayWaitingLaunchMapper` | 等待队列读写，前一日放行后由 gate 触发重放 |
 | `JobSlaScheduler` | SLA escalation 重试 + `BATCH_DAY_LATE_*` / `BATCH_DAY_GATE_*` alert event；`escalation-delay-seconds=0` 关闭 |
-| `WheelTriggerReconciler` / `HashedWheelTriggerScheduler` | cron 计算路径回写 V104 本地计划字段；DST overlap 二次触发 fire_sequence 累加 |
+| `TriggerSchedulerFacade` / `QuartzLaunchJob` | Quartz CronExpression + TimeZone 计算下一触发时间；运行时按 scheduled fire time 推导 bizDate |
 | `RerunRequest` (console-api) → `CompensationSubmitCommand` → `DefaultCompensationService.applyRerunPolicyParams` → `DefaultLaunchService.buildRerunPolicySnapshot` | `resultPolicy / configVersionPolicy / configVersion` 显式入参 + 跨字段校验 + 透传到 `rerun_policy_snapshot` |
 
 worker 路径整改：
@@ -1154,7 +1158,7 @@ CalendarBizDateResolverTest                      (cutoff 跨时区)
 DefaultLaunchServiceTest                         (rerun_policy_snapshot)
 DefaultCompensationServiceTest                   (rerun policy 透传)
 JobSlaSchedulerTest                              (escalation 重试 + alert event)
-TriggerRuntimeStateMapperIntegrationTest         (V104 本地计划字段)
+QuartzJdbcClusterIntegrationTest                 (Quartz JDBC 集群状态)
 ```
 
 全 reactor 验收敛径：`mvn -pl batch-orchestrator,batch-trigger,batch-console-api,batch-common -am -DskipITs test` 全 PASS（414/414，2026-05-06）。
@@ -1165,7 +1169,7 @@ TriggerRuntimeStateMapperIntegrationTest         (V104 本地计划字段)
 trigger 触发到 launch 的耗时（gate 引入了等待表写路径）
 batch_day_waiting_launch 积压量（释放调度器是否落后）
 batch_day_instance.day_status 分布（FROZEN / SKIPPED / MANUAL_RELEASED 的占比异常波动）
-DST 切换日的 cutoff_at / next_fire_time 漂移（gap / overlap 处理是否符合策略）
+DST 切换日的 cutoff_at / Quartz nextFireTime 漂移（gap / overlap 处理是否符合策略）
 ```
 
 ### 14.5 文档维护

@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Param;
  * <p>典型流程:
  *
  * <ol>
- *   <li>时间轮发现 misfire 且 policy=MANUAL_APPROVAL → {@link #insertPending}
+ *   <li>Quartz 发现 misfire 且 policy=MANUAL_APPROVAL → {@link #insertPending}
  *   <li>运维 console 审批通过 → {@link #approve},然后业务侧补 fire 并 {@link #linkCatchUpRequest}
  *   <li>运维拒绝 → {@link #reject}
  *   <li>周期任务扫超期 PENDING → {@link #markExpired}
@@ -20,7 +20,7 @@ import org.apache.ibatis.annotations.Param;
 public interface TriggerMisfirePendingMapper {
 
   /**
-   * INSERT 一条 PENDING 记录;UNIQUE(trigger_runtime_state_id, scheduled_fire_time) 保证幂等。
+   * INSERT 一条 PENDING 记录;UNIQUE(tenant_id, job_code, scheduled_fire_time) 保证幂等。
    *
    * @return 影响行数(1=新建,0=已存在,撞键时由调用方捕获 DuplicateKey)
    */
@@ -28,8 +28,9 @@ public interface TriggerMisfirePendingMapper {
 
   TriggerMisfirePendingEntity selectById(@Param("id") Long id);
 
-  TriggerMisfirePendingEntity selectByRuntimeStateAndFireTime(
-      @Param("triggerRuntimeStateId") Long triggerRuntimeStateId,
+  TriggerMisfirePendingEntity selectBySchedule(
+      @Param("tenantId") String tenantId,
+      @Param("jobCode") String jobCode,
       @Param("scheduledFireTime") Instant scheduledFireTime);
 
   /** 待审列表(给 console UI 展示用)。 */

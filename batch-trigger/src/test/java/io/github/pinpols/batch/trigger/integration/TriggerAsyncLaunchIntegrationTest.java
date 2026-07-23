@@ -68,7 +68,6 @@ import org.springframework.boot.test.context.SpringBootTest;
       // Quartz 不在测试中真起调度,留 jdbc store 但不 fire
       "spring.quartz.job-store-type=jdbc",
       "spring.quartz.jdbc.initialize-schema=always",
-      "batch.trigger.scheduler-impl=wheel",
     })
 class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
 

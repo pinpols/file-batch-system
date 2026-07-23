@@ -7,7 +7,7 @@
 ```
 file-batch-system/
 ├── batch-common/                           基础设施 / Spring AutoConfiguration / 共享 DTO
-├── batch-trigger/                          调度触发(默认 wheel,opt-in Quartz + 业务日历)→ trigger_outbox_event
+├── batch-trigger/                          Quartz 调度触发 + 业务日历 → trigger_outbox_event
 ├── batch-orchestrator/                     状态主机:CLAIM/EXECUTE/REPORT 闭环 + workflow 编排
 ├── batch-worker/                           worker 聚合器(aggregator + 各 worker parent;artifactId 不变)
 │   ├── core/                               Worker SPI 基础(pipeline stages 抽象;artifactId 仍为 batch-worker-core)
@@ -66,7 +66,7 @@ batch-e2e-tests
 | 模块 | 主要 package | 一句话职责 |
 |---|---|---|
 | `batch-common` | `common/{config,events,outbox,security,testing,...}` | 跨模块复用:AutoConfig、Outbox 抽象、RLS、Timezone、i18n、Testcontainers 基类 |
-| `batch-trigger` | `trigger/{wheel,quartz,calendar,outbox}` | 调度(默认 wheel,opt-in Quartz)→ `trigger_outbox_event`(orchestrator 拉取后启动 instance) |
+| `batch-trigger` | `trigger/{quartz,calendar,outbox}` | Quartz 调度 → `trigger_outbox_event`（orchestrator 消费后启动 instance） |
 | `batch-orchestrator` | `orchestrator/{application,domain,infrastructure,controller}` | **状态主机**:CLAIM / EXECUTE / REPORT 状态流转;workflow DAG 编排;outbox 投递 |
 | `batch-worker/core`(artifactId `batch-worker-core`) | `worker/core/{pipeline,stage,registry}` | Worker SPI 抽象、PipelineStage 接口、StepRegistry |
 | `batch-worker/import`(artifactId `batch-worker-import`) | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 5 stages(Preprocess/Validate/Load/...) |

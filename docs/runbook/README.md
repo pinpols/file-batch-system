@@ -43,7 +43,6 @@
 | # | 文件 | 作用 |
 |---|---|---|
 | 15 | [feature-switches.md](./feature-switches.md) | Phase 2 全部能力开关（quota / cache / replica / kafka / quartz）|
-| 16 | [wheel-scheduler-rollout.md](./wheel-scheduler-rollout.md) | Quartz → HashedWheelTimer 灰度上线 SOP |
 | 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED）切换 |
 
 ### 五、观测 / 安全 / 验证 / CI
@@ -68,7 +67,6 @@
 | 上 prod | 25（凭据矩阵:逐行核对必配 + prod fail-fast 项）→ 11（部署前 checklist） → 10 → 18 → 02 |
 | 救火（长期停滞 / 数据异常） | 02 → 03 → 04 |
 | 容量评估 / 上量 | [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) → 11 → 12 → 13 |
-| Quartz → Wheel 切换 | 16 → 15 |
 
 ## 与其他子目录的分工
 

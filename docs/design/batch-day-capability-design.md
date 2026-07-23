@@ -10,10 +10,10 @@
 
 服务启动后，`trigger reconciler` 会把 `job_definition` 同步成调度运行态。
 
-默认 wheel 模式会在启动时和每 30 秒进行一次对账，给启用的定时作业生成：
+Quartz `TriggerReconciler` 会在启动时和每 30 秒进行一次对账，把启用的定时作业注册到：
 
 ```text
-trigger_runtime_state.next_fire_time
+quartz.QRTZ_TRIGGERS.NEXT_FIRE_TIME
 ```
 
 这一步的含义是：

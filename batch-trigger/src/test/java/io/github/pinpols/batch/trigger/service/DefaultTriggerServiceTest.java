@@ -239,7 +239,7 @@ class DefaultTriggerServiceTest {
   @Test
   void launchScheduled_upstreamNotReady_throwsUpstreamNotReadyException() {
     // ADR-043:声明了 dependsOn 且上游未就绪 → 不再返回 skipped 丢批,改抛 UpstreamNotReadyException,
-    // 由 wheel 走 readiness defer。
+    // 由 QuartzLaunchJob 创建 one-shot retry trigger。
     TriggerDescriptor descriptor = scheduledDescriptor();
     descriptor.setDependsOnJobCode("UPSTREAM_SETTLE");
     ScheduledTriggerCommand command =
@@ -312,8 +312,7 @@ class DefaultTriggerServiceTest {
             Instant.parse("2026-03-28T18:00:00Z"),
             TriggerType.CATCH_UP,
             "req-cu",
-            "trace-cu",
-            500L);
+            "trace-cu");
     LaunchRequest launchRequest =
         new LaunchRequest(
             "t1",

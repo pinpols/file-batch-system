@@ -11,7 +11,7 @@
 
 `batch-trigger` 是任务调度入口,负责:
 
-- Quartz / Hashed-wheel 触发器到点 fire
+- Quartz 触发器到点 fire
 - 接收手工触发 / EVENT 触发
 - Misfire 处理(应触发但未触发的回填)
 
@@ -40,7 +40,7 @@
 ### 数据流
 
 ```
-[Quartz / wheel fires]
+[Quartz fires]
         │
         ▼
 DefaultTriggerService.persistAndForward()

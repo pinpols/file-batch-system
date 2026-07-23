@@ -90,11 +90,11 @@
 
 | 维度 | 系统现状 | 实现位置 |
 |---|---|---|
-| SCHEDULED | ✅ `TriggerType.SCHEDULED` + Quartz / HashedWheelTimer 双引擎 | `batch-trigger/.../infrastructure/QuartzLaunchJob.java` + wheel 实现 |
+| SCHEDULED | ✅ `TriggerType.SCHEDULED` + Quartz JDBC JobStore | `batch-trigger/.../infrastructure/QuartzLaunchJob.java` |
 | EVENT | ✅ `TriggerType.EVENT` | `TriggerController` |
 | MANUAL / API | ✅ `TriggerType.MANUAL` / `TriggerType.API` | `TriggerController` |
 | **DEPENDENCY**（跨 workflow） | ⚠️ workflow 内部节点 dependency 通过 `workflow_edge` 表达；**跨 workflow 的依赖触发**没有专门的 trigger 通道 | — |
-| CATCH_UP | ✅ + 漂移检测（drift detection） + 节流（`CatchUpThrottle`） + 审批（MANUAL_APPROVAL / AUTO / NONE 三策略） | `batch-trigger/wheel/CatchUpThrottle.java` + `QuartzLaunchJob`:72-85 |
+| CATCH_UP | ✅ + 漂移检测（drift detection）+ 审批（MANUAL_APPROVAL / AUTO / NONE 三策略） | `QuartzLaunchJob` |
 | RERUN | ✅（V62 加） | DDL: `db/migration/V62__rerun_semantics_and_batch_day_cas.sql` |
 
 > 现有 6 类（API / MANUAL / EVENT / CATCH_UP / SCHEDULED / RERUN）比 PD 提的 3 类更细，**该维度已经超过最初模型**。唯一缺口是**跨 workflow 的 DEPENDENCY 触发**。

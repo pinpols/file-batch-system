@@ -11,7 +11,7 @@ import lombok.Data;
 @Data
 public class TriggerDescriptor {
 
-  /** job_definition.id;wheel reconciler 同步 trigger_runtime_state 时用,quartz 路径不读。 */
+  /** job_definition.id，供定义加载和诊断使用。 */
   private Long jobDefinitionId;
 
   private String tenantId;
