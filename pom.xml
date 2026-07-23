@@ -86,11 +86,13 @@
              - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
              - netty 4.2.13.Final → 4.2.15.Final (2026-06-10): CVE-2026-44249 IPv6 subnet filter
                bypass (netty-handler) + CVE-2026-44894 QUIC token handler (netty-codec-classes-quic)
+             - netty 4.2.15.Final → 4.2.16.Final: CVE-2026-55831/55833/56745/56816/59901
              - bcprov-jdk18on 1.81 → 1.84: CVE-2026-5598 私钥泄漏 (非常量时间比较)
-             - postgresql 42.7.10 → 42.7.11: CVE-2026-42198。 -->
-        <netty.version>4.2.15.Final</netty.version>
+             - postgresql 42.7.10 → 42.7.11: CVE-2026-42198
+             - postgresql 42.7.11 → 42.7.12: CVE-2026-54291。 -->
+        <netty.version>4.2.16.Final</netty.version>
         <bouncycastle.version>1.84</bouncycastle.version>
-        <postgresql.version>42.7.11</postgresql.version>
+        <postgresql.version>42.7.12</postgresql.version>
 
         <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
              2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4 + JDK25 是否能跑。
