@@ -20,6 +20,8 @@ public class WorkerReportOutboxProperties {
   /** 空则回退 user.home/.batch-platform/worker-report-outbox.db（仅 SQLITE）。 */
   private String sqlitePath = "";
 
+  private BackendGuard backendGuard = new BackendGuard();
+
   private long pollIntervalMillis = 5_000L;
 
   /** Poller 维度：单行最多投递尝试次数（每次尝试仍会走 HTTP 内置重试链）。 */
@@ -54,5 +56,11 @@ public class WorkerReportOutboxProperties {
       return Path.of(sqlitePath);
     }
     return Path.of(System.getProperty("user.home"), ".batch-platform", "worker-report-outbox.db");
+  }
+
+  @Data
+  public static class BackendGuard {
+    /** storage 或 PG/SQLite 定位变化时必须换用新的非空值；首次基线登记不需要。 */
+    private String cutoverId = "";
   }
 }

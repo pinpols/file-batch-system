@@ -23,7 +23,7 @@ public class ConsoleAiConfiguration {
       ObjectProvider<AnthropicChatModel> anthropicChatModel,
       ObjectProvider<OpenAiChatModel> openAiChatModel,
       ConsoleAiProperties properties) {
-    boolean openAiPreferred = "openai".equalsIgnoreCase(properties.getProvider());
+    boolean openAiPreferred = properties.getProvider() == ConsoleAiProperties.Provider.OPENAI;
     ChatModel primary =
         openAiPreferred ? openAiChatModel.getIfAvailable() : anthropicChatModel.getIfAvailable();
     if (primary != null) {

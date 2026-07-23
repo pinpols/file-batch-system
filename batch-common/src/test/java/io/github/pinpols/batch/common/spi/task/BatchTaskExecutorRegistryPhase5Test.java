@@ -5,9 +5,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 /** Phase 5:enabled-task-types 白名单过滤行为(BatchWorkerAtomicProperties)。 */
 class BatchTaskExecutorRegistryPhase5Test {
@@ -61,6 +65,23 @@ class BatchTaskExecutorRegistryPhase5Test {
     assertThat(registry.registeredTypes()).containsExactly("import");
   }
 
+  @Test
+  void canonicalEnabledTaskTypesPropertyBindsWhitelist() {
+    BatchWorkerAtomicProperties props =
+        bind(Map.of("batch.worker.atomic.enabled-task-types", "sql,http"));
+
+    assertThat(props.getEnabledTaskTypes()).containsExactlyInAnyOrder("sql", "http");
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  void legacyEnabledTypesPropertyStillBindsWhitelist() {
+    BatchWorkerAtomicProperties props =
+        bind(Map.of("batch.worker.atomic.enabled-types", "sql,http"));
+
+    assertThat(props.getEnabledTaskTypes()).containsExactlyInAnyOrder("sql", "http");
+  }
+
   // ─── helpers ────────────────────────────────────────────────────────────────
 
   private static BatchTaskExecutor stub(String type) {
@@ -80,6 +101,12 @@ class BatchTaskExecutorRegistryPhase5Test {
         return TaskResult.ok();
       }
     };
+  }
+
+  private static BatchWorkerAtomicProperties bind(Map<String, String> properties) {
+    return new Binder(new MapConfigurationPropertySource(properties))
+        .bind("batch.worker.atomic", Bindable.of(BatchWorkerAtomicProperties.class))
+        .orElseThrow(() -> new AssertionError("atomic properties were not bound"));
   }
 
   @SuppressWarnings("unchecked")

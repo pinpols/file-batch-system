@@ -1,9 +1,15 @@
 package io.github.pinpols.batch.worker.imports.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.BindException;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 class ImportScannerPropertiesTest {
 
@@ -30,7 +36,30 @@ class ImportScannerPropertiesTest {
   @Test
   @DisplayName("标记格式默认 MARKER(空标记,向后兼容);MANIFEST 模式才启用 JSON 强校验")
   void doneFileFormat_defaultsToMarker() {
-    assertThat(new ImportScannerProperties().getDoneFileFormat()).isEqualTo("MARKER");
+    assertThat(new ImportScannerProperties().getDoneFileFormat())
+        .isEqualTo(ImportScannerProperties.DoneFileFormat.MARKER);
+  }
+
+  @Test
+  @DisplayName("MANIFEST 与历史 JSON 配置都启用 manifest 强校验")
+  void doneFileFormat_manifestAndJsonAreCompatible() {
+    assertThat(bindDoneFileFormat("MANIFEST").getDoneFileFormat().isManifest()).isTrue();
+    assertThat(bindDoneFileFormat("JSON").getDoneFileFormat().isManifest()).isTrue();
+  }
+
+  @Test
+  @DisplayName("标记格式支持大小写不敏感绑定")
+  void doneFileFormat_bindingIsCaseInsensitive() {
+    assertThat(bindDoneFileFormat("marker").getDoneFileFormat())
+        .isEqualTo(ImportScannerProperties.DoneFileFormat.MARKER);
+  }
+
+  @Test
+  @DisplayName("未知标记格式在配置绑定阶段显式失败")
+  void doneFileFormat_unknownValueFailsBinding() {
+    assertThatThrownBy(() -> bindDoneFileFormat("JSNO"))
+        .isInstanceOf(BindException.class)
+        .hasMessageContaining("done-file-format");
   }
 
   @Test
@@ -39,5 +68,14 @@ class ImportScannerPropertiesTest {
     ImportScannerProperties props = new ImportScannerProperties();
     assertThat(props.isBatchManifestEnabled()).isFalse();
     assertThat(props.getBatchManifestSuffix()).isEqualTo(".batch.json");
+  }
+
+  private static ImportScannerProperties bindDoneFileFormat(String value) {
+    MapConfigurationPropertySource source =
+        new MapConfigurationPropertySource(
+            Map.of("batch.worker.import.scanner.done-file-format", value));
+    return new Binder(source)
+        .bind("batch.worker.import.scanner", Bindable.of(ImportScannerProperties.class))
+        .orElseThrow(() -> new AssertionError("import scanner properties were not bound"));
   }
 }

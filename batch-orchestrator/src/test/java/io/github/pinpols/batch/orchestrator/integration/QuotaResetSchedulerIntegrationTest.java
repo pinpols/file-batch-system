@@ -25,6 +25,7 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(
     properties = {
       "batch.quota.runtime-store=database",
+      "batch.quota.backend-guard.cutover-id=quota-it-database",
       "batch.resource-scheduler.quota-reset-enabled=true",
       "batch.resource-scheduler.quota-reset-sliding-window-hours=2",
       "batch.resource-scheduler.quota-reset-scan-interval-millis=600000"

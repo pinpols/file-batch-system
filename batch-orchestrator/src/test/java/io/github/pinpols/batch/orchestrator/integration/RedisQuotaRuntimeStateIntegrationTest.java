@@ -20,7 +20,11 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@TestPropertySource(properties = "batch.quota.runtime-store=redis")
+@TestPropertySource(
+    properties = {
+      "batch.quota.runtime-store=redis",
+      "batch.quota.backend-guard.cutover-id=quota-it-redis"
+    })
 class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private QuotaRuntimeStateService quotaRuntimeStateService;

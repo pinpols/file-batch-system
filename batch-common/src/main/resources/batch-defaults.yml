@@ -270,6 +270,14 @@ batch:
   # S3 协议对象存储（orchestrator + 所有 worker + console）。底层 MinIO SDK 是通用 S3 客户端,
   # 同一套配置可接 自建 MinIO/Ceph、AWS S3、阿里云 OSS（S3 兼容）、腾讯云 COS（S3 兼容）。
   storage:
+    # 有状态后端选择：切换 backend、bucket、endpoint 或 filesystem root 前必须先迁移历史对象，
+    # 并通过 backend-guard.cutover-id 提供新的单次切换标记。
+    backend: ${BATCH_STORAGE_BACKEND:s3}
+    backend-guard:
+      cutover-id: ${BATCH_STORAGE_BACKEND_CUTOVER_ID:}
+    filesystem:
+      # 绝对路径；所有服务必须挂载同一 NAS 并使用一致路径
+      root: ${BATCH_STORAGE_FILESYSTEM_ROOT:}
     s3:
       # 访问地址（http/https）。AWS: https://s3.<region>.amazonaws.com;OSS: https://oss-<region>.aliyuncs.com
       endpoint: ${BATCH_S3_ENDPOINT:http://localhost:19000}
@@ -363,6 +371,9 @@ batch:
       enabled: ${BATCH_WORKER_REPORT_OUTBOX_ENABLED:false}
       storage: ${BATCH_WORKER_REPORT_OUTBOX_STORAGE:PLATFORM_PG}
       sqlite-path: ${BATCH_WORKER_REPORT_OUTBOX_SQLITE_PATH:}
+      backend-guard:
+        # storage 或 PG/SQLite 文件定位变化时必须提供新的单次 cutover id
+        cutover-id: ${BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID:}
       poll-interval-millis: ${BATCH_WORKER_REPORT_OUTBOX_POLL_INTERVAL_MS:5000}
       max-publish-attempts: ${BATCH_WORKER_REPORT_OUTBOX_MAX_PUBLISH_ATTEMPTS:48}
       initial-backoff-millis: ${BATCH_WORKER_REPORT_OUTBOX_INITIAL_BACKOFF_MS:1000}

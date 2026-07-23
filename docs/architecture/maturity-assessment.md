@@ -127,8 +127,8 @@
 
 **强项**：
 - 4 个 GitHub Actions workflow 分层（pr-gate / full-ci-gate / staging-gate / capacity-gate）
-- `feature-switches.md` 6 个开关 + 风险等级 + 回滚指引
-- 关键大改有专属灰度 runbook：`mq-topic-routing-rollout.md` / `wheel-scheduler-rollout.md` / `read-replica.md`
+- `feature-switches.md` 持续维护跨模块开关索引、风险等级和回滚指引
+- 关键变更有专属 runbook：`mq-topic-routing-rollout.md` / `stateful-backend-cutover.md` / `read-replica.md`
 
 **缺口**：
 - 未看到 release notes / version-cut 流程文档

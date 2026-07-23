@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -20,7 +21,7 @@ public class ResourceSchedulerProperties {
    * ADR-041 Phase2.3:租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。默认 QUEUE_DEFER（有界队列 + 背压,峰值流量不误拒正常请求）;设
    * REJECT 可恢复旧的硬拒默认。仅作用于「未显式配策略」的租户,显式配了的以租户策略为准。
    */
-  private String defaultExceededStrategy = "QUEUE_DEFER";
+  private QuotaExceededStrategy defaultExceededStrategy = QuotaExceededStrategy.QUEUE_DEFER;
 
   /**
    * 共享 worker 池的 fallback 租户。当某租户的目标 workerGroup 下没有 ONLINE worker 时， selector 会退到此租户再查一次——仅用于本地联调

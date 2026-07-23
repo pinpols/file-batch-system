@@ -131,7 +131,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     if (Texts.hasText(configured)) {
       return QuotaExceededStrategy.from(configured);
     }
-    return QuotaExceededStrategy.from(governance.resourceScheduler().getDefaultExceededStrategy());
+    return governance.resourceScheduler().getDefaultExceededStrategy();
   }
 
   /**

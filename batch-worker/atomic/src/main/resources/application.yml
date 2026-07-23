@@ -42,7 +42,7 @@ batch:
       tenant-allowlist: ${BATCH_WORKER_KAFKA_TENANT_ALLOWLIST:}
     # 本 worker 的全部配置都在 batch.worker.atomic 下:
     #   - AtomicWorkerConfiguration 绑 worker-code/worker-type/topic/... (身份/注册)
-    #   - BatchWorkerSpiProperties 绑 enabled-types(注册哪些 SPI taskType)
+    #   - BatchWorkerAtomicProperties 绑 enabled-task-types(注册哪些 SPI taskType)
     # 两个 @ConfigurationProperties 同前缀共存,子键不冲突。
     atomic:
       worker-code: ${BATCH_WORKER_ATOMIC_CODE:atomic-node-1}
@@ -54,7 +54,7 @@ batch:
       # 能力标签:声明本 worker 处理哪些 SPI taskType,orchestrator 按 resource_tag/capability 匹配
       capability-tags: ${BATCH_WORKER_ATOMIC_CAPABILITY_TAGS:}
       # 注册哪些 SPI taskType(空=全注册)
-      enabled-types: ${BATCH_WORKER_ATOMIC_ENABLED_TYPES:}
+      enabled-task-types: ${BATCH_WORKER_ATOMIC_ENABLED_TYPES:}
       # ADR-029 classpath 隔离守护现已 opt-in 默认关,4 个 pipeline worker 的 application.yml 显式 true 开启。
       # 本 atomic worker 不配即 false,正确语义(不应拦自己)。
     # dual-use 执行器:sql/stored-proc/http 默认开(三道闸约束:schema/user 白名单 + 资源限制 + OS 拒绝,见 ADR-029);

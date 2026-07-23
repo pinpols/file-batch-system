@@ -21,7 +21,10 @@ import org.springframework.boot.test.context.SpringBootTest;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @org.springframework.test.context.TestPropertySource(
-    properties = "batch.quota.runtime-store=database")
+    properties = {
+      "batch.quota.runtime-store=database",
+      "batch.quota.backend-guard.cutover-id=quota-it-database"
+    })
 class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   private static final class ReservationSpec {

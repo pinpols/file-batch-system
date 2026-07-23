@@ -30,9 +30,12 @@ public enum QuotaExceededStrategy implements DictEnum {
 
   public static QuotaExceededStrategy from(String value) {
     if (value == null || value.isBlank()) {
-      return REJECT;
+      throw new IllegalArgumentException("quota exceeded strategy must not be blank");
     }
     QuotaExceededStrategy hit = DictEnum.fromCode(QuotaExceededStrategy.class, value.trim());
-    return hit == null ? REJECT : hit;
+    if (hit == null) {
+      throw new IllegalArgumentException("unknown quota exceeded strategy: " + value);
+    }
+    return hit;
   }
 }

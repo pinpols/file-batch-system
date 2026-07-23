@@ -1,6 +1,6 @@
-# Phase 2 能力开关运维手册
+# 能力开关运维手册
 
-> 汇总 2026-04-25 完成的 5 项 Phase 2 scaffolding 涉及的 6 个开关：配置 key、实际默认、启用条件、风险、验证、回滚。
+> 汇总跨模块运行时能力开关：配置 key、实际默认、启用条件、风险、验证和回滚。索引随实现持续维护，不再用固定数量描述范围。
 >
 > 配套阅读：[`docs/architecture/rework-classification.md`](../architecture/rework-classification.md) Phase 2 章节、[`docs/coding-conventions.md` §13.3](../coding-conventions.md) 配置归属决策。
 
@@ -9,6 +9,8 @@
 > **配置优先级**：显式环境变量 > docker-compose `:-` 回退 > application.yml `${VAR:fallback}` > Java 字段默认（`@Data` 字段初始化值，回退中的回退）。
 >
 > **本文档以代码 + yml 为权威**。`rework-classification.md` Phase 2 表格用作交叉对照（已于 2026-04-25 与本文档对齐）。
+>
+> **容器透传契约**：本表登记的公共环境变量必须由 `docker/compose/app.yml` 显式透传；`scripts/ci/check-config-defaults-sync.py --check` 同时检查透传缺失和默认值漂移。
 
 ---
 
@@ -20,17 +22,19 @@
 | `batch.scheduler.worker-cache.enabled` | orchestrator | **true** | **true**（继承 yml） | 🟢 低 | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED` |
 | `batch.mq.routing.mode` | orchestrator | **TENANT** | **TENANT**（继承 yml） | 🟡 中 | `BATCH_MQ_ROUTING_MODE` |
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | ~~trigger~~ | **已移除**（2026-04-25 清理 Phase 2 半成品） | — | — | — |
-| `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟢 低 | `BATCH_QUOTA_RUNTIME_STORE` |
+| `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟡 中 | `BATCH_QUOTA_RUNTIME_STORE`；后端或连接定位变化需先迁移，再提供一次性 `BATCH_QUOTA_BACKEND_CUTOVER_ID` |
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
-| `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；**`SQLITE`** 时需 PVC 指向 `sqlite-path` |
+| `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；启停、PG/SQLite 或定位变化需先排空/迁移，再提供一次性 `BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID` |
 | `batch.worker.lease.renew-batch-max-items` | worker（ADR-016） | **256** | **256**（继承 yml） | 🟢 低 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS`：单 `renew-batch` HTTP 最多携带任务数，超出自动拆单 |
 | `batch.worker.checkpoint.enabled` | worker-import / worker-export | **true**（P0 生产化，2026-07；旧默认 false） | **true** | 🟡 中 | `BATCH_WORKER_CHECKPOINT_ENABLED`；Import 要求 load plugin 明确声明幂等能力（`NONE/UNKNOWN` 拒跑）；`PARTITION_REPLACE_COPY` 与续跑互斥须显式设 false；Export 仅 JSON/DELIMITED/FIXED_WIDTH 且 cursor 可序列化时续跑，详见 [`platform-worker-checkpoint-howto.md`](./platform-worker-checkpoint-howto.md) |
 | `batch.worker.checkpoint.stage-skip.enabled` | worker-process | **false**（P1 阶段级续跑，#812；仅交付能力不默认启用） | **false** | 🟡 中 | `BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED`；只对 PROCESS 的 COMPUTE+VALIDATE 生效（副作用落 `process_staging` 可重建），Import/Export/Dispatch 靠内存中间产物**不跳过**，多分片自动降级不跳过。**翻开关前置=判定语义修复**（"每个 step 最新一次 run 为 SUCCESS 才可跳过",旧"曾成功"会漏发布），详见 [`platform-worker-checkpoint-howto.md`](./platform-worker-checkpoint-howto.md) §阶段级续跑 |
-| `batch.datasource.business.routing.enabled` | import/export/process worker | **false**（单片无损，全租户落 shard-0=现库） | **false** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED`；开后按 `placement-source`（CONFIG/TABLE）+ `shards[*]` 路由,详见 [`biz-tenant-routing.md`](./biz-tenant-routing.md) §8 |
+| `batch.datasource.business.routing.enabled` | import/export/process worker | **false**（单片无损，全租户落 shard-0=现库） | **false** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED`；开后按 `placement-source`（CONFIG/TABLE）+ `shards[*]` 路由；未配置 shard 时启动失败，详见 [`biz-tenant-routing.md`](./biz-tenant-routing.md) §8 |
 | `batch.datasource.business.routing.placement-source` | 同上 | **CONFIG**（hash+silo） | **CONFIG** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE`=CONFIG/TABLE；TABLE 读 `batch.business_tenant_placement`（在线维护,见 console `/api/console/ops/tenant-placements`） |
 | ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
 | `batch.resource-scheduler.default-exceeded-strategy` | orchestrator | **QUEUE_DEFER**（有界队列+背压，峰值流量不误拒） | **QUEUE_DEFER** | 🟡 中 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY`=QUEUE_DEFER/REJECT；ADR-042 Phase2.3 **改了平台默认行为**（旧默认硬拒 REJECT）→ 设 `REJECT` 可回退。仅作用于未显式配 `exceeded_strategy` 的租户，显式配的以租户策略为准 |
-| `batch.worker.import.scanner.done-file-format` | worker-import | **MARKER** | **MARKER** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT`=MARKER/JSON；JSON 即 sidecar manifest 强校验（#570），配合 `batch-manifest-enabled` |
+| `batch.console.ai.provider` | console-api | **ANTHROPIC** | **ANTHROPIC** | 🟢 低 | `BATCH_CONSOLE_AI_PROVIDER`=anthropic/openai；枚举绑定，拼写错误启动失败，不再静默选择其他 provider |
+| `batch.worker.atomic.enabled-task-types` | worker-atomic | **空（注册全部已启用执行器）** | **空** | 🟡 中 | `BATCH_WORKER_ATOMIC_ENABLED_TYPES`；正式键为 `enabled-task-types`，旧 `enabled-types` 暂保留兼容；配置非空时只注册白名单内 task type |
+| `batch.worker.import.scanner.done-file-format` | worker-import | **MARKER** | **MARKER** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT`=MARKER/MANIFEST/JSON；JSON 是 MANIFEST 兼容别名，均执行 sidecar manifest 强校验（#570），未知值启动失败 |
 | `batch.worker.import.scanner.done-file-suffix` | worker-import | **`.done`** | **`.done`** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX`；done 文件后缀可配（#569） |
 | `batch.worker.import.scanner.batch-manifest-enabled` | worker-import | **false** | **false** | 🟡 中 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED`；开后扫描期强校验批次清单（文件完整性，#570）|
 | `batch.file-governance.arrival.require-verified` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED`；开后到达组要求文件已校验通过才放行（#570）|
@@ -39,12 +43,24 @@
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |
 | `batch.console.security.rate-limit.file-op-user-limit-per-minute` | console-api | **60** | **60** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE`；`/api/console/files/` 子树（下载/错误导出/归档/重派/到达组）按用户限流，fail-open；前缀可配 `file-op-path-prefixes` |
 | `batch.request-signing.enabled` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_REQUEST_SIGNING_ENABLED`；开后对 api_key 鉴权的 `/internal/tasks·workers` 写请求强制 HMAC 签名+ts+nonce 防重放，详见 §1.3。灰度须先升级 SDK（`BATCH_SDK_REQUEST_SIGNING_ENABLED=true`）再开服务端 |
-| `batch.storage.backend` | orchestrator + 所有 worker + console | **s3**（`matchIfMissing`，S3 协议对象存储 MinIO/OSS/COS） | **s3** | 🟡 中 | `BATCH_STORAGE_BACKEND`=s3/filesystem；`filesystem` 时用 `batch.storage.filesystem.root` 本地目录并装配 console presign 直发端点，仅单机/测试用 |
+| `batch.storage.backend` | orchestrator + 所有 worker + console | **s3** | **s3** | 🟡 中 | `BATCH_STORAGE_BACKEND`=s3/filesystem；后端、endpoint、bucket 或 root 变化需先迁移对象，再提供一次性 `BATCH_STORAGE_BACKEND_CUTOVER_ID` |
 | `batch.sensor.enabled` | orchestrator | **true**（`matchIfMissing`，ADR-028 Sensor 轮询调度总开关） | **true** | 🟢 低 | `BATCH_SENSOR_ENABLED`；false 时 `SensorPollScheduler` 不调度（SPI bean 仍可人工/测试调用），不影响已有 WAIT 节点数据。注:Kafka offset sensor 另有 `batch.sensor.kafka-offset.enabled`（默认 true） |
 
-> 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 回退，故障自动降级。
+> 风险等级判定：🔴 高 = 启用前需准备独立基础设施或迁移，否则启动失败；🟡 中 = 启用后行为或持久状态归属变化明显，需要监控验证；🟢 低 = 影响面局部且具备明确回退路径。是否 fail-open 以各项说明为准。
 >
 > **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读(#578/580/582/584)是模板/渠道级配置(`trailer_template` / control-total rule / `readback_verify_enabled`),归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md);本表只收全局 yml/env 开关。
+
+### 1.5 有状态后端切换守护
+
+Quota、Worker Report Outbox 和对象存储不是普通布尔开关。应用启动时会把当前 backend 与非敏感定位信息登记到 `batch.stateful_backend_binding`；后续启停、后端或定位变化若未提供新的单次 `cutover-id`，启动直接失败。每次接受的切换写入 `batch.stateful_backend_cutover_history`，同一功能不能复用旧 ID。
+
+`cutover-id` 只表示“运维已完成并接受本次切换”，不会代替数据迁移。正确顺序是：停止写入并排空、迁移或核对历史状态、设置新的唯一 ID、滚动重启、验证新后端，再清除该环境变量。首次升级只登记当前基线，不需要 ID；不要在首次部署 V193 的同时改变后端配置。
+
+```sql
+SELECT feature_key, backend, backend_identity, generation, updated_at
+  FROM batch.stateful_backend_binding
+ ORDER BY feature_key;
+```
 
 ### 1.4 Worker checkpoint（P0 默认启用）
 
@@ -111,7 +127,7 @@ Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD
 
 ## 2. 默认开关状态 + 开启建议（按部署形态）
 
-> **原则**：5 个 P2 开关的 yml fallback 全部为生产推荐值（read-replica=true / worker-cache=true / mq.routing=TENANT / quota.runtime-store=redis / quota.snapshot=true），所有开关都有 fail-open 回退（详见 §1.1）。**多数场景"全部默认"即可**，下表只列需要显式覆盖的场景。
+> **原则**：仓库默认值是当前推荐基线，但并非所有开关都能无状态热切换，也并非全部 fail-open。涉及消息路由、数据库分片或持久状态后端的开关，必须按对应 SOP 迁移并重启；普通部署优先保持默认值，下表只列需要显式覆盖的场景。
 
 | 部署形态 | 业务量级 | 推荐覆盖（在 .env 显式设） | 理由 |
 |---|---|---|---|
@@ -256,7 +272,7 @@ docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 --list | 
 
 **风险**：🟡 中（fail-open 有语义副作用）
 - Redis 抛 `DataAccessException` → 🟡 **中 fail-open**：`RedisQuotaRuntimeStateService` 三处 catch（evaluateAndReserve / acquire / release）一律返回 `ResourceCheck.allow()` —— **限流功能等同关闭**。短抖动无影响；**长期 Redis 故障会让大租户吃掉小租户配额**。运维需监控 quota allow WARN 频率，必要时手工切回 `database` 模式
-- 切回 `database` → PG `quota_runtime_state` 表行可能因 Redis 模式期间未及时 snapshot 而短暂不一致；下个调度周期自然收敛
+- Redis → database 前必须先完成一次 Redis → PG snapshot 并核对时间戳；database → Redis 前必须显式准备 Redis 初始状态或接受新窗口重置。仅改环境变量且没有新的 `BATCH_QUOTA_BACKEND_CUTOVER_ID` 时，启动守护会拒绝切换
 
 **验证**：
 ```bash
@@ -264,7 +280,7 @@ docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 --list | 
 docker exec batch-redis redis-cli --scan --pattern "batch:quota:*" | head
 ```
 
-**回滚**：`BATCH_QUOTA_RUNTIME_STORE=database` → 重启 orchestrator → 改走 PG 实现。**Redis 中残留 key 会因 TTL 自然过期**，无需清理。
+**回滚**：先暂停写入并确认 snapshot 已落 PG，设置 `BATCH_QUOTA_RUNTIME_STORE=database` 和新的唯一 `BATCH_QUOTA_BACKEND_CUTOVER_ID`，再重启 orchestrator。切换成功后清除 ID；Redis 中残留 key 按 TTL 过期。
 
 ---
 
@@ -308,6 +324,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 - `placement-source=CONFIG`(默认):hash 池化 + `silo-overrides`;`=TABLE`:读 `batch.business_tenant_placement`(在线维护,console `/api/console/ops/tenant-placements`,表命中优先 hash 回退)。
 - `shards[*]`(key+url+账密)凭据走 secrets,**不入表**;`shard-max-pool-size` 控每片池;`placement-cache-ttl-ms` 默认 5s(**0=每次查库仅测试用**)。
+- `enabled=true` 但 `shards[*]` 为空时启动直接失败，禁止静默退回单库造成“配置看似启用”的假象。
 - 仅 import/export/process 三 worker 持有 biz 数据源;dispatch/atomic/SDK 不涉及。
 - **Fail-open**:placement 表读失败时已有缓存保留 stale(silo 路由仍对),冷启动退 hash;未知 placement key **硬失败**(关 lenientFallback,防静默落 shard-0 污染)。
 
@@ -341,7 +358,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 |---|---|
 | 对应模块 `application.yml` | fallback 值 + 注释 |
 | 对应 `@ConfigurationProperties` 类 | Java 字段默认 + javadoc |
-| `docker/compose/app.yml` | 如需显式覆盖（如 read-replica）补 `:-xxx` |
+| `docker/compose/app.yml` | 公共开关必须显式透传并提供与应用一致的 `:-xxx` 默认 |
 | `.env.example` | 列出该开关 + 默认值 + 一行作用说明 |
 | 本文档（`feature-switches.md`） | §1 索引表 + §3 详述节 |
 | `docs/architecture/rework-classification.md` | Phase 2 表格的"开关"列 |
