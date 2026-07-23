@@ -97,4 +97,29 @@ batch_require_internal_secret() {
   fi
 }
 
+# 裸 JVM 本地联调使用宿主机端口，而 .env.local 同时还会被 Docker Compose
+# 读取，其中部分地址使用容器 DNS。调用方在加载默认 env 后显式调用本函数，
+# 将通用 PostgreSQL 配置映射到各应用的强类型配置项。
+batch_configure_local_jvm_database_env() {
+  export BATCH_PLATFORM_DB_URL="${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://localhost:${POSTGRES_PORT}/batch_platform?reWriteBatchedInserts=true}"
+  export BATCH_PLATFORM_DB_USERNAME="${BATCH_PLATFORM_DB_USERNAME:-$POSTGRES_USER}"
+  export BATCH_PLATFORM_DB_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-$POSTGRES_PASSWORD}"
+
+  export BATCH_BUSINESS_DB_URL="${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://localhost:${POSTGRES_PORT}/${BUSINESS_DB_NAME}?reWriteBatchedInserts=true}"
+  export BATCH_BUSINESS_DB_USERNAME="${BATCH_BUSINESS_DB_USERNAME:-$POSTGRES_USER}"
+  export BATCH_BUSINESS_DB_PASSWORD="${BATCH_BUSINESS_DB_PASSWORD:-$POSTGRES_PASSWORD}"
+
+  export BATCH_CONSOLE_PRIMARY_URL="${BATCH_CONSOLE_PRIMARY_URL:-$BATCH_PLATFORM_DB_URL}"
+  export BATCH_CONSOLE_PRIMARY_USER="${BATCH_CONSOLE_PRIMARY_USER:-$BATCH_PLATFORM_DB_USERNAME}"
+  export BATCH_CONSOLE_PRIMARY_PASSWORD="${BATCH_CONSOLE_PRIMARY_PASSWORD:-$BATCH_PLATFORM_DB_PASSWORD}"
+  export BATCH_CONSOLE_REPLICA_USER="${BATCH_CONSOLE_REPLICA_USER:-$BATCH_PLATFORM_DB_USERNAME}"
+  export BATCH_CONSOLE_REPLICA_PASSWORD="${BATCH_CONSOLE_REPLICA_PASSWORD:-$BATCH_PLATFORM_DB_PASSWORD}"
+
+  case "${BATCH_CONSOLE_REPLICA_URL:-}" in
+    ""|jdbc:postgresql://postgres-replica:*)
+      export BATCH_CONSOLE_REPLICA_URL="jdbc:postgresql://localhost:${POSTGRES_REPLICA_PORT:-15433}/batch_platform?reWriteBatchedInserts=true"
+      ;;
+  esac
+}
+
 batch_load_default_env
