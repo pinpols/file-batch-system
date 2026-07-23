@@ -69,6 +69,6 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
 
   @Override
   public int getOrder() {
-    return Ordered.HIGHEST_PRECEDENCE + 20;
+    return HIGHEST_PRECEDENCE + 20;
   }
 }

@@ -77,6 +77,6 @@ public class WorkerReportOutboxBackendGuard implements ApplicationRunner, Ordere
 
   @Override
   public int getOrder() {
-    return Ordered.HIGHEST_PRECEDENCE + 20;
+    return HIGHEST_PRECEDENCE + 20;
   }
 }
