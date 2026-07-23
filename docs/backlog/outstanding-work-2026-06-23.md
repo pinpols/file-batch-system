@@ -46,8 +46,8 @@
 
 ## 近期已完成(原规划文档曾标"待办",勿误列)
 
-- **ADR-046 Phase 2 多行 claim/report**(2.0–2.4 + worker 攒批 2.3a–d):已落 main(PR #682–#696);相关 plan `backlog/adr046-phase2-plan-2026-06-23.md` 的"待开工"标注已过期,仅剩上方"生产启用门"一项。
-- **SPI → Atomic 重命名**(`plans/rename-spi-to-atomic-2026-05-31.md`):已落地(`AtomicTaskConsumer` 等),plan 的待办勾选已过期。
+- **ADR-046 Phase 2 多行 claim/report**(2.0–2.4 + worker 攒批 2.3a–d):已落 main(PR #682–#696);历史 plan 已归档到 [`../archive/analysis/adr046-phase2-plan-2026-06-23.md`](../archive/analysis/adr046-phase2-plan-2026-06-23.md),仅剩上方"生产启用门"一项。
+- **SPI → Atomic 重命名**:已落地(`AtomicTaskConsumer` 等);历史 plan 已归档到 [`../archive/analysis/rename-spi-to-atomic-2026-05-31.md`](../archive/analysis/rename-spi-to-atomic-2026-05-31.md)。
 
 ## 遗留:术语统一(非阻塞)
 

@@ -143,7 +143,7 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 
 **最常见配错**:`leaseRenewInterval >= orch lease ttl`,导致任务被无故回收,handler 跑完报告却被拒。SDK 当前**无 cross-field 校验**,见 §6。
 
-## 6. 当前最大短板(对应深度审查 [`docs/analysis/2026-06-02-sdk-atomic-fe-deep-review.md`](../analysis/2026-06-02-sdk-atomic-fe-deep-review.md))
+## 6. 当前最大短板(对应历史深度审查 [`docs/archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md`](../archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md))
 
 | 短板 | 现状 | 改进进度 |
 |---|---|---|

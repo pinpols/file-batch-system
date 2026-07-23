@@ -29,7 +29,7 @@
 - `scripts/local/start-all.sh`：一键启动本地依赖 + Java 模块
 - `scripts/local/stop-all.sh`：停止本地 Java 模块，可选停止 Docker 依赖（只 stop，不 down）
 - `scripts/docker/down-apps.sh`：停止本地应用容器栈（只 stop，不 down）
-- `docs/deployment/docker-deployment.md`：Docker 部署基线说明
+- `docs/runbook/docker-deployment.md`：Docker 部署基线说明
 
 ## 启动
 

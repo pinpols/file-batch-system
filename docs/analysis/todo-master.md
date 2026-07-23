@@ -83,7 +83,7 @@
 
 ### A. POSITIONAL-ARGS 治理（V6-P2-POSITIONAL-ARGS）· P2 · ✅ 已闭环
 
-> 状态：v4 已闭环，并行会话产出 + 守护测试到位。详细方案见 [`positional-args-cleanup-plan.md`](./positional-args-cleanup-plan.md)。CLAUDE.md "调用方约束" 子节由本方案沉淀。
+> 状态：v4 已闭环，并行会话产出 + 守护测试到位。历史方案见 [`../archive/analysis/positional-args-cleanup-plan.md`](../archive/analysis/positional-args-cleanup-plan.md)。CLAUDE.md "调用方约束" 子节由本方案沉淀。
 
 历史详细计划项（POS-1 ~ POS-5）已全部完成，归 §五。
 

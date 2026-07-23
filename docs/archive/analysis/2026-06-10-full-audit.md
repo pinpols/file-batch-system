@@ -28,7 +28,7 @@
 | P2-9 守护测试缺口 | 补 `WorkerCoreMapperXmlTenantGuardArchTest`(其余模块已存在,审计基于旧快照) | 新测试通过 |
 
 **本分支不做 / 转交(理由)**:
-- **P1-6 compose S3 凭据默认值** → `docker-compose*.yml` 按 CLAUDE.md 分支政策属 `feature/docker-deploy`,不进 main,转该分支处理。
+- **P1-6 compose S3 凭据默认值** → `docker-compose*.yml` 属部署配置,需随 compose / runbook 一并走标准 PR 处理。
 - **P1-7 备份/PITR** → 运维投入(base backup + WAL 归档 + 恢复演练),非本仓代码改动。
 - **P1-8 GitHub ruleset 未生效** → 组织账号层面(需升 Team org),仓库内无法闭环。
 - **P2-6 未 CLAIM 分区重派 sweeper / P2-12 COPY streaming** → feature 级改动,分期项。

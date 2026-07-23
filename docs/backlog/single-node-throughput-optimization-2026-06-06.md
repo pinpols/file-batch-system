@@ -690,8 +690,8 @@ Baseline 160.6s
 
 每项独立,改完即测,**测完立即回滚**(见 §4.5),避免互相干扰。
 
-> **分支纪律提醒**(CLAUDE.md):A1 / A3 改 `docker-compose` / `postgresql.conf` 属**部署改动**,
-> 若想永久落地需走 `feature/docker-deploy` 分支 PR(**不进 main**);A2 / A5 改 yml 属业务改动,走 `feature/<topic>` PR → main。
+> **变更纪律提醒**:A1 / A3 改 `docker-compose` / `postgresql.conf` 属**部署改动**,
+> 若想永久落地需同步更新 compose / runbook 并走标准 PR → `main`;A2 / A5 改 yml 属业务改动,走 `feature/<topic>` PR → main。
 > Benchmark 阶段**临时改、不入 git** 是最干净的——拿到数字再决定要不要永久落。
 
 #### A1:生产 JVM 配置

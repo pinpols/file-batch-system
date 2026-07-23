@@ -8,7 +8,7 @@
 2. **业务正确性** — 权限 / 租户 / 审计语义
 3. **运行时违约** — 实际触发非默认事务传播,代码上看似合理但 commit 时序错
 
-扫描基线:`origin/main` @ `5c306063`(2026-06-03);在 worktree `.claude/worktrees/scan-arch-2026-06-03` 上扫,不污染 `feature/docker-deploy`。
+扫描基线:`origin/main` @ `5c306063`(2026-06-03);在 worktree `.claude/worktrees/scan-arch-2026-06-03` 上扫,不污染主工作区。
 
 数据:215 个 `@Transactional` / 99 个文件;Outbox 散落 40+ 文件;读写分离仅在 `batch-console-api`。5 个并行 Explore 子代理 + 关键发现人工 grep 反核。
 
@@ -302,6 +302,6 @@ MANDATORY 契约满足,无运行时风险。
 - 5 个并行 Explore 子代理:RW 拆分 / Outbox+tx / 跨模块边界 / 运行时 tx propagation / 租户+审计
 - 高优先发现(P0/P1)做人工 grep + Read 反核 — 撤回 2 项幻觉(console-api 跨模块 INSERT、TriggerOutbox MANDATORY 失守)
 - ⚠️ 标记的项是子代理引用 + 模式推断,未完整反核;后续 fix 阶段应先 Read 全文件再动手
-- 扫描在 worktree 上完成,`feature/docker-deploy` 未受影响
+- 扫描在 worktree 上完成,主工作区未受影响
 
-**下一步**:本报告应在 `feature/docker-deploy` 上开 PR(走 [[code-changes-on-feature-branch]] 规范),per-finding fix 各自走 `fix/<topic>` PR。
+**下一步**:per-finding fix 各自走 `fix/<topic>` PR → `main`。
