@@ -9,7 +9,7 @@
 - `depends_on_job_code` 为空(绝大多数存量触发器)→ 直接放行,**行为完全不变**。
 - 非空 → 经 orchestrator 只读 API `GET /internal/readiness/job` 查上游同 bizDate 是否已有 **EFFECTIVE asset partition**(`UpstreamReadinessChecker` → `ReadinessService`):
   - 就绪 → 正常 fire。
-  - 未就绪 → `launchScheduled` 抛 `UpstreamNotReadyException`,wheel 调度器走 **readiness defer**(见下),**不丢批**。
+  - 未就绪 → `launchScheduled` 抛 `UpstreamNotReadyException`，Quartz 创建一次性 retry trigger 执行 **readiness defer**，**不丢批**。
 
 > **就绪口径=当前 EFFECTIVE 结果版本**:只认 `result_version.status=EFFECTIVE` 物化出的 asset partition。PENDING、DRY_RUN、失败产物、旧 SUPERSEDED 版本都不放行,避免下游按未生效或已被推翻的过期结果启动(结算级)。ready 响应会带 `businessKey/versionNo/jobInstanceId` 供日志和运维定位。
 >
@@ -19,12 +19,12 @@
 
 ## readiness defer(未就绪不丢批,ADR-043 §6.4)
 
-旧实现未就绪直接 skip + 推进 `next_fire_time` 到下一 cron 点——**日批场景**上游晚几分钟完成,下游当天就再也不会自动 fire(下一 cron 点已是次日)。现改为 **defer**(`HashedWheelTriggerScheduler`):
+旧实现未就绪直接 skip——**日批场景**上游晚几分钟完成，下游当天就再也不会自动 fire。现由 `QuartzLaunchJob` 执行 defer：
 
-- **窗口内重检(同 bizDate 不丢批)**:未就绪且已等待 ≤ `readinessWindow` → 不前移真 cron,把 `next_fire_time` 设为"重检时钟"(`now + recheckInterval`),在 `trigger_runtime_state.readiness_deferred_since` 记**首次 defer 的原始触发时刻**,`last_fire_status='WAITING_READINESS'`。下个扫描窗重检;一旦上游就绪即 fire。bizDate **pin** 到 `readiness_deferred_since`,防重检跨午夜漂移到次日。
-- **超窗 give-up**:等待 > `readinessWindow` 仍未就绪 → 推进到下一真 cron(基准=原始触发时刻),`last_fire_status='WAITING_READINESS_TIMEOUT'`,记 `ERROR` + metric。运维据此判断"上游严重延迟,本 bizDate 已放弃",可走 batch-day replay 手动补。
-- defer 重检行的 `next_fire_time` 是重检时钟而非真 cron,**不参与 misfire 分流**(wheel 检测到 `readiness_deferred_since` 非空即跳过 misfire 判定)。
-- metric:`batch.trigger.wheel.readiness.deferred`(按 group)、`batch.trigger.wheel.readiness.timeout`(按 group,**应配告警**)。
+- **窗口内重检(同 bizDate 不丢批)**：Quartz 为同一 JobDetail 创建 one-shot trigger，在 `now + recheckInterval` 再次执行。retry JobDataMap 固定原始 fire 时间、首次 defer 时间和原始 TriggerType，因此跨午夜不会漂移 bizDate，也不会因等待超过 misfire 阈值改变触发类型。
+- **超窗 give-up**：等待达到 `readinessWindow` 后停止创建 retry trigger，记录 ERROR，并增加 `batch.trigger.quartz.readiness.timeout`。运维据此判断“上游严重延迟，本 bizDate 已放弃”，可走 batch-day replay 手动补。
+- 原 Cron/FIXED_RATE trigger 保持不变；retry trigger 是独立的一次性触发，不修改正常调度表达式。
+- 每次创建 retry trigger 增加 `batch.trigger.quartz.readiness.deferred`，对应 Prometheus 提前预警。
 
 ## fail-closed(结算优先)
 
@@ -48,8 +48,8 @@ orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expe
 |---|---|---|
 | `job_definition.depends_on_job_code` | NULL | 上游 job code;非空才启用本触发器的依赖闸 |
 | `batch.trigger.readiness-gate.enabled` | `true` | 全局 emergency switch;设 `false` 时一律放行(等价关闭依赖感知,应急用) |
-| `batch.trigger.wheel.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口;超窗放弃本 bizDate(`WAITING_READINESS_TIMEOUT` + ERROR/metric) |
-| `batch.trigger.wheel.readiness-recheck-interval-seconds` | `30` | 未就绪时的重检间隔;须 `<` `misfire-threshold-seconds`(默认 60)防重检被误判 misfire |
+| `batch.trigger.runtime.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口；超窗后停止 retry 并记录 ERROR |
+| `batch.trigger.runtime.readiness-recheck-interval-seconds` | `30` | Quartz one-shot retry 的重检间隔 |
 | `batch.asset-freshness.enabled` | `true` | asset freshness SLA 扫描开关 |
 | `batch.asset-freshness.scan-interval-millis` | `60000` | freshness policy 扫描间隔 |
 | `batch.asset-freshness.batch-limit` | `500` | 单轮最多扫描的策略数 |
@@ -57,7 +57,7 @@ orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expe
 ## 边界 / 后续(v1 范围)
 
 - **v1 只支持单个上游 JOB + SAME_DAY 对齐**。多依赖、`PREV_DAY` 对齐、FILE_GROUP(文件组 TRIGGERED)就绪——均为 ADR-043 描述的后续增强项,本期未做。
-- 超窗 give-up 目前是"推进到下一 cron + ERROR/metric 告警 + 人工 replay",未自动落 `trigger_misfire_pending` 走 misfire 策略(ADR §6.4 列的 misfire 路由)——留作后续增强;当前语义更简单且不会无限 catch-up 循环。
+- 超窗 give-up 目前是“停止 retry + ERROR 日志 + 人工 replay”，未自动落 `trigger_misfire_pending` 走 misfire 策略。
 - 只 gate `launchScheduled`(正常调度 fire);catch-up / 手动 fire 不走此闸。
 - 不裁定上游业务对错(ADR-021 红线),只问"上游这个 job 这个批次日跑成功了没"。
 - 不做通用 deadline/window-aware 优化调度器。后续最多补 late/at-risk/missed-window 标记和告警,不得把 trigger 扩成 Airflow/Temporal 类通用编排器。

@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.trigger.config;
 
-import io.github.pinpols.batch.trigger.wheel.CronExpressionAdapter;
+import io.github.pinpols.batch.trigger.support.CronExpressionAdapter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Quartz / wheel 均依赖 Cron 解析适配器；独立于 wheel conditional 装配,避免 Quartz IT 缺失 bean。 */
+/** Quartz 注册和业务日期推导共用的 Cron 解析适配器。 */
 @Configuration
 public class CronExpressionAdapterConfiguration {
 

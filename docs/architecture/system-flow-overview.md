@@ -7,19 +7,9 @@
 
 ## 1. 一张图看完整链路
 
-> **重要前提（先读这段再看图）**：系统**主入口是定时器**（Quartz cron / wheel tick），生产环境 95%+ 的任务由 trigger 模块自动 fire，**根本不经过 console-api**。前台 `USER → CONSOLE → 触发` 是少数场景（联调 / 失败重跑 / 运维介入），看图时把它当辅助入口。
+> **重要前提（先读这段再看图）**：系统**主入口是 Quartz 定时器**，生产环境 95%+ 的任务由 trigger 模块自动 fire，**根本不经过 console-api**。前台 `USER → CONSOLE → 触发` 是少数场景（联调 / 失败重跑 / 运维介入），看图时把它当辅助入口。
 >
-> 下图为了完整性把两条入口都画了，但**当前默认主路径是 `WHEEL → WS`**（HashedWheelTimer tick fire，2026-04-26 起切为默认）；前台 `USER → CONSOLE → TR/WS` 已**降级为灰色细虚线**作"可选入口"标记，方便视觉一眼分清主辅。
->
-> **触发层新旧两套实现并存（严格二选一）**：
->
-> | 实现 | 状态表 | 调度 svc | fire 路径 | 何时 active |
-> |---|---|---|---|---|
-> | **HashedWheelTimer**（**新 / 当前默认**） | `trigger_runtime_state` + `trigger_misfire_pending` | `WS`（HashedWheelTriggerScheduler） | `WHEEL → WS → LS`（蓝粗实） | `BATCH_TRIGGER_SCHEDULER_IMPL=wheel`（默认值，2026-04-26 切换） |
-> | **Quartz**（**旧 / 回退路径**） | `QRTZ_*` | `TR`（TriggerSchedulerFacade） | `QZ → TR → LS` | 显式 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz` 切回（incident 回退用） |
-> | **互斥控制器** | — | `FLAG`（QuartzPauseWhenWheelEnabledCustomizer） | wheel 模式下把 `QZ.autoStartup=false` 让 Quartz bean 仍存在但不 fire | 自动 |
->
-> 这两条 fire 边**永远只有一条会激活**，由配置决定；2026-04-26 已把 application.yml fallback 从 quartz 切到 wheel（phase 1 收尾，57 IT 全过）。详见 [`docs/architecture/quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md) 和 [`docs/runbook/wheel-scheduler-rollout.md`](../runbook/wheel-scheduler-rollout.md)。
+> 下图为了完整性把定时和人工两条入口都画出；生产主路径是 `QZ → TR`，前台入口作为灰色细虚线表示辅助操作。
 >
 > **图例**：
 > - 线**主次**：粗实线 `══>` = 生产主路径 / 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号 / 前台可选入口。
@@ -31,13 +21,10 @@ flowchart LR
   USER([用户 / 前端]):::user
   CONSOLE["batch-console-api<br/>(BFF · 鉴权/限流/审计)"]:::svc
 
-  subgraph TRIG ["触发层 · batch-trigger（wheel 默认 / quartz 回退 · 严格二选一·2026-04-26 切换）"]
+  subgraph TRIG ["触发层 · batch-trigger（Quartz JDBC JobStore 集群）"]
     direction TB
-    WHEEL[("trigger_runtime_state<br/>trigger_misfire_pending<br/>scheduler-impl=wheel (当前默认)")]:::store
-    QZ[("Quartz<br/>QRTZ_*<br/>scheduler-impl=quartz (回退路径)")]:::store
-    WS["HashedWheelTriggerScheduler<br/>+ WheelTriggerReconciler<br/>+ MisfirePendingExpireScheduler<br/>+ CatchUpThrottle<br/>(@ConditionalOnProperty wheel)"]:::svc
-    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(quartz 模式 fire · @ConditionalOnProperty quartz)"]:::svc
-    FLAG{{"QuartzPauseWhenWheelEnabledCustomizer<br/>scheduler-impl=wheel(默认) → Quartz autoStartup=false<br/>(Quartz bean 仍创建供 TriggerSchedulerFacade 引用，但不 fire)"}}:::flag
+    QZ[("Quartz JDBC JobStore<br/>QRTZ_*")]:::store
+    TR["QuartzLaunchJob<br/>+ TriggerSchedulerFacade<br/>+ TriggerReconciler"]:::svc
   end
 
   subgraph SCH ["调度层 · batch-orchestrator"]
@@ -71,16 +58,12 @@ flowchart LR
 
   FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
 
-  %% ─── 触发链路（HTTP 入站 + 时序触发；scheduler-impl 决定走哪条） ──
+  %% ─── 触发链路（HTTP 入站 + Quartz 时序触发） ──
   %% 边 label 直接标流量占比（按触发数估算），让"主入口=定时器"在图里一眼可见
   USER    ==>|"POST /api/console/triggers/launch<br/>📉 < 5% · 联调 / 重跑 / ops"| CONSOLE
   CONSOLE ==>|"HTTP forward (MANUAL · < 5%)"| TR
-  CONSOLE ==>|"HTTP forward (MANUAL · < 5%)"| WS
-  QZ      ==>|"cron fire (SCHEDULED · 回退路径)<br/>需显式 BATCH_TRIGGER_SCHEDULER_IMPL=quartz"| TR
-  WHEEL   ==>|"tick fire (SCHEDULED · 当前默认)<br/>📈 生产 95%+ 触发量"| WS
-  FLAG    -. "scheduler-impl=wheel → autoStartup=false" .-> QZ
+  QZ      ==>|"cron / fixed-rate fire (SCHEDULED)<br/>📈 生产 95%+ 触发量"| TR
   TR      ==>|"INSERT trigger_outbox_event<br/>(同事务) → TriggerOutboxRelay"| TKAFKA
-  WS      ==>|"INSERT trigger_outbox_event<br/>(同事务) → TriggerOutboxRelay"| TKAFKA
   TKAFKA  ==>|"@KafkaListener consume<br/>→ LaunchApplicationService.launch"| LS
 
   %% ─── 调度写库（JDBC INSERT） ─────────────────────
@@ -122,7 +105,7 @@ flowchart LR
   linkStyle 0,1,2 stroke:#9e9e9e,stroke-width:1.5px,stroke-dasharray:5 4
   %%   3      Quartz cron fire → TR（蓝粗虚 = 回退路径，2026-04-26 不再是默认）
   linkStyle 3 stroke:#1565c0,stroke-width:2px,stroke-dasharray:6 4
-  %%   4      Wheel tick fire → WS（蓝粗实 = 当前默认主入口，生产 95%+ 触发量）
+  %%   4      Quartz fire → TR（蓝粗实 = 默认主入口，生产 95%+ 触发量）
   linkStyle 4 stroke:#1565c0,stroke-width:2.5px
   %%   5      feature flag 控制（虚线灰）
   linkStyle 5 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
@@ -161,7 +144,7 @@ flowchart LR
 
 ### 一句话叙事
 
-1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=wheel`** 走 HashedWheelTimer；opt-in 回退 `quartz` 走 Quartz；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 同事务写 `trigger_request` + `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch（**ADR-010 固化异步路径，无开关；详见 §1.4**）。
+1. **触发**：Quartz 定时触发（`SCHEDULED`）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 同事务写 `trigger_request` + `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch（**ADR-010 固化异步路径，无开关；详见 §1.4**）。
 2. **调度**：orchestrator `LaunchService` 写入 `job_instance` + `job_partition` + `outbox_event`（同一事务）。
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态（含 i18n 三元组 + ADR-009 节点 outputs）→ orchestrator 推进状态机 + 落 `workflow_node_run.output` JSONB 列。
@@ -208,7 +191,7 @@ flowchart LR
 以下补充其余四条职责：配置管理、查询 / 报表、实时监控、补偿命令。
 
 > **注意**：本节的图**只画 console-api 视角**，所有边都从 `USER` 起。这不代表系统是前台驱动 ——
-> 生产 95%+ 任务由定时器自动 fire 不经 console（详见 §1 主图的 `QZ → TR` / `WHEEL → WS` 蓝粗实线）。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
+> 生产 95%+ 任务由定时器自动 fire 不经 console（详见 §1 主图的 `QZ → TR` 蓝粗实线）。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%

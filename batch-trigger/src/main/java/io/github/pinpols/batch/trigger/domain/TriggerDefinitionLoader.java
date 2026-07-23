@@ -12,8 +12,8 @@ import org.springframework.stereotype.Component;
  * <p>{@link #loadAll} 只返回处于启用状态的调度定义,用于启动时全量注册或对账。 {@link #loadByJobCode} 在找不到对应记录时返回 {@code
  * null},由调用方决定是否抛出业务异常。
  *
- * <p>R-arch-audit-2026-05-23 P1: 历史上本类是接口 + DatabaseTriggerDefinitionLoader 单实现的形式主义, wheel 与
- * quartz 路径共用同一实现,接口的 Mock 价值很低 (MyBatis Mapper 本身可 mock)。 评估后删除接口,将实现并入本类,消除多余的间接层。
+ * <p>R-arch-audit-2026-05-23 P1:历史上本类是接口 + DatabaseTriggerDefinitionLoader 单实现的形式主义，调度器与 quartz
+ * 路径共用同一实现,接口的 Mock 价值很低 (MyBatis Mapper 本身可 mock)。 评估后删除接口,将实现并入本类,消除多余的间接层。
  */
 @Component
 @RequiredArgsConstructor

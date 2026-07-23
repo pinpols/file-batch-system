@@ -402,6 +402,9 @@ platform.default_timezone
 
 ### 6.3 trigger_runtime_state
 
+> 历史设计：该节对应已退役的 Wheel 运行态。当前使用 Quartz JDBC JobStore，
+> `nextFireTime` 通过调度管理接口读取；保留本节仅用于解释旧迁移。
+
 建议 `next_fire_time` 使用 UTC 事件时间：
 
 ```sql

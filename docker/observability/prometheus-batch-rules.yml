@@ -947,31 +947,27 @@ groups:
   - name: batch.readiness-and-locks
     rules:
       - alert: BatchReadinessWindowExceeded
-        # 上游连续 readinessWindow(默认 7200s/2h,WheelSchedulerProperties.readinessWindowSeconds)
-        # 未就绪 → trigger 放弃本 bizDate fire(WAITING_READINESS_TIMEOUT)。timeout counter 已是
-        # "等满窗口才放弃"的硬终态信号,任意非零增长即告警。
-        expr: sum by (group) (increase(batch_trigger_wheel_readiness_timeout_total[15m])) > 0
+        expr: increase(batch_trigger_quartz_readiness_timeout_total[15m]) > 0
         for: 0m
         labels:
           severity: critical
           team: batch-platform
           alert_group: trigger
         annotations:
-          summary: "上游就绪窗口超时,放弃本批次 group={{ $labels.group }}"
-          description: "trigger 等待上游就绪超过 readinessWindow(默认 2h)仍未就绪,已放弃该 bizDate fire(WAITING_READINESS_TIMEOUT)。下游可能整批漏算,需人工核对上游 job 终态并决定补跑。"
+          summary: "上游就绪窗口超时，Quartz 已停止重试"
+          description: "trigger 等待上游就绪超过 readinessWindow（默认 2h），已停止该 bizDate 的 retry trigger。需核对上游终态并决定是否补跑。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md"
 
       - alert: BatchReadinessDeferredHigh
-        # 持续 defer 但未 timeout:上游慢/卡的提前预警,逼近放弃窗口前介入。
-        expr: sum by (group) (increase(batch_trigger_wheel_readiness_deferred_total[30m])) > 20
+        expr: increase(batch_trigger_quartz_readiness_deferred_total[30m]) > 20
         for: 10m
         labels:
           severity: warning
           team: batch-platform
           alert_group: trigger
         annotations:
-          summary: "上游就绪 defer 频繁 group={{ $labels.group }}"
-          description: "trigger 持续 defer 重检上游就绪(30m 内 >20 次),上游交付偏慢,有逼近 readinessWindow 放弃的风险,建议排查上游 job 时效。"
+          summary: "上游就绪 Quartz retry 频繁"
+          description: "trigger 在 30m 内创建超过 20 次 readiness retry，上游交付偏慢，有逼近放弃窗口的风险。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md"
 
       - alert: BatchPostgresLockWaitStuck

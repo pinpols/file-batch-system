@@ -22,7 +22,7 @@
 
 **形式化落地红旗**:能跑单 job demo,但表达不了"02:00 跑但前提上游今天成功、04:00 还没好按 misfire 处置"这种结算级语义;重跑只能整批不能按账期/按 job;对账只记不拦。
 
-**验证方法**:拿一个**真实账期场景**(上游 SETTLE → 导入 → 加工 → 出账)端到端跑;`sim` 连跑(非单跑)含 stage25 checkpoint-crash;readiness defer 在真 wheel 并发下验窗口内重检 + bizDate 跨午夜 pin 不漂。
+**验证方法**:拿一个**真实账期场景**(上游 SETTLE → 导入 → 加工 → 出账)端到端跑;`sim` 连跑(非单跑)含 stage25 checkpoint-crash;readiness defer 在 Quartz 集群下验 one-shot retry + bizDate 跨午夜 pin 不漂。
 
 **判据**:真实账期链路可配置、可重跑、可补数、可对账拦截;readiness defer 端到端验证通过。
 
@@ -151,7 +151,7 @@
 
 **形式化落地红旗**:调度只在单实例测过(多 leader 漂移、GC pause 旧 leader 重发没验);DST 那两天没人想过;misfire 风暴打挂 LaunchService。
 
-**验证方法**:多 leader 并发 IT(`WheelMisfireIntegrationTest` / `HashedWheelTriggerSchedulerIntegrationTest`)+ 构造 DST 边界 + leader 切换混沌。
+**验证方法**:Quartz JDBC cluster IT + 构造 DST 边界 + leader 切换混沌。
 
 **判据**:并发/漂移/DST 下不重不漏;misfire 限流生效。
 

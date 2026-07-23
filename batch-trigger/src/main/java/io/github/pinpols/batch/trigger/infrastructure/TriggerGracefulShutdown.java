@@ -17,21 +17,14 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>负责接收外部排水信号(REST API / ContextClosedEvent)
  *   <li>更新 {@link TriggerDrainState} 真值源(由 scheduler-agnostic 调用方直接读)
- *   <li>调用 scheduler-specific 停机动作(Quartz: {@code Scheduler.standby/start/shutdown})
+ *   <li>调用 Quartz {@code Scheduler.standby/start/shutdown}
  * </ul>
- *
- * <p>R-arch-audit-2026-05-23 P1: draining 状态从本类抽到独立 {@link TriggerDrainState} bean, 让两种 scheduler
- * 实现(Quartz / Wheel)各自响应停机语义 — Quartz 走本类的 standby/shutdown 路径; Wheel 仅依赖 {@code
- * TriggerDrainState.isDraining()} 来阻挡新 fire,真停机由 {@code @PreDestroy} 走 {@link
- * io.github.pinpols.batch.trigger.wheel.HashedWheelTriggerScheduler#shutdown()}。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class TriggerGracefulShutdown implements ApplicationListener<ContextClosedEvent> {
 
-  // Quartz Scheduler 在两种模式下均由 QuartzAutoConfiguration 装配（wheel 模式下 autoStartup=false）。
-  // 这里持有它的引用只是为了在 Quartz 模式下做 standby/start/shutdown；wheel 模式下调用是 no-op-safe。
   private final Scheduler scheduler;
   private final TriggerDrainState drainState;
 

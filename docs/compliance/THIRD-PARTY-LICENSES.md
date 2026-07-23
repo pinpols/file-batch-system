@@ -78,7 +78,6 @@ These are the main runtime-facing third-party components currently used by the p
 | JSqlParser | 4.5 | Apache-2.0 | export | SQL parsing / schema whitelist |
 | ShedLock | 6.3.0 | Apache-2.0 | common | Distributed lock |
 | Spring Boot Configuration Processor | managed by Spring Boot 4.1.0 | Apache-2.0 | all (annotation processor) | 编译期生成 `spring-configuration-metadata.json`，IDE 提示 / dict 自动化 |
-| Netty (HashedWheelTimer) | managed by Spring Boot 4.1.0 | Apache-2.0 | trigger | Wheel scheduler 实现（`batch.trigger.scheduler-impl=wheel` 启用） |
 
 ## Test and Tooling Dependencies
 

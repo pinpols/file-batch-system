@@ -8,4 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class TriggerRuntimeProperties {
 
   private long misfireCatchUpThresholdSeconds = 60L;
+
+  private long readinessWindowSeconds = 7200L;
+
+  private long readinessRecheckIntervalSeconds = 30L;
 }

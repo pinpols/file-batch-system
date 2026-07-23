@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
-import io.github.pinpols.batch.trigger.wheel.CronExpressionAdapter;
+import io.github.pinpols.batch.trigger.support.CronExpressionAdapter;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -123,7 +123,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         return cronAdapter.next(scheduleExpression, zoneId, fireAt);
       }
       if (ScheduleType.FIXED_RATE.code().equals(type)) {
-        // FIXED_RATE 表达式格式: 纯数字秒 (如 "60") 或 ISO duration (如 "PT5M"), 与 wheel scheduler 对齐
+        // FIXED_RATE 表达式格式:纯数字秒(如 "60")或 ISO duration(如 "PT5M")。
         Duration interval = parseFixedRateInterval(scheduleExpression);
         return interval == null ? null : fireAt.plus(interval);
       }

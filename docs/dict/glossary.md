@@ -70,7 +70,7 @@
 
 | 简称 | 全名 | 职责 |
 |---|---|---|
-| **trigger** | batch-trigger | 触发器（Quartz / Wheel） |
+| **trigger** | batch-trigger | Quartz 定时触发器与手动触发入口 |
 | **orchestrator** | batch-orchestrator | 编排引擎，状态主机 |
 | **worker-import** | batch-worker-import | 文件导入 worker |
 | **worker-export** | batch-worker-export | 文件导出 worker |

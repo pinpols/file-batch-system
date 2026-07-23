@@ -2,7 +2,7 @@
 
 # Quartz 替换为时间轮的可执行方案
 
-> **状态**：决策依据 + 起步设计；阶段 0(零成本动作)可立刻做,阶段 1(实施)等业务量级到拐点再启动。
+> **状态**：Superseded。Wheel 运行路径已于 2026-07-23 移除，当前统一使用 Quartz JDBC JobStore。本文仅保留历史评估过程。
 >
 > **关联文档**:
 > - [`docs/runbook/feature-switches.md`](../runbook/feature-switches.md) §3.4(原 quartz-datasource 开关移除说明)

@@ -3,7 +3,7 @@
 # 22-trigger-stage6c.sh:Trigger scheduled / misfire / replay / storm 验证
 #
 # 覆盖:
-#   - wheel scheduled fire 真实落 trigger_request
+#   - Quartz scheduled fire 真实落 trigger_request
 #   - MANUAL_APPROVAL misfire 真实落 trigger_misfire_pending
 #   - catch-up approve replay API 将 ACCEPTED CATCH_UP request 推进到 LAUNCHED
 #   - API task storm 收敛
@@ -84,7 +84,19 @@ def wait_count(label, sql, expected, timeout=150):
         time.sleep(3)
     raise TimeoutError(f"timeout waiting {label}")
 
-print("==> wait wheel scheduled + misfire", flush=True)
+print("==> wait Quartz scheduled + misfire", flush=True)
+wait_count(
+    "quartz-misfire-registered",
+    "select count(*) from quartz.qrtz_triggers "
+    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'",
+    1,
+)
+psql(
+    "update quartz.qrtz_triggers "
+    "set next_fire_time=(extract(epoch from now() - interval '120 seconds') * 1000)::bigint, "
+    "trigger_state='WAITING' "
+    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'"
+)
 scheduled_count = wait_count(
     "scheduled",
     "select count(*) from batch.trigger_request "

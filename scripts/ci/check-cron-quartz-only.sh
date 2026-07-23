@@ -2,7 +2,7 @@
 # scripts/ci/check-cron-quartz-only.sh
 #
 # QZ-pre-2: 静态扫描 seed / migration SQL 文件,识别 Quartz 专属 cron 表达式(L / W / #),
-# 在 CI 阶段防止 wheel 切换后无法解析的表达式被引入。
+# 在 CI 阶段保证所有表达式都能由 Quartz 解析。
 #
 # 这是 scripts/db/quartz-replacement-preflight-scan.sql(PG 端运行时检查)的另一道 CI 防线:
 # 该 SQL 跑在 staging / prod 已写入数据库数据上,本脚本扫源代码里准备写入数据库的 seed,提前 fail。
@@ -12,7 +12,7 @@
 #   W = "weekday near"  (e.g. "0 0 0 15W * ?" — 距离 15 号最近的工作日)
 #   # = "Nth weekday"   (e.g. "0 0 0 ? * 6#3" — 每月第 3 个星期五)
 #
-# Wheel 默认走 Quartz CronExpression 解析仍兼容这些字符,但要彻底切换到通用 cron 实现
+# Quartz 原生支持这些扩展字符
 # (如 spring-context CronExpression 或 cron-utils Quartz dialect)前必须扫干净。
 #
 # 用法:

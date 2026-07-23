@@ -7,7 +7,7 @@ package io.github.pinpols.batch.common.observability;
  *
  * <ul>
  *   <li>module = {@code trigger / orchestrator / worker / console}
- *   <li>area = 业务域(job / outbox / quartz / wheel / dispatch / process / audit ...)
+ *   <li>area = 业务域(job / outbox / quartz / dispatch / process / audit ...)
  *   <li>metric = 计量项(total / duration / failure / lag / count ...)
  *   <li>unit = 可选,Timer / Histogram 必须带 seconds / ms / bytes;Counter / Gauge 可省
  * </ul>

@@ -725,7 +725,7 @@ if [[ "$ADVANCED" == "1" ]]; then
 
   # 9.5 Trigger 真触发 (CRON 每分钟)
   # 思路: INSERT 一个 enabled CRON job_def → TriggerReconciler ≤30s 接管 →
-  #       wheel fire → trigger_request(SCHEDULED) 自增。polling 最多 120s
+  #       Quartz fire → trigger_request(SCHEDULED) 自增。polling 最多 120s
   # 上限 = 30s reconciler + 60s 下个 cron tick + 缓冲 ≈ 90-120s
   PROBE_FXR_JOB_CODE="${PROBE_TAG}-fxr"
   PROBE_FXR_TENANT="$STRICT_TENANT_ID"
@@ -743,7 +743,7 @@ if [[ "$ADVANCED" == "1" ]]; then
   else
     fxr_baseline=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE' AND trigger_type='SCHEDULED'")
     fxr_start=$(date +%s)
-    # WheelTriggerReconciler scanIntervalMillis=60000 + 一个 fire 周期 15s + 缓冲 ≈ 90-120s
+    # TriggerReconciler 最多 30s + 一个 fire 周期 60s + 缓冲 ≈ 90-120s
     fxr_deadline=$(( fxr_start + 120 ))
     fxr_fired=0
     while [[ $(date +%s) -lt $fxr_deadline ]]; do
@@ -774,14 +774,12 @@ sleep 8
 do_cleanup "$SWEEP_PATTERN"
 after_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN' OR job_code LIKE '$SWEEP_PATTERN'")
 job_def_left=$(psql_q "SELECT count(*) FROM batch.job_definition WHERE job_code LIKE '$SWEEP_PATTERN'")
-runtime_left=$(psql_q "SELECT count(*) FROM batch.trigger_runtime_state WHERE job_definition_id IN (SELECT id FROM batch.job_definition WHERE job_code LIKE '$SWEEP_PATTERN')")
-# PASS 标准: PROBE job_definition + trigger_runtime_state 必须 0 (源头已断, 不会新增 fire)
-# trigger_request 残留容忍 ≤ 15 (CRON PROBE wheel 内存里 stale marker, by-design 自然过期 60-120s,
-# 下次 PRE_CLEANUP 启动时会自动清). 详见 WheelTriggerReconciler 注释
-if [[ "$job_def_left" == "0" && "$runtime_left" == "0" && "$after_cnt" -le 15 ]]; then
-  result pass "探针清理" "源头已断: job_definition=0 + trigger_runtime_state=0; trigger_request 残留 $after_cnt 行 (wheel stale marker, 下轮 PRE_CLEANUP 自清)"
+# PASS 标准:PROBE job_definition 必须为 0。Quartz JobStore 由下一轮 reconciler 异步注销，
+# 因此删除定义后短时间内可能仍有已取得的 fire，允许少量 trigger_request 残留。
+if [[ "$job_def_left" == "0" && "$after_cnt" -le 15 ]]; then
+  result pass "探针清理" "源头已断: job_definition=0; trigger_request 短暂残留 $after_cnt 行"
 else
-  result fail "探针清理" "job_definition=$job_def_left runtime=$runtime_left trigger_request=$after_cnt — 源头未断或异常残留"
+  result fail "探针清理" "job_definition=$job_def_left trigger_request=$after_cnt — 源头未断或异常残留"
 fi
 
 # ---------- 汇总 ----------

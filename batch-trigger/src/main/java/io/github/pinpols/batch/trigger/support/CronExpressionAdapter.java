@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.trigger.wheel;
+package io.github.pinpols.batch.trigger.support;
 
 import java.text.ParseException;
 import java.time.Instant;
@@ -13,13 +13,12 @@ import org.quartz.CronExpression;
 /**
  * Quartz {@link CronExpression} 包装,提供"按 cron 表达式 + 时区 + 起始时刻 → 下次 fire 时刻"。
  *
- * <p><b>关键决策</b>(详见 quartz-replacement-design.md §7):**沿用 Quartz CronExpression 做计算**, 不引入新解析器(如
- * Spring CronExpression)。理由:
+ * <p><b>关键决策</b>：沿用 Quartz CronExpression 做计算，不引入其他 Cron 解析器。理由：
  *
  * <ul>
  *   <li>Quartz 支持 L / W / # 等扩展字符,Spring 不支持
  *   <li>业务侧 cron 表达式 0 改动,降低切换风险
- *   <li>历史 Quartz 实现的 next-fire-time 计算与本适配器一致,迁移期对账无差异
+ *   <li>注册校验和运行时 next-fire-time 计算保持一致
  * </ul>
  *
  * <p><b>线程安全</b>:{@link CronExpression} 实例本身不是线程安全的，{@code setTimeZone} 是写操作。 R4-P0-3：之前缓存键只用

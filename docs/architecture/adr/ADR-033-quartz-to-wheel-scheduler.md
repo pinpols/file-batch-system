@@ -1,6 +1,6 @@
-# ADR-033: Quartz 调度器替换为时间轮(HashedWheelTimer)
+# ADR-033: Quartz 调度器替换为时间轮(HashedWheelTimer)（已撤销）
 
-- 状态: **Accepted(暂缓实施)** (2026-05-21) — 决策成立,实施触发条件未达
+- 状态: **Superseded** (2026-07-23) — Wheel 能力不对等且双引擎维护成本过高，运行路径已移除
 - 范围: `batch-trigger` 模块的调度引擎(当前 Quartz JDBC JobStore)
 - 影响: trigger 模块整体重写调度子系统 + DB schema 迁移(quartz_* 表 → 自管 `trigger_runtime_state`)+ 灰度切换 + 双引擎并行
 

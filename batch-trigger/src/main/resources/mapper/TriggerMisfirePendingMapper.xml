@@ -5,7 +5,6 @@
     <resultMap id="TriggerMisfirePendingResultMap"
                type="io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity">
         <id column="id" property="id"/>
-        <result column="trigger_runtime_state_id" property="triggerRuntimeStateId"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_code" property="jobCode"/>
         <result column="scheduled_fire_time" property="scheduledFireTime"/>
@@ -24,10 +23,10 @@
             parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.trigger_misfire_pending (
-            trigger_runtime_state_id, tenant_id, job_code, scheduled_fire_time,
+            tenant_id, job_code, scheduled_fire_time,
             detected_at, status, expires_at, created_at, updated_at
         ) values (
-            #{triggerRuntimeStateId}, #{tenantId}, #{jobCode}, #{scheduledFireTime},
+            #{tenantId}, #{jobCode}, #{scheduledFireTime},
             now(), 'PENDING', now() + interval '7 days', now(), now()
         )
     </insert>
@@ -36,11 +35,14 @@
         select * from batch.trigger_misfire_pending where id = #{id}
     </select>
 
-    <select id="selectByRuntimeStateAndFireTime" resultMap="TriggerMisfirePendingResultMap">
+    <select id="selectBySchedule" resultMap="TriggerMisfirePendingResultMap">
         select *
           from batch.trigger_misfire_pending
-         where trigger_runtime_state_id = #{triggerRuntimeStateId}
+         where tenant_id = #{tenantId}
+           and job_code = #{jobCode}
            and scheduled_fire_time = #{scheduledFireTime}
+         order by id desc
+         limit 1
     </select>
 
     <select id="selectPendingByTenant" resultMap="TriggerMisfirePendingResultMap">

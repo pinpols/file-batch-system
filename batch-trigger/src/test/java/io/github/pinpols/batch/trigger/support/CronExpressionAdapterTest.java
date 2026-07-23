@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.trigger.wheel;
+package io.github.pinpols.batch.trigger.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -23,8 +23,8 @@ import org.quartz.CronExpression;
  *
  * <ol>
  *   <li>基本算法正确(next 计算 / isValid / IAE)
- *   <li><b>关键:与 Quartz CronExpression 直接调用 next-fire-time 序列完全一致</b> — 切换 wheel scheduler 前的 sanity
- *       check,保证业务侧 cron 表达式 0 改动 + fire 时刻 跟 Quartz 时代完全相同
+ *   <li><b>关键：与 Quartz CronExpression 直接调用 next-fire-time 序列完全一致</b> check,保证业务侧 cron 表达式 0 改动 +
+ *       fire 时刻 跟 Quartz 时代完全相同
  * </ol>
  *
  * <p>测试覆盖常见 cron 模式 + Quartz 扩展字符 (L / W / #) + 跨夏令时 / 跨年。

@@ -23,7 +23,7 @@
 
 ## 背景
 
-缺口分析(2026-06-20)触发侧 Top 缺口 #1:**依赖感知 fire(MISSING)**。现状(`HashedWheelTriggerScheduler` / `QuartzLaunchJob`)是**纯时间触发**——cron 到点即 `doFire`,**不看上游就绪**:
+缺口分析(2026-06-20)触发侧 Top 缺口 #1:**依赖感知 fire(MISSING)**。当时 `QuartzLaunchJob` 是**纯时间触发**——cron 到点即执行，**不看上游就绪**:
 
 1. 结算链路常是「源系统出文件 → 我方导入 → 加工 → 出账」,若上游(源文件 / 上游 job)还没好,纯时间 fire 会**拉起一个注定无输入 / 半输入的批**,要么空跑、要么基于不完整数据产出**错误结算结果**,级联污染下游。
 2. 现有依赖能力都在 **DAG 内**:`CrossDayDependencyResolver`(ADR-018,workflow 节点等上游批次日 job)、`CalendarDependencyEntity`(ADR-023,日历间 WAIT_SETTLED/WAIT_CUTOFF)。这些都发生在**已 launch 之后**的 workflow 推进期——**管不到「该不该 launch」这一层**。
@@ -56,15 +56,15 @@
 
 ### 2. fire 前就绪查询(只读 internal API)
 
-`HashedWheelTriggerScheduler.doFire`(及 Quartz 路径)在调用 `TriggerService.launchScheduled` **之前**:
+`QuartzLaunchJob` 调用 `TriggerService.launchScheduled` 时：
 
 - 若触发器无 `dependsOn` → 行为不变(直接 fire),**向后兼容、默认无依赖**。
 - 若有 `dependsOn` → 调 orchestrator 新增只读端点 `GET /internal/readiness?tenantId=&bizDate=&deps=...`,返回各依赖 `READY/PENDING`。
   - 全 `READY` → 正常 fire。
-  - 有 `PENDING` 且未超 `readinessWindow` → **defer**:不 fire,不前移 `next_fire_time`,标记一条 pending-readiness,留待下一扫描窗重评(类似 misfire pending 但语义是「等就绪」)。
+  - 有 `PENDING` 且未超 `readinessWindow` → **defer**：不 fire，创建 one-shot retry trigger，保留原始 fire 时间并在下一重检周期重评。
   - 超 `readinessWindow` 仍 `PENDING` → 落 `trigger_misfire_pending`,走既有 misfire 策略(AUTO 补跑 / MANUAL_APPROVAL 等)。
 
-> **实现状态(2026-06):defer 已落地**。`HashedWheelTriggerScheduler` 未就绪不再 skip 丢批:窗口内重检(把 `next_fire_time` 设为重检时钟 `now+recheckInterval`、`trigger_runtime_state.readiness_deferred_since` 记原始触发时刻 pin 住 bizDate、`last_fire_status=WAITING_READINESS`),超窗推进到下一 cron 并标 `WAITING_READINESS_TIMEOUT` + ERROR/metric。**与本节差异**:超窗 give-up 当前是"推进+告警+人工 replay",**未**自动落 `trigger_misfire_pending` 走 misfire 策略(避免 AUTO 无限 catch-up 循环);该 misfire 路由留作后续增强。配置/metric 见 `docs/runbook/dependency-aware-fire.md`。
+> **当前实现**：Quartz one-shot retry trigger 在窗口内重检，JobDataMap 保存原始 fire 时间、首次 defer 时间和 TriggerType，确保 bizDate 与 misfire 语义不漂移。超窗后停止 retry，记录 ERROR 和 timeout metric，人工决定是否 replay；当前未自动落 `trigger_misfire_pending`。
 
 ### 3. 边界与一致性
 

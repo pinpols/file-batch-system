@@ -3,8 +3,8 @@
 # 24-trigger-stage6d.sh:Trigger P0 misfire / cron storm / outbox recovery
 #
 # 覆盖:
-#   - 高频 cron fire（当前 wheel 本地参数只要求至少触发 1 次；亚分钟连续 fire 记录为限制）
-#   - wheel 模式下 enabled=false/true 暂停恢复
+#   - 高频 cron fire
+#   - Quartz 模式下 enabled=false/true 暂停恢复
 #   - MANUAL_APPROVAL misfire + catch-up approve replay
 #   - requestId / Idempotency-Key 重放去重
 #   - trigger_outbox_event FAILED 积压恢复并最终 PUBLISHED
@@ -97,6 +97,21 @@ def launch(request_id, batch_key):
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {request_id}")
 
+def manage(action, job_code):
+    req = urllib.request.Request(
+        f"{BASE}/api/triggers/management/{action}?tenantId=ta&jobCode={job_code}",
+        data=b"",
+        headers={
+            "X-Tenant-Id": "ta",
+            "X-Internal-Secret": SECRET,
+            "X-Request-Id": f"{BATCH}-{action}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"trigger management {action} failed")
+
 def wait_int(label, sql, predicate, timeout=180, interval=2):
     deadline = time.time() + timeout
     last = 0
@@ -121,6 +136,7 @@ scheduled_before = wait_int(
 )
 
 print("==> pause and resume scheduled trigger", flush=True)
+manage("pause", CRON_JOB)
 psql_file("docs/test-data/sim-stage6d-trigger-pause.sql", ("job_code", CRON_JOB))
 paused_count = int(scalar(
     "select count(*) from batch.trigger_request "
@@ -140,6 +156,7 @@ if paused_after != paused_count:
     raise RuntimeError("scheduled trigger fired while paused")
 
 psql_file("docs/test-data/sim-stage6d-trigger-resume.sql", ("job_code", CRON_JOB))
+manage("register", CRON_JOB)
 resumed_count = wait_int(
     "resume-fire",
     "select count(*) from batch.trigger_request "
@@ -151,6 +168,19 @@ resumed_count = wait_int(
 )
 
 print("==> misfire pending + catch-up replay", flush=True)
+wait_int(
+    "quartz-misfire-registered",
+    "select count(*) from quartz.qrtz_triggers "
+    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'",
+    lambda v: v >= 1,
+    timeout=90,
+)
+psql(
+    "update quartz.qrtz_triggers "
+    "set next_fire_time=(extract(epoch from now() - interval '120 seconds') * 1000)::bigint, "
+    "trigger_state='WAITING' "
+    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'"
+)
 misfire_count = wait_int(
     "misfire-pending",
     "select count(*) from batch.trigger_misfire_pending "

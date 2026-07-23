@@ -9,15 +9,4 @@ public record ScheduledTriggerCommand(
     Instant fireTime,
     TriggerType triggerType,
     String requestId,
-    String traceId,
-    Long triggerRuntimeStateId) {
-
-  public ScheduledTriggerCommand(
-      TriggerDescriptor descriptor,
-      Instant fireTime,
-      TriggerType triggerType,
-      String requestId,
-      String traceId) {
-    this(descriptor, fireTime, triggerType, requestId, traceId, null);
-  }
-}
+    String traceId) {}

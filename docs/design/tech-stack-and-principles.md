@@ -15,8 +15,7 @@
 | 对象存储 | MinIO Java SDK | 8.6.0 | common, orchestrator, workers |
 | 分布式缓存 / SSE | Spring Data Redis (Lettuce) | managed | orchestrator, console-api |
 | 分布式锁 | ShedLock (JDBC + Redis) | 6.3.0 | common |
-| 调度（默认） | Netty HashedWheelTimer | managed | trigger（`batch.trigger.scheduler-impl=wheel`，默认值） |
-| 调度（opt-in 回退） | Quartz Scheduler (JDBC JobStore) | managed | trigger（`BATCH_TRIGGER_SCHEDULER_IMPL=quartz`） |
+| 调度 | Quartz Scheduler (JDBC JobStore) | managed | trigger |
 | 安全 | Spring Security + OAuth2 JOSE | managed | console-api |
 | HTTP 客户端 | OkHttp | 4.12.0 | export, dispatch |
 | 电子表格 | Apache POI | 5.4.0 | import, export, console-api |
