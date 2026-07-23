@@ -42,8 +42,9 @@
 
 | # | 文件 | 作用 |
 |---|---|---|
-| 15 | [feature-switches.md](./feature-switches.md) | Phase 2 全部能力开关（quota / cache / replica / kafka / quartz）|
+| 15 | [feature-switches.md](./feature-switches.md) | 跨模块能力开关索引、默认值、风险和回滚 |
 | 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED）切换 |
+| 17a | [stateful-backend-cutover.md](./stateful-backend-cutover.md) | Quota / Report Outbox / Object Storage 有状态后端切换守卫与 SOP |
 
 ### 五、观测 / 安全 / 验证 / CI
 

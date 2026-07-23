@@ -3,6 +3,8 @@
 > 状态：阶段二落地。日期 2026-06-06。
 > 适用 `batch.storage.backend=filesystem` 模式（NAS / 本地 POSIX 文件系统当主存储）。S3 模式无需阅读本文档。
 > 设计原文 → [`docs/design/object-storage-abstraction.md`](../design/object-storage-abstraction.md) §4 / §5 / §8。
+> 从 S3 切换或修改 root 前，必须先执行
+> [Stateful Backend Cutover](./stateful-backend-cutover.md) 并使用一次性 cutover id。
 
 ## 1. 何时选 FS 后端
 

@@ -19,8 +19,12 @@ public class ImportScannerProperties {
   /** 标记命名:APPEND_FULL_NAME(默认,全名+后缀)或 REPLACE_EXTENSION(去末段扩展名,旧行为)。 */
   private String doneFileNaming = "APPEND_FULL_NAME";
 
-  /** 标记格式:MARKER(默认,空标记)或 MANIFEST(.chk 为 JSON,校验 size+注入 checksum/recordCount)。 */
-  private String doneFileFormat = "MARKER";
+  /**
+   * 标记格式:MARKER(默认,空标记)或 MANIFEST(.chk 为 JSON,校验 size+注入 checksum/recordCount)。
+   *
+   * <p>JSON 是 MANIFEST 的兼容别名;使用枚举保证未知值在启动绑定阶段显式失败。
+   */
+  private DoneFileFormat doneFileFormat = DoneFileFormat.MARKER;
 
   /** 批次清单(ADR-040)开关:true 时 scanner 识别批次清单对象,按其 requiredFiles 动态注入 required_file_set。 */
   private boolean batchManifestEnabled = false;
@@ -49,6 +53,22 @@ public class ImportScannerProperties {
   private final Arrival arrival = new Arrival();
 
   private final EventArrival eventArrival = new EventArrival();
+
+  public enum DoneFileFormat {
+    MARKER(false),
+    MANIFEST(true),
+    JSON(true);
+
+    private final boolean manifest;
+
+    DoneFileFormat(boolean manifest) {
+      this.manifest = manifest;
+    }
+
+    public boolean isManifest() {
+      return manifest;
+    }
+  }
 
   @Data
   public static class EventArrival {

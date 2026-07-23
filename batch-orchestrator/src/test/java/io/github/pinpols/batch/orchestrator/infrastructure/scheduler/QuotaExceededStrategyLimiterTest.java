@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -49,7 +51,7 @@ class QuotaExceededStrategyLimiterTest {
     when(resScheduler.getGlobalMaxRunningJobs()).thenReturn(0L); // 关掉全局闸门
     when(resScheduler.getQuotaResetSlidingWindowHours()).thenReturn(24);
     // ADR-041 Phase2.3:平台默认有界队列(QUEUE_DEFER),与生产 ResourceSchedulerProperties 默认一致。
-    when(resScheduler.getDefaultExceededStrategy()).thenReturn("QUEUE_DEFER");
+    when(resScheduler.getDefaultExceededStrategy()).thenReturn(QuotaExceededStrategy.QUEUE_DEFER);
 
     limiter =
         new DefaultConcurrencyLimiter(jobInstanceMapper, configCache, quotaRuntime, governance);
@@ -103,12 +105,21 @@ class QuotaExceededStrategyLimiterTest {
   @Test
   void nullStrategy_withRejectPlatformDefault_stillRejects() {
     // 平台默认可配回 REJECT 恢复旧硬拒语义。
-    when(resScheduler.getDefaultExceededStrategy()).thenReturn("REJECT");
+    when(resScheduler.getDefaultExceededStrategy()).thenReturn(QuotaExceededStrategy.REJECT);
     arrangeBurstExceeded(null);
 
     ResourceCheck check = limiter.check(request(), null);
 
     assertThat(check.failFast()).isTrue();
+  }
+
+  @Test
+  void unknownTenantStrategy_shouldFailExplicitly() {
+    arrangeBurstExceeded("QUEU_DEFER");
+
+    assertThatThrownBy(() -> limiter.check(request(), null))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("QUEU_DEFER");
   }
 
   /** quota 未触顶时 limiter 必须 allow，与 strategy 无关。 */

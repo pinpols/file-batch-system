@@ -37,9 +37,12 @@ public final class BusinessDataSourceBuilder {
       BusinessRoutingProperties routingProperties,
       TenantPlacementRepository placementRepository,
       String appName) {
-    if (routingProperties != null
-        && routingProperties.isEnabled()
-        && !routingProperties.getShards().isEmpty()) {
+    if (routingProperties != null && routingProperties.isEnabled()) {
+      if (routingProperties.getShards() == null || routingProperties.getShards().isEmpty()) {
+        throw new IllegalStateException(
+            "batch.datasource.business.routing.enabled=true requires at least one configured"
+                + " shard");
+      }
       return buildMultiShard(
           properties, pgSessionProperties, routingProperties, placementRepository, appName);
     }

@@ -10,8 +10,8 @@ docker/compose/app.yml 默认 :-false 的 bug，导致行为静默不一致。
   application.yml: ${VAR:default}    (Spring Boot 占位符)
   compose.yml:     ${VAR:-default}   (POSIX shell 风格)
 
-只检查"VAR 同时出现在两边且都带 default"的条目；
-- 仅 yml 有（未透传到 compose）→ 跳过（compose 不消费就无歧义）
+默认值检查只比较"VAR 同时出现在两边且都带 default"的条目；
+- 仅 yml 有 → 一般跳过；REQUIRED_COMPOSE_FEATURE_VARS 中登记的公共开关必须透传
 - 仅 compose 有（如 JAVA_OPTS / IMAGE_TAG）→ 跳过（无 yml 对应方）
 - VAR 用 :?required 形式 → 跳过（明确要求必传，无 default）
 - 嵌套占位符 ${VAR:-${OTHER}} → 跳过（间接默认，复杂场景人工 review）
@@ -39,6 +39,7 @@ SPRING_PLACEHOLDER = re.compile(r'\$\{([A-Z][A-Z0-9_]*):([^${}?][^${}]*)\}')
 
 # Compose ${VAR:-default} or ${VAR:?msg}
 COMPOSE_PLACEHOLDER = re.compile(r'\$\{([A-Z][A-Z0-9_]*):-([^${}][^${}]*)\}')
+ENV_REFERENCE = re.compile(r'\$\{([A-Z][A-Z0-9_]*)')
 
 # URL / 连接串前缀
 URL_PREFIXES = ("http://", "https://", "jdbc:")
@@ -68,6 +69,57 @@ def is_network_topology_pair(yml_v: str, compose_v: str) -> bool:
 DRIFT_ALLOWLIST = {
     "BATCH_CONSOLE_INSTANCE_ID":
         "compose 加 -local 后缀区分多容器实例；yml 默认裸名给 IDE 直跑",
+}
+
+# Public feature switches documented in docs/runbook/feature-switches.md. These
+# must be forwarded by Compose so setting them in .env.local is not silently
+# ignored by containers. Secret-bearing and indexed shard variables are
+# intentionally excluded; they have separate deployment wiring.
+REQUIRED_COMPOSE_FEATURE_VARS = {
+    "BATCH_CONSOLE_AI_PROVIDER",
+    "BATCH_CONSOLE_READ_REPLICA_ENABLED",
+    "BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE",
+    "BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE",
+    "BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED",
+    "BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE",
+    "BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED",
+    "BATCH_MQ_ROUTING_MODE",
+    "BATCH_QUOTA_BACKEND_CUTOVER_ID",
+    "BATCH_QUOTA_RUNTIME_STORE",
+    "BATCH_QUOTA_SNAPSHOT_ENABLED",
+    "BATCH_RATE_LIMIT_ENABLED",
+    "BATCH_RATE_LIMIT_MAX_CLAIM_REQUESTS_PER_TENANT_PER_MINUTE",
+    "BATCH_RATE_LIMIT_MAX_NEW_REQUESTS_PER_TENANT_PER_MINUTE",
+    "BATCH_RATE_LIMIT_MAX_REGISTER_REQUESTS_PER_TENANT_PER_MINUTE",
+    "BATCH_RATE_LIMIT_MAX_RELEASE_REQUESTS_PER_TENANT_PER_MINUTE",
+    "BATCH_RATE_LIMIT_MAX_REPORT_REQUESTS_PER_TENANT_PER_MINUTE",
+    "BATCH_REQUEST_SIGNING_ENABLED",
+    "BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY",
+    "BATCH_SCHEDULER_WORKER_CACHE_ENABLED",
+    "BATCH_SENSOR_ENABLED",
+    "BATCH_STORAGE_BACKEND",
+    "BATCH_STORAGE_BACKEND_CUTOVER_ID",
+    "BATCH_STORAGE_FILESYSTEM_ROOT",
+    "BATCH_S3_REGION",
+    "BATCH_WORKER_ATOMIC_ENABLED_TYPES",
+    "BATCH_WORKER_CHECKPOINT_ENABLED",
+    "BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED",
+    "BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED",
+    "BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT",
+    "BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX",
+    "BATCH_WORKER_REPORT_OUTBOX_ENABLED",
+    "BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID",
+    "BATCH_WORKER_REPORT_OUTBOX_INITIAL_BACKOFF_MS",
+    "BATCH_WORKER_REPORT_OUTBOX_JITTER_MS",
+    "BATCH_WORKER_REPORT_OUTBOX_MAX_BACKOFF_MS",
+    "BATCH_WORKER_REPORT_OUTBOX_MAX_PUBLISH_ATTEMPTS",
+    "BATCH_WORKER_REPORT_OUTBOX_PAUSE_POLL_ON_LEASE_CIRCUIT",
+    "BATCH_WORKER_REPORT_OUTBOX_POLL_BATCH_SIZE",
+    "BATCH_WORKER_REPORT_OUTBOX_POLL_INTERVAL_MS",
+    "BATCH_WORKER_REPORT_OUTBOX_PUBLISHING_STALE_MS",
+    "BATCH_WORKER_REPORT_OUTBOX_SQLITE_PATH",
+    "BATCH_WORKER_REPORT_OUTBOX_STALE_RECOVER_INTERVAL_MS",
+    "BATCH_WORKER_REPORT_OUTBOX_STORAGE",
 }
 
 
@@ -119,6 +171,13 @@ def main() -> int:
         ROOT / "docker/compose/test.yml",
     ]
     compose_defaults = merge(*(scan_yml(p, COMPOSE_PLACEHOLDER) for p in compose_files))
+    compose_references = {
+        match.group(1)
+        for path in compose_files
+        if path.exists()
+        for match in ENV_REFERENCE.finditer(path.read_text(encoding="utf-8"))
+    }
+    missing_feature_vars = sorted(REQUIRED_COMPOSE_FEATURE_VARS - compose_references)
 
     common = set(yml_defaults) & set(compose_defaults)
 
@@ -160,9 +219,18 @@ def main() -> int:
     print(f"  yml ({len(yml_files)} 文件)         共 {len(yml_defaults)} 个带默认值的占位符")
     print(f"  compose ({len(compose_files)} 文件) 共 {len(compose_defaults)} 个带默认值的占位符")
     print(f"  共同 VAR                            {len(common)} 个")
-    print(f"  仅 yml                              {len(yml_only)} 个 (compose 不透传，OK)")
+    print(f"  仅 yml                              {len(yml_only)} 个 (非公共开关可不透传)")
     print(f"  仅 compose                          {len(compose_only)} 个 (无 yml 消费方，OK)")
     print()
+
+    if missing_feature_vars:
+        print(
+            "❌ 文档登记的功能开关未透传到 Compose "
+            f"{len(missing_feature_vars)} 项："
+        )
+        for var in missing_feature_vars:
+            print(f"  {var}")
+        print()
 
     if network_topology_drifts:
         print(f"🌐 网络拓扑差异（预期，by-design）{len(network_topology_drifts)} 项：")
@@ -197,6 +265,9 @@ def main() -> int:
         print()
         print("如果差异是 by-design（如网络拓扑）：URL/host:port 已自动跳过；")
         print("其他特殊场景在脚本顶部 DRIFT_ALLOWLIST 加白名单 + 注明原因。")
+        return 1 if args.check else 0
+
+    if missing_feature_vars:
         return 1 if args.check else 0
 
     print("✅ 全部业务参数同步（网络拓扑 / 白名单差异已识别）")

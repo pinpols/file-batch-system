@@ -26,7 +26,7 @@ public class ConsoleAiProperties {
    * 聊天模型提供方:{@code anthropic}(默认,走 Claude,推理质量更高)或 {@code openai}。 嵌入(RAG 向量化)始终走 OpenAI
    * embedding,与本项无关。
    */
-  private String provider = "anthropic";
+  private Provider provider = Provider.ANTHROPIC;
 
   /** 聊天模型 ID(仅用于审计记录展示;实际模型由对应 provider 的 spring.ai 配置决定)。 */
   private String model = "claude-opus-4-8";
@@ -120,6 +120,12 @@ public class ConsoleAiProperties {
 
   /** 只读诊断工具(function-calling):让模型按需拉取实时 job 状态 / 日志 / 失败实例。 */
   private Tools tools = new Tools();
+
+  /** 支持的聊天模型提供方。使用枚举绑定确保拼写错误在应用启动期失败。 */
+  public enum Provider {
+    ANTHROPIC,
+    OPENAI
+  }
 
   /** L3 工具调用参数。 */
   @Data

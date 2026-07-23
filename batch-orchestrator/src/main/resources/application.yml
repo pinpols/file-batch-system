@@ -161,6 +161,9 @@ batch:
   quota:
     # 配额运行时状态后端：redis（默认，Lua 原子脚本，适合海量并发）/ database（@Version 乐观锁，遗留路径）
     runtime-store: ${BATCH_QUOTA_RUNTIME_STORE:redis}
+    backend-guard:
+      # runtime-store 或 Redis/PG 定位变化时必须提供新的单次 cutover id；首次基线登记留空
+      cutover-id: ${BATCH_QUOTA_BACKEND_CUTOVER_ID:}
     snapshot:
       # 是否启用 Redis → PG 配额状态周期 snapshot（仅 runtime-store=redis 时生效）
       enabled: ${BATCH_QUOTA_SNAPSHOT_ENABLED:true}

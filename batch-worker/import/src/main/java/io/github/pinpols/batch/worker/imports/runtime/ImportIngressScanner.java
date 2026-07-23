@@ -533,7 +533,7 @@ public class ImportIngressScanner {
   }
 
   private boolean isManifestMode() {
-    return "MANIFEST".equalsIgnoreCase(scannerProperties.getDoneFileFormat());
+    return scannerProperties.getDoneFileFormat().isManifest();
   }
 
   /** 读 .chk JSON manifest:解析 + 免下载 size 校验;失败/不符返回 null。 */

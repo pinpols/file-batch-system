@@ -40,4 +40,19 @@ public class BatchWorkerAtomicProperties {
    * </ul>
    */
   private Set<String> enabledTaskTypes = Set.of();
+
+  /**
+   * 兼容早期配置中误用的 {@code enabled-types} 键。
+   *
+   * <p>新配置统一使用 {@code enabled-task-types};保留此别名避免已有部署升级后白名单行为突变。
+   */
+  @Deprecated(forRemoval = false)
+  public Set<String> getEnabledTypes() {
+    return enabledTaskTypes;
+  }
+
+  @Deprecated(forRemoval = false)
+  public void setEnabledTypes(Set<String> enabledTypes) {
+    this.enabledTaskTypes = enabledTypes == null ? Set.of() : enabledTypes;
+  }
 }

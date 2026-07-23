@@ -6,9 +6,11 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.EncryptingObjectStore;
 import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
 import io.github.pinpols.batch.common.storage.MeteredObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectStorageBackendGuard;
 import io.github.pinpols.batch.common.storage.S3ObjectStore;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.micrometer.core.instrument.MeterRegistry;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationRunner;
@@ -44,9 +46,22 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @EnableConfigurationProperties({
   S3StorageProperties.class,
   FilesystemStorageProperties.class,
+  StorageBackendGuardProperties.class,
   ObjectStoreEncryptionProperties.class
 })
 public class BatchObjectStoreAutoConfiguration {
+
+  @Bean
+  @ConditionalOnBean(DataSource.class)
+  public ObjectStorageBackendGuard objectStorageBackendGuard(
+      DataSource dataSource,
+      S3StorageProperties s3Properties,
+      FilesystemStorageProperties filesystemProperties,
+      StorageBackendGuardProperties backendGuardProperties,
+      org.springframework.core.env.Environment environment) {
+    return new ObjectStorageBackendGuard(
+        dataSource, s3Properties, filesystemProperties, backendGuardProperties, environment);
+  }
 
   /** S3 后端 raw 实现（默认）。 */
   @Bean(name = "rawObjectStore")
