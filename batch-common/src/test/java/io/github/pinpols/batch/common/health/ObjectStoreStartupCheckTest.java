@@ -3,8 +3,10 @@ package io.github.pinpols.batch.common.health;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,9 +16,14 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
+import io.github.pinpols.batch.common.storage.ObjectSummary;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -80,6 +87,41 @@ class ObjectStoreStartupCheckTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("statSize");
     verify(store).deleteMany(anyString(), any());
+  }
+
+  @Test
+  void shouldFailFastWhenPresignReturnsBlank() {
+    BatchObjectStore store = mock(BatchObjectStore.class);
+    AtomicReference<String> probeKey = new AtomicReference<>();
+    AtomicReference<byte[]> probePayload = new AtomicReference<>();
+    doAnswer(
+            invocation -> {
+              probeKey.set(invocation.getArgument(1));
+              try (InputStream in = invocation.getArgument(2)) {
+                probePayload.set(in.readAllBytes());
+              }
+              return null;
+            })
+        .when(store)
+        .put(anyString(), anyString(), any(), anyLong(), anyString());
+    when(store.exists(anyString(), anyString())).thenReturn(true);
+    when(store.statSize(anyString(), anyString())).thenReturn(PROBE_PAYLOAD_LEN);
+    when(store.get(anyString(), anyString()))
+        .thenAnswer(invocation -> new ByteArrayInputStream(probePayload.get()));
+    when(store.list(anyString(), anyString(), any(), anyInt()))
+        .thenAnswer(
+            invocation ->
+                new ObjectListing(
+                    List.of(
+                        new ObjectSummary(probeKey.get(), PROBE_PAYLOAD_LEN, Instant.now(), "e")),
+                    null));
+    when(store.presign(anyString(), anyString(), any())).thenReturn(" ");
+
+    ObjectStoreStartupCheck check = new ObjectStoreStartupCheck(store, BUCKET);
+
+    assertThatThrownBy(() -> check.run(null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("presign");
   }
 
   @Test

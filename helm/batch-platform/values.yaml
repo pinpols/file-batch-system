@@ -56,6 +56,9 @@ storage:
   backend: "s3"
   backendCutoverId: ""
   filesystemRoot: ""
+  filesystemDownloadBaseUrl: ""
+  filesystemPresignSecret: ""
+  filesystemDefaultPresignTtl: "5m"
 
 # ── 跨服务 ──────────────────────────────────────────────────────────────
 
@@ -314,7 +317,7 @@ orchestrator:
     batchManifestEnabled: false
   fileGovernance:
     arrival:
-      requireVerified: false
+      requireVerified: true
   sensor:
     enabled: true
   rateLimit:

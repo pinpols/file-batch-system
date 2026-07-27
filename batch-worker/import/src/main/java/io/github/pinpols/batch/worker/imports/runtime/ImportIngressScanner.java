@@ -311,6 +311,9 @@ public class ImportIngressScanner {
     }
     if (manifest != null) {
       metadata.put("manifestSchemaVersion", manifest.schemaVersion());
+      metadata.put(
+          "manifestChecksumScope",
+          Texts.hasText(manifest.checksumScope()) ? manifest.checksumScope() : "RAW_OBJECT");
       if (manifest.recordCount() != null) {
         metadata.put("expectedRecordCount", manifest.recordCount());
       }

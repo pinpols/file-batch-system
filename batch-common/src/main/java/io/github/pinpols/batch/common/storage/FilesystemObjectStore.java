@@ -117,6 +117,10 @@ public class FilesystemObjectStore implements BatchObjectStore {
       Files.createDirectories(dst.getParent());
       temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
       Files.copy(src, temp, StandardCopyOption.COPY_ATTRIBUTES);
+      try (FileChannel ch = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+        // 与 put 路径保持同一持久性语义：发布前先把临时文件内容刷盘。
+        ch.force(true);
+      }
       try {
         Files.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
       } catch (AtomicMoveNotSupportedException atomicEx) {

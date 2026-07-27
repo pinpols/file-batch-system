@@ -39,6 +39,8 @@ data:
   BATCH_STORAGE_BACKEND: {{ (.Values.storage).backend | default "s3" | quote }}
   BATCH_STORAGE_BACKEND_CUTOVER_ID: {{ (.Values.storage).backendCutoverId | default "" | quote }}
   BATCH_STORAGE_FILESYSTEM_ROOT: {{ (.Values.storage).filesystemRoot | default "" | quote }}
+  BATCH_STORAGE_FILESYSTEM_DOWNLOAD_BASE_URL: {{ (.Values.storage).filesystemDownloadBaseUrl | default "" | quote }}
+  BATCH_STORAGE_FILESYSTEM_DEFAULT_PRESIGN_TTL: {{ (.Values.storage).filesystemDefaultPresignTtl | default "5m" | quote }}
 
   # ── 跨服务 ──────────────────────────────────────────────────────────
   BATCH_ORCHESTRATOR_BASE_URL: {{ .Values.orchestratorBaseUrl | quote }}

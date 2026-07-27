@@ -6,9 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 import javax.crypto.Cipher;
@@ -69,7 +71,7 @@ class ImportPreprocessPipelineTest {
     entries.put("second.csv", "second".getBytes(StandardCharsets.UTF_8));
     byte[] tar = buildTar(entries);
     Map<String, Object> step = Map.of("type", "UNTAR", "entryName", "second.csv");
-    Map<String, Object> template = Map.of("preprocess_pipeline", java.util.List.of(step));
+    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
     byte[] out = ImportPreprocessPipeline.run(tar, null, template, true);
     assertThat(out).isEqualTo("second".getBytes(StandardCharsets.UTF_8));
   }
@@ -191,11 +193,11 @@ class ImportPreprocessPipelineTest {
   @Test
   void verifyDigestShouldPassWhenChecksumMatches() throws Exception {
     byte[] raw = "abc".getBytes(StandardCharsets.UTF_8);
-    java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+    MessageDigest md = MessageDigest.getInstance("SHA-256");
     String expectedHex = HexFormat.of().formatHex(md.digest(raw));
     Map<String, Object> step =
         Map.of("type", "VERIFY_DIGEST", "algorithm", "SHA-256", "expectedHex", expectedHex);
-    Map<String, Object> template = Map.of("preprocess_pipeline", java.util.List.of(step));
+    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
     byte[] out = ImportPreprocessPipeline.run(raw, null, template, false);
     assertThat(out).isEqualTo(raw);
@@ -207,8 +209,53 @@ class ImportPreprocessPipelineTest {
     Map<String, Object> step =
         Map.of(
             "type", "VERIFY_DIGEST", "algorithm", "SHA-256", "expectedHex", "deadbeef".repeat(8));
-    Map<String, Object> template = Map.of("preprocess_pipeline", java.util.List.of(step));
+    Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
     assertThatThrownBy(() -> ImportPreprocessPipeline.run(raw, null, template, false))
         .isInstanceOf(ImportPreprocessException.class);
+  }
+
+  @Test
+  void implicitChecksumShouldVerifyRawBytesBeforeImplicitTransform() throws Exception {
+    byte[] plain = "hello".getBytes(StandardCharsets.UTF_8);
+    byte[] gz = gzip(plain);
+    String rawChecksum = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(gz));
+    ImportPayload payload =
+        new ImportPayload(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "SHA-256",
+            rawChecksum,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Map.of());
+    Map<String, Object> template = Map.of("compress_type", "GZIP");
+
+    byte[] out = ImportPreprocessPipeline.run(gz, payload, template, false);
+
+    assertThat(out).isEqualTo(plain);
+  }
+
+  private static byte[] gzip(byte[] payload) throws Exception {
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    try (GZIPOutputStream gos = new GZIPOutputStream(bos)) {
+      gos.write(payload);
+    }
+    return bos.toByteArray();
   }
 }

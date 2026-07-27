@@ -278,6 +278,11 @@ batch:
     filesystem:
       # 绝对路径；所有服务必须挂载同一 NAS 并使用一致路径
       root: ${BATCH_STORAGE_FILESYSTEM_ROOT:}
+      # FS 后端无原生 presign，返回 console 代下端点；filesystem 模式下 presign 会 fail-close 校验此值
+      download-base-url: ${BATCH_STORAGE_FILESYSTEM_DOWNLOAD_BASE_URL:}
+      # 可选独立 HMAC 密钥；留空时回退 batch.security.internal-secret
+      presign-secret: ${BATCH_STORAGE_FILESYSTEM_PRESIGN_SECRET:}
+      default-presign-ttl: ${BATCH_STORAGE_FILESYSTEM_DEFAULT_PRESIGN_TTL:5m}
     s3:
       # 访问地址（http/https）。AWS: https://s3.<region>.amazonaws.com;OSS: https://oss-<region>.aliyuncs.com
       endpoint: ${BATCH_S3_ENDPOINT:http://localhost:19000}

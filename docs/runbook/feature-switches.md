@@ -38,7 +38,7 @@
 | `batch.worker.import.scanner.done-file-format` | worker-import | **MARKER** | **MARKER** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT`=MARKER/MANIFEST/JSON；JSON 是 MANIFEST 兼容别名，均执行 sidecar manifest 强校验（#570），未知值启动失败 |
 | `batch.worker.import.scanner.done-file-suffix` | worker-import | **`.done`** | **`.done`** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX`；done 文件后缀可配（#569） |
 | `batch.worker.import.scanner.batch-manifest-enabled` | worker-import | **false** | **false** | 🟡 中 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED`；开后扫描期强校验批次清单（文件完整性，#570）|
-| `batch.file-governance.arrival.require-verified` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED`；开后到达组要求文件已校验通过才放行（#570）|
+| `batch.file-governance.arrival.require-verified` | orchestrator | **false** | **true** | 🟡 中 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED`；生产 Helm 默认开启，到达组要求文件已校验通过才放行（#570）|
 | `batch.rate-limit.enabled` | orchestrator | **true**（2026-06-24 起防接口盗刷；旧默认 false） | **true** | 🟢 低 | `BATCH_RATE_LIMIT_ENABLED`；按租户固定窗口限流总开关，关闸后所有 action 放行。详见 §1.2 限流防盗刷 |
 | `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | orchestrator | launch/release **3000**、register **300**、claim/report **12000** | 同 | 🟡 中 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE`；高水位只拦 runaway，<=0 关闭单项 |
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |

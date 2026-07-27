@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.storage.ObjectListing;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -67,9 +68,13 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
       if (!listed) {
         throw fail("list 未列出刚写入的探针对象", key, null);
       }
+      String presignedUrl = objectStore.presign(bucket, key, Duration.ofMinutes(1));
+      if (presignedUrl == null || presignedUrl.isBlank()) {
+        throw fail("presign 返回空 URL", key, null);
+      }
       log.info(
-          "object store startup check passed: bucket={}, backend reachable + put/get/list/delete"
-              + " OK",
+          "object store startup check passed: bucket={}, backend reachable +"
+              + " put/get/list/presign/delete OK",
           bucket);
     } catch (IllegalStateException ex) {
       throw ex;
