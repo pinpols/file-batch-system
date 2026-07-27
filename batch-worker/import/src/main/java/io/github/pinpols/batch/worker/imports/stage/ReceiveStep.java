@@ -203,6 +203,8 @@ public class ReceiveStep implements ImportStageStep {
     backfillBlank(asMap, "originalFileName", fileRecord.get("original_file_name"));
     backfillBlank(asMap, "fileCode", fileRecord.get("file_code"));
     backfillBlank(asMap, "bizType", fileRecord.get("biz_type"));
+    backfillBlank(asMap, "checksumType", fileRecord.get("checksum_type"));
+    backfillBlank(asMap, "checksumValue", fileRecord.get("checksum_value"));
     return objectMapper.convertValue(asMap, ImportPayload.class);
   }
 

@@ -10,6 +10,7 @@ public record SidecarManifest(
     Long sizeBytes,
     String checksumType,
     String checksumValue,
+    String checksumScope,
     Long recordCount,
     String bizDate,
     String batchNo,

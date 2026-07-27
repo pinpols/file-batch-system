@@ -51,14 +51,35 @@ public class FilesystemObjectStore implements BatchObjectStore {
   private final Path root;
   private final String downloadBaseUrl;
   private final String presignSecret;
+  private final Duration defaultPresignTtl;
+  private final long maxListScanEntries;
 
   public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret) {
+    this(root, downloadBaseUrl, presignSecret, Duration.ofMinutes(5), 200_000L);
+  }
+
+  public FilesystemObjectStore(
+      String root, String downloadBaseUrl, String presignSecret, long maxListScanEntries) {
+    this(root, downloadBaseUrl, presignSecret, Duration.ofMinutes(5), maxListScanEntries);
+  }
+
+  public FilesystemObjectStore(
+      String root,
+      String downloadBaseUrl,
+      String presignSecret,
+      Duration defaultPresignTtl,
+      long maxListScanEntries) {
     if (root == null || root.isBlank()) {
       throw new IllegalArgumentException("filesystem storage root must not be blank");
     }
     this.root = Paths.get(root).toAbsolutePath().normalize();
     this.downloadBaseUrl = downloadBaseUrl;
     this.presignSecret = presignSecret;
+    this.defaultPresignTtl =
+        defaultPresignTtl == null || defaultPresignTtl.isNegative() || defaultPresignTtl.isZero()
+            ? Duration.ofMinutes(5)
+            : defaultPresignTtl;
+    this.maxListScanEntries = maxListScanEntries <= 0 ? Long.MAX_VALUE : maxListScanEntries;
     try {
       Files.createDirectories(this.root);
     } catch (IOException ex) {
@@ -117,6 +138,10 @@ public class FilesystemObjectStore implements BatchObjectStore {
       Files.createDirectories(dst.getParent());
       temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
       Files.copy(src, temp, StandardCopyOption.COPY_ATTRIBUTES);
+      try (FileChannel ch = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+        // 与 put 路径保持同一持久性语义：发布前先把临时文件内容刷盘。
+        ch.force(true);
+      }
       try {
         Files.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
       } catch (AtomicMoveNotSupportedException atomicEx) {
@@ -211,7 +236,18 @@ public class FilesystemObjectStore implements BatchObjectStore {
     try (Stream<Path> walk = Files.walk(scanRoot)) {
       Iterator<Path> iterator =
           walk.filter(Files::isRegularFile).filter(path -> !isHiddenOrTemp(path)).iterator();
+      long scanned = 0L;
       while (iterator.hasNext()) {
+        scanned++;
+        if (scanned > maxListScanEntries) {
+          throw new ObjectStoreException(
+              "filesystem object list scan entries exceeded limit: bucket="
+                  + bucket
+                  + ", prefix="
+                  + safePrefix
+                  + ", maxListScanEntries="
+                  + maxListScanEntries);
+        }
         Path p = iterator.next();
         String relKey = relativeKey(bucketRoot, p);
         if (!relKey.startsWith(safePrefix)) {
@@ -253,7 +289,11 @@ public class FilesystemObjectStore implements BatchObjectStore {
           "filesystem presign requires non-blank secret (set"
               + " batch.storage.filesystem.presign-secret or batch.security.internal-secret)");
     }
-    Instant expiresAt = Instant.now().plus(ttl);
+    Duration effectiveTtl = ttl == null ? defaultPresignTtl : ttl;
+    if (effectiveTtl.isNegative() || effectiveTtl.isZero()) {
+      throw new ObjectStoreException("filesystem presign ttl must be positive");
+    }
+    Instant expiresAt = Instant.now().plus(effectiveTtl);
     String sig = FilesystemPresignTokens.sign(bucket, key, expiresAt, presignSecret);
     return FilesystemPresignTokens.buildUrl(
         downloadBaseUrl, bucket, key, expiresAt.getEpochSecond(), sig);

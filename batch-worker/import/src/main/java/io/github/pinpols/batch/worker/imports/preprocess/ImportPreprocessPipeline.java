@@ -113,7 +113,15 @@ public final class ImportPreprocessPipeline {
       }
       List<Map<String, Object>> steps = resolveSteps(template, bypassMode);
       byte[] current = input;
-      boolean digestVerifiedInPipeline = false;
+      boolean hasExplicitDigestStep =
+          steps.stream()
+              .map(step -> stringProp(step, KEY_TYPE))
+              .anyMatch(type -> "VERIFY_DIGEST".equalsIgnoreCase(type));
+      if (!bypassMode && !hasExplicitDigestStep) {
+        // 隐式 checksum 来自 file_record/.chk，语义固定为“入站原始对象字节”完整性校验。
+        // 若业务需要在解压/解密/转码之后校验，请在 preprocess_pipeline 中显式放置 VERIFY_DIGEST。
+        verifyImplicitChecksum(current, payload, template);
+      }
       for (Map<String, Object> step : steps) {
         String type = stringProp(step, KEY_TYPE);
         if (!Texts.hasText(type)) {
@@ -132,7 +140,6 @@ public final class ImportPreprocessPipeline {
           case "VERIFY_DIGEST" -> {
             if (!bypassMode) {
               verifyDigest(current, step, payload, template);
-              digestVerifiedInPipeline = true;
             }
           }
           case "VERIFY_RSA_SHA256" -> {
@@ -145,9 +152,6 @@ public final class ImportPreprocessPipeline {
               throw new ImportPreprocessException(
                   "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
         }
-      }
-      if (!bypassMode && !digestVerifiedInPipeline) {
-        verifyImplicitChecksum(current, payload, template);
       }
       return current;
     } catch (ImportPreprocessException ex) {

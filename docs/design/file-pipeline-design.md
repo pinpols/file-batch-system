@@ -270,7 +270,7 @@ BIN / 自定义二进制报文**不作为一期标准能力**，但系统应预�
 MANIFEST 模式的**完整性校验链**（复用既有阶段，不重复下载）：
 
 1. **size**：scanner 登记时即校验（免下载）。
-2. **checksum**：注入 `file_record` → preprocess `VERIFY_DIGEST` 在 worker 下载时实校（SHA-256 / MD5）。
+2. **checksum**：注入 `file_record` → worker 在 preprocess 阶段校验。无显式 `VERIFY_DIGEST` 时，隐式校验固定针对**入站原始对象字节**；如果要校验解压/解密/转码后的内容，必须在 `preprocess_pipeline` 中把 `VERIFY_DIGEST` 显式放到对应步骤之后。
 3. **recordCount**：注入 metadata → validate `row_count_check` 作为期望行数。
 
 > 到达组「成员都正确」由各成员各自的 MANIFEST 校验保证（一文件一 `.chk`）。组判定默认按 `requiredFileSet` 文件名满足条件触发；开 `file-governance.arrival.require-verified=true` 后，**还要求每个成员都已完整性背书**（`checksum_type != NONE`），否则文件名虽齐也保持 `WAITING_ARRIVAL`（reason `ARRIVED_PENDING_VERIFY`），超时仍走 `timeout-action`。
@@ -898,7 +898,7 @@ sequenceDiagram
 | `batch-worker-core` | 执行基座 | 统一消费、认领、心跳、租约续约、执行上下文、指标与异常包装 |
 | `batch-worker-import` | 导入链路 | RECEIVE / PREPROCESS / PARSE / VALIDATE / LOAD / FEEDBACK |
 | `batch-worker-export` | 导出链路 | PREPARE / GENERATE / STORE / REGISTER / COMPLETE |
-| `batch-worker-dispatch` | 分发链路 | PREPARE / DISPATCH / ACK / RETRY / COMPLETE |
+| `batch-worker-dispatch` | 分发链路 | PREPARE / DISPATCH / ACK / RETRY / COMPENSATE / COMPLETE |
 
 #### Step 级 Worker 路由配置建议
 
@@ -1096,4 +1096,3 @@ flowchart LR
 - 大文件任务必须绑定资源画像：`IO_HEAVY / CPU_HEAVY / DB_HEAVY`
 - 模板配置应包含 `streamingEnabled / pageSize / fetchSize / chunkSize`
 - 控制台和运行手册中应明确：违反上述约束的实现不允许上线
-

@@ -38,4 +38,7 @@ public class FilesystemStorageProperties {
    * presign(bucket, key, ttl)} 仍优先用入参。
    */
   private Duration defaultPresignTtl = Duration.ofMinutes(5);
+
+  /** list 单次最多扫描的文件数。避免宽 prefix / bucket 根目录在本地盘或 NAS 上变成无界 IO。 */
+  private long maxListScanEntries = 200_000L;
 }

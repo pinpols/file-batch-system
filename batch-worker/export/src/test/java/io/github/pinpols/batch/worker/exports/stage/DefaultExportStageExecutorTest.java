@@ -80,12 +80,16 @@ class DefaultExportStageExecutorTest {
   void execute_returnsSuccess_whenStepSucceeds() {
     when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
     ExportJobContext context = buildContext();
+    context.getAttributes().put("recordCount", 3);
 
     List<ExportStageResult> results = executor.execute(context);
 
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isTrue();
     assertThat(results.get(0).stage()).isEqualTo(ExportStage.PREPARE);
+    assertThat(meterRegistry.find("export.file.rows.total").tag("workerType", "EXPORT").counter())
+        .isNotNull();
+    assertThat(hasTagKey("export.file.rows.total", "tenant")).isFalse();
     verify(runtimeRepository).finishStepRunSuccess(eq(STEP_RUN_ID), any());
   }
 
@@ -182,6 +186,13 @@ class DefaultExportStageExecutorTest {
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of(step));
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
     return context;
+  }
+
+  private boolean hasTagKey(String meterName, String tagKey) {
+    return meterRegistry.getMeters().stream()
+        .filter(meter -> meterName.equals(meter.getId().getName()))
+        .flatMap(meter -> meter.getId().getTags().stream())
+        .anyMatch(tag -> tagKey.equals(tag.getKey()));
   }
 
   private static ExportStageStep stubStep(ExportStage stage) {

@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
+import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
 import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
@@ -57,7 +58,7 @@ class AbstractTaskConsumerTest {
   @Test
   void doConsumeBatch_groupsAcceptedMessagesByTenantAndExecutesBatch() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
-    when(executor.executeBatch(any(), anyString())).thenReturn(List.of());
+    when(executor.executeBatchDetailed(any(), anyString())).thenReturn(List.of());
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
     String j1 = JsonUtils.toJson(buildMessage(1L, "t1", "IMPORT", null));
@@ -68,7 +69,7 @@ class AbstractTaskConsumerTest {
     assertThat(result).isTrue(); // 整批成功 → 提交
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<TaskDispatchMessage>> cap = ArgumentCaptor.forClass(List.class);
-    verify(executor).executeBatch(cap.capture(), anyString()); // 同租户一次 executeBatch
+    verify(executor).executeBatchDetailed(cap.capture(), anyString()); // 同租户一次 executeBatch
     assertThat(cap.getValue()).hasSize(2);
     verify(executor, never()).execute(any(), anyString()); // 不走单条路径
   }
@@ -80,7 +81,77 @@ class AbstractTaskConsumerTest {
 
     assertThat((boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of()))
         .isTrue();
-    verify(executor, never()).executeBatch(any(), anyString());
+    verify(executor, never()).executeBatchDetailed(any(), anyString());
+  }
+
+  @Test
+  void doConsumeBatch_dlqsOnlyMalformedPayloadAndKeepsGoodPayloads() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.executeBatchDetailed(any(), anyString())).thenReturn(List.of());
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+
+    String good = JsonUtils.toJson(buildMessage(1L, "t1", "IMPORT", null));
+    String bad = "{not-json";
+
+    boolean result =
+        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(good, bad));
+
+    assertThat(result).isTrue();
+    verify(dlq).publish(org.mockito.ArgumentMatchers.eq(bad), any(), any(), any());
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<TaskDispatchMessage>> cap = ArgumentCaptor.forClass(List.class);
+    verify(executor).executeBatchDetailed(cap.capture(), anyString());
+    assertThat(cap.getValue()).extracting(TaskDispatchMessage::taskId).containsExactly(1L);
+  }
+
+  @Test
+  void doConsumeBatch_dlqsOnlyFailedItemWhenBatchItemFailsNonTransient() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+    TaskDispatchMessage m1 = buildMessage(1L, "t1", "IMPORT", null);
+    TaskDispatchMessage m2 = buildMessage(2L, "t1", "IMPORT", null);
+    String p1 = JsonUtils.toJson(m1);
+    String p2 = JsonUtils.toJson(m2);
+    when(executor.executeBatchDetailed(any(), anyString()))
+        .thenReturn(
+            List.of(
+                BatchItemExecution.completed(0, m1, new WorkerExecutionResult("1", true, "ok")),
+                BatchItemExecution.failed(1, m2, new IllegalArgumentException("bad item"))));
+
+    boolean result =
+        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(p1, p2));
+
+    assertThat(result).isTrue();
+    verify(dlq).publish(org.mockito.ArgumentMatchers.eq(p2), any(), any(), any());
+  }
+
+  @Test
+  void doConsumeBatch_keepsPayloadPositionWhenMessagesCompareEqual() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+    TaskDispatchMessage first = buildMessage(1L, "t1", "IMPORT", null);
+    TaskDispatchMessage second = buildMessage(1L, "t1", "IMPORT", null);
+    String firstPayload = JsonUtils.toJson(first);
+    String secondPayload = " " + firstPayload;
+    when(executor.executeBatchDetailed(any(), anyString()))
+        .thenReturn(
+            List.of(
+                BatchItemExecution.failed(0, first, new IllegalArgumentException("first failed")),
+                BatchItemExecution.completed(
+                    1, second, new WorkerExecutionResult("1", true, "ok"))));
+
+    boolean result =
+        (boolean)
+            ReflectionTestUtils.invokeMethod(
+                consumer, "doConsumeBatch", List.of(firstPayload, secondPayload));
+
+    assertThat(result).isTrue();
+    verify(dlq).publish(org.mockito.ArgumentMatchers.eq(firstPayload), any(), any(), any());
+    verify(dlq, never())
+        .publish(org.mockito.ArgumentMatchers.eq(secondPayload), any(), any(), any());
   }
 
   @Test

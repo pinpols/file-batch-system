@@ -185,6 +185,20 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  void listShouldRejectWhenScanEntriesExceedLimit(@TempDir Path root) {
+    FilesystemObjectStore store =
+        new FilesystemObjectStore(root.toString(), DOWNLOAD_BASE_URL, SECRET, 2);
+    for (int i = 0; i < 3; i++) {
+      byte[] b = new byte[] {(byte) i};
+      store.put(BUCKET, "wide/k" + i, new ByteArrayInputStream(b), b.length, "x");
+    }
+
+    assertThatThrownBy(() -> store.list(BUCKET, "wide/", null, 10))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("maxListScanEntries");
+  }
+
+  @Test
   void etagShouldReflectSizeAndMtime(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     byte[] before = "abc".getBytes(StandardCharsets.UTF_8);
@@ -267,6 +281,18 @@ class FilesystemObjectStoreTest {
             FilesystemPresignTokens.verify(
                 BUCKET, "f.txt", Instant.now().getEpochSecond() - 60, pastSig, SECRET))
         .isFalse();
+  }
+
+  @Test
+  void presignShouldUseConfiguredDefaultWhenTtlIsNull(@TempDir Path root) {
+    FilesystemObjectStore store =
+        new FilesystemObjectStore(
+            root.toString(), DOWNLOAD_BASE_URL, SECRET, Duration.ofMinutes(2), 200_000);
+
+    String url = store.presign(BUCKET, "default-ttl.txt", null);
+    long remainingSeconds = Long.parseLong(extractParam(url, "e")) - Instant.now().getEpochSecond();
+
+    assertThat(remainingSeconds).isBetween(115L, 120L);
   }
 
   private static String extractParam(String url, String name) {

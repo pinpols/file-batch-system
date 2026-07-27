@@ -64,6 +64,18 @@ python3 scripts/ci/check-dependency-boundaries.py
 
 成功时打印 `OK: dependency boundaries satisfied.` 并以退出码 `0` 结束；违反约束时打印错误并以 `1` 结束。
 
+## `check-helm-env-sync.py`
+
+校验 Helm templates 注入的 `BATCH_*` 环境变量是否能被应用消费，避免生产 Chart 变量名写错后静默失效；同时确认生产一等开关入口（限流、请求签名等）已显式渲染。
+
+生产一等开关入口从 `docs/runbook/feature-switch-registry.yml` 读取；新增公共开关时先登记 registry，再补 Compose / Helm / 运维说明。
+
+```bash
+python3 scripts/ci/check-helm-env-sync.py
+```
+
+成功时打印 `Helm BATCH_* env 与应用消费入口一致` 并以退出码 `0` 结束；违反约束时列出未知变量或缺失入口并以 `1` 结束。
+
 ## `check-db-scripts-safety.sh`
 
 补 `check-migration-safety.sh`(squawk 只扫 `db/migration`)的盲区:`scripts/db/**`(尤其 `business/` 不走 Flyway、`partition-migration/`)下的手工 DDL 脚本同样能跑危险变更。

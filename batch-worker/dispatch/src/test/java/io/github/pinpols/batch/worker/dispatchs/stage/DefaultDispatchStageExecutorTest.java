@@ -47,6 +47,7 @@ class DefaultDispatchStageExecutorTest {
   private DispatchStageStep prepareStep;
 
   private DefaultDispatchStageExecutor executor;
+  private SimpleMeterRegistry meterRegistry;
 
   private static final Long PIPELINE_INSTANCE_ID = 100L;
   private static final Long STEP_RUN_ID = 200L;
@@ -66,8 +67,8 @@ class DefaultDispatchStageExecutorTest {
         allSteps.add(stubStep(stage));
       }
     }
-    executor =
-        new DefaultDispatchStageExecutor(allSteps, runtimeRepository, new SimpleMeterRegistry());
+    meterRegistry = new SimpleMeterRegistry();
+    executor = new DefaultDispatchStageExecutor(allSteps, runtimeRepository, meterRegistry);
   }
 
   @Test
@@ -80,6 +81,9 @@ class DefaultDispatchStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isTrue();
     assertThat(results.get(0).stage()).isEqualTo(DispatchStage.PREPARE);
+    assertThat(meterRegistry.find("dispatch.receipt.total").tag("workerType", "DISPATCH").counter())
+        .isNotNull();
+    assertThat(hasTagKey("dispatch.receipt.total", "tenant")).isFalse();
     verify(runtimeRepository).finishStepRunSuccess(eq(STEP_RUN_ID), any());
   }
 
@@ -176,6 +180,13 @@ class DefaultDispatchStageExecutorTest {
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of(step));
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
     return context;
+  }
+
+  private boolean hasTagKey(String meterName, String tagKey) {
+    return meterRegistry.getMeters().stream()
+        .filter(meter -> meterName.equals(meter.getId().getName()))
+        .flatMap(meter -> meter.getId().getTags().stream())
+        .anyMatch(tag -> tagKey.equals(tag.getKey()));
   }
 
   private static DispatchStageStep stubStep(DispatchStage stage) {

@@ -43,6 +43,7 @@
   "sizeBytes": 12345678,
   "checksumType": "SHA-256",
   "checksumValue": "hex-string",
+  "checksumScope": "RAW_OBJECT",
   "bizDate": "2026-06-07",
   "batchNo": "B20260607001",
   "recordCount": 100000,
@@ -59,6 +60,7 @@
 - `sizeBytes` 必填。
 - `checksumType` 默认 `SHA-256`，不建议继续引入 MD5。
 - `checksumValue` 必填。
+- `checksumScope` 默认 `RAW_OBJECT`，表示 checksum 针对数据对象的原始字节（压缩包就是压缩包字节）。历史 `.chk` 不带该字段时按 `RAW_OBJECT` 解释；如需校验解压/解密/转码后的内容，走模板 `preprocess_pipeline` 的显式 `VERIFY_DIGEST`。
 - `bizDate` / `batchNo` / `fileGroupCode` 用于业务组完整性判断。
 - `recordCount` 可选，但有值时应参与数据集级校验。
 
@@ -100,7 +102,7 @@ Console 到达组查询基于 `batch.file_record`：
 3. 读取 `.chk`，校验 JSON schema。
 4. 校验 `fileName` 指向当前数据文件。
 5. 校验 `sizeBytes`。
-6. 计算数据文件 SHA-256，校验 `checksumValue`。
+6. worker 下载数据对象后，在 preprocess 阶段按 `checksumScope=RAW_OBJECT` 先校验原始字节的 `checksumValue`，再进入解压/解密/转码；显式 `VERIFY_DIGEST` 可覆盖为步骤级校验。
 7. 校验 `bizDate` / `batchNo` / `fileGroupCode` 等业务字段。
 8. 写入或更新 `file_record`：`checksum_type`、`checksum_value`、`file_size_bytes`、`metadata_json.integrityState=VERIFIED`。
 
@@ -226,4 +228,3 @@ API / SMTP：
 - OSS dispatch 生成对象和 `.chk` 对象。
 - `.chk` 中 size/checksum 与实际目标数据一致。
 - 关闭 `dispatch_manifest_enabled=false` 后不生成 `.chk`，原链路仍成功。
-

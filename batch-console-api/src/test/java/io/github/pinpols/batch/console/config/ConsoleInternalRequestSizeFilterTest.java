@@ -48,16 +48,40 @@ class ConsoleInternalRequestSizeFilterTest {
   }
 
   @Test
-  void passesThrough_whenContentLengthUnknown() throws Exception {
+  void rejects_whenContentLengthUnknownButActualBodyExceedsLimit() throws Exception {
     MockHttpServletResponse response = new MockHttpServletResponse();
     MockFilterChain chain = new MockFilterChain();
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/internal/am-notify/ops");
-    request.setContentType("application/json");
-    // 不设置 Content-Length(chunked) → 无法预判,放行。
+    MockHttpServletRequest request = chunkedPost(2048);
+
+    filter(1024).doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+    assertThat(chain.getRequest()).isNull();
+  }
+
+  @Test
+  void passesThrough_whenContentLengthUnknownAndActualBodyWithinLimit() throws Exception {
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    MockFilterChain chain = new MockFilterChain();
+    MockHttpServletRequest request = chunkedPost(512);
 
     filter(1024).doFilter(request, response, chain);
 
     assertThat(chain.getRequest()).isNotNull();
+  }
+
+  @Test
+  void rejectsPatchRequests_whenBodyExceedsLimit() throws Exception {
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    MockFilterChain chain = new MockFilterChain();
+    MockHttpServletRequest request = new MockHttpServletRequest("PATCH", "/internal/am-notify/ops");
+    request.setContentType("application/json");
+    request.setContent(new byte[2048]);
+
+    filter(1024).doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+    assertThat(chain.getRequest()).isNull();
   }
 
   @Test
@@ -92,5 +116,23 @@ class ConsoleInternalRequestSizeFilterTest {
     filter(0).doFilter(amPost(10_000_000), response, chain);
 
     assertThat(chain.getRequest()).isNotNull();
+  }
+
+  private MockHttpServletRequest chunkedPost(int actualBytes) {
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/internal/am-notify/ops") {
+          @Override
+          public int getContentLength() {
+            return -1;
+          }
+
+          @Override
+          public long getContentLengthLong() {
+            return -1L;
+          }
+        };
+    request.setContentType("application/json");
+    request.setContent(new byte[actualBytes]);
+    return request;
   }
 }

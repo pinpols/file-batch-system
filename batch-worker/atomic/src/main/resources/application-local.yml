@@ -71,6 +71,7 @@ batch:
         forbid-os-capable-role: false
       http:
         enabled: true
+        max-request-body-bytes: ${BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES:1048576}
         # 仅本地:dev 机器上没有云 metadata 威胁、目标就是 localhost 自身服务,清空 SSRF 黑名单。
         # 生产保留默认黑名单(localhost/127.*/169.254.169.254/metadata.*),见 HttpExecutorProperties。
         blocked-host-patterns: []

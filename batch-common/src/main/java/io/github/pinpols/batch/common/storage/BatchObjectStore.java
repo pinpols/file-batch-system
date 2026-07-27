@@ -8,7 +8,7 @@ import java.util.Collection;
  * 对象存储统一抽象（Phase 2 §1 定稿契约）。
  *
  * <p>收敛全系统对底层对象存储 SDK（当前为 MinIO/S3）的直连。生产实现为 {@link S3ObjectStore}，覆盖 S3 协议全系（MinIO / AWS S3 / 阿里
- * OSS / 腾讯 COS / GCS）；本地文件系统后端为阶段二内容，此处不实现。
+ * OSS / 腾讯 COS / GCS）；本地文件系统后端由 {@link FilesystemObjectStore} 承载，用于 NAS / 单机部署。
  *
  * <p>异常约定：所有方法在底层失败时抛 {@link ObjectStoreException} 体系——对象不存在抛 {@link ObjectNotFoundException}，
  * 权限/认证失败抛 {@link ObjectStoreAccessException}，其余抛 {@link ObjectStoreException}。

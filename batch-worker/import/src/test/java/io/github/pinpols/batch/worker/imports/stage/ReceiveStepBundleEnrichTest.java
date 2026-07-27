@@ -75,6 +75,8 @@ class ReceiveStepBundleEnrichTest {
     fr.put("original_file_name", "risk-2026.csv");
     fr.put("file_code", "FR-1");
     fr.put("biz_type", "RISK");
+    fr.put("checksum_type", "SHA-256");
+    fr.put("checksum_value", "abc123");
     return fr;
   }
 
@@ -90,6 +92,8 @@ class ReceiveStepBundleEnrichTest {
     assertThat(enriched.charset()).isEqualTo("UTF-8");
     assertThat(enriched.fileName()).isEqualTo("risk.csv");
     assertThat(enriched.originalFileName()).isEqualTo("risk-2026.csv");
+    assertThat(enriched.checksumType()).isEqualTo("SHA-256");
+    assertThat(enriched.checksumValue()).isEqualTo("abc123");
     // payload 已带的 templateCode 不被回填逻辑触碰
     assertThat(enriched.templateCode()).isEqualTo("RISK_IMPORT_V2");
   }

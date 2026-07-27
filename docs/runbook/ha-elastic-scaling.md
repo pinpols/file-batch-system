@@ -142,7 +142,7 @@ done
 
 # B. 限流是集群级
 # 用 5 个并发模拟器同时打满 launch（每个超过单租户 limit）
-# 期望：总 RPS 被限到 BATCH_RATE_LIMIT_MAX_NEW_PER_TENANT_PER_MINUTE / 60，不是 5×
+# 期望：总 RPS 被限到 BATCH_RATE_LIMIT_MAX_NEW_REQUESTS_PER_TENANT_PER_MINUTE / 60，不是 5×
 
 # C. Worker 下线 task 转移
 kubectl delete pod $(kubectl get po -l app=worker-import -o name | head -1)

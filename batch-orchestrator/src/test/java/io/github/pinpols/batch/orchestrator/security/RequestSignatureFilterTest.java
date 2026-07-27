@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.orchestrator.config.InternalRequestProperties;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.Result;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +28,9 @@ class RequestSignatureFilterTest {
   private RequestSignatureFilter newFilter(boolean enabled) {
     RequestSigningProperties props = new RequestSigningProperties();
     props.setEnabled(enabled);
-    return new RequestSignatureFilter(props, verifier);
+    InternalRequestProperties internal = new InternalRequestProperties();
+    internal.setMaxBodyBytes(1024);
+    return new RequestSignatureFilter(props, verifier, internal);
   }
 
   private MockHttpServletRequest post(boolean withApiKey) {
@@ -83,6 +86,32 @@ class RequestSignatureFilterTest {
     MockHttpServletResponse resp = new MockHttpServletResponse();
     newFilter(true).doFilter(post(true), resp, chain);
     assertThat(resp.getStatus()).isEqualTo(401);
+    verify(chain, never()).doFilter(any(), any());
+  }
+
+  @Test
+  @DisplayName("启用+api_key+chunked 超大 body → 413,不验签")
+  void oversizedChunkedBodyRejectedBeforeVerify() throws Exception {
+    MockHttpServletRequest req =
+        new MockHttpServletRequest("POST", "/internal/tasks/10/report") {
+          @Override
+          public int getContentLength() {
+            return -1;
+          }
+
+          @Override
+          public long getContentLengthLong() {
+            return -1L;
+          }
+        };
+    req.setContent(new byte[2048]);
+    req.addHeader("X-Batch-Api-Key", "key-1");
+    MockHttpServletResponse resp = new MockHttpServletResponse();
+
+    newFilter(true).doFilter(req, resp, chain);
+
+    assertThat(resp.getStatus()).isEqualTo(413);
+    verifyNoInteractions(verifier);
     verify(chain, never()).doFilter(any(), any());
   }
 }

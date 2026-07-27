@@ -107,6 +107,18 @@ class HttpTaskExecutorTest {
     }
 
     @Test
+    void rejectsRequestBodyBeyondConfiguredLimit() {
+      props.setMaxRequestBodyBytes(4);
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of("url", "http://api.example.com", "method", "POST", "body", "12345")));
+
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("maxRequestBodyBytes=4");
+    }
+
+    @Test
     void rejectsBadAuthType() {
       TaskResult r =
           executor.execute(

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
+import io.github.pinpols.batch.worker.exports.domain.ExportWorkerType;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
@@ -83,7 +84,7 @@ public class DefaultExportStageExecutor
     }
     Counter.builder("export.file.rows.total")
         .description("导出文件写入总行数")
-        .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
+        .tag("workerType", ExportWorkerType.EXPORT)
         .register(registry)
         .increment(recordCount.doubleValue());
   }

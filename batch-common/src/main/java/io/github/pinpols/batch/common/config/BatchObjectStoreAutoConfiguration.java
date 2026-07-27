@@ -82,7 +82,12 @@ public class BatchObjectStoreAutoConfiguration {
         Texts.hasText(properties.getPresignSecret())
             ? properties.getPresignSecret()
             : securityProperties.getInternalSecret();
-    return new FilesystemObjectStore(properties.getRoot(), properties.getDownloadBaseUrl(), secret);
+    return new FilesystemObjectStore(
+        properties.getRoot(),
+        properties.getDownloadBaseUrl(),
+        secret,
+        properties.getDefaultPresignTtl(),
+        properties.getMaxListScanEntries());
   }
 
   /**

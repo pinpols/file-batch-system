@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
@@ -72,7 +73,7 @@ public class DefaultDispatchStageExecutor
   private void recordDispatchReceiptMetric(DispatchJobContext context) {
     Counter.builder("dispatch.receipt.total")
         .description("Total successfully dispatched file receipts")
-        .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
+        .tag("workerType", DispatchWorkerType.DISPATCH)
         .register(meterRegistry)
         .increment();
   }

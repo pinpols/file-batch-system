@@ -31,6 +31,10 @@ class LocalOutboxDispatchSupportTest {
         LocalOutboxDispatchSupport.writeFilesystemEnvelope(command(target), false, null);
 
     assertThat(result.success()).isTrue();
+    assertThat(result.manifestRef()).isNotNull();
+    assertThat(result.manifestRef().ref()).endsWith(".json.chk");
+    assertThat(result.manifestRef().checksum()).isNotBlank();
+    assertThat(result.manifestRef().sizeBytes()).isPositive();
     try (Stream<Path> files = Files.list(target)) {
       assertThat(files).anyMatch(path -> path.getFileName().toString().endsWith(".json"));
     }

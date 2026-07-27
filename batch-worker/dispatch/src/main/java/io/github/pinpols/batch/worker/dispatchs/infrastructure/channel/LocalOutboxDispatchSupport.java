@@ -99,7 +99,8 @@ final class LocalOutboxDispatchSupport {
           acknowledged,
           pending,
           message,
-          envelopePath.toString());
+          envelopePath.toString(),
+          manifest == null ? null : manifest.toRef());
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(LocalOutboxDispatchSupport.class, "catch:Exception", ex);
 

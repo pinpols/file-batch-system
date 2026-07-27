@@ -1,0 +1,224 @@
+# 公共能力开关登记表。
+#
+# 约束：
+# - env: 该公共开关对应的环境变量；同一个开关可以登记多个变量。
+# - composeRequired: true 表示 docker/compose/app.yml 必须显式透传，防 .env 覆盖被容器忽略。
+# - helmRequired: true 表示生产 Helm Chart 必须显式渲染，防生产开关无入口。
+# - 本文件是 CI required-vars 的唯一登记源；运维说明仍写在 feature-switches.md。
+switches:
+  - key: batch.console.read-replica.enabled
+    module: console-api
+    env:
+      - BATCH_CONSOLE_READ_REPLICA_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.scheduler.worker-cache.enabled
+    module: orchestrator
+    env:
+      - BATCH_SCHEDULER_WORKER_CACHE_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.mq.routing.mode
+    module: orchestrator
+    env:
+      - BATCH_MQ_ROUTING_MODE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.quota.runtime-store
+    module: orchestrator
+    env:
+      - BATCH_QUOTA_RUNTIME_STORE
+      - BATCH_QUOTA_BACKEND_CUTOVER_ID
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.quota.snapshot.enabled
+    module: orchestrator
+    env:
+      - BATCH_QUOTA_SNAPSHOT_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.report-outbox
+    module: worker
+    env:
+      - BATCH_WORKER_REPORT_OUTBOX_ENABLED
+      - BATCH_WORKER_REPORT_OUTBOX_STORAGE
+      - BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID
+      - BATCH_WORKER_REPORT_OUTBOX_SQLITE_PATH
+      - BATCH_WORKER_REPORT_OUTBOX_POLL_INTERVAL_MS
+      - BATCH_WORKER_REPORT_OUTBOX_MAX_PUBLISH_ATTEMPTS
+      - BATCH_WORKER_REPORT_OUTBOX_INITIAL_BACKOFF_MS
+      - BATCH_WORKER_REPORT_OUTBOX_MAX_BACKOFF_MS
+      - BATCH_WORKER_REPORT_OUTBOX_JITTER_MS
+      - BATCH_WORKER_REPORT_OUTBOX_POLL_BATCH_SIZE
+      - BATCH_WORKER_REPORT_OUTBOX_PAUSE_POLL_ON_LEASE_CIRCUIT
+      - BATCH_WORKER_REPORT_OUTBOX_PUBLISHING_STALE_MS
+      - BATCH_WORKER_REPORT_OUTBOX_STALE_RECOVER_INTERVAL_MS
+    composeRequired: true
+    helmRequired: false
+    helmEnv:
+      - BATCH_WORKER_REPORT_OUTBOX_ENABLED
+      - BATCH_WORKER_REPORT_OUTBOX_STORAGE
+      - BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID
+
+  - key: batch.worker.lease.renew-batch-max-items
+    module: worker
+    env:
+      - BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.checkpoint.enabled
+    module: worker-import/worker-export
+    env:
+      - BATCH_WORKER_CHECKPOINT_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.checkpoint.stage-skip.enabled
+    module: worker-process
+    env:
+      - BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.datasource.business.routing.enabled
+    module: import/export/process worker
+    env:
+      - BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.datasource.business.routing.placement-source
+    module: import/export/process worker
+    env:
+      - BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.resource-scheduler.default-exceeded-strategy
+    module: orchestrator
+    env:
+      - BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.ai.enabled
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.ai.provider
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_PROVIDER
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.atomic.enabled-task-types
+    module: worker-atomic
+    env:
+      - BATCH_WORKER_ATOMIC_ENABLED_TYPES
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.import.scanner.done-file-format
+    module: worker-import
+    env:
+      - BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.import.scanner.done-file-suffix
+    module: worker-import
+    env:
+      - BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.import.scanner.batch-manifest-enabled
+    module: worker-import
+    env:
+      - BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.file-governance.arrival.require-verified
+    module: orchestrator
+    env:
+      - BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.rate-limit.enabled
+    module: orchestrator
+    env:
+      - BATCH_RATE_LIMIT_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.rate-limit.request-thresholds
+    module: orchestrator
+    env:
+      - BATCH_RATE_LIMIT_MAX_NEW_REQUESTS_PER_TENANT_PER_MINUTE
+      - BATCH_RATE_LIMIT_MAX_REGISTER_REQUESTS_PER_TENANT_PER_MINUTE
+      - BATCH_RATE_LIMIT_MAX_RELEASE_REQUESTS_PER_TENANT_PER_MINUTE
+      - BATCH_RATE_LIMIT_MAX_CLAIM_REQUESTS_PER_TENANT_PER_MINUTE
+      - BATCH_RATE_LIMIT_MAX_REPORT_REQUESTS_PER_TENANT_PER_MINUTE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.security.rate-limit.expensive-op-user-limit-per-minute
+    module: console-api
+    env:
+      - BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.security.rate-limit.file-op-user-limit-per-minute
+    module: console-api
+    env:
+      - BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.request-signing.enabled
+    module: orchestrator
+    env:
+      - BATCH_REQUEST_SIGNING_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.executors.http.max-request-body-bytes
+    module: worker-atomic
+    env:
+      - BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.storage.backend
+    module: orchestrator/worker/console
+    env:
+      - BATCH_STORAGE_BACKEND
+      - BATCH_STORAGE_BACKEND_CUTOVER_ID
+      - BATCH_STORAGE_FILESYSTEM_ROOT
+      - BATCH_STORAGE_FILESYSTEM_DOWNLOAD_BASE_URL
+      - BATCH_STORAGE_FILESYSTEM_PRESIGN_SECRET
+      - BATCH_STORAGE_FILESYSTEM_DEFAULT_PRESIGN_TTL
+      - BATCH_STORAGE_FILESYSTEM_MAX_LIST_SCAN_ENTRIES
+      - BATCH_S3_REGION
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.sensor.enabled
+    module: orchestrator
+    env:
+      - BATCH_SENSOR_ENABLED
+    composeRequired: true
+    helmRequired: true
