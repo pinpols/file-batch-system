@@ -32,9 +32,10 @@ KAFKA="${KAFKA_BOOTSTRAP:-$KAFKA_HOST_BOOTSTRAP}"
 # default-calendar / always_open),fixture 只需加一行 job_definition。Phase 1 注册断言与租户无关。
 TENANT="${TENANT:-${BATCH_DEFAULT_TENANT_ID:-default-tenant}}"
 INTERNAL_SECRET="${INTERNAL_SECRET:-internal-secret}"
-# Phase 2 worker 须消费平台 ATOMIC base 派单 topic(SINGLE 路由 = batch.task.dispatch.atomic);默认
-# topic pattern 是 batch.task.dispatch.<tenant>.* 不匹配 base topic,这里显式覆盖成 atomic base。
-DISPATCH_TOPIC_PATTERN="${DISPATCH_TOPIC_PATTERN:-batch\\.task\\.dispatch\\.atomic.*}"
+# Phase 2 worker 只消费本轮预建的 direct-dispatch topic。不能订阅整个 atomic topic
+# 前缀:本地 Kafka 使用 earliest 时会先交付历史 atomic 任务,其中不属于 SDK worker 的
+# 任务会因 claim 404 触发 SDK 的 fail-loud 保护,把本轮验证任务一并挡住。
+# 下面的默认值在启动 worker 前由 WORKER_CODE 展开为精确 node topic;仍允许调用方显式覆盖。
 DISPATCH_JOB_CODE="${DISPATCH_JOB_CODE:-SDK_VERIFY_DISPATCH_ECHO}"
 DISPATCH_FIXTURE="$REPO_ROOT/docs/test-data/sim06-sdk-dispatch-echo-fixtures.sql"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-batch-kafka}"
@@ -119,6 +120,8 @@ note "4. 启动 sample worker → 本地栈"
 # 若该 topic 在 worker 订阅之后才由首次派单创建,首条消息会落在订阅前 → 被漏读。预建保证 worker
 # 启动即把它纳入 pattern 订阅、从 offset 0 跟踪,后续派单必达。(幂等 --if-not-exists)
 DISPATCH_NODE_TOPIC="batch.task.dispatch.atomic.node.${WORKER_CODE//[^a-zA-Z0-9._-]/_}"
+WORKER_TOPIC_SUFFIX="${WORKER_CODE//[^a-zA-Z0-9._-]/_}"
+DISPATCH_TOPIC_PATTERN="${DISPATCH_TOPIC_PATTERN:-batch\\.task\\.dispatch\\.atomic\\.node\\.${WORKER_TOPIC_SUFFIX}\$}"
 if docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh \
     --bootstrap-server "$KAFKA_INTERNAL_BOOTSTRAP" --create --if-not-exists \
     --topic "$DISPATCH_NODE_TOPIC" --partitions 1 --replication-factor 1 >/dev/null 2>&1; then
