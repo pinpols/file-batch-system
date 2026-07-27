@@ -50,6 +50,12 @@ objectStorage:
   accessKey: ""
   secretKey: ""
   bucket: "batch-prod"
+  region: ""
+
+storage:
+  backend: "s3"
+  backendCutoverId: ""
+  filesystemRoot: ""
 
 # ── 跨服务 ──────────────────────────────────────────────────────────────
 
@@ -103,6 +109,21 @@ consoleApi:
   # 默认 16+16 配 2 replicas 共 64 连接,加 orchestrator 30 * 2 = 60,留出 100+ 头部给 trigger/worker。
   primaryPool: 16
   replicaPool: 16
+  readReplica:
+    enabled: true
+    primaryUrl: ""
+    primaryUsername: ""
+    primaryPassword: ""
+    replicaUrl: ""
+    replicaUsername: ""
+    replicaPassword: ""
+  ai:
+    enabled: false
+    provider: "anthropic"
+  security:
+    rateLimit:
+      expensiveOpUserLimitPerMinute: 10
+      fileOpUserLimitPerMinute: 60
   # SSE 客户端断开 + Spring graceful shutdown drain；preStop sleep 让 k8s Service endpoints
   # 收敛后再发 SIGTERM，避免 SLB 把新流量打到正退出的 pod。
   gracefulShutdown:
@@ -265,10 +286,46 @@ orchestrator:
   # 撑不住 .env.prod 注释里承诺的 500-1000 req/s。
   platformDb:
     maxPoolSize: 50
+  workerCache:
+    enabled: true
+  mqRouting:
+    mode: "TENANT"
+  quota:
+    runtimeStore: "redis"
+    backendCutoverId: ""
+    snapshotEnabled: true
+  workerReportOutbox:
+    enabled: false
+    storage: "PLATFORM_PG"
+    cutoverId: ""
+  workerLease:
+    renewBatchMaxItems: 256
+  workerCheckpoint:
+    enabled: true
+    stageSkipEnabled: false
+  businessRouting:
+    enabled: false
+    placementSource: "CONFIG"
+  resourceScheduler:
+    defaultExceededStrategy: "QUEUE_DEFER"
+  importScanner:
+    doneFileFormat: "MARKER"
+    doneFileSuffix: ".done"
+    batchManifestEnabled: false
+  fileGovernance:
+    arrival:
+      requireVerified: false
+  sensor:
+    enabled: true
   rateLimit:
     enabled: true
-    maxNewPerTenantPerMinute: 300
-    maxReleasePerTenantPerMinute: 600
+    maxNewPerTenantPerMinute: 3000
+    maxRegisterPerTenantPerMinute: 300
+    maxReleasePerTenantPerMinute: 3000
+    maxClaimPerTenantPerMinute: 12000
+    maxReportPerTenantPerMinute: 12000
+  requestSigning:
+    enabled: false
 
 # ── worker-import ──────────────────────────────────────────────────────────────
 
@@ -444,6 +501,7 @@ workerAtomic:
   isolationAcknowledged: false
   # 生产可在 overlay 中显式声明 executor 开关；未声明时沿用镜像 application.yml 默认值。
   executors: {}
+  enabledTaskTypes: ""
   # 原子任务可能含外部调用(http/shell),给中等优雅停机
   gracefulShutdown:
     terminationGracePeriodSeconds: 120

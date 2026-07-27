@@ -84,6 +84,10 @@ orchestratorBaseUrl: "http://batch-platform-orchestrator.batch.svc.cluster.local
 
 consoleApi:
   replicaCount: 2
+  readReplica:
+    enabled: true
+    primaryUrl: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_platform"
+    replicaUrl: "jdbc:postgresql://pg-replica.db.svc.cluster.local:5432/batch_platform"
   # R4-P2-5：与 .env.prod 一致的 SSE 重放容量（默认 chart 是 dev 量 20000/24h）
   realtime:
     replayMaxEntries: 50000

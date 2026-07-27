@@ -53,6 +53,14 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-sql-config-boundaries.sh
 
+      - name: Verify yml ↔ docker-compose default sync
+        shell: bash
+        run: python3 scripts/ci/check-config-defaults-sync.py --check
+
+      - name: Verify Helm env switch sync
+        shell: bash
+        run: python3 scripts/ci/check-helm-env-sync.py
+
       - name: PMD + Spotless + dependency boundary
         shell: bash
         run: |
