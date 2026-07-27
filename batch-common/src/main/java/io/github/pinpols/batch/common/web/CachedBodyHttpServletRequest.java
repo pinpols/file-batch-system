@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.orchestrator.security;
+package io.github.pinpols.batch.common.web;
 
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -9,14 +9,18 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
-/** 缓存请求体的包装器：签名 filter 已读尽 InputStream 算摘要，下游 controller 仍需可重新读取同一份字节。 */
+/** 缓存请求体的包装器：上游过滤器读取 body 后，下游 controller 仍可重复读取同一份字节。 */
 public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
   private final byte[] cachedBody;
 
   public CachedBodyHttpServletRequest(HttpServletRequest request, byte[] cachedBody) {
     super(request);
-    this.cachedBody = cachedBody;
+    this.cachedBody = cachedBody == null ? new byte[0] : cachedBody;
+  }
+
+  public byte[] cachedBody() {
+    return cachedBody.clone();
   }
 
   @Override

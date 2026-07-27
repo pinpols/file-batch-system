@@ -44,7 +44,8 @@
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |
 | `batch.console.security.rate-limit.file-op-user-limit-per-minute` | console-api | **60** | **60** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE`；`/api/console/files/` 子树（下载/错误导出/归档/重派/到达组）按用户限流，fail-open；前缀可配 `file-op-path-prefixes` |
 | `batch.request-signing.enabled` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_REQUEST_SIGNING_ENABLED`；开后对 api_key 鉴权的 `/internal/tasks·workers` 写请求强制 HMAC 签名+ts+nonce 防重放，详见 §1.3。灰度须先升级 SDK（`BATCH_SDK_REQUEST_SIGNING_ENABLED=true`）再开服务端 |
-| `batch.storage.backend` | orchestrator + 所有 worker + console | **s3** | **s3** | 🟡 中 | `BATCH_STORAGE_BACKEND`=s3/filesystem；后端、endpoint、bucket 或 root 变化需先迁移对象，再提供一次性 `BATCH_STORAGE_BACKEND_CUTOVER_ID` |
+| `batch.worker.executors.http.max-request-body-bytes` | worker-atomic | **1048576** | **1048576** | 🟡 中 | `BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES`；限制 atomic HTTP 任务请求体字节数，避免任务参数被物化成无界请求体 |
+| `batch.storage.backend` | orchestrator + 所有 worker + console | **s3** | **s3** | 🟡 中 | `BATCH_STORAGE_BACKEND`=s3/filesystem；后端、endpoint、bucket 或 root 变化需先迁移对象，再提供一次性 `BATCH_STORAGE_BACKEND_CUTOVER_ID`；FS list 由 `BATCH_STORAGE_FILESYSTEM_MAX_LIST_SCAN_ENTRIES` 兜住宽 prefix |
 | `batch.sensor.enabled` | orchestrator | **true**（`matchIfMissing`，ADR-028 Sensor 轮询调度总开关） | **true** | 🟢 低 | `BATCH_SENSOR_ENABLED`；false 时 `SensorPollScheduler` 不调度（SPI bean 仍可人工/测试调用），不影响已有 WAIT 节点数据。注:Kafka offset sensor 另有 `batch.sensor.kafka-offset.enabled`（默认 true） |
 
 > 风险等级判定：🔴 高 = 启用前需准备独立基础设施或迁移，否则启动失败；🟡 中 = 启用后行为或持久状态归属变化明显，需要监控验证；🟢 低 = 影响面局部且具备明确回退路径。是否 fail-open 以各项说明为准。

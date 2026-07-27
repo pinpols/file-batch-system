@@ -44,7 +44,9 @@ APP_YML_FILES = [
 
 HELM_TEMPLATE_DIR = ROOT / "helm/batch-platform/templates"
 SPRING_PLACEHOLDER = re.compile(r"\$\{(BATCH_[A-Z0-9_]+):")
-TEMPLATE_ENV_NAME = re.compile(r"^\s*(?:-\s+name:\s+)?(BATCH_[A-Z0-9_]+)\s*:", re.MULTILINE)
+TEMPLATE_ENV_NAME = re.compile(
+    r"^\s*(?:-\s+name:\s+)?(BATCH_[A-Z0-9_]+)(?:\s*:|\s*$)", re.MULTILINE
+)
 
 # 这些变量不一定出现在 yml 占位符中，但确实由 Spring relaxed binding、
 # entrypoint、K8s 探针/端口或安全模板直接消费。

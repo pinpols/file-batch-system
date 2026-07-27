@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -48,14 +49,15 @@ class InternalRequestSizeFilterTest {
   }
 
   @Test
-  @DisplayName("Content-Length 在上限内 → 放行")
+  @DisplayName("Content-Length 在上限内 → 读取缓存后放行")
   void passesBodyWithinLimit() throws Exception {
     MockHttpServletResponse res = new MockHttpServletResponse();
     MockHttpServletRequest req = post("/internal/tasks/report", 512);
 
     filter(1024).doFilter(req, res, chain);
 
-    verify(chain).doFilter(req, res);
+    verify(chain)
+        .doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(res));
   }
 
   @Test
@@ -70,14 +72,28 @@ class InternalRequestSizeFilterTest {
   }
 
   @Test
-  @DisplayName("Content-Length 缺失(chunked)→ 放行(无法预判大小)")
-  void passesWhenContentLengthMissing() throws Exception {
+  @DisplayName("Content-Length 缺失(chunked)但实际超限 → 413")
+  void rejectsChunkedBodyByActualBytes() throws Exception {
     MockHttpServletResponse res = new MockHttpServletResponse();
-    MockHttpServletRequest req = post("/internal/tasks/report", -1);
+    MockHttpServletRequest req = chunkedPost("/internal/tasks/report", 2048);
 
     filter(1024).doFilter(req, res, chain);
 
-    verify(chain).doFilter(req, res);
+    assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+    verify(chain, never())
+        .doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("Content-Length 缺失(chunked)且实际未超限 → 缓存后放行")
+  void passesChunkedBodyWithinLimit() throws Exception {
+    MockHttpServletResponse res = new MockHttpServletResponse();
+    MockFilterChain mockChain = new MockFilterChain();
+    MockHttpServletRequest req = chunkedPost("/internal/tasks/report", 512);
+
+    filter(1024).doFilter(req, res, mockChain);
+
+    assertThat(mockChain.getRequest()).isNotNull();
   }
 
   @Test
@@ -92,7 +108,7 @@ class InternalRequestSizeFilterTest {
   }
 
   @Test
-  @DisplayName("GET 方法 → 不拦(只管 POST/PUT)")
+  @DisplayName("GET 方法 → 不拦(只管写方法)")
   void passesGetMethod() throws Exception {
     MockHttpServletResponse res = new MockHttpServletResponse();
     MockHttpServletRequest req = new MockHttpServletRequest("GET", "/internal/tasks/report");
@@ -101,6 +117,18 @@ class InternalRequestSizeFilterTest {
     filter(1024).doFilter(req, res, chain);
 
     verify(chain).doFilter(req, res);
+  }
+
+  @Test
+  @DisplayName("PATCH 写方法同样受限")
+  void rejectsPatchBody() throws Exception {
+    MockHttpServletResponse res = new MockHttpServletResponse();
+    MockHttpServletRequest req = new MockHttpServletRequest("PATCH", "/internal/tasks/report");
+    req.setContent(new byte[4096]);
+
+    filter(1024).doFilter(req, res, chain);
+
+    assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
   }
 
   @Test
@@ -114,5 +142,23 @@ class InternalRequestSizeFilterTest {
     filter(1024).doFilter(req, res, chain);
 
     verify(chain).doFilter(req, res);
+  }
+
+  private MockHttpServletRequest chunkedPost(String uri, int actualBytes) {
+    MockHttpServletRequest req =
+        new MockHttpServletRequest("POST", uri) {
+          @Override
+          public int getContentLength() {
+            return -1;
+          }
+
+          @Override
+          public long getContentLengthLong() {
+            return -1L;
+          }
+        };
+    req.setContentType("application/json");
+    req.setContent(new byte[actualBytes]);
+    return req;
   }
 }

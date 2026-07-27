@@ -59,6 +59,7 @@ storage:
   filesystemDownloadBaseUrl: ""
   filesystemPresignSecret: ""
   filesystemDefaultPresignTtl: "5m"
+  filesystemMaxListScanEntries: 200000
 
 # ── 跨服务 ──────────────────────────────────────────────────────────────
 
@@ -503,6 +504,7 @@ workerAtomic:
   requireIsolation: false
   isolationAcknowledged: false
   # 生产可在 overlay 中显式声明 executor 开关；未声明时沿用镜像 application.yml 默认值。
+  # executors.httpMaxRequestBodyBytes 默认 1048576,用于限制 atomic HTTP 任务请求体内存边界。
   executors: {}
   enabledTaskTypes: ""
   # 原子任务可能含外部调用(http/shell),给中等优雅停机

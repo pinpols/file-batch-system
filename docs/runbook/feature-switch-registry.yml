@@ -195,6 +195,13 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.worker.executors.http.max-request-body-bytes
+    module: worker-atomic
+    env:
+      - BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.storage.backend
     module: orchestrator/worker/console
     env:
@@ -204,6 +211,7 @@ switches:
       - BATCH_STORAGE_FILESYSTEM_DOWNLOAD_BASE_URL
       - BATCH_STORAGE_FILESYSTEM_PRESIGN_SECRET
       - BATCH_STORAGE_FILESYSTEM_DEFAULT_PRESIGN_TTL
+      - BATCH_STORAGE_FILESYSTEM_MAX_LIST_SCAN_ENTRIES
       - BATCH_S3_REGION
     composeRequired: true
     helmRequired: true

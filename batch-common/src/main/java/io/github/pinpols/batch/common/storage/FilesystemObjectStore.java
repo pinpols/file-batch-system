@@ -51,14 +51,21 @@ public class FilesystemObjectStore implements BatchObjectStore {
   private final Path root;
   private final String downloadBaseUrl;
   private final String presignSecret;
+  private final long maxListScanEntries;
 
   public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret) {
+    this(root, downloadBaseUrl, presignSecret, 200_000L);
+  }
+
+  public FilesystemObjectStore(
+      String root, String downloadBaseUrl, String presignSecret, long maxListScanEntries) {
     if (root == null || root.isBlank()) {
       throw new IllegalArgumentException("filesystem storage root must not be blank");
     }
     this.root = Paths.get(root).toAbsolutePath().normalize();
     this.downloadBaseUrl = downloadBaseUrl;
     this.presignSecret = presignSecret;
+    this.maxListScanEntries = maxListScanEntries <= 0 ? Long.MAX_VALUE : maxListScanEntries;
     try {
       Files.createDirectories(this.root);
     } catch (IOException ex) {
@@ -215,7 +222,18 @@ public class FilesystemObjectStore implements BatchObjectStore {
     try (Stream<Path> walk = Files.walk(scanRoot)) {
       Iterator<Path> iterator =
           walk.filter(Files::isRegularFile).filter(path -> !isHiddenOrTemp(path)).iterator();
+      long scanned = 0L;
       while (iterator.hasNext()) {
+        scanned++;
+        if (scanned > maxListScanEntries) {
+          throw new ObjectStoreException(
+              "filesystem object list scan entries exceeded limit: bucket="
+                  + bucket
+                  + ", prefix="
+                  + safePrefix
+                  + ", maxListScanEntries="
+                  + maxListScanEntries);
+        }
         Path p = iterator.next();
         String relKey = relativeKey(bucketRoot, p);
         if (!relKey.startsWith(safePrefix)) {

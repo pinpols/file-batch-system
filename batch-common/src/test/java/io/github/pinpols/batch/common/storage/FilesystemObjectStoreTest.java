@@ -185,6 +185,20 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  void listShouldRejectWhenScanEntriesExceedLimit(@TempDir Path root) {
+    FilesystemObjectStore store =
+        new FilesystemObjectStore(root.toString(), DOWNLOAD_BASE_URL, SECRET, 2);
+    for (int i = 0; i < 3; i++) {
+      byte[] b = new byte[] {(byte) i};
+      store.put(BUCKET, "wide/k" + i, new ByteArrayInputStream(b), b.length, "x");
+    }
+
+    assertThatThrownBy(() -> store.list(BUCKET, "wide/", null, 10))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("maxListScanEntries");
+  }
+
+  @Test
   void etagShouldReflectSizeAndMtime(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     byte[] before = "abc".getBytes(StandardCharsets.UTF_8);

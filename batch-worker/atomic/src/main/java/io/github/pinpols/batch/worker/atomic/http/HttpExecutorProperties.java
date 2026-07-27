@@ -17,6 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   <li>{@link #allowedHostPatterns}:出口域名白名单(简单 glob,如 {@code "api.internal.*"}),空 = 允许全部(仅 dev)
  *   <li>{@link #blockedHostPatterns}:出口域名黑名单(永远拒,优先于白名单)。默认拒绝 metadata 服务 + localhost(SSRF 防御)
  *   <li>{@link #defaultTimeout}:连接 + 读超时
+ *   <li>{@link #maxRequestBodyBytes}:请求体最大字节,超出直接拒绝
  *   <li>{@link #maxResponseBytes}:响应体截断字节,超出截断 + WARN
  *   <li>{@link #allowedMethods}:HTTP 方法白名单
  *   <li>{@link #maxRetries} / {@link #retryBackoff}:简单重试(只对幂等方法 / 5xx)
@@ -57,6 +58,9 @@ public class HttpExecutorProperties {
 
   /** 响应体最大字节,超出截断 + WARN。默认 1MB。 */
   private int maxResponseBytes = 1024 * 1024;
+
+  /** 请求体最大字节,超出直接拒绝。默认 1MB,避免任务参数被当成无界 HTTP body 物化进堆。 */
+  private int maxRequestBodyBytes = 1024 * 1024;
 
   /** 允许的 HTTP 方法。 */
   private Set<String> allowedMethods = Set.of("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD");

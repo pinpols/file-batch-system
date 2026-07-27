@@ -267,6 +267,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m, "headers") : Map.of();
 
     String body = params.get(PARAM_BODY) instanceof String s ? s : null;
+    validateRequestBodySize(body);
 
     Duration timeout = props.getDefaultTimeout();
     Object t = params.get(PARAM_TIMEOUT);
@@ -435,6 +436,21 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   private static String stringParam(Map<String, Object> p, String key, String fallback) {
     Object v = p.get(key);
     return v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : fallback;
+  }
+
+  private void validateRequestBodySize(String body) {
+    if (body == null) {
+      return;
+    }
+    int max = props.getMaxRequestBodyBytes();
+    if (max < 0) {
+      throw new HttpValidationException("maxRequestBodyBytes must be >= 0");
+    }
+    int bytes = body.getBytes(StandardCharsets.UTF_8).length;
+    if (max > 0 && bytes > max) {
+      throw new HttpValidationException(
+          "request body exceeds maxRequestBodyBytes=" + max + ": " + bytes);
+    }
   }
 
   // ─── execution with retry ──────────────────────────────────────────────────

@@ -1,7 +1,11 @@
 package io.github.pinpols.batch.orchestrator.security;
 
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
+import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
+import io.github.pinpols.batch.common.web.CachedBodyHttpServletRequest;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
+import io.github.pinpols.batch.orchestrator.config.InternalRequestProperties;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.Result;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.SignedRequest;
 import jakarta.servlet.FilterChain;
@@ -13,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.util.StreamUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -33,6 +36,7 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
 
   private final RequestSigningProperties properties;
   private final RequestSignatureVerifier verifier;
+  private final InternalRequestProperties internalRequestProperties;
 
   @Override
   protected void doFilterInternal(
@@ -45,7 +49,17 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
       return;
     }
 
-    byte[] body = StreamUtils.copyToByteArray(request.getInputStream());
+    byte[] body;
+    try {
+      body =
+          BoundedRequestBodyReader.read(
+              request.getInputStream(),
+              internalRequestProperties.getMaxBodyBytes(),
+              "signed-internal");
+    } catch (RequestBodyLimitExceededException ex) {
+      writePayloadTooLarge(response);
+      return;
+    }
     Object tenantAttr = request.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID);
     String tenantId = tenantAttr == null ? null : tenantAttr.toString();
     SignedRequest signed =
@@ -87,5 +101,15 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
     response
         .getWriter()
         .write("{\"code\":\"SIGNATURE_INVALID\",\"message\":\"" + result.name() + "\"}");
+  }
+
+  private static void writePayloadTooLarge(HttpServletResponse response) throws IOException {
+    response.setStatus(HttpStatus.CONTENT_TOO_LARGE.value());
+    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+    response
+        .getWriter()
+        .write(
+            "{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"signed internal request body exceeds"
+                + " the configured limit\"}");
   }
 }

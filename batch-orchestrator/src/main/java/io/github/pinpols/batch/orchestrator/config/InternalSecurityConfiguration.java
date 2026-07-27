@@ -28,9 +28,12 @@ public class InternalSecurityConfiguration {
   /** 请求签名校验(方案 A,opt-in)order=2,排在鉴权后:此时 api_key 已校验、resolvedTenantId 已就绪。 */
   @Bean
   public FilterRegistrationBean<RequestSignatureFilter> requestSignatureFilter(
-      RequestSigningProperties signingProperties, RequestSignatureVerifier verifier) {
+      RequestSigningProperties signingProperties,
+      RequestSignatureVerifier verifier,
+      InternalRequestProperties internalRequestProperties) {
     FilterRegistrationBean<RequestSignatureFilter> registration = new FilterRegistrationBean<>();
-    registration.setFilter(new RequestSignatureFilter(signingProperties, verifier));
+    registration.setFilter(
+        new RequestSignatureFilter(signingProperties, verifier, internalRequestProperties));
     registration.addUrlPatterns("/internal/*");
     registration.setOrder(2);
     return registration;

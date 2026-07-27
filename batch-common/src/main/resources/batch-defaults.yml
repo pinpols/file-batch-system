@@ -283,6 +283,8 @@ batch:
       # 可选独立 HMAC 密钥；留空时回退 batch.security.internal-secret
       presign-secret: ${BATCH_STORAGE_FILESYSTEM_PRESIGN_SECRET:}
       default-presign-ttl: ${BATCH_STORAGE_FILESYSTEM_DEFAULT_PRESIGN_TTL:5m}
+      # list 单次最多扫描文件数；<=0 表示不限，不建议生产使用
+      max-list-scan-entries: ${BATCH_STORAGE_FILESYSTEM_MAX_LIST_SCAN_ENTRIES:200000}
     s3:
       # 访问地址（http/https）。AWS: https://s3.<region>.amazonaws.com;OSS: https://oss-<region>.aliyuncs.com
       endpoint: ${BATCH_S3_ENDPOINT:http://localhost:19000}

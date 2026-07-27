@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
+import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
@@ -310,27 +311,88 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     }
     try {
       WorkerRegistration registration = workerLoop().ensureStarted();
-      // 解码 + accepts 过滤,按 tenant 分组(RLS 是单 tenant 语义,不能整批混绑)
-      Map<String, List<TaskDispatchMessage>> byTenant = new LinkedHashMap<>();
+      // 解码 + accepts 过滤,按 tenant 分组(RLS 是单 tenant 语义,不能整批混绑)。解析失败是 payload
+      // 级毒丸,只 DLQ 当前消息,不能拖同 poll 的正常消息一起进 DLQ。
+      Map<String, List<BatchPayload>> byTenant = new LinkedHashMap<>();
       for (String payload : payloads) {
-        TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+        TaskDispatchMessage message;
+        try {
+          message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+        } catch (Exception parseEx) {
+          log.error(
+              "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
+              workerConfiguration().workerType(),
+              parseEx.getMessage(),
+              parseEx);
+          if (!publishToDlqSafely(payload, parseEx.getMessage())) {
+            return false;
+          }
+          continue;
+        }
         if (!accepts(message, registration)) {
           continue;
         }
-        byTenant.computeIfAbsent(message.tenantId(), k -> new ArrayList<>()).add(message);
+        byTenant
+            .computeIfAbsent(message.tenantId(), k -> new ArrayList<>())
+            .add(new BatchPayload(payload, message));
       }
       String workerId = registration.getWorkerId();
-      for (Map.Entry<String, List<TaskDispatchMessage>> entry : byTenant.entrySet()) {
+      boolean allDlq = true;
+      for (Map.Entry<String, List<BatchPayload>> entry : byTenant.entrySet()) {
         String tenantId = entry.getKey();
-        List<TaskDispatchMessage> group = entry.getValue();
+        List<BatchPayload> group = entry.getValue();
+        List<TaskDispatchMessage> messages = group.stream().map(BatchPayload::message).toList();
+        List<BatchItemExecution> executions;
         if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
-          RlsTenantContextHolder.runWithTenant(
-              tenantId, () -> taskDispatchExecutor().executeBatch(group, workerId));
+          executions =
+              RlsTenantContextHolder.runWithTenant(
+                  tenantId, () -> taskDispatchExecutor().executeBatchDetailed(messages, workerId));
         } else {
-          taskDispatchExecutor().executeBatch(group, workerId);
+          executions = taskDispatchExecutor().executeBatchDetailed(messages, workerId);
+        }
+        Map<TaskDispatchMessage, String> payloadByMessage = new LinkedHashMap<>();
+        for (BatchPayload item : group) {
+          payloadByMessage.put(item.message(), item.payload());
+        }
+        for (BatchItemExecution execution : executions) {
+          if (execution == null || execution.skipped()) {
+            continue;
+          }
+          if (execution.error() == null) {
+            WorkerExecutionResult result = execution.result();
+            if (result != null) {
+              log.info(
+                  "{} batch task processed: taskId={}, success={}, message={}",
+                  workerConfiguration().workerType(),
+                  result.taskId(),
+                  result.success(),
+                  result.message());
+            }
+            continue;
+          }
+          if (isTransientOrchestratorFailure(execution.error())) {
+            log.warn(
+                "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
+                    + " batch: taskId={}, error={}",
+                workerConfiguration().workerType(),
+                execution.message() == null ? null : execution.message().taskId(),
+                execution.error().getMessage());
+            return false;
+          }
+          String payload = payloadByMessage.get(execution.message());
+          log.error(
+              "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
+                  + " error={}",
+              workerConfiguration().workerType(),
+              execution.message() == null ? null : execution.message().taskId(),
+              execution.error().getMessage(),
+              execution.error());
+          if (!publishToDlqSafely(payload, execution.error().getMessage())) {
+            allDlq = false;
+          }
         }
       }
-      return true; // 整批成功 → 提交 offset
+      return allDlq; // 整批成功或逐项不可恢复已 DLQ → 提交 offset
     } catch (Exception ex) {
       if (isTransientOrchestratorFailure(ex)) {
         log.warn(
@@ -368,6 +430,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           StructuredLogField.RUN_MODE);
     }
   }
+
+  private record BatchPayload(String payload, TaskDispatchMessage message) {}
 
   /**
    * R1-P2-7 / S1-7：判定异常是否为 orchestrator transient 故障（5xx / 网络层），不该进 DLQ。

@@ -52,6 +52,25 @@ public class TaskDispatchExecutor {
    */
   public List<WorkerExecutionResult> executeBatch(
       List<TaskDispatchMessage> messages, String workerId) {
+    List<BatchItemExecution> detailed = executeBatchDetailed(messages, workerId);
+    List<WorkerExecutionResult> results = new ArrayList<>();
+    for (BatchItemExecution item : detailed) {
+      if (item.error() != null) {
+        if (item.error() instanceof RuntimeException runtimeException) {
+          throw runtimeException;
+        }
+        throw new IllegalStateException(item.error());
+      }
+      if (item.result() != null) {
+        results.add(item.result());
+      }
+    }
+    return results;
+  }
+
+  /** 批量执行的逐项结果版本。Kafka 批量 consumer 需要知道是哪条消息失败，才能只 DLQ 毒丸消息，而不是把同 poll 的正常任务一起送进 DLQ。 */
+  public List<BatchItemExecution> executeBatchDetailed(
+      List<TaskDispatchMessage> messages, String workerId) {
     if (messages == null || messages.isEmpty() || workerId == null || workerId.isBlank()) {
       return List.of();
     }
@@ -70,18 +89,42 @@ public class TaskDispatchExecutor {
         claimedById.put(r.taskId(), r);
       }
     }
-    List<WorkerExecutionResult> results = new ArrayList<>();
+    List<BatchItemExecution> detailedResults = new ArrayList<>();
     for (TaskDispatchMessage message : messages) {
       if (message == null || message.taskId() == null) {
         continue;
       }
       TaskClaimResult claim = claimedById.get(message.taskId());
       if (claim == null || !claim.claimed() || claim.config() == null) {
+        detailedResults.add(BatchItemExecution.skipped(message));
         continue; // 没领到 → 跳过(与单条 execute 返 null 一致)
       }
-      results.add(workerRuntimeFacade.execute(buildTask(message, workerId, claim.config())));
+      try {
+        WorkerExecutionResult result =
+            workerRuntimeFacade.execute(buildTask(message, workerId, claim.config()));
+        detailedResults.add(BatchItemExecution.completed(message, result));
+      } catch (Exception ex) {
+        detailedResults.add(BatchItemExecution.failed(message, ex));
+      }
     }
-    return results;
+    return detailedResults;
+  }
+
+  public record BatchItemExecution(
+      TaskDispatchMessage message, WorkerExecutionResult result, Throwable error, boolean skipped) {
+
+    public static BatchItemExecution completed(
+        TaskDispatchMessage message, WorkerExecutionResult result) {
+      return new BatchItemExecution(message, result, null, false);
+    }
+
+    public static BatchItemExecution failed(TaskDispatchMessage message, Throwable error) {
+      return new BatchItemExecution(message, null, error, false);
+    }
+
+    public static BatchItemExecution skipped(TaskDispatchMessage message) {
+      return new BatchItemExecution(message, null, null, true);
+    }
   }
 
   /** 从 message(task key + 路由元数据)+ CLAIM 返回的 effective config(业务字段)组装 PulledTask。 */

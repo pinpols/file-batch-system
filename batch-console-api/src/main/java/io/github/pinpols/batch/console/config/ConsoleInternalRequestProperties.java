@@ -16,8 +16,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ConsoleInternalRequestProperties {
 
   /**
-   * 内部端点 POST/PUT 请求体允许的最大字节数;{@code <=0} 表示不限。 默认 1MiB —— AM webhook 正常 payload 远小于此,仅拦截异常超大体防
-   * OOM。 Content-Length 缺失(chunked)的请求放行。
+   * 内部端点 POST/PUT/PATCH/DELETE 请求体允许的最大字节数;{@code <=0} 表示不限。 默认 1MiB —— AM webhook 正常 payload
+   * 远小于此,仅拦截异常超大体防 OOM。Content-Length 缺失(chunked)时也按实际读取字节数拦截。
    */
   private long maxBodyBytes = 1_048_576L;
 }

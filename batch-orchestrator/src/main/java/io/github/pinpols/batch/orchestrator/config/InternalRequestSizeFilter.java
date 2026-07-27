@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
+import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,12 +18,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * 缺口③：内部端点（{@code /internal/**}）请求体大小硬上限过滤器。
  *
- * <p>仅作用于 {@code /internal/**} 的 POST / PUT；按 {@code Content-Length} 超过 {@link
- * InternalRequestProperties#getMaxBodyBytes()} 即返回 413，不进 controller，防超大 report / outputs 撑爆内存。
+ * <p>仅作用于 {@code /internal/**} 的 POST / PUT / PATCH / DELETE；先按 {@code Content-Length} 廉价拒绝， 再实际
+ * bounded 读取并缓存 body，兜住 chunked / 缺失长度请求，防超大 report / outputs 撑爆内存。
  *
  * <ul>
  *   <li>{@code maxBodyBytes <= 0}：不限（放行）。
- *   <li>Content-Length 缺失（chunked transfer）：放行（无法预判大小，简单起见不拦）。
+ *   <li>Content-Length 缺失（chunked transfer）：按实际读取字节数拦截。
  *   <li>multipart：放行（文件上传走 Spring multipart 60MB 限制，不在本过滤器管辖）。
  * </ul>
  *
@@ -56,12 +58,19 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
       writePayloadTooLarge(response);
       return;
     }
-    chain.doFilter(request, response);
+    try {
+      chain.doFilter(BoundedRequestBodyReader.readAndCache(request, max, "internal"), response);
+    } catch (RequestBodyLimitExceededException ex) {
+      writePayloadTooLarge(response);
+    }
   }
 
   private static boolean isWriteMethod(HttpServletRequest request) {
     String method = request.getMethod();
-    return HttpMethod.POST.matches(method) || HttpMethod.PUT.matches(method);
+    return HttpMethod.POST.matches(method)
+        || HttpMethod.PUT.matches(method)
+        || HttpMethod.PATCH.matches(method)
+        || HttpMethod.DELETE.matches(method);
   }
 
   private static boolean isMultipart(HttpServletRequest request) {

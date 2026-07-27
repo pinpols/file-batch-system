@@ -177,7 +177,7 @@ class AbstractTaskConsumerBackpressureTest {
     assertThat(result).isFalse();
     verify(batchContainer, times(1)).pause();
     verify(baseContainer, never()).pause();
-    verify(executor, never()).executeBatch(any(), anyString());
+    verify(executor, never()).executeBatchDetailed(any(), anyString());
   }
 
   // P1-2.2:删除原 shouldExposeRunModeInMdcDuringConsumption 测试。

@@ -85,6 +85,8 @@ spec:
             - name: BATCH_WORKER_ATOMIC_HTTP_ENABLED
               value: {{ index $executors "httpEnabled" | quote }}
             {{- end }}
+            - name: BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES
+              value: {{ index $executors "httpMaxRequestBodyBytes" | default 1048576 | quote }}
             # atomic worker 使用独立受限 Secret，不继承共享 Secret；安全旁路开关仍需显式注入。
             - name: BATCH_SECURITY_BYPASS_MODE
               value: {{ .Values.security.bypassMode | quote }}
