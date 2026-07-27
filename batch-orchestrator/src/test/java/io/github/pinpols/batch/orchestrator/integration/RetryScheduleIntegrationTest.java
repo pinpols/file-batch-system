@@ -80,7 +80,10 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
 
     int updated =
         retryScheduleMapper.markRunning(
-            entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+            entity.getTenantId(),
+            entity.getId(),
+            RetryScheduleStatus.WAITING.code(),
+            RetryScheduleStatus.RUNNING.code());
 
     assertThat(updated).isEqualTo(1);
   }
@@ -93,13 +96,60 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     retryScheduleMapper.insert(entity);
 
     retryScheduleMapper.markRunning(
-        entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
     // 第二次尝试应失败（通过 fromStatus 检查实现乐观锁）
     int second =
         retryScheduleMapper.markRunning(
-            entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+            entity.getTenantId(),
+            entity.getId(),
+            RetryScheduleStatus.WAITING.code(),
+            RetryScheduleStatus.RUNNING.code());
 
     assertThat(second).isZero();
+  }
+
+  @Test
+  void shouldNotAdvanceRetryScheduleAcrossTenantBoundary() {
+    RetryScheduleEntity entity = waitingRetry("tenant-a", 510L, "FIXED", 1, 3);
+    entity.setDedupKey("tenant-a:wrong-tenant:" + BatchDateTimeSupport.utcEpochMillis());
+    retryScheduleMapper.insert(entity);
+
+    int updated =
+        retryScheduleMapper.markRunning(
+            "tenant-b",
+            entity.getId(),
+            RetryScheduleStatus.WAITING.code(),
+            RetryScheduleStatus.RUNNING.code());
+
+    assertThat(updated).isZero();
+    assertThat(retryScheduleMapper.selectById(entity.getId()).getRetryStatus())
+        .isEqualTo(RetryScheduleStatus.WAITING.code());
+  }
+
+  @Test
+  void shouldNotAdvanceRetryScheduleFromStaleStatus() {
+    RetryScheduleEntity entity = waitingRetry("t1", 520L, "FIXED", 1, 3);
+    entity.setDedupKey("t1:stale-status:" + BatchDateTimeSupport.utcEpochMillis());
+    retryScheduleMapper.insert(entity);
+
+    retryScheduleMapper.markRunning(
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
+    int updated =
+        retryScheduleMapper.markSuccess(
+            entity.getTenantId(),
+            entity.getId(),
+            RetryScheduleStatus.WAITING.code(),
+            RetryScheduleStatus.SUCCESS.code());
+
+    assertThat(updated).isZero();
+    assertThat(retryScheduleMapper.selectById(entity.getId()).getRetryStatus())
+        .isEqualTo(RetryScheduleStatus.RUNNING.code());
   }
 
   @Test
@@ -109,10 +159,17 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
     retryScheduleMapper.markRunning(
-        entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
 
     int updated =
-        retryScheduleMapper.markSuccess(entity.getId(), RetryScheduleStatus.SUCCESS.code());
+        retryScheduleMapper.markSuccess(
+            entity.getTenantId(),
+            entity.getId(),
+            RetryScheduleStatus.RUNNING.code(),
+            RetryScheduleStatus.SUCCESS.code());
 
     assertThat(updated).isEqualTo(1);
     RetryScheduleEntity loaded = retryScheduleMapper.selectById(entity.getId());
@@ -126,11 +183,16 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
     retryScheduleMapper.markRunning(
-        entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
 
     RetryScheduleMapper.MarkFailedParam markFailedParam =
         RetryScheduleMapper.MarkFailedParam.builder()
+            .tenantId(entity.getTenantId())
             .id(entity.getId())
+            .fromStatus(RetryScheduleStatus.RUNNING.code())
             .retryStatus(RetryScheduleStatus.FAILED.code())
             .lastErrorCode("DISPATCH_FAILED")
             .lastErrorMessage("connection refused")
