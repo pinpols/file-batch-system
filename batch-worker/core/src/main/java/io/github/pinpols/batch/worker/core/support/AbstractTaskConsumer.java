@@ -336,69 +336,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
             .computeIfAbsent(message.tenantId(), k -> new ArrayList<>())
             .add(new BatchPayload(payload, message));
       }
-      String workerId = registration.getWorkerId();
-      boolean allDlq = true;
-      for (Map.Entry<String, List<BatchPayload>> entry : byTenant.entrySet()) {
-        String tenantId = entry.getKey();
-        List<BatchPayload> group = entry.getValue();
-        List<TaskDispatchMessage> messages = group.stream().map(BatchPayload::message).toList();
-        List<BatchItemExecution> executions;
-        if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
-          executions =
-              RlsTenantContextHolder.runWithTenant(
-                  tenantId, () -> taskDispatchExecutor().executeBatchDetailed(messages, workerId));
-        } else {
-          executions = taskDispatchExecutor().executeBatchDetailed(messages, workerId);
-        }
-        for (BatchItemExecution execution : executions) {
-          if (execution == null || execution.skipped()) {
-            continue;
-          }
-          if (execution.error() == null) {
-            WorkerExecutionResult result = execution.result();
-            if (result != null) {
-              log.info(
-                  "{} batch task processed: taskId={}, success={}, message={}",
-                  workerConfiguration().workerType(),
-                  result.taskId(),
-                  result.success(),
-                  result.message());
-            }
-            continue;
-          }
-          if (isTransientOrchestratorFailure(execution.error())) {
-            log.warn(
-                "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
-                    + " batch: taskId={}, error={}",
-                workerConfiguration().workerType(),
-                execution.message() == null ? null : execution.message().taskId(),
-                execution.error().getMessage());
-            return false;
-          }
-          String payload = originalPayload(execution, group);
-          if (payload == null) {
-            log.error(
-                "{} batch item has no matching original payload — refusing to commit offset:"
-                    + " messageIndex={}, taskId={}",
-                workerConfiguration().workerType(),
-                execution.messageIndex(),
-                execution.message() == null ? null : execution.message().taskId());
-            allDlq = false;
-            continue;
-          }
-          log.error(
-              "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
-                  + " error={}",
-              workerConfiguration().workerType(),
-              execution.message() == null ? null : execution.message().taskId(),
-              execution.error().getMessage(),
-              execution.error());
-          if (!publishToDlqSafely(payload, execution.error().getMessage())) {
-            allDlq = false;
-          }
-        }
-      }
-      return allDlq; // 整批成功或逐项不可恢复已 DLQ → 提交 offset
+      return processBatchGroups(byTenant, registration.getWorkerId());
     } catch (Exception ex) {
       if (isTransientOrchestratorFailure(ex)) {
         log.warn(
@@ -438,6 +376,76 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   }
 
   private record BatchPayload(String payload, TaskDispatchMessage message) {}
+
+  private boolean processBatchGroups(Map<String, List<BatchPayload>> byTenant, String workerId) {
+    boolean allDlq = true;
+    for (Map.Entry<String, List<BatchPayload>> entry : byTenant.entrySet()) {
+      String tenantId = entry.getKey();
+      List<BatchPayload> group = entry.getValue();
+      List<TaskDispatchMessage> messages = group.stream().map(BatchPayload::message).toList();
+      List<BatchItemExecution> executions = executeBatchForTenant(tenantId, messages, workerId);
+      for (BatchItemExecution execution : executions) {
+        if (execution == null || execution.skipped()) {
+          continue;
+        }
+        if (execution.error() == null) {
+          logBatchSuccess(execution.result());
+          continue;
+        }
+        if (isTransientOrchestratorFailure(execution.error())) {
+          log.warn(
+              "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
+                  + " batch: taskId={}, error={}",
+              workerConfiguration().workerType(),
+              execution.message() == null ? null : execution.message().taskId(),
+              execution.error().getMessage());
+          return false;
+        }
+        String payload = originalPayload(execution, group);
+        if (payload == null) {
+          log.error(
+              "{} batch item has no matching original payload — refusing to commit offset:"
+                  + " messageIndex={}, taskId={}",
+              workerConfiguration().workerType(),
+              execution.messageIndex(),
+              execution.message() == null ? null : execution.message().taskId());
+          allDlq = false;
+          continue;
+        }
+        log.error(
+            "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
+                + " error={}",
+            workerConfiguration().workerType(),
+            execution.message() == null ? null : execution.message().taskId(),
+            execution.error().getMessage(),
+            execution.error());
+        if (!publishToDlqSafely(payload, execution.error().getMessage())) {
+          allDlq = false;
+        }
+      }
+    }
+    return allDlq; // 整批成功或逐项不可恢复已 DLQ → 提交 offset
+  }
+
+  private List<BatchItemExecution> executeBatchForTenant(
+      String tenantId, List<TaskDispatchMessage> messages, String workerId) {
+    if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
+      return RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> taskDispatchExecutor().executeBatchDetailed(messages, workerId));
+    }
+    return taskDispatchExecutor().executeBatchDetailed(messages, workerId);
+  }
+
+  private void logBatchSuccess(WorkerExecutionResult result) {
+    if (result != null) {
+      log.info(
+          "{} batch task processed: taskId={}, success={}, message={}",
+          workerConfiguration().workerType(),
+          result.taskId(),
+          result.success(),
+          result.message());
+    }
+  }
 
   private String originalPayload(BatchItemExecution execution, List<BatchPayload> group) {
     int index = execution.messageIndex();
