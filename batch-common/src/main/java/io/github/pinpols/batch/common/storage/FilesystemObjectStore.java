@@ -51,20 +51,34 @@ public class FilesystemObjectStore implements BatchObjectStore {
   private final Path root;
   private final String downloadBaseUrl;
   private final String presignSecret;
+  private final Duration defaultPresignTtl;
   private final long maxListScanEntries;
 
   public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret) {
-    this(root, downloadBaseUrl, presignSecret, 200_000L);
+    this(root, downloadBaseUrl, presignSecret, Duration.ofMinutes(5), 200_000L);
   }
 
   public FilesystemObjectStore(
       String root, String downloadBaseUrl, String presignSecret, long maxListScanEntries) {
+    this(root, downloadBaseUrl, presignSecret, Duration.ofMinutes(5), maxListScanEntries);
+  }
+
+  public FilesystemObjectStore(
+      String root,
+      String downloadBaseUrl,
+      String presignSecret,
+      Duration defaultPresignTtl,
+      long maxListScanEntries) {
     if (root == null || root.isBlank()) {
       throw new IllegalArgumentException("filesystem storage root must not be blank");
     }
     this.root = Paths.get(root).toAbsolutePath().normalize();
     this.downloadBaseUrl = downloadBaseUrl;
     this.presignSecret = presignSecret;
+    this.defaultPresignTtl =
+        defaultPresignTtl == null || defaultPresignTtl.isNegative() || defaultPresignTtl.isZero()
+            ? Duration.ofMinutes(5)
+            : defaultPresignTtl;
     this.maxListScanEntries = maxListScanEntries <= 0 ? Long.MAX_VALUE : maxListScanEntries;
     try {
       Files.createDirectories(this.root);
@@ -275,7 +289,11 @@ public class FilesystemObjectStore implements BatchObjectStore {
           "filesystem presign requires non-blank secret (set"
               + " batch.storage.filesystem.presign-secret or batch.security.internal-secret)");
     }
-    Instant expiresAt = Instant.now().plus(ttl);
+    Duration effectiveTtl = ttl == null ? defaultPresignTtl : ttl;
+    if (effectiveTtl.isNegative() || effectiveTtl.isZero()) {
+      throw new ObjectStoreException("filesystem presign ttl must be positive");
+    }
+    Instant expiresAt = Instant.now().plus(effectiveTtl);
     String sig = FilesystemPresignTokens.sign(bucket, key, expiresAt, presignSecret);
     return FilesystemPresignTokens.buildUrl(
         downloadBaseUrl, bucket, key, expiresAt.getEpochSecond(), sig);

@@ -86,6 +86,7 @@ public class BatchObjectStoreAutoConfiguration {
         properties.getRoot(),
         properties.getDownloadBaseUrl(),
         secret,
+        properties.getDefaultPresignTtl(),
         properties.getMaxListScanEntries());
   }
 

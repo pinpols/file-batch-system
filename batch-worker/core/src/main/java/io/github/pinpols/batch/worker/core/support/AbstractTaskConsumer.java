@@ -350,10 +350,6 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
         } else {
           executions = taskDispatchExecutor().executeBatchDetailed(messages, workerId);
         }
-        Map<TaskDispatchMessage, String> payloadByMessage = new LinkedHashMap<>();
-        for (BatchPayload item : group) {
-          payloadByMessage.put(item.message(), item.payload());
-        }
         for (BatchItemExecution execution : executions) {
           if (execution == null || execution.skipped()) {
             continue;
@@ -379,7 +375,17 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
                 execution.error().getMessage());
             return false;
           }
-          String payload = payloadByMessage.get(execution.message());
+          String payload = originalPayload(execution, group);
+          if (payload == null) {
+            log.error(
+                "{} batch item has no matching original payload — refusing to commit offset:"
+                    + " messageIndex={}, taskId={}",
+                workerConfiguration().workerType(),
+                execution.messageIndex(),
+                execution.message() == null ? null : execution.message().taskId());
+            allDlq = false;
+            continue;
+          }
           log.error(
               "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
                   + " error={}",
@@ -432,6 +438,20 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   }
 
   private record BatchPayload(String payload, TaskDispatchMessage message) {}
+
+  private String originalPayload(BatchItemExecution execution, List<BatchPayload> group) {
+    int index = execution.messageIndex();
+    if (index >= 0 && index < group.size()) {
+      return group.get(index).payload();
+    }
+    // Compatibility for test/custom executors that still construct an unindexed result.
+    for (BatchPayload item : group) {
+      if (item.message() == execution.message()) {
+        return item.payload();
+      }
+    }
+    return null;
+  }
 
   /**
    * R1-P2-7 / S1-7：判定异常是否为 orchestrator transient 故障（5xx / 网络层），不该进 DLQ。

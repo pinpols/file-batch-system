@@ -2,6 +2,8 @@ package io.github.pinpols.batch.worker.core.application;
 
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.logging.BatchMdc;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
@@ -90,41 +92,83 @@ public class TaskDispatchExecutor {
       }
     }
     List<BatchItemExecution> detailedResults = new ArrayList<>();
-    for (TaskDispatchMessage message : messages) {
+    for (int messageIndex = 0; messageIndex < messages.size(); messageIndex++) {
+      TaskDispatchMessage message = messages.get(messageIndex);
       if (message == null || message.taskId() == null) {
         continue;
       }
       TaskClaimResult claim = claimedById.get(message.taskId());
       if (claim == null || !claim.claimed() || claim.config() == null) {
-        detailedResults.add(BatchItemExecution.skipped(message));
+        detailedResults.add(BatchItemExecution.skipped(messageIndex, message));
         continue; // 没领到 → 跳过(与单条 execute 返 null 一致)
       }
+      putExecutionMdc(message, workerId);
       try {
         WorkerExecutionResult result =
             workerRuntimeFacade.execute(buildTask(message, workerId, claim.config()));
-        detailedResults.add(BatchItemExecution.completed(message, result));
+        detailedResults.add(BatchItemExecution.completed(messageIndex, message, result));
       } catch (Exception ex) {
-        detailedResults.add(BatchItemExecution.failed(message, ex));
+        detailedResults.add(BatchItemExecution.failed(messageIndex, message, ex));
+      } finally {
+        BatchMdc.removeAll(
+            StructuredLogField.TENANT_ID,
+            StructuredLogField.TRACE_ID,
+            StructuredLogField.TASK_ID,
+            StructuredLogField.JOB_INSTANCE_ID,
+            StructuredLogField.WORKER_TYPE,
+            StructuredLogField.WORKER_ID,
+            StructuredLogField.RUN_MODE);
       }
     }
     return detailedResults;
   }
 
   public record BatchItemExecution(
-      TaskDispatchMessage message, WorkerExecutionResult result, Throwable error, boolean skipped) {
+      int messageIndex,
+      TaskDispatchMessage message,
+      WorkerExecutionResult result,
+      Throwable error,
+      boolean skipped) {
 
     public static BatchItemExecution completed(
         TaskDispatchMessage message, WorkerExecutionResult result) {
-      return new BatchItemExecution(message, result, null, false);
+      return completed(-1, message, result);
+    }
+
+    public static BatchItemExecution completed(
+        int messageIndex, TaskDispatchMessage message, WorkerExecutionResult result) {
+      return new BatchItemExecution(messageIndex, message, result, null, false);
     }
 
     public static BatchItemExecution failed(TaskDispatchMessage message, Throwable error) {
-      return new BatchItemExecution(message, null, error, false);
+      return failed(-1, message, error);
+    }
+
+    public static BatchItemExecution failed(
+        int messageIndex, TaskDispatchMessage message, Throwable error) {
+      return new BatchItemExecution(messageIndex, message, null, error, false);
     }
 
     public static BatchItemExecution skipped(TaskDispatchMessage message) {
-      return new BatchItemExecution(message, null, null, true);
+      return skipped(-1, message);
     }
+
+    public static BatchItemExecution skipped(int messageIndex, TaskDispatchMessage message) {
+      return new BatchItemExecution(messageIndex, message, null, null, true);
+    }
+  }
+
+  private static void putExecutionMdc(TaskDispatchMessage message, String workerId) {
+    BatchMdc.put(StructuredLogField.TENANT_ID, message.tenantId());
+    BatchMdc.put(StructuredLogField.TRACE_ID, message.traceId());
+    BatchMdc.put(
+        StructuredLogField.TASK_ID,
+        message.taskId() == null ? null : String.valueOf(message.taskId()));
+    BatchMdc.put(
+        StructuredLogField.JOB_INSTANCE_ID,
+        message.jobInstanceId() == null ? null : String.valueOf(message.jobInstanceId()));
+    BatchMdc.put(StructuredLogField.WORKER_TYPE, message.workerType());
+    BatchMdc.put(StructuredLogField.WORKER_ID, workerId);
   }
 
   /** 从 message(task key + 路由元数据)+ CLAIM 返回的 effective config(业务字段)组装 PulledTask。 */

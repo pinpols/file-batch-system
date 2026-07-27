@@ -283,6 +283,18 @@ class FilesystemObjectStoreTest {
         .isFalse();
   }
 
+  @Test
+  void presignShouldUseConfiguredDefaultWhenTtlIsNull(@TempDir Path root) {
+    FilesystemObjectStore store =
+        new FilesystemObjectStore(
+            root.toString(), DOWNLOAD_BASE_URL, SECRET, Duration.ofMinutes(2), 200_000);
+
+    String url = store.presign(BUCKET, "default-ttl.txt", null);
+    long remainingSeconds = Long.parseLong(extractParam(url, "e")) - Instant.now().getEpochSecond();
+
+    assertThat(remainingSeconds).isBetween(115L, 120L);
+  }
+
   private static String extractParam(String url, String name) {
     int q = url.indexOf('?');
     String query = url.substring(q + 1);

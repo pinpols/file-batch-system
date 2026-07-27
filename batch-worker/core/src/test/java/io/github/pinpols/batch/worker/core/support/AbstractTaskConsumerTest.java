@@ -117,14 +117,41 @@ class AbstractTaskConsumerTest {
     when(executor.executeBatchDetailed(any(), anyString()))
         .thenReturn(
             List.of(
-                BatchItemExecution.completed(m1, new WorkerExecutionResult("1", true, "ok")),
-                BatchItemExecution.failed(m2, new IllegalArgumentException("bad item"))));
+                BatchItemExecution.completed(0, m1, new WorkerExecutionResult("1", true, "ok")),
+                BatchItemExecution.failed(1, m2, new IllegalArgumentException("bad item"))));
 
     boolean result =
         (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(p1, p2));
 
     assertThat(result).isTrue();
     verify(dlq).publish(org.mockito.ArgumentMatchers.eq(p2), any(), any(), any());
+  }
+
+  @Test
+  void doConsumeBatch_keepsPayloadPositionWhenMessagesCompareEqual() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+    TaskDispatchMessage first = buildMessage(1L, "t1", "IMPORT", null);
+    TaskDispatchMessage second = buildMessage(1L, "t1", "IMPORT", null);
+    String firstPayload = JsonUtils.toJson(first);
+    String secondPayload = " " + firstPayload;
+    when(executor.executeBatchDetailed(any(), anyString()))
+        .thenReturn(
+            List.of(
+                BatchItemExecution.failed(0, first, new IllegalArgumentException("first failed")),
+                BatchItemExecution.completed(
+                    1, second, new WorkerExecutionResult("1", true, "ok"))));
+
+    boolean result =
+        (boolean)
+            ReflectionTestUtils.invokeMethod(
+                consumer, "doConsumeBatch", List.of(firstPayload, secondPayload));
+
+    assertThat(result).isTrue();
+    verify(dlq).publish(org.mockito.ArgumentMatchers.eq(firstPayload), any(), any(), any());
+    verify(dlq, never())
+        .publish(org.mockito.ArgumentMatchers.eq(secondPayload), any(), any(), any());
   }
 
   @Test
