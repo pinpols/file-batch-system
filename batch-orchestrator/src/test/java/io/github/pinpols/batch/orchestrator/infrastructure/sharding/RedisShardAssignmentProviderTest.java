@@ -53,6 +53,7 @@ class RedisShardAssignmentProviderTest {
 
     assertThat(a.shardTotal()).isEqualTo(3);
     assertThat(a.shardIndex()).isEqualTo(1); // orch-1 字典序第 2 位（index=1）
+    assertThat(p.canPoll()).isTrue();
   }
 
   @Test
@@ -66,20 +67,22 @@ class RedisShardAssignmentProviderTest {
 
     assertThat(a.shardTotal()).isEqualTo(1);
     assertThat(a.shardIndex()).isEqualTo(0);
+    assertThat(p.canPoll()).isTrue();
   }
 
   @Test
-  void currentEmptyMembersReturnsSingle() {
+  void currentEmptyMembersStopsPolling() {
     RedisShardAssignmentProvider p = provider("orch-0");
     when(zset.rangeWithScores(anyString(), eq(0L), eq(-1L))).thenReturn(Set.of());
 
     ShardAssignment a = p.current();
 
     assertThat(a.shardTotal()).isEqualTo(1);
+    assertThat(p.canPoll()).isFalse();
   }
 
   @Test
-  void currentSelfNotInMembersReturnsSingle() {
+  void currentSelfNotInMembersStopsPolling() {
     RedisShardAssignmentProvider p = provider("orch-missing");
     Set<TypedTuple<String>> tuples = new LinkedHashSet<>();
     tuples.add(new DefaultTypedTuple<>("orch-0", 1.0));
@@ -90,6 +93,7 @@ class RedisShardAssignmentProviderTest {
 
     // 自己不在集合里，降级为 single（避免以为还在 rebalance 就处理别人的分片）
     assertThat(a.shardTotal()).isEqualTo(1);
+    assertThat(p.canPoll()).isFalse();
   }
 
   @Test
@@ -111,6 +115,7 @@ class RedisShardAssignmentProviderTest {
     // 返回上次成功值，不抛异常
     assertThat(fallback.shardTotal()).isEqualTo(first.shardTotal());
     assertThat(fallback.shardIndex()).isEqualTo(first.shardIndex());
+    assertThat(p.canPoll()).isFalse();
   }
 
   @Test

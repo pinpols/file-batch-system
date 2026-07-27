@@ -48,10 +48,13 @@ public class OutboxLagHealthIndicator implements HealthIndicator {
               .withDetail("stalePublishingTimeoutSeconds", properties.getStalePublishingSeconds());
       return builder.build();
     } catch (Exception ex) {
-      // 健康探针不能因为 DB 抖动让 readiness 持久 DOWN(DataSource 自己的 HealthIndicator 已覆盖此场景);
-      // 这里返 UNKNOWN 保留可见性,具体连接错误依然在 DataSource indicator 报
       SwallowedExceptionLogger.warn(OutboxLagHealthIndicator.class, "catch:Exception", ex);
-      return Health.unknown().withDetail("error", ex.getClass().getSimpleName()).build();
+      // Outbox 是控制面的持久交付链路。DB 查询失败时必须摘出 readiness，
+      // 否则实例仍接收新任务但无法可靠推进状态，形成静默积压。
+      return Health.down()
+          .withDetail("error", ex.getClass().getSimpleName())
+          .withDetail("reason", "outbox health query unavailable")
+          .build();
     }
   }
 }

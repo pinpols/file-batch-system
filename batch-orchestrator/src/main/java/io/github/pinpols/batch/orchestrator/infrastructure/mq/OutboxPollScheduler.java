@@ -165,7 +165,13 @@ public class OutboxPollScheduler {
       return;
     }
     try {
-      lockingTaskExecutor.executeWithLock((LockingTaskExecutor.Task) this::doPoll, lockConfig());
+      ShardAssignment assignment = shardAssignmentProvider.current();
+      if (!shardAssignmentProvider.canPoll()) {
+        log.warn("Outbox 轮询跳过：分片协调后端不可用");
+        return;
+      }
+      lockingTaskExecutor.executeWithLock(
+          (LockingTaskExecutor.Task) () -> doPoll(assignment), lockConfig(assignment));
     } catch (Throwable t) {
       log.error("Outbox 轮询异常", t);
     } finally {
@@ -189,8 +195,14 @@ public class OutboxPollScheduler {
     }
     ScheduleForwarderResult[] holder = new ScheduleForwarderResult[1];
     try {
+      ShardAssignment assignment = shardAssignmentProvider.current();
+      if (!shardAssignmentProvider.canPoll()) {
+        log.warn("Outbox 轮询跳过：分片协调后端不可用");
+        return;
+      }
       lockingTaskExecutor.executeWithLock(
-          (LockingTaskExecutor.Task) () -> holder[0] = executeAdvance(), lockConfig());
+          (LockingTaskExecutor.Task) () -> holder[0] = executeAdvance(assignment),
+          lockConfig(assignment));
     } catch (DataAccessException dae) {
       // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
       // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
@@ -213,7 +225,7 @@ public class OutboxPollScheduler {
     }
   }
 
-  private ScheduleForwarderResult executeAdvance() {
+  private ScheduleForwarderResult executeAdvance(ShardAssignment assignment) {
     if (gracefulShutdown.isDraining()) {
       log.info("Outbox 轮询跳过：orchestrator 正在 draining");
       return null;
@@ -226,7 +238,13 @@ public class OutboxPollScheduler {
     OutboxProperties outbox = governance.outbox();
     // #1-1: 每轮开始前将超时的 PUBLISHING 事件重置为 FAILED，防止 Kafka 投递失败后事件永久长期停滞
     resetStalePublishingEvents(outbox);
-    ShardAssignment assignment = shardAssignmentProvider.current();
+    if (!shardAssignmentProvider.canPoll()) {
+      log.warn(
+          "Outbox 轮询跳过：动态分片协调后端不可用，保留 assignment total={} index={}，" + "等待 fencing 协调恢复后再继续",
+          assignment.shardTotal(),
+          assignment.shardIndex());
+      return null;
+    }
     SchedulePlan plan = new SchedulePlan();
     plan.setShardTotal(assignment.shardTotal());
     plan.setShardIndex(assignment.shardIndex());
@@ -256,8 +274,8 @@ public class OutboxPollScheduler {
     }
   }
 
-  private void doPoll() {
-    executeAdvance();
+  private void doPoll(ShardAssignment assignment) {
+    executeAdvance(assignment);
   }
 
   /**
@@ -308,8 +326,7 @@ public class OutboxPollScheduler {
    *
    * <p>DYNAMIC 模式下每轮都重新查询分配；rebalance 期间可能有短暂重叠，由 Outbox 事件幂等设计回退。
    */
-  private LockConfiguration lockConfig() {
-    ShardAssignment assignment = shardAssignmentProvider.current();
+  private LockConfiguration lockConfig(ShardAssignment assignment) {
     String lockName =
         assignment.shardTotal() > 1
             ? "outbox_poll_shard_" + assignment.shardIndex()

@@ -161,6 +161,9 @@ batch:
   quota:
     # 配额运行时状态后端：redis（默认，Lua 原子脚本，适合海量并发）/ database（@Version 乐观锁，遗留路径）
     runtime-store: ${BATCH_QUOTA_RUNTIME_STORE:redis}
+    redis:
+      # 控制面默认 fail-closed；本地兼容或非关键限流场景可显式设 FAIL_OPEN。
+      failure-mode: ${BATCH_QUOTA_REDIS_FAILURE_MODE:FAIL_CLOSED}
     backend-guard:
       # runtime-store 或 Redis/PG 定位变化时必须提供新的单次 cutover id；首次基线登记留空
       cutover-id: ${BATCH_QUOTA_BACKEND_CUTOVER_ID:}
