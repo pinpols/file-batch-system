@@ -53,11 +53,6 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "OutboxEventMapper#deleteByIds",
         "OutboxEventMapper#deleteEventDeliveryLogsByOutboxIds",
         "OutboxEventMapper#deleteEventOutboxRetriesByOutboxIds",
-        // 重试调度器:全局认领后按 id 推进状态(claimForRetry 已由调度器选定行)
-        "RetryScheduleMapper#markRunning",
-        "RetryScheduleMapper#markSuccess",
-        "RetryScheduleMapper#markFailed",
-        "RetryScheduleMapper#resetToWaiting",
         // worker 自更新:worker 按自己的注册 id 改
         "WorkerRegistryMapper#updateById",
         // 归档/保留级联:按预选 job_instance id 集删除运行态子行(内部维护任务,id 集即隔离边界)

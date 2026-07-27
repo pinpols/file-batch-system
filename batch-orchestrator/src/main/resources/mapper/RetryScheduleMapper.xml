@@ -82,7 +82,8 @@
         update batch.retry_schedule
         set retry_status = #{runningStatus},
             updated_at = current_timestamp
-        where id = #{id}
+        where tenant_id = #{tenantId}
+          and id = #{id}
           and retry_status = #{fromStatus}
     </update>
 
@@ -90,7 +91,9 @@
         update batch.retry_schedule
         set retry_status = #{successStatus},
             updated_at = current_timestamp
-        where id = #{id}
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and retry_status = #{fromStatus}
     </update>
 
     <update id="markFailed">
@@ -102,13 +105,17 @@
             last_error_args = #{p.lastErrorArgs,jdbcType=VARCHAR}::jsonb,
             next_retry_at = #{p.nextRetryAt},
             updated_at = current_timestamp
-        where id = #{p.id}
+        where tenant_id = #{p.tenantId}
+          and id = #{p.id}
+          and retry_status = #{p.fromStatus}
     </update>
 
     <update id="resetToWaiting">
         update batch.retry_schedule
         set retry_status = #{waitingStatus},
             updated_at = current_timestamp
-        where id = #{id}
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and retry_status = #{fromStatus}
     </update>
 </mapper>
