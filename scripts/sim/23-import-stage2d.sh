@@ -49,7 +49,8 @@ fi
 
 echo "==> apply bootstrap(XML import runtime config)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
+  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2d-reset-errors.sql >/dev/null
 
