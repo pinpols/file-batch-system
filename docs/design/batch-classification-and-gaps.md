@@ -63,7 +63,7 @@
 
 | 维度 | 系统现状 | 实现位置 | 评价 |
 |---|---|---|---|
-| IMPORT | ✅ `JobType.IMPORT` + `PipelineType.IMPORT` + `batch-worker-import`（6 阶段：RECEIVE→PARSE→PREPROCESS→VALIDATE→LOAD→COMPLETE） | `batch-worker-import/.../DefaultImportStageExecutor` | 落地完整 |
+| IMPORT | ✅ `JobType.IMPORT` + `PipelineType.IMPORT` + `batch-worker-import`（6 阶段：RECEIVE→PREPROCESS→PARSE→VALIDATE→LOAD→FEEDBACK） | `batch-worker-import/.../DefaultImportStageExecutor` | 落地完整 |
 | EXPORT | ✅ `JobType.EXPORT` + `PipelineType.EXPORT` + `batch-worker-export`（5 阶段：PREPARE→GENERATE→STORE→REGISTER→COMPLETE） | `batch-worker-export` | 落地完整 |
 | DISPATCH | ✅ `JobType.DISPATCH` + `PipelineType.DISPATCH` + `batch-worker-dispatch`（5 阶段 + 渠道熔断） | `batch-worker-dispatch` | 落地完整，且额外做了 channel circuit breaker / receipt polling |
 | **PROCESS** | ✅ `JobType.PROCESS` + `PipelineType.PROCESS` + `batch-worker-process`（5 阶段：PREPARE→COMPUTE→VALIDATE→COMMIT→FEEDBACK） | `DefaultProcessStageExecutor` + `sqlTransformCompute` + `ProcessComputePlugin` | 已补一等公民；常见 SQL 加工可纯配置驱动，复杂业务通过插件扩展 |

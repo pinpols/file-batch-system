@@ -898,7 +898,7 @@ sequenceDiagram
 | `batch-worker-core` | 执行基座 | 统一消费、认领、心跳、租约续约、执行上下文、指标与异常包装 |
 | `batch-worker-import` | 导入链路 | RECEIVE / PREPROCESS / PARSE / VALIDATE / LOAD / FEEDBACK |
 | `batch-worker-export` | 导出链路 | PREPARE / GENERATE / STORE / REGISTER / COMPLETE |
-| `batch-worker-dispatch` | 分发链路 | PREPARE / DISPATCH / ACK / RETRY / COMPLETE |
+| `batch-worker-dispatch` | 分发链路 | PREPARE / DISPATCH / ACK / RETRY / COMPENSATE / COMPLETE |
 
 #### Step 级 Worker 路由配置建议
 
