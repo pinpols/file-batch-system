@@ -44,7 +44,8 @@ trap restore_import_default EXIT
 # 灌入 bootstrap + checkpoint 测试夹具
 echo "==> apply bootstrap + checkpoint fixture"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
+  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2e-import-checkpoint.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_BUSINESS_DB" \
