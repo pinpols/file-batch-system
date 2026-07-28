@@ -23,6 +23,7 @@
 | `batch.mq.routing.mode` | orchestrator | **TENANT** | **TENANT**（继承 yml） | 🟡 中 | `BATCH_MQ_ROUTING_MODE` |
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | ~~trigger~~ | **已移除**（2026-04-25 清理 Phase 2 半成品） | — | — | — |
 | `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟡 中 | `BATCH_QUOTA_RUNTIME_STORE`；后端或连接定位变化需先迁移，再提供一次性 `BATCH_QUOTA_BACKEND_CUTOVER_ID` |
+| `batch.quota.redis.failure-mode` | orchestrator | **FAIL_CLOSED** | **FAIL_CLOSED** | 🔴 高 | `BATCH_QUOTA_REDIS_FAILURE_MODE`=FAIL_CLOSED/FAIL_OPEN；生产必须 FAIL_CLOSED，只有隔离的本地兼容场景才允许显式 FAIL_OPEN，详见 §3.5 |
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
 | `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；启停、PG/SQLite 或定位变化需先排空/迁移，再提供一次性 `BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID` |
 | `batch.worker.lease.renew-batch-max-items` | worker（ADR-016） | **256** | **256**（继承 yml） | 🟢 低 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS`：单 `renew-batch` HTTP 最多携带任务数，超出自动拆单 |
@@ -272,9 +273,20 @@ docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 --list | 
 - `redis` 模式：Redis 必须就位；`QuotaRuntimeStateSnapshotScheduler` 按 `batch.quota.snapshot.interval-millis`（默认 5 分钟）把 Redis 状态 upsert 回 PG `quota_runtime_state` 保留审计能力
 - `database` 模式：`QuotaRuntimeResetScheduler` 启用，按时间窗口重置 PG 行；Redis 模式下该 scheduler 不启动（`@ConditionalOnProperty(havingValue=database)`）
 
-**风险**：🟡 中（fail-open 有语义副作用）
-- Redis 抛 `DataAccessException` → 🟡 **中 fail-open**：`RedisQuotaRuntimeStateService` 三处 catch（evaluateAndReserve / acquire / release）一律返回 `ResourceCheck.allow()` —— **限流功能等同关闭**。短抖动无影响；**长期 Redis 故障会让大租户吃掉小租户配额**。运维需监控 quota allow WARN 频率，必要时手工切回 `database` 模式
+**风险**：🟡 中（状态后端切换与故障策略会改变配额语义）
+- Redis 抛 `DataAccessException` 时由 `batch.quota.redis.failure-mode` 决定：默认 **FAIL_CLOSED** 返回 `QUOTA_BACKEND_UNAVAILABLE` 并让请求等待/重试，避免 Redis 故障绕过租户配额；仅显式设为 **FAIL_OPEN** 时才放行。FAIL_OPEN 只适用于隔离的本地兼容场景，生产禁止使用。
 - Redis → database 前必须先完成一次 Redis → PG snapshot 并核对时间戳；database → Redis 前必须显式准备 Redis 初始状态或接受新窗口重置。仅改环境变量且没有新的 `BATCH_QUOTA_BACKEND_CUTOVER_ID` 时，启动守护会拒绝切换
+
+**故障策略配置**：
+
+```yaml
+batch:
+  quota:
+    redis:
+      failure-mode: FAIL_CLOSED
+```
+
+对应环境变量为 `BATCH_QUOTA_REDIS_FAILURE_MODE`。该项不是后端切换，不需要 `BATCH_QUOTA_BACKEND_CUTOVER_ID`；变更后需重启 orchestrator，并观察 quota backend unavailable 告警和等待队列是否恢复。
 
 **验证**：
 ```bash

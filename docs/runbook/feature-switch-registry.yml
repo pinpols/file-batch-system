@@ -31,6 +31,7 @@ switches:
     module: orchestrator
     env:
       - BATCH_QUOTA_RUNTIME_STORE
+      - BATCH_QUOTA_REDIS_FAILURE_MODE
       - BATCH_QUOTA_BACKEND_CUTOVER_ID
     composeRequired: true
     helmRequired: true

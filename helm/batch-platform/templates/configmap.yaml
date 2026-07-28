@@ -67,6 +67,7 @@ data:
   BATCH_SCHEDULER_WORKER_CACHE_ENABLED: {{ (.Values.orchestrator.workerCache).enabled | default true | quote }}
   BATCH_MQ_ROUTING_MODE: {{ (.Values.orchestrator.mqRouting).mode | default "TENANT" | quote }}
   BATCH_QUOTA_RUNTIME_STORE: {{ (.Values.orchestrator.quota).runtimeStore | default "redis" | quote }}
+  BATCH_QUOTA_REDIS_FAILURE_MODE: {{ (.Values.orchestrator.quota).redisFailureMode | default "FAIL_CLOSED" | quote }}
   BATCH_QUOTA_BACKEND_CUTOVER_ID: {{ (.Values.orchestrator.quota).backendCutoverId | default "" | quote }}
   BATCH_QUOTA_SNAPSHOT_ENABLED: {{ (.Values.orchestrator.quota).snapshotEnabled | default true | quote }}
   BATCH_WORKER_REPORT_OUTBOX_ENABLED: {{ (.Values.orchestrator.workerReportOutbox).enabled | default false | quote }}

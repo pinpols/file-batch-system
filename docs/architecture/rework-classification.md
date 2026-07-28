@@ -80,7 +80,7 @@
 
 **Phase 2：原 5 项 → 现 4 项**（Quartz JobStore 单独库已撤销）— 其余 4 项 ✅✅✅✅ 全部交付
 
-**Phase 2 落地策略 — 实际默认（2026-04-25 校准）**：scaffolding 验证完成后多数开关 application.yml fallback 已设为开启 + fail-open 回退，并非全 opt-in。每个开关的实际默认 / 风险等级 / 启用条件详见 [`docs/runbook/feature-switches.md`](../runbook/feature-switches.md)。
+**Phase 2 落地策略 — 实际默认（2026-07-28 校准）**：scaffolding 验证完成后多数开关 application.yml fallback 已设为开启；故障回退策略按能力分别定义，不再笼统视为 fail-open。每个开关的实际默认 / 风险等级 / 启用条件详见 [`docs/runbook/feature-switches.md`](../runbook/feature-switches.md)。
 
 | 开关 | application.yml 默认 | docker-compose 默认 | 备注 |
 |---|---|---|---|
@@ -88,7 +88,7 @@
 | `batch.scheduler.worker-cache.enabled` | true | true | Redis fail-open 已就位 |
 | `batch.mq.routing.mode` | TENANT | TENANT | 切换需 worker 端 topicPattern 配套 |
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | — | — | **已移除**（2026-04-25 半成品清理）；演进直接换时间轮见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md) |
-| `batch.quota.runtime-store` | redis | redis | Redis 故障 fail-open 放行 |
+| `batch.quota.runtime-store` | redis | redis | Redis 故障默认 fail-closed；`batch.quota.redis.failure-mode` 可显式切到 FAIL_OPEN |
 
 > 历史叙述（"opt-in scaffolding，所有开关默认关闭"）已不准确，以本表 + `feature-switches.md` 为准。
 
@@ -96,10 +96,10 @@
 - 接口 `QuotaRuntimeStateService` 抽出，配 `batch.quota.runtime-store=redis|database` 切换实现。默认 `redis`。
 - Redis 路径：`RedisQuotaRuntimeStateService` 用单条 Lua 脚本原子完成"窗口判定 + peakBorrowed CAS 抬升 + TTL 续命"，避免多 orchestrator 实例对 PG 同一行的写竞争。Lua 返回 `{allowed, peak, winStart, winEnd}`。
 - DB 路径：`DatabaseQuotaRuntimeStateService` 保留 PG `@Version` 乐观锁的原实现，作为 Redis 故障 / 短期回退路径。`QuotaRuntimeResetScheduler` 仅 DB 模式启用（Redis 由 TTL 自动回收过期窗口）。
-- 故障策略：Redis 抛 `DataAccessException` 时 fail-open（放行 + WARN 日志）。限流故障不应放大成业务故障；下一轮自然恢复。
+- 故障策略：Redis 抛 `DataAccessException` 时默认 fail-closed（返回 `QUOTA_BACKEND_UNAVAILABLE` + WARN 日志），避免协调后端故障绕过租户配额；仅显式 `BATCH_QUOTA_REDIS_FAILURE_MODE=FAIL_OPEN` 才放行，且仅限隔离的本地兼容场景。
 - 时区敏感：CALENDAR_DAY 边界由 Java 侧 `BatchTimezoneProvider` 计算后透传给 Lua（`calendarStartMillis / calendarEndMillis`），不依赖 Lua server 时区。
 - PG 审计落盘：`QuotaRuntimeStateSnapshotScheduler` 默认每 5 分钟（`batch.quota.snapshot.interval-millis`）按 `tenant_quota_policy` / `resource_queue` 枚举 owner，把 Redis 当前 peak 状态 upsert 到 PG `quota_runtime_state`。仅 Redis 模式启用。
-- 测试覆盖：12 个 unit test（mock OrchestratorRedisSupport，验证 fail-open / 守卫逻辑）+ 6 个 integration test（真实 Redis testcontainer，验证 Lua 脚本窗口/peak 语义）。
+- 测试覆盖：12 个 unit test（mock OrchestratorRedisSupport，验证默认 fail-closed、显式 fail-open 与守卫逻辑）+ 6 个 integration test（真实 Redis testcontainer，验证 Lua 脚本窗口/peak 语义）。
 
 ### Phase 3 — 千万 → 亿（5 项）
 
