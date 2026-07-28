@@ -77,6 +77,23 @@
 ## 一句话排序
 **先 P0-1 Kafka HA + P0-2 PG Patroni + P0-3 备份演练 → P1-1 Redis Sentinel → (确需扩展再)Citus + P1-2 PgBouncer。** 应用层已就位,基础件按上表逐项落地(自托管 operator 或云托管二选一);Helm 的 svc 地址是"假设运维会建",chart 不自建,别误以为装了 Helm 就有 HA。
 
+## 应用层 HA/CAP 验收矩阵（2026-07-28）
+
+以下 8 项属于应用代码防线，和上面的 PG/Kafka/Redis 基础设施落地分开验收：
+
+| 项 | 代码实现 | 验证口径 |
+|---|---|---|
+| 动态分片 fencing | Redis 协调异常时保留快照仅供诊断，`canPoll=false`；同一轮锁名和执行计划复用同一个分片快照 | `RedisShardAssignmentProviderTest`、`OutboxPollSchedulerTest` |
+| invocation/lease fencing | `current_invocation_id` 与 worker/lease/report CAS 条件绑定，旧 invocation 更新影响行数为 0 | `JobPartitionMapper` SQL 守护、lease/report IT |
+| Kafka UNKNOWN 对账 | `PUBLISHING` 是未确认态；发送异常不直接重复提交，超时由 `resetStalePublishing` 回收为 `FAILED`，以稳定 event key 重投 | `OutboxPublishCircuitBreakerKafkaFailureIntegrationTest`、outbox 状态 CAS IT |
+| Redis quota 降级 | 默认 `FAIL_CLOSED`；仅显式 `BATCH_QUOTA_REDIS_FAILURE_MODE=FAIL_OPEN` 才允许放行 | `RedisQuotaRuntimeStateServiceTest`、Redis quota IT |
+| PG failover 重试 | 仅对锁冲突/瞬时数据访问异常重试；查询超时不在 forwarder 内盲重试，交给 PUBLISHING 回收，避免重复发布 | `DefaultScheduleForwarder` `@Retryable` 与 outbox recovery IT |
+| readiness 分级 | 控制面 outbox 数据库查询失败返回 `DOWN`，让服务摘流；业务 readiness 保留明确原因码 | `OutboxLagHealthIndicator`、readiness service tests |
+| ShedLock provider 边界 | provider 只能选择 `redis` 或 `jdbc`；切换要求全停、切配置、全起，不允许两套锁同时运行 | `BatchShedLockAutoConfiguration`、`ShedLockConfigurationIntegrationTest` |
+| 恢复对账 | outbox、partition lease、created launch、workflow stuck、补偿命令、文件治理均有定时回收/对账入口 | 对应 reconciler 单测、容器启动后的 actuator/log 验收 |
+
+本矩阵不把“应用防线已实现”误写成“基础设施 HA 已落地”：生产签字仍需完成 Kafka 多副本、PG 自动故障转移、WAL/PITR 真实演练和 Redis Sentinel/托管 Redis 验证。
+
 ## 关联
 - `playbooks/pg-primary-failover.md` / `backup-and-pitr.md` / `redis-shedlock-down.md`
 - `helm/values-prod.yaml`(基础件连接地址 + Kafka broker 期望拓扑)、`docker/observability/prometheus-batch-rules.yml`(HA 告警)

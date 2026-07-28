@@ -64,7 +64,7 @@ PG 层的真相:
 | **PG HA** | **普通 Patroni**(非 Citus 模式) | 1 primary + 1 replica | `synchronous_mode=on`(RPO≈0,按性能容忍调);暴露 `<cluster>-leader` Service | url 走 PgBouncer svc ✅;Hikari keepalive=30s ✅ |
 | **备份** | pgBackRest | — | WAL 归档 + 日 base → MinIO | `PostgresBackupStale` 告警 ✅ |
 | **Kafka** | Strimzi | 3 broker(KRaft) | topic RF=3 / `min.insync.replicas=2` / offsets+txn RF=3 | acks=all+idempotence / consumer manual_immediate ✅ |
-| **Redis** | Sentinel | 1主2从+3哨兵 | ShedLock/quota/cache | cache fail-open ✅;ShedLock 可回退 PG |
+| **Redis** | Sentinel | 1主2从+3哨兵 | ShedLock/quota/cache | cache 可按策略降级；quota 默认 **FAIL_CLOSED**，仅本地显式 FAIL_OPEN；ShedLock 可回退 PG |
 | **对象存储** | MinIO Operator | ≥4 盘 EC | WAL/备份也存这 | object store 重试 ✅ |
 | **连接池** | PgBouncer | ×2 | transaction mode | Hikari pool 已估算 ✅ |
 

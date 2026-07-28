@@ -2,7 +2,8 @@
 
 # 海量批量调度承载力评估
 
-> 评估日期：2026-04-25
+> 评估日期：2026-07-28
+> 配置与 HA/CAP 结论以 [`../runbook/ha-readiness.md`](../runbook/ha-readiness.md)、[`../runbook/feature-switches.md`](../runbook/feature-switches.md) 和本文的后续校准为准；本文保留容量方向性评估，不替代真实 staging 压测和灾备演练。
 > 评估角度：架构决策的方向性 + 工程承载力（在量上能不能撑）
 > 评估依据：本仓库当前代码（`main` HEAD）+ 数据模型 + 这周端到端跑通验证（参考 [`worker-stage-coverage.md`](../runbook/worker-stage-coverage.md)）
 
@@ -98,7 +99,7 @@
 
 历史问题：`quota_runtime_state` 是 PG 行锁层，并发热点租户会撞乐观锁（曾遇到 `OptimisticLockingFailureException` 500，先修为 409 + retry 回退）。海量场景需要真分布式限流。
 
-**当前状态**：默认实现已切到 `RedisQuotaRuntimeStateService`：单条 Lua 脚本原子完成"窗口判定 + peakBorrowed 抬升 + TTL 续命"，去掉了 PG 行锁瓶颈。配置 `batch.quota.runtime-store=database` 可回退到原 PG 实现作为故障降级。`QuotaRuntimeStateSnapshotScheduler` 周期把 Redis 状态 upsert 到 PG 表保留审计能力。详见 `docs/architecture/rework-classification.md` Phase 2 第 5 项 / `CLAUDE.md` 2026-04-25 条目。
+**当前状态**：默认实现已切到 `RedisQuotaRuntimeStateService`：单条 Lua 脚本原子完成"窗口判定 + peakBorrowed 抬升 + TTL 续命"，去掉了 PG 行锁瓶颈。Redis 协调后端不可用时默认 `FAIL_CLOSED`，返回 `QUOTA_BACKEND_UNAVAILABLE`；仅隔离的本地兼容场景可通过 `BATCH_QUOTA_REDIS_FAILURE_MODE=FAIL_OPEN` 显式放行。配置 `batch.quota.runtime-store=database` 可回退到原 PG 实现作为状态后端切换路径。`QuotaRuntimeStateSnapshotScheduler` 周期把 Redis 状态 upsert 到 PG 表保留审计能力。详见 [`feature-switches.md`](../runbook/feature-switches.md) §3.5。
 
 ### 4.6 跨数据中心/AZ 部署
 
@@ -135,14 +136,14 @@
 
 ### Phase 2 — 百万 → 千万 — **2026-04-25 全部 5 项 scaffolding 完成 **
 
-> 全部 opt-in：默认关闭（保持历史行为），运维侧按需翻开关。详见 [`docs/architecture/rework-classification.md`](rework-classification.md#phase-2--百万--千万5-项--2026-04-25-全部完成--opt-in-scaffolding) Phase 2 落地表。
+> 当前默认和故障策略按能力分别定义，不再笼统视为全部 opt-in 或 fail-open。Quartz 独立库方案已撤销，触发器统一使用现有 Quartz JDBC JobStore；最新开关清单见 [`feature-switches.md`](../runbook/feature-switches.md)。
 
 | 项 | 说明 | 状态 / 开关 |
 |---|---|---|
 | Read replica | 所有 `console-api` / queries 走从库 | ✅ `batch.console.read-replica.enabled` |
 | `DefaultWorkerSelector` 加 Redis cache | `worker_registry` 5s TTL，每秒派发不再每次查 DB | ✅ `batch.scheduler.worker-cache.enabled` |
 | Kafka topic 按租户/优先级分 | 防大租户阻塞调度全局 | ✅ `batch.mq.routing.mode=TENANT\|PRIORITY` |
-| Quartz JobStore 单独库 | 避免和业务表争 WAL/锁 | ✅ `batch.trigger.quartz-datasource.enabled` |
+| Quartz JobStore 单独库 | 避免和业务表争 WAL/锁 | ❌ 已撤销（半成品清理）；不再暴露 `batch.trigger.quartz-datasource.enabled` |
 | ~~资源 quota 改 Redis token bucket~~ | ~~替换 PG 乐观锁，去掉热点行锁~~ | ✅ **2026-04-25 完成**（默认 Redis Lua）|
 
 ### Phase 3 — 千万 → 亿

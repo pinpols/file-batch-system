@@ -15,6 +15,8 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -34,7 +36,7 @@ import org.springframework.stereotype.Service;
  *   <li>时区敏感的 calendarDay 边界由 Java 侧用 {@link BatchTimezoneProvider} 计算后透传给 Lua， 避免 Lua server
  *       时区与平台默认时区不一致。
  *   <li>窗口 TTL = 窗口剩余时长 + 60s 缓冲，过期自动回收，不需要后台 reconcile 调度器。
- *   <li>Redis 故障 fail-open（返回 allow + WARN）：限流故障不应放大成业务故障。
+ *   <li>Redis 故障默认 fail-closed（返回不可用 + WARN）：协调后端不可用时不能绕过租户配额；本地联调如确有需要可显式设为 FAIL_OPEN。
  * </ul>
  *
  * <p><b>租户索引</b>：成功 reserve 后把 owner 标识 SADD 入 {@link BatchRedisKeys#quotaStateIndex(String)}， 供
@@ -131,10 +133,23 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
   private final OrchestratorRedisSupport redis;
   private final BatchTimezoneProvider timezoneProvider;
 
+  /** Redis 故障策略：FAIL_CLOSED 保证控制面不绕过租户配额；本地兼容可显式设为 FAIL_OPEN。 */
+  private final String redisFailureMode;
+
   public RedisQuotaRuntimeStateService(
       OrchestratorRedisSupport redis, BatchTimezoneProvider timezoneProvider) {
+    this(redis, timezoneProvider, "FAIL_CLOSED");
+  }
+
+  @Autowired
+  public RedisQuotaRuntimeStateService(
+      OrchestratorRedisSupport redis,
+      BatchTimezoneProvider timezoneProvider,
+      @Value("${batch.quota.redis.failure-mode:FAIL_CLOSED}") String redisFailureMode) {
     this.redis = redis;
     this.timezoneProvider = timezoneProvider;
+    this.redisFailureMode =
+        Texts.hasText(redisFailureMode) ? redisFailureMode.trim() : "FAIL_CLOSED";
   }
 
   @Override
@@ -195,15 +210,25 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
               Long.toString(calendarEndMillis),
               Integer.toString(slidingHours));
     } catch (DataAccessException ex) {
-      // Redis 故障 fail-open：放行 + WARN，避免限流故障扩散为业务故障；下一轮自然恢复
       log.warn(
-          "redis quota evaluateAndReserve failed; failing open: tenant={}, scope={}, owner={},"
+          "redis quota evaluateAndReserve failed; failureMode={}, tenant={}, scope={}, owner={},"
               + " cause={}",
+          redisFailureMode,
           request.owner().tenantId(),
           request.owner().quotaScope(),
           request.owner().ownerCode(),
           ex.getMessage());
-      return ResourceCheck.allow();
+      if ("FAIL_OPEN".equalsIgnoreCase(redisFailureMode)) {
+        return ResourceCheck.allow();
+      }
+      return waitForCapacity(
+          new QuotaReservationRequest(
+              request.owner(),
+              request.policy(),
+              request.currentActiveCount(),
+              request.requestedCount(),
+              new QuotaReservationReason(
+                  "QUOTA_BACKEND_UNAVAILABLE", "quota coordination backend unavailable")));
     }
 
     if (result == null || result.isEmpty()) {

@@ -10,7 +10,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sharding;
  *
  * <ul>
  *   <li>{@link #current()} 必须尽可能快（调度器每次 poll 前都会调用），内部可以缓存
- *   <li>返回值必须 non-null；即使协调失败也应 fallback 到上次已知值或 {@link ShardAssignment#single()}
+ *   <li>返回值必须 non-null；协调失败时可以返回上次值，但必须通过 {@link #canPoll()} 禁止继续消费
  *   <li>必须保证同一时刻集群内不同 Pod 返回的 {@link ShardAssignment#shardTotal()} 一致； {@link
  *       ShardAssignment#shardIndex()} 两两不重复
  * </ul>
@@ -23,4 +23,13 @@ public interface ShardAssignmentProvider {
    * @return 非 null 的当前分配
    */
   ShardAssignment current();
+
+  /**
+   * 当前分片分配是否由协调后端确认。
+   *
+   * <p>动态分片在 Redis 不可用时不能继续使用缓存分配，否则新旧实例可能同时消费同一分片。 静态分片没有外部协调依赖，默认始终可 poll。
+   */
+  default boolean canPoll() {
+    return true;
+  }
 }

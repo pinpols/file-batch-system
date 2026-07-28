@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,8 +21,7 @@ import org.springframework.scheduling.annotation.Scheduled;
  *   <li>当前 Pod 的 index = 自己在排序列表中的位置；total = 列表长度
  * </ul>
  *
- * <p>容错：Redis 读写任何异常发生时，回退到上一次成功读到的 {@link ShardAssignment}， 保证调度不中断。集群启动时若 Redis 不可用，首次 {@link
- * #current()} 返回 {@link ShardAssignment#single()}（退化为单实例）。
+ * <p>容错：Redis 读写异常时保留上一次分片快照用于诊断，但通过 {@link #canPoll()} 禁止继续轮询，直到协调后端恢复；不能用过期快照继续消费，否则扩缩容窗口可能重叠消费。
  *
  * <p>人工评审记录(2026-05-23):审计曾提议改为 @Component 注册。 当前由 {@link
  * io.github.pinpols.batch.orchestrator.config.ShardingConfiguration} 通过 {@code @Bean} 方法装配,
@@ -41,6 +41,9 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   /** 缓存上次成功读到的 assignment，Redis 异常时回退用。 */
   private final AtomicReference<ShardAssignment> lastKnown =
       new AtomicReference<>(ShardAssignment.single());
+
+  /** Redis 协调不可用时禁止继续 poll，避免缓存分片与新成员分片重叠。 */
+  private final AtomicBoolean coordinationHealthy = new AtomicBoolean(false);
 
   /**
    * @param redis Spring Data Redis StringRedisTemplate（和 ShedLock / 其它业务共用连接）
@@ -65,8 +68,10 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   void selfCheckOnStartup() {
     try {
       redis.opsForZSet().add(MEMBERS_KEY, memberId, BatchDateTimeSupport.utcEpochMillis());
+      coordinationHealthy.set(true);
       log.info("RedisShardAssignmentProvider startup heartbeat OK: member={}", memberId);
     } catch (RuntimeException ex) {
+      coordinationHealthy.set(false);
       log.warn(
           "RedisShardAssignmentProvider startup heartbeat FAILED: member={}, err={} "
               + "— DYNAMIC sharding 将持续退化为单实例直至 Redis 恢复",
@@ -84,13 +89,16 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   public void heartbeat() {
     try {
       redis.opsForZSet().add(MEMBERS_KEY, memberId, BatchDateTimeSupport.utcEpochMillis());
+      coordinationHealthy.set(true);
     } catch (RuntimeException ex) {
+      coordinationHealthy.set(false);
       log.warn("Shard coordinator heartbeat failed: member={}, err={}", memberId, ex.toString());
     }
   }
 
   /** 优雅退出时移除自己，加速其他 Pod 感知（不强制——即使不调，下次 evict 阶段 TTL 会兜）。 */
   public void leave() {
+    coordinationHealthy.set(false);
     try {
       redis.opsForZSet().remove(MEMBERS_KEY, memberId);
     } catch (RuntimeException ex) {
@@ -109,7 +117,8 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
           redis.opsForZSet().rangeWithScores(MEMBERS_KEY, 0, -1);
       if (tuples == null || tuples.isEmpty()) {
         // 空集合：可能自己心跳还没发（首次 current() 在 heartbeat 之前），降级为单实例
-        return cacheAndReturn(ShardAssignment.single());
+        coordinationHealthy.set(false);
+        return lastKnown.get();
       }
       String[] members =
           tuples.stream()
@@ -128,11 +137,15 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
       }
       if (index < 0) {
         // 自己不在集合里：可能刚启动还没心跳，或被误清；降级为单实例
-        return cacheAndReturn(ShardAssignment.single());
+        coordinationHealthy.set(false);
+        return lastKnown.get();
       }
-      return cacheAndReturn(
-          total == 1 ? ShardAssignment.single() : new ShardAssignment(total, index));
+      ShardAssignment assignment =
+          total == 1 ? ShardAssignment.single() : new ShardAssignment(total, index);
+      coordinationHealthy.set(true);
+      return cacheAndReturn(assignment);
     } catch (RuntimeException ex) {
+      coordinationHealthy.set(false);
       ShardAssignment fallback = lastKnown.get();
       log.warn(
           "Redis shard coordinator 查询失败，fallback 到上次值 total={} index={}: {}",
@@ -141,6 +154,11 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
           ex.toString());
       return fallback;
     }
+  }
+
+  @Override
+  public boolean canPoll() {
+    return coordinationHealthy.get();
   }
 
   private ShardAssignment cacheAndReturn(ShardAssignment assignment) {

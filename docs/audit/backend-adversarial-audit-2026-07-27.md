@@ -67,3 +67,7 @@
 4. 保持 `mvn clean` 作为迁移/分支切换后的验证入口，避免增量 `target` 污染结果。
 
 本轮没有为上述明确的产品降级或运维证据问题强行改动核心语义，避免把批量运行控制面扩张成新的治理平台。
+
+## 2026-07-28 跟进记录
+
+应用层 HA/CAP 收口后，Redis quota 故障策略已改为默认 `FAIL_CLOSED`，并新增显式配置 `BATCH_QUOTA_REDIS_FAILURE_MODE`；生产 Helm、Compose、feature-switch registry 和运维文档已同步。原第 1 项“quota fail-open”不再是默认生产语义，但生产仍需完成 Redis Sentinel/托管 Redis 的真实故障演练，并验证告警、等待队列和切换到 `database` 后端的操作流程。

@@ -25,7 +25,7 @@ import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
- * RedisQuotaRuntimeStateService 单元测试：覆盖 Java 侧的守卫逻辑、fail-open 降级、describe 路径。 Lua 脚本本身的窗口/peak
+ * RedisQuotaRuntimeStateService 单元测试：覆盖 Java 侧的守卫逻辑、Redis 故障降级、describe 路径。 Lua 脚本本身的窗口/peak
  * 语义由集成测试在真实 Redis 上验证（{@code RedisQuotaRuntimeStateIntegrationTest}）。
  */
 class RedisQuotaRuntimeStateServiceTest {
@@ -140,10 +140,10 @@ class RedisQuotaRuntimeStateServiceTest {
     assertThat(result.allowed()).isFalse();
   }
 
-  // ── Redis 故障：fail-open（放行 + WARN）
+  // ── Redis 故障：默认 fail-closed；FAIL_OPEN 只能显式配置
 
   @Test
-  void shouldFailOpenWhenRedisThrows() {
+  void shouldFailClosedWhenRedisThrowsByDefault() {
     when(redis.evalList(
             anyString(),
             anyString(),
@@ -159,7 +159,32 @@ class RedisQuotaRuntimeStateServiceTest {
         .thenThrow(new QueryTimeoutException("redis down"));
     ResourceCheck result =
         service.evaluateAndReserve(reservation("t1", "JOB", "j1", "SLIDING_WINDOW", 5, 3, 8));
-    assertThat(result.allowed()).isTrue();
+    assertThat(result.allowed()).isFalse();
+  }
+
+  @Test
+  void shouldFailOpenOnlyWhenExplicitlyConfigured() {
+    RedisQuotaRuntimeStateService failOpenService =
+        new RedisQuotaRuntimeStateService(
+            redis, new BatchTimezoneProvider(new BatchTimezoneProperties()), "FAIL_OPEN");
+    when(redis.evalList(
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString()))
+        .thenThrow(new QueryTimeoutException("redis down"));
+    assertThat(
+            failOpenService
+                .evaluateAndReserve(reservation("t1", "JOB", "j1", "SLIDING_WINDOW", 5, 3, 8))
+                .allowed())
+        .isTrue();
   }
 
   // ── describe：空 Hash → 默认快照

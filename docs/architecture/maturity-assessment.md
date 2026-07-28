@@ -87,7 +87,7 @@
 ### 3.4 运行时可靠性 — **L4**
 
 **强项**：
-- fail-open 多处回退：read-replica quarantine + worker-cache Redis 异常退 DB + quota Redis 异常放行
+- 分级故障策略：read-replica quarantine、worker-cache Redis 异常退 DB；quota Redis 默认 fail-closed，仅隔离本地兼容场景可显式放行
 - Outbox stale PUBLISHING 重置（防 JVM 崩溃事件长期停滞）
 - 熔断器（`OutboxPublishCircuitBreaker`）三态
 - 优雅停机 `isDraining()` 短路（防 Lettuce 关闭后还抢 Redis 锁）

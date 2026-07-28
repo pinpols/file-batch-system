@@ -125,6 +125,9 @@ trigger:
 
 orchestrator:
   replicaCount: 2
+  quota:
+    # Do not allow a Redis outage to bypass tenant quota enforcement.
+    redisFailureMode: "FAIL_CLOSED"
   startupProbe:
     httpGet: {path: /actuator/health/liveness, port: 18082}
     initialDelaySeconds: 20

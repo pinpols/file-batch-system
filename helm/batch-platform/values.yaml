@@ -296,6 +296,9 @@ orchestrator:
     mode: "TENANT"
   quota:
     runtimeStore: "redis"
+    # Redis quota coordination failure policy. Keep fail-closed in production;
+    # FAIL_OPEN is reserved for explicitly isolated local compatibility runs.
+    redisFailureMode: "FAIL_CLOSED"
     backendCutoverId: ""
     snapshotEnabled: true
   workerReportOutbox:
