@@ -41,7 +41,7 @@
 |---|---|---|
 | PG 主库挂 | 所有写失败 + console 502 | 写 |
 | Kafka 不可达 | 派发延迟,outbox 堆 | 派发 |
-| Redis 不可达 | 限流降级 / session 回退 cache | session / 限流 |
+| Redis 不可达 | quota 默认 fail-closed；非关键 cache/session 按各自策略降级 | 配额写路径等待/拒绝；cache/session 观测层 |
 | Worker 失联 | orchestrator 不再派给它,task 回收 | 单 worker |
 | 上游 trigger 服务 down | console trigger 列表降级为空(只读) | 见 §2 例外 |
 
@@ -72,6 +72,8 @@
 | **写路径 P** | spring-retry 瞬时重试 + Idempotency-Key([ADR-011](./ADR-011-idempotency-boundary-alignment.md))+ outbox 异步发([ADR-002](./ADR-002-transactional-outbox.md))|
 | **读路径 AP** | `DownstreamFallback.callOrFallback(svc, op, primary, fallback)` 集中模板(PR #97)+ 策略清单(`docs/runbook/downstream-degradation.md`) |
 | **降级守护** | 后续:ArchUnit 规则 — 所有 `*ProxyService` public 方法必有 `@CircuitBreaker` 注解或 `DownstreamFallback.call*` 调用 |
+
+应用层 HA/CAP 的具体验收矩阵见 [`../../runbook/ha-readiness.md`](../../runbook/ha-readiness.md)“应用层 HA/CAP 验收矩阵”。该矩阵区分应用防线与 Kafka/PG/Redis/MinIO 等基础设施 HA，后者仍需真实演练才能宣称完成。
 
 ## 例外清单(明确登记)
 
