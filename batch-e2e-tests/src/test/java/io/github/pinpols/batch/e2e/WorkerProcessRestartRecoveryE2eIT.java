@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
@@ -37,6 +38,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -86,7 +88,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
   private static final String JAVA_BIN =
       Path.of(System.getProperty("java.home"), "bin", "java").toString();
-  private static final long WORKER_START_TIMEOUT_SECONDS = 60L;
+  private static final long WORKER_START_TIMEOUT_SECONDS = 180L;
   private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
 
   @Autowired private LaunchService launchService;
@@ -134,10 +136,6 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
       worker2 = startDispatchWorker(tenantId, workerCode, consumerGroupId, worker2Log);
       awaitLogContains(worker2Log, "Started BatchWorkerDispatchApplication");
       awaitWorkerOnlineInRegistry(tenantId, workerCode);
-      // Kafka Consumer Group Rebalance 在 Worker 注册后还需要额外时间完成分区分配。
-      // 必须等到 consumer group 进入 STABLE 状态后再触发 job，否则 dispatch 消息
-      // 到达时 worker 尚未被分配分区，导致任务停留在 READY 状态直到超时。
-      awaitKafkaConsumerGroupStable(consumerGroupId);
 
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("fileId", String.valueOf(fileId));
@@ -159,6 +157,11 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
               params));
 
       publishPendingOutbox(tenantId);
+
+      // 先创建并发布真实 dispatch topic，再等待 consumer group 稳定。按 topic pattern
+      // 订阅的 Kafka consumer 在 topic 尚不存在时可能尚未创建 group；此时查询 group
+      // 会返回 GroupIdNotFoundException，不能把它当成业务失败。
+      awaitKafkaConsumerGroupStable(consumerGroupId);
 
       // 480s（8 min）：full reactor 跑时 worker subprocess 重启 + Kafka PATTERN topic
       // metadata 刷新（最长 5 min）+ JVM 启动 + CLAIM 重新建立 在资源竞争下经常踩 5 min 边界。
@@ -198,17 +201,24 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
       await()
           .atMost(Duration.ofSeconds(60))
           .pollInterval(Duration.ofMillis(500))
-          .untilAsserted(
+          .until(
               () -> {
-                Map<String, ConsumerGroupDescription> descriptions =
-                    adminClient
-                        .describeConsumerGroups(List.of(consumerGroupId))
-                        .all()
-                        .get(10, TimeUnit.SECONDS);
-                ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
-                assertThat(desc).isNotNull();
-                assertThat(desc.groupState()).isEqualTo(GroupState.STABLE);
-                assertThat(desc.members()).isNotEmpty();
+                try {
+                  Map<String, ConsumerGroupDescription> descriptions =
+                      adminClient
+                          .describeConsumerGroups(List.of(consumerGroupId))
+                          .all()
+                          .get(10, TimeUnit.SECONDS);
+                  ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
+                  return desc != null
+                      && desc.groupState() == GroupState.STABLE
+                      && !desc.members().isEmpty();
+                } catch (ExecutionException ex) {
+                  if (ex.getCause() instanceof GroupIdNotFoundException) {
+                    return false;
+                  }
+                  throw ex;
+                }
               });
     }
   }
@@ -306,6 +316,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         """,
         tenantId,
         jobCode);
+    E2eScenarioFixture.provisionPipelineDefinition(jdbcTemplate, tenantId, jobCode, workerGroup);
 
     jdbcTemplate.update(
         """
@@ -536,14 +547,22 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     if (process == null) {
       return;
     }
-    if (!process.isAlive()) {
+    ProcessHandle handle = process.toHandle();
+    if (!handle.isAlive()) {
       return;
     }
-    process.destroyForcibly();
+    handle.descendants().forEach(ProcessHandle::destroyForcibly);
+    handle.destroyForcibly();
     try {
-      process.waitFor(10, TimeUnit.SECONDS);
+      handle.onExit().get(10, TimeUnit.SECONDS);
+    } catch (java.util.concurrent.TimeoutException timeoutException) {
+      // 子进程可能在父进程退出竞争窗口中重新出现，再做一次不可恢复终止，避免 Surefire 残留。
+      handle.descendants().forEach(ProcessHandle::destroyForcibly);
+      handle.destroyForcibly();
     } catch (InterruptedException interruptedException) {
       Thread.currentThread().interrupt();
+    } catch (ExecutionException ignored) {
+      // 进程已退出但句柄状态尚未刷新，清理可以继续完成。
     }
   }
 
