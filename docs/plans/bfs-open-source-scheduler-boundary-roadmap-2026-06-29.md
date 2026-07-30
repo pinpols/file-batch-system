@@ -53,6 +53,8 @@
 | PG 冷数据分层 | archive 表、Outbox 月分区、部分手工分区脚本已存在；**OSS/Parquet 自动卸载、冷查询和真实阈值演练未实现** | P1 | 仅在容量阈值触发后实施，保留 PG 结构化热状态；不做数据湖、通用 OLAP 或字段级治理 |
 | 数字可信 / 精确一次边界 | 已有幂等键、状态 CAS、result version 守卫、manifest 对账和防终态复活；**旧 leader 迟到上报、重复 report、崩溃窗口的全链验证证据仍不完整** | P0 | 补对抗性故障矩阵和必要的状态更新防线，不承诺跨库 1PC |
 | 故障恢复 / HA 证据 | 已有 lease 回收、outbox/DLQ、checkpoint、备份/PITR runbook；**Worker/PG/Kafka 故障注入和 staging RTO/RPO 证据未形成闭环** | P0/P1 | 运行链路故障注入列 P0，PITR/主备切换实演列 P1；不另造基础设施 |
+| 配置中心边界 | 已有 `system_parameter`、领域配置表、Redis 二级缓存和 after-commit 失效；**启动期配置与运行期配置的边界需固化，直接改库的失效流程需持续可见** | P1 | 保留轻量 DB + Redis，不引入 Nacos/Apollo；补配置分类、审计、stale-cache 指标和 runbook |
+| Worker 平台库边界 | Worker 通过 HTTP 使用控制面 claim/report，并直接维护受限运行态；**pipeline definition 自动写入越过职责边界，表级权限/连接池边界还需落地** | P0/P1 | 收回 definition 写入；运行态直写暂保留并限权，不改成跨服务 1PC |
 
 ### 分阶段实施计划
 
@@ -137,6 +139,30 @@
 - 恢复后 lease 回收、outbox 重发、worker 重连和业务结果查询均可收敛。
 - 演练脚本可重复执行、失败可重试，不破坏现有 Docker 开发环境。
 
+#### P0-E: Worker 平台库写入边界
+
+1. 将 `pipeline_definition` / `pipeline_step_definition` 的 provision 收回 Console / Orchestrator；Worker 只读，缺失定义返回明确配置错误，不在执行路径隐式建表数据。
+2. 固化 Worker 允许写入的运行态白名单：`pipeline_instance`、`pipeline_step_run`、`file_record`、`file_error_record`、`file_audit_log`、`pipeline_progress` 及明确批准的 worker report outbox。
+3. 固化 Orchestrator 唯一写入表：`job_instance`、`job_partition`、`job_task`、`outbox_event`、`worker_registry`。增加 SQL/权限架构门禁，防止 Worker mapper 越界。
+
+验收:
+
+- Worker 数据库角色不能对控制面表执行 INSERT/UPDATE/DELETE；claim/report 仍通过 Orchestrator API 正常完成。
+- 缺失 pipeline definition 时任务明确失败并可诊断，预置定义的 import/export/process/dispatch/atomic 全链路不回归。
+- 运行态表写入均带租户 / 已 claim 实例约束，有连接池上限、写入耗时和失败率指标。
+
+#### P1-C: 轻量配置中心治理
+
+1. 在配置清单中区分启动期 env、`system_parameter` 和领域配置；启动期配置不承诺热更新。
+2. 所有 Console 配置写入必须审计并在 after-commit 失效对应 Redis key；直接 DB 维护必须在 runbook 中执行显式 evict。
+3. 增加 cache hit/miss、evict、stale fallback、配置版本和变更操作者指标；不新增独立配置中心。
+
+验收:
+
+- 配置修改在提交后被所有 Orchestrator 实例感知，失败时不会静默长期使用旧值。
+- Redis 故障时按已定义的 DB fallback 语义运行，并有告警和恢复后的缓存回填。
+- env 改动需要重启的边界在文档、Helm values 和运维手册中一致。
+
 ### 明确不做
 
 - 不新增本地队列替代 Kafka。
@@ -144,6 +170,8 @@
 - 不把 Kafka lag 直接作为 Prometheus 标签写入高基数业务指标。
 - 不提前实现完整 OSS 数据湖、DuckDB/Calcite 通用查询平台。
 - 不把 Worker 直接写入的平台运行表改造成跨服务分布式事务；先通过表边界、连接池和写入指标治理。
+- 不把 Worker 运行态直写一律改成同步 HTTP；只有控制面状态通过 Orchestrator API 改变。
+- 不把轻量 `system_parameter` / Redis 缓存方案升级成通用配置中心。
 
 ## 2. 可以做
 
