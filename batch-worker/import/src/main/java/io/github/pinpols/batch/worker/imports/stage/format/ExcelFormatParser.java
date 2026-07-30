@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.SourceLocator;
@@ -39,8 +40,8 @@ import org.xml.sax.XMLReader;
  * <p><b>内存模型</b>：不加载整个 workbook 到堆；仅缓存当前行的 cell 值，{@code endRow} 时写入 downstream。{@code
  * SharedStringsTable} 走 {@link ReadOnlySharedStringsTable}（流式解析）。 典型 500MB xlsx 堆占用 ~20MB。
  *
- * <p>尺寸硬限 {@link #MAX_EXCEL_BYTES}（默认 200MB，可用系统属性 {@code batch.worker.import.max-excel-bytes}
- * 覆盖）——SAX 流式下仍保留是因为 sharedStrings 若极端大（每行唯一字符串）仍会占用堆。
+ * <p>尺寸硬限由 {@code batch.worker.import.max-excel-bytes} 控制（默认 200MB）——SAX 流式下仍保留是因为 sharedStrings
+ * 若极端大（每行唯一字符串）仍会占用堆。
  *
  * <p><b>仅支持 .xlsx(OOXML)</b>：本解析器走纯 OOXML 的 {@link OPCPackage}，旧版二进制 .xls(OLE2/HSSF)
  * 喂进来必崩当坏文件。{@code parse} 入口用 {@link FileMagic} 探测字节签名,识别为 OLE2 时 fail-fast 抛 {@link
@@ -54,18 +55,21 @@ public class ExcelFormatParser implements FormatParser {
 
   private static final int MAX_EXCEL_COLUMNS = 1000;
 
-  private static final long MAX_EXCEL_BYTES =
-      Long.getLong("batch.worker.import.max-excel-bytes", 200L * 1024 * 1024);
-
   // 当 byte[] 大于此阈值,改走"先落 temp file → OPCPackage.open(File)"路径,避免 POI
   // 内部 ByteArrayInputStream → ZipInputStream → 全量缓冲 造成第二份堆内拷贝。
   // 16 MB 与 PreprocessStep 的 SPOOL_THRESHOLD_BYTES 保持一致语义。
   private static final long FILE_BACKED_THRESHOLD_BYTES = 16L * 1024 * 1024;
 
   private final ParseSupport support;
+  private final WorkerImportPayloadProperties properties;
 
   public ExcelFormatParser(ParseSupport support) {
+    this(support, new WorkerImportPayloadProperties());
+  }
+
+  public ExcelFormatParser(ParseSupport support, WorkerImportPayloadProperties properties) {
     this.support = support;
+    this.properties = properties;
   }
 
   @Override
@@ -78,12 +82,12 @@ public class ExcelFormatParser implements FormatParser {
     // Item 1：旧版二进制 .xls(OLE2/HSSF)字节签名 fail-fast。scanner 已不再把 .xls 假映射成 EXCEL,
     // 但若调用方显式 file_format_type=EXCEL 喂进 OLE2 字节,这里给出明确报错而非崩成坏文件。
     rejectLegacyBinaryXls(excelBytes);
-    if (excelBytes.length > MAX_EXCEL_BYTES) {
+    if (excelBytes.length > properties.getMaxExcelBytes()) {
       throw new IllegalStateException(
           "IMPORT_PARSE_EXCEL_TOO_LARGE: xlsx size "
               + excelBytes.length
               + " bytes exceeds cap "
-              + MAX_EXCEL_BYTES);
+              + properties.getMaxExcelBytes());
     }
     ImportPayload importPayload = request.importPayload();
     Object templateConfig = request.templateConfig();

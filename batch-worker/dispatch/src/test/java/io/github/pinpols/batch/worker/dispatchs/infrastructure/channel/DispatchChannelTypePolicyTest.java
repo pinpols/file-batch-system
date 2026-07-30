@@ -78,7 +78,9 @@ class DispatchChannelTypePolicyTest {
             DispatchChannelSafetyAttribute.FILESYSTEM_SANDBOX,
             DispatchChannelSafetyAttribute.SIDECAR_MANIFEST);
     assertThat(DispatchChannelTypePolicy.safetyProfiles().get("LOCAL").knownGaps())
-        .contains("sandbox root is optional unless batch.dispatch.local-sandbox-root is set");
+        .contains(
+            "sandbox root is optional unless batch.worker.dispatch.runtime.local-sandbox-root is"
+                + " set");
   }
 
   @Test

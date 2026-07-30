@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import java.util.Set;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
@@ -19,6 +20,12 @@ import org.springframework.stereotype.Component;
 @Order(1000)
 public class StubRemoteFilesystemDispatchChannelAdapter implements DispatchChannelAdapter {
 
+  private final DispatchRuntimeProperties runtimeProperties;
+
+  public StubRemoteFilesystemDispatchChannelAdapter(DispatchRuntimeProperties runtimeProperties) {
+    this.runtimeProperties = runtimeProperties;
+  }
+
   private static final Set<String> SUPPORTED_TYPES = Set.of("NAS");
 
   private static final String STUB_DETAIL =
@@ -32,6 +39,7 @@ public class StubRemoteFilesystemDispatchChannelAdapter implements DispatchChann
 
   @Override
   public DispatchResult dispatch(DispatchCommand command) {
-    return LocalOutboxDispatchSupport.writeFilesystemEnvelope(command, true, STUB_DETAIL);
+    return LocalOutboxDispatchSupport.writeFilesystemEnvelope(
+        command, true, STUB_DETAIL, runtimeProperties);
   }
 }

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
@@ -49,28 +50,21 @@ import org.springframework.stereotype.Component;
 public class PreprocessStep implements ImportStageStep {
 
   /**
-   * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块 UTF-16 String。默认 16 MiB，可通过系统属性 {@code
-   * batch.worker.import.preprocess-spool-bytes} 调整（设 0 关闭 spool，全部走 byte[] → String 路径）。
+   * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块 UTF-16 String。默认 16 MiB， 通过 {@code
+   * batch.worker.import.preprocess-spool-bytes} 调整（设 0 关闭 spool）。
    */
-  private static final int SPOOL_THRESHOLD_BYTES =
-      Integer.getInteger("batch.worker.import.preprocess-spool-bytes", 16 * 1024 * 1024);
-
   private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
-  /**
-   * 对象存储拉取的单文件字节上限(防 OOM)。默认 512 MiB,系统属性 {@code batch.worker.import.max-object-bytes} 可调。超限直接
-   * fail,避免把超大对象整块读进 byte[]。
-   */
-  private static final long MAX_OBJECT_BYTES =
-      Long.getLong("batch.worker.import.max-object-bytes", 512L * 1024 * 1024);
-
+  /** 对象存储拉取的单文件字节上限(防 OOM)。默认 512 MiB,由 {@code batch.worker.import.max-object-bytes} 调整。 */
   private final PlatformFileRuntimeRepository runtimeRepository;
+
   private final BatchSecurityProperties batchSecurityProperties;
   private final BatchObjectCryptoService cryptoService;
   // ADR-sim:大文件对象自动加载——内联 content 受 Kafka 消息体上限(~1MB)限制,
   // 大文件须把对象路径下发、由 worker 直接从 MinIO 拉取(payload 只带 path,不带内容)。
   private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
+  private final WorkerImportPayloadProperties payloadProperties;
 
   public PreprocessStep(
       PlatformFileRuntimeRepository runtimeRepository,
@@ -78,11 +72,29 @@ public class PreprocessStep implements ImportStageStep {
       BatchObjectCryptoService cryptoService,
       S3StorageProperties s3StorageProperties,
       BatchObjectStore objectStore) {
+    this(
+        runtimeRepository,
+        batchSecurityProperties,
+        cryptoService,
+        s3StorageProperties,
+        objectStore,
+        new WorkerImportPayloadProperties());
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public PreprocessStep(
+      PlatformFileRuntimeRepository runtimeRepository,
+      BatchSecurityProperties batchSecurityProperties,
+      BatchObjectCryptoService cryptoService,
+      S3StorageProperties s3StorageProperties,
+      BatchObjectStore objectStore,
+      WorkerImportPayloadProperties payloadProperties) {
     this.runtimeRepository = runtimeRepository;
     this.batchSecurityProperties = batchSecurityProperties;
     this.cryptoService = cryptoService;
     this.s3StorageProperties = s3StorageProperties;
     this.objectStore = objectStore;
+    this.payloadProperties = payloadProperties;
   }
 
   @Override
@@ -152,7 +164,7 @@ public class PreprocessStep implements ImportStageStep {
                   && canStreamObjectDirect(importPayload, templateConfig))
               ? objectSizeBytes(importPayload)
               : -1L;
-      if (directStreamObjectBytes >= SPOOL_THRESHOLD_BYTES) {
+      if (directStreamObjectBytes >= payloadProperties.getPreprocessSpoolBytes()) {
         // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
         // (消除每片 N× 下载/解析放大);否则维持整份流式直载。range 路径任何异常都回退整份(不抛)。
         Integer partitionNo = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_NO));
@@ -182,7 +194,8 @@ public class PreprocessStep implements ImportStageStep {
       // 内部 ByteArrayInputStream → readAllBytes(), 100 MB 输入瞬间 200 MB 堆峰. 现在 > spool 阈值且加密时
       // 走 Path → Path 流式解密, 完成后释放 rawBytes 引用让 GC 回收, 堆峰降为单 100 MB.
       if (!batchSecurityProperties.isBypassMode()) {
-        if (rawBytes.length > SPOOL_THRESHOLD_BYTES && cryptoService.isEncryptedContent(rawBytes)) {
+        if (rawBytes.length > payloadProperties.getPreprocessSpoolBytes()
+            && cryptoService.isEncryptedContent(rawBytes)) {
           rawBytes = decryptViaSpool(rawBytes);
         } else {
           rawBytes = cryptoService.decrypt(rawBytes);
@@ -190,7 +203,11 @@ public class PreprocessStep implements ImportStageStep {
       }
       byte[] processed =
           ImportPreprocessPipeline.run(
-              rawBytes, importPayload, templateConfig, batchSecurityProperties.isBypassMode());
+              rawBytes,
+              importPayload,
+              templateConfig,
+              batchSecurityProperties.isBypassMode(),
+              payloadProperties);
 
       String formatType = resolveFileFormatType(importPayload, templateConfig);
       if (isBinaryImportFormat(formatType)) {
@@ -199,7 +216,7 @@ public class PreprocessStep implements ImportStageStep {
         attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
       } else {
         Charset charset = resolveCharset(importPayload, templateConfigObject);
-        if (processed.length >= SPOOL_THRESHOLD_BYTES) {
+        if (processed.length >= payloadProperties.getPreprocessSpoolBytes()) {
           spoolLargePayload(processed, charset, context);
         } else {
           String normalized = decodeWithGuards(processed, charset, context);
@@ -300,7 +317,7 @@ public class PreprocessStep implements ImportStageStep {
 
   /**
    * 从对象存储拉取 import 源对象的原始字节。bucket 取 {@code payload.storageBucket},缺省默认回退 bucket; object 取 {@code
-   * payload.storagePath}。超 {@link #MAX_OBJECT_BYTES} fail-fast 防 OOM。
+   * payload.storagePath}。超过 {@code batch.worker.import.max-object-bytes} fail-fast 防 OOM。
    */
   private byte[] downloadObjectBytes(ImportPayload importPayload) {
     String bucket =
@@ -315,11 +332,11 @@ public class PreprocessStep implements ImportStageStep {
       int n;
       while ((n = in.read(buf)) >= 0) {
         total += n;
-        if (total > MAX_OBJECT_BYTES) {
+        if (total > payloadProperties.getMaxObjectBytes()) {
           throw new ImportPreprocessException(
               "IMPORT_PREPROCESS_OBJECT_TOO_LARGE",
               "import object exceeds max-object-bytes="
-                  + MAX_OBJECT_BYTES
+                  + payloadProperties.getMaxObjectBytes()
                   + " (bucket="
                   + bucket
                   + ", object="
@@ -353,7 +370,7 @@ public class PreprocessStep implements ImportStageStep {
 
   /**
    * 是否可对 storagePath 对象走「流式直载」(不读进堆):纯文本格式 + 无 compress / encrypt(非 NONE)/ preprocess_pipeline
-   * 变换。需变换或二进制(EXCEL/BINARY)时返回 false,回退 byte[] 路径(受 MAX_OBJECT_BYTES 限)。
+   * 变换。需变换或二进制(EXCEL/BINARY)时返回 false,回退 byte[] 路径(受对象大小配置限制)。
    */
   private boolean canStreamObjectDirect(ImportPayload importPayload, Map<String, Object> tc) {
     if (isBinaryImportFormat(resolveFileFormatType(importPayload, tc))) {

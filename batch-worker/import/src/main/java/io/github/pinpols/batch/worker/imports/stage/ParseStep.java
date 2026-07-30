@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -73,9 +75,22 @@ public class ParseStep implements ImportStageStep {
       ObjectMapper objectMapper,
       PlatformFileRuntimeRepository runtimeRepository,
       ImportRecordGovernanceService recordGovernanceService) {
+    this(
+        objectMapper,
+        runtimeRepository,
+        recordGovernanceService,
+        new WorkerImportPayloadProperties());
+  }
+
+  @Autowired
+  public ParseStep(
+      ObjectMapper objectMapper,
+      PlatformFileRuntimeRepository runtimeRepository,
+      ImportRecordGovernanceService recordGovernanceService,
+      WorkerImportPayloadProperties payloadProperties) {
     this.runtimeRepository = runtimeRepository;
     this.support = new ParseSupport(objectMapper, recordGovernanceService);
-    ExcelFormatParser excelParser = new ExcelFormatParser(support);
+    ExcelFormatParser excelParser = new ExcelFormatParser(support, payloadProperties);
     JsonFormatParser jsonParser = new JsonFormatParser(support);
     XmlFormatParser xmlParser = new XmlFormatParser(support);
     FixedWidthFormatParser fixedWidthParser = new FixedWidthFormatParser(support);

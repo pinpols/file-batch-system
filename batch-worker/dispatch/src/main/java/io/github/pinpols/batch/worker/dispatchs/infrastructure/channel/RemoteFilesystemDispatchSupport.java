@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -54,10 +55,13 @@ final class RemoteFilesystemDispatchSupport {
   private static final String LOG_CATCH_EXCEPTION = "catch:Exception";
   private static final String KEY_TARGET_ENDPOINT = "target_endpoint";
   private static final String PATH_SEP = "/";
-  // R-4.2: NAS 沙箱根目录（可选）。若系统属性 batch.dispatch.nas-sandbox-root 设置，
+  private static final String NAS_SANDBOX_PROPERTY_KEY =
+      "batch.worker.dispatch.runtime.nas-sandbox-root";
+  // R-4.2: NAS 沙箱根目录（可选）。若 batch.worker.dispatch.runtime.nas-sandbox-root 设置，
   // 则所有 NAS dispatch 的 realPath 必须落在该根内，否则拒绝；未设置则仅 WARN 不阻断（兼容模式）。
   // 生产强烈建议设置此属性以彻底关闭 symlink 逃逸攻击面。
-  private static final String SANDBOX_ROOT_PROP = "batch.dispatch.nas-sandbox-root";
+  private static final DispatchRuntimeProperties DEFAULT_RUNTIME_PROPERTIES =
+      new DispatchRuntimeProperties();
 
   // Dedup: 每个 configured NAS path 的 symlink WARN 只报一次；否则每次 dispatch 都会刷同样告警
   // （macOS 本地 `/tmp → /private/tmp` 是典型场景）。路径在进程生命周期内稳定，内存开销可忽略。
@@ -66,15 +70,10 @@ final class RemoteFilesystemDispatchSupport {
 
   // R2-P1-10：NAS Files.copy 是阻塞 IO；stale NFS mount → 派发线程永久挂死，circuit breaker 接不到。
   // 把 copy 跑在守护线程 pool 上，主线程 future.get(timeout) 限时等待；超时则 cancel(true) + 抛 IOException。
-  // 默认 5 分钟（GB 级文件 + 10 MB/s 慢盘 ~100s 留余量），可被 jvm property 覆盖。
-  private static final long NAS_COPY_TIMEOUT_SECONDS =
-      Long.getLong("batch.dispatch.nas-copy-timeout-seconds", 300L);
-
+  // 默认 5 分钟（GB 级文件 + 10 MB/s 慢盘 ~100s 留余量），可由 DispatchRuntimeProperties 覆盖。
   // OSS 内联上传需把对象整读入堆(AWS SDK v2 RequestBody 需精确 contentLength,且分发流可能已解密)。
   // 无上限 readAllBytes 遇 GB 级文件 + 多路并发 dispatch → OOM。与 import 侧 MAX_OBJECT_BYTES 同语义,
-  // 默认 512 MiB,jvm property 可调;超限拒绝该 dispatch(返回 failed,不 OOM)。
-  private static final int MAX_OSS_INLINE_PAYLOAD_BYTES =
-      Integer.getInteger("batch.dispatch.oss-max-inline-mib", 512) * 1024 * 1024;
+  // 默认 512 MiB,可由 DispatchRuntimeProperties 调整;超限拒绝该 dispatch(返回 failed,不 OOM)。
   // R-audit-p0: newCachedThreadPool 无界——stale NFS mount 下线程随并发 dispatch 持续创建且不可中断
   // 释放，最终线程泄漏拖垮 JVM。改为有界池：core=0(空闲即回收)/max=8/SynchronousQueue(无排队缓冲，
   // 池满即拒绝)。拒绝时该次 dispatch 走现有失败路径快速失败（见 copyWithTimeout 的
@@ -102,7 +101,8 @@ final class RemoteFilesystemDispatchSupport {
   private RemoteFilesystemDispatchSupport() {}
 
   /** R2-P1-10：有超时保护的 Files.copy。stale NFS mount 时不会让派发线程永久阻塞。 */
-  private static void copyWithTimeout(InputStream in, Path target) throws IOException {
+  private static void copyWithTimeout(
+      InputStream in, Path target, DispatchRuntimeProperties properties) throws IOException {
     Future<?> future;
     try {
       future =
@@ -127,12 +127,12 @@ final class RemoteFilesystemDispatchSupport {
           "NAS copy thread pool exhausted (max=" + NAS_COPY_MAX_THREADS + "); retry later", ree);
     }
     try {
-      future.get(NAS_COPY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      future.get(properties.getNasCopyTimeoutSeconds(), TimeUnit.SECONDS);
     } catch (TimeoutException te) {
       future.cancel(true);
       throw new IOException(
           "NAS Files.copy timed out after "
-              + NAS_COPY_TIMEOUT_SECONDS
+              + properties.getNasCopyTimeoutSeconds()
               + "s — likely stale NFS mount or hung remote",
           te);
     } catch (InterruptedException ie) {
@@ -153,6 +153,13 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchResult dispatchNas(
       DispatchCommand command, DispatchFileContentResolver contentResolver) {
+    return dispatchNas(command, contentResolver, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchResult dispatchNas(
+      DispatchCommand command,
+      DispatchFileContentResolver contentResolver,
+      DispatchRuntimeProperties properties) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String remoteDir =
@@ -164,7 +171,7 @@ final class RemoteFilesystemDispatchSupport {
       // R-4.2: normalize 只处理 . 和 ..，不解析 symlink；恶意配置 /tmp/link_to_parent
       // 即可绕过路径遍历防线。此处额外解析 realPath，若可选的 sandbox root 配置了
       // 则强制 realPath 必须落在沙箱内。
-      Path directory = resolveNasDirectory(remoteDir);
+      Path directory = resolveNasDirectory(remoteDir, properties);
       String externalRequestId = resolveExternalRequestId(command);
       String receiptCode = resolveReceiptCode(command, externalRequestId);
       String remoteName =
@@ -176,7 +183,7 @@ final class RemoteFilesystemDispatchSupport {
         try (InputStream in = contentResolver.openInputStream(command.fileRecord());
             DispatchManifestSupport.DigestingInputStream digesting =
                 DispatchManifestSupport.digesting(in)) {
-          copyWithTimeout(digesting, tempTarget);
+          copyWithTimeout(digesting, tempTarget, properties);
           payloadDigest = digesting.finish();
         }
         movePublishedFile(tempTarget, target);
@@ -224,12 +231,17 @@ final class RemoteFilesystemDispatchSupport {
    *   <li>{@code Files.createDirectories} 保证存在
    *   <li>{@code toRealPath} 解析 symlink 到真实路径
    *   <li>检查真实路径是否等于 normalize 路径；不同则记 WARN（存在 symlink）
-   *   <li>若系统属性 {@code batch.dispatch.nas-sandbox-root} 已配置，强制真实路径必须落在沙箱内
+   *   <li>若 {@code batch.worker.dispatch.runtime.nas-sandbox-root} 已配置，强制真实路径必须落在沙箱内
    * </ol>
    *
    * <p>返回后续操作使用的真实路径。
    */
   private static Path resolveNasDirectory(String remoteDir) throws IOException {
+    return resolveNasDirectory(remoteDir, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  private static Path resolveNasDirectory(String remoteDir, DispatchRuntimeProperties properties)
+      throws IOException {
     Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
     Files.createDirectories(directory);
     Path realDirectory = directory.toRealPath();
@@ -247,15 +259,16 @@ final class RemoteFilesystemDispatchSupport {
             realDirectory);
       } else {
         log.warn(
-            "NAS directory contains symlink(s): configured={}, real={} — using real path;"
-                + " set -D{}=<abs-path> to enforce sandbox root and reject symlink escape"
-                + " (this warning is emitted only once per configured path)",
+            "NAS directory contains symlink(s): configured={}, real={} — using real path; set"
+                + " batch.worker.dispatch.runtime.nas-sandbox-root=<abs-path> to enforce sandbox"
+                + " root and reject symlink escape (this warning is emitted only once per"
+                + " configured path)",
             directory,
             realDirectory,
-            SANDBOX_ROOT_PROP);
+            NAS_SANDBOX_PROPERTY_KEY);
       }
     }
-    String sandboxRootRaw = System.getProperty(SANDBOX_ROOT_PROP);
+    String sandboxRootRaw = properties.getNasSandboxRoot();
     if (Texts.hasText(sandboxRootRaw)) {
       Path sandboxRoot = Path.of(sandboxRootRaw).toAbsolutePath().normalize().toRealPath();
       if (!realDirectory.startsWith(sandboxRoot)) {
@@ -274,6 +287,16 @@ final class RemoteFilesystemDispatchSupport {
       DispatchFileContentResolver contentResolver,
       S3StorageProperties s3Properties,
       BatchObjectStore objectStore) {
+    return dispatchOss(
+        command, contentResolver, s3Properties, objectStore, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchResult dispatchOss(
+      DispatchCommand command,
+      DispatchFileContentResolver contentResolver,
+      S3StorageProperties s3Properties,
+      BatchObjectStore objectStore,
+      DispatchRuntimeProperties properties) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String bucket =
@@ -294,10 +317,11 @@ final class RemoteFilesystemDispatchSupport {
       // 长度与声明值不一致，故先读入内存再以精确字节数上传（与 probeOss 的 ByteArrayInputStream 一致）。
       // 防 OOM:bounded 读到上限+1,超限说明文件过大,拒绝该 dispatch 而非把 GB 级整文件读进堆。
       byte[] payload;
+      int maxInlinePayloadBytes = maxInlinePayloadBytes(properties);
       try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
-        payload = in.readNBytes(MAX_OSS_INLINE_PAYLOAD_BYTES + 1);
+        payload = in.readNBytes(maxInlinePayloadBytes + 1);
       }
-      if (payload.length > MAX_OSS_INLINE_PAYLOAD_BYTES) {
+      if (payload.length > maxInlinePayloadBytes) {
         return new DispatchResult(
             false,
             null,
@@ -305,7 +329,7 @@ final class RemoteFilesystemDispatchSupport {
             false,
             false,
             "oss payload exceeds inline upload limit ("
-                + MAX_OSS_INLINE_PAYLOAD_BYTES
+                + maxInlinePayloadBytes
                 + " bytes); reduce file size or use a streaming-capable channel",
             null);
       }
@@ -350,6 +374,11 @@ final class RemoteFilesystemDispatchSupport {
   }
 
   static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {
+    return probeNas(channelConfig, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchChannelProbeResult probeNas(
+      Map<String, Object> channelConfig, DispatchRuntimeProperties properties) {
     try {
       String remoteDir =
           resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
@@ -358,7 +387,7 @@ final class RemoteFilesystemDispatchSupport {
       }
       // R-4.2: probe 与 dispatch 走同一路径解析，保证两者对"可写性"的判断一致，
       // 避免 probe 显示 OK 但 dispatch 被沙箱拒绝（或反之）。
-      Path directory = resolveNasDirectory(remoteDir);
+      Path directory = resolveNasDirectory(remoteDir, properties);
       if (!Files.isDirectory(directory)) {
         return new DispatchChannelProbeResult(
             false, "nas path is not a directory: " + directory, null);
@@ -504,10 +533,20 @@ final class RemoteFilesystemDispatchSupport {
       S3StorageProperties s3Properties,
       BatchObjectStore objectStore,
       boolean dnsGuardEnabled) {
+    return probeChannel(
+        channelConfig, s3Properties, objectStore, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchChannelProbeResult probeChannel(
+      Map<String, Object> channelConfig,
+      S3StorageProperties s3Properties,
+      BatchObjectStore objectStore,
+      boolean dnsGuardEnabled,
+      DispatchRuntimeProperties properties) {
     String channelType =
         String.valueOf(channelConfig.getOrDefault("channel_type", "")).toUpperCase(Locale.ROOT);
     return switch (channelType) {
-      case "NAS" -> probeNas(channelConfig);
+      case "NAS" -> probeNas(channelConfig, properties);
       case "OSS" -> probeOss(channelConfig, s3Properties, objectStore);
       case "SFTP" -> probeSftp(channelConfig, dnsGuardEnabled);
       case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled);
@@ -516,6 +555,14 @@ final class RemoteFilesystemDispatchSupport {
           new DispatchChannelProbeResult(
               false, "unsupported health probe channel type: " + channelType, null);
     };
+  }
+
+  private static int maxInlinePayloadBytes(DispatchRuntimeProperties properties) {
+    long bytes = properties.getOssMaxInlineMib() * 1024L * 1024L;
+    if (bytes <= 0 || bytes > Integer.MAX_VALUE - 1L) {
+      throw new IllegalArgumentException("oss-max-inline-mib must be between 1 and 2047");
+    }
+    return (int) bytes;
   }
 
   private static DispatchResult finishResult(

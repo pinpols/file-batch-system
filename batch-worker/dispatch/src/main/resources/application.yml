@@ -66,6 +66,11 @@ batch:
       topic: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
       # Kafka consumer group（同类 worker 负载均衡）
       consumer-group-id: ${BATCH_WORKER_DISPATCH_CONSUMER_GROUP_ID:batch-worker-dispatch}
+      runtime:
+        nas-sandbox-root: ${BATCH_DISPATCH_NAS_SANDBOX_ROOT:}
+        local-sandbox-root: ${BATCH_DISPATCH_LOCAL_SANDBOX_ROOT:}
+        nas-copy-timeout-seconds: ${BATCH_DISPATCH_NAS_COPY_TIMEOUT_SECONDS:300}
+        oss-max-inline-mib: ${BATCH_DISPATCH_OSS_MAX_INLINE_MIB:512}
       circuit-breaker:
         # 断路器：连续失败达到阈值后进入冷却，防止雪崩
         enabled: true
@@ -91,4 +96,3 @@ batch:
         interval-millis: ${BATCH_DISPATCH_RECEIPT_POLL_MS:60000}
         # 单次轮询批大小
         batch-size: ${BATCH_DISPATCH_RECEIPT_POLL_BATCH:50}
-

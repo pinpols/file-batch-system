@@ -23,9 +23,6 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class AtomicWorkerInternalRestClient {
 
-  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-  private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
-
   private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private final ConsoleAtomicWorkerClientProperties properties;
   private final Environment environment;
@@ -44,8 +41,8 @@ public class AtomicWorkerInternalRestClient {
             ClientHttpRequestFactoryBuilder.detect()
                 .build(
                     HttpClientSettings.defaults()
-                        .withConnectTimeout(CONNECT_TIMEOUT)
-                        .withReadTimeout(READ_TIMEOUT)))
+                        .withConnectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+                        .withReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))))
         .build();
   }
 }

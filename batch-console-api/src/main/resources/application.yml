@@ -169,10 +169,16 @@ batch:
     trigger:
       # Trigger 服务地址（Console 调用 Trigger API）
       base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:18081}
+      connect-timeout-millis: ${BATCH_CONSOLE_TRIGGER_CONNECT_TIMEOUT_MILLIS:5000}
+      read-timeout-millis: ${BATCH_CONSOLE_TRIGGER_READ_TIMEOUT_MILLIS:30000}
     orchestrator:
       # Orchestrator 服务地址（Console 调用 Orchestrator API）
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
+      connect-timeout-millis: ${BATCH_CONSOLE_ORCHESTRATOR_CONNECT_TIMEOUT_MILLIS:5000}
+      read-timeout-millis: ${BATCH_CONSOLE_ORCHESTRATOR_READ_TIMEOUT_MILLIS:30000}
     # Round-3 #8(Round-2 §4 P0 #8):Console 反向拉 atomic worker /actuator/atomicruntime 做仪表盘。
     atomic-worker:
       base-url: ${BATCH_WORKER_ATOMIC_BASE_URL:http://localhost:${BATCH_WORKER_ATOMIC_PORT:18087}}
       enabled: ${BATCH_CONSOLE_ATOMIC_WORKER_ENABLED:true}
+      connect-timeout-millis: ${BATCH_CONSOLE_ATOMIC_CONNECT_TIMEOUT_MILLIS:5000}
+      read-timeout-millis: ${BATCH_CONSOLE_ATOMIC_READ_TIMEOUT_MILLIS:10000}

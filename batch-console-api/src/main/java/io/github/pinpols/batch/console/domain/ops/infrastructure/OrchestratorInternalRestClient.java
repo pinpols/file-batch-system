@@ -46,10 +46,6 @@ public class OrchestratorInternalRestClient {
    * R7-A2-P1: connect / read 超时。JDK 默认 HttpURLConnection 是 ∞，orchestrator GC 暂停 / DB stall /
    * 网络黑洞时，Tomcat worker 线程会无限阻塞，整个 console UI 雪崩。这里给一个保守的默认值， 后续可改为 properties 注入。
    */
-  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-
-  private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
-
   /** 构造一个新的 {@link RestClient}，已绑定 baseUrl + internal-secret header + connect/read 超时。 */
   public RestClient build() {
     String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
@@ -62,8 +58,12 @@ public class OrchestratorInternalRestClient {
                 ClientHttpRequestFactoryBuilder.detect()
                     .build(
                         HttpClientSettings.defaults()
-                            .withConnectTimeout(CONNECT_TIMEOUT)
-                            .withReadTimeout(READ_TIMEOUT)));
+                            .withConnectTimeout(
+                                Duration.ofMillis(
+                                    orchestratorClientProperties.getConnectTimeoutMillis()))
+                            .withReadTimeout(
+                                Duration.ofMillis(
+                                    orchestratorClientProperties.getReadTimeoutMillis()))));
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }
