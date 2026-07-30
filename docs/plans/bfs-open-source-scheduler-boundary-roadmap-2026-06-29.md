@@ -42,6 +42,70 @@
 2. 是否只管理 BFS 的任务、文件、结果版本、审计和运维动作。
 3. 是否避免裁定业务本身对错,避免接管基础设施调度,避免替代数据治理/数仓/流处理平台。
 
+## 1.2 2026-07-30 落地核查校准:三项真实缺口
+
+本节覆盖代码核查后对路线图的校准。已有能力不能因为文档或指标存在就标记为闭环；以下三项保留在计划中，按阶段实施。
+
+| 项目 | 当前真实状态 | 优先级 | 计划边界 |
+|---|---|---:|---|
+| Kafka 感知式 Admission Control | 已有租户/队列配额、Worker `maxConcurrent`、限流、WAITING 重派；**Kafka lag / broker health 尚未直接参与准入** | P0 | 只控制“是否继续产生/释放新任务”，不做本地持久队列，不做 K8s 调度 |
+| WAITING 有界治理 | `DEFER` 会落 WAITING，扫描批次有上限；**没有统一的等待数量上限、等待 TTL、超限终态** | P0 | 复用 tenant/queue 资源模型增加 pending cap、TTL 和明确 `REJECTED/EXPIRED` 归因，不新增同义队列表 |
+| PG 冷数据分层 | archive 表、Outbox 月分区、部分手工分区脚本已存在；**OSS/Parquet 自动卸载、冷查询和真实阈值演练未实现** | P1 | 仅在容量阈值触发后实施，保留 PG 结构化热状态；不做数据湖、通用 OLAP 或字段级治理 |
+
+### 分阶段实施计划
+
+#### P0-A: WAITING 队列边界
+
+1. 在既有 tenant quota / resource queue 语义上补充 `max_pending_jobs`、`max_pending_partitions` 和 `max_wait_seconds`，默认保持关闭，按租户/队列显式启用。
+2. 将准入判断统一放在 launch、DAG dispatch、retry、waiting release 共用的 `ResourceScheduler`；不得只在 Trigger 入口单独判断。
+3. 超过 pending cap 时返回 `REJECT`，写入机器可读原因；超过等待 TTL 时进入明确终态并产生审计/告警，不能永久留 WAITING。
+4. WAITING 计数必须使用当前已有的 tenant/queue backlog 查询口径，避免新增一套计数表或缓存真相。
+
+验收:
+
+- 1k/10k storm 下 WAITING 数量不超过配置上限。
+- 不出现无原因的永久 WAITING、`CREATED + NO_TASK` 或静默丢弃。
+- 多租户混压时单租户不能占满全局 pending cap。
+- release、retry、cancel、重启恢复后计数最终收敛。
+
+#### P0-B: Kafka lag / broker health 准入闸门
+
+1. 新增只读 `KafkaAdmissionSnapshotProvider`，按 worker group 读取 consumer lag、broker 可用性和采样时间；快照必须带 TTL，不能使用过期状态无限放行。
+2. 在 outbox release / partition dispatch 前做轻量 gate：
+   - broker 不可用或快照过期:停止继续释放新任务，已有 outbox 继续由 durable retry 处理。
+   - lag 超阈值:进入 DEFER，受 P0-A pending cap 约束。
+   - lag 恢复并连续稳定:按小批量恢复，避免恢复洪峰。
+3. Redis 只作为多实例快照协调或缓存，不承载唯一业务状态；PG outbox 仍是恢复真相。
+4. Prometheus/KEDA 继续负责观测和扩缩容，不把 KEDA 当作业务准入实现。
+
+验收:
+
+- Kafka broker 短断、lag 超阈值、lag 恢复三种场景均有明确状态和指标。
+- 新任务释放速率受控，outbox 不重复、不丢失，lag 最终归零。
+- 多实例下 gate 行为一致，快照过期不会永久放行。
+- 不新增本地内存持久队列，不改变 worker claim/report 契约。
+
+#### P1: PG 冷数据分层
+
+1. 先完成容量触发器:热表/归档表行数、索引大小、VACUUM 延迟、备份窗口和查询 p95。
+2. 仅对已具备归档镜像且按 `biz_date/created_at` 可切分的表做试点，先 staging 验证 COPY、checksum、恢复和权限。
+3. 冷卸载链路必须是“导出 → 校验 → 写 metadata → detach → grace period → drop”，任何一步失败都不得删除 PG 数据。
+4. 冷查询先限定为按业务日范围的只读运维查询；不改变在线状态机和控制面写入路径。
+
+验收:
+
+- staging 完成真实大表演练，记录 RTO/RPO、row count、byte count、checksum 和恢复耗时。
+- detach/drop 可回退，失败重试幂等，不产生半成品“已成功”记录。
+- 在线 launch/claim/report 不受冷卸载影响，租户隔离和审计保持有效。
+
+### 明确不做
+
+- 不新增本地队列替代 Kafka。
+- 不引入 Nacos/Apollo、独立 Gateway、通用调度器或自研 K8s scheduler。
+- 不把 Kafka lag 直接作为 Prometheus 标签写入高基数业务指标。
+- 不提前实现完整 OSS 数据湖、DuckDB/Calcite 通用查询平台。
+- 不把 Worker 直接写入的平台运行表改造成跨服务分布式事务；先通过表边界、连接池和写入指标治理。
+
 ## 2. 可以做
 
 ### 2.1 资源池 / 公平调度产品化

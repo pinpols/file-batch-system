@@ -35,6 +35,12 @@ V89 引入 `tenant_quota_policy.exceeded_strategy`,三态齐备且 `QUEUE_DEFER`
 - 显式配 `REJECT` 的租户:行为不变(仍硬拒)。
 - 无新表、无新事件类型、orchestrator 仍是唯一状态主机、WAITING 重评走既有 scheduler。
 
+## 2026-07-30 实现核查校准
+
+上述“有界队列”当前只完成了**准入策略层面的 DEFER 语义**：资源不足时进入 `WAITING`，由既有 scheduler 批量重评。当前代码尚未提供统一的 pending 数量上限、等待 TTL 或超限终态，因此不能把 `WAITING` 描述成已经完成硬边界保护的队列。
+
+后续实现以路线图 [`bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md`](../../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) §1.2 为准，先补 WAITING 边界，再补 Kafka lag / broker health 感知式准入。两项完成前，生产容量结论必须以 pending cap 和 lag 受控的压测证据为准。
+
 ## 备选(未采纳)
 
 - 令牌桶速率限流:平滑 launch 速率,但不解决总量堆积;留作后续增强。
