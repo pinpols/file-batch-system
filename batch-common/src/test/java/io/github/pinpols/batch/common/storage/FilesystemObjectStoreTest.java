@@ -199,6 +199,23 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  void listScanLimitShouldCountHiddenAndTempEntries(@TempDir Path root) throws Exception {
+    FilesystemObjectStore store =
+        new FilesystemObjectStore(root.toString(), DOWNLOAD_BASE_URL, SECRET, 2);
+    Path bucketDir = root.resolve(BUCKET).resolve("wide");
+    Files.createDirectories(bucketDir);
+    Files.createFile(bucketDir.resolve(".hidden-1"));
+    Files.createFile(
+        bucketDir.resolve("payload.csv" + FilesystemObjectStore.TEMP_SUFFIX_MARKER + "1"));
+    Files.createFile(
+        bucketDir.resolve("payload.csv" + FilesystemObjectStore.TEMP_SUFFIX_MARKER + "2"));
+
+    assertThatThrownBy(() -> store.list(BUCKET, "wide/", null, 10))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("maxListScanEntries");
+  }
+
+  @Test
   void etagShouldReflectSizeAndMtime(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     byte[] before = "abc".getBytes(StandardCharsets.UTF_8);

@@ -146,7 +146,7 @@ impl KafkaConsumerConfig {
     /// atomic) so this one subscription is workerType-agnostic.
     pub fn topic_regex(&self) -> String {
         format!(
-            "^batch\\.task\\.dispatch\\..*\\.node\\.{}",
+            "^batch\\.task\\.dispatch\\..*\\.node\\.{}$",
             regex_escape(&self.worker_code)
         )
     }
@@ -752,7 +752,7 @@ mod tests {
         // `.*` covering any base workerType (workerType-agnostic, #2).
         assert_eq!(
             c.topic_regex(),
-            r"^batch\.task\.dispatch\..*\.node\.worker-1"
+            r"^batch\.task\.dispatch\..*\.node\.worker-1$"
         );
     }
 
@@ -792,7 +792,7 @@ mod tests {
         // subscription matches literally.
         assert_eq!(
             c.topic_regex(),
-            r"^batch\.task\.dispatch\..*\.node\.w\.o\+rker"
+            r"^batch\.task\.dispatch\..*\.node\.w\.o\+rker$"
         );
     }
 

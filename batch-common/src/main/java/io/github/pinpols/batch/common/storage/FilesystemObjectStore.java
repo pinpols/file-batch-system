@@ -234,10 +234,10 @@ public class FilesystemObjectStore implements BatchObjectStore {
     PriorityQueue<ObjectSummary> smallestKeys =
         new PriorityQueue<>(Comparator.comparing(ObjectSummary::key).reversed());
     try (Stream<Path> walk = Files.walk(scanRoot)) {
-      Iterator<Path> iterator =
-          walk.filter(Files::isRegularFile).filter(path -> !isHiddenOrTemp(path)).iterator();
+      Iterator<Path> iterator = walk.iterator();
       long scanned = 0L;
       while (iterator.hasNext()) {
+        Path p = iterator.next();
         scanned++;
         if (scanned > maxListScanEntries) {
           throw new ObjectStoreException(
@@ -248,7 +248,9 @@ public class FilesystemObjectStore implements BatchObjectStore {
                   + ", maxListScanEntries="
                   + maxListScanEntries);
         }
-        Path p = iterator.next();
+        if (!Files.isRegularFile(p) || isHiddenOrTemp(p)) {
+          continue;
+        }
         String relKey = relativeKey(bucketRoot, p);
         if (!relKey.startsWith(safePrefix)) {
           continue;
