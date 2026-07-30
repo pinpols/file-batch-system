@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -96,6 +97,7 @@ public class DispatchChannelHealthService {
         objectStoreProvider);
   }
 
+  @Autowired
   @SuppressWarnings("PMD.ExcessiveParameterList")
   public DispatchChannelHealthService(
       DispatchChannelHealthRepository repository,
