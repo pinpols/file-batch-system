@@ -51,6 +51,8 @@
 | Kafka 感知式 Admission Control | 已有租户/队列配额、Worker `maxConcurrent`、限流、WAITING 重派；**Kafka lag / broker health 尚未直接参与准入** | P0 | 只控制“是否继续产生/释放新任务”，不做本地持久队列，不做 K8s 调度 |
 | WAITING 有界治理 | `DEFER` 会落 WAITING，扫描批次有上限；**没有统一的等待数量上限、等待 TTL、超限终态** | P0 | 复用 tenant/queue 资源模型增加 pending cap、TTL 和明确 `REJECTED/EXPIRED` 归因，不新增同义队列表 |
 | PG 冷数据分层 | archive 表、Outbox 月分区、部分手工分区脚本已存在；**OSS/Parquet 自动卸载、冷查询和真实阈值演练未实现** | P1 | 仅在容量阈值触发后实施，保留 PG 结构化热状态；不做数据湖、通用 OLAP 或字段级治理 |
+| 数字可信 / 精确一次边界 | 已有幂等键、状态 CAS、result version 守卫、manifest 对账和防终态复活；**旧 leader 迟到上报、重复 report、崩溃窗口的全链验证证据仍不完整** | P0 | 补对抗性故障矩阵和必要的状态更新防线，不承诺跨库 1PC |
+| 故障恢复 / HA 证据 | 已有 lease 回收、outbox/DLQ、checkpoint、备份/PITR runbook；**Worker/PG/Kafka 故障注入和 staging RTO/RPO 证据未形成闭环** | P0/P1 | 运行链路故障注入列 P0，PITR/主备切换实演列 P1；不另造基础设施 |
 
 ### 分阶段实施计划
 
@@ -97,6 +99,43 @@
 - staging 完成真实大表演练，记录 RTO/RPO、row count、byte count、checksum 和恢复耗时。
 - detach/drop 可回退，失败重试幂等，不产生半成品“已成功”记录。
 - 在线 launch/claim/report 不受冷卸载影响，租户隔离和审计保持有效。
+
+#### P0-C: 数字可信与精确一次边界
+
+1. 固化同一 `tenant + instance/partition + invocation` 的 claim/report 并发约束，迟到的旧 invocation 只能被拒绝或记录为过期，不得覆盖新状态。
+2. 对重复 report、重复 outbox、旧 leader 迟到上报、终态后二次写入、replay 后旧 result version 复活做真 PG + 真 Kafka 验证。
+3. 对账失败必须进入明确失败或人工处置状态；不能只记录告警后继续 promote 结果版本。
+4. 保持现有跨库补偿式最终一致和插件幂等边界，不引入 XA/JTA 或跨系统 1PC。
+
+验收:
+
+- 重投、GC/暂停后的旧 worker、重复 report 均不产生重复成功或终态复活。
+- 同一业务结果最多一个可消费的 EFFECTIVE version，旧 attempt 不能被 readiness 选中。
+- 声明笔数/金额与实际不符时，阻断规则确实阻断，alert-only 规则有明确告警和审计。
+
+#### P0-D: 运行链路故障恢复
+
+1. 复用现有 Docker 基础环境，注入 worker 在 claim 后、chunk 提交后、report 前退出；验证 lease 回收、checkpoint/幂等重派和终态收敛。
+2. 注入 PG 短断、Kafka broker 短断/lag、MinIO/HTTP 下游失败；验证 outbox retry、DLQ、熔断、恢复放量和取消语义。
+3. 每个故障场景都记录故障窗口、恢复耗时、重复数、丢失数、残留 RUNNING/WAITING 数和 Kafka lag。
+
+验收:
+
+- `non_terminal=0`，或只保留有原因、可操作、受 TTL 约束的 WAITING/DEFERRED。
+- 不出现 `CREATED + NO_TASK`、重复成功、静默丢失和永久 RUNNING。
+- broker/PG 恢复后 outbox、lease 和 lag 最终收敛；多实例重启后结果一致。
+
+#### P1-B: HA / PITR 实演证据
+
+1. 在 staging 或本地同构 Docker 环境执行现有备份、WAL/PITR、主库切换和恢复脚本，不新增另一套数据库或备份工具抽象。
+2. 用真实批量运行数据记录 RTO、RPO、恢复前后关键表指纹、outbox 未发布事件和租户隔离结果。
+3. 将实测结果写回 `go-live-readiness` 和灾备 runbook；未实演的目标值只能标为“待验证”，不能标记达标。
+
+验收:
+
+- RTO/RPO 达到当前 runbook 目标，或明确记录偏差、原因和上线限制。
+- 恢复后 lease 回收、outbox 重发、worker 重连和业务结果查询均可收敛。
+- 演练脚本可重复执行、失败可重试，不破坏现有 Docker 开发环境。
 
 ### 明确不做
 
@@ -548,8 +587,8 @@ trigger
 
 缓解:
 
-- stuck diagnosis、replay preview、DLQ/outbox 幂等重放进入 P0/P1。
-- runbook rehearsal 要证明不手改 DB 也能恢复。
+- stuck diagnosis、replay preview、DLQ/outbox 幂等重放已落；数字可信边界按 P0-C 做旧 invocation / 重复 report / result promote 对抗验证。
+- 运行故障注入按 P0-D 做，PITR/主备切换按 P1-B 做；runbook rehearsal 要证明不手改 DB 也能恢复。
 
 ## 8. 评审红线
 
