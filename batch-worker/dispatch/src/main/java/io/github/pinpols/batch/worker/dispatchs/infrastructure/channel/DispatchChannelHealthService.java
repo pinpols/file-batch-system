@@ -72,6 +72,9 @@ public class DispatchChannelHealthService {
   private final AtomicLong probeFailureCount = new AtomicLong();
   private ExecutorService probeExecutor;
 
+  // Spring DI compatibility overload; the parameter count is intentional to preserve the old
+  // test/API constructor.
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public DispatchChannelHealthService(
       DispatchChannelHealthRepository repository,
       DispatchChannelHealthProperties properties,
@@ -93,6 +96,7 @@ public class DispatchChannelHealthService {
         objectStoreProvider);
   }
 
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public DispatchChannelHealthService(
       DispatchChannelHealthRepository repository,
       DispatchChannelHealthProperties properties,
