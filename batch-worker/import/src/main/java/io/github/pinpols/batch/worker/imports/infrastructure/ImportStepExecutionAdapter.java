@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -46,16 +45,6 @@ public class ImportStepExecutionAdapter
   @Override
   protected String pipelineType() {
     return ImportWorkerType.IMPORT;
-  }
-
-  @Override
-  protected String pipelineDescription() {
-    return "Chapter 9 import pipeline";
-  }
-
-  @Override
-  protected List<PipelineStepTemplate> defaultPipelineSteps() {
-    return importStageExecutor.defaultStepDefinitions();
   }
 
   @Override

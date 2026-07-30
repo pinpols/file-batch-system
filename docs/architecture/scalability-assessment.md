@@ -28,7 +28,7 @@
 | **熔断 / 退避 / DL / 补偿全链** | `RetryGovernanceService`（NON_RETRYABLE 集合）+ `CompensationService` + `DispatchChannelHealthService` 熔断 | 海量 dispatch 时一两个对端异常退出是常态，必须熔断不让雪崩；不可重试错误必须直接进 DL 而不是浪费指数 backoff |
 | **ShedLock 集群单实例 + Sharding** | 调度类任务都加 ShedLock；`OutboxPollScheduler` 支持 `shardTotal>1` 多实例并行 | 这是横向扩 orchestrator 实例的前提 |
 | **Outbox 自适应轮询** | 有积压立即下轮（200ms）/ 空闲退避到 5s | 既不空查 DB 又能近实时推消息 |
-| **Pipeline / Stage 模板可静态校验** | 每类 worker 的 step 链是固定模板（IMPORT 6 / EXPORT 5 / DISPATCH 6）；ensurePipelineDefinition 已存在不重写（本周修） | 防止跨 worker 错位污染 step 链 |
+| **Pipeline / Stage 模板可静态校验** | 每类 worker 的 step 链是固定模板（IMPORT 6 / EXPORT 5 / DISPATCH 6）；定义由 Console / 配置包 provision，Worker 只读并校验 | 防止执行进程越权创建或跨 worker 错位污染 step 链 |
 
 **判断**：架构方向对——不是堆砌组件，是"经典互联网批量任务平台"该有的样子（XXL-Job / DolphinScheduler / Apache Hop / Spring Batch + custom orchestration 都在做类似的事，这套接近 mature 实现的形态）。
 

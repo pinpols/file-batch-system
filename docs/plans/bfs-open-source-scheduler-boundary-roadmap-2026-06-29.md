@@ -42,6 +42,137 @@
 2. 是否只管理 BFS 的任务、文件、结果版本、审计和运维动作。
 3. 是否避免裁定业务本身对错,避免接管基础设施调度,避免替代数据治理/数仓/流处理平台。
 
+## 1.2 2026-07-30 落地核查校准:三项真实缺口
+
+本节覆盖代码核查后对路线图的校准。已有能力不能因为文档或指标存在就标记为闭环；以下三项保留在计划中，按阶段实施。
+
+| 项目 | 当前真实状态 | 优先级 | 计划边界 |
+|---|---|---:|---|
+| Kafka 感知式 Admission Control | 已有租户/队列配额、Worker `maxConcurrent`、限流、WAITING 重派；**Kafka lag / broker health 尚未直接参与准入** | P0 | 只控制“是否继续产生/释放新任务”，不做本地持久队列，不做 K8s 调度 |
+| WAITING 有界治理 | `DEFER` 会落 WAITING，扫描批次有上限；**没有统一的等待数量上限、等待 TTL、超限终态** | P0 | 复用 tenant/queue 资源模型增加 pending cap、TTL 和明确 `REJECTED/EXPIRED` 归因，不新增同义队列表 |
+| PG 冷数据分层 | archive 表、Outbox 月分区、部分手工分区脚本已存在；**OSS/Parquet 自动卸载、冷查询和真实阈值演练未实现** | P1 | 仅在容量阈值触发后实施，保留 PG 结构化热状态；不做数据湖、通用 OLAP 或字段级治理 |
+| 数字可信 / 精确一次边界 | 已有幂等键、状态 CAS、result version 守卫、manifest 对账和防终态复活；**旧 leader 迟到上报、重复 report、崩溃窗口的全链验证证据仍不完整** | P0 | 补对抗性故障矩阵和必要的状态更新防线，不承诺跨库 1PC |
+| 故障恢复 / HA 证据 | 已有 lease 回收、outbox/DLQ、checkpoint、备份/PITR runbook；**Worker/PG/Kafka 故障注入和 staging RTO/RPO 证据未形成闭环** | P0/P1 | 运行链路故障注入列 P0，PITR/主备切换实演列 P1；不另造基础设施 |
+| 配置中心边界 | 已有 `system_parameter`、领域配置表、Redis 二级缓存和 after-commit 失效；**启动期配置与运行期配置的边界需固化，直接改库的失效流程需持续可见** | P1 | 保留轻量 DB + Redis，不引入 Nacos/Apollo；补配置分类、审计、stale-cache 指标和 runbook |
+| Worker 平台库边界 | Worker 通过 HTTP 使用控制面 claim/report，并直接维护受限运行态；**pipeline definition 自动写入越过职责边界，表级权限/连接池边界还需落地** | P0/P1 | 收回 definition 写入；运行态直写暂保留并限权，不改成跨服务 1PC |
+
+### 分阶段实施计划
+
+#### P0-A: WAITING 队列边界
+
+1. 在既有 tenant quota / resource queue 语义上补充 `max_pending_jobs`、`max_pending_partitions` 和 `max_wait_seconds`，默认保持关闭，按租户/队列显式启用。
+2. 将准入判断统一放在 launch、DAG dispatch、retry、waiting release 共用的 `ResourceScheduler`；不得只在 Trigger 入口单独判断。
+3. 超过 pending cap 时返回 `REJECT`，写入机器可读原因；超过等待 TTL 时进入明确终态并产生审计/告警，不能永久留 WAITING。
+4. WAITING 计数必须使用当前已有的 tenant/queue backlog 查询口径，避免新增一套计数表或缓存真相。
+
+验收:
+
+- 1k/10k storm 下 WAITING 数量不超过配置上限。
+- 不出现无原因的永久 WAITING、`CREATED + NO_TASK` 或静默丢弃。
+- 多租户混压时单租户不能占满全局 pending cap。
+- release、retry、cancel、重启恢复后计数最终收敛。
+
+#### P0-B: Kafka lag / broker health 准入闸门
+
+1. 新增只读 `KafkaAdmissionSnapshotProvider`，按 worker group 读取 consumer lag、broker 可用性和采样时间；快照必须带 TTL，不能使用过期状态无限放行。
+2. 在 outbox release / partition dispatch 前做轻量 gate：
+   - broker 不可用或快照过期:停止继续释放新任务，已有 outbox 继续由 durable retry 处理。
+   - lag 超阈值:进入 DEFER，受 P0-A pending cap 约束。
+   - lag 恢复并连续稳定:按小批量恢复，避免恢复洪峰。
+3. Redis 只作为多实例快照协调或缓存，不承载唯一业务状态；PG outbox 仍是恢复真相。
+4. Prometheus/KEDA 继续负责观测和扩缩容，不把 KEDA 当作业务准入实现。
+
+验收:
+
+- Kafka broker 短断、lag 超阈值、lag 恢复三种场景均有明确状态和指标。
+- 新任务释放速率受控，outbox 不重复、不丢失，lag 最终归零。
+- 多实例下 gate 行为一致，快照过期不会永久放行。
+- 不新增本地内存持久队列，不改变 worker claim/report 契约。
+
+#### P1: PG 冷数据分层
+
+1. 先完成容量触发器:热表/归档表行数、索引大小、VACUUM 延迟、备份窗口和查询 p95。
+2. 仅对已具备归档镜像且按 `biz_date/created_at` 可切分的表做试点，先 staging 验证 COPY、checksum、恢复和权限。
+3. 冷卸载链路必须是“导出 → 校验 → 写 metadata → detach → grace period → drop”，任何一步失败都不得删除 PG 数据。
+4. 冷查询先限定为按业务日范围的只读运维查询；不改变在线状态机和控制面写入路径。
+
+验收:
+
+- staging 完成真实大表演练，记录 RTO/RPO、row count、byte count、checksum 和恢复耗时。
+- detach/drop 可回退，失败重试幂等，不产生半成品“已成功”记录。
+- 在线 launch/claim/report 不受冷卸载影响，租户隔离和审计保持有效。
+
+#### P0-C: 数字可信与精确一次边界
+
+1. 固化同一 `tenant + instance/partition + invocation` 的 claim/report 并发约束，迟到的旧 invocation 只能被拒绝或记录为过期，不得覆盖新状态。
+2. 对重复 report、重复 outbox、旧 leader 迟到上报、终态后二次写入、replay 后旧 result version 复活做真 PG + 真 Kafka 验证。
+3. 对账失败必须进入明确失败或人工处置状态；不能只记录告警后继续 promote 结果版本。
+4. 保持现有跨库补偿式最终一致和插件幂等边界，不引入 XA/JTA 或跨系统 1PC。
+
+验收:
+
+- 重投、GC/暂停后的旧 worker、重复 report 均不产生重复成功或终态复活。
+- 同一业务结果最多一个可消费的 EFFECTIVE version，旧 attempt 不能被 readiness 选中。
+- 声明笔数/金额与实际不符时，阻断规则确实阻断，alert-only 规则有明确告警和审计。
+
+#### P0-D: 运行链路故障恢复
+
+1. 复用现有 Docker 基础环境，注入 worker 在 claim 后、chunk 提交后、report 前退出；验证 lease 回收、checkpoint/幂等重派和终态收敛。
+2. 注入 PG 短断、Kafka broker 短断/lag、MinIO/HTTP 下游失败；验证 outbox retry、DLQ、熔断、恢复放量和取消语义。
+3. 每个故障场景都记录故障窗口、恢复耗时、重复数、丢失数、残留 RUNNING/WAITING 数和 Kafka lag。
+
+验收:
+
+- `non_terminal=0`，或只保留有原因、可操作、受 TTL 约束的 WAITING/DEFERRED。
+- 不出现 `CREATED + NO_TASK`、重复成功、静默丢失和永久 RUNNING。
+- broker/PG 恢复后 outbox、lease 和 lag 最终收敛；多实例重启后结果一致。
+
+#### P1-B: HA / PITR 实演证据
+
+1. 在 staging 或本地同构 Docker 环境执行现有备份、WAL/PITR、主库切换和恢复脚本，不新增另一套数据库或备份工具抽象。
+2. 用真实批量运行数据记录 RTO、RPO、恢复前后关键表指纹、outbox 未发布事件和租户隔离结果。
+3. 将实测结果写回 `go-live-readiness` 和灾备 runbook；未实演的目标值只能标为“待验证”，不能标记达标。
+
+验收:
+
+- RTO/RPO 达到当前 runbook 目标，或明确记录偏差、原因和上线限制。
+- 恢复后 lease 回收、outbox 重发、worker 重连和业务结果查询均可收敛。
+- 演练脚本可重复执行、失败可重试，不破坏现有 Docker 开发环境。
+
+#### P0-E: Worker 平台库写入边界
+
+1. 将 `pipeline_definition` / `pipeline_step_definition` 的 provision 收回 Console / Orchestrator；Worker 只读，缺失定义返回明确配置错误，不在执行路径隐式建表数据。
+2. 固化 Worker 允许写入的运行态白名单：`pipeline_instance`、`pipeline_step_run`、`file_record`、`file_error_record`、`file_audit_log`、`pipeline_progress` 及明确批准的 worker report outbox。
+3. 固化 Orchestrator 唯一写入表：`job_instance`、`job_partition`、`job_task`、`outbox_event`、`worker_registry`。增加 SQL/权限架构门禁，防止 Worker mapper 越界。
+
+验收:
+
+- Worker 数据库角色不能对控制面表执行 INSERT/UPDATE/DELETE；claim/report 仍通过 Orchestrator API 正常完成。
+- 缺失 pipeline definition 时任务明确失败并可诊断，预置定义的 import/export/process/dispatch/atomic 全链路不回归。
+- 运行态表写入均带租户 / 已 claim 实例约束，有连接池上限、写入耗时和失败率指标。
+
+#### P1-C: 轻量配置中心治理
+
+1. 在配置清单中区分启动期 env、`system_parameter` 和领域配置；启动期配置不承诺热更新。
+2. 所有 Console 配置写入必须审计并在 after-commit 失效对应 Redis key；直接 DB 维护必须在 runbook 中执行显式 evict。
+3. 增加 cache hit/miss、evict、stale fallback、配置版本和变更操作者指标；不新增独立配置中心。
+
+验收:
+
+- 配置修改在提交后被所有 Orchestrator 实例感知，失败时不会静默长期使用旧值。
+- Redis 故障时按已定义的 DB fallback 语义运行，并有告警和恢复后的缓存回填。
+- env 改动需要重启的边界在文档、Helm values 和运维手册中一致。
+
+### 明确不做
+
+- 不新增本地队列替代 Kafka。
+- 不引入 Nacos/Apollo、独立 Gateway、通用调度器或自研 K8s scheduler。
+- 不把 Kafka lag 直接作为 Prometheus 标签写入高基数业务指标。
+- 不提前实现完整 OSS 数据湖、DuckDB/Calcite 通用查询平台。
+- 不把 Worker 直接写入的平台运行表改造成跨服务分布式事务；先通过表边界、连接池和写入指标治理。
+- 不把 Worker 运行态直写一律改成同步 HTTP；只有控制面状态通过 Orchestrator API 改变。
+- 不把轻量 `system_parameter` / Redis 缓存方案升级成通用配置中心。
+
 ## 2. 可以做
 
 ### 2.1 资源池 / 公平调度产品化
@@ -484,8 +615,8 @@ trigger
 
 缓解:
 
-- stuck diagnosis、replay preview、DLQ/outbox 幂等重放进入 P0/P1。
-- runbook rehearsal 要证明不手改 DB 也能恢复。
+- stuck diagnosis、replay preview、DLQ/outbox 幂等重放已落；数字可信边界按 P0-C 做旧 invocation / 重复 report / result promote 对抗验证。
+- 运行故障注入按 P0-D 做，PITR/主备切换按 P1-B 做；runbook rehearsal 要证明不手改 DB 也能恢复。
 
 ## 8. 评审红线
 

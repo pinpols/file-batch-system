@@ -10,7 +10,6 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -24,14 +23,13 @@ import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
- * 三条 worker 链路（import / export / dispatch）共用的 pipeline 生命周期模板： 确保 pipeline 定义存在 → 创建 pipeline 实例 →
- * 执行各阶段 → 标记实例最终状态。
+ * worker 链路共用的 pipeline 生命周期模板：读取已 provision 的 pipeline 定义 → 创建 pipeline 实例 → 执行各阶段 → 标记实例最终状态。
  *
  * <p><b>执行流程（{@link #execute} → {@link #doExecute}）</b>：
  *
  * <ol>
- *   <li>通过 {@link PlatformFileRuntimeRepository#ensurePipelineDefinition} 查找或自动创建 pipeline
- *       定义（首次运行可无需手动在控制台配置）。
+ *   <li>通过 {@link PlatformFileRuntimeRepository#findPipelineDefinition} 查找已由 Console / Orchestrator
+ *       provision 的 pipeline 定义；Worker 执行期间不创建平台配置。
  *   <li>创建本次执行的 pipeline 实例（{@code pipeline_instance}），写入初始阶段和 traceId。
  *   <li>将 pipelineDefinitionId、pipelineInstanceId、stepDefinitions 注入 {@code attributes}， 再构建业务上下文
  *       {@code C}，调用子类 {@link #executeStages(Object)} 执行所有阶段。
@@ -43,7 +41,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * <p><b>子类约定</b>：
  *
  * <ul>
- *   <li>必须实现 {@link #pipelineType} / {@link #defaultPipelineSteps} 等描述性方法。
+ *   <li>必须实现 {@link #pipelineType} 等执行描述方法。
  *   <li>{@link #executeStages} 内部应捕获阶段级异常并返回失败结果，不得上抛。
  *   <li>{@link #handlePipelineFailure} 用于在 pipeline 失败后触发补偿（如错误文件上传、状态回写）。
  * </ul>
@@ -145,13 +143,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     String jobCode = resolveJobCode(request, attributes);
     Long fileId = runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
     Long pipelineDefinitionId =
-        runtimeRepository.ensurePipelineDefinition(
-            request.tenantId(),
-            jobCode,
-            pipelineType(),
-            pipelineWorkerGroup(),
-            pipelineDescription(),
-            defaultPipelineSteps());
+        runtimeRepository.findPipelineDefinition(request.tenantId(), jobCode);
     if (pipelineDefinitionId == null) {
       BizException exception =
           BizException.of(ResultCode.NOT_FOUND, "error.pipeline.definition_not_found");
@@ -301,10 +293,6 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     compensationHook.runCompensation(tenantId, pipelineType(), pipelineInstanceId, attributes);
   }
 
-  protected String pipelineWorkerGroup() {
-    return "worker-" + pipelineType().toLowerCase(Locale.ROOT);
-  }
-
   protected String resolveInitialStage(List<PipelineStepDefinition> pipelineSteps) {
     PipelineStepDefinition firstStep = PipelineStepFlowSupport.firstStep(pipelineSteps);
     return firstStep == null ? initialStage() : firstStep.stageCode();
@@ -449,10 +437,6 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   }
 
   protected abstract String pipelineType();
-
-  protected abstract String pipelineDescription();
-
-  protected abstract List<PipelineStepTemplate> defaultPipelineSteps();
 
   protected abstract String initialStage();
 

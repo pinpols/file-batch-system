@@ -4,7 +4,7 @@
 - **日期**: 2026-03-25
 - **决策人**: 后端平台团队
 
-> 实现订正：落地后平台库实际 schema 为 `batch` / `quartz` / `archive`，**未单独建 `batch_worker` schema 与 `batch_worker_app` 用户**;worker 注册表是 `batch.worker_registry`（不是 `worker_registration` / `worker_heartbeat`,心跳走 HTTP 上报 + orchestrator 侧超时扫描）。worker 通过 HTTP 调 orchestrator 完成 register/heartbeat/claim/report,不直写平台表。下文保留原决策表述,以代码与 Flyway 为准。
+> 实现订正：落地后平台库实际 schema 为 `batch` / `quartz` / `archive`，**未单独建 `batch_worker` schema 与 `batch_worker_app` 用户**；worker 注册表是 `batch.worker_registry`（不是 `worker_registration` / `worker_heartbeat`，心跳走 HTTP 上报 + orchestrator 侧超时扫描）。worker 通过 HTTP 调 orchestrator 完成 register/heartbeat/claim/report；执行期间会直接读写受限的 `pipeline_*`、`file_*`、`pipeline_progress` 运行态表，不直接写 `job_instance`、`job_partition`、`job_task`、`outbox_event`、`worker_registry` 等控制面表。下文保留原决策背景，访问边界以代码、Flyway 和本节实现校准为准。
 
 ## 背景
 
@@ -59,3 +59,24 @@ Flyway 迁移：
 ## 系统测试配置
 
 `docs/sql/system-test/platform_seed.sql` 包含测试环境的 schema 初始化脚本，创建两个 schema 及对应用户权限。
+
+## 2026-07-30 实现边界校准
+
+### 配置中心
+
+当前不引入 Nacos、Apollo 或 Spring Cloud Config。BFS 的配置分为三类：
+
+1. 环境变量 / `application.yml`：启动期绑定，涉及数据源、端口、线程池等基础设施参数，变更需要滚动重启。
+2. `batch.system_parameter`：租户级低频运行参数，由 Console 写入，Orchestrator 按需读取。
+3. 作业、工作流、日历、窗口、配额等领域配置：平台库为事实源，Orchestrator 使用 Redis 二级缓存；Console 提交后通过 after-commit 失效广播。
+
+因此当前要做的是配置分类、审计、失效和 stale-cache 监控，不是把所有启动配置伪装成热更新。直接改库后必须按 runbook 主动 evict，不能依赖 TTL 作为正常发布流程。
+
+### Worker 平台库访问
+
+Worker 的直接平台库写入分为两类，不能混为一谈：
+
+- **允许保留**：`pipeline_instance`、`pipeline_step_run`、`file_record`、`file_error_record`、`file_audit_log`、`pipeline_progress` 等执行运行态。它们承载 worker 自己产生的进度、文件产物和错误证据，全部通过已 claim 的实例 / 租户上下文定位。
+- **必须收回**：`pipeline_definition`、`pipeline_step_definition` 的自动创建属于平台配置写入，不应由 worker 在执行时自注册。后续改为 Console / Orchestrator provision；worker 只读，缺失配置时明确失败。
+
+控制面表 `job_instance`、`job_partition`、`job_task`、`outbox_event`、`worker_registry` 继续保持 Orchestrator 唯一写入。当前不把运行态写入全部改造成 HTTP 或跨服务分布式事务；先完成表级 GRANT、独立连接池上限、租户/RLS 审计和写入压力指标。只有真实容量证据证明运行态写入成为瓶颈时，才评估事件化或独立 runtime store。
