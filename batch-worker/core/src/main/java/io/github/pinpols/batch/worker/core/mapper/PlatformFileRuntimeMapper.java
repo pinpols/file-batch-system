@@ -17,11 +17,7 @@ public interface PlatformFileRuntimeMapper {
 
   Long selectLatestPipelineDefinitionId(Map<String, Object> params);
 
-  int insertPipelineDefinition(Map<String, Object> params);
-
   List<Map<String, Object>> selectPipelineStepDefinitions(Map<String, Object> params);
-
-  int insertPipelineStepDefinition(Map<String, Object> params);
 
   int insertPipelineInstance(Map<String, Object> params);
 

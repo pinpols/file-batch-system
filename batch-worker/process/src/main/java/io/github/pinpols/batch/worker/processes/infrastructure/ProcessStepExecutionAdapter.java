@@ -1,14 +1,12 @@
 package io.github.pinpols.batch.worker.processes.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
-import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessPayload;
@@ -31,35 +29,22 @@ public class ProcessStepExecutionAdapter
     extends AbstractPipelineStepExecutionAdapter<ProcessJobContext, ProcessStageResult> {
 
   private final ProcessStageExecutor processStageExecutor;
-  private final PipelineStepTemplateProvider stepTemplateProvider;
   private final ObjectMapper objectMapper;
 
   public ProcessStepExecutionAdapter(
       ProcessStageExecutor processStageExecutor,
-      PipelineStepTemplateProvider stepTemplateProvider,
       ObjectMapper objectMapper,
       PlatformFileRuntimeRepository runtimeRepository,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     super(runtimeRepository, verifierHookProvider, compensationHookProvider);
     this.processStageExecutor = processStageExecutor;
-    this.stepTemplateProvider = stepTemplateProvider;
     this.objectMapper = objectMapper;
   }
 
   @Override
   protected String pipelineType() {
     return ProcessWorkerType.PROCESS;
-  }
-
-  @Override
-  protected String pipelineDescription() {
-    return "加工 pipeline";
-  }
-
-  @Override
-  protected List<PipelineStepTemplate> defaultPipelineSteps() {
-    return stepTemplateProvider.defaultStepDefinitions();
   }
 
   @Override

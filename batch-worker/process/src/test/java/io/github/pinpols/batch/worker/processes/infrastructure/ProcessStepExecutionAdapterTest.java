@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.processes.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -18,7 +17,6 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
-import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
@@ -39,7 +37,6 @@ import org.springframework.beans.factory.ObjectProvider;
 class ProcessStepExecutionAdapterTest {
 
   @Mock private ProcessStageExecutor processStageExecutor;
-  @Mock private PipelineStepTemplateProvider stepTemplateProvider;
   @Mock private PlatformFileRuntimeRepository runtimeRepository;
 
   @Test
@@ -48,18 +45,11 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter =
         new ProcessStepExecutionAdapter(
             processStageExecutor,
-            stepTemplateProvider,
             new ObjectMapper(),
             runtimeRepository,
             (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
             (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(runtimeRepository.ensurePipelineDefinition(
-            eq("tenant-a"),
-            eq("job-process"),
-            eq("PROCESS"),
-            eq("worker-process"),
-            any(),
-            anyList()))
+    when(runtimeRepository.findPipelineDefinition(eq("tenant-a"), eq("job-process")))
         .thenReturn(10L);
     when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
@@ -92,18 +82,11 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter =
         new ProcessStepExecutionAdapter(
             processStageExecutor,
-            stepTemplateProvider,
             objectMapper,
             runtimeRepository,
             (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
             (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(runtimeRepository.ensurePipelineDefinition(
-            eq("tenant-a"),
-            eq("job-process"),
-            eq("PROCESS"),
-            eq("worker-process"),
-            any(),
-            anyList()))
+    when(runtimeRepository.findPipelineDefinition(eq("tenant-a"), eq("job-process")))
         .thenReturn(10L);
     when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
@@ -139,7 +122,6 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter =
         new ProcessStepExecutionAdapter(
             processStageExecutor,
-            stepTemplateProvider,
             new ObjectMapper(),
             runtimeRepository,
             (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
@@ -163,7 +145,6 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter =
         new ProcessStepExecutionAdapter(
             processStageExecutor,
-            stepTemplateProvider,
             new ObjectMapper(),
             runtimeRepository,
             (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),

@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import java.time.Instant;
 import java.util.List;
@@ -53,15 +52,8 @@ public class PlatformFileRuntimeRepository {
     return pipelineDefinitions.loadChannelConfig(tenantId, channelCode);
   }
 
-  public Long ensurePipelineDefinition(
-      String tenantId,
-      String jobCode,
-      String pipelineType,
-      String workerGroup,
-      String description,
-      List<PipelineStepTemplate> defaultSteps) {
-    return pipelineDefinitions.ensurePipelineDefinition(
-        tenantId, jobCode, pipelineType, workerGroup, description, defaultSteps);
+  public Long findPipelineDefinition(String tenantId, String jobCode) {
+    return pipelineDefinitions.findPipelineDefinition(tenantId, jobCode);
   }
 
   public List<PipelineStepDefinition> loadPipelineSteps(Long pipelineDefinitionId) {

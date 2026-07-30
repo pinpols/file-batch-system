@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.exports.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -45,16 +44,6 @@ public class ExportStepExecutionAdapter
   @Override
   protected String pipelineType() {
     return ExportWorkerType.EXPORT;
-  }
-
-  @Override
-  protected String pipelineDescription() {
-    return "导出 pipeline";
-  }
-
-  @Override
-  protected List<PipelineStepTemplate> defaultPipelineSteps() {
-    return exportStageExecutor.defaultStepDefinitions();
   }
 
   @Override

@@ -1,14 +1,12 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
-import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
@@ -31,35 +29,22 @@ public class DispatchStepExecutionAdapter
     extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
 
   private final DispatchStageExecutor dispatchStageExecutor;
-  private final PipelineStepTemplateProvider stepTemplateProvider;
   private final ObjectMapper objectMapper;
 
   public DispatchStepExecutionAdapter(
       DispatchStageExecutor dispatchStageExecutor,
-      PipelineStepTemplateProvider stepTemplateProvider,
       ObjectMapper objectMapper,
       PlatformFileRuntimeRepository runtimeRepository,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     super(runtimeRepository, verifierHookProvider, compensationHookProvider);
     this.dispatchStageExecutor = dispatchStageExecutor;
-    this.stepTemplateProvider = stepTemplateProvider;
     this.objectMapper = objectMapper;
   }
 
   @Override
   protected String pipelineType() {
     return DispatchWorkerType.DISPATCH;
-  }
-
-  @Override
-  protected String pipelineDescription() {
-    return "分发 pipeline";
-  }
-
-  @Override
-  protected List<PipelineStepTemplate> defaultPipelineSteps() {
-    return stepTemplateProvider.defaultStepDefinitions();
   }
 
   @Override
