@@ -106,7 +106,8 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # 本地默认复用已显式提供的数据库密码；部署环境应单独设置 GRAFANA_ADMIN_PASSWORD。
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}}
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
@@ -140,7 +141,7 @@ services:
     container_name: batch-postgres-exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://${BATCH_PLATFORM_DB_USERNAME:-batch_user}:${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}@postgres-primary:5432/${BATCH_PLATFORM_DB_NAME:-batch_platform}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${BATCH_PLATFORM_DB_USERNAME:-batch_user}:${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}@postgres-primary:5432/${BATCH_PLATFORM_DB_NAME:-batch_platform}?sslmode=disable"
       # 挂自定义 query 暴露锁等待指标(pg_lock_waits_*),供 BatchPostgresLockWaitStuck 告警。
       PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
     volumes:

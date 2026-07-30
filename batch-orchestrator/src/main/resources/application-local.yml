@@ -10,9 +10,9 @@ spring:
     # 导致定时派发 tick 不触发（本地观察：SlaScheduler 会 tick，但 WaitingPartitionDispatchScheduler 不 tick）。
     lazy-initialization: false
   datasource:
-    url: jdbc:postgresql://localhost:15432/batch_platform
-    username: batch_user
-    password: batch_pass_123
+    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
+    password: ${BATCH_PLATFORM_DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
       # 本地联调：降低启动时连接创建数，减少与其他模块抢连接

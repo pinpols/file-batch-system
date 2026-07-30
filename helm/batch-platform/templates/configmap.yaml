@@ -36,6 +36,12 @@ data:
   BATCH_S3_ENDPOINT: {{ .Values.objectStorage.endpoint | quote }}
   BATCH_S3_BUCKET: {{ .Values.objectStorage.bucket | quote }}
   BATCH_S3_REGION: {{ .Values.objectStorage.region | default "" | quote }}
+  BATCH_ALERT_AM_EMIT_ENABLED: {{ (.Values.alertmanager).enabled | default false | quote }}
+  BATCH_ALERT_AM_EMIT_ENDPOINT: {{ (.Values.alertmanager).endpoint | default "" | quote }}
+  BATCH_CONSOLE_ALERTMANAGER_ENABLED: {{ ((.Values.alertmanager).console).enabled | default true | quote }}
+  BATCH_CONSOLE_ALERTMANAGER_TENANT_ID: {{ ((.Values.alertmanager).console).tenantId | default "system" | quote }}
+  BATCH_CONSOLE_ALERTMANAGER_SILENCE_ENABLED: {{ ((.Values.alertmanager).console).silenceEnabled | default false | quote }}
+  BATCH_CONSOLE_ALERTMANAGER_API_BASE_URL: {{ ((.Values.alertmanager).console).apiBaseUrl | default "" | quote }}
   BATCH_STORAGE_BACKEND: {{ (.Values.storage).backend | default "s3" | quote }}
   BATCH_STORAGE_BACKEND_CUTOVER_ID: {{ (.Values.storage).backendCutoverId | default "" | quote }}
   BATCH_STORAGE_FILESYSTEM_ROOT: {{ (.Values.storage).filesystemRoot | default "" | quote }}

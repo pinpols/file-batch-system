@@ -56,6 +56,13 @@ spring:
 
 batch:
   console:
+    alertmanager:
+      enabled: ${BATCH_CONSOLE_ALERTMANAGER_ENABLED:true}
+      tenant-id: ${BATCH_CONSOLE_ALERTMANAGER_TENANT_ID:system}
+      bearer-token: ${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN:}
+      silence:
+        enabled: ${BATCH_CONSOLE_ALERTMANAGER_SILENCE_ENABLED:true}
+        api-base-url: ${BATCH_CONSOLE_ALERTMANAGER_API_BASE_URL:}
     # 维护 / 降级模式开关。默认全部 false,生产灰度切换 / 紧急回滚时由 env 临时开启。
     # SOP: docs/runbook/maintenance-mode.md
     maintenance:
