@@ -52,6 +52,16 @@ objectStorage:
   bucket: "batch-prod"
   region: ""
 
+# Alertmanager 是可选外部依赖。未配置 endpoint 时保持关闭，避免容器内 localhost 误连。
+alertmanager:
+  enabled: false
+  endpoint: ""
+  console:
+    enabled: true
+    tenantId: "system"
+    silenceEnabled: false
+    apiBaseUrl: ""
+
 storage:
   backend: "s3"
   backendCutoverId: ""

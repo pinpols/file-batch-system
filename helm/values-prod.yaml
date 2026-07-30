@@ -46,6 +46,17 @@ objectStorage:
   endpoint: "http://minio.minio.svc.cluster.local:9000"
   bucket: "batch-prod"
 
+# Alertmanager 由集群外部提供时，在发布 overlay 中显式设置 endpoint 和 enabled。
+# 未配置时保持关闭，不允许回落到容器内 localhost。
+alertmanager:
+  enabled: false
+  endpoint: ""
+  console:
+    enabled: true
+    tenantId: "system"
+    silenceEnabled: false
+    apiBaseUrl: ""
+
 security:
   bypassMode: "false"
   enforceStrongSecrets: true

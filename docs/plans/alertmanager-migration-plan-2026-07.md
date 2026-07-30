@@ -230,8 +230,11 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
 ### 6.2 配置开关(仅回滚用,无灰度维度)
 
 新增 `AlertmanagerEmitProperties`(`prefix=batch.alert.am-emit`):
-- `enabled`(全局唯一开关;**合入即默认 true** —— 未上线,直接切,关掉即回滚);
+- `enabled`(全局开关;**默认关闭**，由生产 Helm overlay 或受管环境变量显式开启；关掉即回滚);
 - `endpoint` / `timeout-millis`(默认 2000)/ `resend-interval-seconds`(默认 60)。
+
+实现约束：endpoint 不再写入 Java 默认值。未注入 endpoint 时即使误开开关也不会访问本机或未知地址；
+本地 Compose 默认保持关闭，生产环境必须显式提供 Alertmanager endpoint。
 
 **不做** tenant/alert-type allowlist —— 没有存量流量需要灰度保护,回滚粒度就是全局开关。
 

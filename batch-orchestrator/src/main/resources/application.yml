@@ -52,6 +52,10 @@ mybatis:
 
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
+  alert:
+    am-emit:
+      enabled: ${BATCH_ALERT_AM_EMIT_ENABLED:false}
+      endpoint: ${BATCH_ALERT_AM_EMIT_ENDPOINT:}
   startup-self-check:
     enabled: true
     context-name: orchestrator

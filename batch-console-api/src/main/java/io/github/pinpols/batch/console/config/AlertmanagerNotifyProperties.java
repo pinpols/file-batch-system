@@ -45,8 +45,8 @@ public class AlertmanagerNotifyProperties {
     /** 是否启用 silence/close → AM 单向桥接。false = 关闭桥接(只改 fbs 状态)。 */
     private boolean enabled = true;
 
-    /** AM base URL(不含路径);桥接追加 {@code /api/v2/silences} 或 {@code /api/v2/alerts}。 */
-    private String apiBaseUrl = "http://localhost:9093";
+    /** AM base URL(不含路径);桥接追加 {@code /api/v2/silences} 或 {@code /api/v2/alerts}。由部署配置注入。 */
+    private String apiBaseUrl = "";
 
     /** silence/resolved 推送 HTTP 读超时(毫秒)。 */
     private long timeoutMillis = 2000L;

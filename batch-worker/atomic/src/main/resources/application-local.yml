@@ -6,9 +6,9 @@ spring:
     # 同 pipeline worker:关懒加载,保证 @KafkaListener container 启动期实例化 + 订阅 topic
     lazy-initialization: false
   datasource:
-    url: jdbc:postgresql://localhost:15432/batch_platform
-    username: batch_user
-    password: batch_pass_123
+    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
+    password: ${BATCH_PLATFORM_DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
   data:
     redis:
@@ -37,7 +37,7 @@ batch:
   security:
     bypass-mode: true
   orchestrator:
-    base-url: http://localhost:18082
+    base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
   worker:
     registry:
       fail-fast-on-startup: false
@@ -45,7 +45,7 @@ batch:
     lease:
       renew-interval-millis: 10000
     task-client:
-      base-url: http://localhost:18082
+      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
     atomic:
       worker-code: atomic-node-1
       worker-type: ATOMIC
@@ -78,7 +78,7 @@ batch:
         allowed-host-patterns: []
   datasource:
     business:
-      url: jdbc:postgresql://localhost:15432/batch_business
-      username: batch_user
-      password: batch_pass_123
+      url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
+      username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
+      password: ${BATCH_BUSINESS_DB_PASSWORD:}
       schema: biz
