@@ -1045,7 +1045,7 @@ trigger
   - 哪些 adapter 是平台官方认可的。
   - 每类 adapter 的安全能力和缺口。
 - `LOCAL` 已具备可选沙箱边界与 sidecar manifest:
-  - `batch.dispatch.local-sandbox-root` 配置后强制 `target_endpoint` 落在沙箱内。
+  - `batch.worker.dispatch.runtime.local-sandbox-root` 配置后强制 `target_endpoint` 落在沙箱内。
   - envelope 文件名会净化 path segment,并为 envelope 生成 `.chk` sidecar manifest。
 - `EMAIL` 已设置显式 JavaMail timeout:
   - `smtp_connection_timeout_millis`

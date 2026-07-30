@@ -38,10 +38,6 @@ public class TriggerInternalRestClient {
   private final Environment environment;
 
   /** 与 OrchestratorInternalRestClient 同源的保守超时;trigger 抖动时不让 Tomcat worker 永久阻塞。 */
-  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-
-  private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
-
   /** 构造一个新的 {@link RestClient},已绑定 baseUrl + internal-secret + 5s/30s 超时。 */
   public RestClient build() {
     String baseUrl = environment.resolvePlaceholders(triggerClientProperties.getBaseUrl());
@@ -54,8 +50,12 @@ public class TriggerInternalRestClient {
                 ClientHttpRequestFactoryBuilder.detect()
                     .build(
                         HttpClientSettings.defaults()
-                            .withConnectTimeout(CONNECT_TIMEOUT)
-                            .withReadTimeout(READ_TIMEOUT)));
+                            .withConnectTimeout(
+                                Duration.ofMillis(
+                                    triggerClientProperties.getConnectTimeoutMillis()))
+                            .withReadTimeout(
+                                Duration.ofMillis(
+                                    triggerClientProperties.getReadTimeoutMillis()))));
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }

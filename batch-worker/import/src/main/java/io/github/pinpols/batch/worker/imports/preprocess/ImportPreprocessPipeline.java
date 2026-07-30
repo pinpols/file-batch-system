@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -107,6 +108,15 @@ public final class ImportPreprocessPipeline {
 
   public static byte[] run(
       byte[] input, ImportPayload payload, Map<String, Object> template, boolean bypassMode) {
+    return run(input, payload, template, bypassMode, new WorkerImportPayloadProperties());
+  }
+
+  public static byte[] run(
+      byte[] input,
+      ImportPayload payload,
+      Map<String, Object> template,
+      boolean bypassMode,
+      WorkerImportPayloadProperties properties) {
     try {
       if (input == null) {
         input = new byte[0];
@@ -128,10 +138,11 @@ public final class ImportPreprocessPipeline {
           continue;
         }
         switch (type.toUpperCase(Locale.ROOT)) {
-          case "UNZIP" -> current = unzip(current, step, payload);
-          case "GUNZIP" -> current = gunzip(current);
-          case "UNTAR" -> current = untar(current, step, payload);
-          case "UNTAR_GZ" -> current = untar(gunzip(current), step, payload);
+          case "UNZIP" -> current = unzip(current, step, payload, properties);
+          case "GUNZIP" -> current = gunzip(current, properties);
+          case "UNTAR" -> current = untar(current, step, payload, properties);
+          case "UNTAR_GZ" ->
+              current = untar(gunzip(current, properties), step, payload, properties);
           case "AES_GCM_DECRYPT" -> {
             if (!bypassMode) {
               current = aesGcmDecrypt(current, step, payload);
@@ -223,7 +234,11 @@ public final class ImportPreprocessPipeline {
     return List.of();
   }
 
-  private static byte[] unzip(byte[] input, Map<String, Object> step, ImportPayload payload) {
+  private static byte[] unzip(
+      byte[] input,
+      Map<String, Object> step,
+      ImportPayload payload,
+      WorkerImportPayloadProperties properties) {
     String entryName = stringProp(step, "entryName");
     if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
       Object v = payload.metadata().get("zipEntryName");
@@ -240,7 +255,7 @@ public final class ImportPreprocessPipeline {
         if (Texts.hasText(entryName) && !entryName.equals(entry.getName())) {
           continue;
         }
-        return boundedReadAll(zis, input.length, "UNZIP");
+        return boundedReadAll(zis, input.length, "UNZIP", properties);
       }
     } catch (IOException ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_UNZIP_FAILED", ex.getMessage(), ex);
@@ -249,16 +264,20 @@ public final class ImportPreprocessPipeline {
         "IMPORT_PREPROCESS_UNZIP_EMPTY", "zip archive has no usable entry");
   }
 
-  private static byte[] gunzip(byte[] input) {
+  private static byte[] gunzip(byte[] input, WorkerImportPayloadProperties properties) {
     try (GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(input))) {
-      return boundedReadAll(gis, input.length, "GUNZIP");
+      return boundedReadAll(gis, input.length, "GUNZIP", properties);
     } catch (IOException ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_GUNZIP_FAILED", ex.getMessage(), ex);
     }
   }
 
   /** 解 tar:取 entryName 指定条目,缺省首个普通文件;复用 boundedReadAll 防失败弹。 */
-  private static byte[] untar(byte[] input, Map<String, Object> step, ImportPayload payload) {
+  private static byte[] untar(
+      byte[] input,
+      Map<String, Object> step,
+      ImportPayload payload,
+      WorkerImportPayloadProperties properties) {
     String entryName = stringProp(step, "entryName");
     if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
       Object v = payload.metadata().get("tarEntryName");
@@ -275,7 +294,7 @@ public final class ImportPreprocessPipeline {
         if (Texts.hasText(entryName) && !entryName.equals(entry.getName())) {
           continue;
         }
-        return boundedReadAll(tis, input.length, "UNTAR");
+        return boundedReadAll(tis, input.length, "UNTAR", properties);
       }
     } catch (IOException ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_UNTAR_FAILED", ex.getMessage(), ex);
@@ -286,21 +305,17 @@ public final class ImportPreprocessPipeline {
 
   // ── 解压尺寸闸（防 zip bomb / 压缩失败弹）────────────────────────────────
   // 解压后字节同时受两个上限制约，取最小值：
-  //   1) 绝对上限 MAX_DECOMPRESS_BYTES（默认 256 MiB，防单文件过大拖死堆）
-  //   2) 相对输入的膨胀倍数 MAX_DECOMPRESS_RATIO（默认 50x，典型文本压缩 3-10x，50x 就是异常）
+  //   1) 绝对上限 batch.worker.import.max-decompress-bytes（默认 256 MiB，防单文件过大拖死堆）
+  //   2) 相对输入的膨胀倍数 batch.worker.import.max-decompress-ratio（默认 50x，典型文本压缩 3-10x）
   // 超过即抛 IMPORT_PREPROCESS_DECOMPRESS_TOO_LARGE，文件拒收而不是静默把堆写爆。
   //
   // 2026-05-03 ⚠1: 默认从 1 GiB 下调到 256 MiB. 之前 1 GiB × 6 并发 task = 6 GiB 堆压, 真实业务大文件
-  // 需要更大上限可通过 -Dbatch.worker.import.max-decompress-bytes 显式提高.
-  private static final long MAX_DECOMPRESS_BYTES =
-      Long.getLong("batch.worker.import.max-decompress-bytes", 256L * 1024 * 1024);
-  private static final int MAX_DECOMPRESS_RATIO =
-      Integer.getInteger("batch.worker.import.max-decompress-ratio", 50);
-
-  private static byte[] boundedReadAll(InputStream in, int inputLen, String stepLabel)
+  // 需要更大上限可通过 Spring 配置或环境变量显式提高。
+  private static byte[] boundedReadAll(
+      InputStream in, int inputLen, String stepLabel, WorkerImportPayloadProperties properties)
       throws IOException {
-    long capRatio = (long) Math.max(inputLen, 1) * MAX_DECOMPRESS_RATIO;
-    long cap = Math.min(MAX_DECOMPRESS_BYTES, capRatio);
+    long capRatio = (long) Math.max(inputLen, 1) * properties.getMaxDecompressRatio();
+    long cap = Math.min(properties.getMaxDecompressBytes(), capRatio);
     ByteArrayOutputStream baos = new ByteArrayOutputStream(Math.min(inputLen * 4, 1024 * 1024));
     byte[] buf = new byte[8192];
     long total = 0;
@@ -318,9 +333,9 @@ public final class ImportPreprocessPipeline {
                 + " (input="
                 + inputLen
                 + ", ratio="
-                + MAX_DECOMPRESS_RATIO
+                + properties.getMaxDecompressRatio()
                 + ", absMax="
-                + MAX_DECOMPRESS_BYTES
+                + properties.getMaxDecompressBytes()
                 + ")");
       }
       baos.write(buf, 0, n);

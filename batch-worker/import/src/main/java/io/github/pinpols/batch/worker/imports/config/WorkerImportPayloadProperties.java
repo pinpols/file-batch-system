@@ -20,4 +20,19 @@ public class WorkerImportPayloadProperties {
    * 80% 给 JVM / GC / 其它业务。
    */
   private double payloadHeapRatio = 0.2;
+
+  /** Excel 单文件字节上限。 */
+  private long maxExcelBytes = 200L * 1024 * 1024;
+
+  /** 预处理结果超过该阈值时落临时文件，避免重复堆内副本。 */
+  private int preprocessSpoolBytes = 16 * 1024 * 1024;
+
+  /** 从对象存储整块读取时的单文件字节上限。 */
+  private long maxObjectBytes = 512L * 1024 * 1024;
+
+  /** 解压后的绝对字节上限。 */
+  private long maxDecompressBytes = 256L * 1024 * 1024;
+
+  /** 解压相对输入大小的最大膨胀倍数。 */
+  private int maxDecompressRatio = 50;
 }

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,13 +17,22 @@ import java.util.UUID;
  */
 final class LocalOutboxDispatchSupport {
 
-  private static final String LOCAL_SANDBOX_ROOT_PROP = "batch.dispatch.local-sandbox-root";
   private static final String DEFAULT_CHANNEL_CODE = "channel";
+  private static final DispatchRuntimeProperties DEFAULT_RUNTIME_PROPERTIES =
+      new DispatchRuntimeProperties();
 
   private LocalOutboxDispatchSupport() {}
 
   static DispatchResult writeFilesystemEnvelope(
       DispatchCommand command, boolean transportStub, String stubDetail) {
+    return writeFilesystemEnvelope(command, transportStub, stubDetail, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchResult writeFilesystemEnvelope(
+      DispatchCommand command,
+      boolean transportStub,
+      String stubDetail,
+      DispatchRuntimeProperties properties) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "NONE"));
@@ -47,7 +57,7 @@ final class LocalOutboxDispatchSupport {
       if (endpoint == null || endpoint.isBlank()) {
         endpoint = System.getProperty("java.io.tmpdir") + "/batch-dispatch-outbox";
       }
-      Path directory = resolveLocalDirectory(endpoint);
+      Path directory = resolveLocalDirectory(endpoint, properties);
       String channelCode =
           sanitizeFileSegment(
               String.valueOf(channelConfig.getOrDefault("channel_code", DEFAULT_CHANNEL_CODE)));
@@ -108,11 +118,12 @@ final class LocalOutboxDispatchSupport {
     }
   }
 
-  private static Path resolveLocalDirectory(String endpoint) throws Exception {
+  private static Path resolveLocalDirectory(String endpoint, DispatchRuntimeProperties properties)
+      throws Exception {
     Path directory = Path.of(endpoint).toAbsolutePath().normalize();
     Files.createDirectories(directory);
     Path realDirectory = directory.toRealPath();
-    String sandboxRootRaw = System.getProperty(LOCAL_SANDBOX_ROOT_PROP);
+    String sandboxRootRaw = properties.getLocalSandboxRoot();
     if (Texts.hasText(sandboxRootRaw)) {
       Path sandboxRoot = Path.of(sandboxRootRaw).toAbsolutePath().normalize().toRealPath();
       if (!realDirectory.startsWith(sandboxRoot)) {

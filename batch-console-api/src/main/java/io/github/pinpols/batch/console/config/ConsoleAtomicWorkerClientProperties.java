@@ -22,4 +22,10 @@ public class ConsoleAtomicWorkerClientProperties {
 
   /** atomic worker 的 base URL(含 scheme + host + port),用于拼接 {@code /actuator/atomicruntime}。 */
   private String baseUrl;
+
+  /** 建立连接超时，单位毫秒。 */
+  private long connectTimeoutMillis = 5000L;
+
+  /** 读取响应超时，单位毫秒。 */
+  private long readTimeoutMillis = 10000L;
 }

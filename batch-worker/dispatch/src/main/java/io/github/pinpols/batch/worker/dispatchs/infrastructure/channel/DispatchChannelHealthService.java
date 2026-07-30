@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -29,7 +30,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.event.ContextClosedEvent;
@@ -45,7 +45,6 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class DispatchChannelHealthService {
 
   // 单次探针查询上限，防止渠道数量过大时探针调度器阻塞 DB 连接池
@@ -60,6 +59,7 @@ public class DispatchChannelHealthService {
   private final DispatchChannelHealthRepository repository;
   private final DispatchChannelHealthProperties properties;
   private final DispatchCircuitBreakerProperties circuitBreakerProperties;
+  private final DispatchRuntimeProperties runtimeProperties;
   private final S3StorageProperties s3StorageProperties;
   private final BatchSecurityProperties securityProperties;
   private final ObjectMapper objectMapper;
@@ -71,6 +71,48 @@ public class DispatchChannelHealthService {
   private final AtomicLong probeSuccessCount = new AtomicLong();
   private final AtomicLong probeFailureCount = new AtomicLong();
   private ExecutorService probeExecutor;
+
+  public DispatchChannelHealthService(
+      DispatchChannelHealthRepository repository,
+      DispatchChannelHealthProperties properties,
+      DispatchCircuitBreakerProperties circuitBreakerProperties,
+      S3StorageProperties s3StorageProperties,
+      BatchSecurityProperties securityProperties,
+      ObjectMapper objectMapper,
+      MeterRegistry meterRegistry,
+      ObjectProvider<BatchObjectStore> objectStoreProvider) {
+    this(
+        repository,
+        properties,
+        circuitBreakerProperties,
+        new DispatchRuntimeProperties(),
+        s3StorageProperties,
+        securityProperties,
+        objectMapper,
+        meterRegistry,
+        objectStoreProvider);
+  }
+
+  public DispatchChannelHealthService(
+      DispatchChannelHealthRepository repository,
+      DispatchChannelHealthProperties properties,
+      DispatchCircuitBreakerProperties circuitBreakerProperties,
+      DispatchRuntimeProperties runtimeProperties,
+      S3StorageProperties s3StorageProperties,
+      BatchSecurityProperties securityProperties,
+      ObjectMapper objectMapper,
+      MeterRegistry meterRegistry,
+      ObjectProvider<BatchObjectStore> objectStoreProvider) {
+    this.repository = repository;
+    this.properties = properties;
+    this.circuitBreakerProperties = circuitBreakerProperties;
+    this.runtimeProperties = runtimeProperties;
+    this.s3StorageProperties = s3StorageProperties;
+    this.securityProperties = securityProperties;
+    this.objectMapper = objectMapper;
+    this.meterRegistry = meterRegistry;
+    this.objectStoreProvider = objectStoreProvider;
+  }
 
   @PostConstruct
   void init() {
@@ -342,7 +384,11 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelProbeResult result =
         RemoteFilesystemDispatchSupport.probeChannel(
-            channelConfig, s3StorageProperties, objectStore, !securityProperties.isBypassMode());
+            channelConfig,
+            s3StorageProperties,
+            objectStore,
+            !securityProperties.isBypassMode(),
+            runtimeProperties);
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();

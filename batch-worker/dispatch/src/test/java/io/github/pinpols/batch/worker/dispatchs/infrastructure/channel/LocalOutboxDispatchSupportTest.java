@@ -2,33 +2,27 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class LocalOutboxDispatchSupportTest {
-
-  private static final String SANDBOX_PROP = "batch.dispatch.local-sandbox-root";
-
-  @AfterEach
-  void tearDown() {
-    System.clearProperty(SANDBOX_PROP);
-  }
 
   @Test
   void shouldWriteEnvelopeAndSidecarManifestInsideSandbox(@TempDir Path tempDir) throws Exception {
     Path sandbox = tempDir.resolve("sandbox");
     Path target = sandbox.resolve("outbox");
     Files.createDirectories(sandbox);
-    System.setProperty(SANDBOX_PROP, sandbox.toString());
+    DispatchRuntimeProperties properties = runtimeProperties(sandbox);
 
     DispatchResult result =
-        LocalOutboxDispatchSupport.writeFilesystemEnvelope(command(target), false, null);
+        LocalOutboxDispatchSupport.writeFilesystemEnvelope(
+            command(target), false, null, properties);
 
     assertThat(result.success()).isTrue();
     assertThat(result.manifestRef()).isNotNull();
@@ -49,13 +43,20 @@ class LocalOutboxDispatchSupportTest {
     Path outside = tempDir.resolve("outside");
     Files.createDirectories(sandbox);
     Files.createDirectories(outside);
-    System.setProperty(SANDBOX_PROP, sandbox.toString());
+    DispatchRuntimeProperties properties = runtimeProperties(sandbox);
 
     DispatchResult result =
-        LocalOutboxDispatchSupport.writeFilesystemEnvelope(command(outside), false, null);
+        LocalOutboxDispatchSupport.writeFilesystemEnvelope(
+            command(outside), false, null, properties);
 
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("escapes sandbox root");
+  }
+
+  private static DispatchRuntimeProperties runtimeProperties(Path sandbox) {
+    DispatchRuntimeProperties properties = new DispatchRuntimeProperties();
+    properties.setLocalSandboxRoot(sandbox.toString());
+    return properties;
   }
 
   private static DispatchCommand command(Path target) {

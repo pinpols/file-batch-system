@@ -77,7 +77,9 @@ final class DispatchChannelTypePolicy {
                 DispatchChannelSafetyAttribute.SIDECAR_MANIFEST),
             "no remote credential",
             READBACK_NONE,
-            Set.of("sandbox root is optional unless batch.dispatch.local-sandbox-root is set")));
+            Set.of(
+                "sandbox root is optional unless batch.worker.dispatch.runtime.local-sandbox-root"
+                    + " is set")));
     profiles.put(
         "NAS",
         profile(
@@ -90,7 +92,9 @@ final class DispatchChannelTypePolicy {
                 DispatchChannelSafetyAttribute.SIDECAR_MANIFEST),
             "filesystem permissions are external to the worker",
             READBACK_NONE,
-            Set.of("sandbox root is optional unless batch.dispatch.nas-sandbox-root is set")));
+            Set.of(
+                "sandbox root is optional unless batch.worker.dispatch.runtime.nas-sandbox-root is"
+                    + " set")));
     profiles.put(
         "OSS",
         profile(

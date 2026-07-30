@@ -1,10 +1,17 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import org.springframework.stereotype.Component;
 
 /** LOCAL 渠道分发适配器：将分发信封写入 {@code target_endpoint} 指定目录（或系统临时 outbox 目录）。 */
 @Component
 public class LocalDispatchChannelAdapter implements DispatchChannelAdapter {
+
+  private final DispatchRuntimeProperties runtimeProperties;
+
+  public LocalDispatchChannelAdapter(DispatchRuntimeProperties runtimeProperties) {
+    this.runtimeProperties = runtimeProperties;
+  }
 
   @Override
   public boolean supports(String channelType) {
@@ -13,6 +20,7 @@ public class LocalDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Override
   public DispatchResult dispatch(DispatchCommand command) {
-    return LocalOutboxDispatchSupport.writeFilesystemEnvelope(command, false, null);
+    return LocalOutboxDispatchSupport.writeFilesystemEnvelope(
+        command, false, null, runtimeProperties);
   }
 }

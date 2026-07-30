@@ -8,4 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ConsoleTriggerClientProperties {
 
   private String baseUrl = "";
+
+  private long connectTimeoutMillis = 5000L;
+
+  private long readTimeoutMillis = 30000L;
 }
