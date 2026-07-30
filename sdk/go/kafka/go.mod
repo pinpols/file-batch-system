@@ -7,7 +7,7 @@
 // packages directly from source.
 module github.com/pinpols/file-batch-system/sdk/go/kafka
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/pinpols/file-batch-system/sdk/go v0.0.0-00010101000000-000000000000
@@ -20,7 +20,7 @@ require (
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 )
 
 replace github.com/pinpols/file-batch-system/sdk/go => ../

@@ -2,11 +2,17 @@ package io.github.pinpols.batch.e2e.support;
 
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Seeds job_definition + workflow_definition + trigger_request so {@code LaunchService#launch} runs
+ * Seeds the configured job/pipeline/workflow/request records so {@code LaunchService#launch} runs
  * scheduling against workers registered at runtime by worker loops (same tenant / worker group).
+ *
+ * <p>The pipeline definition is deliberately provisioned by the fixture, representing the
+ * Console/admin configuration step. Worker execution must remain read-only for platform
+ * definitions.
  */
 public final class E2eScenarioFixture {
 
@@ -86,8 +92,8 @@ public final class E2eScenarioFixture {
   }
 
   /**
-   * Inserts job + workflow + trigger. No {@code worker_registry} row — the worker process registers
-   * on startup.
+   * Inserts job + pipeline definition + workflow + trigger. No {@code worker_registry} row — the
+   * worker process registers on startup.
    */
   public static LaunchSeed prepareLaunchWithoutPreSeededWorker(
       JdbcTemplate jdbc,
@@ -138,6 +144,8 @@ public final class E2eScenarioFixture {
             spec.retryPolicy(),
             spec.retryMaxCount());
 
+    provisionPipelineDefinition(spec.jdbc(), spec.tenantId(), jobCode, spec.workerGroup());
+
     spec.jdbc()
         .update(
             """
@@ -163,4 +171,86 @@ public final class E2eScenarioFixture {
 
     return new LaunchSeed(jobCode, requestId, dedupKey);
   }
+
+  /**
+   * Provisions the pipeline definition owned by the Console/admin configuration path. Custom E2E
+   * scenarios can reuse this when they seed their own job/workflow records instead of calling the
+   * standard launch fixture.
+   */
+  public static void provisionPipelineDefinition(
+      JdbcTemplate jdbc, String tenantId, String jobCode, String workerGroup) {
+    String pipelineType = CodeNormalizer.toUpperOrNull(workerGroup);
+    if (pipelineType == null || !List.of("IMPORT", "EXPORT", "DISPATCH").contains(pipelineType)) {
+      // PROCESS tests provide custom step definitions because their compute plugin parameters are
+      // part of the scenario. ATOMIC has no pipeline stage definition.
+      return;
+    }
+
+    Long pipelineDefinitionId =
+        jdbc.queryForObject(
+            """
+            insert into batch.pipeline_definition (
+                tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
+                version, enabled
+            ) values (?, ?, ?, ?, 'E2E', ?, 1, true)
+            returning id
+            """,
+            Long.class,
+            tenantId,
+            jobCode,
+            "e2e " + pipelineType.toLowerCase(Locale.ROOT) + " pipeline",
+            pipelineType,
+            pipelineType);
+
+    List<PipelineStepSeed> steps =
+        switch (pipelineType) {
+          case "IMPORT" ->
+              List.of(
+                  step("IMPORT_RECEIVE", "RECEIVE", "{}"),
+                  step("IMPORT_PREPROCESS", "PREPROCESS", "{}"),
+                  step("IMPORT_PARSE", "PARSE", "{}"),
+                  step("IMPORT_VALIDATE", "VALIDATE", "{}"),
+                  step("IMPORT_LOAD", "LOAD", "{}"),
+                  step("IMPORT_FEEDBACK", "FEEDBACK", "{}"));
+          case "EXPORT" ->
+              List.of(
+                  step("EXPORT_PREPARE", "PREPARE", "{}"),
+                  step("EXPORT_GENERATE", "GENERATE", "{}"),
+                  step("EXPORT_STORE", "STORE", "{}"),
+                  step("EXPORT_REGISTER", "REGISTER", "{}"),
+                  step("EXPORT_COMPLETE", "COMPLETE", "{}"));
+          case "DISPATCH" ->
+              List.of(
+                  step("DISPATCH_PREPARE", "PREPARE", "{}"),
+                  step("DISPATCH_DISPATCH", "DISPATCH", "{}"),
+                  step("DISPATCH_ACK", "ACK", "{\"onSuccessNextStageCode\":\"COMPLETE\"}"),
+                  step("DISPATCH_RETRY", "RETRY", "{\"onFailureNextStageCode\":\"COMPENSATE\"}"),
+                  step("DISPATCH_COMPENSATE", "COMPENSATE", "{\"terminalOnSuccess\":true}"),
+                  step("DISPATCH_COMPLETE", "COMPLETE", "{\"terminalOnSuccess\":true}"));
+          default -> List.of();
+        };
+    for (int i = 0; i < steps.size(); i++) {
+      PipelineStepSeed step = steps.get(i);
+      jdbc.update(
+          """
+          insert into batch.pipeline_step_definition (
+              pipeline_definition_id, step_code, step_name, stage_code, step_order,
+              impl_code, step_params, timeout_seconds, retry_policy, retry_max_count, enabled
+          ) values (?, ?, ?, ?, ?, ?, ?::jsonb, 0, 'NONE', 0, true)
+          """,
+          pipelineDefinitionId,
+          step.stepCode(),
+          step.stepCode(),
+          step.stageCode(),
+          i + 1,
+          step.stepCode(),
+          step.stepParamsJson());
+    }
+  }
+
+  private static PipelineStepSeed step(String stepCode, String stageCode, String stepParamsJson) {
+    return new PipelineStepSeed(stepCode, stageCode, stepParamsJson);
+  }
+
+  private record PipelineStepSeed(String stepCode, String stageCode, String stepParamsJson) {}
 }
