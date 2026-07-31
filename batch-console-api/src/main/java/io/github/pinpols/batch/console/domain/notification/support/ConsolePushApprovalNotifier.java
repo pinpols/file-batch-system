@@ -44,13 +44,11 @@ public class ConsolePushApprovalNotifier {
               + " false)");
       return;
     }
-    scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "push-approval-notifier");
-              t.setDaemon(true);
-              return t;
-            });
+    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "push-approval-notifier");
+      t.setDaemon(true);
+      return t;
+    });
     long intervalMillis = properties.getApprovalNotify().getPollIntervalMillis();
     scheduler.scheduleWithFixedDelay(
         this::pollSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
@@ -101,10 +99,9 @@ public class ConsolePushApprovalNotifier {
     if (stopping.get()) {
       return;
     }
-    List<PendingApprovalNotification> pending =
-        notificationMapper.findPending(
-            properties.getApprovalNotify().getLookbackMinutes(),
-            properties.getApprovalNotify().getBatchSize());
+    List<PendingApprovalNotification> pending = notificationMapper.findPending(
+        properties.getApprovalNotify().getLookbackMinutes(),
+        properties.getApprovalNotify().getBatchSize());
     if (pending.isEmpty()) {
       return;
     }
@@ -130,11 +127,9 @@ public class ConsolePushApprovalNotifier {
     String title = String.format("%s 申请%s", typeLabel, statusLabel);
     String reason =
         "REJECTED".equals(p.getApprovalStatus()) ? p.getRejectionReason() : p.getApprovalReason();
-    String body =
-        reason == null || reason.isBlank()
-            ? String.format("approver=%s · %s", nullToDash(p.getApproverId()), p.getApprovalNo())
-            : String.format(
-                "approver=%s · %s", nullToDash(p.getApproverId()), truncate(reason, 80));
+    String body = reason == null || reason.isBlank()
+        ? String.format("approver=%s · %s", nullToDash(p.getApproverId()), p.getApprovalNo())
+        : String.format("approver=%s · %s", nullToDash(p.getApproverId()), truncate(reason, 80));
     String tag = "approval-" + p.getApprovalNo();
     // 前端 /m/approvals 是列表页;带 ?id 让列表页打开后高亮/滚动到目标条。
     // 如果未来 FE 加了详情页 /m/approvals/:no,把这里改成 path 段即可。

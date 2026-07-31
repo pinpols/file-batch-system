@@ -103,18 +103,16 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
                 + spec.table());
       }
       if (!Texts.hasText(runScope.runValue())) {
-        return CompensationResult.skipped(
-            "run-identifier column '"
-                + runScope.runColumn()
-                + "' resolved to blank value at compensation time; cannot scope reverse — SKIPPED");
+        return CompensationResult.skipped("run-identifier column '"
+            + runScope.runColumn()
+            + "' resolved to blank value at compensation time; cannot scope reverse — SKIPPED");
       }
 
       // 强校验所有进 SQL 的标识符(表名来自模板,必须校验白名单 + 正则)。
       JdbcMappedSqlValidator.requireInAllowlist(spec.schema(), allowedSchemas(spec));
-      String fqTable =
-          JdbcMappedSqlValidator.quotePg(spec.schema())
-              + "."
-              + JdbcMappedSqlValidator.quotePg(spec.table());
+      String fqTable = JdbcMappedSqlValidator.quotePg(spec.schema())
+          + "."
+          + JdbcMappedSqlValidator.quotePg(spec.table());
       String tenantCol = JdbcMappedSqlValidator.quotePg(spec.tenantColumn());
       String runCol = JdbcMappedSqlValidator.quotePg(runScope.runColumn());
 
@@ -122,26 +120,23 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
       String deleteSql =
           "DELETE FROM " + fqTable + " WHERE " + tenantCol + " = ? AND " + runCol + " = ?";
 
-      Integer deleted =
-          txTemplate.execute(
-              status -> {
-                RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-                return jdbcTemplate.update(deleteSql, tenantId, runScope.runValue());
-              });
+      Integer deleted = txTemplate.execute(status -> {
+        RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+        return jdbcTemplate.update(deleteSql, tenantId, runScope.runValue());
+      });
       long reversed = deleted == null ? 0L : deleted;
-      String detail =
-          "reversed import rows: table="
-              + spec.schema()
-              + "."
-              + spec.table()
-              + ", where "
-              + spec.tenantColumn()
-              + "=<tenant> AND "
-              + runScope.runColumn()
-              + "="
-              + runScope.runValue()
-              + ", deletedRows="
-              + reversed;
+      String detail = "reversed import rows: table="
+          + spec.schema()
+          + "."
+          + spec.table()
+          + ", where "
+          + spec.tenantColumn()
+          + "=<tenant> AND "
+          + runScope.runColumn()
+          + "="
+          + runScope.runValue()
+          + ", deletedRows="
+          + reversed;
       log.info(
           "import compensation reversed rows: tenantId={}, pipelineInstanceId={}, table={}.{},"
               + " runColumn={}, runValue={}, deletedRows={}",

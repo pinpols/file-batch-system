@@ -40,12 +40,11 @@ class ConsoleClusterDiagnosticControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleClusterDiagnosticController(diagnosticService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleClusterDiagnosticController(diagnosticService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -53,13 +52,12 @@ class ConsoleClusterDiagnosticControllerTest {
     // 键与真实 ConsoleClusterDiagnosticService.loadDiagnose
     // 输出一致：shedLock/workers/outbox/terminalChildren。
     when(diagnosticService.diagnose("t1"))
-        .thenReturn(
-            Map.of(
-                "shedLock", Map.of("totalLocks", 2, "activeLocks", 1L, "locks", List.of()),
-                "workers", Map.of("onlineWorkers", 3L, "healthy", true, "workerGroups", List.of()),
-                "outbox", Map.of("pendingEvents", 0L, "healthy", true, "deliveryStats", List.of()),
-                "terminalChildren",
-                    Map.of("terminalInstancesWithActiveChildren", 0L, "healthy", true)));
+        .thenReturn(Map.of(
+            "shedLock", Map.of("totalLocks", 2, "activeLocks", 1L, "locks", List.of()),
+            "workers", Map.of("onlineWorkers", 3L, "healthy", true, "workerGroups", List.of()),
+            "outbox", Map.of("pendingEvents", 0L, "healthy", true, "deliveryStats", List.of()),
+            "terminalChildren",
+                Map.of("terminalInstancesWithActiveChildren", 0L, "healthy", true)));
 
     mockMvc
         .perform(get("/api/console/ops/cluster-diagnostic").param("tenantId", "t1"))
@@ -68,8 +66,8 @@ class ConsoleClusterDiagnosticControllerTest {
         .andExpect(jsonPath("$.data.shedLock.totalLocks").value(2))
         .andExpect(jsonPath("$.data.workers.onlineWorkers").value(3))
         .andExpect(jsonPath("$.data.outbox.healthy").value(true))
-        .andExpect(
-            jsonPath("$.data.terminalChildren.terminalInstancesWithActiveChildren").value(0));
+        .andExpect(jsonPath("$.data.terminalChildren.terminalInstancesWithActiveChildren")
+            .value(0));
   }
 
   @Test

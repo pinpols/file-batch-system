@@ -43,11 +43,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class JobLifecycleMetricsRecorder {
 
   /** 失败类终态:这些状态要额外打 {@code batch.orchestrator.job.failure.total} + error_code。 */
-  private static final Set<String> FAILED_TERMINAL_STATUSES =
-      Set.of(
-          JobInstanceStatus.FAILED.code(),
-          JobInstanceStatus.PARTIAL_FAILED.code(),
-          JobInstanceStatus.FAILED_DRY_RUN.code());
+  private static final Set<String> FAILED_TERMINAL_STATUSES = Set.of(
+      JobInstanceStatus.FAILED.code(),
+      JobInstanceStatus.PARTIAL_FAILED.code(),
+      JobInstanceStatus.FAILED_DRY_RUN.code());
 
   private final JobInstanceMapper jobInstanceMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
@@ -66,39 +65,36 @@ public class JobLifecycleMetricsRecorder {
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
       return;
     }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            try {
-              JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, jobInstanceId);
-              if (instance == null || instance.getCreatedAt() == null) {
-                return;
-              }
-              Instant resolvedFinished =
-                  finishedAt != null ? finishedAt : BatchDateTimeSupport.utcNow();
-              Duration duration = Duration.between(instance.getCreatedAt(), resolvedFinished);
-              // ADR-026:dry_run 维度切分指标 — Boolean 字段可能为 null,缺省按 false(非演练)处理
-              boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
-              String jobType = resolveJobType(instance);
-              jobLifecycleMetrics.recordCompletion(
-                  tenantId, jobType, terminalStatus, dryRun, duration);
-              // P0 (review 2026-05-21): 失败类终态补打 JOB_FAILURE_TOTAL + error_code,
-              // 否则 batch.orchestrator.job.failure.total 永久为 0,error_code 分桶报警失效。
-              if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
-                jobLifecycleMetrics.recordFailure(
-                    tenantId, jobType, resolveErrorCode(instance), dryRun);
-              }
-            } catch (RuntimeException ex) {
-              log.warn(
-                  "record job lifecycle metrics failed after commit:"
-                      + " tenantId={} jobInstanceId={}",
-                  tenantId,
-                  jobInstanceId,
-                  ex);
-            }
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        try {
+          JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, jobInstanceId);
+          if (instance == null || instance.getCreatedAt() == null) {
+            return;
           }
-        });
+          Instant resolvedFinished =
+              finishedAt != null ? finishedAt : BatchDateTimeSupport.utcNow();
+          Duration duration = Duration.between(instance.getCreatedAt(), resolvedFinished);
+          // ADR-026:dry_run 维度切分指标 — Boolean 字段可能为 null,缺省按 false(非演练)处理
+          boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
+          String jobType = resolveJobType(instance);
+          jobLifecycleMetrics.recordCompletion(tenantId, jobType, terminalStatus, dryRun, duration);
+          // P0 (review 2026-05-21): 失败类终态补打 JOB_FAILURE_TOTAL + error_code,
+          // 否则 batch.orchestrator.job.failure.total 永久为 0,error_code 分桶报警失效。
+          if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
+            jobLifecycleMetrics.recordFailure(
+                tenantId, jobType, resolveErrorCode(instance), dryRun);
+          }
+        } catch (RuntimeException ex) {
+          log.warn(
+              "record job lifecycle metrics failed after commit:" + " tenantId={} jobInstanceId={}",
+              tenantId,
+              jobInstanceId,
+              ex);
+        }
+      }
+    });
   }
 
   /**
@@ -115,7 +111,9 @@ public class JobLifecycleMetricsRecorder {
       return "unknown";
     }
     JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
-    return definition == null || definition.jobType() == null || definition.jobType().isBlank()
+    return definition == null
+            || definition.jobType() == null
+            || definition.jobType().isBlank()
         ? "unknown"
         : definition.jobType();
   }

@@ -65,9 +65,8 @@ public class EncryptingObjectStore implements BatchObjectStore {
           "encrypted object store put exceeds in-memory encryption limit: bucket=%s, key=%s, size=%d, limit=%d"
               .formatted(bucket, key, size, maxInMemoryEncryptBytes));
     }
-    ExactSizeInputStream bounded =
-        ExactSizeInputStream.exactAndBounded(
-            in, "encrypted", bucket, key, size, maxInMemoryEncryptBytes);
+    ExactSizeInputStream bounded = ExactSizeInputStream.exactAndBounded(
+        in, "encrypted", bucket, key, size, maxInMemoryEncryptBytes);
     // BATCHENC 加密产物体积与明文不等长（含 magic + header + GCM tag），且 InputStream 路径不易预先知道密文长度。
     // 此处先全量加密到内存缓冲再以确切 size 写入 delegate；明文 ≤ 几十 MB 场景（export / dispatch 错误集等）足够，
     // 与现有 cryptoService.encrypt(byte[]) 范式保持一致。

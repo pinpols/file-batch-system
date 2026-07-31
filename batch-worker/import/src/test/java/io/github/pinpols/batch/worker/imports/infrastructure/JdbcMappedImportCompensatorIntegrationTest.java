@@ -28,12 +28,12 @@ class JdbcMappedImportCompensatorIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-          .withDatabaseName("batch_business")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123")
-          .withUrlParam("sslmode", "disable");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse(TestContainerImages.POSTGRES))
+      .withDatabaseName("batch_business")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123")
+      .withUrlParam("sslmode", "disable");
 
   private DriverManagerDataSource dataSource;
   private JdbcTemplate jdbcTemplate;
@@ -52,8 +52,7 @@ class JdbcMappedImportCompensatorIntegrationTest {
 
     jdbcTemplate.execute("DROP SCHEMA IF EXISTS biz CASCADE");
     jdbcTemplate.execute("CREATE SCHEMA biz");
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         CREATE TABLE biz.import_customer (
           tenant_id text NOT NULL,
           source_batch_no text NOT NULL,
@@ -124,12 +123,11 @@ class JdbcMappedImportCompensatorIntegrationTest {
   }
 
   private int countRows(String tenantId, String batchNo) {
-    Integer count =
-        jdbcTemplate.queryForObject(
-            "SELECT count(*) FROM biz.import_customer WHERE tenant_id=? AND source_batch_no=?",
-            Integer.class,
-            tenantId,
-            batchNo);
+    Integer count = jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM biz.import_customer WHERE tenant_id=? AND source_batch_no=?",
+        Integer.class,
+        tenantId,
+        batchNo);
     return count == null ? 0 : count;
   }
 

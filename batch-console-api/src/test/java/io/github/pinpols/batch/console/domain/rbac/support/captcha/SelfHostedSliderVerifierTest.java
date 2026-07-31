@@ -18,8 +18,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SelfHostedSliderVerifierTest {
 
-  @Mock private CaptchaChallengeStore challengeStore;
-  @Mock private BatchDateTimeSupport dateTimeSupport;
+  @Mock
+  private CaptchaChallengeStore challengeStore;
+
+  @Mock
+  private BatchDateTimeSupport dateTimeSupport;
 
   private CaptchaProperties properties;
   private SelfHostedSliderVerifier verifier;

@@ -80,13 +80,12 @@ public abstract class AbstractStepBeanRegistrar<T> {
       LinkedHashSet<String> registeredCodes = new LinkedHashSet<>();
       List<Object> collected = new ArrayList<>();
       TransactionTemplate tx = new TransactionTemplate(transactionManager);
-      tx.executeWithoutResult(
-          status -> {
-            stepRegistryMapper.deleteByModule(module);
-            for (BeanTypeBinding<?> binding : bindings) {
-              registerOne(binding, registeredCodes, collected);
-            }
-          });
+      tx.executeWithoutResult(status -> {
+        stepRegistryMapper.deleteByModule(module);
+        for (BeanTypeBinding<?> binding : bindings) {
+          registerOne(binding, registeredCodes, collected);
+        }
+      });
       if (collected.isEmpty()) {
         log.info("step registry snapshot refreshed: module={}, count=0 (未发现 bean)", module);
         return;
@@ -109,21 +108,18 @@ public abstract class AbstractStepBeanRegistrar<T> {
   private <B> void registerOne(
       BeanTypeBinding<B> binding, LinkedHashSet<String> registeredCodes, List<Object> collected) {
     Map<String, B> beans = applicationContext.getBeansOfType(binding.beanType());
-    beans
-        .values()
-        .forEach(
-            bean -> {
-              String code = binding.implCodeExtractor().apply(bean);
-              if (code == null || code.isBlank()) {
-                return;
-              }
-              // 同 impl_code 可能有多个 bean 实现（预留扩展），按第一个登记；同一 bean
-              // 重复登记由 UK(module, impl_code) 拦截，这里手动去重避免 SQL 异常
-              if (registeredCodes.add(code)) {
-                stepRegistryMapper.insertEntry(module, code, bean.getClass().getName());
-                collected.add(bean);
-              }
-            });
+    beans.values().forEach(bean -> {
+      String code = binding.implCodeExtractor().apply(bean);
+      if (code == null || code.isBlank()) {
+        return;
+      }
+      // 同 impl_code 可能有多个 bean 实现（预留扩展），按第一个登记；同一 bean
+      // 重复登记由 UK(module, impl_code) 拦截，这里手动去重避免 SQL 异常
+      if (registeredCodes.add(code)) {
+        stepRegistryMapper.insertEntry(module, code, bean.getClass().getName());
+        collected.add(bean);
+      }
+    });
   }
 
   /** 单个 bean 类型 + 其 impl_code 提取器的绑定。 */

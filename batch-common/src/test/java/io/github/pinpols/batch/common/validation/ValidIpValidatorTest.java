@@ -47,34 +47,33 @@ class ValidIpValidatorTest {
   }
 
   private void init(boolean ipv4Only) {
-    validator.initialize(
-        new ValidIp() {
-          @Override
-          public Class<? extends java.lang.annotation.Annotation> annotationType() {
-            return ValidIp.class;
-          }
+    validator.initialize(new ValidIp() {
+      @Override
+      public Class<? extends java.lang.annotation.Annotation> annotationType() {
+        return ValidIp.class;
+      }
 
-          @Override
-          public String message() {
-            return "";
-          }
+      @Override
+      public String message() {
+        return "";
+      }
 
-          @Override
-          public boolean ipv4Only() {
-            return ipv4Only;
-          }
+      @Override
+      public boolean ipv4Only() {
+        return ipv4Only;
+      }
 
-          @Override
-          public Class<?>[] groups() {
-            return new Class<?>[0];
-          }
+      @Override
+      public Class<?>[] groups() {
+        return new Class<?>[0];
+      }
 
-          @Override
-          public Class<? extends jakarta.validation.Payload>[] payload() {
-            @SuppressWarnings("unchecked")
-            Class<? extends jakarta.validation.Payload>[] empty = new Class[0];
-            return empty;
-          }
-        });
+      @Override
+      public Class<? extends jakarta.validation.Payload>[] payload() {
+        @SuppressWarnings("unchecked")
+        Class<? extends jakarta.validation.Payload>[] empty = new Class[0];
+        return empty;
+      }
+    });
   }
 }

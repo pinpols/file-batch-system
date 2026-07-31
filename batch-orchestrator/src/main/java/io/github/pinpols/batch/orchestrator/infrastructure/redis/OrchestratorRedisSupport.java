@@ -109,21 +109,19 @@ public class OrchestratorRedisSupport {
           + "return 1";
 
   public void putHashAll(String key, Map<String, String> fields, Duration ttl) {
-    cacheWrite(
-        key,
-        () -> {
-          if (fields == null || fields.isEmpty()) {
-            return;
-          }
-          List<String> args = new ArrayList<>(fields.size() * 2 + 1);
-          for (Map.Entry<String, String> e : fields.entrySet()) {
-            args.add(e.getKey());
-            args.add(e.getValue() == null ? "" : e.getValue());
-          }
-          args.add(String.valueOf(ttl.toMillis()));
-          redisTemplate.execute(
-              new DefaultRedisScript<>(LUA_HSET_EXPIRE, Long.class), List.of(key), args.toArray());
-        });
+    cacheWrite(key, () -> {
+      if (fields == null || fields.isEmpty()) {
+        return;
+      }
+      List<String> args = new ArrayList<>(fields.size() * 2 + 1);
+      for (Map.Entry<String, String> e : fields.entrySet()) {
+        args.add(e.getKey());
+        args.add(e.getValue() == null ? "" : e.getValue());
+      }
+      args.add(String.valueOf(ttl.toMillis()));
+      redisTemplate.execute(
+          new DefaultRedisScript<>(LUA_HSET_EXPIRE, Long.class), List.of(key), args.toArray());
+    });
   }
 
   // R3-P2-8：entries 也走 best-effort 包装；Redis 不可达时返回空 map 让上游 fallback DB，

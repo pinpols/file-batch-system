@@ -41,9 +41,8 @@ class CheckpointPartitionGuardTest {
     assertThat(CheckpointPartitionGuard.shouldDegrade(1.5D)).isTrue();
     assertThat(CheckpointPartitionGuard.shouldDegrade(Double.NaN)).isTrue();
     assertThat(CheckpointPartitionGuard.shouldDegrade(new BigDecimal("1.1"))).isTrue();
-    assertThat(
-            CheckpointPartitionGuard.shouldDegrade(
-                BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE)))
+    assertThat(CheckpointPartitionGuard.shouldDegrade(
+            BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE)))
         .isTrue();
   }
 }

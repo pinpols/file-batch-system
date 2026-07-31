@@ -22,11 +22,11 @@ class BatchDaySqlMigrationsIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:17"))
-          .withDatabaseName("batch_day_sql_guard")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse("postgres:17"))
+      .withDatabaseName("batch_day_sql_guard")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123");
 
   @Test
   void emptyDb_migration_createsBatchDayInstanceAndBusinessCalendarColumns() {
@@ -43,10 +43,12 @@ class BatchDaySqlMigrationsIntegrationTest {
     JdbcTemplate jdbc = jdbc();
     try {
       assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time")).isTrue();
+      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
+          .isTrue();
       assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
           .isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min")).isTrue();
+      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
+          .isTrue();
 
       assertThat(
               uniqueConstraintExists(jdbc, "batch", "batch_day_instance", "uk_batch_day_instance"))
@@ -58,13 +60,14 @@ class BatchDaySqlMigrationsIntegrationTest {
 
       // sanity check：day_status check constraint 至少可用（非法值应失败）
       try {
-        jdbc.update(
-            """
+        jdbc.update("""
             insert into batch.batch_day_instance(
               tenant_id, calendar_code, biz_date, day_status
             ) values ('t1', 'CAL', date '2026-03-27', 'NOT_REAL')
             """);
-        assertThat(true).as("invalid day_status should fail by check constraint").isFalse();
+        assertThat(true)
+            .as("invalid day_status should fail by check constraint")
+            .isFalse();
       } catch (Exception expected) {
         // ok: constraint violation
       }
@@ -80,24 +83,25 @@ class BatchDaySqlMigrationsIntegrationTest {
     resetDb();
 
     // 先模拟已有库：只跑到 V29（target 设成 30 时等价于“<=29”，不要求 V30 脚本存在）
-    Flyway configured =
-        Flyway.configure()
-            .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-            .schemas("batch", "quartz", "archive")
-            .defaultSchema("batch")
-            .locations("classpath:db/migration")
-            // 飞行目标必须存在真实迁移版本；用 V29 作为 V31 之前的“已升级到尽可能多”
-            .target("29")
-            .load();
+    Flyway configured = Flyway.configure()
+        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        .schemas("batch", "quartz", "archive")
+        .defaultSchema("batch")
+        .locations("classpath:db/migration")
+        // 飞行目标必须存在真实迁移版本；用 V29 作为 V31 之前的“已升级到尽可能多”
+        .target("29")
+        .load();
     configured.migrate();
 
     JdbcTemplate jdbc = jdbc();
     try {
       assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isFalse();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time")).isFalse();
+      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
+          .isFalse();
       assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
           .isFalse();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min")).isFalse();
+      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
+          .isFalse();
 
       // 再全量升级到最新版（补齐 V31/V32...）
       Flyway.configure()
@@ -109,22 +113,23 @@ class BatchDaySqlMigrationsIntegrationTest {
           .migrate();
 
       assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time")).isTrue();
+      assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
+          .isTrue();
       assertThat(columnExists(jdbc, "batch", "business_calendar", "late_arrival_tolerance_min"))
           .isTrue();
-      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min")).isTrue();
+      assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
+          .isTrue();
       assertThat(columnExists(jdbc, "batch", "job_instance", "version")).isTrue();
       assertThat(columnExists(jdbc, "batch", "job_partition", "version")).isTrue();
       assertThat(columnExists(jdbc, "batch", "job_task", "version")).isTrue();
 
       // 幂等性：重复 migrate，不应改变 flyway_schema_history 的 applied 行数
-      Flyway fullFlyway =
-          Flyway.configure()
-              .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-              .schemas("batch", "quartz", "archive")
-              .defaultSchema("batch")
-              .locations("classpath:db/migration")
-              .load();
+      Flyway fullFlyway = Flyway.configure()
+          .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+          .schemas("batch", "quartz", "archive")
+          .defaultSchema("batch")
+          .locations("classpath:db/migration")
+          .load();
       long historyBefore = flywayHistoryCount(jdbc);
       fullFlyway.migrate();
       long historyAfter = flywayHistoryCount(jdbc);
@@ -138,39 +143,35 @@ class BatchDaySqlMigrationsIntegrationTest {
   void flywayMigrate_isIdempotent_secondRunSameAppliedSet() {
     resetDb();
 
-    Flyway flyway =
-        Flyway.configure()
-            .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-            .schemas("batch", "quartz", "archive")
-            .defaultSchema("batch")
-            .locations("classpath:db/migration")
-            .load();
+    Flyway flyway = Flyway.configure()
+        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        .schemas("batch", "quartz", "archive")
+        .defaultSchema("batch")
+        .locations("classpath:db/migration")
+        .load();
 
     flyway.migrate();
-    List<String> applied1 =
-        Arrays.stream(flyway.info().applied())
-            .filter(Objects::nonNull)
-            .map(MigrationInfo::getVersion)
-            .filter(Objects::nonNull)
-            .map(Object::toString)
-            .toList();
+    List<String> applied1 = Arrays.stream(flyway.info().applied())
+        .filter(Objects::nonNull)
+        .map(MigrationInfo::getVersion)
+        .filter(Objects::nonNull)
+        .map(Object::toString)
+        .toList();
 
     flyway.migrate();
-    List<String> applied2 =
-        Arrays.stream(flyway.info().applied())
-            .filter(Objects::nonNull)
-            .map(MigrationInfo::getVersion)
-            .filter(Objects::nonNull)
-            .map(Object::toString)
-            .toList();
+    List<String> applied2 = Arrays.stream(flyway.info().applied())
+        .filter(Objects::nonNull)
+        .map(MigrationInfo::getVersion)
+        .filter(Objects::nonNull)
+        .map(Object::toString)
+        .toList();
 
     assertThat(applied2).containsExactlyInAnyOrderElementsOf(applied1);
   }
 
   private static JdbcTemplate jdbc() {
-    SingleConnectionDataSource dataSource =
-        new SingleConnectionDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+    SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     return new JdbcTemplate(dataSource);
   }
 
@@ -185,66 +186,48 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   private static boolean tableExists(JdbcTemplate jdbc, String schema, String table) {
-    Long cnt =
-        jdbc.queryForObject(
-            """
+    Long cnt = jdbc.queryForObject("""
             select count(*)
             from information_schema.tables
             where table_schema = ?
               and table_name = ?
-            """,
-            Long.class,
-            schema,
-            table);
+            """, Long.class, schema, table);
     return cnt != null && cnt > 0;
   }
 
   private static boolean columnExists(
       JdbcTemplate jdbc, String schema, String table, String column) {
-    Long cnt =
-        jdbc.queryForObject(
-            """
+    Long cnt = jdbc.queryForObject("""
             select count(*)
             from information_schema.columns
             where table_schema = ?
               and table_name = ?
               and column_name = ?
-            """,
-            Long.class,
-            schema,
-            table,
-            column);
+            """, Long.class, schema, table, column);
     return cnt != null && cnt > 0;
   }
 
   private static boolean uniqueConstraintExists(
       JdbcTemplate jdbc, String schema, String table, String constraintName) {
-    Long cnt =
-        jdbc.queryForObject(
-            """
+    Long cnt = jdbc.queryForObject("""
             select count(*)
             from information_schema.table_constraints tc
             where tc.table_schema = ?
               and tc.table_name = ?
               and tc.constraint_name = ?
               and tc.constraint_type in ('UNIQUE', 'PRIMARY KEY')
-            """,
-            Long.class,
-            schema,
-            table,
-            constraintName);
+            """, Long.class, schema, table, constraintName);
     return cnt != null && cnt > 0;
   }
 
   private static void resetDb() {
-    Flyway resetFlyway =
-        Flyway.configure()
-            .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-            .schemas("batch", "quartz", "archive")
-            .defaultSchema("batch")
-            .locations("classpath:db/migration")
-            .cleanDisabled(false)
-            .load();
+    Flyway resetFlyway = Flyway.configure()
+        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        .schemas("batch", "quartz", "archive")
+        .defaultSchema("batch")
+        .locations("classpath:db/migration")
+        .cleanDisabled(false)
+        .load();
     resetFlyway.clean();
   }
 

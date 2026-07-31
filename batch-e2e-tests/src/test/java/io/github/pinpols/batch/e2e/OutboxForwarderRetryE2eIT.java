@@ -66,13 +66,17 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @MockitoBean private OutboxPublisher outboxPublisher;
+  @MockitoBean
+  private OutboxPublisher outboxPublisher;
 
-  @Autowired private OutboxEventMapper outboxEventMapper;
+  @Autowired
+  private OutboxEventMapper outboxEventMapper;
 
-  @Autowired private EventOutboxRetryMapper eventOutboxRetryMapper;
+  @Autowired
+  private EventOutboxRetryMapper eventOutboxRetryMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   // ── Scenario A ────────────────────────────────────────────────────────────
 
@@ -86,30 +90,26 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              E2eStatusLogger.logOutboxSnapshot(
-                  jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
-              String status =
-                  jdbcTemplate.queryForObject(
-                      "select publish_status from batch.outbox_event where id = ?",
-                      String.class,
-                      event.getId());
-              assertThat(status).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
-            });
+        .untilAsserted(() -> {
+          E2eStatusLogger.logOutboxSnapshot(
+              jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
+          String status = jdbcTemplate.queryForObject(
+              "select publish_status from batch.outbox_event where id = ?",
+              String.class,
+              event.getId());
+          assertThat(status).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
+        });
 
     // publish_attempt should equal max-retry-attempts
-    Integer attempt =
-        jdbcTemplate.queryForObject(
-            "select publish_attempt from batch.outbox_event where id = ?",
-            Integer.class,
-            event.getId());
+    Integer attempt = jdbcTemplate.queryForObject(
+        "select publish_attempt from batch.outbox_event where id = ?",
+        Integer.class,
+        event.getId());
     assertThat(attempt).isEqualTo(2);
 
     // audit trail: at least one EXHAUSTED retry record
-    List<EventOutboxRetryEntity> retries =
-        eventOutboxRetryMapper.selectByQuery(
-            new EventOutboxRetryQuery("t1", null, "e2e-exhausted-001"));
+    List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
+        new EventOutboxRetryQuery("t1", null, "e2e-exhausted-001"));
     assertThat(retries).isNotEmpty();
     assertThat(retries)
         .anyMatch(r -> RetryScheduleStatus.EXHAUSTED.code().equals(r.getRetryStatus()));
@@ -129,22 +129,19 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              E2eStatusLogger.logOutboxSnapshot(
-                  jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
-              String status =
-                  jdbcTemplate.queryForObject(
-                      "select publish_status from batch.outbox_event where id = ?",
-                      String.class,
-                      event.getId());
-              assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
-            });
+        .untilAsserted(() -> {
+          E2eStatusLogger.logOutboxSnapshot(
+              jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
+          String status = jdbcTemplate.queryForObject(
+              "select publish_status from batch.outbox_event where id = ?",
+              String.class,
+              event.getId());
+          assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+        });
 
     // audit trail: at least one FAILED retry record for the failed attempt
-    List<EventOutboxRetryEntity> retries =
-        eventOutboxRetryMapper.selectByQuery(
-            new EventOutboxRetryQuery("t1", null, "e2e-recovery-001"));
+    List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
+        new EventOutboxRetryQuery("t1", null, "e2e-recovery-001"));
     assertThat(retries).isNotEmpty();
     assertThat(retries).anyMatch(r -> RetryScheduleStatus.FAILED.code().equals(r.getRetryStatus()));
   }

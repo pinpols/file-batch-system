@@ -19,11 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkerLifecycleManagerTest {
 
-  @Mock private WorkerSelfRegistrationService workerRegistryService;
+  @Mock
+  private WorkerSelfRegistrationService workerRegistryService;
 
-  @Mock private WorkerRuntimeState workerRuntimeState;
+  @Mock
+  private WorkerRuntimeState workerRuntimeState;
 
-  @Mock private ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+  @Mock
+  private ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
 
   @Test
   void shutdown_removesLocalStateEvenWhenRemoteStatusSyncFails() {
@@ -36,13 +39,12 @@ class DefaultWorkerLifecycleManagerTest {
         .when(workerRegistryService)
         .updateStatus(registration, "DECOMMISSIONED");
 
-    DefaultWorkerLifecycleManager manager =
-        new DefaultWorkerLifecycleManager(
-            workerRegistryService,
-            workerRuntimeState,
-            activeTaskLeaseRegistry,
-            new BatchDateTimeSupport(
-                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
+    DefaultWorkerLifecycleManager manager = new DefaultWorkerLifecycleManager(
+        workerRegistryService,
+        workerRuntimeState,
+        activeTaskLeaseRegistry,
+        new BatchDateTimeSupport(
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
 
     manager.shutdown("worker-1");
 

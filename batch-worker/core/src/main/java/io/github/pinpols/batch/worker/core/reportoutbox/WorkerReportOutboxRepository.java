@@ -52,8 +52,7 @@ public class WorkerReportOutboxRepository {
   private static void initializeSqliteSchema(JdbcTemplate jdbc) {
     jdbc.execute("PRAGMA journal_mode=WAL");
     jdbc.execute("PRAGMA synchronous=NORMAL");
-    jdbc.execute(
-        """
+    jdbc.execute("""
         CREATE TABLE IF NOT EXISTS worker_report_outbox (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           tenant_id TEXT NOT NULL,
@@ -69,9 +68,8 @@ public class WorkerReportOutboxRepository {
           UNIQUE(tenant_id, task_id)
         )
         """);
-    jdbc.execute(
-        "CREATE INDEX IF NOT EXISTS idx_worker_report_outbox_poll ON worker_report_outbox"
-            + " (publish_status, next_attempt_at)");
+    jdbc.execute("CREATE INDEX IF NOT EXISTS idx_worker_report_outbox_poll ON worker_report_outbox"
+        + " (publish_status, next_attempt_at)");
   }
 
   void upsert(TaskExecutionReport report) {
@@ -84,17 +82,16 @@ public class WorkerReportOutboxRepository {
     String invocationId =
         report.getPartitionInvocationId() == null ? null : report.getPartitionInvocationId();
     String traceId = report.getTraceId() == null ? null : report.getTraceId();
-    WorkerReportOutboxUpsertParam p =
-        new WorkerReportOutboxUpsertParam(
-            report.getTenantId(),
-            report.getTaskId(),
-            invocationId,
-            traceId,
-            payload,
-            STATUS_NEW,
-            now,
-            now,
-            now);
+    WorkerReportOutboxUpsertParam p = new WorkerReportOutboxUpsertParam(
+        report.getTenantId(),
+        report.getTaskId(),
+        invocationId,
+        traceId,
+        payload,
+        STATUS_NEW,
+        now,
+        now,
+        now);
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
       pgMapper.upsert(p);
     } else {
@@ -156,10 +153,9 @@ public class WorkerReportOutboxRepository {
   }
 
   void recordFailure(long id, long nowEpochMillis, RuntimeException cause) {
-    Integer attemptsNullable =
-        dialect == WorkerReportOutboxDialect.POSTGRESQL
-            ? pgMapper.selectAttemptCount(id)
-            : sqliteMapper.selectAttemptCount(id);
+    Integer attemptsNullable = dialect == WorkerReportOutboxDialect.POSTGRESQL
+        ? pgMapper.selectAttemptCount(id)
+        : sqliteMapper.selectAttemptCount(id);
     if (attemptsNullable == null) {
       return;
     }
@@ -168,9 +164,8 @@ public class WorkerReportOutboxRepository {
     if (nextAttempts >= props.getMaxPublishAttempts()) {
       int updated;
       if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        updated =
-            pgMapper.updateGiveUp(
-                id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis, STATUS_PUBLISHING);
+        updated = pgMapper.updateGiveUp(
+            id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis, STATUS_PUBLISHING);
       } else {
         updated = sqliteMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
       }
@@ -189,9 +184,8 @@ public class WorkerReportOutboxRepository {
       long nextAt = nowEpochMillis + backoff + jitter;
       int updated;
       if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        updated =
-            pgMapper.updateRetry(
-                id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
+        updated = pgMapper.updateRetry(
+            id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
       } else {
         updated = sqliteMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
       }

@@ -49,9 +49,8 @@ class WeComNotificationSenderTest {
   }
 
   private NotificationMessage messageWith(String configJson) {
-    WebhookEventPayload payload =
-        new WebhookEventPayload(
-            "t1", "JOB_FAILED", "jobs", "cursor-1", Instant.parse("2026-06-24T00:00:00Z"), null);
+    WebhookEventPayload payload = new WebhookEventPayload(
+        "t1", "JOB_FAILED", "jobs", "cursor-1", Instant.parse("2026-06-24T00:00:00Z"), null);
     return new NotificationMessage(
         "t1", "wecom-bot", "WECOM", configJson, payload, "{\"jobId\":42}");
   }

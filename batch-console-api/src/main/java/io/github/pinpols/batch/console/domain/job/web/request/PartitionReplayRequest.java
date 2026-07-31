@@ -8,9 +8,11 @@ import lombok.Data;
 @Data
 public class PartitionReplayRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @NotNull private Long partitionId;
+  @NotNull
+  private Long partitionId;
 
   @Size(max = 512, message = "reason too long (max 512)")
   private String reason;

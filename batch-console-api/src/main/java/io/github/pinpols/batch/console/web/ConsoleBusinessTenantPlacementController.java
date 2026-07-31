@@ -53,12 +53,11 @@ public class ConsoleBusinessTenantPlacementController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<Void> upsert(@Valid @RequestBody UpsertTenantPlacementRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    placementService.upsert(
-        BusinessTenantPlacementUpsertParam.builder()
-            .tenantId(request.tenantId())
-            .placementKey(request.placementKey())
-            .operator(operator)
-            .build());
+    placementService.upsert(BusinessTenantPlacementUpsertParam.builder()
+        .tenantId(request.tenantId())
+        .placementKey(request.placementKey())
+        .operator(operator)
+        .build());
     return responseFactory.success(null);
   }
 
@@ -77,5 +76,7 @@ public class ConsoleBusinessTenantPlacementController {
   /** placementKey 约束为 key 字符集(shard-N / silo-xxx 约定),防 typo 误把租户指到不存在的片。 */
   record UpsertTenantPlacementRequest(
       @NotBlank @Size(max = 64) String tenantId,
-      @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$") String placementKey) {}
+
+      @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$")
+      String placementKey) {}
 }

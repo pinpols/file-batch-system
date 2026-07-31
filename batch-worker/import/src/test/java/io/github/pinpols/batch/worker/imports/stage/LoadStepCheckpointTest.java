@@ -50,9 +50,14 @@ class LoadStepCheckpointTest {
   private static final String TENANT = "tenant-A";
   private static final long PIPELINE_INSTANCE_ID = 7001L;
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private ImportLoadPlugin plugin;
-  @Mock private ProcessingPositionStore positionStore;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private ImportLoadPlugin plugin;
+
+  @Mock
+  private ProcessingPositionStore positionStore;
 
   private ImportLoadPluginRegistry registry;
   private ImportWorkerConfiguration workerConfig;
@@ -60,7 +65,9 @@ class LoadStepCheckpointTest {
   private WorkerCheckpointProperties checkpointProps;
   private LoadStep loadStep;
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
+
   private final List<Path> tempPaths = new ArrayList<>();
 
   @BeforeEach
@@ -72,27 +79,20 @@ class LoadStepCheckpointTest {
         .when(plugin.idempotencyCapability())
         .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
     registry = new ImportLoadPluginRegistry(List.of(plugin));
-    workerConfig =
-        new ImportWorkerConfiguration(
-            "wc",
-            "wt",
-            "tenant",
-            5_000L,
-            "topic",
-            "cg",
-            List.of(),
-            new FileProcessing(true, 1000, 1000, 2),
-            Boolean.FALSE);
+    workerConfig = new ImportWorkerConfiguration(
+        "wc",
+        "wt",
+        "tenant",
+        5_000L,
+        "topic",
+        "cg",
+        List.of(),
+        new FileProcessing(true, 1000, 1000, 2),
+        Boolean.FALSE);
     objectMapper = new ObjectMapper();
     checkpointProps = new WorkerCheckpointProperties();
-    loadStep =
-        new LoadStep(
-            registry,
-            runtimeRepository,
-            workerConfig,
-            objectMapper,
-            checkpointProps,
-            positionStore);
+    loadStep = new LoadStep(
+        registry, runtimeRepository, workerConfig, objectMapper, checkpointProps, positionStore);
   }
 
   @AfterEach

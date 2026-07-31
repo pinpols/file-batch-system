@@ -50,10 +50,8 @@ public final class RequestSigner {
     try {
       Mac mac = Mac.getInstance("HmacSHA256");
       mac.init(new SecretKeySpec(nz(apiKey).getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-      return toHex(
-          mac.doFinal(
-              canonicalString(method, path, timestamp, nonce, body)
-                  .getBytes(StandardCharsets.UTF_8)));
+      return toHex(mac.doFinal(
+          canonicalString(method, path, timestamp, nonce, body).getBytes(StandardCharsets.UTF_8)));
     } catch (Exception e) {
       throw new IllegalStateException("HMAC-SHA256 failed", e);
     }

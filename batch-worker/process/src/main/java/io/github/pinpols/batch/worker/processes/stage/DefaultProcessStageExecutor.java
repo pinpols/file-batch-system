@@ -234,9 +234,8 @@ public class DefaultProcessStageExecutor
           step.implCode(),
           context.getTenantId(),
           exception);
-      result =
-          ProcessStageResult.failure(
-              stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
+      result = ProcessStageResult.failure(
+          stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
       log.error(
           "process stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}",
@@ -245,14 +244,13 @@ public class DefaultProcessStageExecutor
           step.implCode(),
           context.getTenantId(),
           exception);
-      result =
-          ProcessStageResult.failure(
-              stage,
-              StageFailureCode.INFRA_ERROR.name(),
-              "error.worker.stage_infra_error",
-              new Object[] {exception.getMessage()},
-              exception.getMessage(),
-              ERROR_OBJECT_MAPPER);
+      result = ProcessStageResult.failure(
+          stage,
+          StageFailureCode.INFRA_ERROR.name(),
+          "error.worker.stage_infra_error",
+          new Object[] {exception.getMessage()},
+          exception.getMessage(),
+          ERROR_OBJECT_MAPPER);
     }
     metrics.recordStageDuration(
         stage.name(), context.getTenantId(), result.success(), System.nanoTime() - startNanos);
@@ -339,30 +337,28 @@ public class DefaultProcessStageExecutor
   private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
     List<PipelineStepTemplate> templates = new ArrayList<>();
     int order = 1;
-    for (ProcessStage stage :
-        List.of(
-            ProcessStage.PREPARE,
-            ProcessStage.COMPUTE,
-            ProcessStage.VALIDATE,
-            ProcessStage.COMMIT,
-            ProcessStage.FEEDBACK)) {
+    for (ProcessStage stage : List.of(
+        ProcessStage.PREPARE,
+        ProcessStage.COMPUTE,
+        ProcessStage.VALIDATE,
+        ProcessStage.COMMIT,
+        ProcessStage.FEEDBACK)) {
       ProcessStageStep step = stepsByStage.get(stage);
       if (step == null) {
         throw new IllegalStateException("missing process step bean for stage: " + stage.name());
       }
-      PipelineStepTemplate template =
-          PipelineStepTemplate.builder()
-              .stepCode(step.stepCode())
-              .stepName(step.stepName())
-              .stageCode(stage.name())
-              .stepOrder(order++)
-              .implCode(step.implCode())
-              .stepParams(Map.of())
-              .timeoutSeconds(0)
-              .retryPolicy("NONE")
-              .retryMaxCount(0)
-              .enabled(true)
-              .build();
+      PipelineStepTemplate template = PipelineStepTemplate.builder()
+          .stepCode(step.stepCode())
+          .stepName(step.stepName())
+          .stageCode(stage.name())
+          .stepOrder(order++)
+          .implCode(step.implCode())
+          .stepParams(Map.of())
+          .timeoutSeconds(0)
+          .retryPolicy("NONE")
+          .retryMaxCount(0)
+          .enabled(true)
+          .build();
       templates.add(template);
     }
     return List.copyOf(templates);

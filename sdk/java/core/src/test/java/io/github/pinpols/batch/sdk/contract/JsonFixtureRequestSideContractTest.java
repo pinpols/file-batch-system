@@ -62,14 +62,13 @@ class JsonFixtureRequestSideContractTest {
           .filter(p -> p.getFileName().toString().endsWith(".json"))
           .filter(p -> !p.getFileName().toString().equals("fixture-schema.json"))
           .sorted()
-          .forEach(
-              p -> {
-                JsonNode expect = readExpect(p);
-                if (expect != null
-                    && (expect.has("requestBodyIncludes") || expect.has("requestBodyExcludes"))) {
-                  out.add(Arguments.of(p.getFileName().toString(), p));
-                }
-              });
+          .forEach(p -> {
+            JsonNode expect = readExpect(p);
+            if (expect != null
+                && (expect.has("requestBodyIncludes") || expect.has("requestBodyExcludes"))) {
+              out.add(Arguments.of(p.getFileName().toString(), p));
+            }
+          });
     }
     assertThat(out)
         .as("expect >= 1 request-side fixture (report red-line / partitionInvocationId)")
@@ -117,10 +116,9 @@ class JsonFixtureRequestSideContractTest {
     String tenantId = config.path("tenantId").asText(null);
     String workerCode = config.path("workerCode").asText(null);
     String kind = spec.path("kind").asText();
-    String inv =
-        spec.hasNonNull("partitionInvocationId")
-            ? spec.get("partitionInvocationId").asText()
-            : null;
+    String inv = spec.hasNonNull("partitionInvocationId")
+        ? spec.get("partitionInvocationId").asText()
+        : null;
 
     switch (kind) {
       case "register":
@@ -149,7 +147,8 @@ class JsonFixtureRequestSideContractTest {
         String errorCode = r.hasNonNull("errorCode") ? r.get("errorCode").asText() : null;
         String resultSummary =
             r.hasNonNull("resultSummary") ? r.get("resultSummary").asText() : null;
-        String failureClass = r.hasNonNull("failureClass") ? r.get("failureClass").asText() : null;
+        String failureClass =
+            r.hasNonNull("failureClass") ? r.get("failureClass").asText() : null;
         @SuppressWarnings("unchecked")
         Map<String, Object> outputs =
             r.has("outputs") ? JSON.convertValue(r.get("outputs"), Map.class) : null;

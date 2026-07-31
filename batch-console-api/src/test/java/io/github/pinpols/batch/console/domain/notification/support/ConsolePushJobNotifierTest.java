@@ -25,8 +25,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsolePushJobNotifierTest {
 
-  @Mock private ConsolePushJobNotificationMapper notificationMapper;
-  @Mock private ConsolePushSender pushSender;
+  @Mock
+  private ConsolePushJobNotificationMapper notificationMapper;
+
+  @Mock
+  private ConsolePushSender pushSender;
 
   private ConsolePushProperties properties;
   private ConsolePushJobNotifier notifier;

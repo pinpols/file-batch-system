@@ -15,26 +15,23 @@ public class SizeBasedPartitionCountResolver implements PartitionCountResolver {
   @Override
   public int resolve(
       JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
-    long estimatedItems =
-        firstPositiveLong(
-            params.get("estimatedItemCount"),
-            params.get("recordCount"),
-            params.get("itemCount"),
-            params.get("totalCount"));
-    int targetItemsPerPartition =
-        firstPositiveInt(
-            params.get("targetItemsPerPartition"),
-            params.get("targetShardSize"),
-            params.get("itemsPerPartition"));
+    long estimatedItems = firstPositiveLong(
+        params.get("estimatedItemCount"),
+        params.get("recordCount"),
+        params.get("itemCount"),
+        params.get("totalCount"));
+    int targetItemsPerPartition = firstPositiveInt(
+        params.get("targetItemsPerPartition"),
+        params.get("targetShardSize"),
+        params.get("itemsPerPartition"));
     if (estimatedItems > 0 && targetItemsPerPartition > 0) {
       return ceilDiv(estimatedItems, targetItemsPerPartition);
     }
 
-    long estimatedBytes =
-        firstPositiveLong(
-            params.get("estimatedFileSizeBytes"),
-            params.get("fileSizeBytes"),
-            params.get("sourceFileSizeBytes"));
+    long estimatedBytes = firstPositiveLong(
+        params.get("estimatedFileSizeBytes"),
+        params.get("fileSizeBytes"),
+        params.get("sourceFileSizeBytes"));
     long targetBytesPerPartition =
         firstPositiveLong(params.get("targetBytesPerPartition"), params.get("targetShardBytes"));
     if (estimatedBytes > 0 && targetBytesPerPartition > 0) {

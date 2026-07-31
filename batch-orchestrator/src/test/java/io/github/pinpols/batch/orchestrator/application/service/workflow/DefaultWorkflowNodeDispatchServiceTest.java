@@ -60,52 +60,81 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkflowNodeDispatchServiceTest {
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private WorkflowNodeMapper workflowNodeMapper;
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private WorkflowNodeRunMapper workflowNodeRunMapper;
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Mock private SchedulePlanBuilder schedulePlanBuilder;
-  @Mock private PartitionLifecycleService partitionLifecycleService;
-  @Mock private TaskDispatchOutboxService taskDispatchOutboxService;
-  @Mock private WorkflowDagService workflowDagService;
-  @Mock private ResourceScheduler resourceScheduler;
-  @Mock private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
-  @Mock private WorkflowNodePayloadBuilder payloadBuilder;
-  @Mock private ChildJobLaunchSupport childJobLaunchSupport;
-  @Mock private CrossDayDependencyResolver crossDayDependencyResolver;
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  private SchedulePlanBuilder schedulePlanBuilder;
+
+  @Mock
+  private PartitionLifecycleService partitionLifecycleService;
+
+  @Mock
+  private TaskDispatchOutboxService taskDispatchOutboxService;
+
+  @Mock
+  private WorkflowDagService workflowDagService;
+
+  @Mock
+  private ResourceScheduler resourceScheduler;
+
+  @Mock
+  private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+
+  @Mock
+  private WorkflowNodePayloadBuilder payloadBuilder;
+
+  @Mock
+  private ChildJobLaunchSupport childJobLaunchSupport;
+
+  @Mock
+  private CrossDayDependencyResolver crossDayDependencyResolver;
 
   private DefaultWorkflowNodeDispatchService service;
 
   @BeforeEach
   void setUp() {
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper);
-    OrchestratorWorkflowMappers workflowMappers =
-        new OrchestratorWorkflowMappers(
-            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    service =
-        new DefaultWorkflowNodeDispatchService(
-            jobMappers,
-            workflowMappers,
-            schedulePlanBuilder,
-            partitionLifecycleService,
-            taskDispatchOutboxService,
-            workflowDagService,
-            resourceScheduler,
-            taskExecutionServiceProvider,
-            payloadBuilder,
-            childJobLaunchSupport,
-            crossDayDependencyResolver);
+    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
+    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
+        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
+    service = new DefaultWorkflowNodeDispatchService(
+        jobMappers,
+        workflowMappers,
+        schedulePlanBuilder,
+        partitionLifecycleService,
+        taskDispatchOutboxService,
+        workflowDagService,
+        resourceScheduler,
+        taskExecutionServiceProvider,
+        payloadBuilder,
+        childJobLaunchSupport,
+        crossDayDependencyResolver);
   }
 
   private JobInstanceEntity instance() {
@@ -130,9 +159,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   @Test
   @DisplayName("null jobInstance → 返 0,不读 DB")
   void nullJobInstanceReturnsZero() {
-    assertThat(
-            service.dispatchNode(
-                null, workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            null, workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
     verify(workflowNodeRunMapper, never()).selectLatestForUpdate(anyLong(), anyString());
   }
@@ -140,16 +168,16 @@ class DefaultWorkflowNodeDispatchServiceTest {
   @Test
   @DisplayName("null workflowRun → 返 0")
   void nullWorkflowRunReturnsZero() {
-    assertThat(
-            service.dispatchNode(
-                instance(), null, new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            instance(), null, new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
   }
 
   @Test
   @DisplayName("null node → 返 0")
   void nullNodeReturnsZero() {
-    assertThat(service.dispatchNode(instance(), workflowRun(), null, null, "trace")).isZero();
+    assertThat(service.dispatchNode(instance(), workflowRun(), null, null, "trace"))
+        .isZero();
   }
 
   // ===== 已激活早退 =====
@@ -161,9 +189,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     existing.setNodeStatus(WorkflowNodeRunStatus.READY.code());
     when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
 
-    int result =
-        service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace");
+    int result = service.dispatchNode(
+        instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace");
     assertThat(result).isZero();
     verify(workflowDagService, never())
         .isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any());
@@ -176,9 +203,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     existing.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
     when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
 
-    assertThat(
-            service.dispatchNode(
-                instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
   }
 
@@ -189,9 +215,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     existing.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
     when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
 
-    assertThat(
-            service.dispatchNode(
-                instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
   }
 
@@ -204,9 +229,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(false);
 
-    assertThat(
-            service.dispatchNode(
-                instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
     verify(workflowDagService).isNodeReadyForDispatch(eq(10L), eq(50L), eq("n1"), any());
   }
@@ -220,9 +244,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(false);
 
-    assertThat(
-            service.dispatchNode(
-                instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
     verify(workflowNodeMapper, never())
         .selectByWorkflowDefinitionIdAndNodeCode(anyLong(), anyString());
@@ -239,9 +262,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
         .thenReturn(null);
 
-    assertThat(
-            service.dispatchNode(
-                instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
     verify(childJobLaunchSupport, never())
         .dispatchJobNode(any(), any(), any(), any(), any(), any());
@@ -262,16 +284,14 @@ class DefaultWorkflowNodeDispatchServiceTest {
         .thenReturn(node);
     // 跨日依赖未就绪 → WAITING
     when(crossDayDependencyResolver.resolve(any(), any(), any()))
-        .thenReturn(
-            CrossDayDependencyResolver.ResolutionResult.builder()
-                .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
-                .resolved(java.util.Map.of())
-                .waitingReasons(java.util.List.of("upstream"))
-                .build());
+        .thenReturn(CrossDayDependencyResolver.ResolutionResult.builder()
+            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
+            .resolved(java.util.Map.of())
+            .waitingReasons(java.util.List.of("upstream"))
+            .build());
 
-    assertThat(
-            service.dispatchNode(
-                instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
+    assertThat(service.dispatchNode(
+            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
     verify(childJobLaunchSupport, never())
         .dispatchJobNode(any(), any(), any(), any(), any(), any());
@@ -303,10 +323,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     decision.setReasonMessage("tenant quota exceeded");
     when(resourceScheduler.schedule(any())).thenReturn(decision);
 
-    assertThatThrownBy(
-            () ->
-                service.dispatchNode(
-                    instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), "{}", "trace"))
+    assertThatThrownBy(() -> service.dispatchNode(
+            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), "{}", "trace"))
         .isInstanceOf(BizException.class)
         .hasMessage("error.partition.dispatch_business_error");
     verify(partitionLifecycleService, never()).createPartitions(any(), any(), any());

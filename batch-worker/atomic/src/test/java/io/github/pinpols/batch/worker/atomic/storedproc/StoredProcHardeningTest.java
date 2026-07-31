@@ -84,9 +84,8 @@ class StoredProcHardeningTest {
     assertThat(StoredProcTaskExecutor.resolveDataSourceBean("mainDs", "mainDs", Set.of()))
         .isEqualTo("mainDs");
     // requested 在白名单 → 放行
-    assertThat(
-            StoredProcTaskExecutor.resolveDataSourceBean(
-                "reportingDs", "mainDs", Set.of("reportingDs")))
+    assertThat(StoredProcTaskExecutor.resolveDataSourceBean(
+            "reportingDs", "mainDs", Set.of("reportingDs")))
         .isEqualTo("reportingDs");
     // 不同且不在白名单 → 抛
     assertThatThrownBy(
@@ -133,9 +132,8 @@ class StoredProcHardeningTest {
     when(cursor.next()).thenReturn(true);
     when(cursor.getObject(anyInt())).thenReturn("v");
 
-    TaskResult r =
-        executor.execute(
-            ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
+    TaskResult r = executor.execute(
+        ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
 
     assertThat(r.success()).isTrue();
     assertThat(r.output().get("truncated")).isEqualTo(true);
@@ -163,9 +161,8 @@ class StoredProcHardeningTest {
     when(cursor.next()).thenReturn(true, true, false); // 2 行
     when(cursor.getObject(anyInt())).thenReturn("v");
 
-    TaskResult r =
-        executor.execute(
-            ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
+    TaskResult r = executor.execute(
+        ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
 
     assertThat(r.success()).isTrue();
     assertThat(r.output().get("truncated")).isEqualTo(false);

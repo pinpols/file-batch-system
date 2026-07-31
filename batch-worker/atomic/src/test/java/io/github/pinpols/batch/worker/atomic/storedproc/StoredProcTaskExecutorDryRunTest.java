@@ -36,17 +36,16 @@ class StoredProcTaskExecutorDryRunTest {
   @Test
   void shouldShortCircuit_whenDryRun_andNotOpenConnection() throws Exception {
     // 准备
-    TaskContext ctx =
-        new TaskContext(
-            "t1",
-            "job-1",
-            "ti-1",
-            "w-1",
-            Map.of(
-                "procedureName", "batch.refresh_metrics",
-                "inParams", List.of("sensitive-arg-1", 42),
-                "outParams", List.of("INTEGER", "VARCHAR")),
-            Map.of("dryRun", true));
+    TaskContext ctx = new TaskContext(
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of(
+            "procedureName", "batch.refresh_metrics",
+            "inParams", List.of("sensitive-arg-1", 42),
+            "outParams", List.of("INTEGER", "VARCHAR")),
+        Map.of("dryRun", true));
 
     // 执行
     TaskResult result = executor.execute(ctx);

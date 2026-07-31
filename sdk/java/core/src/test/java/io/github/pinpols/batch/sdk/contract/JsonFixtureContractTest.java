@@ -72,30 +72,29 @@ class JsonFixtureContractTest {
   private static final YAMLMapper YAML = new YAMLMapper();
 
   /** 允许的 sdkExpectedAction 关键字(动词级,人类可读描述包含其一即合法)。 */
-  private static final Set<String> ACTION_KEYWORDS =
-      Set.of(
-          "transition",
-          "start",
-          "stop",
-          "pause",
-          "resume",
-          "drain",
-          "deactivate",
-          "fail-fast",
-          "retry",
-          "backoff",
-          "cancel",
-          "log",
-          "schedule",
-          "subscribe",
-          "process",
-          "commit",
-          "call",
-          "maintain",
-          "update",
-          "adjust",
-          "restore",
-          "no-op");
+  private static final Set<String> ACTION_KEYWORDS = Set.of(
+      "transition",
+      "start",
+      "stop",
+      "pause",
+      "resume",
+      "drain",
+      "deactivate",
+      "fail-fast",
+      "retry",
+      "backoff",
+      "cancel",
+      "log",
+      "schedule",
+      "subscribe",
+      "process",
+      "commit",
+      "call",
+      "maintain",
+      "update",
+      "adjust",
+      "restore",
+      "no-op");
 
   /** 从测试 cwd(module 目录)向上找含 {@code docs/api} 的仓库根;与 module 路径深度无关(模块在 sdk/java)。 */
   private static Path repoRoot() {
@@ -170,7 +169,9 @@ class JsonFixtureContractTest {
       assertOpenApiDeclares(name, method, fixturePath);
 
       JsonNode status = when.get("responseStatus");
-      assertThat(status != null && status.isInt()).as("%s responseStatus int", name).isTrue();
+      assertThat(status != null && status.isInt())
+          .as("%s responseStatus int", name)
+          .isTrue();
       int sc = status.asInt();
       assertThat(sc).as("%s responseStatus in 1xx..5xx", name).isBetween(100, 599);
     }
@@ -201,10 +202,9 @@ class JsonFixtureContractTest {
     Map<String, Object> computed = computeSdkDecision(doc);
     assumeTrue(
         computed != null,
-        () ->
-            name
-                + ": not drivable at pure-decision layer (needs real HTTP/kafka offset side"
-                + " effect); covered structurally by fixtureMatchesContract");
+        () -> name
+            + ": not drivable at pure-decision layer (needs real HTTP/kafka offset side"
+            + " effect); covered structurally by fixtureMatchesContract");
 
     // expect 块逐字段 deep-equal:SDK 决策核算出的、且 fixture then.expect 也声明的每个键必须一致。
     assertThat(expect)
@@ -282,10 +282,9 @@ class JsonFixtureContractTest {
   /** 驱动 {@link HeartbeatDirective#fromResponse} → {@link HeartbeatDirective#toRuntimeState()}。 */
   private static Map<String, Object> computeHeartbeatDirective(JsonNode when) {
     @SuppressWarnings("unchecked")
-    Map<String, Object> resp =
-        JSON.convertValue(when.path("responseBody"), Map.class) == null
-            ? Map.of()
-            : JSON.convertValue(when.path("responseBody"), Map.class);
+    Map<String, Object> resp = JSON.convertValue(when.path("responseBody"), Map.class) == null
+        ? Map.of()
+        : JSON.convertValue(when.path("responseBody"), Map.class);
     HeartbeatDirective directive = HeartbeatDirective.fromResponse(resp);
     WorkerRuntimeState fsm = directive.toRuntimeState();
 
@@ -310,10 +309,9 @@ class JsonFixtureContractTest {
 
   /** 驱动 {@link TaskDispatchMessage#isSchemaSupported()}(缺省 / v2 接受,v3 拒绝;未知字段被忽略)。 */
   private static Map<String, Object> computeSchemaAccept(JsonNode when) {
-    String schemaVersion =
-        when.path("body").hasNonNull("schemaVersion")
-            ? when.path("body").get("schemaVersion").asText()
-            : null;
+    String schemaVersion = when.path("body").hasNonNull("schemaVersion")
+        ? when.path("body").get("schemaVersion").asText()
+        : null;
     // 走真 record(经 Jackson 反序列化,验未知字段确实被 ignoreUnknown 包容、不影响 schema 判定)。
     TaskDispatchMessage msg;
     try {

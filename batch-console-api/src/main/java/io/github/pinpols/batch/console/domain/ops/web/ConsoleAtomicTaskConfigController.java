@@ -56,9 +56,8 @@ public class ConsoleAtomicTaskConfigController {
   public CommonResponse<AtomicTaskConfigEntity> create(@RequestBody CreateRequest request) {
     String resolved = tenantGuard.resolveTenant(request.tenantId());
     String operator = resolveOperator();
-    AtomicTaskConfigEntity created =
-        configService.create(
-            resolved, request.taskType(), request.name(), request.parameters(), operator);
+    AtomicTaskConfigEntity created = configService.create(
+        resolved, request.taskType(), request.name(), request.parameters(), operator);
     return responseFactory.success(created);
   }
 

@@ -52,9 +52,8 @@ public class BatchDayOperationService {
         || command.action() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day.operation.invalid");
     }
-    BatchDayInstanceEntity current =
-        batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            command.tenantId(), command.calendarCode(), command.bizDate());
+    BatchDayInstanceEntity current = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+        command.tenantId(), command.calendarCode(), command.bizDate());
     if (current == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day.not_found");
     }
@@ -64,18 +63,16 @@ public class BatchDayOperationService {
         transition(current, command.action(), operator, command.reason(), now);
     int rows = batchDayInstanceMapper.updateWithCas(target);
     if (rows == 0) {
-      throw new OptimisticLockingFailureException(
-          "batch_day_instance version mismatch: id="
-              + current.id()
-              + ", version="
-              + current.version());
+      throw new OptimisticLockingFailureException("batch_day_instance version mismatch: id="
+          + current.id()
+          + ", version="
+          + current.version());
     }
     appendAuditLog(current, target, command.action(), operator, command.reason(), now);
     insertOperationAudit(command, current, target, operator, now);
-    int released =
-        command.action() == BatchDayOperation.RELEASE
-            ? releaseWaitingLaunchesForBatchDay(target, operator)
-            : 0;
+    int released = command.action() == BatchDayOperation.RELEASE
+        ? releaseWaitingLaunchesForBatchDay(target, operator)
+        : 0;
     return new BatchDayOperationResult(target, released);
   }
 
@@ -92,25 +89,24 @@ public class BatchDayOperationService {
     payload.put("action", command.action().name());
     payload.put("reason", command.reason());
     payload.put("operatorId", operator);
-    BatchDayOperationAuditEntity audit =
-        BatchDayOperationAuditEntity.builder()
-            .tenantId(from.tenantId())
-            .calendarCode(from.calendarCode())
-            .bizDate(from.bizDate())
-            .operationType("BATCH_DAY_" + command.action().name())
-            .fromStatus(from.dayStatus())
-            .toStatus(to.dayStatus())
-            .fromFrozen(from.frozen())
-            .toFrozen(to.frozen())
-            .operatorId(operator)
-            .operatorType(AuditLogConstants.OPERATOR_TYPE_REQUEST)
-            .reasonCode(command.reason())
-            .comment(null)
-            .approvalId(null)
-            .requestPayload(JsonUtils.toJson(payload))
-            .traceId(null)
-            .createdAt(now)
-            .build();
+    BatchDayOperationAuditEntity audit = BatchDayOperationAuditEntity.builder()
+        .tenantId(from.tenantId())
+        .calendarCode(from.calendarCode())
+        .bizDate(from.bizDate())
+        .operationType("BATCH_DAY_" + command.action().name())
+        .fromStatus(from.dayStatus())
+        .toStatus(to.dayStatus())
+        .fromFrozen(from.frozen())
+        .toFrozen(to.frozen())
+        .operatorId(operator)
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_REQUEST)
+        .reasonCode(command.reason())
+        .comment(null)
+        .approvalId(null)
+        .requestPayload(JsonUtils.toJson(payload))
+        .traceId(null)
+        .createdAt(now)
+        .build();
     batchDayOperationAuditMapper.insert(audit);
   }
 
@@ -121,19 +117,22 @@ public class BatchDayOperationService {
       String reason,
       Instant now) {
     String status = normalize(current.dayStatus());
-    BatchDayManualOperation.BatchDayManualOperationBuilder base =
-        BatchDayManualOperation.builder()
-            .operationReason(reason)
-            .operatedBy(operator)
-            .operatedAt(now)
-            .updatedAt(now);
+    BatchDayManualOperation.BatchDayManualOperationBuilder base = BatchDayManualOperation.builder()
+        .operationReason(reason)
+        .operatedBy(operator)
+        .operatedAt(now)
+        .updatedAt(now);
     BatchDayManualOperation op =
         switch (action) {
           case FREEZE -> {
             requireNotTerminal(status, action);
-            yield base.dayStatus(status).frozen(true).settledAt(current.settledAt()).build();
+            yield base.dayStatus(status)
+                .frozen(true)
+                .settledAt(current.settledAt())
+                .build();
           }
-          case RELEASE -> base.dayStatus("MANUAL_RELEASED").frozen(false).settledAt(now).build();
+          case RELEASE ->
+            base.dayStatus("MANUAL_RELEASED").frozen(false).settledAt(now).build();
           case SKIP -> {
             requireNotTerminal(status, action);
             yield base.dayStatus("SKIPPED").frozen(false).settledAt(now).build();
@@ -178,12 +177,8 @@ public class BatchDayOperationService {
     if (waitingBizDate == null) {
       return 0;
     }
-    List<BatchDayWaitingLaunchEntity> waiting =
-        waitingLaunchMapper.selectWaitingByCalendarBizDate(
-            releasedDay.tenantId(),
-            releasedDay.calendarCode(),
-            waitingBizDate,
-            RELEASE_WAITING_LIMIT);
+    List<BatchDayWaitingLaunchEntity> waiting = waitingLaunchMapper.selectWaitingByCalendarBizDate(
+        releasedDay.tenantId(), releasedDay.calendarCode(), waitingBizDate, RELEASE_WAITING_LIMIT);
     if (waiting == null || waiting.isEmpty()) {
       return 0;
     }
@@ -207,16 +202,15 @@ public class BatchDayOperationService {
     }
     Map<String, Object> payload = JsonUtils.fromJson(entity.launchPayload(), Map.class);
     String triggerType = stringValue(payload.get("triggerType"));
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(stringValue(payload.get("tenantId")))
-            .jobCode(stringValue(payload.get("jobCode")))
-            .bizDate(LocalDate.parse(stringValue(payload.get("bizDate"))))
-            .triggerType(TriggerType.valueOf(triggerType))
-            .requestId(stringValue(payload.get("requestId")))
-            .traceId(stringValue(payload.get("traceId")))
-            .params((Map<String, Object>) payload.getOrDefault("params", Map.of()))
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(stringValue(payload.get("tenantId")))
+        .jobCode(stringValue(payload.get("jobCode")))
+        .bizDate(LocalDate.parse(stringValue(payload.get("bizDate"))))
+        .triggerType(TriggerType.valueOf(triggerType))
+        .requestId(stringValue(payload.get("requestId")))
+        .traceId(stringValue(payload.get("traceId")))
+        .params((Map<String, Object>) payload.getOrDefault("params", Map.of()))
+        .build();
     return launchRequest;
   }
 

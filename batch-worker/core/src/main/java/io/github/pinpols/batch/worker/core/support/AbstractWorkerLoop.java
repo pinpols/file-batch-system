@@ -203,10 +203,9 @@ public abstract class AbstractWorkerLoop {
       }
       if (root != ex) {
         String rm = root.getMessage();
-        String rootPart =
-            Texts.hasText(rm)
-                ? root.getClass().getSimpleName() + ": " + rm
-                : root.getClass().getSimpleName();
+        String rootPart = Texts.hasText(rm)
+            ? root.getClass().getSimpleName() + ": " + rm
+            : root.getClass().getSimpleName();
         return top + " [" + rootPart + "]" + registrationFailureHint(ex);
       }
       return top + registrationFailureHint(ex);

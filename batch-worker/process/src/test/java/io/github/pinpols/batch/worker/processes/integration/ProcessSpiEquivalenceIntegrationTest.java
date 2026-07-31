@@ -27,8 +27,11 @@ class ProcessSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired ProcessStepExecutionAdapter primaryAdapter;
-  @Autowired BatchTaskExecutorRegistry registry;
+  @Autowired
+  ProcessStepExecutionAdapter primaryAdapter;
+
+  @Autowired
+  BatchTaskExecutorRegistry registry;
 
   @Test
   void registryContainsProcessTaskType() {

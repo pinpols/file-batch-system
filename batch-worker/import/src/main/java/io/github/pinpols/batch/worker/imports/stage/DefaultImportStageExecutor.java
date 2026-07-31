@@ -210,14 +210,13 @@ public class DefaultImportStageExecutor
 
   private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
     List<AbstractStageExecutor.StageStepDescriptor> ordered = new ArrayList<>();
-    for (ImportStage stage :
-        List.of(
-            ImportStage.RECEIVE,
-            ImportStage.PREPROCESS,
-            ImportStage.PARSE,
-            ImportStage.VALIDATE,
-            ImportStage.LOAD,
-            ImportStage.FEEDBACK)) {
+    for (ImportStage stage : List.of(
+        ImportStage.RECEIVE,
+        ImportStage.PREPROCESS,
+        ImportStage.PARSE,
+        ImportStage.VALIDATE,
+        ImportStage.LOAD,
+        ImportStage.FEEDBACK)) {
       ImportStageStep step = stepsByStage.get(stage);
       if (step == null) {
         throw new IllegalStateException("missing import step bean for stage: " + stage.name());

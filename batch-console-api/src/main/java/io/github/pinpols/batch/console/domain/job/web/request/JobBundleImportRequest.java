@@ -13,7 +13,8 @@ import lombok.Data;
 @Data
 public class JobBundleImportRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotEmpty
   @Size(max = 50)
@@ -23,5 +24,7 @@ public class JobBundleImportRequest {
 
   private boolean dryRun;
 
-  @Valid @NotNull private ConfigSyncBundlePayload bundle;
+  @Valid
+  @NotNull
+  private ConfigSyncBundlePayload bundle;
 }

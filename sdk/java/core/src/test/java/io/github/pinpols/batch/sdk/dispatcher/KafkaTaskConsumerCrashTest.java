@@ -26,16 +26,15 @@ import org.junit.jupiter.api.Test;
  */
 class KafkaTaskConsumerCrashTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("kafka:9092")
-          .kafkaTopicPattern("batch.task.dispatch.tx.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("kafka:9092")
+      .kafkaTopicPattern("batch.task.dispatch.tx.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private TaskDispatcher dispatcher;
   private Thread runner;
@@ -100,18 +99,16 @@ class KafkaTaskConsumerCrashTest {
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
     when(consumer.assignment()).thenReturn(Set.of());
     // poll 阻塞短时,close() 调 wakeup → 第二次 poll 抛 WakeupException
-    doAnswer(
-            inv -> {
-              Thread.sleep(50);
-              return org.apache.kafka.clients.consumer.ConsumerRecords.<String, byte[]>empty();
-            })
+    doAnswer(inv -> {
+          Thread.sleep(50);
+          return org.apache.kafka.clients.consumer.ConsumerRecords.<String, byte[]>empty();
+        })
         .when(consumer)
         .poll(any());
-    doAnswer(
-            inv -> {
-              when(consumer.poll(any())).thenThrow(new WakeupException());
-              return null;
-            })
+    doAnswer(inv -> {
+          when(consumer.poll(any())).thenThrow(new WakeupException());
+          return null;
+        })
         .when(consumer)
         .wakeup();
     doNothing().when(consumer).resume(anyCollection());

@@ -147,15 +147,14 @@ public class WorkflowRunStuckReconciler {
       targetStatus =
           dryRun ? WorkflowRunStatus.FAILED_DRY_RUN.code() : WorkflowRunStatus.FAILED.code();
     }
-    UpdateWorkflowRunStatusParam param =
-        UpdateWorkflowRunStatusParam.builder()
-            .tenantId(wr.getTenantId())
-            .id(wr.getId())
-            .runStatus(targetStatus)
-            .currentNodeCode(wr.getCurrentNodeCode())
-            .finishedAt(BatchDateTimeSupport.utcNow())
-            .expectedStatuses(EXPECTED_RUNNING)
-            .build();
+    UpdateWorkflowRunStatusParam param = UpdateWorkflowRunStatusParam.builder()
+        .tenantId(wr.getTenantId())
+        .id(wr.getId())
+        .runStatus(targetStatus)
+        .currentNodeCode(wr.getCurrentNodeCode())
+        .finishedAt(BatchDateTimeSupport.utcNow())
+        .expectedStatuses(EXPECTED_RUNNING)
+        .build();
     int rows = workflowRunMapper.updateStatus(param);
     if (rows > 0) {
       log.warn(

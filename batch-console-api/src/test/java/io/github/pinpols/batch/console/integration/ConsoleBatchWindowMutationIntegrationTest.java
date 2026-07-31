@@ -56,11 +56,10 @@ class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .isOk();
 
-    var row =
-        jdbcTemplate.queryForMap(
-            "SELECT tenant_id, window_code, timezone, end_strategy FROM batch.batch_window"
-                + " WHERE window_code = ?",
-            code);
+    var row = jdbcTemplate.queryForMap(
+        "SELECT tenant_id, window_code, timezone, end_strategy FROM batch.batch_window"
+            + " WHERE window_code = ?",
+        code);
     assertThat(row.get("tenant_id")).isEqualTo("int-win-ta");
     assertThat(row.get("window_code")).isEqualTo(code);
     assertThat(row.get("end_strategy")).isEqualTo("FINISH_RUNNING");
@@ -82,9 +81,8 @@ class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrat
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.batch_window WHERE window_code = ?", Long.class, "q q q");
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.batch_window WHERE window_code = ?", Long.class, "q q q");
     assertThat(cnt).isZero();
   }
 

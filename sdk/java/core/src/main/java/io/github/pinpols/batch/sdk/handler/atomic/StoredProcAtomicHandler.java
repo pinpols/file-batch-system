@@ -232,11 +232,10 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
     }
     String schema = schemaOf(procName);
     if (schema == null || !config.allowedSchemas().contains(schema)) {
-      throw new SecurityException(
-          "procedureName schema not allowed: "
-              + procName
-              + ", allowedSchemas="
-              + config.allowedSchemas());
+      throw new SecurityException("procedureName schema not allowed: "
+          + procName
+          + ", allowedSchemas="
+          + config.allowedSchemas());
     }
   }
 
@@ -245,20 +244,18 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
    * pg_write_server_files),命中即抛 {@link SecurityException}。
    */
   private void requireNonOsCapableRole(Connection conn) throws Exception {
-    String sql =
-        "select rolsuper"
-            + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
-            + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
-            + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
-            + " from pg_roles where rolname = current_user";
+    String sql = "select rolsuper"
+        + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
+        + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
+        + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
+        + " from pg_roles where rolname = current_user";
     try (PreparedStatement ps = conn.prepareStatement(sql);
         ResultSet rs = ps.executeQuery()) {
       if (rs.next() && rs.getBoolean(1)) {
-        throw new SecurityException(
-            "refusing stored-proc on OS-capable DB role (superuser /"
-                + " pg_execute_server_program / pg_read_server_files / pg_write_server_files);"
-                + " connect as a least-privilege role, or disable forbidOsCapableRole only in"
-                + " trusted test envs");
+        throw new SecurityException("refusing stored-proc on OS-capable DB role (superuser /"
+            + " pg_execute_server_program / pg_read_server_files / pg_write_server_files);"
+            + " connect as a least-privilege role, or disable forbidOsCapableRole only in"
+            + " trusted test envs");
       }
     }
   }
@@ -270,12 +267,11 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
   private void requireNotSecurityDefiner(Connection conn, String procName) throws Exception {
     String schema = schemaOf(procName);
     String name = nameOf(procName);
-    String sql =
-        schema == null
-            ? "select prosecdef from pg_proc where proname = ?"
-            : "select p.prosecdef from pg_catalog.pg_proc p"
-                + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-                + " where p.proname = ? and n.nspname = ?";
+    String sql = schema == null
+        ? "select prosecdef from pg_proc where proname = ?"
+        : "select p.prosecdef from pg_catalog.pg_proc p"
+            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+            + " where p.proname = ? and n.nspname = ?";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
       ps.setString(1, name);
       if (schema != null) {

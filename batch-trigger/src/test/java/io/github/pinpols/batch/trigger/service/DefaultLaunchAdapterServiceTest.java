@@ -25,11 +25,10 @@ class DefaultLaunchAdapterServiceTest {
   private static final BatchTimezoneProvider TIMEZONE_PROVIDER =
       new BatchTimezoneProvider(new BatchTimezoneProperties());
 
-  private final DefaultLaunchAdapterService service =
-      new DefaultLaunchAdapterService(
-          new CalendarBizDateResolver(TIMEZONE_PROVIDER),
-          TIMEZONE_PROVIDER,
-          new CronExpressionAdapter());
+  private final DefaultLaunchAdapterService service = new DefaultLaunchAdapterService(
+      new CalendarBizDateResolver(TIMEZONE_PROVIDER),
+      TIMEZONE_PROVIDER,
+      new CronExpressionAdapter());
 
   @Test
   void shouldBuildApiLaunchRequestFromControllerPayload() {
@@ -40,9 +39,8 @@ class DefaultLaunchAdapterServiceTest {
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("source", "api"));
 
-    LaunchRequest launchRequest =
-        service.fromApiRequest(
-            new TriggerLaunchCommand(request, "idem-001", "req-001", "trace-001"));
+    LaunchRequest launchRequest = service.fromApiRequest(
+        new TriggerLaunchCommand(request, "idem-001", "req-001", "trace-001"));
 
     assertThat(launchRequest.tenantId()).isEqualTo("t1");
     assertThat(launchRequest.jobCode()).isEqualTo("IMPORT_JOB");
@@ -66,14 +64,12 @@ class DefaultLaunchAdapterServiceTest {
     descriptor.setCatchUpPolicy(CatchUpPolicyType.MANUAL_APPROVAL.code());
 
     Instant fireTime = Instant.parse("2026-03-27T16:30:00Z");
-    CalendarBizDateDefinition calendar =
-        new CalendarBizDateDefinition(
-            "Asia/Shanghai", LocalTime.of(6, 0), "SKIP", Set.of(), Set.of());
-    LaunchRequest launchRequest =
-        service.fromScheduledTrigger(
-            new ScheduledTriggerCommand(
-                descriptor, fireTime, TriggerType.CATCH_UP, "req-002", "trace-002"),
-            calendar);
+    CalendarBizDateDefinition calendar = new CalendarBizDateDefinition(
+        "Asia/Shanghai", LocalTime.of(6, 0), "SKIP", Set.of(), Set.of());
+    LaunchRequest launchRequest = service.fromScheduledTrigger(
+        new ScheduledTriggerCommand(
+            descriptor, fireTime, TriggerType.CATCH_UP, "req-002", "trace-002"),
+        calendar);
 
     assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, 3, 27));
     assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.CATCH_UP);
@@ -101,9 +97,8 @@ class DefaultLaunchAdapterServiceTest {
     descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
     Instant fireTime = Instant.parse("2026-03-27T14:00:00Z");
-    LaunchRequest launchRequest =
-        service.fromScheduledTrigger(
-            new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv1", "trace-iv1"), null);
+    LaunchRequest launchRequest = service.fromScheduledTrigger(
+        new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv1", "trace-iv1"), null);
 
     assertThat(launchRequest.dataIntervalStart()).isEqualTo(fireTime);
     assertThat(launchRequest.dataIntervalEnd())
@@ -124,9 +119,8 @@ class DefaultLaunchAdapterServiceTest {
     descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
     Instant fireTime = Instant.parse("2026-03-27T14:30:00Z");
-    LaunchRequest launchRequest =
-        service.fromScheduledTrigger(
-            new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv2", "trace-iv2"), null);
+    LaunchRequest launchRequest = service.fromScheduledTrigger(
+        new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv2", "trace-iv2"), null);
 
     assertThat(launchRequest.dataIntervalStart()).isEqualTo(fireTime);
     assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T14:35:00Z"));
@@ -145,9 +139,8 @@ class DefaultLaunchAdapterServiceTest {
     descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
     Instant fireTime = Instant.parse("2026-03-27T14:00:00Z");
-    LaunchRequest launchRequest =
-        service.fromScheduledTrigger(
-            new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv3", "trace-iv3"), null);
+    LaunchRequest launchRequest = service.fromScheduledTrigger(
+        new ScheduledTriggerCommand(descriptor, fireTime, null, "req-iv3", "trace-iv3"), null);
 
     assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T15:00:00Z"));
   }
@@ -164,11 +157,10 @@ class DefaultLaunchAdapterServiceTest {
     descriptor.setTriggerMode("MANUAL");
     descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
-    LaunchRequest launchRequest =
-        service.fromScheduledTrigger(
-            new ScheduledTriggerCommand(
-                descriptor, Instant.parse("2026-03-27T00:00:00Z"), null, "req-iv4", "trace-iv4"),
-            null);
+    LaunchRequest launchRequest = service.fromScheduledTrigger(
+        new ScheduledTriggerCommand(
+            descriptor, Instant.parse("2026-03-27T00:00:00Z"), null, "req-iv4", "trace-iv4"),
+        null);
 
     assertThat(launchRequest.dataIntervalStart()).isNotNull(); // 仍透传 fireTime 作为 start
     assertThat(launchRequest.dataIntervalEnd()).isNull();
@@ -186,9 +178,8 @@ class DefaultLaunchAdapterServiceTest {
     request.setDataIntervalStart(Instant.parse("2026-03-27T14:30:00Z"));
     request.setDataIntervalEnd(Instant.parse("2026-03-27T14:35:00Z"));
 
-    LaunchRequest launchRequest =
-        service.fromApiRequest(
-            new TriggerLaunchCommand(request, "idem-api", "req-api", "trace-api"));
+    LaunchRequest launchRequest = service.fromApiRequest(
+        new TriggerLaunchCommand(request, "idem-api", "req-api", "trace-api"));
 
     assertThat(launchRequest.dataIntervalStart()).isEqualTo(Instant.parse("2026-03-27T14:30:00Z"));
     assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T14:35:00Z"));
@@ -205,11 +196,10 @@ class DefaultLaunchAdapterServiceTest {
     descriptor.setTriggerMode("SCHEDULED");
     descriptor.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
 
-    LaunchRequest launchRequest =
-        service.fromScheduledTrigger(
-            new ScheduledTriggerCommand(
-                descriptor, Instant.parse("2026-03-27T08:00:00Z"), null, "req-003", "trace-003"),
-            null);
+    LaunchRequest launchRequest = service.fromScheduledTrigger(
+        new ScheduledTriggerCommand(
+            descriptor, Instant.parse("2026-03-27T08:00:00Z"), null, "req-003", "trace-003"),
+        null);
 
     assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.SCHEDULED);
     assertThat(launchRequest.params())

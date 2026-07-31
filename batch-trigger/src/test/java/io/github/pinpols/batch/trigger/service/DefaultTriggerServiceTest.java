@@ -43,15 +43,32 @@ import org.springframework.transaction.TransactionStatus;
 @ExtendWith(MockitoExtension.class)
 class DefaultTriggerServiceTest {
 
-  @Mock private LaunchAdapterService launchAdapterService;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private TriggerMisfirePendingMapper triggerMisfirePendingMapper;
-  @Mock private TriggerOutboxDomainEventPublisher triggerOutboxPublisher;
-  @Mock private BusinessCalendarMapper businessCalendarMapper;
-  @Mock private TenantStatusMapper tenantStatusMapper;
-  @Mock private PlatformTransactionManager transactionManager;
-  @Mock private TransactionStatus transactionStatus;
-  @Mock private UpstreamReadinessChecker upstreamReadinessChecker;
+  @Mock
+  private LaunchAdapterService launchAdapterService;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private TriggerMisfirePendingMapper triggerMisfirePendingMapper;
+
+  @Mock
+  private TriggerOutboxDomainEventPublisher triggerOutboxPublisher;
+
+  @Mock
+  private BusinessCalendarMapper businessCalendarMapper;
+
+  @Mock
+  private TenantStatusMapper tenantStatusMapper;
+
+  @Mock
+  private PlatformTransactionManager transactionManager;
+
+  @Mock
+  private TransactionStatus transactionStatus;
+
+  @Mock
+  private UpstreamReadinessChecker upstreamReadinessChecker;
 
   private DefaultTriggerService service;
 
@@ -59,24 +76,21 @@ class DefaultTriggerServiceTest {
   void setUp() {
     lenient().when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
     lenient().when(tenantStatusMapper.selectStatus(any())).thenReturn("ACTIVE");
-    service =
-        new DefaultTriggerService(
-            launchAdapterService,
-            triggerRequestMapper,
-            triggerMisfirePendingMapper,
-            triggerOutboxPublisher,
-            businessCalendarMapper,
-            tenantStatusMapper,
-            transactionManager,
-            upstreamReadinessChecker);
+    service = new DefaultTriggerService(
+        launchAdapterService,
+        triggerRequestMapper,
+        triggerMisfirePendingMapper,
+        triggerOutboxPublisher,
+        businessCalendarMapper,
+        tenantStatusMapper,
+        transactionManager,
+        upstreamReadinessChecker);
   }
 
   @Test
   void shouldRejectBlankIdempotencyKey() {
-    assertThatThrownBy(
-            () ->
-                service.launch(
-                    new TriggerLaunchCommand(validRequest(), " ", "req-001", "trace-001")))
+    assertThatThrownBy(() ->
+            service.launch(new TriggerLaunchCommand(validRequest(), " ", "req-001", "trace-001")))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.MISSING_IDEMPOTENCY_KEY);
@@ -86,15 +100,14 @@ class DefaultTriggerServiceTest {
   void shouldShortCircuitWhenDedupRequestAlreadyExists() {
     TriggerLaunchCommand command =
         new TriggerLaunchCommand(validRequest(), "idem-001", "req-001", "trace-001");
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 27),
-            TriggerType.API,
-            "req-001",
-            "trace-001",
-            Map.of());
+    LaunchRequest launchRequest = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 27),
+        TriggerType.API,
+        "req-001",
+        "trace-001",
+        Map.of());
     TriggerRequestEntity existing = new TriggerRequestEntity();
     existing.setTenantId("t1");
     existing.setRequestId("existing-request");
@@ -208,22 +221,20 @@ class DefaultTriggerServiceTest {
 
   @Test
   void shouldSkipScheduledTriggerWhenBizDateResolutionReturnsNull() {
-    ScheduledTriggerCommand command =
-        new ScheduledTriggerCommand(
-            scheduledDescriptor(),
-            Instant.parse("2026-03-28T18:00:00Z"),
-            TriggerType.SCHEDULED,
-            "req-skip",
-            "trace-skip");
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            null,
-            TriggerType.SCHEDULED,
-            "req-skip",
-            "trace-skip",
-            Map.of("calendarCode", "BIZ_CAL"));
+    ScheduledTriggerCommand command = new ScheduledTriggerCommand(
+        scheduledDescriptor(),
+        Instant.parse("2026-03-28T18:00:00Z"),
+        TriggerType.SCHEDULED,
+        "req-skip",
+        "trace-skip");
+    LaunchRequest launchRequest = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        null,
+        TriggerType.SCHEDULED,
+        "req-skip",
+        "trace-skip",
+        Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
 
@@ -242,22 +253,20 @@ class DefaultTriggerServiceTest {
     // 由 QuartzLaunchJob 创建 one-shot retry trigger。
     TriggerDescriptor descriptor = scheduledDescriptor();
     descriptor.setDependsOnJobCode("UPSTREAM_SETTLE");
-    ScheduledTriggerCommand command =
-        new ScheduledTriggerCommand(
-            descriptor,
-            Instant.parse("2026-03-28T18:00:00Z"),
-            TriggerType.SCHEDULED,
-            "req-nr",
-            "trace-nr");
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 28),
-            TriggerType.SCHEDULED,
-            "req-nr",
-            "trace-nr",
-            Map.of("calendarCode", "BIZ_CAL"));
+    ScheduledTriggerCommand command = new ScheduledTriggerCommand(
+        descriptor,
+        Instant.parse("2026-03-28T18:00:00Z"),
+        TriggerType.SCHEDULED,
+        "req-nr",
+        "trace-nr");
+    LaunchRequest launchRequest = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 28),
+        TriggerType.SCHEDULED,
+        "req-nr",
+        "trace-nr",
+        Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
     when(upstreamReadinessChecker.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, 3, 28)))
@@ -276,22 +285,20 @@ class DefaultTriggerServiceTest {
   void launchScheduled_upstreamReady_proceedsToForward() {
     TriggerDescriptor descriptor = scheduledDescriptor();
     descriptor.setDependsOnJobCode("UPSTREAM_SETTLE");
-    ScheduledTriggerCommand command =
-        new ScheduledTriggerCommand(
-            descriptor,
-            Instant.parse("2026-03-28T18:00:00Z"),
-            TriggerType.SCHEDULED,
-            "req-ok",
-            "trace-ok");
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 28),
-            TriggerType.SCHEDULED,
-            "req-ok",
-            "trace-ok",
-            Map.of("calendarCode", "BIZ_CAL"));
+    ScheduledTriggerCommand command = new ScheduledTriggerCommand(
+        descriptor,
+        Instant.parse("2026-03-28T18:00:00Z"),
+        TriggerType.SCHEDULED,
+        "req-ok",
+        "trace-ok");
+    LaunchRequest launchRequest = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 28),
+        TriggerType.SCHEDULED,
+        "req-ok",
+        "trace-ok",
+        Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
     when(upstreamReadinessChecker.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, 3, 28)))
@@ -306,36 +313,32 @@ class DefaultTriggerServiceTest {
 
   @Test
   void createPendingCatchUpShouldLinkMisfirePendingToCatchUpRequest() {
-    ScheduledTriggerCommand command =
-        new ScheduledTriggerCommand(
-            scheduledDescriptor(),
-            Instant.parse("2026-03-28T18:00:00Z"),
-            TriggerType.CATCH_UP,
-            "req-cu",
-            "trace-cu");
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 28),
-            TriggerType.CATCH_UP,
-            "req-cu",
-            "trace-cu",
-            Map.of("catchUp", true));
-    doAnswer(
-            invocation -> {
-              TriggerRequestEntity entity = invocation.getArgument(0);
-              entity.setId(900L);
-              return 1;
-            })
+    ScheduledTriggerCommand command = new ScheduledTriggerCommand(
+        scheduledDescriptor(),
+        Instant.parse("2026-03-28T18:00:00Z"),
+        TriggerType.CATCH_UP,
+        "req-cu",
+        "trace-cu");
+    LaunchRequest launchRequest = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 28),
+        TriggerType.CATCH_UP,
+        "req-cu",
+        "trace-cu",
+        Map.of("catchUp", true));
+    doAnswer(invocation -> {
+          TriggerRequestEntity entity = invocation.getArgument(0);
+          entity.setId(900L);
+          return 1;
+        })
         .when(triggerRequestMapper)
         .insert(any());
-    doAnswer(
-            invocation -> {
-              TriggerMisfirePendingEntity entity = invocation.getArgument(0);
-              entity.setId(901L);
-              return 1;
-            })
+    doAnswer(invocation -> {
+          TriggerMisfirePendingEntity entity = invocation.getArgument(0);
+          entity.setId(901L);
+          return 1;
+        })
         .when(triggerMisfirePendingMapper)
         .insertPending(any());
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
@@ -352,11 +355,8 @@ class DefaultTriggerServiceTest {
   void launch_suspendedTenant_throwsBizException() {
     when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
 
-    assertThatThrownBy(
-            () ->
-                service.launch(
-                    new TriggerLaunchCommand(
-                        validRequest(), "idem-susp", "req-susp", "trace-susp")))
+    assertThatThrownBy(() -> service.launch(
+            new TriggerLaunchCommand(validRequest(), "idem-susp", "req-susp", "trace-susp")))
         .isInstanceOf(BizException.class)
         .extracting(e -> ((BizException) e).getMessageArgs())
         .satisfies(
@@ -371,13 +371,12 @@ class DefaultTriggerServiceTest {
   void launchScheduled_suspendedTenant_throwsBizException() {
     when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
 
-    ScheduledTriggerCommand command =
-        new ScheduledTriggerCommand(
-            scheduledDescriptor(),
-            Instant.parse("2026-03-28T18:00:00Z"),
-            TriggerType.SCHEDULED,
-            "req-susp",
-            "trace-susp");
+    ScheduledTriggerCommand command = new ScheduledTriggerCommand(
+        scheduledDescriptor(),
+        Instant.parse("2026-03-28T18:00:00Z"),
+        TriggerType.SCHEDULED,
+        "req-susp",
+        "trace-susp");
 
     assertThatThrownBy(() -> service.launchScheduled(command))
         .isInstanceOf(BizException.class)

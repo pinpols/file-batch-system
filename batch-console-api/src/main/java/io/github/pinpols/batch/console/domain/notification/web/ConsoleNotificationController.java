@@ -45,10 +45,9 @@ public class ConsoleNotificationController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<ConsoleNotificationChannelResponse>> listChannels(
       @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(
-        service.listChannels(tenantId).stream()
-            .map(ConsoleNotificationChannelResponse::from)
-            .toList());
+    return responseFactory.success(service.listChannels(tenantId).stream()
+        .map(ConsoleNotificationChannelResponse::from)
+        .toList());
   }
 
   @GetMapping("/channels/{channelCode}")
@@ -100,8 +99,9 @@ public class ConsoleNotificationController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<ConsoleSubscriptionRuleResponse>> listRules(
       @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(
-        service.listRules(tenantId).stream().map(ConsoleSubscriptionRuleResponse::from).toList());
+    return responseFactory.success(service.listRules(tenantId).stream()
+        .map(ConsoleSubscriptionRuleResponse::from)
+        .toList());
   }
 
   @GetMapping("/rules/{ruleId}")
@@ -146,9 +146,8 @@ public class ConsoleNotificationController {
   public CommonResponse<List<ConsoleNotificationDeliveryLogResponse>> deliveryLogs(
       @RequestParam @NotBlank String tenantId,
       @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
-    return responseFactory.success(
-        service.deliveryLogs(tenantId, limit).stream()
-            .map(ConsoleNotificationDeliveryLogResponse::from)
-            .toList());
+    return responseFactory.success(service.deliveryLogs(tenantId, limit).stream()
+        .map(ConsoleNotificationDeliveryLogResponse::from)
+        .toList());
   }
 }

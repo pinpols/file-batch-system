@@ -32,11 +32,11 @@ class SqlConsistencyIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:17"))
-          .withDatabaseName("batch_sql_guard")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse("postgres:17"))
+      .withDatabaseName("batch_sql_guard")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123");
 
   @Test
   void flywayMigrationsKeyConstraintsAndUpsertProbe() throws Exception {
@@ -48,9 +48,8 @@ class SqlConsistencyIntegrationTest {
         .load()
         .migrate();
 
-    SingleConnectionDataSource dataSource =
-        new SingleConnectionDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+    SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     try {
       JdbcTemplate jdbc = new JdbcTemplate(dataSource);
       // V62: uk_job_instance_tenant_dedup 替换为 (tenant_id, dedup_key, run_attempt) 三元
@@ -65,26 +64,20 @@ class SqlConsistencyIntegrationTest {
   }
 
   private static void assertUniquePresent(JdbcTemplate jdbc, String table, String constraintName) {
-    Long cnt =
-        jdbc.queryForObject(
-            """
+    Long cnt = jdbc.queryForObject("""
             select count(*) from information_schema.table_constraints tc
             where tc.table_schema = 'batch'
               and tc.table_name = ?
               and tc.constraint_name = ?
               and tc.constraint_type in ('UNIQUE', 'PRIMARY KEY')
-            """,
-            Long.class,
-            table,
-            constraintName);
+            """, Long.class, table, constraintName);
     assertThat(cnt).isEqualTo(1L);
   }
 
   private static void runRuntimeParameterUpsertProbe(DataSource dataSource) throws Exception {
     try (Connection c = dataSource.getConnection();
         var st = c.createStatement()) {
-      st.execute(
-          """
+      st.execute("""
           insert into batch.batch_runtime_default_parameter (
               module, parameter_key, default_value, value_type, yaml_path, description
           ) values (
@@ -93,8 +86,7 @@ class SqlConsistencyIntegrationTest {
           )
           on conflict (module, parameter_key) do nothing
           """);
-      st.execute(
-          """
+      st.execute("""
           insert into batch.batch_runtime_default_parameter (
               module, parameter_key, default_value, value_type, yaml_path, description
           ) values (

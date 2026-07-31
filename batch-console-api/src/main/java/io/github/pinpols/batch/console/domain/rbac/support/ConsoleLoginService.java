@@ -59,10 +59,9 @@ public class ConsoleLoginService {
     loginProtectionService.assertCaptchaSatisfied(username, clientIp, request.getCaptchaToken());
     // 用户名全局唯一，直接按 username 查找，租户从账号记录中获取
     Optional<ConsoleUserAccount> found = userAccountService.findByUsername(username);
-    boolean credentialsValid =
-        found.isPresent()
-            && found.get().enabled()
-            && passwordHasher.matches(request.getPassword(), found.get().passwordHash());
+    boolean credentialsValid = found.isPresent()
+        && found.get().enabled()
+        && passwordHasher.matches(request.getPassword(), found.get().passwordHash());
     if (!credentialsValid) {
       // 记失败 + 渐进退避(总开关关时 no-op),再抛统一的 invalid credentials(防用户枚举)。
       loginProtectionService.onLoginFailure(username, clientIp);

@@ -19,14 +19,13 @@ public class ImportLoadPluginRegistry {
       String id = plugin.id().toLowerCase(Locale.ROOT);
       ImportLoadPlugin previous = resolved.putIfAbsent(id, plugin);
       if (previous != null) {
-        throw new IllegalStateException(
-            "duplicate ImportLoadPlugin id: "
-                + id
-                + " ("
-                + previous.getClass().getName()
-                + ", "
-                + plugin.getClass().getName()
-                + ")");
+        throw new IllegalStateException("duplicate ImportLoadPlugin id: "
+            + id
+            + " ("
+            + previous.getClass().getName()
+            + ", "
+            + plugin.getClass().getName()
+            + ")");
       }
     }
     this.byId = Map.copyOf(resolved);

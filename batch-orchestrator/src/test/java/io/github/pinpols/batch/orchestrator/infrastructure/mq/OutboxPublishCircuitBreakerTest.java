@@ -25,8 +25,11 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OutboxPublishCircuitBreakerTest {
 
-  @Mock private BatchOrchestratorGovernanceProperties governance;
-  @Mock private OrchestratorRedisSupport redis;
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
+
+  @Mock
+  private OrchestratorRedisSupport redis;
 
   private OutboxPublishCircuitBreaker breaker;
   private SimpleMeterRegistry meterRegistry;
@@ -184,7 +187,8 @@ class OutboxPublishCircuitBreakerTest {
     breaker.allowNow(); // allowNow fail-open 分支
     breaker.onAdvanceResult(1); // onAdvanceResult fail-open 分支
 
-    assertThat(meterRegistry.get("batch.outbox.circuit.failopen.total").counter().count())
+    assertThat(
+            meterRegistry.get("batch.outbox.circuit.failopen.total").counter().count())
         .isEqualTo(2.0d);
   }
 }

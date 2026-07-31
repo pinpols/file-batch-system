@@ -60,12 +60,23 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-  @Autowired private LaunchService launchService;
-  @Autowired private TaskExecutionService taskExecutionService;
-  @Autowired private JobInstanceMapper jobInstanceMapper;
-  @Autowired private JobPartitionMapper jobPartitionMapper;
-  @Autowired private JobTaskMapper jobTaskMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private TaskExecutionService taskExecutionService;
+
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void refreshWorkersForClaim() {
@@ -75,34 +86,30 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("reclaim 重派后旧 invocation(及缺失)的迟到 report 被 fence 拒,I2 真实结果不丢")
   void staleReportAfterReclaim_isRejectedByInvocationFence_andI2ResultWins() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-fence-" + seed.requestId())
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-fence-" + seed.requestId())
+        .params(Map.of())
+        .build();
     launchService.launch(launchRequest);
 
     JobInstanceEntity jobInstance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
     assertThat(jobInstance).isNotNull();
 
-    JobTaskEntity task =
-        jobTaskMapper
-            .selectByQuery(new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null))
-            .get(0);
-    JobPartitionEntity partition =
-        jobPartitionMapper
-            .selectByQuery(new JobPartitionQuery(TENANT, jobInstance.getId(), null, null))
-            .get(0);
+    JobTaskEntity task = jobTaskMapper
+        .selectByQuery(new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null))
+        .get(0);
+    JobPartitionEntity partition = jobPartitionMapper
+        .selectByQuery(new JobPartitionQuery(TENANT, jobInstance.getId(), null, null))
+        .get(0);
 
     // 1) worker#1 认领 → partition.current_invocation_id = I1
     JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
@@ -115,47 +122,40 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     // 2) 模拟 reclaim 重派:同一 task/partition 被重新以 I2 领取(task 保持 RUNNING = double-executor 窗口)。
     //    直接改写 current_invocation_id 复现"新 invocation 已就位、旧 worker 仍在跑"的竞态,无需真起第二个 worker。
     String invocationI2 = "inv-reclaim-" + System.nanoTime();
-    int moved =
-        jdbcTemplate.update(
-            "update batch.job_partition set current_invocation_id = ? where tenant_id = ? and id ="
-                + " ?",
-            invocationI2,
-            TENANT,
-            partition.getId());
+    int moved = jdbcTemplate.update(
+        "update batch.job_partition set current_invocation_id = ? where tenant_id = ? and id ="
+            + " ?",
+        invocationI2,
+        TENANT,
+        partition.getId());
     assertThat(moved).isEqualTo(1);
 
     // 3) worker#1 的迟到 report 带旧 I1 → 必须被 fence 拒,且不写任何状态。
-    TaskOutcomeCommand staleWithOldInvocation =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(task.getId())
-            .success(true)
-            .resultSummary("{\"stale\":\"I1 result must be dropped\"}")
-            .partitionInvocationId(invocationI1)
-            .build();
+    TaskOutcomeCommand staleWithOldInvocation = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(task.getId())
+        .success(true)
+        .resultSummary("{\"stale\":\"I1 result must be dropped\"}")
+        .partitionInvocationId(invocationI1)
+        .build();
     assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(staleWithOldInvocation))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            ex -> {
-              assertThat(ex.getCode()).isEqualTo(ResultCode.CONFLICT);
-              assertThat(ex.getMessageKey()).isEqualTo("error.task.invocation_mismatch");
-            });
+        .isInstanceOfSatisfying(BizException.class, ex -> {
+          assertThat(ex.getCode()).isEqualTo(ResultCode.CONFLICT);
+          assertThat(ex.getMessageKey()).isEqualTo("error.task.invocation_mismatch");
+        });
 
     // 4) 迟到 report 缺失 invocationId(镜像未回填的陈旧 worker)→ 同样被拒。
-    TaskOutcomeCommand staleMissingInvocation =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(task.getId())
-            .success(true)
-            .resultSummary("{\"stale\":\"missing invocation must be dropped\"}")
-            .build();
+    TaskOutcomeCommand staleMissingInvocation = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(task.getId())
+        .success(true)
+        .resultSummary("{\"stale\":\"missing invocation must be dropped\"}")
+        .build();
     assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(staleMissingInvocation))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            ex -> {
-              assertThat(ex.getCode()).isEqualTo(ResultCode.CONFLICT);
-              assertThat(ex.getMessageKey()).isEqualTo("error.task.invocation_mismatch");
-            });
+        .isInstanceOfSatisfying(BizException.class, ex -> {
+          assertThat(ex.getCode()).isEqualTo(ResultCode.CONFLICT);
+          assertThat(ex.getMessageKey()).isEqualTo("error.task.invocation_mismatch");
+        });
 
     // 两次被拒后:task 仍 RUNNING、partition 仍 RUNNING 且 invocation 仍是 I2(旧结果没污染状态)。
     assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
@@ -165,14 +165,13 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     assertThat(afterStale.getCurrentInvocationId()).isEqualTo(invocationI2);
 
     // 5) I2 的真实 report → 正常推进,I2 结果落地(task→SUCCESS、partition→SUCCESS)。
-    TaskOutcomeCommand i2Report =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(task.getId())
-            .success(true)
-            .resultSummary("{\"records\":42,\"invocation\":\"I2 real result\"}")
-            .partitionInvocationId(invocationI2)
-            .build();
+    TaskOutcomeCommand i2Report = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(task.getId())
+        .success(true)
+        .resultSummary("{\"records\":42,\"invocation\":\"I2 real result\"}")
+        .partitionInvocationId(invocationI2)
+        .build();
     taskExecutionService.applyTaskOutcome(i2Report);
 
     assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())

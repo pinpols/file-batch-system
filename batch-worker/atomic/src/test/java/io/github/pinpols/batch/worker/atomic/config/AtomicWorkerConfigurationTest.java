@@ -10,15 +10,14 @@ class AtomicWorkerConfigurationTest {
 
   @Test
   void implementsWorkerConfigurationAndExposesIdentity() {
-    AtomicWorkerConfiguration cfg =
-        new AtomicWorkerConfiguration(
-            "atomic-node-1",
-            "ATOMIC",
-            "default-tenant",
-            15000L,
-            "batch.task.dispatch.atomic",
-            "batch-worker-atomic",
-            List.of("shell", "sql"));
+    AtomicWorkerConfiguration cfg = new AtomicWorkerConfiguration(
+        "atomic-node-1",
+        "ATOMIC",
+        "default-tenant",
+        15000L,
+        "batch.task.dispatch.atomic",
+        "batch-worker-atomic",
+        List.of("shell", "sql"));
     assertThat(cfg).isInstanceOf(WorkerConfiguration.class);
     assertThat(cfg.workerCode()).isEqualTo("atomic-node-1");
     assertThat(cfg.workerType()).isEqualTo("ATOMIC");

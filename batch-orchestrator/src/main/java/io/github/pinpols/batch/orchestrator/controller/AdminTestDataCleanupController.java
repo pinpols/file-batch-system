@@ -56,8 +56,10 @@ public class AdminTestDataCleanupController {
     if (ids == null || ids.isBlank()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
-    List<String> tenantIds =
-        Arrays.stream(ids.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+    List<String> tenantIds = Arrays.stream(ids.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .toList();
     return cleanupService.cleanupByExactTenantIds(tenantIds);
   }
 

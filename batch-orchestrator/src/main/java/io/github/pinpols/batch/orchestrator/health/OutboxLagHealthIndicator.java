@@ -38,14 +38,13 @@ public class OutboxLagHealthIndicator implements HealthIndicator {
       long backlog = mapper.countByStatuses(PENDING_STATUSES);
       long stalePublishing =
           mapper.countStalePublishing(PUBLISHING_STATUS, properties.getStalePublishingSeconds());
-      Health.Builder builder =
-          (backlog >= properties.getBacklogThreshold() || stalePublishing > 0
-                  ? Health.down()
-                  : Health.up())
-              .withDetail("backlog", backlog)
-              .withDetail("backlogThreshold", properties.getBacklogThreshold())
-              .withDetail("stalePublishing", stalePublishing)
-              .withDetail("stalePublishingTimeoutSeconds", properties.getStalePublishingSeconds());
+      Health.Builder builder = (backlog >= properties.getBacklogThreshold() || stalePublishing > 0
+              ? Health.down()
+              : Health.up())
+          .withDetail("backlog", backlog)
+          .withDetail("backlogThreshold", properties.getBacklogThreshold())
+          .withDetail("stalePublishing", stalePublishing)
+          .withDetail("stalePublishingTimeoutSeconds", properties.getStalePublishingSeconds());
       return builder.build();
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(OutboxLagHealthIndicator.class, "catch:Exception", ex);

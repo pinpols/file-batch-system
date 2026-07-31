@@ -45,14 +45,13 @@ public class ImportErrorOutputStorage {
         || badRecords.isEmpty()) {
       return null;
     }
-    String objectKey =
-        BatchFileConstants.ERROR_OUTPUT_PREFIX
-            + tenantId
-            + "/"
-            + fileId
-            + "/"
-            + fileId
-            + ".error.jsonl";
+    String objectKey = BatchFileConstants.ERROR_OUTPUT_PREFIX
+        + tenantId
+        + "/"
+        + fileId
+        + "/"
+        + fileId
+        + ".error.jsonl";
     Path spool = null;
     try {
       spool = Files.createTempFile("import-error-", ".jsonl");

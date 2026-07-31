@@ -28,9 +28,8 @@ import org.junit.jupiter.api.Test;
 class PreprocessStepKmsDecryptTest {
 
   private static final String KEY_REF = "TEST_KMS_2026";
-  private static final String KEY_B64 =
-      Base64.getEncoder()
-          .encodeToString("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345".getBytes(StandardCharsets.US_ASCII));
+  private static final String KEY_B64 = Base64.getEncoder()
+      .encodeToString("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345".getBytes(StandardCharsets.US_ASCII));
   private static final String PLAINTEXT = "{\"customerNo\":\"C001\",\"customerName\":\"Alice\"}";
 
   private BatchObjectCryptoService cryptoService;
@@ -53,13 +52,12 @@ class PreprocessStepKmsDecryptTest {
     when(runtimeRepo.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
     // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
 
-    preprocessStep =
-        new PreprocessStep(
-            runtimeRepo,
-            security,
-            cryptoService,
-            mock(io.github.pinpols.batch.common.config.S3StorageProperties.class),
-            mock(io.github.pinpols.batch.common.storage.BatchObjectStore.class));
+    preprocessStep = new PreprocessStep(
+        runtimeRepo,
+        security,
+        cryptoService,
+        mock(io.github.pinpols.batch.common.config.S3StorageProperties.class),
+        mock(io.github.pinpols.batch.common.storage.BatchObjectStore.class));
   }
 
   @Test
@@ -74,31 +72,30 @@ class PreprocessStepKmsDecryptTest {
     //   targetCharset, checksumType, checksumValue, sourceType, sourceRef, storageType,
     //   storagePath, storageBucket, templateCode, batchNo, content, contentBase64,
     //   delimiter, headerRows, footerRows, withHeader, metadata
-    ImportPayload payload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            "JSON",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            encryptedBase64, // contentBase64（第 18 个字段）
-            null,
-            null,
-            null,
-            null,
-            Map.of());
+    ImportPayload payload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        "JSON",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        encryptedBase64, // contentBase64（第 18 个字段）
+        null,
+        null,
+        null,
+        null,
+        Map.of());
 
     ImportJobContext context = buildContext(payload);
     context.getAttributes().put("importPayload", payload);
@@ -116,11 +113,10 @@ class PreprocessStepKmsDecryptTest {
   @Test
   void shouldPassThrough_nonEncryptedPayload() {
     String rawJson = "{\"records\":[]}";
-    ImportPayload payload =
-        new ImportPayload(
-            null, null, null, null, "JSON", null, null, null, null, null, null, null, null, null,
-            null, null, rawJson, null, // content（第 17 个字段）
-            null, null, null, null, Map.of());
+    ImportPayload payload = new ImportPayload(
+        null, null, null, null, "JSON", null, null, null, null, null, null, null, null, null, null,
+        null, rawJson, null, // content（第 17 个字段）
+        null, null, null, null, Map.of());
 
     ImportJobContext context = buildContext(payload);
     context.getAttributes().put("importPayload", payload);

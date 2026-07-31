@@ -57,11 +57,10 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     }
     int rows = quotaRuntimeStateMapper.updateWithCas(state);
     if (rows == 0) {
-      throw new OptimisticLockingFailureException(
-          "quota_runtime_state version mismatch: id="
-              + state.id()
-              + ", version="
-              + state.version());
+      throw new OptimisticLockingFailureException("quota_runtime_state version mismatch: id="
+          + state.id()
+          + ", version="
+          + state.version());
     }
   }
 
@@ -90,20 +89,15 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     }
 
     Instant now = BatchDateTimeSupport.utcNow();
-    QuotaRuntimeStateEntity state =
-        loadOrCreate(
-            new StateContext(
-                request.owner(), policy.name(), now, request.policy().slidingWindowHours()));
+    QuotaRuntimeStateEntity state = loadOrCreate(new StateContext(
+        request.owner(), policy.name(), now, request.policy().slidingWindowHours()));
     state = refreshState(state, policy, now, request.policy().slidingWindowHours());
     if (state == null) {
       return ResourceCheck.allow();
     }
 
-    int borrowedNeeded =
-        Math.max(
-            0,
-            (int)
-                (request.currentActiveCount() + normalizedRequested - request.policy().baseCap()));
+    int borrowedNeeded = Math.max(0, (int)
+        (request.currentActiveCount() + normalizedRequested - request.policy().baseCap()));
     if (borrowedNeeded == 0) {
       persist(state);
       return ResourceCheck.allow();
@@ -114,9 +108,8 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     int currentPeak =
         state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
     if (borrowedNeeded > currentPeak) {
-      state =
-          state.withPeakAndTimestamps(
-              borrowedNeeded, state.lastResetAt() == null ? now : state.lastResetAt(), now);
+      state = state.withPeakAndTimestamps(
+          borrowedNeeded, state.lastResetAt() == null ? now : state.lastResetAt(), now);
     }
     // M-4: 只要使用了突发容量就必须持久化状态，否则 lastUpdatedAt 漂移导致窗口过期误判
     persist(state);
@@ -221,27 +214,25 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     if (state != null) {
       return state;
     }
-    QuotaRuntimeStateEntity created =
-        new QuotaRuntimeStateEntity(
-            null,
-            tenantId,
-            quotaScope,
-            ownerCode,
-            ctx.quotaResetPolicy(),
-            null,
-            null,
-            0,
-            null,
-            ctx.now(),
-            ctx.now(),
-            null);
-    created =
-        refreshState(
-            created,
-            QuotaResetPolicy.from(ctx.quotaResetPolicy()),
-            ctx.now(),
-            ctx.slidingWindowHours(),
-            false);
+    QuotaRuntimeStateEntity created = new QuotaRuntimeStateEntity(
+        null,
+        tenantId,
+        quotaScope,
+        ownerCode,
+        ctx.quotaResetPolicy(),
+        null,
+        null,
+        0,
+        null,
+        ctx.now(),
+        ctx.now(),
+        null);
+    created = refreshState(
+        created,
+        QuotaResetPolicy.from(ctx.quotaResetPolicy()),
+        ctx.now(),
+        ctx.slidingWindowHours(),
+        false);
     return created;
   }
 
@@ -263,13 +254,12 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     String normalizedPolicy = effectivePolicy.name();
     boolean changed = false;
     if (!normalizedPolicy.equalsIgnoreCase(state.quotaResetPolicy())) {
-      state =
-          state.withRefresh(
-              normalizedPolicy,
-              state.windowStartedAt(),
-              state.windowExpiresAt(),
-              state.peakBorrowedCount() == null ? 0 : state.peakBorrowedCount(),
-              state.lastResetAt());
+      state = state.withRefresh(
+          normalizedPolicy,
+          state.windowStartedAt(),
+          state.windowExpiresAt(),
+          state.peakBorrowedCount() == null ? 0 : state.peakBorrowedCount(),
+          state.lastResetAt());
       changed = true;
     }
     if (!effectivePolicy.isRuntimeManaged()) {
@@ -303,9 +293,8 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       if (state.windowStartedAt() == null
           || state.windowExpiresAt() == null
           || !now.isBefore(state.windowExpiresAt())) {
-        state =
-            state.withRefresh(
-                normalizedPolicy, now, now.plus(Duration.ofHours(normalizedHours)), 0, now);
+        state = state.withRefresh(
+            normalizedPolicy, now, now.plus(Duration.ofHours(normalizedHours)), 0, now);
         changed = true;
       }
     }

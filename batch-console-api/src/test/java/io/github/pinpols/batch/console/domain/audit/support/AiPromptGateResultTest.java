@@ -20,9 +20,8 @@ class AiPromptGateResultTest {
 
   @Test
   void rejectedShouldCarryDecisionAndReason() {
-    AiPromptGateResult r =
-        AiPromptGateResult.rejected(
-            AiPromptDecision.REJECTED_SAFETY, AiPromptCategory.FILE_GOVERNANCE, "policy");
+    AiPromptGateResult r = AiPromptGateResult.rejected(
+        AiPromptDecision.REJECTED_SAFETY, AiPromptCategory.FILE_GOVERNANCE, "policy");
     assertThat(r.approved()).isFalse();
     assertThat(r.decision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY);
     assertThat(r.reason()).isEqualTo("policy");

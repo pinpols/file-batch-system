@@ -45,22 +45,18 @@ class ConsoleAlertControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAlertController(alertApplicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAlertController(alertApplicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(
-            post("/api/console/alerts/100/ack")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+            post("/api/console/alerts/100/ack").contentType(APPLICATION_JSON).content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
         .andExpect(status().isBadRequest())
@@ -75,12 +71,10 @@ class ConsoleAlertControllerTest {
         .thenReturn(new ConsoleAlertActionResponse(100L, "t1", "ack", "ACKED"));
 
     mockMvc
-        .perform(
-            post("/api/console/alerts/100/ack")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/alerts/100/ack")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
         .andExpect(status().isOk())
@@ -91,12 +85,10 @@ class ConsoleAlertControllerTest {
   @Test
   void shouldReturn400WhenRequestBodyInvalid() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/alerts/100/close")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/alerts/100/close")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"","operatorId":"","reason":"ok"}
                     """))
         .andExpect(status().isBadRequest())

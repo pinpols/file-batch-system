@@ -165,9 +165,9 @@ public class CrossDayDependencyResolver {
     String strategy = spec.resolvedStrategy();
     return switch (strategy) {
       case CrossDayDependencySpec.STRATEGY_EFFECTIVE_ONLY ->
-          resultVersionQueryService.findEffectiveByJob(tenantId, spec.jobCode(), bizDate);
+        resultVersionQueryService.findEffectiveByJob(tenantId, spec.jobCode(), bizDate);
       case CrossDayDependencySpec.STRATEGY_LATEST_INCLUDING_PENDING ->
-          latestIncludingPending(tenantId, spec.jobCode(), bizDate);
+        latestIncludingPending(tenantId, spec.jobCode(), bizDate);
       case CrossDayDependencySpec.STRATEGY_SPECIFIC_VERSION -> {
         if (spec.specificVersionNo() == null) {
           yield Optional.empty();

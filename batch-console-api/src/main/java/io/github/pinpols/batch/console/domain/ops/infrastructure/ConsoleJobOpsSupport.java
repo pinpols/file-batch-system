@@ -100,22 +100,20 @@ public class ConsoleJobOpsSupport {
     // X-Internal-Secret,生产 bypass=false 后 trigger 侧 401。换走
     // TriggerInternalRestClient 统一注入 secret + 超时。
     RestClient restClient = triggerInternalRestClient.build();
-    CommonResponse<LaunchResponse> response =
-        restClient
-            .post()
-            .uri("/api/triggers/launch")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-            .body(
-                new TriggerLaunchPayload(
-                    tenantId,
-                    ConsoleTextSanitizer.safeInput(jobCode, 128),
-                    parseBizDate(bizDate),
-                    triggerType,
-                    params == null ? Map.of() : params))
-            .retrieve()
-            .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
+    CommonResponse<LaunchResponse> response = restClient
+        .post()
+        .uri("/api/triggers/launch")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(new TriggerLaunchPayload(
+            tenantId,
+            ConsoleTextSanitizer.safeInput(jobCode, 128),
+            parseBizDate(bizDate),
+            triggerType,
+            params == null ? Map.of() : params))
+        .retrieve()
+        .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
     if (response == null || response.data() == null) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
     }
@@ -125,16 +123,15 @@ public class ConsoleJobOpsSupport {
   public String submitCompensation(CompensationPayload payload, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
-    CompensationResponse response =
-        restClient
-            .post()
-            .uri("/internal/compensations")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-            .body(payload.withTraceId(requestMetadata.traceId()))
-            .retrieve()
-            .body(CompensationResponse.class);
+    CompensationResponse response = restClient
+        .post()
+        .uri("/internal/compensations")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(payload.withTraceId(requestMetadata.traceId()))
+        .retrieve()
+        .body(CompensationResponse.class);
     if (response == null || response.commandNo() == null) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.orchestrator.empty_compensation");
     }
@@ -147,16 +144,15 @@ public class ConsoleJobOpsSupport {
       String tenantId, String uriTemplate, Long targetId, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
-    CommonResponse<RecoveryOperationResponse> response =
-        restClient
-            .post()
-            .uri(uriTemplate, targetId)
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-            .body(Map.of("tenantId", tenantId))
-            .retrieve()
-            .body(new ParameterizedTypeReference<CommonResponse<RecoveryOperationResponse>>() {});
+    CommonResponse<RecoveryOperationResponse> response = restClient
+        .post()
+        .uri(uriTemplate, targetId)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(Map.of("tenantId", tenantId))
+        .retrieve()
+        .body(new ParameterizedTypeReference<CommonResponse<RecoveryOperationResponse>>() {});
     if (response == null || response.data() == null) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.orchestrator.empty_recovery");
     }
@@ -164,17 +160,16 @@ public class ConsoleJobOpsSupport {
   }
 
   public String submitApproval(ApprovalSubmitContext ctx) {
-    return approvalClient.submitApproval(
-        ApprovalSubmitCommand.builder()
-            .tenantId(resolveTenant(extractTenantId(ctx.payload())))
-            .approvalType(ctx.approvalType())
-            .actionType(ctx.actionType())
-            .targetType(ctx.targetType())
-            .targetId(ctx.targetId())
-            .payloadJson(JsonUtils.toJson(ctx.payload()))
-            .approvalReason(ctx.approvalReason())
-            .idempotencyKey(ctx.idempotencyKey())
-            .build());
+    return approvalClient.submitApproval(ApprovalSubmitCommand.builder()
+        .tenantId(resolveTenant(extractTenantId(ctx.payload())))
+        .approvalType(ctx.approvalType())
+        .actionType(ctx.actionType())
+        .targetType(ctx.targetType())
+        .targetId(ctx.targetId())
+        .payloadJson(JsonUtils.toJson(ctx.payload()))
+        .approvalReason(ctx.approvalReason())
+        .idempotencyKey(ctx.idempotencyKey())
+        .build());
   }
 
   /**

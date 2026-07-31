@@ -46,11 +46,14 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void sqlSeedJobRunsFromDefaultParams() {
@@ -72,15 +75,13 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
   @Test
   void httpSeedJobRunsFromDefaultParams() throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext(
-        "/ok",
-        exchange -> {
-          byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
-          exchange.sendResponseHeaders(200, body.length);
-          try (OutputStream os = exchange.getResponseBody()) {
-            os.write(body);
-          }
-        });
+    server.createContext("/ok", exchange -> {
+      byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream os = exchange.getResponseBody()) {
+        os.write(body);
+      }
+    });
     server.start();
     try {
       String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/ok";
@@ -94,9 +95,8 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 
   /** 建 SPI job(default_params 携带执行器协议)→ launch(空参)→ 等终态 SUCCESS。 */
   private void runSeedJob(String defaultParamsJson) {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
 
     // 把执行器协议写进 job_definition.default_params(生产形态:管理员配好,调度只给 jobCode)
     jdbcTemplate.update(
@@ -106,34 +106,27 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
         TENANT,
         seed.jobCode());
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-atomic-seed",
-            Map.of())); // 不传任何 launch 参数 —— 协议全来自 default_params
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-atomic-seed",
+        Map.of())); // 不传任何 launch 参数 —— 协议全来自 default_params
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("SUCCESS");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("SUCCESS");
+        });
   }
 }

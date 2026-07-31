@@ -61,23 +61,21 @@ public class AlertmanagerEmitPublisher {
     this.props = props;
     this.meterRegistryProvider = meterRegistryProvider;
     if (props.isEnabled() && Texts.hasText(props.getEndpoint())) {
-      this.httpClient =
-          HttpClient.newBuilder()
-              .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMillis()))
-              .build();
-      ThreadPoolExecutor pool =
-          new ThreadPoolExecutor(
-              1,
-              Math.max(1, props.getEmitThreads()),
-              30L,
-              TimeUnit.SECONDS,
-              new LinkedBlockingQueue<>(512),
-              r -> {
-                Thread t = new Thread(r, "am-emit");
-                t.setDaemon(true);
-                return t;
-              },
-              new ThreadPoolExecutor.AbortPolicy());
+      this.httpClient = HttpClient.newBuilder()
+          .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMillis()))
+          .build();
+      ThreadPoolExecutor pool = new ThreadPoolExecutor(
+          1,
+          Math.max(1, props.getEmitThreads()),
+          30L,
+          TimeUnit.SECONDS,
+          new LinkedBlockingQueue<>(512),
+          r -> {
+            Thread t = new Thread(r, "am-emit");
+            t.setDaemon(true);
+            return t;
+          },
+          new ThreadPoolExecutor.AbortPolicy());
       this.executor = pool;
       this.alertsUri = stripTrailingSlash(props.getEndpoint()) + ALERTS_PATH;
       log.info("AlertmanagerEmitPublisher enabled: endpoint={}", props.getEndpoint());
@@ -131,13 +129,12 @@ public class AlertmanagerEmitPublisher {
   private void sendQuietly(AlertEventEntity entity) {
     try {
       String body = JsonUtils.toJson(List.of(buildPostableAlert(entity)));
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(alertsUri))
-              .timeout(Duration.ofMillis(props.getTimeoutMillis()))
-              .header("Content-Type", "application/json")
-              .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-              .build();
+      HttpRequest request = HttpRequest.newBuilder()
+          .uri(URI.create(alertsUri))
+          .timeout(Duration.ofMillis(props.getTimeoutMillis()))
+          .header("Content-Type", "application/json")
+          .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+          .build();
       HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
       int sc = resp.statusCode();
       if (sc >= 200 && sc < 300) {

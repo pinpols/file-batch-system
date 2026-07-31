@@ -24,7 +24,8 @@ public class DryRunPlanRequest {
   private String jobCode;
 
   /** L2/L3 必填；L1 可空。 */
-  @ValidBizDate private String bizDate;
+  @ValidBizDate
+  private String bizDate;
 
   /** CONFIG_VALIDATE / SCHEDULE_PLAN / EXECUTION_PLAN。 */
   @Size(max = 64, message = "level too long (max 64)")

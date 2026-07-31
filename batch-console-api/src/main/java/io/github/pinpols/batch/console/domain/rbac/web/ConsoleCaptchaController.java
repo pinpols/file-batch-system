@@ -38,11 +38,10 @@ public class ConsoleCaptchaController {
   /** FE 拉取验证码配置:provider + 公开 siteKey + 登录防护是否开启。绝不下发 secretKey。 */
   @GetMapping("/config")
   public CommonResponse<ConsoleCaptchaConfigResponse> config() {
-    return responseFactory.success(
-        new ConsoleCaptchaConfigResponse(
-            captchaProperties.getProvider(),
-            captchaProperties.getSiteKey(),
-            loginProtectionProperties.isEnabled()));
+    return responseFactory.success(new ConsoleCaptchaConfigResponse(
+        captchaProperties.getProvider(),
+        captchaProperties.getSiteKey(),
+        loginProtectionProperties.isEnabled()));
   }
 
   /** self-hosted 滑块挑战签发。非 self-hosted provider → 404。 */

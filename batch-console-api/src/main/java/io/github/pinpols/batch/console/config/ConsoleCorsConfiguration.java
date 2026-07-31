@@ -35,23 +35,21 @@ public class ConsoleCorsConfiguration {
     }
     CorsConfiguration cfg = new CorsConfiguration();
     cfg.setAllowedOrigins(origins);
-    cfg.setAllowedMethods(
-        List.of(
-            HttpMethod.GET.name(),
-            HttpMethod.POST.name(),
-            HttpMethod.PUT.name(),
-            HttpMethod.PATCH.name(),
-            HttpMethod.DELETE.name(),
-            HttpMethod.OPTIONS.name()));
-    cfg.setAllowedHeaders(
-        List.of(
-            HttpHeaders.AUTHORIZATION,
-            HttpHeaders.CONTENT_TYPE,
-            HttpHeaders.ACCEPT,
-            "X-Tenant-Id",
-            "X-Idempotency-Key",
-            "X-Request-Id",
-            "X-XSRF-TOKEN"));
+    cfg.setAllowedMethods(List.of(
+        HttpMethod.GET.name(),
+        HttpMethod.POST.name(),
+        HttpMethod.PUT.name(),
+        HttpMethod.PATCH.name(),
+        HttpMethod.DELETE.name(),
+        HttpMethod.OPTIONS.name()));
+    cfg.setAllowedHeaders(List.of(
+        HttpHeaders.AUTHORIZATION,
+        HttpHeaders.CONTENT_TYPE,
+        HttpHeaders.ACCEPT,
+        "X-Tenant-Id",
+        "X-Idempotency-Key",
+        "X-Request-Id",
+        "X-XSRF-TOKEN"));
     cfg.setExposedHeaders(List.of("X-Request-Id", "X-Trace-Id"));
     cfg.setAllowCredentials(true); // HttpOnly cookie 必需
     cfg.setMaxAge(3600L); // preflight 缓存 1h

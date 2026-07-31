@@ -18,14 +18,12 @@ public class RuntimeBasedPartitionCountResolver implements PartitionCountResolve
   @Override
   public int resolve(
       JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
-    long historicalDurationSeconds =
-        firstPositiveLong(
-            params.get("historicalAverageDurationSeconds"),
-            params.get("historicalDurationSeconds"),
-            params.get("expectedDurationSeconds"));
-    int targetDurationSeconds =
-        firstPositiveInt(
-            params.get("targetPartitionDurationSeconds"), params.get("targetDurationSeconds"));
+    long historicalDurationSeconds = firstPositiveLong(
+        params.get("historicalAverageDurationSeconds"),
+        params.get("historicalDurationSeconds"),
+        params.get("expectedDurationSeconds"));
+    int targetDurationSeconds = firstPositiveInt(
+        params.get("targetPartitionDurationSeconds"), params.get("targetDurationSeconds"));
     if (historicalDurationSeconds > 0 && targetDurationSeconds > 0) {
       return ceilDiv(historicalDurationSeconds, targetDurationSeconds);
     }

@@ -55,12 +55,11 @@ public class KafkaConsumerTriangleValidator {
               + "ms)。Kafka 协议硬约束: 心跳间隔过长会被 broker 误判为失联触发 rebalance。");
     }
     if (sessionTimeoutMs >= maxPollIntervalMs) {
-      throw new IllegalStateException(
-          "FATAL: spring.kafka.consumer.properties.session.timeout.ms ("
-              + sessionTimeoutMs
-              + "ms) 必须 < max.poll.interval.ms ("
-              + maxPollIntervalMs
-              + "ms)。session.timeout 早于 max-poll 触发会破坏 rebalance 语义。");
+      throw new IllegalStateException("FATAL: spring.kafka.consumer.properties.session.timeout.ms ("
+          + sessionTimeoutMs
+          + "ms) 必须 < max.poll.interval.ms ("
+          + maxPollIntervalMs
+          + "ms)。session.timeout 早于 max-poll 触发会破坏 rebalance 语义。");
     }
     if (!partitionAssignmentStrategy.contains("CooperativeStickyAssignor")) {
       throw new IllegalStateException(

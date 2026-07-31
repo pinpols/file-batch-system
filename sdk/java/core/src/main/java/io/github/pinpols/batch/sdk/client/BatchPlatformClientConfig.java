@@ -31,14 +31,25 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BatchPlatformClientConfig {
 
-  @NonNull String baseUrl;
-  String apiKey;
-  @NonNull String tenantId;
-  @NonNull String workerCode;
+  @NonNull
+  String baseUrl;
 
-  @NonNull String kafkaBootstrap;
-  @NonNull String kafkaTopicPattern;
-  @NonNull String kafkaGroupId;
+  String apiKey;
+
+  @NonNull
+  String tenantId;
+
+  @NonNull
+  String workerCode;
+
+  @NonNull
+  String kafkaBootstrap;
+
+  @NonNull
+  String kafkaTopicPattern;
+
+  @NonNull
+  String kafkaGroupId;
 
   /**
    * SDK-P5-3 运行指纹:租户应用构建标识(可空)。建议由 CI 注入(如 git 短 SHA / 镜像 tag),register 时上报到平台
@@ -47,26 +58,33 @@ public class BatchPlatformClientConfig {
   String buildId;
 
   /** HTTP 调用超时(connect + read)。默认 10s。 */
-  @Default Duration httpTimeout = Duration.ofSeconds(10);
+  @Default
+  Duration httpTimeout = Duration.ofSeconds(10);
 
   /** Heartbeat 上报间隔。默认 30s。 */
-  @Default Duration heartbeatInterval = Duration.ofSeconds(30);
+  @Default
+  Duration heartbeatInterval = Duration.ofSeconds(30);
 
   /** 单 worker 进程最大并发处理任务数(线程池大小)。默认 4。 */
-  @Default int maxConcurrentTasks = 4;
+  @Default
+  int maxConcurrentTasks = 4;
 
   /** Kafka poll 间隔。默认 200ms。 */
-  @Default Duration kafkaPollInterval = Duration.ofMillis(200);
+  @Default
+  Duration kafkaPollInterval = Duration.ofMillis(200);
 
   /** in-flight 任务的 lease 续约间隔。应 < orchestrator 端 lease TTL(默认 ~3min)的 1/2。 */
-  @Default Duration leaseRenewInterval = Duration.ofSeconds(60);
+  @Default
+  Duration leaseRenewInterval = Duration.ofSeconds(60);
 
   // ─── P1-2 CLAIM 重试策略 ───────────────────────────────────────────────────
   /** CLAIM 收到 5xx / 传输错误时的最大额外重试次数(0 = 不重试,仅首试)。401/403 永远 fail-fast, 409 / 其它 4xx 永远不重试。默认 3。 */
-  @Default int claimMax5xxRetries = 3;
+  @Default
+  int claimMax5xxRetries = 3;
 
   /** CLAIM 5xx 重试的基准退避(实际:{@code base * 2^attempt})。默认 200ms。 */
-  @Default Duration claimRetryBaseDelay = Duration.ofMillis(200);
+  @Default
+  Duration claimRetryBaseDelay = Duration.ofMillis(200);
 
   // ─── P7-2 CLAIM/REPORT 连续 4xx fail-fast ──────────────────────────────────
   /**
@@ -74,7 +92,8 @@ public class BatchPlatformClientConfig {
    * isHealthy()} 报 false 让 K8s liveness probe 拉起)。任一次成功调用重置计数。 持续 4xx 通常意味 SDK 版本 / 契约不匹配, 重试无益,应
    * fail-fast 让运维介入。{@code 0} = 关闭此机制。默认 5。 鉴权 401/403 仍是首次即 fatal(P1-2),不受此阈值影响。
    */
-  @Default int clientErrorFailFastThreshold = 5;
+  @Default
+  int clientErrorFailFastThreshold = 5;
 
   // ─── P3 Kafka SASL/SCRAM 鉴权 (per-tenant ACL) ─────────────────────────────
   /**
@@ -106,7 +125,8 @@ public class BatchPlatformClientConfig {
    *
    * <p>env 覆盖:{@code BATCH_SDK_STRICT_TIMING=false} 可一键降级(默认 true)。
    */
-  @Default boolean strictTimingValidation = true;
+  @Default
+  boolean strictTimingValidation = true;
 
   /**
    * 请求签名（HMAC + 时间戳 + nonce 防重放）开关，默认关。开启后写请求（claim/report/renew 等）附带 {@code X-Batch-Timestamp /
@@ -114,7 +134,8 @@ public class BatchPlatformClientConfig {
    * batch.request-signing.enabled=true} 配合；灰度时先升级 SDK 再开服务端开关。env 覆盖：{@code
    * BATCH_SDK_REQUEST_SIGNING_ENABLED=true}。{@link #apiKey} 为空时即便开启也不签（无密钥）。
    */
-  @Default boolean requestSigningEnabled = false;
+  @Default
+  boolean requestSigningEnabled = false;
 
   /**
    * 从环境变量构造配置(默认前缀 {@code BATCH_SDK_})—— 租户无需在 {@code main()} 里手写一堆 {@code System.getenv}。
@@ -147,19 +168,18 @@ public class BatchPlatformClientConfig {
           "missing required env vars: " + String.join(", ", missing));
     }
 
-    BatchPlatformClientConfigBuilder builder =
-        builder()
-            .baseUrl(baseUrl)
-            .tenantId(tenantId)
-            .workerCode(workerCode)
-            .kafkaBootstrap(kafkaBootstrap)
-            .kafkaTopicPattern(kafkaTopicPattern)
-            .kafkaGroupId(kafkaGroupId)
-            .apiKey(env.apply(prefix + "API_KEY"))
-            .buildId(env.apply(prefix + "BUILD_ID"))
-            .kafkaSecurityProtocol(env.apply(prefix + "KAFKA_SECURITY_PROTOCOL"))
-            .kafkaSaslMechanism(env.apply(prefix + "KAFKA_SASL_MECHANISM"))
-            .kafkaSaslJaasConfig(env.apply(prefix + "KAFKA_SASL_JAAS_CONFIG"));
+    BatchPlatformClientConfigBuilder builder = builder()
+        .baseUrl(baseUrl)
+        .tenantId(tenantId)
+        .workerCode(workerCode)
+        .kafkaBootstrap(kafkaBootstrap)
+        .kafkaTopicPattern(kafkaTopicPattern)
+        .kafkaGroupId(kafkaGroupId)
+        .apiKey(env.apply(prefix + "API_KEY"))
+        .buildId(env.apply(prefix + "BUILD_ID"))
+        .kafkaSecurityProtocol(env.apply(prefix + "KAFKA_SECURITY_PROTOCOL"))
+        .kafkaSaslMechanism(env.apply(prefix + "KAFKA_SASL_MECHANISM"))
+        .kafkaSaslJaasConfig(env.apply(prefix + "KAFKA_SASL_JAAS_CONFIG"));
 
     String maxConcurrent = env.apply(prefix + "MAX_CONCURRENT_TASKS");
     if (maxConcurrent != null && !maxConcurrent.isBlank()) {
@@ -245,40 +265,36 @@ public class BatchPlatformClientConfig {
     long leaseMs = leaseRenewInterval.toMillis();
     long httpMs = httpTimeout.toMillis();
     if (hbMs < 1_000L) {
-      reportTimingViolation(
-          "BatchPlatformClient config invalid: heartbeatInterval="
-              + heartbeatInterval
-              + " must be >= 1s (current "
-              + hbMs
-              + "ms; suggest >= 5s for prod)");
+      reportTimingViolation("BatchPlatformClient config invalid: heartbeatInterval="
+          + heartbeatInterval
+          + " must be >= 1s (current "
+          + hbMs
+          + "ms; suggest >= 5s for prod)");
     }
     if (leaseMs < 5_000L) {
-      reportTimingViolation(
-          "BatchPlatformClient config invalid: leaseRenewInterval="
-              + leaseRenewInterval
-              + " must be >= 5s (current "
-              + leaseMs
-              + "ms; suggest 30s..60s for prod)");
+      reportTimingViolation("BatchPlatformClient config invalid: leaseRenewInterval="
+          + leaseRenewInterval
+          + " must be >= 5s (current "
+          + leaseMs
+          + "ms; suggest 30s..60s for prod)");
     }
     long leaseUpperMs = hbMs * 3L;
     if (leaseMs > leaseUpperMs) {
-      reportTimingViolation(
-          "BatchPlatformClient config invalid: leaseRenewInterval="
-              + leaseRenewInterval
-              + " must be <= heartbeatInterval × 3 ("
-              + leaseUpperMs
-              + "ms) — 否则 in-flight task 可能被 orch 误判租约过期回收;"
-              + "suggest leaseRenewInterval ≈ 2 × heartbeatInterval");
+      reportTimingViolation("BatchPlatformClient config invalid: leaseRenewInterval="
+          + leaseRenewInterval
+          + " must be <= heartbeatInterval × 3 ("
+          + leaseUpperMs
+          + "ms) — 否则 in-flight task 可能被 orch 误判租约过期回收;"
+          + "suggest leaseRenewInterval ≈ 2 × heartbeatInterval");
     }
     long httpUpperMs = hbMs / 2L;
     if (httpMs > httpUpperMs) {
-      reportTimingViolation(
-          "BatchPlatformClient config invalid: httpTimeout="
-              + httpTimeout
-              + " must be <= heartbeatInterval / 2 ("
-              + httpUpperMs
-              + "ms) — 否则心跳超时会堆积阻塞 scheduler;"
-              + "suggest 调大 heartbeatInterval 或调小 httpTimeout");
+      reportTimingViolation("BatchPlatformClient config invalid: httpTimeout="
+          + httpTimeout
+          + " must be <= heartbeatInterval / 2 ("
+          + httpUpperMs
+          + "ms) — 否则心跳超时会堆积阻塞 scheduler;"
+          + "suggest 调大 heartbeatInterval 或调小 httpTimeout");
     }
   }
 

@@ -47,14 +47,13 @@ public class ConsoleForensicController {
   @PostMapping("/export")
   public CommonResponse<ConsoleForensicExportResponse> requestExport(
       @Valid @RequestBody ForensicExportRequest request) {
-    Map<String, Object> result =
-        orchestratorProxyService.requestForensicExport(
-            request.getTenantId(),
-            request.getBizDateFrom(),
-            request.getBizDateTo(),
-            request.getJobCodes(),
-            request.getExportFormat() == null ? "BUNDLE" : request.getExportFormat(),
-            requestMetadataResolver.current().operatorId());
+    Map<String, Object> result = orchestratorProxyService.requestForensicExport(
+        request.getTenantId(),
+        request.getBizDateFrom(),
+        request.getBizDateTo(),
+        request.getJobCodes(),
+        request.getExportFormat() == null ? "BUNDLE" : request.getExportFormat(),
+        requestMetadataResolver.current().operatorId());
     return responseFactory.success(ConsoleForensicExportResponse.from(result));
   }
 
@@ -63,14 +62,13 @@ public class ConsoleForensicController {
       @PathVariable String exportId, @RequestParam("tenantId") String tenantId) {
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
-    StreamingResponseBody body =
-        outputStream -> {
-          try {
-            orchestratorProxyService.downloadForensicExport(tenantId, exportId, outputStream);
-          } catch (IOException exception) {
-            throw exception;
-          }
-        };
+    StreamingResponseBody body = outputStream -> {
+      try {
+        orchestratorProxyService.downloadForensicExport(tenantId, exportId, outputStream);
+      } catch (IOException exception) {
+        throw exception;
+      }
+    };
     return ResponseEntity.ok()
         .headers(headers)
         .contentType(MediaType.APPLICATION_OCTET_STREAM)

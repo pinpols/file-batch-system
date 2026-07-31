@@ -123,11 +123,10 @@ class AuditFieldsInterceptorTest {
     MappedStatement ms = Mockito.mock(MappedStatement.class);
     Mockito.when(ms.getSqlCommandType()).thenReturn(type);
     Executor executor = Mockito.mock(Executor.class);
-    Invocation invocation =
-        new Invocation(
-            executor,
-            Executor.class.getMethod("update", MappedStatement.class, Object.class),
-            new Object[] {ms, param});
+    Invocation invocation = new Invocation(
+        executor,
+        Executor.class.getMethod("update", MappedStatement.class, Object.class),
+        new Object[] {ms, param});
     Mockito.when(executor.update(ms, param)).thenReturn(1);
     interceptor.intercept(invocation);
   }

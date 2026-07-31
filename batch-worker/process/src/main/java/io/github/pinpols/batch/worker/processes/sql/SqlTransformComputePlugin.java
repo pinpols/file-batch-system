@@ -146,15 +146,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     preCleanParams.put(PARAM_TENANT_ID, context.getTenantId());
     preCleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     preCleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
-    int leftover =
-        jdbc.update(
-            "DELETE FROM "
-                + STAGING_TABLE
-                + " WHERE batch_key = :batchKey"
-                + " AND tenant_id = :tenantId"
-                + " AND target_schema = :targetSchema"
-                + " AND target_table = :targetTable",
-            preCleanParams);
+    int leftover = jdbc.update(
+        "DELETE FROM "
+            + STAGING_TABLE
+            + " WHERE batch_key = :batchKey"
+            + " AND tenant_id = :tenantId"
+            + " AND target_schema = :targetSchema"
+            + " AND target_table = :targetTable",
+        preCleanParams);
     if (leftover > 0) {
       log.warn(
           "sqlTransformCompute pre-compute cleared leftover staging: tenantId={}, batchKey={},"
@@ -412,12 +411,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("schema", spec.targetSchema());
     params.put("table", spec.targetTable());
-    Boolean exists =
-        jdbc.queryForObject(
-            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :schema"
-                + " AND table_name = :table)",
-            params,
-            Boolean.class);
+    Boolean exists = jdbc.queryForObject(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :schema"
+            + " AND table_name = :table)",
+        params,
+        Boolean.class);
     if (exists == null || !exists) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
@@ -511,29 +509,24 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   static String buildStagingInsertSql(SqlTransformComputeSpec spec) {
     // R2-P2-3 二层防御：column.target() 已被 validateIdentifiers() 白名单检查，但只是单层防御。
     // 显式走 JdbcMappedSqlValidator.requireIdentifier 再校验一次，未来调用路径绕过 parse 时也阻断注入。
-    String jsonbBuild =
-        spec.columns().stream()
-            .map(
-                column ->
-                    "'"
-                        + JdbcMappedSqlValidator.requireIdentifier(column.target(), "column.target")
-                        + "', base."
-                        + JdbcMappedSqlValidator.quotePg(column.source()))
-            .collect(Collectors.joining(", "));
+    String jsonbBuild = spec.columns().stream()
+        .map(column -> "'"
+            + JdbcMappedSqlValidator.requireIdentifier(column.target(), "column.target")
+            + "', base."
+            + JdbcMappedSqlValidator.quotePg(column.source()))
+        .collect(Collectors.joining(", "));
     return """
     INSERT INTO %s (batch_key, tenant_id, target_schema, target_table, payload)
     SELECT :batchKey, :tenantId, :targetSchema, :targetTable, jsonb_build_object(%s)
     FROM (
     %s
     ) base
-    """
-        .formatted(STAGING_TABLE, jsonbBuild, spec.sourceSql());
+    """.formatted(STAGING_TABLE, jsonbBuild, spec.sourceSql());
   }
 
   /** COMMIT 用 jsonb_populate_record 反序列化到目标表行类型,单 SQL ON CONFLICT 原子上线。 */
   static String buildPublishSql(SqlTransformComputeSpec spec) {
-    String sql =
-        """
+    String sql = """
         INSERT INTO %s (%s)
         SELECT %s
         FROM (
@@ -544,31 +537,28 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
               AND target_schema = :targetSchema
               AND target_table = :targetTable
         ) staged
-        """
-            .formatted(
-                targetName(spec),
-                targetColumnList(spec),
-                jsonbRecordSelectColumns(spec),
-                targetName(spec),
-                STAGING_TABLE);
+        """.formatted(
+            targetName(spec),
+            targetColumnList(spec),
+            jsonbRecordSelectColumns(spec),
+            targetName(spec),
+            STAGING_TABLE);
     return appendConflictClause(sql, spec);
   }
 
   /** DIRECT fast path:绕开 JSONB staging,直接把 sourceSql 结果写入目标表。 */
   static String buildDirectPublishSql(SqlTransformComputeSpec spec) {
-    String sql =
-        """
+    String sql = """
         INSERT INTO %s (%s)
         SELECT %s
         FROM (
         %s
         ) base
-        """
-            .formatted(
-                targetName(spec),
-                targetColumnList(spec),
-                directSourceSelectColumns(spec),
-                spec.sourceSql());
+        """.formatted(
+            targetName(spec),
+            targetColumnList(spec),
+            directSourceSelectColumns(spec),
+            spec.sourceSql());
     return appendConflictClause(sql, spec);
   }
 
@@ -585,8 +575,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     )
     SELECT count(*) AS published_rows, max(high_water_mark) AS high_water_mark
     FROM published
-    """
-        .formatted(buildDirectPublishSql(spec), watermarkColumn);
+    """.formatted(buildDirectPublishSql(spec), watermarkColumn);
   }
 
   private ProcessStageResult commitDirect(ProcessJobContext context, SqlTransformComputeSpec spec) {
@@ -620,10 +609,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   }
 
   private static String targetName(SqlTransformComputeSpec spec) {
-    String target =
-        JdbcMappedSqlValidator.quotePg(spec.targetSchema())
-            + "."
-            + JdbcMappedSqlValidator.quotePg(spec.targetTable());
+    String target = JdbcMappedSqlValidator.quotePg(spec.targetSchema())
+        + "."
+        + JdbcMappedSqlValidator.quotePg(spec.targetTable());
     return target;
   }
 
@@ -650,24 +638,21 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     // PROCESS at-least-once 安全:所有 writeMode 都需要 ON CONFLICT 子句,SqlTransformComputeSpec
     // 已在 parse 期保证 conflictColumns 非空。INSERT / INSERT_IGNORE 共用 DO NOTHING 语义,
     // UPSERT 走 DO UPDATE SET。这样 commit-后-report-丢的重发不会双写 target。
-    String conflictColumns =
-        spec.conflictColumns().stream()
-            .map(JdbcMappedSqlValidator::quotePg)
-            .collect(Collectors.joining(", "));
+    String conflictColumns = spec.conflictColumns().stream()
+        .map(JdbcMappedSqlValidator::quotePg)
+        .collect(Collectors.joining(", "));
     if (spec.writeMode() == SqlTransformComputeSpec.WriteMode.INSERT
         || spec.writeMode() == SqlTransformComputeSpec.WriteMode.INSERT_IGNORE) {
       return sql + " ON CONFLICT (" + conflictColumns + ") DO NOTHING";
     }
-    String update =
-        spec.columns().stream()
-            .map(SqlTransformComputeSpec.ColumnMapping::target)
-            .filter(column -> !spec.conflictColumns().contains(column))
-            .map(
-                column -> {
-                  String quoted = JdbcMappedSqlValidator.quotePg(column);
-                  return quoted + " = EXCLUDED." + quoted;
-                })
-            .collect(Collectors.joining(", "));
+    String update = spec.columns().stream()
+        .map(SqlTransformComputeSpec.ColumnMapping::target)
+        .filter(column -> !spec.conflictColumns().contains(column))
+        .map(column -> {
+          String quoted = JdbcMappedSqlValidator.quotePg(column);
+          return quoted + " = EXCLUDED." + quoted;
+        })
+        .collect(Collectors.joining(", "));
     if (!Texts.hasText(update)) {
       return sql + " ON CONFLICT (" + conflictColumns + ") DO NOTHING";
     }
@@ -681,30 +666,25 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
     params.put("watermarkColumn", spec.watermarkColumn());
-    String sql =
-        """
+    String sql = """
         SELECT max((payload ->> :watermarkColumn)::numeric)
         FROM %s
         WHERE batch_key = :batchKey
           AND tenant_id = :tenantId
           AND target_schema = :targetSchema
           AND target_table = :targetTable
-        """
-            .formatted(STAGING_TABLE);
+        """.formatted(STAGING_TABLE);
     return jdbc.queryForObject(sql, params, Object.class);
   }
 
   private int cleanupCommittedStaging(Map<String, Object> params) {
-    return jdbc.update(
-        """
+    return jdbc.update("""
         DELETE FROM %s
         WHERE batch_key = :batchKey
           AND tenant_id = :tenantId
           AND target_schema = :targetSchema
           AND target_table = :targetTable
-        """
-            .formatted(STAGING_TABLE),
-        params);
+        """.formatted(STAGING_TABLE), params);
   }
 
   private static int toIntegerOrZero(Object value) {

@@ -40,10 +40,7 @@ public class BatchRestClientAutoConfiguration {
   @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
   public RestClient.Builder restClientBuilder(JsonMapper jsonMapper) {
     return RestClient.builder()
-        .configureMessageConverters(
-            b ->
-                b.configureMessageConvertersList(
-                    converters ->
-                        converters.add(0, new JacksonJsonHttpMessageConverter(jsonMapper))));
+        .configureMessageConverters(b -> b.configureMessageConvertersList(
+            converters -> converters.add(0, new JacksonJsonHttpMessageConverter(jsonMapper))));
   }
 }

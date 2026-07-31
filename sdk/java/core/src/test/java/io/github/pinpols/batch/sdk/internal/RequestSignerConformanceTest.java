@@ -18,12 +18,10 @@ class RequestSignerConformanceTest {
   @DisplayName("canonical 串与服务端一致")
   void canonicalMatchesServer() {
     byte[] body = "{\"tenantId\":\"t1\",\"success\":true}".getBytes(StandardCharsets.UTF_8);
-    assertThat(
-            RequestSigner.canonicalString(
-                "POST", "/internal/tasks/10/report", "1700000000000", "n-1", body))
-        .isEqualTo(
-            RequestSignatures.canonicalString(
-                "POST", "/internal/tasks/10/report", "1700000000000", "n-1", body));
+    assertThat(RequestSigner.canonicalString(
+            "POST", "/internal/tasks/10/report", "1700000000000", "n-1", body))
+        .isEqualTo(RequestSignatures.canonicalString(
+            "POST", "/internal/tasks/10/report", "1700000000000", "n-1", body));
   }
 
   @Test

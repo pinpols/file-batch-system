@@ -42,23 +42,21 @@ class S3ObjectStoreTest {
     objectStore.start();
     bucket = objectStore.getDefaultBucket();
 
-    StaticCredentialsProvider credentials =
-        StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(objectStore.getAccessKey(), objectStore.getSecretKey()));
-    S3Client s3Client =
-        S3Client.builder()
-            .endpointOverride(URI.create(objectStore.getEndpoint()))
-            .credentialsProvider(credentials)
-            .forcePathStyle(true)
-            .region(Region.US_EAST_1)
-            .build();
-    S3Presigner presigner =
-        S3Presigner.builder()
-            .endpointOverride(URI.create(objectStore.getEndpoint()))
-            .credentialsProvider(credentials)
-            .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-            .region(Region.US_EAST_1)
-            .build();
+    StaticCredentialsProvider credentials = StaticCredentialsProvider.create(
+        AwsBasicCredentials.create(objectStore.getAccessKey(), objectStore.getSecretKey()));
+    S3Client s3Client = S3Client.builder()
+        .endpointOverride(URI.create(objectStore.getEndpoint()))
+        .credentialsProvider(credentials)
+        .forcePathStyle(true)
+        .region(Region.US_EAST_1)
+        .build();
+    S3Presigner presigner = S3Presigner.builder()
+        .endpointOverride(URI.create(objectStore.getEndpoint()))
+        .credentialsProvider(credentials)
+        .serviceConfiguration(
+            S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .region(Region.US_EAST_1)
+        .build();
     S3StorageProperties properties = new S3StorageProperties();
     properties.setEndpoint(objectStore.getEndpoint());
     properties.setAccessKey(objectStore.getAccessKey());

@@ -118,9 +118,9 @@ public class DataQualityCheckExecutor {
           switch (type) {
             case "TABLE_LEVEL" -> executeTableLevel(instance, rule);
             case "ROW_LEVEL", "CROSS_TABLE", "CROSS_DAY" ->
-                // v1.0 暂占位：业务方走 SPI sink 直接写 data_quality_check；
-                // 这里返回 PASS 让 gate 不强阻（避免误伤）— 真实失败由 sink 已落 FAIL 行驱动。
-                "SKIPPED";
+              // v1.0 暂占位：业务方走 SPI sink 直接写 data_quality_check；
+              // 这里返回 PASS 让 gate 不强阻（避免误伤）— 真实失败由 sink 已落 FAIL 行驱动。
+              "SKIPPED";
             default -> STATUS_ERROR;
           };
       writeCheck(instance, rule, severity, status, null, null, now);
@@ -174,11 +174,10 @@ public class DataQualityCheckExecutor {
               + ex.getMessage(),
           ex);
     }
-    MapSqlParameterSource params =
-        new MapSqlParameterSource()
-            .addValue("tenantId", instance.getTenantId())
-            .addValue("bizDate", instance.getBizDate())
-            .addValue("jobInstanceId", instance.getId());
+    MapSqlParameterSource params = new MapSqlParameterSource()
+        .addValue("tenantId", instance.getTenantId())
+        .addValue("bizDate", instance.getBizDate())
+        .addValue("jobInstanceId", instance.getId());
     Number result;
     try {
       result = jdbcTemplate.queryForObject(validated, params, Number.class);
@@ -232,19 +231,18 @@ public class DataQualityCheckExecutor {
       String failureSample,
       Instant now) {
     Map<String, Object> metrics = metricsJson == null ? new LinkedHashMap<>() : Map.of();
-    DataQualityCheckEntity check =
-        DataQualityCheckEntity.builder()
-            .tenantId(instance.getTenantId())
-            .jobInstanceId(instance.getId())
-            .ruleId(rule.getId())
-            .ruleCode(rule.getRuleCode())
-            .ruleType(rule.getRuleType())
-            .severity(severity)
-            .status(status)
-            .metricsJson(metricsJson != null ? metricsJson : JsonUtils.toJson(metrics))
-            .failureSample(failureSample)
-            .checkedAt(now)
-            .build();
+    DataQualityCheckEntity check = DataQualityCheckEntity.builder()
+        .tenantId(instance.getTenantId())
+        .jobInstanceId(instance.getId())
+        .ruleId(rule.getId())
+        .ruleCode(rule.getRuleCode())
+        .ruleType(rule.getRuleType())
+        .severity(severity)
+        .status(status)
+        .metricsJson(metricsJson != null ? metricsJson : JsonUtils.toJson(metrics))
+        .failureSample(failureSample)
+        .checkedAt(now)
+        .build();
     checkMapper.insert(check);
   }
 }

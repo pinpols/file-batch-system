@@ -27,9 +27,8 @@ import java.lang.annotation.Target;
 @Size(max = 128, message = "code too long (max 128)")
 @Pattern(
     regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,127}$",
-    message =
-        "code must start with a letter and contain only letters, digits, underscore or hyphen"
-            + " (no spaces / Chinese / special chars), length ≤ 128")
+    message = "code must start with a letter and contain only letters, digits, underscore or hyphen"
+        + " (no spaces / Chinese / special chars), length ≤ 128")
 public @interface ValidResourceCode {
 
   String message() default "resource code invalid";

@@ -47,14 +47,12 @@ class HttpAtomicHandlerTest {
   @DisplayName("GET 200 返回 statusCode + responseBody")
   void shouldReturn200Body_whenGet() {
     // 准备
-    server.createContext(
-        "/x",
-        ex -> {
-          byte[] b = "hello".getBytes(StandardCharsets.UTF_8);
-          ex.sendResponseHeaders(200, b.length);
-          ex.getResponseBody().write(b);
-          ex.close();
-        });
+    server.createContext("/x", ex -> {
+      byte[] b = "hello".getBytes(StandardCharsets.UTF_8);
+      ex.sendResponseHeaders(200, b.length);
+      ex.getResponseBody().write(b);
+      ex.close();
+    });
     HttpAtomicHandler h = new HttpAtomicHandler(allowLoopback());
 
     // 执行
@@ -72,19 +70,16 @@ class HttpAtomicHandlerTest {
   void shouldSendBody_whenPost() {
     // 准备
     AtomicReference<String> seen = new AtomicReference<>();
-    server.createContext(
-        "/p",
-        ex -> {
-          seen.set(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-          ex.sendResponseHeaders(200, -1);
-          ex.close();
-        });
+    server.createContext("/p", ex -> {
+      seen.set(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+      ex.sendResponseHeaders(200, -1);
+      ex.close();
+    });
     HttpAtomicHandler h = new HttpAtomicHandler(allowLoopback());
-    Map<String, Object> params =
-        Map.of(
-            "url", "http://127.0.0.1:" + port + "/p",
-            "method", "post",
-            "body", "payload-123");
+    Map<String, Object> params = Map.of(
+        "url", "http://127.0.0.1:" + port + "/p",
+        "method", "post",
+        "body", "payload-123");
 
     // 执行
     SdkTaskResult r = h.execute(ctx(params));
@@ -149,14 +144,12 @@ class HttpAtomicHandlerTest {
   @DisplayName("响应超 maxResponseBytes → responseTruncated=true")
   void shouldTruncate_whenResponseTooLarge() {
     // 准备
-    server.createContext(
-        "/big",
-        ex -> {
-          byte[] b = "abcdefghij".getBytes(StandardCharsets.UTF_8); // 10 bytes
-          ex.sendResponseHeaders(200, b.length);
-          ex.getResponseBody().write(b);
-          ex.close();
-        });
+    server.createContext("/big", ex -> {
+      byte[] b = "abcdefghij".getBytes(StandardCharsets.UTF_8); // 10 bytes
+      ex.sendResponseHeaders(200, b.length);
+      ex.getResponseBody().write(b);
+      ex.close();
+    });
     HttpAtomicConfig cfg = new HttpAtomicConfig("http", false, Set.of(), Set.of(), 5, 4);
     HttpAtomicHandler h = new HttpAtomicHandler(cfg);
 
@@ -173,14 +166,12 @@ class HttpAtomicHandlerTest {
   @DisplayName("非 2xx(500)仍返回 statusCode,success=true")
   void shouldReturn500_whenServerError() {
     // 准备
-    server.createContext(
-        "/err",
-        ex -> {
-          byte[] b = "boom".getBytes(StandardCharsets.UTF_8);
-          ex.sendResponseHeaders(500, b.length);
-          ex.getResponseBody().write(b);
-          ex.close();
-        });
+    server.createContext("/err", ex -> {
+      byte[] b = "boom".getBytes(StandardCharsets.UTF_8);
+      ex.sendResponseHeaders(500, b.length);
+      ex.getResponseBody().write(b);
+      ex.close();
+    });
     HttpAtomicHandler h = new HttpAtomicHandler(allowLoopback());
 
     // 执行
@@ -197,13 +188,11 @@ class HttpAtomicHandlerTest {
   void shouldForwardHeaders_whenProvided() {
     // 准备
     AtomicReference<String> seen = new AtomicReference<>();
-    server.createContext(
-        "/h",
-        ex -> {
-          seen.set(ex.getRequestHeaders().getFirst("X-Custom"));
-          ex.sendResponseHeaders(200, -1);
-          ex.close();
-        });
+    server.createContext("/h", ex -> {
+      seen.set(ex.getRequestHeaders().getFirst("X-Custom"));
+      ex.sendResponseHeaders(200, -1);
+      ex.close();
+    });
     HttpAtomicHandler h = new HttpAtomicHandler(allowLoopback());
     Map<String, Object> headers = new HashMap<>();
     headers.put("X-Custom", "v1");

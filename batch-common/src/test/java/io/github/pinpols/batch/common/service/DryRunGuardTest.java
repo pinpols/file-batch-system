@@ -37,13 +37,12 @@ class DryRunGuardTest {
   void skipAllNeverInvokesSupplierEvenIfSupplierThrows() {
     DryRunGuard guard = DryRunGuard.skipAll();
 
-    String value =
-        guard.callOrSkip(
-            "RISKY",
-            () -> {
-              throw new IllegalStateException("must not be called in dry-run");
-            },
-            "fallback");
+    String value = guard.callOrSkip(
+        "RISKY",
+        () -> {
+          throw new IllegalStateException("must not be called in dry-run");
+        },
+        "fallback");
 
     assertThat(value).isEqualTo("fallback");
   }

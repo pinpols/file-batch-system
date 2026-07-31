@@ -61,25 +61,21 @@ class ConsoleLineageEvidenceControllerTest {
     doReturn(getUriSpec).when(restClient).get();
     doReturn(getSpec).when(getUriSpec).uri(anyString(), any(Object[].class));
     doReturn(responseSpec).when(getSpec).retrieve();
-    doReturn(
-            CommonResponse.success(
-                new LineageEvidenceResponse(
-                    Map.of("id", 7, "businessKey", "job:daily:2026-06-30"),
-                    null,
-                    List.of(),
-                    List.of(Map.of("id", 11, "fileName", "out.csv")),
-                    List.of(),
-                    new LineageEvidenceResponse.LineageCoverage(
-                        "BFS_HOT_TABLES", 7L, Map.of(), true, 11L, true, 0, 1, 1, List.of()))))
+    doReturn(CommonResponse.success(new LineageEvidenceResponse(
+            Map.of("id", 7, "businessKey", "job:daily:2026-06-30"),
+            null,
+            List.of(),
+            List.of(Map.of("id", 11, "fileName", "out.csv")),
+            List.of(),
+            new LineageEvidenceResponse.LineageCoverage(
+                "BFS_HOT_TABLES", 7L, Map.of(), true, 11L, true, 0, 1, 1, List.of()))))
         .when(responseSpec)
         .body(any(ParameterizedTypeReference.class));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleLineageEvidenceController(
-                    orchestratorInternalRestClient, tenantGuard, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleLineageEvidenceController(
+            orchestratorInternalRestClient, tenantGuard, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -103,10 +99,9 @@ class ConsoleLineageEvidenceControllerTest {
     doReturn("ta").when(tenantGuard).resolveTenant("ta");
 
     mockMvc
-        .perform(
-            get("/api/console/lineage/effective")
-                .param("tenantId", "ta")
-                .param("businessKey", "job:daily:2026-06-30"))
+        .perform(get("/api/console/lineage/effective")
+            .param("tenantId", "ta")
+            .param("businessKey", "job:daily:2026-06-30"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.resultVersion.businessKey").value("job:daily:2026-06-30"));
 

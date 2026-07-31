@@ -18,20 +18,19 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldParseTopLevelJdbcMappedImport() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "jdbc_mapped_import",
         Map.of(
-            "jdbc_mapped_import",
-            Map.of(
-                "schema",
-                "biz",
-                "table",
-                "imp_orders",
-                "tenantColumn",
-                "tenant_id",
-                "columnMappings",
-                List.of(Map.of("from", "col_a", "to", "col_a")),
-                "conflictColumns",
-                List.of("id")));
+            "schema",
+            "biz",
+            "table",
+            "imp_orders",
+            "tenantColumn",
+            "tenant_id",
+            "columnMappings",
+            List.of(Map.of("from", "col_a", "to", "col_a")),
+            "conflictColumns",
+            List.of("id")));
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
     assertThat(spec.schema()).isEqualTo("biz");
     assertThat(spec.table()).isEqualTo("imp_orders");
@@ -51,21 +50,20 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldInferColumnMappingsFromFieldMappingsWhenOmitted() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "field_mappings",
+        List.of(
+            Map.of("name", "customerNo", "targetColumn", "customer_no"),
+            // 无 targetColumn → 归一化 customerName → customer_name
+            Map.of("name", "customerName"),
+            // persist:false → 只校验不入库,不进推断
+            Map.of("name", "creditLimit", "persist", false)),
+        "jdbc_mapped_import",
         Map.of(
-            "field_mappings",
-            List.of(
-                Map.of("name", "customerNo", "targetColumn", "customer_no"),
-                // 无 targetColumn → 归一化 customerName → customer_name
-                Map.of("name", "customerName"),
-                // persist:false → 只校验不入库,不进推断
-                Map.of("name", "creditLimit", "persist", false)),
-            "jdbc_mapped_import",
-            Map.of(
-                "schema", "biz",
-                "table", "customer_account",
-                "tenantColumn", "tenant_id",
-                "conflictColumns", List.of("tenant_id", "customer_no")));
+            "schema", "biz",
+            "table", "customer_account",
+            "tenantColumn", "tenant_id",
+            "conflictColumns", List.of("tenant_id", "customer_no")));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
@@ -77,16 +75,15 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldInferWhenColumnMappingsIsEmptyJsonArray() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "field_mappings",
+        List.of(Map.of("name", "customerNo", "targetColumn", "customer_no")),
+        "jdbc_mapped_import",
         Map.of(
-            "field_mappings",
-            List.of(Map.of("name", "customerNo", "targetColumn", "customer_no")),
-            "jdbc_mapped_import",
-            Map.of(
-                "schema", "biz",
-                "table", "customer_account",
-                "tenantColumn", "tenant_id",
-                "columnMappings", List.of()));
+            "schema", "biz",
+            "table", "customer_account",
+            "tenantColumn", "tenant_id",
+            "columnMappings", List.of()));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
@@ -96,17 +93,16 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void explicitMappingsOverrideInferredByFrom_onlyDiffsNeeded() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "field_mappings",
+        List.of(Map.of("name", "email"), Map.of("name", "phone")),
+        "jdbc_mapped_import",
         Map.of(
-            "field_mappings",
-            List.of(Map.of("name", "email"), Map.of("name", "phone")),
-            "jdbc_mapped_import",
-            Map.of(
-                "schema", "biz",
-                "table", "customer_account",
-                "tenantColumn", "tenant_id",
-                // 只需写名字对不上的差异项:phone → mobile_no
-                "columnMappings", List.of(Map.of("from", "phone", "to", "mobile_no"))));
+            "schema", "biz",
+            "table", "customer_account",
+            "tenantColumn", "tenant_id",
+            // 只需写名字对不上的差异项:phone → mobile_no
+            "columnMappings", List.of(Map.of("from", "phone", "to", "mobile_no"))));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
@@ -117,10 +113,9 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldRejectWhenNeitherColumnMappingsNorFieldMappingsPresent() {
-    Map<String, Object> template =
-        Map.of(
-            "jdbc_mapped_import",
-            Map.of("schema", "biz", "table", "customer_account", "tenantColumn", "tenant_id"));
+    Map<String, Object> template = Map.of(
+        "jdbc_mapped_import",
+        Map.of("schema", "biz", "table", "customer_account", "tenantColumn", "tenant_id"));
 
     assertThatThrownBy(() -> JdbcMappedImportSpec.parse(template, objectMapper))
         .isInstanceOf(WorkerConfigException.class)
@@ -129,11 +124,9 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldRejectFanOutOneSourceToMultipleColumns() {
-    JdbcMappedImportSpec spec =
-        mappingSpec(
-            List.of(
-                new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
-                new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_y")));
+    JdbcMappedImportSpec spec = mappingSpec(List.of(
+        new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
+        new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_y")));
 
     assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz")))
         .isInstanceOf(WorkerConfigException.class)
@@ -142,11 +135,9 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldRejectCollisionMultipleSourcesToOneColumn() {
-    JdbcMappedImportSpec spec =
-        mappingSpec(
-            List.of(
-                new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
-                new JdbcMappedImportSpec.ColumnMapping("fieldB", "col_x")));
+    JdbcMappedImportSpec spec = mappingSpec(List.of(
+        new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
+        new JdbcMappedImportSpec.ColumnMapping("fieldB", "col_x")));
 
     assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz")))
         .isInstanceOf(WorkerConfigException.class)
@@ -165,15 +156,14 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void conflictColumnsAutoPrependsTenantWhenMissing() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "jdbc_mapped_import",
         Map.of(
-            "jdbc_mapped_import",
-            Map.of(
-                "schema", "biz",
-                "table", "customer_account",
-                "tenantColumn", "tenant_id",
-                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
-                "conflictColumns", List.of("customer_no")));
+            "schema", "biz",
+            "table", "customer_account",
+            "tenantColumn", "tenant_id",
+            "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
+            "conflictColumns", List.of("customer_no")));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
@@ -182,15 +172,14 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void conflictColumnsKeptWhenTenantAlreadyPresent() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "jdbc_mapped_import",
         Map.of(
-            "jdbc_mapped_import",
-            Map.of(
-                "schema", "biz",
-                "table", "customer_account",
-                "tenantColumn", "tenant_id",
-                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
-                "conflictColumns", List.of("tenant_id", "customer_no")));
+            "schema", "biz",
+            "table", "customer_account",
+            "tenantColumn", "tenant_id",
+            "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
+            "conflictColumns", List.of("tenant_id", "customer_no")));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
@@ -199,14 +188,13 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void emptyConflictColumnsStayEmpty() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "jdbc_mapped_import",
         Map.of(
-            "jdbc_mapped_import",
-            Map.of(
-                "schema", "biz",
-                "table", "customer_account",
-                "tenantColumn", "tenant_id",
-                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no"))));
+            "schema", "biz",
+            "table", "customer_account",
+            "tenantColumn", "tenant_id",
+            "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no"))));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
@@ -215,23 +203,22 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void standardAuditBindingsExpandWithExplicitOverride() {
-    Map<String, Object> template =
+    Map<String, Object> template = Map.of(
+        "jdbc_mapped_import",
         Map.of(
-            "jdbc_mapped_import",
-            Map.of(
-                "schema",
-                "biz",
-                "table",
-                "customer_account",
-                "tenantColumn",
-                "tenant_id",
-                "columnMappings",
-                List.of(Map.of("from", "customerNo", "to", "customer_no")),
-                "standardAuditBindings",
-                true,
-                // 用户显式 created_by 覆盖标准默认
-                "systemBindings",
-                Map.of("created_by", "${customWorker}")));
+            "schema",
+            "biz",
+            "table",
+            "customer_account",
+            "tenantColumn",
+            "tenant_id",
+            "columnMappings",
+            List.of(Map.of("from", "customerNo", "to", "customer_no")),
+            "standardAuditBindings",
+            true,
+            // 用户显式 created_by 覆盖标准默认
+            "systemBindings",
+            Map.of("created_by", "${customWorker}")));
 
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
 
@@ -261,20 +248,19 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldParseJdbcMappedImportWhenQueryParamSchemaIsPgJsonObject() throws Exception {
-    Map<String, Object> qps =
+    Map<String, Object> qps = Map.of(
+        "jdbcMappedImport",
         Map.of(
-            "jdbcMappedImport",
-            Map.of(
-                "schema",
-                "biz",
-                "table",
-                "customer_account",
-                "tenantColumn",
-                "tenant_id",
-                "columnMappings",
-                List.of(Map.of("from", "customerNo", "to", "customer_no")),
-                "conflictColumns",
-                List.of("tenant_id", "customer_no")));
+            "schema",
+            "biz",
+            "table",
+            "customer_account",
+            "tenantColumn",
+            "tenant_id",
+            "columnMappings",
+            List.of(Map.of("from", "customerNo", "to", "customer_no")),
+            "conflictColumns",
+            List.of("tenant_id", "customer_no")));
     PGobject pg = new PGobject();
     pg.setType("jsonb");
     pg.setValue(objectMapper.writeValueAsString(qps));
@@ -286,26 +272,25 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldParsePartitionReplaceCopyStrategy() {
-    JdbcMappedImportSpec spec =
-        JdbcMappedImportSpec.parse(
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(
+        Map.of(
+            "jdbc_mapped_import",
             Map.of(
-                "jdbc_mapped_import",
-                Map.of(
-                    "schema",
-                    "biz",
-                    "table",
-                    "customer_account",
-                    "tenantColumn",
-                    "tenant_id",
-                    "columnMappings",
-                    List.of(Map.of("from", "customerNo", "to", "customer_no")),
-                    "systemBindings",
-                    Map.of("biz_date", "${bizDate}"),
-                    "loadStrategy",
-                    "partition-replace-copy",
-                    "replacePartitionColumns",
-                    List.of("tenant_id", "biz_date"))),
-            objectMapper);
+                "schema",
+                "biz",
+                "table",
+                "customer_account",
+                "tenantColumn",
+                "tenant_id",
+                "columnMappings",
+                List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "systemBindings",
+                Map.of("biz_date", "${bizDate}"),
+                "loadStrategy",
+                "partition-replace-copy",
+                "replacePartitionColumns",
+                List.of("tenant_id", "biz_date"))),
+        objectMapper);
 
     assertThat(spec.loadStrategy()).isEqualTo(ImportLoadStrategy.PARTITION_REPLACE_COPY);
     assertThat(spec.replacePartitionColumns()).containsExactly("tenant_id", "biz_date");
@@ -313,32 +298,31 @@ class JdbcMappedImportSpecTest {
 
   @Test
   void shouldParsePartitionStageSwapCopyStrategy() {
-    JdbcMappedImportSpec spec =
-        JdbcMappedImportSpec.parse(
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(
+        Map.of(
+            "jdbc_mapped_import",
             Map.of(
-                "jdbc_mapped_import",
+                "schema",
+                "biz",
+                "table",
+                "customer_account",
+                "tenantColumn",
+                "tenant_id",
+                "columnMappings",
+                List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "systemBindings",
+                Map.of("biz_date", "${bizDate}"),
+                "loadStrategy",
+                "PARTITION_STAGE_SWAP_COPY",
+                "replacePartitionColumns",
+                List.of("tenant_id", "biz_date"),
+                "stageSwap",
                 Map.of(
-                    "schema",
-                    "biz",
-                    "table",
-                    "customer_account",
-                    "tenantColumn",
-                    "tenant_id",
-                    "columnMappings",
-                    List.of(Map.of("from", "customerNo", "to", "customer_no")),
-                    "systemBindings",
-                    Map.of("biz_date", "${bizDate}"),
-                    "loadStrategy",
-                    "PARTITION_STAGE_SWAP_COPY",
-                    "replacePartitionColumns",
-                    List.of("tenant_id", "biz_date"),
-                    "stageSwap",
-                    Map.of(
-                        "partitionTable",
-                        "customer_account_20260607",
-                        "attachClause",
-                        "FOR VALUES FROM ('2026-06-07') TO ('2026-06-08')"))),
-            objectMapper);
+                    "partitionTable",
+                    "customer_account_20260607",
+                    "attachClause",
+                    "FOR VALUES FROM ('2026-06-07') TO ('2026-06-08')"))),
+        objectMapper);
 
     assertThat(spec.loadStrategy()).isEqualTo(ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY);
     assertThat(spec.stageSwap().partitionTable()).isEqualTo("customer_account_20260607");

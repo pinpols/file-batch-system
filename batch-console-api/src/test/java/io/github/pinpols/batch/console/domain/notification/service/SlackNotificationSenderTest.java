@@ -41,13 +41,12 @@ class SlackNotificationSenderTest {
   @DisplayName("缺 url -> failure 且不走网络")
   void shouldFailWithoutGoingNetwork_whenUrlMissing() {
     // arrange: postJson 若被调用即让测试失败
-    SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected SlackResponse postJson(String url, String body) {
-            throw new AssertionError("must not call network when url missing");
-          }
-        };
+    SlackNotificationSender sender = new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
+      @Override
+      protected SlackResponse postJson(String url, String body) {
+        throw new AssertionError("must not call network when url missing");
+      }
+    };
 
     // act
     WebhookDeliveryResult result = sender.send(message("{}"));
@@ -63,14 +62,13 @@ class SlackNotificationSenderTest {
   void shouldReturnOk_whenBodyIsOk() {
     // arrange
     AtomicReference<String> captured = new AtomicReference<>();
-    SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected SlackResponse postJson(String url, String body) {
-            captured.set(body);
-            return new SlackResponse(200, "ok");
-          }
-        };
+    SlackNotificationSender sender = new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
+      @Override
+      protected SlackResponse postJson(String url, String body) {
+        captured.set(body);
+        return new SlackResponse(200, "ok");
+      }
+    };
 
     // act
     WebhookDeliveryResult result =
@@ -86,13 +84,12 @@ class SlackNotificationSenderTest {
   @DisplayName("非 ok 响应体 -> failure 带状态码与截断响应体")
   void shouldFail_whenBodyNotOk() {
     // arrange
-    SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected SlackResponse postJson(String url, String body) {
-            return new SlackResponse(400, "invalid_payload");
-          }
-        };
+    SlackNotificationSender sender = new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
+      @Override
+      protected SlackResponse postJson(String url, String body) {
+        return new SlackResponse(400, "invalid_payload");
+      }
+    };
 
     // act
     WebhookDeliveryResult result =
@@ -108,13 +105,12 @@ class SlackNotificationSenderTest {
   @DisplayName("SSRF: 主机名解析到内网回环 -> 建连前被 guard 拦, 不走网络")
   void shouldBlock_whenHostResolvesToInternalAddress() {
     // arrange: postJson 被调用即失败, 证明 guard 在建连前短路
-    SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected SlackResponse postJson(String url, String body) {
-            throw new AssertionError("must not connect to internal address");
-          }
-        };
+    SlackNotificationSender sender = new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
+      @Override
+      protected SlackResponse postJson(String url, String body) {
+        throw new AssertionError("must not connect to internal address");
+      }
+    };
 
     // act
     WebhookDeliveryResult result =
@@ -129,13 +125,12 @@ class SlackNotificationSenderTest {
   @DisplayName("SSRF: 字面量内网/元数据 IP -> 被 guard 兜底拦(OkHttp 对字面量 IP 短路不走 Dns)")
   void shouldBlock_whenUrlIsLiteralInternalIp() {
     // arrange
-    SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected SlackResponse postJson(String url, String body) {
-            throw new AssertionError("must not connect to metadata IP");
-          }
-        };
+    SlackNotificationSender sender = new SlackNotificationSender(objectMapper, ssrfGuardedDns) {
+      @Override
+      protected SlackResponse postJson(String url, String body) {
+        throw new AssertionError("must not connect to metadata IP");
+      }
+    };
 
     // act
     WebhookDeliveryResult result =

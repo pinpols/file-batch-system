@@ -50,11 +50,10 @@ public abstract class AbstractChaosIntegrationTest extends AbstractIntegrationTe
   private static final String TOXIPROXY_IMAGE = "ghcr.io/shopify/toxiproxy:2.5.0";
 
   @SuppressWarnings("resource")
-  private static final GenericContainer<?> TOXIPROXY =
-      new GenericContainer<>(DockerImageName.parse(TOXIPROXY_IMAGE))
-          .withExposedPorts(
-              TOXIPROXY_CONTROL_PORT, PG_PROXY_PORT, KAFKA_PROXY_PORT, REDIS_PROXY_PORT)
-          .waitingFor(Wait.forHttp("/version").forPort(TOXIPROXY_CONTROL_PORT));
+  private static final GenericContainer<?> TOXIPROXY = new GenericContainer<>(
+          DockerImageName.parse(TOXIPROXY_IMAGE))
+      .withExposedPorts(TOXIPROXY_CONTROL_PORT, PG_PROXY_PORT, KAFKA_PROXY_PORT, REDIS_PROXY_PORT)
+      .waitingFor(Wait.forHttp("/version").forPort(TOXIPROXY_CONTROL_PORT));
 
   private static ToxiproxyClient client;
   private static Proxy pgProxy;
@@ -87,14 +86,10 @@ public abstract class AbstractChaosIntegrationTest extends AbstractIntegrationTe
         new ToxiproxyClient(TOXIPROXY.getHost(), TOXIPROXY.getMappedPort(TOXIPROXY_CONTROL_PORT));
 
     String hostBridge = "host.testcontainers.internal";
-    pgProxy =
-        getOrCreate(
-            "pg_proxy",
-            "0.0.0.0:" + PG_PROXY_PORT,
-            hostBridge + ":" + extractPort(platformJdbcUrl()));
-    kafkaProxy =
-        getOrCreate(
-            "kafka_proxy", "0.0.0.0:" + KAFKA_PROXY_PORT, hostBridge + ":" + extractKafkaPort());
+    pgProxy = getOrCreate(
+        "pg_proxy", "0.0.0.0:" + PG_PROXY_PORT, hostBridge + ":" + extractPort(platformJdbcUrl()));
+    kafkaProxy = getOrCreate(
+        "kafka_proxy", "0.0.0.0:" + KAFKA_PROXY_PORT, hostBridge + ":" + extractKafkaPort());
     redisProxy =
         getOrCreate("redis_proxy", "0.0.0.0:" + REDIS_PROXY_PORT, hostBridge + ":" + redisPort());
 

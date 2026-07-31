@@ -60,11 +60,14 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final String BATCH_NO = "E2E-CONTENT-VERIFY-1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Autowired
   @Qualifier("exportBusinessDataSource")
@@ -85,37 +88,26 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
   void exportJobProducesNonEmptyFileAndUpdatesSettlementAmount() throws Exception {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
 
-    Long batchId =
-        businessJdbc.queryForObject(
-            """
+    Long batchId = businessJdbc.queryForObject("""
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, date '2026-01-15', '202601', 'READY', 2, 0, 'CNY')
             returning id
-            """,
-            Long.class,
-            TENANT,
-            BATCH_NO);
+            """, Long.class, TENANT, BATCH_NO);
     assertThat(batchId).isNotNull();
 
-    businessJdbc.update(
-        """
+    businessJdbc.update("""
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values
             (?, ?, 'E2E-CV-001', 'C-CV-1', date '2026-01-15', '202601', 100.00, 5.00, 95.00, 'CNY', 'READY'),
             (?, ?, 'E2E-CV-002', 'C-CV-2', date '2026-01-15', '202601', 200.00, 10.00, 190.00, 'CNY', 'READY')
-        """,
-        TENANT,
-        batchId,
-        TENANT,
-        batchId);
+        """, TENANT, batchId, TENANT, batchId);
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchNo", BATCH_NO);
@@ -124,15 +116,14 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
     params.put("bizType", "SETTLEMENT");
     params.put("fileCode", "e2e-cv-export-file");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-cv-export",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-cv-export",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
@@ -140,20 +131,14 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("SUCCESS");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("SUCCESS");
+        });
 
     // Content-level triple-check (状态 + 产物 + 审计) via ExportFileVerifier
     ExportFileVerifier.forTenant(TENANT)

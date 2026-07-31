@@ -54,7 +54,8 @@ class ReplicaLagMonitorTest {
 
   @Test
   void shouldRegisterGaugeWithExpectedName() {
-    assertThat(meterRegistry.find("batch.console.replica.replay_lag_seconds").gauge()).isNotNull();
+    assertThat(meterRegistry.find("batch.console.replica.replay_lag_seconds").gauge())
+        .isNotNull();
     assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0); // 初始值
   }
 
@@ -66,7 +67,10 @@ class ReplicaLagMonitorTest {
     monitor.sampleReplayLag();
 
     assertThat(monitor.currentLagSeconds()).isEqualTo(1.42);
-    assertThat(meterRegistry.find("batch.console.replica.replay_lag_seconds").gauge().value())
+    assertThat(meterRegistry
+            .find("batch.console.replica.replay_lag_seconds")
+            .gauge()
+            .value())
         .isEqualTo(1.42);
   }
 

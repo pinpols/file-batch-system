@@ -30,12 +30,11 @@ class UpstreamReadinessCheckerTest {
   @SuppressWarnings("unchecked")
   private void stubBody(ReadinessResponse response) {
     lenient()
-        .when(
-            orchestratorRestClient
-                .get()
-                .uri(any(Function.class))
-                .retrieve()
-                .body(eq(ReadinessResponse.class)))
+        .when(orchestratorRestClient
+            .get()
+            .uri(any(Function.class))
+            .retrieve()
+            .body(eq(ReadinessResponse.class)))
         .thenReturn(response);
   }
 

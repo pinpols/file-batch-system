@@ -36,10 +36,8 @@ final class PlatformFileRecordRepository {
     if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
       return false;
     }
-    Long count =
-        mapper.countFileRecordByStoragePath(
-            params(
-                TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
+    Long count = mapper.countFileRecordByStoragePath(
+        params(TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
     return count != null && count > 0;
   }
 
@@ -48,10 +46,8 @@ final class PlatformFileRecordRepository {
     if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
       return Map.of();
     }
-    Map<String, Object> row =
-        mapper.selectFileRecordByStoragePath(
-            params(
-                TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
+    Map<String, Object> row = mapper.selectFileRecordByStoragePath(
+        params(TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
     return row == null ? Map.of() : row;
   }
 
@@ -88,63 +84,60 @@ final class PlatformFileRecordRepository {
     String fileVersion =
         Texts.hasText(param.getFileVersion()) ? param.getFileVersion() : "v" + nextGenerationNo;
     LocalDate bizDate = param.getBizDate();
-    Map<String, Object> values =
-        params(
-            TENANT_ID,
-            tenantId,
-            "fileCode",
-            fileCode,
-            "bizType",
-            param.getBizType(),
-            "fileCategory",
-            fileCategory,
-            "fileName",
-            fileName,
-            "originalFileName",
-            param.getOriginalFileName(),
-            "fileExt",
-            resolveFileExt(fileName),
-            "fileFormatType",
-            fileFormatType,
-            "charset",
-            param.getCharset(),
-            "mimeType",
-            resolveMimeType(fileFormatType),
-            "fileSizeBytes",
-            Math.max(param.getFileSizeBytes(), 0L),
-            "checksumType",
-            defaultText(param.getChecksumType(), "NONE"),
-            "checksumValue",
-            checksumValue,
-            "storageType",
-            storageType,
-            "storagePath",
-            storagePath,
-            "storageBucket",
-            storageBucket,
-            "fileVersion",
-            fileVersion,
-            "fileGenerationNo",
-            nextGenerationNo,
-            "sourceType",
-            sourceType,
-            "sourceRef",
-            param.getSourceRef(),
-            "fileStatus",
-            fileStatus,
-            "bizDate",
-            bizDate,
-            "traceId",
-            param.getTraceId(),
-            "metadataJson",
-            toJson(param.getMetadata()));
+    Map<String, Object> values = params(
+        TENANT_ID,
+        tenantId,
+        "fileCode",
+        fileCode,
+        "bizType",
+        param.getBizType(),
+        "fileCategory",
+        fileCategory,
+        "fileName",
+        fileName,
+        "originalFileName",
+        param.getOriginalFileName(),
+        "fileExt",
+        resolveFileExt(fileName),
+        "fileFormatType",
+        fileFormatType,
+        "charset",
+        param.getCharset(),
+        "mimeType",
+        resolveMimeType(fileFormatType),
+        "fileSizeBytes",
+        Math.max(param.getFileSizeBytes(), 0L),
+        "checksumType",
+        defaultText(param.getChecksumType(), "NONE"),
+        "checksumValue",
+        checksumValue,
+        "storageType",
+        storageType,
+        "storagePath",
+        storagePath,
+        "storageBucket",
+        storageBucket,
+        "fileVersion",
+        fileVersion,
+        "fileGenerationNo",
+        nextGenerationNo,
+        "sourceType",
+        sourceType,
+        "sourceRef",
+        param.getSourceRef(),
+        "fileStatus",
+        fileStatus,
+        "bizDate",
+        bizDate,
+        "traceId",
+        param.getTraceId(),
+        "metadataJson",
+        toJson(param.getMetadata()));
 
     // 无 checksum 的重试先按存储路径复用既有记录，避免唯一约束冲突后事务进入 aborted 状态。
     if (!Texts.hasText(checksumValue)) {
-      Map<String, Object> existing =
-          mapper.selectFileRecordByStoragePath(
-              params(
-                  TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
+      Map<String, Object> existing = mapper.selectFileRecordByStoragePath(
+          params(TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
       if (existing != null && existing.get(ID) != null) {
         Object existingChecksumValue = existing.get("checksum_value");
         String existingChecksum =

@@ -98,9 +98,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   @Override
   public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-    WorkflowDefinitionEntity def =
-        Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    WorkflowDefinitionEntity def = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));
     List<WorkflowEdgeEntity> edges =
@@ -148,9 +147,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   public WorkflowDefinitionDetailResponse update(Long id, WorkflowDefinitionSaveRequest request) {
     String resolvedTenant = tenantGuard.resolveTenant(request.getTenantId());
 
-    WorkflowDefinitionEntity def =
-        Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    WorkflowDefinitionEntity def = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
 
     // BE 回退:与 fullUpdate 同源校验。update 不改 workflowCode,用持久化 def 的 code 作环检测 root。
     dagValidator.validate(resolvedTenant, request);
@@ -179,9 +177,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     WorkflowDefinitionSaveRequest body = request.getDefinition();
     String resolvedTenant = tenantGuard.resolveTenant(body.getTenantId());
 
-    WorkflowDefinitionEntity def =
-        Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    WorkflowDefinitionEntity def = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
 
     // workflowCode 不可改:保持持久化引用稳定(workflow_node.workflow_definition_id 等下游不感知 code 变更)
     if (body.getWorkflowCode() != null && !body.getWorkflowCode().equals(def.getWorkflowCode())) {
@@ -207,14 +204,13 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     // (workflowCode 不可变,用持久化 def 的 code 作 root)。运行期另有 ChildJobLaunchSupport 回退。
     dagValidator.validateNoCrossWorkflowCycle(resolvedTenant, def.getWorkflowCode(), body);
 
-    int rows =
-        definitionMapper.updateAndBumpVersion(
-            resolvedTenant,
-            id,
-            request.getExpectedVersion(),
-            body.getWorkflowName(),
-            body.getWorkflowType(),
-            body.getEnabled() != null ? body.getEnabled() : def.getEnabled());
+    int rows = definitionMapper.updateAndBumpVersion(
+        resolvedTenant,
+        id,
+        request.getExpectedVersion(),
+        body.getWorkflowName(),
+        body.getWorkflowType(),
+        body.getEnabled() != null ? body.getEnabled() : def.getEnabled());
     if (rows == 0) {
       throw BizException.of(
           ResultCode.CONFLICT,
@@ -294,9 +290,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   @Override
   public DagValidationResult validate(Long id, String tenantId) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-    WorkflowDefinitionEntity def =
-        Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    WorkflowDefinitionEntity def = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
 
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));
@@ -304,11 +299,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
         edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null));
 
     List<DagValidationResult.Finding> findings = validateDag(resolvedTenant, nodes, edges);
-    List<String> errors =
-        findings.stream()
-            .filter(f -> DagValidationResult.Finding.LEVEL_ERROR.equals(f.level()))
-            .map(DagValidationResult.Finding::message)
-            .toList();
+    List<String> errors = findings.stream()
+        .filter(f -> DagValidationResult.Finding.LEVEL_ERROR.equals(f.level()))
+        .map(DagValidationResult.Finding::message)
+        .toList();
     return new DagValidationResult(errors.isEmpty(), errors, findings);
   }
 
@@ -452,34 +446,28 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       }
       String jobCode = n.getRelatedJobCode();
       if (jobCode == null || jobCode.isBlank()) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "JOB_REF_MISSING",
-                "JOB node missing related_job_code: " + n.getNodeCode(),
-                n.getNodeCode(),
-                null));
+        findings.add(DagValidationResult.Finding.error(
+            "JOB_REF_MISSING",
+            "JOB node missing related_job_code: " + n.getNodeCode(),
+            n.getNodeCode(),
+            null));
         continue;
       }
       var jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
       if (jobDef == null) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "JOB_REF_NOT_FOUND",
-                "JOB node "
-                    + n.getNodeCode()
-                    + " references non-existent job_definition: "
-                    + jobCode,
-                n.getNodeCode(),
-                null));
+        findings.add(DagValidationResult.Finding.error(
+            "JOB_REF_NOT_FOUND",
+            "JOB node " + n.getNodeCode() + " references non-existent job_definition: " + jobCode,
+            n.getNodeCode(),
+            null));
         continue;
       }
       if (Boolean.FALSE.equals(jobDef.getEnabled())) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "JOB_REF_DISABLED",
-                "JOB node " + n.getNodeCode() + " references disabled job_definition: " + jobCode,
-                n.getNodeCode(),
-                null));
+        findings.add(DagValidationResult.Finding.error(
+            "JOB_REF_DISABLED",
+            "JOB node " + n.getNodeCode() + " references disabled job_definition: " + jobCode,
+            n.getNodeCode(),
+            null));
       }
     }
   }
@@ -492,15 +480,14 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
         continue;
       }
       if (e.getConditionExpr() == null || e.getConditionExpr().isBlank()) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "EDGE_CONDITION_MISSING_EXPR",
-                "CONDITION edge missing condition_expr: "
-                    + e.getFromNodeCode()
-                    + " -> "
-                    + e.getToNodeCode(),
-                null,
-                edgeIdOf(e)));
+        findings.add(DagValidationResult.Finding.error(
+            "EDGE_CONDITION_MISSING_EXPR",
+            "CONDITION edge missing condition_expr: "
+                + e.getFromNodeCode()
+                + " -> "
+                + e.getToNodeCode(),
+            null,
+            edgeIdOf(e)));
       }
     }
   }
@@ -517,12 +504,11 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     } else if (startNodes.size() > 1) {
       // 多个 START 时把第 2 个之后的位置标到具体 node 以便前端高亮
       for (int i = 1; i < startNodes.size(); i++) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "MULTIPLE_START",
-                "Multiple START nodes found: " + startNodes,
-                startNodes.get(i),
-                null));
+        findings.add(DagValidationResult.Finding.error(
+            "MULTIPLE_START",
+            "Multiple START nodes found: " + startNodes,
+            startNodes.get(i),
+            null));
       }
     }
 
@@ -531,28 +517,25 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
           DagValidationResult.Finding.error("MISSING_END", "Missing END node", null, null));
     } else if (endNodes.size() > 1) {
       for (int i = 1; i < endNodes.size(); i++) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "MULTIPLE_END", "Multiple END nodes found: " + endNodes, endNodes.get(i), null));
+        findings.add(DagValidationResult.Finding.error(
+            "MULTIPLE_END", "Multiple END nodes found: " + endNodes, endNodes.get(i), null));
       }
     }
 
     for (WorkflowEdgeEntity e : edges) {
       if (!nodeCodes.contains(e.getFromNodeCode())) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "EDGE_SOURCE_MISSING",
-                "Edge references non-existent source node: " + e.getFromNodeCode(),
-                null,
-                edgeIdOf(e)));
+        findings.add(DagValidationResult.Finding.error(
+            "EDGE_SOURCE_MISSING",
+            "Edge references non-existent source node: " + e.getFromNodeCode(),
+            null,
+            edgeIdOf(e)));
       }
       if (!nodeCodes.contains(e.getToNodeCode())) {
-        findings.add(
-            DagValidationResult.Finding.error(
-                "EDGE_TARGET_MISSING",
-                "Edge references non-existent target node: " + e.getToNodeCode(),
-                null,
-                edgeIdOf(e)));
+        findings.add(DagValidationResult.Finding.error(
+            "EDGE_TARGET_MISSING",
+            "Edge references non-existent target node: " + e.getToNodeCode(),
+            null,
+            edgeIdOf(e)));
       }
     }
   }
@@ -606,12 +589,11 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       // 把仍有 inDegree > 0 的节点（在环里）逐个标出，便于前端高亮
       for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
         if (entry.getValue() > 0) {
-          findings.add(
-              DagValidationResult.Finding.error(
-                  "CYCLE_DETECTED",
-                  "Cycle detected in workflow DAG (node still has incoming edges)",
-                  entry.getKey(),
-                  null));
+          findings.add(DagValidationResult.Finding.error(
+              "CYCLE_DETECTED",
+              "Cycle detected in workflow DAG (node still has incoming edges)",
+              entry.getKey(),
+              null));
         }
       }
     }
@@ -631,9 +613,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       for (String code : nodeCodes) {
         if (!"START".equalsIgnoreCase(nodeTypeByCode(nodes, code))
             && !reachableFromStart.contains(code)) {
-          findings.add(
-              DagValidationResult.Finding.error(
-                  "UNREACHABLE_FROM_START", "Node not reachable from START: " + code, code, null));
+          findings.add(DagValidationResult.Finding.error(
+              "UNREACHABLE_FROM_START", "Node not reachable from START: " + code, code, null));
         }
       }
     }
@@ -645,9 +626,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       for (String code : nodeCodes) {
         if (!"END".equalsIgnoreCase(nodeTypeByCode(nodes, code))
             && !reachableToEnd.contains(code)) {
-          findings.add(
-              DagValidationResult.Finding.error(
-                  "CANNOT_REACH_END", "Node cannot reach END: " + code, code, null));
+          findings.add(DagValidationResult.Finding.error(
+              "CANNOT_REACH_END", "Node cannot reach END: " + code, code, null));
         }
       }
     }
@@ -690,38 +670,33 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   @Override
   public List<WorkflowDefinitionVersionSummaryResponse> listVersions(Long id, String tenantId) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-    WorkflowDefinitionEntity def =
-        Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    WorkflowDefinitionEntity def = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
 
     List<WorkflowDefinitionVersionEntity> rows =
         versionMapper.listByDefinitionId(resolvedTenant, id);
     if (rows.isEmpty()) {
       // 降级路径:历史表无数据(刚迁移后 / 从未 fullUpdate)→ 单条返回主表 current,
       // 与 PR #370 行为一致,FE diff 页可降级显示"当前 vs 空"。
-      return List.of(
-          new WorkflowDefinitionVersionSummaryResponse(
-              def.getVersion(), null, def.getUpdatedAt(), null, true));
+      return List.of(new WorkflowDefinitionVersionSummaryResponse(
+          def.getVersion(), null, def.getUpdatedAt(), null, true));
     }
     Integer currentVersion = def.getVersion();
     return rows.stream()
-        .map(
-            r ->
-                new WorkflowDefinitionVersionSummaryResponse(
-                    r.getVersion(),
-                    r.getSavedBy(),
-                    r.getSavedAt(),
-                    r.getSummary(),
-                    r.getVersion().equals(currentVersion)))
+        .map(r -> new WorkflowDefinitionVersionSummaryResponse(
+            r.getVersion(),
+            r.getSavedBy(),
+            r.getSavedAt(),
+            r.getSummary(),
+            r.getVersion().equals(currentVersion)))
         .toList();
   }
 
   @Override
   public WorkflowDefinitionDetailResponse getVersion(Long id, String tenantId, Integer version) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-    WorkflowDefinitionEntity def =
-        Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    WorkflowDefinitionEntity def = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
     if (version == null || version.equals(def.getVersion())) {
       // 当前 version → 主表 + 关联节点边(loadDetail 路径)
       return loadDetail(resolvedTenant, id);

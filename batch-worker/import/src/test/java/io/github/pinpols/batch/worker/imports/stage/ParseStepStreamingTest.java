@@ -47,9 +47,8 @@ class ParseStepStreamingTest {
 
   @Test
   void shouldParseJsonArray_streamingOnRecord() {
-    String json =
-        "[{\"customerNo\":\"C001\",\"customerName\":\"Alice\"},"
-            + "{\"customerNo\":\"C002\",\"customerName\":\"Bob\"}]";
+    String json = "[{\"customerNo\":\"C001\",\"customerName\":\"Alice\"},"
+        + "{\"customerNo\":\"C002\",\"customerName\":\"Bob\"}]";
 
     ImportJobContext context = buildContext(json, "JSON");
 
@@ -65,17 +64,14 @@ class ParseStepStreamingTest {
   @Test
   void shouldParseRecordsEnvelope_streamingWithoutFullLoad() {
     // Build a {"records":[...]} payload with 5 records
-    String records =
-        IntStream.rangeClosed(1, 5)
-            .mapToObj(
-                i ->
-                    "{\"customerNo\":\"C"
-                        + String.format("%03d", i)
-                        + "\","
-                        + "\"customerName\":\"Name"
-                        + i
-                        + "\"}")
-            .collect(Collectors.joining(","));
+    String records = IntStream.rangeClosed(1, 5)
+        .mapToObj(i -> "{\"customerNo\":\"C"
+            + String.format("%03d", i)
+            + "\","
+            + "\"customerName\":\"Name"
+            + i
+            + "\"}")
+        .collect(Collectors.joining(","));
     String json = "{\"records\":[" + records + "]}";
 
     ImportJobContext context = buildContext(json, "JSON");
@@ -104,10 +100,9 @@ class ParseStepStreamingTest {
     // 500 条记录包装在 {"records":[...]} 信封中 — 验证流式路径
     // 可处理大量数据而不会导致 StackOverflow 或过度 GC
     int count = 500;
-    String records =
-        IntStream.rangeClosed(1, count)
-            .mapToObj(i -> "{\"customerNo\":\"C" + i + "\",\"customerName\":\"Name" + i + "\"}")
-            .collect(Collectors.joining(","));
+    String records = IntStream.rangeClosed(1, count)
+        .mapToObj(i -> "{\"customerNo\":\"C" + i + "\",\"customerName\":\"Name" + i + "\"}")
+        .collect(Collectors.joining(","));
     String json = "{\"records\":[" + records + "]}";
 
     ImportJobContext context = buildContext(json, "JSON");
@@ -137,10 +132,9 @@ class ParseStepStreamingTest {
 
   @Test
   void shouldParseDelimited_streamingLineByLine() {
-    String csv =
-        "customerNo,customerName,customerType,certificateNo,mobileNo,email,status\n"
-            + "C001,Alice,PERSONAL,ID001,13800000001,alice@example.com,ACTIVE\n"
-            + "C002,Bob,CORPORATE,ID002,13800000002,bob@example.com,ACTIVE\n";
+    String csv = "customerNo,customerName,customerType,certificateNo,mobileNo,email,status\n"
+        + "C001,Alice,PERSONAL,ID001,13800000001,alice@example.com,ACTIVE\n"
+        + "C002,Bob,CORPORATE,ID002,13800000002,bob@example.com,ACTIVE\n";
 
     ImportJobContext context = buildContext(csv, "DELIMITED");
 
@@ -153,31 +147,30 @@ class ParseStepStreamingTest {
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private ImportJobContext buildContext(String rawPayload, String fileFormatType) {
-    ImportPayload importPayload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            fileFormatType,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            rawPayload,
-            null,
-            null,
-            null,
-            null,
-            Boolean.TRUE,
-            Map.of());
+    ImportPayload importPayload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        fileFormatType,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        rawPayload,
+        null,
+        null,
+        null,
+        null,
+        Boolean.TRUE,
+        Map.of());
 
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("tenant-streaming-test");
@@ -201,7 +194,8 @@ class ParseStepStreamingTest {
       return;
     }
     try {
-      long lineCount = Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).count();
+      long lineCount =
+          Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).count();
       assertThat(lineCount).isEqualTo(expected);
     } catch (Exception e) {
       throw new AssertionError("Could not count NDJSON lines: " + e.getMessage(), e);

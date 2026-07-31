@@ -54,13 +54,13 @@ class ConsoleWebhookDomainEventListenerTest {
 
   @Test
   void shouldSkipEventWithBlankTenantId() {
-    ConsoleRealtimeDomainEvent event =
-        ConsoleRealtimeDomainEvent.builder().tenantId("  ").stream("job-instance")
-            .eventType("JOB_COMPLETED")
-            .cursor("cursor-1")
-            .data("payload")
-            .emittedAt(BatchDateTimeSupport.utcNow())
-            .build();
+    ConsoleRealtimeDomainEvent event = ConsoleRealtimeDomainEvent.builder().tenantId("  ").stream(
+            "job-instance")
+        .eventType("JOB_COMPLETED")
+        .cursor("cursor-1")
+        .data("payload")
+        .emittedAt(BatchDateTimeSupport.utcNow())
+        .build();
 
     listener.onDomainEvent(event);
 

@@ -107,24 +107,21 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (!eval.claimable()) {
       return current;
     }
-    int updated =
-        jobTaskMapper.assignWorker(
-            AssignWorkerParam.builder()
-                .tenantId(tenantId)
-                .id(taskId)
-                .assignedWorkerCode(workerCode)
-                .taskStatus(TaskStatus.RUNNING.code())
-                .readyStatus(TaskStatus.READY.code())
-                .expectedVersion(current.getVersion())
-                .build());
+    int updated = jobTaskMapper.assignWorker(AssignWorkerParam.builder()
+        .tenantId(tenantId)
+        .id(taskId)
+        .assignedWorkerCode(workerCode)
+        .taskStatus(TaskStatus.RUNNING.code())
+        .readyStatus(TaskStatus.READY.code())
+        .expectedVersion(current.getVersion())
+        .build());
     if (updated <= 0) {
       return jobTaskMapper.selectById(tenantId, taskId);
     }
     if (current.getJobPartitionId() != null) {
       // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
-      int claimed =
-          claimPartitionLeaseForTask(
-              tenantId, current.getJobPartitionId(), workerCode, eval.partition());
+      int claimed = claimPartitionLeaseForTask(
+          tenantId, current.getJobPartitionId(), workerCode, eval.partition());
       if (claimed <= 0) {
         // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
         // 同理返回 current（READY），不重读 DB。
@@ -134,13 +131,12 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
     JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
     if (stepInstance != null
-        && jobStepInstanceMapper.markRunning(
-                MarkRunningParam.withDefaultStatuses()
-                    .tenantId(tenantId)
-                    .id(stepInstance.getId())
-                    .startedAt(BatchDateTimeSupport.utcNow())
-                    .expectedVersion(stepInstance.getVersion())
-                    .build())
+        && jobStepInstanceMapper.markRunning(MarkRunningParam.withDefaultStatuses()
+                .tenantId(tenantId)
+                .id(stepInstance.getId())
+                .startedAt(BatchDateTimeSupport.utcNow())
+                .expectedVersion(stepInstance.getVersion())
+                .build())
             <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_claim_conflict");
     }
@@ -186,16 +182,14 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       return false;
     }
     String expectedInvocation = partitionInvocationId;
-    return jobPartitionMapper.renewLease(
-            RenewLeaseParam.builder()
-                .tenantId(tenantId)
-                .id(current.getJobPartitionId())
-                .workerCode(workerCode)
-                .leaseExpireAt(
-                    BatchDateTimeSupport.utcNow()
-                        .plusSeconds(partitionLeaseProperties.getExpireSeconds()))
-                .expectedInvocationId(expectedInvocation)
-                .build())
+    return jobPartitionMapper.renewLease(RenewLeaseParam.builder()
+            .tenantId(tenantId)
+            .id(current.getJobPartitionId())
+            .workerCode(workerCode)
+            .leaseExpireAt(BatchDateTimeSupport.utcNow()
+                .plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+            .expectedInvocationId(expectedInvocation)
+            .build())
         > 0;
   }
 
@@ -251,13 +245,12 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
           || !Texts.hasText(item.partitionInvocationId())) {
         continue;
       }
-      sqlItems.add(
-          RenewLeaseBatchItem.builder()
-              .tenantId(item.tenantId())
-              .taskId(item.taskId())
-              .workerCode(item.workerCode())
-              .invocationId(item.partitionInvocationId())
-              .build());
+      sqlItems.add(RenewLeaseBatchItem.builder()
+          .tenantId(item.tenantId())
+          .taskId(item.taskId())
+          .workerCode(item.workerCode())
+          .invocationId(item.partitionInvocationId())
+          .build());
     }
     Map<String, RenewLeaseBatchRow> renewedByKey = new HashMap<>();
     if (!sqlItems.isEmpty()) {
@@ -292,16 +285,15 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (current == null) {
       return null;
     }
-    jobTaskMapper.updateStatus(
-        UpdateTaskStatusParam.withDefaultTerminals()
-            .tenantId(tenantId)
-            .id(taskId)
-            .taskStatus(taskStatus)
-            .resultSummary(null)
-            .errorCode(errorCode)
-            .errorMessage(errorMessage)
-            .expectedVersion(current.getVersion())
-            .build());
+    jobTaskMapper.updateStatus(UpdateTaskStatusParam.withDefaultTerminals()
+        .tenantId(tenantId)
+        .id(taskId)
+        .taskStatus(taskStatus)
+        .resultSummary(null)
+        .errorCode(errorCode)
+        .errorMessage(errorMessage)
+        .expectedVersion(current.getVersion())
+        .build());
     return jobTaskMapper.selectById(tenantId, taskId);
   }
 
@@ -328,25 +320,23 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
     current.setStartedAt(startedAt);
     current.setTaskStatus(TaskStatus.RUNNING.code());
-    jobTaskMapper.updateStatus(
-        UpdateTaskStatusParam.withDefaultTerminals()
-            .tenantId(tenantId)
-            .id(taskId)
-            .taskStatus(TaskStatus.RUNNING.code())
-            .resultSummary(null)
-            .errorCode(null)
-            .errorMessage(null)
-            .expectedVersion(current.getVersion())
-            .build());
+    jobTaskMapper.updateStatus(UpdateTaskStatusParam.withDefaultTerminals()
+        .tenantId(tenantId)
+        .id(taskId)
+        .taskStatus(TaskStatus.RUNNING.code())
+        .resultSummary(null)
+        .errorCode(null)
+        .errorMessage(null)
+        .expectedVersion(current.getVersion())
+        .build());
     JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
     if (stepInstance != null
-        && jobStepInstanceMapper.markRunning(
-                MarkRunningParam.withDefaultStatuses()
-                    .tenantId(tenantId)
-                    .id(stepInstance.getId())
-                    .startedAt(startedAt)
-                    .expectedVersion(stepInstance.getVersion())
-                    .build())
+        && jobStepInstanceMapper.markRunning(MarkRunningParam.withDefaultStatuses()
+                .tenantId(tenantId)
+                .id(stepInstance.getId())
+                .startedAt(startedAt)
+                .expectedVersion(stepInstance.getVersion())
+                .build())
             <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_running_conflict");
     }
@@ -373,12 +363,11 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
     Timer.builder("batch.task.launch_to_running.duration")
         .description("Task NEW→RUNNING wait time (orchestrator dispatch → worker start)")
-        .tags(
-            Tags.of(
-                "tenant_id",
-                task.getTenantId() == null ? "unknown" : task.getTenantId(),
-                "task_type",
-                task.getTaskType() == null ? "unknown" : task.getTaskType()))
+        .tags(Tags.of(
+            "tenant_id",
+            task.getTenantId() == null ? "unknown" : task.getTenantId(),
+            "task_type",
+            task.getTaskType() == null ? "unknown" : task.getTaskType()))
         .publishPercentileHistogram()
         .register(meterRegistry)
         .record(wait);
@@ -404,17 +393,15 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (instance == null) {
       return null;
     }
-    JobPartitionEntity partition =
-        task.getJobPartitionId() == null
-            ? null
-            : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
+    JobPartitionEntity partition = task.getJobPartitionId() == null
+        ? null
+        : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
     JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
     String businessKey =
         partition != null && partition.getBusinessKey() != null ? partition.getBusinessKey() : null;
-    String idempotencyKey =
-        partition != null && partition.getIdempotencyKey() != null
-            ? partition.getIdempotencyKey()
-            : null;
+    String idempotencyKey = partition != null && partition.getIdempotencyKey() != null
+        ? partition.getIdempotencyKey()
+        : null;
     Map<String, Object> partitionSnapshot = parsePartitionSnapshot(partition);
     return new EffectiveTaskConfig(
         tenantId,
@@ -501,10 +488,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       String tenantId, Long partitionId, String workerCode, JobPartitionEntity preloadedPartition) {
     // PERF(5.2): 优先复用认领评估阶段已读到的 partition（无 job_partition 写入介于其间，version 未漂移）；
     // 缺省（null）时回退到自读，保持与原实现完全一致的行为。
-    JobPartitionEntity partition =
-        preloadedPartition != null
-            ? preloadedPartition
-            : jobPartitionMapper.selectById(tenantId, partitionId);
+    JobPartitionEntity partition = preloadedPartition != null
+        ? preloadedPartition
+        : jobPartitionMapper.selectById(tenantId, partitionId);
     if (partition == null) {
       return 0;
     }
@@ -523,20 +509,18 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       String tenantId, Long partitionId, String workerCode, JobPartitionEntity partition) {
     String invocationId = IdGenerator.newInvocationId();
     Instant invocationStartedAt = BatchDateTimeSupport.utcNow();
-    ClaimPartitionParam param =
-        ClaimPartitionParam.builder()
-            .tenantId(tenantId)
-            .id(partitionId)
-            .workerCode(workerCode)
-            .leaseExpireAt(
-                BatchDateTimeSupport.utcNow()
-                    .plusSeconds(partitionLeaseProperties.getExpireSeconds()))
-            .fromStatus(PartitionStatus.READY.code())
-            .toStatus(PartitionStatus.RUNNING.code())
-            .expectedVersion(partition.getVersion())
-            .currentInvocationId(invocationId)
-            .invocationStartedAt(invocationStartedAt)
-            .build();
+    ClaimPartitionParam param = ClaimPartitionParam.builder()
+        .tenantId(tenantId)
+        .id(partitionId)
+        .workerCode(workerCode)
+        .leaseExpireAt(
+            BatchDateTimeSupport.utcNow().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+        .fromStatus(PartitionStatus.READY.code())
+        .toStatus(PartitionStatus.RUNNING.code())
+        .expectedVersion(partition.getVersion())
+        .currentInvocationId(invocationId)
+        .invocationStartedAt(invocationStartedAt)
+        .build();
     return jobPartitionMapper.claimPartition(param);
   }
 
@@ -562,10 +546,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       return new ClaimEval(false, null);
     }
     // PERF(5.2c): memo 非空时同 (tenant,workerCode) 只查一次 worker_registry（含缓存 miss）。
-    WorkerRegistryEntity workerRegistry =
-        workerMemo == null
-            ? resolveClaimableWorker(tenantId, workerCode)
-            : workerMemo.resolve(tenantId, workerCode, this::resolveClaimableWorker);
+    WorkerRegistryEntity workerRegistry = workerMemo == null
+        ? resolveClaimableWorker(tenantId, workerCode)
+        : workerMemo.resolve(tenantId, workerCode, this::resolveClaimableWorker);
     if (workerRegistry == null
         || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
       return new ClaimEval(false, null);
@@ -599,10 +582,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (primary != null) {
       return primary;
     }
-    String fallbackTenant =
-        resourceSchedulerProperties == null
-            ? null
-            : resourceSchedulerProperties.getSharedTenantFallback();
+    String fallbackTenant = resourceSchedulerProperties == null
+        ? null
+        : resourceSchedulerProperties.getSharedTenantFallback();
     if (!Texts.hasText(fallbackTenant) || fallbackTenant.equals(tenantId)) {
       return null;
     }

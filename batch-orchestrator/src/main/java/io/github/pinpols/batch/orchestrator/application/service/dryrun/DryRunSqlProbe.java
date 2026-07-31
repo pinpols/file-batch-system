@@ -49,44 +49,40 @@ final class DryRunSqlProbe {
   private void probeSingleSql(
       String key, String sql, JdbcTemplate jdbcTemplate, List<DryRunFinding> findings) {
     if (EXPLAIN_PREFIX.matcher(sql).find()) {
-      findings.add(
-          DryRunFinding.error(
-              "EXEC_SQL_EXPLAIN_REJECTED",
-              SCOPE_EXECUTION,
-              "payload starts with EXPLAIN — refusing to nest a second EXPLAIN; submit raw SELECT",
-              key));
+      findings.add(DryRunFinding.error(
+          "EXEC_SQL_EXPLAIN_REJECTED",
+          SCOPE_EXECUTION,
+          "payload starts with EXPLAIN — refusing to nest a second EXPLAIN; submit raw SELECT",
+          key));
       return;
     }
     if (!SELECT_OR_WITH_PREFIX.matcher(sql).find()) {
-      findings.add(
-          DryRunFinding.error(
-              "EXEC_SQL_NON_SELECT_REJECTED",
-              SCOPE_EXECUTION,
-              "dry-run SQL probe only accepts SELECT / WITH statements; refusing to EXPLAIN a"
-                  + " DML/DDL payload",
-              key));
+      findings.add(DryRunFinding.error(
+          "EXEC_SQL_NON_SELECT_REJECTED",
+          SCOPE_EXECUTION,
+          "dry-run SQL probe only accepts SELECT / WITH statements; refusing to EXPLAIN a"
+              + " DML/DDL payload",
+          key));
       return;
     }
     SingleSelectCheck check = classifySingleSelect(sql);
     if (check == SingleSelectCheck.UNPARSEABLE) {
-      findings.add(
-          DryRunFinding.error(
-              "EXEC_SQL_UNPARSEABLE_REJECTED",
-              SCOPE_EXECUTION,
-              "dry-run SQL probe could not be parsed to verify single-statement safety; refusing"
-                  + " to EXPLAIN via simple-query (may be valid PG-specific syntax jsqlparser"
-                  + " cannot parse — submit a parseable single SELECT/WITH)",
-              key));
+      findings.add(DryRunFinding.error(
+          "EXEC_SQL_UNPARSEABLE_REJECTED",
+          SCOPE_EXECUTION,
+          "dry-run SQL probe could not be parsed to verify single-statement safety; refusing"
+              + " to EXPLAIN via simple-query (may be valid PG-specific syntax jsqlparser"
+              + " cannot parse — submit a parseable single SELECT/WITH)",
+          key));
       return;
     }
     if (check == SingleSelectCheck.MULTI_OR_NON_SELECT) {
-      findings.add(
-          DryRunFinding.error(
-              "EXEC_SQL_MULTISTATEMENT_REJECTED",
-              SCOPE_EXECUTION,
-              "dry-run SQL probe must be exactly one SELECT/WITH statement; refusing to EXPLAIN a"
-                  + " multi-statement / stacked-query payload",
-              key));
+      findings.add(DryRunFinding.error(
+          "EXEC_SQL_MULTISTATEMENT_REJECTED",
+          SCOPE_EXECUTION,
+          "dry-run SQL probe must be exactly one SELECT/WITH statement; refusing to EXPLAIN a"
+              + " multi-statement / stacked-query payload",
+          key));
       return;
     }
     try {
@@ -94,12 +90,11 @@ final class DryRunSqlProbe {
       findings.add(
           DryRunFinding.pass("EXEC_SQL_EXPLAIN_OK", SCOPE_EXECUTION, "EXPLAIN passed for " + key));
     } catch (RuntimeException ex) {
-      findings.add(
-          DryRunFinding.error(
-              "EXEC_SQL_EXPLAIN_FAILED",
-              SCOPE_EXECUTION,
-              "EXPLAIN failed for " + key + ": " + ex.getMessage(),
-              key));
+      findings.add(DryRunFinding.error(
+          "EXEC_SQL_EXPLAIN_FAILED",
+          SCOPE_EXECUTION,
+          "EXPLAIN failed for " + key + ": " + ex.getMessage(),
+          key));
     }
   }
 

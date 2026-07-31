@@ -31,9 +31,8 @@ class ConsolePipelineProgressRealtimeControllerTest {
 
   @BeforeEach
   void setUp() {
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(
-            new ConsoleResponseFactory(requestMetadataResolver));
+    ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(
+        new ConsoleResponseFactory(requestMetadataResolver));
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
@@ -42,11 +41,10 @@ class ConsolePipelineProgressRealtimeControllerTest {
     when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
         .thenReturn(new SseEmitter());
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsolePipelineProgressRealtimeController(realtimeEventHub, tenantGuard))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsolePipelineProgressRealtimeController(realtimeEventHub, tenantGuard))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test

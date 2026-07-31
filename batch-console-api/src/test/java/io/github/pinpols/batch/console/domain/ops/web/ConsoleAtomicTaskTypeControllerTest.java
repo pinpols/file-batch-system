@@ -17,10 +17,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAtomicTaskTypeControllerTest {
 
-  @Mock private ConsoleAtomicTaskTypeSchemaService schemaService;
-  @Mock private ConsoleResponseFactory responseFactory;
+  @Mock
+  private ConsoleAtomicTaskTypeSchemaService schemaService;
 
-  @InjectMocks private ConsoleAtomicTaskTypeController controller;
+  @Mock
+  private ConsoleResponseFactory responseFactory;
+
+  @InjectMocks
+  private ConsoleAtomicTaskTypeController controller;
 
   @Test
   void schemaReturnsCatalog() {

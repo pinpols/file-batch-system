@@ -87,29 +87,27 @@ public class BatchDayReplayService {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.no_candidates");
     }
 
-    BatchDayReplaySessionEntity session =
-        BatchDayReplaySessionEntity.builder()
-            .tenantId(command.tenantId())
-            .calendarCode(command.calendarCode())
-            .bizDate(command.bizDate())
-            .scope(scope)
-            .scopePayload(buildScopePayload(command, scope))
-            .resultPolicy(defaultIfBlank(command.resultPolicy(), "CREATE_NEW_VERSION"))
-            .configVersionPolicy(
-                defaultIfBlank(command.configVersionPolicy(), "USE_ORIGINAL_CONFIG"))
-            .configVersion(command.configVersion())
-            .reason(command.reason())
-            .status(initialStatus)
-            .totalCount(entries.size())
-            .succeededCount(0)
-            .failedCount(0)
-            .inFlightCount(0)
-            .requestedBy(command.requestedBy())
-            .startedAt(STATUS_RUNNING.equals(initialStatus) ? now : null)
-            .traceId(command.traceId())
-            .createdAt(now)
-            .updatedAt(now)
-            .build();
+    BatchDayReplaySessionEntity session = BatchDayReplaySessionEntity.builder()
+        .tenantId(command.tenantId())
+        .calendarCode(command.calendarCode())
+        .bizDate(command.bizDate())
+        .scope(scope)
+        .scopePayload(buildScopePayload(command, scope))
+        .resultPolicy(defaultIfBlank(command.resultPolicy(), "CREATE_NEW_VERSION"))
+        .configVersionPolicy(defaultIfBlank(command.configVersionPolicy(), "USE_ORIGINAL_CONFIG"))
+        .configVersion(command.configVersion())
+        .reason(command.reason())
+        .status(initialStatus)
+        .totalCount(entries.size())
+        .succeededCount(0)
+        .failedCount(0)
+        .inFlightCount(0)
+        .requestedBy(command.requestedBy())
+        .startedAt(STATUS_RUNNING.equals(initialStatus) ? now : null)
+        .traceId(command.traceId())
+        .createdAt(now)
+        .updatedAt(now)
+        .build();
 
     try {
       sessionMapper.insert(session);
@@ -118,9 +116,8 @@ public class BatchDayReplayService {
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_exists");
     }
     // Record 不可变，MyBatis useGeneratedKeys 写不回 id；用 active 唯一索引重读拿持久化后的行。
-    BatchDayReplaySessionEntity persisted =
-        sessionMapper.selectActiveByCalendarBizDate(
-            command.tenantId(), command.calendarCode(), command.bizDate());
+    BatchDayReplaySessionEntity persisted = sessionMapper.selectActiveByCalendarBizDate(
+        command.tenantId(), command.calendarCode(), command.bizDate());
     if (persisted == null || persisted.id() == null) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
@@ -158,12 +155,12 @@ public class BatchDayReplayService {
     String configVersionPolicy =
         defaultIfBlank(command.configVersionPolicy(), "USE_ORIGINAL_CONFIG");
     Map<Long, String> versionBusinessKeys = loadVersionBusinessKeys(command, scope);
-    List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries =
-        entries.stream()
-            .map(entry -> toPreviewEntry(command, scope, entry, versionBusinessKeys))
-            .toList();
-    List<BatchDayReplayPreviewResponse.ResultVersionImpact> impacts =
-        previewEntries.stream().map(entry -> toResultVersionImpact(entry, resultPolicy)).toList();
+    List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries = entries.stream()
+        .map(entry -> toPreviewEntry(command, scope, entry, versionBusinessKeys))
+        .toList();
+    List<BatchDayReplayPreviewResponse.ResultVersionImpact> impacts = previewEntries.stream()
+        .map(entry -> toResultVersionImpact(entry, resultPolicy))
+        .toList();
     List<BatchDayReplayPreviewResponse.AssetPartitionImpact> assetPartitionImpacts =
         loadAssetPartitionImpacts(command.tenantId(), previewEntries);
     List<BatchDayReplayPreviewResponse.DispatchImpact> dispatchImpacts =
@@ -209,16 +206,15 @@ public class BatchDayReplayService {
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.approve_state_invalid");
     }
     Instant now = dateTimeSupport.nowInstant();
-    int updated =
-        sessionMapper.updateStatus(
-            tenantId,
-            sessionId,
-            STATUS_RUNNING,
-            List.of(STATUS_PENDING_APPROVAL),
-            now,
-            null,
-            approver,
-            now);
+    int updated = sessionMapper.updateStatus(
+        tenantId,
+        sessionId,
+        STATUS_RUNNING,
+        List.of(STATUS_PENDING_APPROVAL),
+        now,
+        null,
+        approver,
+        now);
     if (updated == 0) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.approve_state_invalid");
@@ -235,16 +231,15 @@ public class BatchDayReplayService {
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.cancel_state_invalid");
     }
     Instant now = dateTimeSupport.nowInstant();
-    int updated =
-        sessionMapper.updateStatus(
-            tenantId,
-            sessionId,
-            STATUS_CANCELLED,
-            List.of(STATUS_PENDING_APPROVAL, STATUS_RUNNING),
-            null,
-            now,
-            null,
-            now);
+    int updated = sessionMapper.updateStatus(
+        tenantId,
+        sessionId,
+        STATUS_CANCELLED,
+        List.of(STATUS_PENDING_APPROVAL, STATUS_RUNNING),
+        null,
+        now,
+        null,
+        now);
     if (updated == 0) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.cancel_state_invalid");
@@ -351,17 +346,17 @@ public class BatchDayReplayService {
           case SCOPE_SUBSET -> List.of("SUCCESS", "FAILED", "PARTIAL_FAILED");
           default -> List.of();
         };
-    List<String> jobCodes =
-        SCOPE_SUBSET.equals(scope) && command.jobCodes() != null && !command.jobCodes().isEmpty()
-            ? command.jobCodes()
-            : List.of();
+    List<String> jobCodes = SCOPE_SUBSET.equals(scope)
+            && command.jobCodes() != null
+            && !command.jobCodes().isEmpty()
+        ? command.jobCodes()
+        : List.of();
     if (SCOPE_SUBSET.equals(scope) && jobCodes.isEmpty()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.subset_job_codes_required");
     }
-    List<JobInstanceEntity> candidates =
-        jobInstanceMapper.selectBatchDayCandidates(
-            command.tenantId(), command.calendarCode(), command.bizDate(), statuses, jobCodes);
+    List<JobInstanceEntity> candidates = jobInstanceMapper.selectBatchDayCandidates(
+        command.tenantId(), command.calendarCode(), command.bizDate(), statuses, jobCodes);
     if (candidates == null) {
       return List.of();
     }
@@ -373,15 +368,14 @@ public class BatchDayReplayService {
           || ji.getId() == null) {
         continue;
       }
-      entries.add(
-          BatchDayReplayEntryEntity.builder()
-              .tenantId(ji.getTenantId())
-              .jobCode(ji.getJobCode())
-              .sourceInstanceId(ji.getId())
-              .status(ENTRY_PENDING)
-              .createdAt(now)
-              .updatedAt(now)
-              .build());
+      entries.add(BatchDayReplayEntryEntity.builder()
+          .tenantId(ji.getTenantId())
+          .jobCode(ji.getJobCode())
+          .sourceInstanceId(ji.getId())
+          .status(ENTRY_PENDING)
+          .createdAt(now)
+          .updatedAt(now)
+          .build());
     }
     return entries;
   }
@@ -399,22 +393,22 @@ public class BatchDayReplayService {
     for (ResultVersionEntity v : versions) {
       byId.put(v.id(), v);
     }
-    List<BatchDayReplayEntryEntity> entries = new ArrayList<>(command.versionIds().size());
+    List<BatchDayReplayEntryEntity> entries =
+        new ArrayList<>(command.versionIds().size());
     for (Long versionId : command.versionIds()) {
       ResultVersionEntity version = byId.get(versionId);
       if (version == null) {
         throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
       }
-      entries.add(
-          BatchDayReplayEntryEntity.builder()
-              .tenantId(command.tenantId())
-              .jobCode(deriveJobCode(version.businessKey()))
-              .sourceInstanceId(version.jobInstanceId())
-              .resultVersionId(versionId)
-              .status(ENTRY_PENDING)
-              .createdAt(now)
-              .updatedAt(now)
-              .build());
+      entries.add(BatchDayReplayEntryEntity.builder()
+          .tenantId(command.tenantId())
+          .jobCode(deriveJobCode(version.businessKey()))
+          .sourceInstanceId(version.jobInstanceId())
+          .resultVersionId(versionId)
+          .status(ENTRY_PENDING)
+          .createdAt(now)
+          .updatedAt(now)
+          .build());
     }
     return entries;
   }
@@ -455,10 +449,9 @@ public class BatchDayReplayService {
       BatchDayReplayEntryEntity entry,
       Map<Long, String> versionBusinessKeys) {
     String action = SCOPE_OUTPUTS_ONLY.equals(scope) ? "PROMOTE_RESULT_VERSION" : "RERUN_INSTANCE";
-    String businessKey =
-        SCOPE_OUTPUTS_ONLY.equals(scope)
-            ? versionBusinessKeys.getOrDefault(entry.resultVersionId(), "")
-            : "job:" + entry.jobCode() + ":" + command.bizDate();
+    String businessKey = SCOPE_OUTPUTS_ONLY.equals(scope)
+        ? versionBusinessKeys.getOrDefault(entry.resultVersionId(), "")
+        : "job:" + entry.jobCode() + ":" + command.bizDate();
     return new BatchDayReplayPreviewResponse.PreviewEntry(
         entry.jobCode(), entry.sourceInstanceId(), entry.resultVersionId(), action, businessKey);
   }
@@ -477,12 +470,11 @@ public class BatchDayReplayService {
 
   private List<BatchDayReplayPreviewResponse.AssetPartitionImpact> loadAssetPartitionImpacts(
       String tenantId, List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries) {
-    List<String> businessKeys =
-        previewEntries.stream()
-            .map(BatchDayReplayPreviewResponse.PreviewEntry::businessKey)
-            .filter(Texts::hasText)
-            .distinct()
-            .toList();
+    List<String> businessKeys = previewEntries.stream()
+        .map(BatchDayReplayPreviewResponse.PreviewEntry::businessKey)
+        .filter(Texts::hasText)
+        .distinct()
+        .toList();
     if (businessKeys.isEmpty()) {
       return List.of();
     }
@@ -492,25 +484,22 @@ public class BatchDayReplayService {
       return List.of();
     }
     return rows.stream()
-        .map(
-            row ->
-                new BatchDayReplayPreviewResponse.AssetPartitionImpact(
-                    text(row.get("business_key")),
-                    text(row.get("asset_code")),
-                    text(row.get("partition_key")),
-                    longValue(row.get("current_result_version_id")),
-                    text(row.get("freshness_status"))))
+        .map(row -> new BatchDayReplayPreviewResponse.AssetPartitionImpact(
+            text(row.get("business_key")),
+            text(row.get("asset_code")),
+            text(row.get("partition_key")),
+            longValue(row.get("current_result_version_id")),
+            text(row.get("freshness_status"))))
         .toList();
   }
 
   private List<BatchDayReplayPreviewResponse.DispatchImpact> loadDispatchImpacts(
       String tenantId, List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries) {
-    List<Long> sourceInstanceIds =
-        previewEntries.stream()
-            .map(BatchDayReplayPreviewResponse.PreviewEntry::sourceInstanceId)
-            .filter(id -> id != null && id > 0)
-            .distinct()
-            .toList();
+    List<Long> sourceInstanceIds = previewEntries.stream()
+        .map(BatchDayReplayPreviewResponse.PreviewEntry::sourceInstanceId)
+        .filter(id -> id != null && id > 0)
+        .distinct()
+        .toList();
     if (sourceInstanceIds.isEmpty()) {
       return List.of();
     }
@@ -519,14 +508,12 @@ public class BatchDayReplayService {
       return List.of();
     }
     return rows.stream()
-        .map(
-            row ->
-                new BatchDayReplayPreviewResponse.DispatchImpact(
-                    longValue(row.get("source_instance_id")),
-                    longValueOrZero(row.get("record_count")),
-                    longValueOrZero(row.get("sent_count")),
-                    longValueOrZero(row.get("failed_count")),
-                    longValueOrZero(row.get("pending_receipt_count"))))
+        .map(row -> new BatchDayReplayPreviewResponse.DispatchImpact(
+            longValue(row.get("source_instance_id")),
+            longValueOrZero(row.get("record_count")),
+            longValueOrZero(row.get("sent_count")),
+            longValueOrZero(row.get("failed_count")),
+            longValueOrZero(row.get("pending_receipt_count"))))
         .toList();
   }
 

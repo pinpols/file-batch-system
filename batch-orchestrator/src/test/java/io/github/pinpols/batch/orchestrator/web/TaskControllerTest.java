@@ -40,8 +40,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class TaskControllerTest {
 
-  @Mock private TaskExecutionService taskExecutionService;
-  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
+  @Mock
+  private TaskExecutionService taskExecutionService;
+
+  @Mock
+  private TenantActionRateLimiter tenantActionRateLimiter;
 
   private MockMvc mockMvc;
 
@@ -55,11 +58,10 @@ class TaskControllerTest {
             new ObjectMapper(),
             new BundleBatchClaimProperties(),
             new SimpleMeterRegistry());
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new TaskController(taskControllerApplicationService, tenantActionRateLimiter))
-            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new TaskController(taskControllerApplicationService, tenantActionRateLimiter))
+        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+        .build();
   }
 
   @Test
@@ -68,10 +70,9 @@ class TaskControllerTest {
         .thenReturn(false);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/10/claim")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/10/claim")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isTooManyRequests());
 
     verify(taskExecutionService, org.mockito.Mockito.never()).assignWorker(any(), any(), any());
@@ -83,10 +84,9 @@ class TaskControllerTest {
         .thenReturn(false);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/5/report")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"success\":true,\"resultSummary\":\"ok\"}"))
+        .perform(post("/internal/tasks/5/report")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"success\":true,\"resultSummary\":\"ok\"}"))
         .andExpect(status().isTooManyRequests());
 
     verify(taskExecutionService, org.mockito.Mockito.never()).applyTaskOutcome(any());
@@ -100,10 +100,9 @@ class TaskControllerTest {
     when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/10/claim")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/10/claim")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isOk());
   }
 
@@ -113,48 +112,46 @@ class TaskControllerTest {
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("w1");
     when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
-    EffectiveTaskConfig config =
-        new EffectiveTaskConfig(
-            "t1",
-            10L,
-            100L,
-            200L,
-            "INST-1",
-            "JOB-X",
-            "IMPORT",
-            1,
-            "IMPORT",
-            "HIGH",
-            "biz",
-            "idem",
-            "{}",
-            "trace-1",
-            "INCREMENTAL",
-            "update_time",
-            "wm-1",
-            "EXPONENTIAL",
-            5,
-            600,
-            1,
-            1,
-            "JOB-X:2026-05-01:1",
-            1,
-            0,
-            1,
-            0L,
-            100L,
-            100L,
-            null,
-            null,
-            null);
+    EffectiveTaskConfig config = new EffectiveTaskConfig(
+        "t1",
+        10L,
+        100L,
+        200L,
+        "INST-1",
+        "JOB-X",
+        "IMPORT",
+        1,
+        "IMPORT",
+        "HIGH",
+        "biz",
+        "idem",
+        "{}",
+        "trace-1",
+        "INCREMENTAL",
+        "update_time",
+        "wm-1",
+        "EXPONENTIAL",
+        5,
+        600,
+        1,
+        1,
+        "JOB-X:2026-05-01:1",
+        1,
+        0,
+        1,
+        0L,
+        100L,
+        100L,
+        null,
+        null,
+        null);
     // PERF(5.2b): claim 复用 assignWorker 返回的 task 实体拉 config
     when(taskExecutionService.loadEffectiveConfig(eq("t1"), same(task))).thenReturn(config);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/10/claim")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/10/claim")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
         .andExpect(jsonPath("$.jobCode").value("JOB-X"))
@@ -173,11 +170,10 @@ class TaskControllerTest {
   @Test
   void shouldRejectApiKeyTenantMismatchOnClaim() throws Exception {
     mockMvc
-        .perform(
-            post("/internal/tasks/10/claim")
-                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"tenant-b\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/10/claim")
+            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"tenant-b\",\"workerId\":\"w1\"}"))
         .andExpect(status().isForbidden());
   }
 
@@ -189,11 +185,10 @@ class TaskControllerTest {
     when(taskExecutionService.assignWorker(eq("tenant-a"), eq(10L), eq("w1"))).thenReturn(task);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/10/claim")
-                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
-                .contentType(APPLICATION_JSON)
-                .content("{\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/10/claim")
+            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
+            .contentType(APPLICATION_JSON)
+            .content("{\"workerId\":\"w1\"}"))
         .andExpect(status().isOk());
 
     verify(taskExecutionService).assignWorker("tenant-a", 10L, "w1");
@@ -204,10 +199,9 @@ class TaskControllerTest {
     when(taskExecutionService.assignWorker(any(), any(), any())).thenReturn(null);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/99/claim")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/99/claim")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isNotFound());
   }
 
@@ -219,21 +213,16 @@ class TaskControllerTest {
     when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/10/claim")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/10/claim")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isConflict());
   }
 
   @Test
   void shouldReturn200WhenReportAccepted() throws Exception {
     mockMvc
-        .perform(
-            post("/internal/tasks/5/report")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/internal/tasks/5/report").contentType(APPLICATION_JSON).content("""
                     {
                       "tenantId": "t1",
                       "success": true,
@@ -246,11 +235,7 @@ class TaskControllerTest {
   @Test
   void shouldFallbackToLegacyCodeAndMessageWhenErrorFieldsMissing() throws Exception {
     mockMvc
-        .perform(
-            post("/internal/tasks/5/report")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/internal/tasks/5/report").contentType(APPLICATION_JSON).content("""
                     {
                       "tenantId": "t1",
                       "success": false,
@@ -272,10 +257,9 @@ class TaskControllerTest {
         .thenReturn(new TaskHeartbeatResult(true, false));
 
     mockMvc
-        .perform(
-            post("/internal/tasks/7/renew")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/7/renew")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.cancelRequested").value(false));
   }
@@ -286,10 +270,9 @@ class TaskControllerTest {
         .thenReturn(new TaskHeartbeatResult(true, true));
 
     mockMvc
-        .perform(
-            post("/internal/tasks/7/renew")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/7/renew")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.cancelRequested").value(true));
   }
@@ -300,11 +283,9 @@ class TaskControllerTest {
         .thenReturn(new TaskHeartbeatResult(true, false));
 
     mockMvc
-        .perform(
-            post("/internal/tasks/7/renew")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"tenantId\":\"t1\",\"workerId\":\"w1\",\"details\":{\"processed\":42}}"))
+        .perform(post("/internal/tasks/7/renew")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\",\"details\":{\"processed\":42}}"))
         .andExpect(status().isOk());
 
     ArgumentCaptor<String> details = ArgumentCaptor.forClass(String.class);
@@ -319,10 +300,9 @@ class TaskControllerTest {
         .thenReturn(new TaskHeartbeatResult(false, false));
 
     mockMvc
-        .perform(
-            post("/internal/tasks/7/renew")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .perform(post("/internal/tasks/7/renew")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isConflict());
   }
 
@@ -331,10 +311,9 @@ class TaskControllerTest {
     when(taskExecutionService.requestCancel("t1", 7L)).thenReturn(true);
 
     mockMvc
-        .perform(
-            post("/internal/tasks/7/cancel")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"reason\":\"manual\"}"))
+        .perform(post("/internal/tasks/7/cancel")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"reason\":\"manual\"}"))
         .andExpect(status().isOk());
 
     verify(taskExecutionService).requestCancel("t1", 7L);
@@ -344,16 +323,13 @@ class TaskControllerTest {
   void shouldReturn200WithPerTaskResultsForRenewBatch() throws Exception {
     // PERF(5.3): renewBatch 走 set-based renewLeaseBatch,一次下发、逐项结果与入参对齐
     when(taskExecutionService.renewLeaseBatch(any()))
-        .thenReturn(
-            java.util.List.of(
-                new TaskHeartbeatResult(true, false), new TaskHeartbeatResult(false, false)));
+        .thenReturn(java.util.List.of(
+            new TaskHeartbeatResult(true, false), new TaskHeartbeatResult(false, false)));
 
     mockMvc
-        .perform(
-            post("/internal/tasks/leases/renew-batch")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/internal/tasks/leases/renew-batch")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "items": [
                         {"tenantId":"t1","taskId":7,"workerId":"w1"},

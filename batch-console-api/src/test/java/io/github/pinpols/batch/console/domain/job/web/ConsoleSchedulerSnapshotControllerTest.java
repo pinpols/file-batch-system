@@ -42,20 +42,18 @@ class ConsoleSchedulerSnapshotControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleSchedulerSnapshotController(orchestratorProxyService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleSchedulerSnapshotController(orchestratorProxyService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn200WhenGetLiveSnapshot() throws Exception {
     when(orchestratorProxyService.schedulerSnapshot(anyString()))
-        .thenReturn(
-            new ConsoleSchedulerSnapshotResponse(
-                BatchDateTimeSupport.utcNow(), "t1", List.of(), List.of(), List.of()));
+        .thenReturn(new ConsoleSchedulerSnapshotResponse(
+            BatchDateTimeSupport.utcNow(), "t1", List.of(), List.of(), List.of()));
 
     mockMvc
         .perform(get("/api/console/scheduler/snapshot").param("tenantId", "t1"))
@@ -70,10 +68,9 @@ class ConsoleSchedulerSnapshotControllerTest {
         .thenReturn(List.of());
 
     mockMvc
-        .perform(
-            get("/api/console/scheduler/snapshot/history")
-                .param("tenantId", "t1")
-                .param("limit", "10"))
+        .perform(get("/api/console/scheduler/snapshot/history")
+            .param("tenantId", "t1")
+            .param("limit", "10"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }

@@ -19,10 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleCustomTaskTypeControllerTest {
 
-  @Mock private ConsoleCustomTaskTypeQueryService queryService;
-  @Mock private ConsoleResponseFactory responseFactory;
+  @Mock
+  private ConsoleCustomTaskTypeQueryService queryService;
 
-  @InjectMocks private ConsoleCustomTaskTypeController controller;
+  @Mock
+  private ConsoleResponseFactory responseFactory;
+
+  @InjectMocks
+  private ConsoleCustomTaskTypeController controller;
 
   private CustomTaskTypeEntity entity(String code) {
     CustomTaskTypeEntity e = new CustomTaskTypeEntity();

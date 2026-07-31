@@ -66,16 +66,15 @@ public class ConsoleWebhookController {
   public CommonResponse<WebhookSubscriptionEntity> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateWebhookRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    CreateSubscriptionCommand createCommand =
-        CreateSubscriptionCommand.builder()
-            .tenantId(tenantId)
-            .name(request.name())
-            .callbackUrl(request.callbackUrl())
-            .eventTypes(String.join(",", request.eventTypes()))
-            .secret(request.secret())
-            .enabled(request.enabled() == null || request.enabled())
-            .operator(operator)
-            .build();
+    CreateSubscriptionCommand createCommand = CreateSubscriptionCommand.builder()
+        .tenantId(tenantId)
+        .name(request.name())
+        .callbackUrl(request.callbackUrl())
+        .eventTypes(String.join(",", request.eventTypes()))
+        .secret(request.secret())
+        .enabled(request.enabled() == null || request.enabled())
+        .operator(operator)
+        .build();
     return responseFactory.success(webhookService.createSubscription(createCommand));
   }
 
@@ -86,16 +85,15 @@ public class ConsoleWebhookController {
       @PathVariable Long id,
       @Valid @RequestBody UpdateWebhookRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    UpdateSubscriptionCommand updateCommand =
-        UpdateSubscriptionCommand.builder()
-            .tenantId(tenantId)
-            .id(id)
-            .callbackUrl(request.callbackUrl())
-            .eventTypes(String.join(",", request.eventTypes()))
-            .secret(request.secret())
-            .enabled(request.enabled() == null || request.enabled())
-            .operator(operator)
-            .build();
+    UpdateSubscriptionCommand updateCommand = UpdateSubscriptionCommand.builder()
+        .tenantId(tenantId)
+        .id(id)
+        .callbackUrl(request.callbackUrl())
+        .eventTypes(String.join(",", request.eventTypes()))
+        .secret(request.secret())
+        .enabled(request.enabled() == null || request.enabled())
+        .operator(operator)
+        .build();
     return responseFactory.success(webhookService.updateSubscription(updateCommand));
   }
 

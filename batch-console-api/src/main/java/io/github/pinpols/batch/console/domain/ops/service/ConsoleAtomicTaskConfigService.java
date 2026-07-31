@@ -121,12 +121,8 @@ public class ConsoleAtomicTaskConfigService {
     return schemaService.schema().stream()
         .filter(s -> s.taskType().equals(taskType))
         .findFirst()
-        .orElseThrow(
-            () ->
-                BizException.of(
-                    ResultCode.INVALID_ARGUMENT,
-                    "error.atomic_task_config.task_type_unknown",
-                    taskType));
+        .orElseThrow(() -> BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.atomic_task_config.task_type_unknown", taskType));
   }
 
   private void validateAgainstSchema(AtomicTaskTypeSchema schema, Map<String, Object> parameters) {

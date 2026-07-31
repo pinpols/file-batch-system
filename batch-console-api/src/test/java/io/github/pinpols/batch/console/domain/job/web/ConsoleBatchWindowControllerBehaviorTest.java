@@ -48,11 +48,11 @@ class ConsoleBatchWindowControllerBehaviorTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleBatchWindowController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleBatchWindowController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -68,22 +68,21 @@ class ConsoleBatchWindowControllerBehaviorTest {
   @Test
   void createShouldReturnRow() throws Exception {
     when(service.create(any(BatchWindowCreateRequest.class)))
-        .thenReturn(
-            new ConsoleBatchWindowResponse(
-                1L,
-                "ta",
-                "always-open",
-                null,
-                "Asia/Shanghai",
-                "00:00:00",
-                "23:59:00",
-                null,
-                null,
-                null,
-                true,
-                null,
-                null,
-                null));
+        .thenReturn(new ConsoleBatchWindowResponse(
+            1L,
+            "ta",
+            "always-open",
+            null,
+            "Asia/Shanghai",
+            "00:00:00",
+            "23:59:00",
+            null,
+            null,
+            null,
+            true,
+            null,
+            null,
+            null));
     mockMvc
         .perform(
             post("/api/console/batch-windows")
@@ -98,22 +97,21 @@ class ConsoleBatchWindowControllerBehaviorTest {
   @Test
   void updateShouldPassPathId() throws Exception {
     when(service.update(eq(7L), any(BatchWindowUpdateRequest.class)))
-        .thenReturn(
-            new ConsoleBatchWindowResponse(
-                7L,
-                "ta",
-                "w1",
-                null,
-                "Asia/Shanghai",
-                "00:00:00",
-                "23:59:00",
-                null,
-                null,
-                null,
-                true,
-                null,
-                null,
-                null));
+        .thenReturn(new ConsoleBatchWindowResponse(
+            7L,
+            "ta",
+            "w1",
+            null,
+            "Asia/Shanghai",
+            "00:00:00",
+            "23:59:00",
+            null,
+            null,
+            null,
+            true,
+            null,
+            null,
+            null));
     mockMvc
         .perform(
             put("/api/console/batch-windows/7")
@@ -127,10 +125,9 @@ class ConsoleBatchWindowControllerBehaviorTest {
   @Test
   void toggleShouldPassEnabledFlag() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/batch-windows/9/toggle")
-                .param("tenantId", "ta")
-                .param("enabled", "true"))
+        .perform(post("/api/console/batch-windows/9/toggle")
+            .param("tenantId", "ta")
+            .param("enabled", "true"))
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", true);
   }

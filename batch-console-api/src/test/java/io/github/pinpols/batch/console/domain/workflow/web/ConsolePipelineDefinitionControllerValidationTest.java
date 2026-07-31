@@ -50,12 +50,11 @@ class ConsolePipelineDefinitionControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsolePipelineDefinitionController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsolePipelineDefinitionController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String body(String jobCode) {
@@ -72,10 +71,9 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_with_space() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(body("q q q")))
+        .perform(post("/api/console/pipeline-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body("q q q")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verify(service, never()).create(ArgumentMatchers.any());
@@ -84,10 +82,9 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_chinese() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(body("中文")))
+        .perform(post("/api/console/pipeline-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body("中文")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -95,10 +92,9 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_starts_with_digit() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(body("1pipeline")))
+        .perform(post("/api/console/pipeline-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body("1pipeline")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -106,10 +102,9 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_blank() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(body("")))
+        .perform(post("/api/console/pipeline-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body("")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -117,14 +112,14 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @Test
   void rejects_nested_step_with_blank_stepCode() throws Exception {
     // 顶层 jobCode 合法,但 steps[0].stepCode 为空 → @Valid 应下钻 → 400
-    String body =
-        "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
-            + "\"pipelineType\":\"IMPORT\","
-            + "\"steps\":[{\"stepCode\":\"\",\"stepName\":\"s\",\"stageCode\":\"st\","
-            + "\"implCode\":\"impl\"}]}";
+    String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
+        + "\"pipelineType\":\"IMPORT\","
+        + "\"steps\":[{\"stepCode\":\"\",\"stepName\":\"s\",\"stageCode\":\"st\","
+        + "\"implCode\":\"impl\"}]}";
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions").contentType(APPLICATION_JSON).content(body))
+        .perform(post("/api/console/pipeline-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verify(service, never()).create(ArgumentMatchers.any());
@@ -132,12 +127,12 @@ class ConsolePipelineDefinitionControllerValidationTest {
 
   @Test
   void rejects_invalid_pipelineType() throws Exception {
-    String body =
-        "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
-            + "\"pipelineType\":\"UNKNOWN\"}";
+    String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
+        + "\"pipelineType\":\"UNKNOWN\"}";
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions").contentType(APPLICATION_JSON).content(body))
+        .perform(post("/api/console/pipeline-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -145,14 +140,14 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @Test
   void acceptsValidRequestWithNestedSteps() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    String body =
-        "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
-            + "\"pipelineType\":\"IMPORT\","
-            + "\"steps\":[{\"stepCode\":\"s1\",\"stepName\":\"step1\",\"stageCode\":\"stage1\","
-            + "\"implCode\":\"impl1\"}]}";
+    String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
+        + "\"pipelineType\":\"IMPORT\","
+        + "\"steps\":[{\"stepCode\":\"s1\",\"stepName\":\"step1\",\"stageCode\":\"stage1\","
+        + "\"implCode\":\"impl1\"}]}";
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions").contentType(APPLICATION_JSON).content(body))
+        .perform(post("/api/console/pipeline-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     verify(service).create(ArgumentMatchers.any());

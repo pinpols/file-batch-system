@@ -29,48 +29,65 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleTenantApplicationServiceTest {
 
-  @Mock private TenantMapper tenantMapper;
-  @Mock private ConsoleUserAccountMapper userAccountMapper;
-  @Mock private ConsolePasswordHasher passwordHasher;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private FilePipelineMapper filePipelineMapper;
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private ConsoleTriggerProxyService triggerProxyService;
-  @Mock private ConsoleTenantConfigCopyService configCopyService;
-  @Mock private ConsoleTenantReadinessService readinessService;
-  @Mock private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
+  @Mock
+  private TenantMapper tenantMapper;
+
+  @Mock
+  private ConsoleUserAccountMapper userAccountMapper;
+
+  @Mock
+  private ConsolePasswordHasher passwordHasher;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private FilePipelineMapper filePipelineMapper;
+
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private ConsoleTriggerProxyService triggerProxyService;
+
+  @Mock
+  private ConsoleTenantConfigCopyService configCopyService;
+
+  @Mock
+  private ConsoleTenantReadinessService readinessService;
+
+  @Mock
+  private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
 
   private final org.springframework.core.env.Environment environment =
       new org.springframework.mock.env.MockEnvironment();
 
   private ConsoleTenantApplicationService service;
 
-  private static final Map<String, Object> ACTIVE_TENANT =
-      Map.of(
-          "id", 1L,
-          "tenant_id", "tenant-a",
-          "tenant_name", "Tenant A",
-          "status", "ACTIVE",
-          "description", "",
-          "created_by", "admin",
-          "created_at", "2026-01-01T00:00:00",
-          "updated_at", "2026-01-01T00:00:00");
+  private static final Map<String, Object> ACTIVE_TENANT = Map.of(
+      "id", 1L,
+      "tenant_id", "tenant-a",
+      "tenant_name", "Tenant A",
+      "status", "ACTIVE",
+      "description", "",
+      "created_by", "admin",
+      "created_at", "2026-01-01T00:00:00",
+      "updated_at", "2026-01-01T00:00:00");
 
   @BeforeEach
   void setUp() {
-    service =
-        new ConsoleTenantApplicationService(
-            tenantMapper,
-            userAccountMapper,
-            passwordHasher,
-            jobInstanceMapper,
-            filePipelineMapper,
-            workflowRunMapper,
-            triggerProxyService,
-            configCopyService,
-            readinessService,
-            tenantGuard,
-            environment);
+    service = new ConsoleTenantApplicationService(
+        tenantMapper,
+        userAccountMapper,
+        passwordHasher,
+        jobInstanceMapper,
+        filePipelineMapper,
+        workflowRunMapper,
+        triggerProxyService,
+        configCopyService,
+        readinessService,
+        tenantGuard,
+        environment);
   }
 
   @Test
@@ -83,13 +100,12 @@ class ConsoleTenantApplicationServiceTest {
     assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 不含原文,改用 messageArgs 检查
-        .satisfies(
-            ex -> {
-              String joined = String.join(" | ", argsAsStrings((BizException) ex));
-              assertThat(joined)
-                  .contains("cannot suspend tenant with active instances")
-                  .contains("jobs=2");
-            });
+        .satisfies(ex -> {
+          String joined = String.join(" | ", argsAsStrings((BizException) ex));
+          assertThat(joined)
+              .contains("cannot suspend tenant with active instances")
+              .contains("jobs=2");
+        });
 
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
@@ -103,10 +119,8 @@ class ConsoleTenantApplicationServiceTest {
 
     assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex ->
-                assertThat(String.join(" | ", argsAsStrings((BizException) ex)))
-                    .contains("pipelines=3"));
+        .satisfies(ex -> assertThat(String.join(" | ", argsAsStrings((BizException) ex)))
+            .contains("pipelines=3"));
 
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
@@ -120,10 +134,8 @@ class ConsoleTenantApplicationServiceTest {
 
     assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex ->
-                assertThat(String.join(" | ", argsAsStrings((BizException) ex)))
-                    .contains("workflows=1"));
+        .satisfies(ex -> assertThat(String.join(" | ", argsAsStrings((BizException) ex)))
+            .contains("workflows=1"));
 
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
@@ -160,8 +172,10 @@ class ConsoleTenantApplicationServiceTest {
 
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(jobInstanceMapper.countByStatuses("tenant-a", expectedJobStatuses)).thenReturn(0L);
-    when(filePipelineMapper.countByStatuses("tenant-a", expectedPipelineStatuses)).thenReturn(0L);
-    when(workflowRunMapper.countByStatuses("tenant-a", expectedWorkflowStatuses)).thenReturn(0L);
+    when(filePipelineMapper.countByStatuses("tenant-a", expectedPipelineStatuses))
+        .thenReturn(0L);
+    when(workflowRunMapper.countByStatuses("tenant-a", expectedWorkflowStatuses))
+        .thenReturn(0L);
 
     service.suspendTenant("tenant-a");
 
@@ -180,11 +194,10 @@ class ConsoleTenantApplicationServiceTest {
     when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
     when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
     when(triggerProxyService.pauseByTenant("tenant-a"))
-        .thenThrow(
-            BizException.of(
-                io.github.pinpols.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
-                "error.common.downstream_unavailable",
-                "trigger"));
+        .thenThrow(BizException.of(
+            io.github.pinpols.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
+            "error.common.downstream_unavailable",
+            "trigger"));
 
     assertThatThrownBy(() -> service.suspendTenant("tenant-a")).isInstanceOf(BizException.class);
 
@@ -196,11 +209,10 @@ class ConsoleTenantApplicationServiceTest {
   void activateTenant_whenRemoteResumeFails_doesNotUpdateStatus() {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(triggerProxyService.resumeByTenant("tenant-a"))
-        .thenThrow(
-            BizException.of(
-                io.github.pinpols.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
-                "error.common.downstream_unavailable",
-                "trigger"));
+        .thenThrow(BizException.of(
+            io.github.pinpols.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
+            "error.common.downstream_unavailable",
+            "trigger"));
 
     assertThatThrownBy(() -> service.activateTenant("tenant-a")).isInstanceOf(BizException.class);
 
@@ -208,16 +220,15 @@ class ConsoleTenantApplicationServiceTest {
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
 
-  private static final Map<String, Object> ACME_TENANT =
-      Map.of(
-          "id", 9L,
-          "tenant_id", "acme",
-          "tenant_name", "Acme",
-          "status", "ACTIVE",
-          "description", "",
-          "created_by", "admin",
-          "created_at", "2026-01-01T00:00:00",
-          "updated_at", "2026-01-01T00:00:00");
+  private static final Map<String, Object> ACME_TENANT = Map.of(
+      "id", 9L,
+      "tenant_id", "acme",
+      "tenant_name", "Acme",
+      "status", "ACTIVE",
+      "description", "",
+      "created_by", "admin",
+      "created_at", "2026-01-01T00:00:00",
+      "updated_at", "2026-01-01T00:00:00");
 
   @Test
   void provisionTenant_withoutInitConfig_skipsCopyButRunsReadiness() {
@@ -229,12 +240,10 @@ class ConsoleTenantApplicationServiceTest {
             new io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse(
                 "acme", true, List.of(), List.of()));
 
-    var cmd =
-        new ConsoleTenantApplicationService.CreateTenantCommand(
-            "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
-    var resp =
-        service.provisionTenant(
-            cmd, new ConsoleTenantApplicationService.ConfigInitOption(null, null));
+    var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
+        "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
+    var resp = service.provisionTenant(
+        cmd, new ConsoleTenantApplicationService.ConfigInitOption(null, null));
 
     assertThat(resp.tenant().tenantId()).isEqualTo("acme");
     assertThat(resp.configInit()).isNull();
@@ -251,10 +260,8 @@ class ConsoleTenantApplicationServiceTest {
     @Test
     void getTenant_crossTenant_deniedByGuard_neverQueries() {
       // arrange:守卫对越权 tenantId 抛 FORBIDDEN(等价 TENANT_ADMIN 读他租户)
-      org.mockito.Mockito.doThrow(
-              io.github.pinpols.batch.common.exception.BizException.of(
-                  io.github.pinpols.batch.common.enums.ResultCode.FORBIDDEN,
-                  "error.tenant.mismatch"))
+      org.mockito.Mockito.doThrow(io.github.pinpols.batch.common.exception.BizException.of(
+              io.github.pinpols.batch.common.enums.ResultCode.FORBIDDEN, "error.tenant.mismatch"))
           .when(tenantGuard)
           .assertTenantAllowed("tenant-b");
 
@@ -315,9 +322,8 @@ class ConsoleTenantApplicationServiceTest {
             new io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse(
                 "acme", true, List.of(), List.of()));
 
-    var cmd =
-        new ConsoleTenantApplicationService.CreateTenantCommand(
-            "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
+    var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
+        "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
     service.provisionTenant(
         cmd, new ConsoleTenantApplicationService.ConfigInitOption("default", null));
 

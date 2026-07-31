@@ -69,9 +69,8 @@ public class FileGovernanceScheduler {
     this.metricsCacheService = metricsCacheService;
     this.meterRegistry = meterRegistry;
     this.bundleArrivalLauncher = bundleArrivalLauncher;
-    this.storageMaintenance =
-        new FileGovernanceStorageMaintenance(
-            fileGovernanceRepository, s3GovernanceStorage, properties);
+    this.storageMaintenance = new FileGovernanceStorageMaintenance(
+        fileGovernanceRepository, s3GovernanceStorage, properties);
   }
 
   @PostConstruct
@@ -92,13 +91,12 @@ public class FileGovernanceScheduler {
     }
     String tenantId = properties.getReconcile().getDefaultTenantId();
     sweepStaleRunningPipelines(tenantId);
-    Map<String, Object> metrics =
-        metricsCacheService.compute(
-            tenantId,
-            properties.getLatency().getArrivalDelayThresholdSeconds(),
-            properties.getLatency().getProcessingDelayThresholdSeconds(),
-            properties.getLatency().getProcessingDelayMaxAgeSeconds(),
-            properties.getLatency().getSampleSize());
+    Map<String, Object> metrics = metricsCacheService.compute(
+        tenantId,
+        properties.getLatency().getArrivalDelayThresholdSeconds(),
+        properties.getLatency().getProcessingDelayThresholdSeconds(),
+        properties.getLatency().getProcessingDelayMaxAgeSeconds(),
+        properties.getLatency().getSampleSize());
     long arrivalCount = asLong(metrics.get("arrivalDelayViolations"));
     long arrivalMax = asLong(metrics.get("maxArrivalDelaySeconds"));
     long processingCount = asLong(metrics.get("processingDelayViolations"));
@@ -207,7 +205,7 @@ public class FileGovernanceScheduler {
       }
       switch (decision.state()) {
         case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM ->
-            waitingGroups++;
+          waitingGroups++;
         case STATUS_TRIGGERED -> triggeredGroups++;
         case STATUS_TIMEOUT -> timeoutGroups++;
         default -> {}
@@ -253,32 +251,28 @@ public class FileGovernanceScheduler {
     missingFiles.removeAll(arrivedFiles);
     Instant latestTolerableTime =
         parseInstant(text(groupFiles.get(0).get("latest_tolerable_time")));
-    boolean triggerOnComplete =
-        parseBoolean(
-            text(groupFiles.get(0).get("trigger_on_complete")),
-            properties.getArrival().isTriggerOnComplete());
-    String timeoutAction =
-        defaultText(
-            text(groupFiles.get(0).get("arrival_timeout_action")),
-            properties.getArrival().getDefaultTimeoutAction());
+    boolean triggerOnComplete = parseBoolean(
+        text(groupFiles.get(0).get("trigger_on_complete")),
+        properties.getArrival().isTriggerOnComplete());
+    String timeoutAction = defaultText(
+        text(groupFiles.get(0).get("arrival_timeout_action")),
+        properties.getArrival().getDefaultTimeoutAction());
     boolean timedOut = latestTolerableTime != null && now.isAfter(latestTolerableTime);
     if (timedOut) {
       if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
-        updateGroupState(
-            new ArrivalGroupUpdateContext(
-                key,
-                new ArrivalGroupUpdateState(
-                    STATUS_WAITING_MANUAL_CONFIRM, "TIMEOUT_WAITING_MANUAL_CONFIRM", now),
-                new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+        updateGroupState(new ArrivalGroupUpdateContext(
+            key,
+            new ArrivalGroupUpdateState(
+                STATUS_WAITING_MANUAL_CONFIRM, "TIMEOUT_WAITING_MANUAL_CONFIRM", now),
+            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
         return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
       }
       if ("BLOCK_DOWNSTREAM".equalsIgnoreCase(timeoutAction)
           || "BLOCK".equalsIgnoreCase(timeoutAction)) {
-        updateGroupState(
-            new ArrivalGroupUpdateContext(
-                key,
-                new ArrivalGroupUpdateState(STATUS_TIMEOUT, "LATEST_TOLERABLE_TIME_EXCEEDED", now),
-                new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+        updateGroupState(new ArrivalGroupUpdateContext(
+            key,
+            new ArrivalGroupUpdateState(STATUS_TIMEOUT, "LATEST_TOLERABLE_TIME_EXCEEDED", now),
+            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
         return new ArrivalGroupDecision(STATUS_TIMEOUT);
       }
       return triggerArrivalGroup(
@@ -287,23 +281,21 @@ public class FileGovernanceScheduler {
     if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
       if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
         // 文件名虽齐,但有成员缺完整性背书(checksum_type=NONE)→ 保持等待,不放行;超时已在上方走 timeoutAction
-        updateGroupState(
-            new ArrivalGroupUpdateContext(
-                key,
-                new ArrivalGroupUpdateState("WAITING_ARRIVAL", "ARRIVED_PENDING_VERIFY", now),
-                new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+        updateGroupState(new ArrivalGroupUpdateContext(
+            key,
+            new ArrivalGroupUpdateState("WAITING_ARRIVAL", "ARRIVED_PENDING_VERIFY", now),
+            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
         return new ArrivalGroupDecision("WAITING_ARRIVAL");
       }
       if (triggerOnComplete) {
         return triggerArrivalGroup(
             key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
       }
-      updateGroupState(
-          new ArrivalGroupUpdateContext(
-              key,
-              new ArrivalGroupUpdateState(
-                  STATUS_WAITING_MANUAL_CONFIRM, "COMPLETE_WAITING_MANUAL_CONFIRM", now),
-              new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+      updateGroupState(new ArrivalGroupUpdateContext(
+          key,
+          new ArrivalGroupUpdateState(
+              STATUS_WAITING_MANUAL_CONFIRM, "COMPLETE_WAITING_MANUAL_CONFIRM", now),
+          new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
       return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
     }
     // 配置不全守卫:有 fileGroupCode 但 requiredFileSet 为空 → 既不能判定"完成"也不能判定"等"。
@@ -319,11 +311,10 @@ public class FileGovernanceScheduler {
           arrivedFiles.size());
       return new ArrivalGroupDecision(null);
     }
-    updateGroupState(
-        new ArrivalGroupUpdateContext(
-            key,
-            new ArrivalGroupUpdateState("WAITING_ARRIVAL", "WAITING_REQUIRED_FILES", now),
-            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+    updateGroupState(new ArrivalGroupUpdateContext(
+        key,
+        new ArrivalGroupUpdateState("WAITING_ARRIVAL", "WAITING_REQUIRED_FILES", now),
+        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
     return new ArrivalGroupDecision("WAITING_ARRIVAL");
   }
 
@@ -350,11 +341,10 @@ public class FileGovernanceScheduler {
           exception);
       return new ArrivalGroupDecision("WAITING_ARRIVAL");
     }
-    updateGroupState(
-        new ArrivalGroupUpdateContext(
-            key,
-            new ArrivalGroupUpdateState(STATUS_TRIGGERED, reason, now),
-            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+    updateGroupState(new ArrivalGroupUpdateContext(
+        key,
+        new ArrivalGroupUpdateState(STATUS_TRIGGERED, reason, now),
+        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
     return new ArrivalGroupDecision(STATUS_TRIGGERED);
   }
 
@@ -399,15 +389,14 @@ public class FileGovernanceScheduler {
         continue;
       }
       fileGovernanceRepository.updateFileMetadata(tenantId, fileId, metadata);
-      fileGovernanceRepository.appendAudit(
-          new FileGovernanceRepository.FileAuditCommand(
-              tenantId,
-              fileId,
-              "ARRIVAL_GROUP_" + context.state().arrivalState(),
-              "SUCCESS",
-              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-              "arrival-group-" + context.key().fileGroupCode(),
-              metadata));
+      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+          tenantId,
+          fileId,
+          "ARRIVAL_GROUP_" + context.state().arrivalState(),
+          "SUCCESS",
+          new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+          "arrival-group-" + context.key().fileGroupCode(),
+          metadata));
     }
     log.info(
         "file arrival group updated: tenantId={}, fileGroupCode={}, state={}, reason={},"

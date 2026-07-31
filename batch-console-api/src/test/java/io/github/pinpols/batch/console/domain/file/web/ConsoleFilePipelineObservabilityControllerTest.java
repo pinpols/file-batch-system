@@ -45,40 +45,36 @@ class ConsoleFilePipelineObservabilityControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleFilePipelineObservabilityController(
-                    queryApplicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleFilePipelineObservabilityController(
+            queryApplicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturnFilePipelinesFromLegacyPath() throws Exception {
     when(queryApplicationService.filePipelines(any()))
-        .thenReturn(
-            new PageResponse<>(
+        .thenReturn(new PageResponse<>(
+            1L,
+            1,
+            20,
+            List.of(new ConsoleFilePipelineResponse(
                 1L,
-                1,
-                20,
-                List.of(
-                    new ConsoleFilePipelineResponse(
-                        1L,
-                        "t1",
-                        1001L,
-                        "file-001",
-                        "IMPORT",
-                        2001L,
-                        3001L,
-                        "RECEIVE",
-                        "PARSE",
-                        "RUNNING",
-                        "trace-1",
-                        Instant.EPOCH,
-                        null,
-                        Instant.EPOCH,
-                        Instant.EPOCH))));
+                "t1",
+                1001L,
+                "file-001",
+                "IMPORT",
+                2001L,
+                3001L,
+                "RECEIVE",
+                "PARSE",
+                "RUNNING",
+                "trace-1",
+                Instant.EPOCH,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH))));
 
     mockMvc
         .perform(get("/api/console/file-pipeline-observability").param("tenantId", "t1"))
@@ -91,23 +87,22 @@ class ConsoleFilePipelineObservabilityControllerTest {
   @Test
   void shouldReturnFilePipelineDetailFromLegacyPath() throws Exception {
     when(queryApplicationService.filePipelineDetail(anyString(), anyLong()))
-        .thenReturn(
-            new ConsoleFilePipelineResponse(
-                1L,
-                "t1",
-                1001L,
-                "file-001",
-                "IMPORT",
-                2001L,
-                3001L,
-                "RECEIVE",
-                "PARSE",
-                "SUCCESS",
-                "trace-1",
-                Instant.EPOCH,
-                Instant.EPOCH,
-                Instant.EPOCH,
-                Instant.EPOCH));
+        .thenReturn(new ConsoleFilePipelineResponse(
+            1L,
+            "t1",
+            1001L,
+            "file-001",
+            "IMPORT",
+            2001L,
+            3001L,
+            "RECEIVE",
+            "PARSE",
+            "SUCCESS",
+            "trace-1",
+            Instant.EPOCH,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            Instant.EPOCH));
 
     mockMvc
         .perform(get("/api/console/file-pipeline-observability/1").param("tenantId", "t1"))

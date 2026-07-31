@@ -101,14 +101,12 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       this.timeoutCounter = null;
       this.threadLeakedCounter = null;
     } else {
-      this.timeoutCounter =
-          Counter.builder("worker.task.execution.timeout.total")
-              .description("worker task 执行超时累计 (future.cancel(true) 触发)")
-              .register(registry);
-      this.threadLeakedCounter =
-          Counter.builder("worker.task.execution.thread.leaked.total")
-              .description("超时后 cancelGraceSeconds 内仍未退出的执行线程数 (业务线程不响应 interrupt)")
-              .register(registry);
+      this.timeoutCounter = Counter.builder("worker.task.execution.timeout.total")
+          .description("worker task 执行超时累计 (future.cancel(true) 触发)")
+          .register(registry);
+      this.threadLeakedCounter = Counter.builder("worker.task.execution.thread.leaked.total")
+          .description("超时后 cancelGraceSeconds 内仍未退出的执行线程数 (业务线程不响应 interrupt)")
+          .register(registry);
     }
   }
 
@@ -120,12 +118,11 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     String tag = workerType == null || workerType.isBlank() ? "unknown" : workerType;
     return executionTimerByType.computeIfAbsent(
         tag,
-        t ->
-            Timer.builder("worker.task.execution.duration")
-                .description("worker task 执行耗时分位")
-                .tags(Tags.of("workerType", t))
-                .publishPercentiles(0.5, 0.95, 0.99)
-                .register(meterRegistry));
+        t -> Timer.builder("worker.task.execution.duration")
+            .description("worker task 执行耗时分位")
+            .tags(Tags.of("workerType", t))
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .register(meterRegistry));
   }
 
   /**
@@ -152,13 +149,12 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   @Override
   public WorkerExecutionResult execute(PulledTask task) {
     Map<String, Object> executionContext = buildExecutionContext(task);
-    StepExecutionRequest request =
-        new StepExecutionRequest(
-            task.getTenantId(),
-            task.getJobCode(),
-            task.getTaskType(),
-            task.getWorkerId(),
-            executionContext);
+    StepExecutionRequest request = new StepExecutionRequest(
+        task.getTenantId(),
+        task.getJobCode(),
+        task.getTaskType(),
+        task.getWorkerId(),
+        executionContext);
     activeTaskLeaseRegistry.register(
         task.getTaskId(), task.getTenantId(), task.getWorkerId(), task.getPartitionInvocationId());
     long timeoutSeconds = resolveEffectiveTimeoutSeconds(task);
@@ -200,17 +196,14 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       StepExecutionRequest request, PulledTask task, long timeoutSeconds) {
     Future<StepExecutionResponse> future =
         executionPool.submit(() -> stepExecutionAdapter.execute(request));
-    activeTaskLeaseRegistry.registerCancellationCallback(
-        task.getTaskId(),
-        () -> {
-          boolean cancelled = future.cancel(true);
-          log.info(
-              "task cancellation requested by orchestrator: tenantId={}, taskId={},"
-                  + " cancelled={}",
-              task.getTenantId(),
-              task.getTaskId(),
-              cancelled);
-        });
+    activeTaskLeaseRegistry.registerCancellationCallback(task.getTaskId(), () -> {
+      boolean cancelled = future.cancel(true);
+      log.info(
+          "task cancellation requested by orchestrator: tenantId={}, taskId={}," + " cancelled={}",
+          task.getTenantId(),
+          task.getTaskId(),
+          cancelled);
+    });
     try {
       return future.get(timeoutSeconds, TimeUnit.SECONDS);
     } catch (TimeoutException ex) {
@@ -232,10 +225,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
           null,
           null);
     } catch (CancellationException ex) {
-      String message =
-          activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())
-              ? "task execution cancelled by orchestrator request"
-              : "task execution cancelled";
+      String message = activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())
+          ? "task execution cancelled by orchestrator request"
+          : "task execution cancelled";
       return new StepExecutionResponse(false, CANCELLED_ERROR_CODE, message, null, null);
     } catch (ExecutionException ex) {
       // 业务异常已在 stepExecutionAdapter 里被包成 StepExecutionResponse.failure 返回, 这里到达说明 adapter 自己抛了
@@ -287,10 +279,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   private long resolveEffectiveTimeoutSeconds(PulledTask task) {
     Integer fromConfig = task.getTimeoutSeconds();
-    long base =
-        (fromConfig == null || fromConfig <= 0)
-            ? timeoutProperties.getDefaultTimeoutSeconds()
-            : fromConfig;
+    long base = (fromConfig == null || fromConfig <= 0)
+        ? timeoutProperties.getDefaultTimeoutSeconds()
+        : fromConfig;
     long max = timeoutProperties.getMaxTimeoutSeconds();
     if (max > 0 && base > max) {
       log.warn(
@@ -404,11 +395,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     // 将 traceId 传递给 Orchestrator,确保状态更新与重试/DLQ 全链路可追踪
     report.setTraceId(task.getTraceId());
     report.setPartitionInvocationId(task.getPartitionInvocationId());
-    report.setResultSummary(
-        JsonUtils.toJson(
-            Map.of(
-                "code", Objects.requireNonNullElse(response.code(), ""),
-                "message", Objects.requireNonNullElse(response.message(), ""))));
+    report.setResultSummary(JsonUtils.toJson(Map.of(
+        "code", Objects.requireNonNullElse(response.code(), ""),
+        "message", Objects.requireNonNullElse(response.message(), ""))));
     // INCREMENTAL pipeline 在 attributes 写出新水位 → 透传给 orchestrator;
     // 业务没显式写就保持 null,orchestrator 跳过持久化(保留旧值)。
     Object highWaterMarkOut = executionContext.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT);

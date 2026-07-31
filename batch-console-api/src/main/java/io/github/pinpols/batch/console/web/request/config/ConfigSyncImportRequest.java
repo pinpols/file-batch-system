@@ -31,5 +31,6 @@ public class ConfigSyncImportRequest {
 
   private boolean dryRun;
 
-  @Valid private ConfigSyncBundlePayload bundle;
+  @Valid
+  private ConfigSyncBundlePayload bundle;
 }

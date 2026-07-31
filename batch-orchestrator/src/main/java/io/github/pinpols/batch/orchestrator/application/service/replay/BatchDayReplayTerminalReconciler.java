@@ -171,16 +171,15 @@ public class BatchDayReplayTerminalReconciler {
         now);
     if (inFlight == 0L && SESSION_RUNNING.equals(session.status())) {
       String terminalStatus = failed > 0L ? SESSION_PARTIAL_FAILED : SESSION_SUCCEEDED;
-      int updated =
-          sessionMapper.updateStatus(
-              session.tenantId(),
-              session.id(),
-              terminalStatus,
-              List.of(SESSION_RUNNING),
-              null,
-              now,
-              null,
-              now);
+      int updated = sessionMapper.updateStatus(
+          session.tenantId(),
+          session.id(),
+          terminalStatus,
+          List.of(SESSION_RUNNING),
+          null,
+          now,
+          null,
+          now);
       if (updated > 0) {
         log.info(
             "replay session completed: tenantId={}, sessionId={}, terminalStatus={},"

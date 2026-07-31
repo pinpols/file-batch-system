@@ -59,28 +59,29 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private KafkaTemplate<String, String> kafkaTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private KafkaTemplate<String, String> kafkaTemplate;
 
   @Test
   void kafkaPublish_consumerInvokesLaunchAndCreatesJobInstance() throws Exception {
     // 1) 准备:在 orchestrator 端 seed job_definition,模拟 trigger fire 时它已经存在
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     // 2) 构造 LaunchEnvelope = trigger 端会写到 trigger_outbox_event 的同款 payload
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 4, 30),
-            TriggerType.API,
-            seed.requestId(),
-            "tr-fullchain",
-            params);
+    LaunchRequest launchRequest = new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 4, 30),
+        TriggerType.API,
+        seed.requestId(),
+        "tr-fullchain",
+        params);
     LaunchEnvelope envelope =
         LaunchEnvelope.of(launchRequest, seed.dedupKey(), BatchDateTimeSupport.utcNow());
     String payload = JsonUtils.toJson(envelope);
@@ -95,35 +96,30 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              Integer count =
-                  jdbcTemplate.queryForObject(
-                      "select count(*) from batch.job_instance"
-                          + " where tenant_id = ? and dedup_key = ?",
-                      Integer.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(count).isEqualTo(1);
-            });
+        .untilAsserted(() -> {
+          Integer count = jdbcTemplate.queryForObject(
+              "select count(*) from batch.job_instance" + " where tenant_id = ? and dedup_key = ?",
+              Integer.class,
+              TENANT,
+              seed.dedupKey());
+          assertThat(count).isEqualTo(1);
+        });
   }
 
   @Test
   void duplicateKafkaMessage_dedupKeyEnsuresOnlyOneJobInstance() throws Exception {
     // 验证 ADR-010 §不变量:同 requestId 多次消费 → uk_job_instance_tenant_dedup 回退,只产生 1 个 job_instance
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 4, 30),
-            TriggerType.API,
-            seed.requestId(),
-            "tr-dup",
-            Map.of("fileFormatType", "JSON"));
+    LaunchRequest launchRequest = new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 4, 30),
+        TriggerType.API,
+        seed.requestId(),
+        "tr-dup",
+        Map.of("fileFormatType", "JSON"));
     LaunchEnvelope envelope =
         LaunchEnvelope.of(launchRequest, seed.dedupKey(), BatchDateTimeSupport.utcNow());
     String payload = JsonUtils.toJson(envelope);
@@ -138,26 +134,22 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              Integer count =
-                  jdbcTemplate.queryForObject(
-                      "select count(*) from batch.job_instance"
-                          + " where tenant_id = ? and dedup_key = ?",
-                      Integer.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(count).isEqualTo(1);
-            });
+        .untilAsserted(() -> {
+          Integer count = jdbcTemplate.queryForObject(
+              "select count(*) from batch.job_instance" + " where tenant_id = ? and dedup_key = ?",
+              Integer.class,
+              TENANT,
+              seed.dedupKey());
+          assertThat(count).isEqualTo(1);
+        });
 
     // 再多等 5s 让积压消息消费完, 确认 count 仍为 1
     Thread.sleep(5_000L);
-    Integer finalCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            Integer.class,
-            TENANT,
-            seed.dedupKey());
+    Integer finalCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        Integer.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(finalCount).isEqualTo(1);
   }
 }

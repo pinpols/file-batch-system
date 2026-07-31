@@ -27,8 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.NEVER)
 class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private TriggerMisfirePendingMapper mapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private TriggerMisfirePendingMapper mapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   private String tenantId;
   private String jobCode;

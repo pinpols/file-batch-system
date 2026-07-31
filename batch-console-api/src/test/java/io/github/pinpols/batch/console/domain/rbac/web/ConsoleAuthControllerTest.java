@@ -41,41 +41,34 @@ class ConsoleAuthControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAuthController(
-                    authApplicationService,
-                    new ConsoleResponseFactory(requestMetadataResolver),
-                    Mockito.mock(SseTicketService.class),
-                    securityProperties,
-                    Mockito.mock(ConsoleJwtService.class),
-                    Mockito.mock(ConsoleLoginKeyPairService.class),
-                    Mockito.mock(
-                        io.github.pinpols.batch.console.domain.rbac.service
-                            .ConsoleUserAccountService.class)))
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAuthController(
+            authApplicationService,
+            new ConsoleResponseFactory(requestMetadataResolver),
+            Mockito.mock(SseTicketService.class),
+            securityProperties,
+            Mockito.mock(ConsoleJwtService.class),
+            Mockito.mock(ConsoleLoginKeyPairService.class),
+            Mockito.mock(
+                io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService
+                    .class)))
+        .build();
   }
 
   @Test
   void shouldLoginWithBuiltInAccount() throws Exception {
     when(authApplicationService.login(any()))
-        .thenReturn(
-            new ConsoleAuthTokenResponse(
-                "jwt-token",
-                "Bearer",
-                Instant.parse("2026-04-05T00:00:00Z"),
-                Instant.parse("2026-04-05T08:00:00Z"),
-                "admin",
-                "default-tenant",
-                Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
-                false));
+        .thenReturn(new ConsoleAuthTokenResponse(
+            "jwt-token",
+            "Bearer",
+            Instant.parse("2026-04-05T00:00:00Z"),
+            Instant.parse("2026-04-05T08:00:00Z"),
+            "admin",
+            "default-tenant",
+            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+            false));
 
     mockMvc
-        .perform(
-            post("/api/console/auth/login")
-                .contentType("application/json")
-                .content(
-                    """
+        .perform(post("/api/console/auth/login").contentType("application/json").content("""
                     {
                       "username": "admin",
                       "password": "admin123"

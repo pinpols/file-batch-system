@@ -40,50 +40,78 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
 
-  @Mock JobInstanceMapper jobInstanceMapper;
-  @Mock JobPartitionMapper jobPartitionMapper;
-  @Mock JobTaskMapper jobTaskMapper;
-  @Mock JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock TriggerRequestMapper triggerRequestMapper;
-  @Mock WorkflowNodeMapper workflowNodeMapper;
-  @Mock WorkflowRunMapper workflowRunMapper;
-  @Mock WorkflowNodeRunMapper workflowNodeRunMapper;
-  @Mock SchedulePlanBuilder schedulePlanBuilder;
-  @Mock PartitionLifecycleService partitionLifecycleService;
-  @Mock TaskDispatchOutboxService taskDispatchOutboxService;
-  @Mock WorkflowDagService workflowDagService;
-  @Mock ResourceScheduler resourceScheduler;
-  @Mock ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
-  @Mock WorkflowNodePayloadBuilder payloadBuilder;
-  @Mock ChildJobLaunchSupport childJobLaunchSupport;
+  @Mock
+  JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  JobTaskMapper jobTaskMapper;
+
+  @Mock
+  JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  SchedulePlanBuilder schedulePlanBuilder;
+
+  @Mock
+  PartitionLifecycleService partitionLifecycleService;
+
+  @Mock
+  TaskDispatchOutboxService taskDispatchOutboxService;
+
+  @Mock
+  WorkflowDagService workflowDagService;
+
+  @Mock
+  ResourceScheduler resourceScheduler;
+
+  @Mock
+  ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+
+  @Mock
+  WorkflowNodePayloadBuilder payloadBuilder;
+
+  @Mock
+  ChildJobLaunchSupport childJobLaunchSupport;
 
   private DefaultWorkflowNodeDispatchService service;
 
   @BeforeEach
   void setUp() {
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper);
-    OrchestratorWorkflowMappers workflowMappers =
-        new OrchestratorWorkflowMappers(
-            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    service =
-        new DefaultWorkflowNodeDispatchService(
-            jobMappers,
-            workflowMappers,
-            schedulePlanBuilder,
-            partitionLifecycleService,
-            taskDispatchOutboxService,
-            workflowDagService,
-            resourceScheduler,
-            taskExecutionServiceProvider,
-            payloadBuilder,
-            childJobLaunchSupport,
-            mock(CrossDayDependencyResolver.class));
+    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
+    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
+        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
+    service = new DefaultWorkflowNodeDispatchService(
+        jobMappers,
+        workflowMappers,
+        schedulePlanBuilder,
+        partitionLifecycleService,
+        taskDispatchOutboxService,
+        workflowDagService,
+        resourceScheduler,
+        taskExecutionServiceProvider,
+        payloadBuilder,
+        childJobLaunchSupport,
+        mock(CrossDayDependencyResolver.class));
   }
 
   @Test

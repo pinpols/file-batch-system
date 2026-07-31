@@ -115,15 +115,13 @@ public class WorkflowRunManagementApplicationService {
           "error.common.state_conflict_detail",
           "cannot transition from " + run.getRunStatus() + " to " + targetStatus);
     }
-    int updated =
-        workflowRunMapper.updateStatus(
-            UpdateWorkflowRunStatusParam.builder()
-                .tenantId(tenantId)
-                .id(id)
-                .runStatus(targetStatus)
-                .currentNodeCode(run.getCurrentNodeCode())
-                .expectedStatuses(expectedFrom)
-                .build());
+    int updated = workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
+        .tenantId(tenantId)
+        .id(id)
+        .runStatus(targetStatus)
+        .currentNodeCode(run.getCurrentNodeCode())
+        .expectedStatuses(expectedFrom)
+        .build());
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
@@ -142,25 +140,23 @@ public class WorkflowRunManagementApplicationService {
     if (!"RUNNING".equals(run.getRunStatus()) && !"FAILED".equals(run.getRunStatus())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.skip_node_state_invalid");
     }
-    WorkflowNodeRunEntity nodeRun =
-        Guard.requireFound(
-            workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode),
-            "node run not found: " + nodeCode);
+    WorkflowNodeRunEntity nodeRun = Guard.requireFound(
+        workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode),
+        "node run not found: " + nodeCode);
     if (!"FAILED".equals(nodeRun.getNodeStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.common.state_conflict_detail",
           "can only skip FAILED nodes, current: " + nodeRun.getNodeStatus());
     }
-    workflowNodeRunMapper.updateStatus(
-        UpdateNodeRunStatusParam.builder()
-            .id(nodeRun.getId())
-            .nodeStatus("SKIPPED")
-            .errorCode(null)
-            .errorMessage(null)
-            .durationMs(nodeRun.getDurationMs())
-            .finishedAt(BatchDateTimeSupport.utcNow())
-            .build());
+    workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+        .id(nodeRun.getId())
+        .nodeStatus("SKIPPED")
+        .errorCode(null)
+        .errorMessage(null)
+        .durationMs(nodeRun.getDurationMs())
+        .finishedAt(BatchDateTimeSupport.utcNow())
+        .build());
     advanceDownstreamAfterSkip(run, nodeCode);
     // P1-2: 写 audit 行 + 发 WARN alert,补齐"运维介入"事后追溯。
     appendSkipNodeAudit(run, nodeCode, nodeRun.getId(), operatorId, reason);
@@ -170,10 +166,9 @@ public class WorkflowRunManagementApplicationService {
 
   private void appendSkipNodeAudit(
       WorkflowRunEntity run, String nodeCode, Long nodeRunId, String operatorId, String reason) {
-    JobExecutionLogMapper mapper =
-        jobExecutionLogMapperProvider == null
-            ? null
-            : jobExecutionLogMapperProvider.getIfAvailable();
+    JobExecutionLogMapper mapper = jobExecutionLogMapperProvider == null
+        ? null
+        : jobExecutionLogMapperProvider.getIfAvailable();
     if (mapper == null) {
       return;
     }
@@ -212,32 +207,29 @@ public class WorkflowRunManagementApplicationService {
     detail.put("workflowRunId", run.getId());
     detail.put("nodeCode", nodeCode);
     detail.put("operatorId", operatorId);
-    alertService.emit(
-        AlertEmitRequest.builder()
-            .tenantId(run.getTenantId())
-            .serviceName("batch-orchestrator")
-            .alertType("WORKFLOW_NODE_MANUAL_SKIP")
-            .severity("WARN")
-            .title("Workflow node manually skipped")
-            .resourceKey(resourceKey)
-            .detailJson(JsonUtils.toJson(detail))
-            .traceId(null)
-            .build());
+    alertService.emit(AlertEmitRequest.builder()
+        .tenantId(run.getTenantId())
+        .serviceName("batch-orchestrator")
+        .alertType("WORKFLOW_NODE_MANUAL_SKIP")
+        .severity("WARN")
+        .title("Workflow node manually skipped")
+        .resourceKey(resourceKey)
+        .detailJson(JsonUtils.toJson(detail))
+        .traceId(null)
+        .build());
   }
 
   /** 把 run 切到 TERMINATED：SQL 期望前态守护 + 同事务发 outbox 终态事件。 */
   private Map<String, Object> flipToTerminated(WorkflowRunEntity run, Set<String> expectedFrom) {
     Instant finishedAt = BatchDateTimeSupport.utcNow();
-    int updated =
-        workflowRunMapper.updateStatus(
-            UpdateWorkflowRunStatusParam.builder()
-                .tenantId(run.getTenantId())
-                .id(run.getId())
-                .runStatus(STATUS_TERMINATED)
-                .currentNodeCode(run.getCurrentNodeCode())
-                .finishedAt(finishedAt)
-                .expectedStatuses(expectedFrom)
-                .build());
+    int updated = workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
+        .tenantId(run.getTenantId())
+        .id(run.getId())
+        .runStatus(STATUS_TERMINATED)
+        .currentNodeCode(run.getCurrentNodeCode())
+        .finishedAt(finishedAt)
+        .expectedStatuses(expectedFrom)
+        .build());
     if (updated <= 0) {
       // SELECT-then-UPDATE race：findRun 看到合法前态后 outcome 把 run 推到了终态
       throw BizException.of(

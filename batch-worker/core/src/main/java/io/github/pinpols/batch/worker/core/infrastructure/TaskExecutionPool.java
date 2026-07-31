@@ -57,15 +57,12 @@ public class TaskExecutionPool {
       }
     }
     AtomicLong threadIndex = new AtomicLong();
-    this.delegate =
-        Executors.newFixedThreadPool(
-            size,
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setName("worker-task-exec-" + threadIndex.incrementAndGet());
-              thread.setDaemon(properties.isDaemonThreads());
-              return thread;
-            });
+    this.delegate = Executors.newFixedThreadPool(size, runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setName("worker-task-exec-" + threadIndex.incrementAndGet());
+      thread.setDaemon(properties.isDaemonThreads());
+      return thread;
+    });
     log.info(
         "TaskExecutionPool started: poolSize={}, daemonThreads={}",
         size,

@@ -171,18 +171,17 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             nextFire = t.getNextFireTime().toInstant();
           }
         }
-        TriggerStatusInfo statusInfo =
-            TriggerStatusInfo.builder()
-                .tenantId(tid)
-                .jobCode(jc)
-                .scheduleType(data.getString(QuartzLaunchJob.SCHEDULE_TYPE))
-                .scheduleExpression(data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION))
-                .timezone(data.getString(QuartzLaunchJob.TIMEZONE))
-                .triggerMode(data.getString(QuartzLaunchJob.TRIGGER_MODE))
-                .status(status)
-                .previousFireTime(prevFire)
-                .nextFireTime(nextFire)
-                .build();
+        TriggerStatusInfo statusInfo = TriggerStatusInfo.builder()
+            .tenantId(tid)
+            .jobCode(jc)
+            .scheduleType(data.getString(QuartzLaunchJob.SCHEDULE_TYPE))
+            .scheduleExpression(data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION))
+            .timezone(data.getString(QuartzLaunchJob.TIMEZONE))
+            .triggerMode(data.getString(QuartzLaunchJob.TRIGGER_MODE))
+            .status(status)
+            .previousFireTime(prevFire)
+            .nextFireTime(nextFire)
+            .build();
         result.add(statusInfo);
       }
       return result;
@@ -235,10 +234,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
    * R7-A5: 用 ScheduleType.code() 替代字面量 + Map 路由替代 if-chain（CLAUDE.md §分支消除 + §领域字典）。 EVENT / MANUAL
    * 不在 map 内即静默跳过（无 Quartz 注册）。
    */
-  private final Map<String, Consumer<TriggerDescriptor>> scheduleHandlers =
-      Map.of(
-          ScheduleType.CRON.code(), this::scheduleCronDescriptor,
-          ScheduleType.FIXED_RATE.code(), this::scheduleFixedRateDescriptor);
+  private final Map<String, Consumer<TriggerDescriptor>> scheduleHandlers = Map.of(
+      ScheduleType.CRON.code(), this::scheduleCronDescriptor,
+      ScheduleType.FIXED_RATE.code(), this::scheduleFixedRateDescriptor);
 
   private void scheduleDescriptor(TriggerDescriptor descriptor) {
     try {
@@ -294,15 +292,13 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     }
     String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
     JobDetail jobDetail = buildJobDetail(descriptor);
-    CronTrigger trigger =
-        TriggerBuilder.newTrigger()
-            .withIdentity(identity, JOB_GROUP)
-            .forJob(jobDetail)
-            .withSchedule(
-                CronScheduleBuilder.cronSchedule(expression)
-                    .inTimeZone(TimeZone.getTimeZone(timezone))
-                    .withMisfireHandlingInstructionDoNothing())
-            .build();
+    CronTrigger trigger = TriggerBuilder.newTrigger()
+        .withIdentity(identity, JOB_GROUP)
+        .forJob(jobDetail)
+        .withSchedule(CronScheduleBuilder.cronSchedule(expression)
+            .inTimeZone(TimeZone.getTimeZone(timezone))
+            .withMisfireHandlingInstructionDoNothing())
+        .build();
     scheduleWithReplace(jobDetail, trigger);
   }
 
@@ -310,16 +306,14 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     int intervalSeconds = parseFixedRateIntervalSeconds(descriptor);
     String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
     JobDetail jobDetail = buildJobDetail(descriptor);
-    Trigger trigger =
-        TriggerBuilder.newTrigger()
-            .withIdentity(identity, JOB_GROUP)
-            .forJob(jobDetail)
-            .withSchedule(
-                SimpleScheduleBuilder.simpleSchedule()
-                    .withIntervalInSeconds(intervalSeconds)
-                    .repeatForever()
-                    .withMisfireHandlingInstructionNextWithExistingCount())
-            .build();
+    Trigger trigger = TriggerBuilder.newTrigger()
+        .withIdentity(identity, JOB_GROUP)
+        .forJob(jobDetail)
+        .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+            .withIntervalInSeconds(intervalSeconds)
+            .repeatForever()
+            .withMisfireHandlingInstructionNextWithExistingCount())
+        .build();
     scheduleWithReplace(jobDetail, trigger);
   }
 
@@ -374,11 +368,10 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
               + "'");
     }
     if (seconds <= 0) {
-      throw new IllegalArgumentException(
-          "FIXED_RATE interval must be > 0 for job: "
-              + descriptor.getJobCode()
-              + ", got: "
-              + seconds);
+      throw new IllegalArgumentException("FIXED_RATE interval must be > 0 for job: "
+          + descriptor.getJobCode()
+          + ", got: "
+          + seconds);
     }
     return seconds;
   }

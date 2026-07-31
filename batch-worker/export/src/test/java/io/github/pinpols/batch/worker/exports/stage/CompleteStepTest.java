@@ -37,9 +37,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CompleteStepTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
-  @InjectMocks private CompleteStep step;
+  @InjectMocks
+  private CompleteStep step;
 
   private static ExportJobContext baseContext() {
     ExportJobContext ctx = new ExportJobContext();
@@ -57,19 +59,18 @@ class CompleteStepTest {
   @DisplayName("autoDispatch=TRUE → 文件状态推进到 DISPATCHING，audit 写入 EXPORT_COMPLETE")
   void shouldTransitionToDispatching_whenAutoDispatchEnabled() {
     ExportJobContext ctx = baseContext();
-    ExportPayload payload =
-        new ExportPayload(
-            "FC1",
-            "BIZ",
-            "TPL",
-            "B1",
-            "f.json",
-            "obj.json",
-            "2026-05-21",
-            null,
-            Boolean.TRUE,
-            null,
-            Map.of());
+    ExportPayload payload = new ExportPayload(
+        "FC1",
+        "BIZ",
+        "TPL",
+        "B1",
+        "f.json",
+        "obj.json",
+        "2026-05-21",
+        null,
+        Boolean.TRUE,
+        null,
+        Map.of());
     ctx.getAttributes().put("exportPayload", payload);
     when(runtimeRepository.toLong(any())).thenReturn(501L);
 
@@ -91,19 +92,18 @@ class CompleteStepTest {
   @DisplayName("autoDispatch=FALSE → 文件状态推进到 GENERATED")
   void shouldTransitionToGenerated_whenAutoDispatchFalse() {
     ExportJobContext ctx = baseContext();
-    ExportPayload payload =
-        new ExportPayload(
-            "FC1",
-            "BIZ",
-            "TPL",
-            "B1",
-            "f.json",
-            "obj.json",
-            "2026-05-21",
-            null,
-            Boolean.FALSE,
-            null,
-            Map.of());
+    ExportPayload payload = new ExportPayload(
+        "FC1",
+        "BIZ",
+        "TPL",
+        "B1",
+        "f.json",
+        "obj.json",
+        "2026-05-21",
+        null,
+        Boolean.FALSE,
+        null,
+        Map.of());
     ctx.getAttributes().put("exportPayload", payload);
     when(runtimeRepository.toLong(any())).thenReturn(501L);
 

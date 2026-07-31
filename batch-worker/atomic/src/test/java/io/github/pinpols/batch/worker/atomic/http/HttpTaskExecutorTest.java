@@ -89,19 +89,16 @@ class HttpTaskExecutorTest {
     @Test
     void rejectsMethodNotInWhitelist() {
       props.setAllowedMethods(Set.of("GET"));
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("url", "http://api.example.com", "method", "DELETE")));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("url", "http://api.example.com", "method", "DELETE")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("not in allowedMethods");
     }
 
     @Test
     void rejectsBadExpectStatusType() {
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of("url", "http://api.example.com", "expectStatus", "not-a-number")));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("url", "http://api.example.com", "expectStatus", "not-a-number")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("expectStatus must be Integer or List");
     }
@@ -109,10 +106,8 @@ class HttpTaskExecutorTest {
     @Test
     void rejectsRequestBodyBeyondConfiguredLimit() {
       props.setMaxRequestBodyBytes(4);
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of("url", "http://api.example.com", "method", "POST", "body", "12345")));
+      TaskResult r = executor.execute(ctxWithParams(
+          Map.of("url", "http://api.example.com", "method", "POST", "body", "12345")));
 
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("maxRequestBodyBytes=4");
@@ -120,20 +115,16 @@ class HttpTaskExecutorTest {
 
     @Test
     void rejectsBadAuthType() {
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of("url", "http://api.example.com", "auth", Map.of("type", "oauth"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("url", "http://api.example.com", "auth", Map.of("type", "oauth"))));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("not in allowedAuthTypes");
     }
 
     @Test
     void rejectsBearerWithoutToken() {
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of("url", "http://api.example.com", "auth", Map.of("type", "bearer"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("url", "http://api.example.com", "auth", Map.of("type", "bearer"))));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("auth.token required");
     }
@@ -141,9 +132,8 @@ class HttpTaskExecutorTest {
     @Test
     void rejectsSensitiveCredentialInParameters_LaneC() {
       // 顶层 password 字段(非 auth 协议)直接拒
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("url", "http://api.example.com", "myPassword", "leak")));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("url", "http://api.example.com", "myPassword", "leak")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("SENSITIVE_DATA_IN_PARAMETERS");
     }
@@ -151,14 +141,8 @@ class HttpTaskExecutorTest {
     @Test
     void allowsAuthSubtreeAsHttpProtocol_LaneC() {
       // auth.password / auth.token 是 HTTP executor 显式协议,允许通过 Lane C 闸门(继续按 protocol 走)
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of(
-                      "url",
-                      "http://api.example.com",
-                      "auth",
-                      Map.of("type", "bearer", "token", "tk"))));
+      TaskResult r = executor.execute(ctxWithParams(Map.of(
+          "url", "http://api.example.com", "auth", Map.of("type", "bearer", "token", "tk"))));
       // 这里不要求成功(URL 是假的会走真实请求),只要 Lane C 不拦即可:错误信息不含 SENSITIVE
       assertThat(r.message()).doesNotContain("SENSITIVE_DATA_IN_PARAMETERS");
     }
@@ -172,9 +156,8 @@ class HttpTaskExecutorTest {
     @Test
     void blocksMetadataServiceByDefault() {
       props.setBlockedHostPatterns(Set.of("169.254.169.254", "metadata.google.internal"));
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("url", "http://169.254.169.254/latest/meta-data/")));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("url", "http://169.254.169.254/latest/meta-data/")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("host blocked");
     }
@@ -230,13 +213,16 @@ class HttpTaskExecutorTest {
 
     @Test
     void plainHostMatches() {
-      assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.com")).isTrue();
-      assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.org")).isFalse();
+      assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.com"))
+          .isTrue();
+      assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.org"))
+          .isFalse();
     }
 
     @Test
     void starPrefix() {
-      assertThat(HttpTaskExecutor.matchesGlob("*.example.com", "foo.example.com")).isTrue();
+      assertThat(HttpTaskExecutor.matchesGlob("*.example.com", "foo.example.com"))
+          .isTrue();
       assertThat(HttpTaskExecutor.matchesGlob("*.example.com", "example.com")).isFalse();
     }
   }
@@ -257,14 +243,12 @@ class HttpTaskExecutorTest {
 
     @Test
     void getSuccess() {
-      server.createContext(
-          "/hello",
-          ex -> {
-            byte[] body = "world".getBytes(StandardCharsets.UTF_8);
-            ex.sendResponseHeaders(200, body.length);
-            ex.getResponseBody().write(body);
-            ex.close();
-          });
+      server.createContext("/hello", ex -> {
+        byte[] body = "world".getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(200, body.length);
+        ex.getResponseBody().write(body);
+        ex.close();
+      });
 
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/hello"))));
 
@@ -276,28 +260,23 @@ class HttpTaskExecutorTest {
     @Test
     void postWithBody() {
       AtomicInteger received = new AtomicInteger();
-      server.createContext(
-          "/echo",
-          ex -> {
-            byte[] body = ex.getRequestBody().readAllBytes();
-            received.set(body.length);
-            ex.sendResponseHeaders(201, body.length);
-            ex.getResponseBody().write(body);
-            ex.close();
-          });
+      server.createContext("/echo", ex -> {
+        byte[] body = ex.getRequestBody().readAllBytes();
+        received.set(body.length);
+        ex.sendResponseHeaders(201, body.length);
+        ex.getResponseBody().write(body);
+        ex.close();
+      });
 
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of(
-                      "url",
-                      url("/echo"),
-                      "method",
-                      "POST",
-                      "body",
-                      "{\"foo\":\"bar\"}",
-                      "expectStatus",
-                      201)));
+      TaskResult r = executor.execute(ctxWithParams(Map.of(
+          "url",
+          url("/echo"),
+          "method",
+          "POST",
+          "body",
+          "{\"foo\":\"bar\"}",
+          "expectStatus",
+          201)));
 
       assertThat(r.success()).isTrue();
       assertThat(r.output()).containsEntry("statusCode", 201);
@@ -306,12 +285,10 @@ class HttpTaskExecutorTest {
 
     @Test
     void expectStatusMismatchFails() {
-      server.createContext(
-          "/notfound",
-          ex -> {
-            ex.sendResponseHeaders(404, -1);
-            ex.close();
-          });
+      server.createContext("/notfound", ex -> {
+        ex.sendResponseHeaders(404, -1);
+        ex.close();
+      });
 
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("url", url("/notfound"), "expectStatus", 200)));
@@ -323,23 +300,15 @@ class HttpTaskExecutorTest {
     @Test
     void basicAuthHeaderInjected() {
       AtomicInteger gotAuth = new AtomicInteger();
-      server.createContext(
-          "/auth",
-          ex -> {
-            String h = ex.getRequestHeaders().getFirst("Authorization");
-            if (h != null && h.startsWith("Basic ")) gotAuth.incrementAndGet();
-            ex.sendResponseHeaders(200, -1);
-            ex.close();
-          });
+      server.createContext("/auth", ex -> {
+        String h = ex.getRequestHeaders().getFirst("Authorization");
+        if (h != null && h.startsWith("Basic ")) gotAuth.incrementAndGet();
+        ex.sendResponseHeaders(200, -1);
+        ex.close();
+      });
 
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of(
-                      "url",
-                      url("/auth"),
-                      "auth",
-                      Map.of("type", "basic", "username", "u", "password", "p"))));
+      TaskResult r = executor.execute(ctxWithParams(Map.of(
+          "url", url("/auth"), "auth", Map.of("type", "basic", "username", "u", "password", "p"))));
 
       assertThat(r.success()).isTrue();
       assertThat(gotAuth.get()).isEqualTo(1);
@@ -348,18 +317,15 @@ class HttpTaskExecutorTest {
     @Test
     void bearerAuthHeaderInjected() {
       AtomicInteger gotBearer = new AtomicInteger();
-      server.createContext(
-          "/bearer",
-          ex -> {
-            String h = ex.getRequestHeaders().getFirst("Authorization");
-            if ("Bearer xyz".equals(h)) gotBearer.incrementAndGet();
-            ex.sendResponseHeaders(200, -1);
-            ex.close();
-          });
+      server.createContext("/bearer", ex -> {
+        String h = ex.getRequestHeaders().getFirst("Authorization");
+        if ("Bearer xyz".equals(h)) gotBearer.incrementAndGet();
+        ex.sendResponseHeaders(200, -1);
+        ex.close();
+      });
 
-      executor.execute(
-          ctxWithParams(
-              Map.of("url", url("/bearer"), "auth", Map.of("type", "bearer", "token", "xyz"))));
+      executor.execute(ctxWithParams(
+          Map.of("url", url("/bearer"), "auth", Map.of("type", "bearer", "token", "xyz"))));
 
       assertThat(gotBearer.get()).isEqualTo(1);
     }
@@ -367,15 +333,13 @@ class HttpTaskExecutorTest {
     @Test
     void truncatesLargeResponse() {
       props.setMaxResponseBytes(10);
-      server.createContext(
-          "/big",
-          ex -> {
-            byte[] body = new byte[1000];
-            java.util.Arrays.fill(body, (byte) 'X');
-            ex.sendResponseHeaders(200, body.length);
-            ex.getResponseBody().write(body);
-            ex.close();
-          });
+      server.createContext("/big", ex -> {
+        byte[] body = new byte[1000];
+        java.util.Arrays.fill(body, (byte) 'X');
+        ex.sendResponseHeaders(200, body.length);
+        ex.getResponseBody().write(body);
+        ex.close();
+      });
 
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/big"))));
 
@@ -387,12 +351,10 @@ class HttpTaskExecutorTest {
     @Test
     void emptyBodyYieldsEmptyResponseBodyNotTruncated() {
       // 空 body(sendResponseHeaders(200,-1) → 无内容):responseBody="" 且 truncated=false。
-      server.createContext(
-          "/empty",
-          ex -> {
-            ex.sendResponseHeaders(204, -1);
-            ex.close();
-          });
+      server.createContext("/empty", ex -> {
+        ex.sendResponseHeaders(204, -1);
+        ex.close();
+      });
 
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("url", url("/empty"), "expectStatus", 204)));
@@ -407,13 +369,11 @@ class HttpTaskExecutorTest {
       // 响应恰好 max+N 字节:kept 必须是前 max 字节(逐字节等于原内容),truncated=true。
       props.setMaxResponseBytes(10);
       byte[] payload = "0123456789ABCDEFGHIJ".getBytes(StandardCharsets.UTF_8); // 20 字节
-      server.createContext(
-          "/exact",
-          ex -> {
-            ex.sendResponseHeaders(200, payload.length);
-            ex.getResponseBody().write(payload);
-            ex.close();
-          });
+      server.createContext("/exact", ex -> {
+        ex.sendResponseHeaders(200, payload.length);
+        ex.getResponseBody().write(payload);
+        ex.close();
+      });
 
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/exact"))));
 
@@ -432,27 +392,25 @@ class HttpTaskExecutorTest {
       final long hugeTotal = 64L * 1024 * 1024; // 64 MiB
       final int chunkSize = 64 * 1024;
       java.util.concurrent.atomic.AtomicLong written = new java.util.concurrent.atomic.AtomicLong();
-      server.createContext(
-          "/huge",
-          ex -> {
-            ex.sendResponseHeaders(200, 0); // 0 = chunked,允许流式写
-            byte[] chunk = new byte[chunkSize];
-            java.util.Arrays.fill(chunk, (byte) 'Z');
-            try (OutputStream os = ex.getResponseBody()) {
-              long remaining = hugeTotal;
-              while (remaining > 0) {
-                int n = (int) Math.min(chunkSize, remaining);
-                os.write(chunk, 0, n);
-                os.flush();
-                written.addAndGet(n);
-                remaining -= n;
-              }
-            } catch (IOException expected) {
-              // 客户端读满 max+1 后关连接 → 后续写被拒:这正是"未全量读"的证据。
-            } finally {
-              ex.close();
-            }
-          });
+      server.createContext("/huge", ex -> {
+        ex.sendResponseHeaders(200, 0); // 0 = chunked,允许流式写
+        byte[] chunk = new byte[chunkSize];
+        java.util.Arrays.fill(chunk, (byte) 'Z');
+        try (OutputStream os = ex.getResponseBody()) {
+          long remaining = hugeTotal;
+          while (remaining > 0) {
+            int n = (int) Math.min(chunkSize, remaining);
+            os.write(chunk, 0, n);
+            os.flush();
+            written.addAndGet(n);
+            remaining -= n;
+          }
+        } catch (IOException expected) {
+          // 客户端读满 max+1 后关连接 → 后续写被拒:这正是"未全量读"的证据。
+        } finally {
+          ex.close();
+        }
+      });
 
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/huge"))));
 
@@ -470,19 +428,17 @@ class HttpTaskExecutorTest {
       props.setMaxRetries(2);
       props.setRetryBackoff(Duration.ofMillis(10));
       AtomicInteger calls = new AtomicInteger();
-      server.createContext(
-          "/flaky",
-          ex -> {
-            int n = calls.incrementAndGet();
-            if (n < 3) {
-              ex.sendResponseHeaders(503, -1);
-            } else {
-              byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
-              ex.sendResponseHeaders(200, body.length);
-              ex.getResponseBody().write(body);
-            }
-            ex.close();
-          });
+      server.createContext("/flaky", ex -> {
+        int n = calls.incrementAndGet();
+        if (n < 3) {
+          ex.sendResponseHeaders(503, -1);
+        } else {
+          byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+          ex.sendResponseHeaders(200, body.length);
+          ex.getResponseBody().write(body);
+        }
+        ex.close();
+      });
 
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/flaky"))));
 
@@ -495,13 +451,11 @@ class HttpTaskExecutorTest {
     void doesNotRetryNonIdempotentOn5xx() {
       props.setMaxRetries(2);
       AtomicInteger calls = new AtomicInteger();
-      server.createContext(
-          "/post-fail",
-          ex -> {
-            calls.incrementAndGet();
-            ex.sendResponseHeaders(503, -1);
-            ex.close();
-          });
+      server.createContext("/post-fail", ex -> {
+        calls.incrementAndGet();
+        ex.sendResponseHeaders(503, -1);
+        ex.close();
+      });
 
       executor.execute(ctxWithParams(Map.of("url", url("/post-fail"), "method", "POST")));
 
@@ -531,13 +485,11 @@ class HttpTaskExecutorTest {
     @Test
     void doesNotFollowRedirectToInternalHost() {
       // SSRF 加固:服务端 301 指向内网/metadata,执行器禁止跟随 → 直接拿到 30x,不打内网。
-      server.createContext(
-          "/redirect",
-          ex -> {
-            ex.getResponseHeaders().add("Location", "http://169.254.169.254/latest/meta-data/");
-            ex.sendResponseHeaders(301, -1);
-            ex.close();
-          });
+      server.createContext("/redirect", ex -> {
+        ex.getResponseHeaders().add("Location", "http://169.254.169.254/latest/meta-data/");
+        ex.sendResponseHeaders(301, -1);
+        ex.close();
+      });
 
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("url", url("/redirect"), "expectStatus", 301)));
@@ -557,15 +509,13 @@ class HttpTaskExecutorTest {
     void redactsSetCookieAndAuthorizationHeadersInOutput() {
       // P2-3(2026-06-03):出口响应若回声 Set-Cookie / Authorization,落 task_result.output
       // 会形成 forensic 期间凭据泄漏。executor 在写 output 前先按固定黑名单脱敏(case-insensitive)。
-      server.createContext(
-          "/echo",
-          ex -> {
-            ex.getResponseHeaders().add("Set-Cookie", "SESSION=secret-value; HttpOnly");
-            ex.getResponseHeaders().add("Authorization", "Bearer downstream-token");
-            ex.getResponseHeaders().add("X-Trace-Id", "trace-123");
-            ex.sendResponseHeaders(200, -1);
-            ex.close();
-          });
+      server.createContext("/echo", ex -> {
+        ex.getResponseHeaders().add("Set-Cookie", "SESSION=secret-value; HttpOnly");
+        ex.getResponseHeaders().add("Authorization", "Bearer downstream-token");
+        ex.getResponseHeaders().add("X-Trace-Id", "trace-123");
+        ex.sendResponseHeaders(200, -1);
+        ex.close();
+      });
 
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/echo"))));
 
@@ -574,13 +524,12 @@ class HttpTaskExecutorTest {
       Map<String, java.util.List<String>> hdrs =
           (Map<String, java.util.List<String>>) r.output().get("responseHeaders");
       // Set-Cookie / Authorization 必须被脱敏(任何大小写形态都不应残留原值)
-      hdrs.forEach(
-          (name, values) -> {
-            String lower = name.toLowerCase(Locale.ROOT);
-            if (lower.equals("set-cookie") || lower.equals("authorization")) {
-              assertThat(values).containsExactly("[REDACTED]");
-            }
-          });
+      hdrs.forEach((name, values) -> {
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.equals("set-cookie") || lower.equals("authorization")) {
+          assertThat(values).containsExactly("[REDACTED]");
+        }
+      });
       // 非敏感头透传(用于业务可观测性)
       boolean traceFound =
           hdrs.entrySet().stream().anyMatch(e -> e.getKey().equalsIgnoreCase("X-Trace-Id"));

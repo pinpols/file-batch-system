@@ -70,23 +70,20 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("\"code\":\"SUCCESS\""));
 
-    Long defId =
-        jdbcTemplate.queryForObject(
-            "SELECT id FROM batch.workflow_definition WHERE workflow_code = ?", Long.class, wfCode);
+    Long defId = jdbcTemplate.queryForObject(
+        "SELECT id FROM batch.workflow_definition WHERE workflow_code = ?", Long.class, wfCode);
     assertThat(defId).isNotNull();
 
-    Long nodeCount =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.workflow_node WHERE workflow_definition_id = ?",
-            Long.class,
-            defId);
+    Long nodeCount = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.workflow_node WHERE workflow_definition_id = ?",
+        Long.class,
+        defId);
     assertThat(nodeCount).isEqualTo(3L);
 
-    Long edgeCount =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.workflow_edge WHERE workflow_definition_id = ?",
-            Long.class,
-            defId);
+    Long edgeCount = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.workflow_edge WHERE workflow_definition_id = ?",
+        Long.class,
+        defId);
     assertThat(edgeCount).isEqualTo(2L);
 
     // 清理(按外键反向顺序)
@@ -111,11 +108,10 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
     // 守护:异常数据不入库
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.workflow_definition WHERE workflow_code = ?",
-            Long.class,
-            "int_wf_bad_node");
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.workflow_definition WHERE workflow_code = ?",
+        Long.class,
+        "int_wf_bad_node");
     assertThat(cnt).isZero();
   }
 
@@ -158,9 +154,8 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
     // 清理
-    Long defId =
-        jdbcTemplate.queryForObject(
-            "SELECT id FROM batch.workflow_definition WHERE workflow_code = ?", Long.class, wfCode);
+    Long defId = jdbcTemplate.queryForObject(
+        "SELECT id FROM batch.workflow_definition WHERE workflow_code = ?", Long.class, wfCode);
     if (defId != null) {
       jdbcTemplate.update(
           "DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?", defId);

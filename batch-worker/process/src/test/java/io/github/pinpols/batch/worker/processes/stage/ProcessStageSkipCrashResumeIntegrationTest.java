@@ -82,22 +82,19 @@ class ProcessStageSkipCrashResumeIntegrationTest {
   @BeforeEach
   void setUp() {
     RlsTenantContextHolder.set(TENANT);
-    dataSource =
-        new DriverManagerDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    dataSource = new DriverManagerDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));
-    plugin =
-        new SqlTransformComputePlugin(
-            dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
+    plugin = new SqlTransformComputePlugin(
+        dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
 
     jdbcTemplate.execute("drop schema if exists biz cascade");
     jdbcTemplate.execute("drop schema if exists batch cascade");
     jdbcTemplate.execute("create schema biz");
     jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table batch.process_staging (
           batch_key text not null,
           row_seq bigserial not null,
@@ -109,8 +106,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           primary key (batch_key, row_seq)
         )
         """);
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table biz.order_event (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
@@ -118,8 +114,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           amount numeric(18, 2) not null
         )
         """);
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table biz.account_summary (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
@@ -197,14 +192,11 @@ class ProcessStageSkipCrashResumeIntegrationTest {
   @DisplayName("从未成功的 stage 不误跳:succeeded 集为空 → COMPUTE 必跑并清掉陈旧 staging")
   void noPriorSuccess_doesNotSkipCompute_recomputesAndClearsStaleStaging() {
     // 预置一条陈旧 staging(模拟上次崩溃残留),但 COMPUTE 从未成功过(succeeded 集空)。
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.process_staging (batch_key, tenant_id, target_schema, target_table, payload)
         values (?, ?, 'biz', 'account_summary',
                 '{"tenant_id":"t1","account_id":"STALE","total_amount":999.00,"high_water_mark":1}'::jsonb)
-        """,
-        "process-" + TASK_ID,
-        TENANT);
+        """, "process-" + TASK_ID, TENANT);
     // 源表删空:若 COMPUTE 被误跳,陈旧 STALE 行会被 COMMIT 发布到 target;
     // 若 COMPUTE 正确重跑,pre-DELETE 清掉 STALE + 从空源 re-SELECT → staging 空 → target 空。
     jdbcTemplate.execute("delete from biz.order_event");
@@ -217,22 +209,20 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     assertThat(results).allMatch(ProcessStageResult::success);
     // COMPUTE 真跑了(未误跳):陈旧 STALE 被 pre-DELETE 清掉,空源无新行 → target 零
     assertThat(targetCount()).isZero();
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from biz.account_summary where account_id='STALE'", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from biz.account_summary where account_id='STALE'", Integer.class))
         .isZero();
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
   private DefaultProcessStageExecutor newExecutor(WorkerCheckpointProperties checkpointProps) {
-    List<ProcessStageStep> steps =
-        List.of(
-            new PrepareStep(),
-            new ComputeStep(),
-            new ValidateStep(),
-            new CommitStep(),
-            new FeedbackStep(ProcessMetrics.noop()));
+    List<ProcessStageStep> steps = List.of(
+        new PrepareStep(),
+        new ComputeStep(),
+        new ValidateStep(),
+        new CommitStep(),
+        new FeedbackStep(ProcessMetrics.noop()));
     return new DefaultProcessStageExecutor(
         steps, List.of(plugin), runtimeRepository, ProcessMetrics.noop(), checkpointProps);
   }
@@ -255,32 +245,30 @@ class ProcessStageSkipCrashResumeIntegrationTest {
   private List<PipelineStepDefinition> stepsThrough(ProcessStage lastStage) {
     List<PipelineStepDefinition> steps = new ArrayList<>();
     int order = 1;
-    for (ProcessStage stage :
-        List.of(
-            ProcessStage.PREPARE,
-            ProcessStage.COMPUTE,
-            ProcessStage.VALIDATE,
-            ProcessStage.COMMIT,
-            ProcessStage.FEEDBACK)) {
+    for (ProcessStage stage : List.of(
+        ProcessStage.PREPARE,
+        ProcessStage.COMPUTE,
+        ProcessStage.VALIDATE,
+        ProcessStage.COMMIT,
+        ProcessStage.FEEDBACK)) {
       String implCode =
           stage == ProcessStage.COMPUTE ? SqlTransformComputePlugin.PLUGIN_ID : "PROCESS_" + stage;
       Map<String, Object> stepParams =
           stage == ProcessStage.COMPUTE ? computeStepParams() : Map.of();
-      steps.add(
-          PipelineStepDefinition.builder()
-              .id((long) order)
-              .pipelineDefinitionId(1L)
-              .stepCode("PROCESS_" + stage.name())
-              .stepName("Process " + stage.name())
-              .stageCode(stage.name())
-              .stepOrder(order++)
-              .implCode(implCode)
-              .stepParams(stepParams)
-              .timeoutSeconds(0)
-              .retryPolicy("NONE")
-              .retryMaxCount(0)
-              .enabled(true)
-              .build());
+      steps.add(PipelineStepDefinition.builder()
+          .id((long) order)
+          .pipelineDefinitionId(1L)
+          .stepCode("PROCESS_" + stage.name())
+          .stepName("Process " + stage.name())
+          .stageCode(stage.name())
+          .stepOrder(order++)
+          .implCode(implCode)
+          .stepParams(stepParams)
+          .timeoutSeconds(0)
+          .retryPolicy("NONE")
+          .retryMaxCount(0)
+          .enabled(true)
+          .build());
       if (stage == lastStage) {
         break;
       }
@@ -290,9 +278,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
 
   private Map<String, Object> computeStepParams() {
     Map<String, Object> sqlTransformSpec = new LinkedHashMap<>();
-    sqlTransformSpec.put(
-        "sourceSql",
-        """
+    sqlTransformSpec.put("sourceSql", """
         select tenant_id,
                account_id,
                sum(amount) as total_amount,

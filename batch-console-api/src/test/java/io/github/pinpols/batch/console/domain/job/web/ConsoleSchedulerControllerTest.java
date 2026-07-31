@@ -35,10 +35,10 @@ class ConsoleSchedulerControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleSchedulerController(proxy, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleSchedulerController(proxy, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -56,7 +56,9 @@ class ConsoleSchedulerControllerTest {
     when(proxy.schedulerPauseAll()).thenReturn(Map.of("status", "ALL_PAUSED"));
     when(proxy.schedulerResumeAll()).thenReturn(Map.of("status", "ALL_RESUMED"));
     mockMvc.perform(post("/api/console/scheduler/pause-all")).andExpect(status().isOk());
-    mockMvc.perform(post("/api/console/scheduler/resume-all")).andExpect(status().isOk());
+    mockMvc
+        .perform(post("/api/console/scheduler/resume-all"))
+        .andExpect(status().isOk());
     verify(proxy).schedulerPauseAll();
     verify(proxy).schedulerResumeAll();
   }

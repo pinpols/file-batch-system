@@ -39,14 +39,10 @@ class WorkerRegistryCacheTest {
   void disabledShouldBypassRedisAndCallLoader() {
     props.setEnabled(false);
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return List.of();
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return List.of();
+    });
     assertThat(result).isEmpty();
     assertThat(calls.get()).isEqualTo(1);
     verify(redis, never()).getStringCache(anyString());
@@ -59,14 +55,10 @@ class WorkerRegistryCacheTest {
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(1L, "w-1"));
 
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return records;
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return records;
+    });
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result)
@@ -81,34 +73,27 @@ class WorkerRegistryCacheTest {
   @Test
   void cacheHitShouldNotCallLoader() throws Exception {
     props.setEnabled(true);
-    String json =
-        new ObjectMapper()
-            .writeValueAsString(
-                List.of(
-                    new WorkerRegistryCache.Entry(
-                        7L,
-                        "t1",
-                        "w-cached",
-                        "EXPORT",
-                        null,
-                        "report",
-                        "ONLINE",
-                        BatchDateTimeSupport.utcNow().toEpochMilli(),
-                        2,
-                        10,
-                        null,
-                        null)));
+    String json = new ObjectMapper()
+        .writeValueAsString(List.of(new WorkerRegistryCache.Entry(
+            7L,
+            "t1",
+            "w-cached",
+            "EXPORT",
+            null,
+            "report",
+            "ONLINE",
+            BatchDateTimeSupport.utcNow().toEpochMilli(),
+            2,
+            10,
+            null,
+            null)));
     when(redis.getStringCache(anyString())).thenReturn(json);
     AtomicInteger calls = new AtomicInteger();
 
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return List.of();
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return List.of();
+    });
 
     assertThat(calls.get()).isZero();
     assertThat(result).hasSize(1);
@@ -123,14 +108,10 @@ class WorkerRegistryCacheTest {
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(2L, "w-2"));
 
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return records;
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return records;
+    });
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
@@ -146,14 +127,10 @@ class WorkerRegistryCacheTest {
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(3L, "w-3"));
 
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return records;
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return records;
+    });
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
@@ -167,14 +144,10 @@ class WorkerRegistryCacheTest {
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(4L, "w-4"));
 
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return records;
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return records;
+    });
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
@@ -185,14 +158,10 @@ class WorkerRegistryCacheTest {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn(null);
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return List.of();
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return List.of();
+    });
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).isEmpty();
     verify(redis, never()).setStringCache(anyString(), anyString(), any(Duration.class));
@@ -205,14 +174,10 @@ class WorkerRegistryCacheTest {
     when(redis.getStringCache(anyString())).thenReturn("[]");
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(5L, "w-5"));
-    List<WorkerRegistryEntity> result =
-        cache.getOrLoad(
-            "t1",
-            "EXPORT",
-            () -> {
-              calls.incrementAndGet();
-              return records;
-            });
+    List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
+      calls.incrementAndGet();
+      return records;
+    });
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
     verify(redis)

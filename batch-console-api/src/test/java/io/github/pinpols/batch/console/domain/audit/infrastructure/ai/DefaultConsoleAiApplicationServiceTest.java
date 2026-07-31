@@ -67,16 +67,32 @@ import org.springframework.dao.QueryTimeoutException;
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleAiApplicationServiceTest {
 
-  @Mock private ObjectProvider<ChatClient> chatClientProvider;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
-  @Mock private ConsoleAiAuthorizationService authorizationService;
-  @Mock private ConsoleAiPromptGuard promptGuard;
-  @Mock private ConsoleAiAuditService auditService;
-  @Mock private ConsoleAiKnowledgeBase knowledgeBase;
+  @Mock
+  private ObjectProvider<ChatClient> chatClientProvider;
 
-  @Mock private ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
-  @Mock private ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
-  @Mock private SlidingWindowRateLimiter rateLimiter;
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
+  @Mock
+  private ConsoleAiAuthorizationService authorizationService;
+
+  @Mock
+  private ConsoleAiPromptGuard promptGuard;
+
+  @Mock
+  private ConsoleAiAuditService auditService;
+
+  @Mock
+  private ConsoleAiKnowledgeBase knowledgeBase;
+
+  @Mock
+  private ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
+
+  @Mock
+  private ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
+
+  @Mock
+  private SlidingWindowRateLimiter rateLimiter;
 
   private ConsoleAiProperties aiProperties;
   private SimpleMeterRegistry meterRegistry;
@@ -94,19 +110,18 @@ class DefaultConsoleAiApplicationServiceTest {
     aiProperties.setRequestTimeout(Duration.ofSeconds(5));
     meterRegistry = new SimpleMeterRegistry();
     aiMetrics = new ConsoleAiMetrics(meterRegistry);
-    service =
-        new DefaultConsoleAiApplicationService(
-            chatClientProvider,
-            aiProperties,
-            requestMetadataResolver,
-            authorizationService,
-            promptGuard,
-            auditService,
-            knowledgeBase,
-            queryServiceProvider,
-            diagnosticServiceProvider,
-            rateLimiter,
-            aiMetrics);
+    service = new DefaultConsoleAiApplicationService(
+        chatClientProvider,
+        aiProperties,
+        requestMetadataResolver,
+        authorizationService,
+        promptGuard,
+        auditService,
+        knowledgeBase,
+        queryServiceProvider,
+        diagnosticServiceProvider,
+        rateLimiter,
+        aiMetrics);
   }
 
   private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
@@ -156,17 +171,13 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   @Test
-  @DisplayName(
-      "Prompt guard REJECTED_SAFETY → refusal 响应 + 审计写入数据库（含"
-          + " refusalReason，decision=REJECTED_SAFETY）")
+  @DisplayName("Prompt guard REJECTED_SAFETY → refusal 响应 + 审计写入数据库（含"
+      + " refusalReason，decision=REJECTED_SAFETY）")
   void shouldReturnRefusalResponse_andRecordAudit_whenSafetyRejected() {
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
     when(promptGuard.check(any()))
-        .thenReturn(
-            AiPromptGateResult.rejected(
-                AiPromptDecision.REJECTED_SAFETY,
-                AiPromptCategory.OUT_OF_SCOPE,
-                "blocked-by-keyword"));
+        .thenReturn(AiPromptGateResult.rejected(
+            AiPromptDecision.REJECTED_SAFETY, AiPromptCategory.OUT_OF_SCOPE, "blocked-by-keyword"));
 
     AiChatResponse response = service.chat(request("tenant-1", "提示词包含密码"), "idem-1");
 
@@ -192,9 +203,8 @@ class DefaultConsoleAiApplicationServiceTest {
   void shouldReturnScopeRefusal_whenScopeRejected() {
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
     when(promptGuard.check(any()))
-        .thenReturn(
-            AiPromptGateResult.rejected(
-                AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
+        .thenReturn(AiPromptGateResult.rejected(
+            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
 
     AiChatResponse response = service.chat(request("tenant-1", "今天股价"), "idem-1");
 
@@ -207,9 +217,8 @@ class DefaultConsoleAiApplicationServiceTest {
   void shouldReturnDisabledRefusal_whenDisabledRejected() {
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
     when(promptGuard.check(any()))
-        .thenReturn(
-            AiPromptGateResult.rejected(
-                AiPromptDecision.REJECTED_DISABLED, AiPromptCategory.OUT_OF_SCOPE, "disabled"));
+        .thenReturn(AiPromptGateResult.rejected(
+            AiPromptDecision.REJECTED_DISABLED, AiPromptCategory.OUT_OF_SCOPE, "disabled"));
 
     AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
 
@@ -238,9 +247,8 @@ class DefaultConsoleAiApplicationServiceTest {
     aiProperties.setMaxPromptLength(50);
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
     when(promptGuard.check(any()))
-        .thenReturn(
-            AiPromptGateResult.rejected(
-                AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
+        .thenReturn(AiPromptGateResult.rejected(
+            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
 
     String longPrompt = "batch ".repeat(200); // 1200 chars
     service.chat(request("tenant-1", longPrompt), "idem-1");
@@ -257,9 +265,8 @@ class DefaultConsoleAiApplicationServiceTest {
   void shouldGenerateRequestId_whenMetadataAbsent() {
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", null, null));
     when(promptGuard.check(any()))
-        .thenReturn(
-            AiPromptGateResult.rejected(
-                AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "x"));
+        .thenReturn(AiPromptGateResult.rejected(
+            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "x"));
 
     AiChatResponse response = service.chat(request("tenant-1", "x"), "idem-1");
 
@@ -352,9 +359,8 @@ class DefaultConsoleAiApplicationServiceTest {
     when(rateLimiter.tryAcquire(anyString(), anyInt()))
         .thenThrow(new QueryTimeoutException("redis down"));
     when(promptGuard.check(any()))
-        .thenReturn(
-            AiPromptGateResult.rejected(
-                AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
+        .thenReturn(AiPromptGateResult.rejected(
+            AiPromptDecision.REJECTED_SCOPE, AiPromptCategory.OUT_OF_SCOPE, "off-topic"));
 
     AiChatResponse response = service.chat(request("tenant-1", "今天股价"), "idem-1");
 
@@ -388,12 +394,10 @@ class DefaultConsoleAiApplicationServiceTest {
   void shouldDegradeGracefully_whenModelCallTimesOut() {
     aiProperties.setRequestTimeout(Duration.ofMillis(150));
     ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
-    when(callSpec.chatResponse())
-        .thenAnswer(
-            invocation -> {
-              Thread.sleep(2000);
-              return chatResponseWithUsage("迟到的答复", 1, 1);
-            });
+    when(callSpec.chatResponse()).thenAnswer(invocation -> {
+      Thread.sleep(2000);
+      return chatResponseWithUsage("迟到的答复", 1, 1);
+    });
 
     long start = System.currentTimeMillis();
     AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
@@ -409,7 +413,9 @@ class DefaultConsoleAiApplicationServiceTest {
   private static ChatResponse chatResponseWithUsage(String text, int prompt, int completion) {
     return new ChatResponse(
         List.of(new Generation(new AssistantMessage(text))),
-        ChatResponseMetadata.builder().usage(new DefaultUsage(prompt, completion)).build());
+        ChatResponseMetadata.builder()
+            .usage(new DefaultUsage(prompt, completion))
+            .build());
   }
 
   /** stub 授权/门禁放行 + RAG 空 + 工具关 + ChatClient fluent 链,返回可继续 stub 的 CallResponseSpec。 */
@@ -443,8 +449,10 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   private double decisionCount(String decision) {
-    io.micrometer.core.instrument.Counter counter =
-        meterRegistry.find("batch.console.ai.requests.total").tag("decision", decision).counter();
+    io.micrometer.core.instrument.Counter counter = meterRegistry
+        .find("batch.console.ai.requests.total")
+        .tag("decision", decision)
+        .counter();
     return counter == null ? 0.0 : counter.count();
   }
 }

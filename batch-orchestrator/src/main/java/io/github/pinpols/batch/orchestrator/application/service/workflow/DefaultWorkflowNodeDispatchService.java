@@ -82,7 +82,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   // ADR-018 跨批量日依赖解析；NULL（无依赖）跳过；REQUIRED 缺失 → WAITING_DEPENDENCY；解析失败 → FAILED
   private final CrossDayDependencyResolver crossDayDependencyResolver;
 
-  @Lazy @Autowired private DefaultWorkflowNodeDispatchService self;
+  @Lazy
+  @Autowired
+  private DefaultWorkflowNodeDispatchService self;
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
@@ -157,9 +159,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (jsonSpec == null || jsonSpec.isBlank()) {
       return CrossDayDependencyOutcome.proceed(sourcePayload);
     }
-    ResolutionResult result =
-        crossDayDependencyResolver.resolve(
-            jobInstance.getTenantId(), jobInstance.getBizDate(), jsonSpec);
+    ResolutionResult result = crossDayDependencyResolver.resolve(
+        jobInstance.getTenantId(), jobInstance.getBizDate(), jsonSpec);
     if (result.isResolved()) {
       return CrossDayDependencyOutcome.proceed(
           mergeCrossDayPayload(sourcePayload, result.getResolved()));
@@ -193,11 +194,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (crossDay == null || crossDay.isEmpty()) {
       return sourcePayload;
     }
-    Map<String, Object> base =
-        sourcePayload == null || sourcePayload.isBlank()
-            ? new LinkedHashMap<>()
-            : new LinkedHashMap<>(
-                (Map<String, Object>) JsonUtils.fromJson(sourcePayload, Map.class));
+    Map<String, Object> base = sourcePayload == null || sourcePayload.isBlank()
+        ? new LinkedHashMap<>()
+        : new LinkedHashMap<>((Map<String, Object>) JsonUtils.fromJson(sourcePayload, Map.class));
     base.put("crossDay", crossDay);
     return JsonUtils.toJson(base);
   }
@@ -260,17 +259,15 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       String sourcePayload,
       String traceId) {
     recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
-    String targetJobCode =
-        workflowNode.getRelatedJobCode() == null || workflowNode.getRelatedJobCode().isBlank()
-            ? jobInstance.getJobCode()
-            : workflowNode.getRelatedJobCode();
-    SchedulePlan plan =
-        schedulePlanBuilder.build(
-            new SchedulePlanCommand(
-                jobInstance.getTenantId(),
-                targetJobCode,
-                jobInstance.getBizDate().toString(),
-                WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload)));
+    String targetJobCode = workflowNode.getRelatedJobCode() == null
+            || workflowNode.getRelatedJobCode().isBlank()
+        ? jobInstance.getJobCode()
+        : workflowNode.getRelatedJobCode();
+    SchedulePlan plan = schedulePlanBuilder.build(new SchedulePlanCommand(
+        jobInstance.getTenantId(),
+        targetJobCode,
+        jobInstance.getBizDate().toString(),
+        WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload)));
     if (plan == null || plan.getPartitions() == null || plan.getPartitions().isEmpty()) {
       return 0;
     }
@@ -312,35 +309,30 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
           decision.getReasonMessage());
     }
     applySchedulingDecision(plan, decision);
-    List<JobPartitionEntity> existingPartitions =
-        jobMappers.jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
-    int nextPartitionNo =
-        existingPartitions.stream()
-                .map(JobPartitionEntity::getPartitionNo)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0)
-            + 1;
+    List<JobPartitionEntity> existingPartitions = jobMappers.jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
+    int nextPartitionNo = existingPartitions.stream()
+            .map(JobPartitionEntity::getPartitionNo)
+            .filter(Objects::nonNull)
+            .max(Integer::compareTo)
+            .orElse(0)
+        + 1;
     for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
       partitionPlan.setPartitionNo(nextPartitionNo++);
-      partitionPlan.setPartitionKey(
-          partitionPlan.getPartitionKey()
-              + ":"
-              + node.nodeCode()
-              + ":"
-              + partitionPlan.getPartitionNo());
+      partitionPlan.setPartitionKey(partitionPlan.getPartitionKey()
+          + ":"
+          + node.nodeCode()
+          + ":"
+          + partitionPlan.getPartitionNo());
       partitionPlan.setBusinessKey(
           (partitionPlan.getBusinessKey() == null ? targetJobCode : partitionPlan.getBusinessKey())
               + ":"
               + node.nodeCode());
     }
-    List<JobPartitionEntity> newPartitions =
-        partitionLifecycleService.createPartitions(
-            plan, jobInstance.getId(), decision.getPartitionStatus());
-    String baseTaskPayload =
-        payloadBuilder.buildTaskPayload(
-            sourcePayload, node, targetJobCode, workflowNode, jobInstance, workflowRun);
+    List<JobPartitionEntity> newPartitions = partitionLifecycleService.createPartitions(
+        plan, jobInstance.getId(), decision.getPartitionStatus());
+    String baseTaskPayload = payloadBuilder.buildTaskPayload(
+        sourcePayload, node, targetJobCode, workflowNode, jobInstance, workflowRun);
     int sequence = 1;
     int fanOutIndex = 0;
     for (JobPartitionEntity partition : newPartitions) {
@@ -357,15 +349,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       // DefaultSchedulePlanBuilder 读 job_definition)
       task.setPriority(plan.getPriority());
       // fan-out:每个并行分区拿不同的 item(注入到 payload),非 fan-out 走共享 payload(行为不变)。
-      String taskPayload =
-          fanOut == null
-              ? baseTaskPayload
-              : WorkflowFanOutSupport.injectItem(
-                  baseTaskPayload,
-                  fanOut.itemParam(),
-                  fanOut.items().get(fanOutIndex),
-                  fanOutIndex,
-                  fanOut.items().size());
+      String taskPayload = fanOut == null
+          ? baseTaskPayload
+          : WorkflowFanOutSupport.injectItem(
+              baseTaskPayload,
+              fanOut.itemParam(),
+              fanOut.items().get(fanOutIndex),
+              fanOutIndex,
+              fanOut.items().size());
       fanOutIndex++;
       task.setTaskPayload(taskPayload);
       task.setDryRun(plan.isDryRun());
@@ -384,16 +375,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 jobInstance.getTenantId(), workflowRun.getId(), node.nodeCode(), task.getId()));
       }
     }
-    int currentExpectedPartitionCount =
-        jobInstance.getExpectedPartitionCount() == null
-            ? 0
-            : jobInstance.getExpectedPartitionCount();
-    int updated =
-        jobMappers.jobInstanceMapper.updateExpectedPartitionCount(
-            jobInstance.getTenantId(),
-            jobInstance.getId(),
-            currentExpectedPartitionCount + newPartitions.size(),
-            jobInstance.getVersion());
+    int currentExpectedPartitionCount = jobInstance.getExpectedPartitionCount() == null
+        ? 0
+        : jobInstance.getExpectedPartitionCount();
+    int updated = jobMappers.jobInstanceMapper.updateExpectedPartitionCount(
+        jobInstance.getTenantId(),
+        jobInstance.getId(),
+        currentExpectedPartitionCount + newPartitions.size(),
+        jobInstance.getVersion());
     if (updated <= 0) {
       throw new IllegalStateException("job instance expected partition count update conflict");
     }
@@ -456,27 +445,24 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     runningNode.setStartedAt(now);
     runningNode.setDurationMs(0L);
     workflowMappers.workflowNodeRunMapper.insert(runningNode);
-    workflowMappers.workflowNodeRunMapper.updateStatus(
-        UpdateNodeRunStatusParam.builder()
-            .id(runningNode.getId())
-            .nodeStatus(WorkflowNodeRunStatus.SUCCESS.code())
-            .errorCode(null)
-            .errorMessage(null)
-            .durationMs(0L)
-            .finishedAt(now)
-            .build());
-    List<WorkflowDagService.DagNodeResolution> nextNodes =
-        workflowDagService.resolveNextNodes(
-            workflowRun.getWorkflowDefinitionId(), node.nodeCode(), true, sourcePayload);
+    workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+        .id(runningNode.getId())
+        .nodeStatus(WorkflowNodeRunStatus.SUCCESS.code())
+        .errorCode(null)
+        .errorMessage(null)
+        .durationMs(0L)
+        .finishedAt(now)
+        .build());
+    List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
+        workflowRun.getWorkflowDefinitionId(), node.nodeCode(), true, sourcePayload);
     int dispatchedCount = 0;
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
         createTerminalNodeRun(workflowRun.getId(), nextNode, now);
         continue;
       }
-      dispatchedCount +=
-          self.dispatchNode(
-              jobInstance, workflowRun, nextNode, sourcePayload, jobInstance.getTraceId());
+      dispatchedCount += self.dispatchNode(
+          jobInstance, workflowRun, nextNode, sourcePayload, jobInstance.getTraceId());
     }
     return dispatchedCount;
   }

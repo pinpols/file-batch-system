@@ -126,14 +126,12 @@ class WorkerTaskLeaseRenewerTest {
     ActiveTaskLeaseRegistry.ActiveTaskLease healthy = lease("t1", "200", "w1");
     when(registry.snapshot()).thenReturn(List.of(failed, healthy));
 
-    when(client.renewLeasesBatch(
-            List.of(
-                new TaskLeaseRenewItem("t1", 100L, "w1", null),
-                new TaskLeaseRenewItem("t1", 200L, "w1", null))))
-        .thenReturn(
-            Map.of(
-                100L, TaskLeaseRenewResult.rejected(100L),
-                200L, TaskLeaseRenewResult.renewed(200L)));
+    when(client.renewLeasesBatch(List.of(
+            new TaskLeaseRenewItem("t1", 100L, "w1", null),
+            new TaskLeaseRenewItem("t1", 200L, "w1", null))))
+        .thenReturn(Map.of(
+            100L, TaskLeaseRenewResult.rejected(100L),
+            200L, TaskLeaseRenewResult.renewed(200L)));
     renewer.renewActiveTaskLeases();
 
     // fast-retry 应仅打 100，不打 200
@@ -141,10 +139,9 @@ class WorkerTaskLeaseRenewerTest {
     renewer.fastRetryFailedLeases();
 
     verify(client, times(1))
-        .renewLeasesBatch(
-            List.of(
-                new TaskLeaseRenewItem("t1", 100L, "w1", null),
-                new TaskLeaseRenewItem("t1", 200L, "w1", null)));
+        .renewLeasesBatch(List.of(
+            new TaskLeaseRenewItem("t1", 100L, "w1", null),
+            new TaskLeaseRenewItem("t1", 200L, "w1", null)));
     verify(client, times(1)).renewLease("t1", 100L, "w1", null);
     verify(client, never()).renewLease("t1", 200L, "w1", null);
     // fast-retry 救回 metric +1

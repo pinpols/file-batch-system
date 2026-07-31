@@ -69,15 +69,14 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
       return new StepExecutionResponse(
           false, "NO_EXECUTOR", "no BatchTaskExecutor registered for taskType=" + taskType);
     }
-    TaskContext ctx =
-        new TaskContext(
-            request.tenantId(),
-            request.jobCode(),
-            // taskInstanceId 暂不在 StepExecutionRequest 里;需要时从 context 抽
-            null,
-            request.workerId(),
-            parameters,
-            request.context());
+    TaskContext ctx = new TaskContext(
+        request.tenantId(),
+        request.jobCode(),
+        // taskInstanceId 暂不在 StepExecutionRequest 里;需要时从 context 抽
+        null,
+        request.workerId(),
+        parameters,
+        request.context());
     try {
       TaskResult result = executor.execute(ctx);
       return toResponse(result);

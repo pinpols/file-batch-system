@@ -31,9 +31,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ConsoleClusterDiagnosticMapper mapper;
+  @Autowired
+  private ConsoleClusterDiagnosticMapper mapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   // 全局递增 task_seq,保证 uk_job_task_no_partition_seq (job_instance_id, task_seq) 不撞。
   private final AtomicLong taskSeq = new AtomicLong(0);
@@ -106,34 +108,23 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
   }
 
   private void insertJobTask(String tenantId, long id, long jobInstanceId) {
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         INSERT INTO batch.job_task
           (id, tenant_id, job_instance_id, task_type, task_seq, task_status,
            created_at, updated_at)
         VALUES (?, ?, ?, 'EXECUTION', ?, 'RUNNING', now(), now())
-        """,
-        id,
-        tenantId,
-        jobInstanceId,
-        taskSeq.incrementAndGet());
+        """, id, tenantId, jobInstanceId, taskSeq.incrementAndGet());
   }
 
   private void insertOutbox(
       String tenantId, String aggregateType, long aggregateId, String status) {
     String eventKey = aggregateType + "-" + aggregateId + "-" + System.nanoTime();
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         INSERT INTO batch.outbox_event
           (tenant_id, aggregate_type, aggregate_id, event_type, event_key, payload_json,
            publish_status, created_at, updated_at)
         VALUES (?, ?, ?, 'TASK_EVENT', ?, '{}'::jsonb, ?, now(), now())
-        """,
-        tenantId,
-        aggregateType,
-        aggregateId,
-        eventKey,
-        status);
+        """, tenantId, aggregateType, aggregateId, eventKey, status);
   }
 
   private static long countForStatus(List<Map<String, Object>> rows, String status) {

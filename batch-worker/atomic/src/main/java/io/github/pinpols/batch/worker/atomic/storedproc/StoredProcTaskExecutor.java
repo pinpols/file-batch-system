@@ -138,13 +138,12 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     } catch (StoredProcValidationException ex) {
       // schema/SECURITY DEFINER/角色等安全闸 vs 入参非法
       String msg = ex.getMessage();
-      boolean security =
-          msg != null
-              && (msg.contains("not allowed")
-                  || msg.contains("OS-capable")
-                  || msg.contains("SECURITY DEFINER")
-                  || msg.contains("EXECUTE privilege")
-                  || msg.contains("schema not allowed"));
+      boolean security = msg != null
+          && (msg.contains("not allowed")
+              || msg.contains("OS-capable")
+              || msg.contains("SECURITY DEFINER")
+              || msg.contains("EXECUTE privilege")
+              || msg.contains("schema not allowed"));
       return AtomicErrorCode.fail(
           security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID, msg);
     } catch (BizException ex) {
@@ -232,11 +231,10 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       schema = props.getDefaultSchema();
     }
     if (!props.getAllowedSchemas().contains(schema)) {
-      throw new StoredProcValidationException(
-          "procedureName schema not allowed: "
-              + procName
-              + ", allowedSchemas="
-              + props.getAllowedSchemas());
+      throw new StoredProcValidationException("procedureName schema not allowed: "
+          + procName
+          + ", allowedSchemas="
+          + props.getAllowedSchemas());
     }
   }
 
@@ -340,37 +338,32 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   private TaskResult runCall(TaskContext ctx, Invocation inv) {
     long start = System.currentTimeMillis();
     int totalParams = inv.inParams.size() + inv.outTypes.size();
-    AtomicConnectionManager.Options opts =
-        AtomicConnectionManager.Options.defaults()
-            .withAutoCommit(inv.autoCommit)
-            // 角色闸用 executor 本地实现(StoredProcValidationException 保留 i18n 语义)
-            .withForbidOsCapableRole(false);
+    AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
+        .withAutoCommit(inv.autoCommit)
+        // 角色闸用 executor 本地实现(StoredProcValidationException 保留 i18n 语义)
+        .withForbidOsCapableRole(false);
 
     try {
-      return AtomicConnectionManager.withConnection(
-          inv.dataSource,
-          opts,
-          conn -> {
-            String call = buildCallSql(conn, inv.procName, totalParams);
-            // 同一事务内 pin search_path,固定过程解析(防 search_path shadowing/注入)
-            pinSearchPath(conn, inv.procName);
-            // 堵死 OS:① 角色 ② SECURITY DEFINER(借 owner 提权绕过①)
-            if (props.isForbidOsCapableRole()) {
-              requireNonOsCapableRole(conn);
-            }
-            if (!props.isAllowSecurityDefiner()) {
-              requireNotSecurityDefiner(conn, inv.procName);
-            }
-            if (props.isVerifyExecutePrivilege()) {
-              requireExecutePrivilege(conn, inv.procName);
-            }
-            return execCallableStatement(conn, call, inv, start);
-          });
+      return AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
+        String call = buildCallSql(conn, inv.procName, totalParams);
+        // 同一事务内 pin search_path,固定过程解析(防 search_path shadowing/注入)
+        pinSearchPath(conn, inv.procName);
+        // 堵死 OS:① 角色 ② SECURITY DEFINER(借 owner 提权绕过①)
+        if (props.isForbidOsCapableRole()) {
+          requireNonOsCapableRole(conn);
+        }
+        if (!props.isAllowSecurityDefiner()) {
+          requireNotSecurityDefiner(conn, inv.procName);
+        }
+        if (props.isVerifyExecutePrivilege()) {
+          requireExecutePrivilege(conn, inv.procName);
+        }
+        return execCallableStatement(conn, call, inv, start);
+      });
     } catch (SQLException ex) {
-      boolean isTimeout =
-          "57014".equals(ex.getSQLState())
-              || (ex.getMessage() != null
-                  && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
+      boolean isTimeout = "57014".equals(ex.getSQLState())
+          || (ex.getMessage() != null
+              && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
       return AtomicErrorCode.fail(
           isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
           "stored proc call failed: " + ex.getMessage(),
@@ -458,12 +451,11 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       schema = procName.substring(0, dot);
       name = procName.substring(dot + 1);
     }
-    String sql =
-        "select p.prokind from pg_catalog.pg_proc p"
-            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-            + " where p.proname = ?"
-            + (schema == null ? "" : " and n.nspname = ?")
-            + " limit 1";
+    String sql = "select p.prokind from pg_catalog.pg_proc p"
+        + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+        + " where p.proname = ?"
+        + (schema == null ? "" : " and n.nspname = ?")
+        + " limit 1";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
       ps.setString(1, name);
       if (schema != null) {
@@ -542,11 +534,10 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     int dot = procName.indexOf('.');
     String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
     String name = dot > 0 ? procName.substring(dot + 1) : procName;
-    String sql =
-        "select has_function_privilege(current_user, p.oid, 'EXECUTE')"
-            + " from pg_catalog.pg_proc p"
-            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-            + " where p.proname = ? and n.nspname = ? limit 1";
+    String sql = "select has_function_privilege(current_user, p.oid, 'EXECUTE')"
+        + " from pg_catalog.pg_proc p"
+        + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+        + " where p.proname = ? and n.nspname = ? limit 1";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
       ps.setString(1, name);
       ps.setString(2, schema);
@@ -572,12 +563,11 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
    * 成员(这些是 COPY PROGRAM / 不可信 PL / 服务端文件访问的前置),命中即拒。
    */
   private void requireNonOsCapableRole(Connection conn) {
-    String sql =
-        "select rolsuper"
-            + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
-            + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
-            + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
-            + " from pg_roles where rolname = current_user";
+    String sql = "select rolsuper"
+        + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
+        + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
+        + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
+        + " from pg_roles where rolname = current_user";
     try (PreparedStatement ps = conn.prepareStatement(sql);
         ResultSet rs = ps.executeQuery()) {
       if (rs.next() && rs.getBoolean(1)) {
@@ -599,10 +589,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     int dot = procName.indexOf('.');
     String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
     String name = dot > 0 ? procName.substring(dot + 1) : procName;
-    String sql =
-        "select p.prosecdef from pg_catalog.pg_proc p"
-            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-            + " where p.proname = ? and n.nspname = ? limit 1";
+    String sql = "select p.prosecdef from pg_catalog.pg_proc p"
+        + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+        + " where p.proname = ? and n.nspname = ? limit 1";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
       ps.setString(1, name);
       ps.setString(2, schema);

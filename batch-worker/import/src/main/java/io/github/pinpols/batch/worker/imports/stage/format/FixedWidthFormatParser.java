@@ -29,18 +29,16 @@ public class FixedWidthFormatParser implements FormatParser {
     }
     ImportPayload importPayload = request.importPayload();
     Object templateConfig = request.templateConfig();
-    int footerRows =
-        support.resolveInt(
-            importPayload == null ? null : importPayload.footerRows(),
-            templateConfig,
-            "footer_rows",
-            0);
-    int headerRows =
-        support.resolveInt(
-            importPayload == null ? null : importPayload.headerRows(),
-            templateConfig,
-            "header_rows",
-            0);
+    int footerRows = support.resolveInt(
+        importPayload == null ? null : importPayload.footerRows(),
+        templateConfig,
+        "footer_rows",
+        0);
+    int headerRows = support.resolveInt(
+        importPayload == null ? null : importPayload.headerRows(),
+        templateConfig,
+        "header_rows",
+        0);
     int recordLength = support.resolveInt(null, templateConfig, "record_length", 0);
     List<FixedWidthField> fields =
         loadFixedWidthFields(support.templateFieldMappings(templateConfig));
@@ -84,7 +82,8 @@ public class FixedWidthFormatParser implements FormatParser {
             if (field.start() + field.length() > line.length()) {
               throw new IllegalStateException("field overflow: " + field.target());
             }
-            String value = line.substring(field.start(), field.start() + field.length()).trim();
+            String value =
+                line.substring(field.start(), field.start() + field.length()).trim();
             row.put(field.target(), value);
           }
           support.collectSchemaFields(context, row);
@@ -121,11 +120,8 @@ public class FixedWidthFormatParser implements FormatParser {
         Object start = map.get("start");
         Object length = map.get("length");
         if (target != null && start instanceof Number && length instanceof Number) {
-          out.add(
-              new FixedWidthField(
-                  String.valueOf(target),
-                  ((Number) start).intValue(),
-                  ((Number) length).intValue()));
+          out.add(new FixedWidthField(
+              String.valueOf(target), ((Number) start).intValue(), ((Number) length).intValue()));
         }
       }
     }

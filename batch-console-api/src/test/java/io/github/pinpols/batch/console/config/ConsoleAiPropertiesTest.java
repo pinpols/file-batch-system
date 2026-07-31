@@ -26,9 +26,10 @@ class ConsoleAiPropertiesTest {
   }
 
   private static ConsoleAiProperties bind(String provider) {
-    Binder binder =
-        new Binder(
-            new MapConfigurationPropertySource(Map.of("batch.console.ai.provider", provider)));
-    return binder.bind("batch.console.ai", Bindable.of(ConsoleAiProperties.class)).get();
+    Binder binder = new Binder(
+        new MapConfigurationPropertySource(Map.of("batch.console.ai.provider", provider)));
+    return binder
+        .bind("batch.console.ai", Bindable.of(ConsoleAiProperties.class))
+        .get();
   }
 }

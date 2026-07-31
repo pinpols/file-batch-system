@@ -43,36 +43,41 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 5, 4);
   private static final LocalDate UPSTREAM_BIZ_DATE = BIZ_DATE.minusDays(1);
 
-  @Autowired private CrossDayDependencyResolver resolver;
-  @Autowired private ResultVersionMapper resultVersionMapper;
-  @Autowired private OrchestratorWorkflowMappers workflowMappers;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private CrossDayDependencyResolver resolver;
+
+  @Autowired
+  private ResultVersionMapper resultVersionMapper;
+
+  @Autowired
+  private OrchestratorWorkflowMappers workflowMappers;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void resolverFindsEffectiveUpstreamVersion() {
     long upstreamInstanceId = insertStubJobInstance("INST-Y", "SUCCESS", UPSTREAM_JOB);
-    ResultVersionEntity upstream =
-        ResultVersionEntity.builder()
-            .tenantId(TENANT)
-            .businessKey("job:" + UPSTREAM_JOB + ":" + UPSTREAM_BIZ_DATE)
-            .versionNo(1)
-            .jobInstanceId(upstreamInstanceId)
-            .status("EFFECTIVE")
-            .effectiveAt(Instant.parse("2026-05-03T22:00:00Z"))
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{\"recordCount\":10}")
-            .generatedAt(Instant.parse("2026-05-03T22:00:00Z"))
-            .generatedBy("test")
-            .promotionPolicy("AUTO_LATEST")
-            .createdAt(Instant.parse("2026-05-03T22:00:00Z"))
-            .updatedAt(Instant.parse("2026-05-03T22:00:00Z"))
-            .build();
+    ResultVersionEntity upstream = ResultVersionEntity.builder()
+        .tenantId(TENANT)
+        .businessKey("job:" + UPSTREAM_JOB + ":" + UPSTREAM_BIZ_DATE)
+        .versionNo(1)
+        .jobInstanceId(upstreamInstanceId)
+        .status("EFFECTIVE")
+        .effectiveAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"recordCount\":10}")
+        .generatedAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .generatedBy("test")
+        .promotionPolicy("AUTO_LATEST")
+        .createdAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .updatedAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .build();
     resultVersionMapper.insert(upstream);
 
-    String spec =
-        "[{\"alias\":\"t_minus_1\",\"jobCode\":\""
-            + UPSTREAM_JOB
-            + "\",\"bizDateOffset\":-1,\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"EFFECTIVE_ONLY\"}]";
+    String spec = "[{\"alias\":\"t_minus_1\",\"jobCode\":\""
+        + UPSTREAM_JOB
+        + "\",\"bizDateOffset\":-1,\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"EFFECTIVE_ONLY\"}]";
     ResolutionResult result = resolver.resolve(TENANT, BIZ_DATE, spec);
 
     assertThat(result.isResolved()).isTrue();
@@ -98,29 +103,26 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
 
     List<WorkflowNodeRunEntity> waiting =
         workflowMappers.workflowNodeRunMapper.selectByNodeStatus("WAITING_DEPENDENCY", 100);
-    assertThat(waiting)
-        .anySatisfy(
-            r -> {
-              assertThat(r.getNodeStatus()).isEqualTo("WAITING_DEPENDENCY");
-              assertThat(r.getStartedAt()).isNotNull();
-            });
+    assertThat(waiting).anySatisfy(r -> {
+      assertThat(r.getNodeStatus()).isEqualTo("WAITING_DEPENDENCY");
+      assertThat(r.getStartedAt()).isNotNull();
+    });
   }
 
   // ── helpers (复用 ResultVersion / Workflow 最小桩) ──────────────────────
 
   private long insertStubJobInstance(String instanceNo, String status, String jobCode) {
     Long jobDefId = ensureJobDefinition(jobCode);
-    Long triggerRequestId =
-        jdbcTemplate.queryForObject(
-            "insert into batch.trigger_request (tenant_id, request_id, trigger_type, job_code,"
-                + " biz_date, dedup_key, request_status) values (?, ?, 'SCHEDULED', ?, ?, ?,"
-                + " 'LAUNCHED') returning id",
-            Long.class,
-            TENANT,
-            "REQ:" + jobCode + ":" + instanceNo,
-            jobCode,
-            UPSTREAM_BIZ_DATE,
-            "TR:" + TENANT + ":" + jobCode + ":" + instanceNo);
+    Long triggerRequestId = jdbcTemplate.queryForObject(
+        "insert into batch.trigger_request (tenant_id, request_id, trigger_type, job_code,"
+            + " biz_date, dedup_key, request_status) values (?, ?, 'SCHEDULED', ?, ?, ?,"
+            + " 'LAUNCHED') returning id",
+        Long.class,
+        TENANT,
+        "REQ:" + jobCode + ":" + instanceNo,
+        jobCode,
+        UPSTREAM_BIZ_DATE,
+        "TR:" + TENANT + ":" + jobCode + ":" + instanceNo);
     jdbcTemplate.update(
         "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no,"
             + " biz_date, trigger_request_id, trigger_type, instance_status, queue_code,"
@@ -143,13 +145,12 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
   }
 
   private Long ensureJobDefinition(String jobCode) {
-    Long existing =
-        jdbcTemplate.queryForObject(
-            "select coalesce((select id from batch.job_definition where tenant_id=? and"
-                + " job_code=?), 0)",
-            Long.class,
-            TENANT,
-            jobCode);
+    Long existing = jdbcTemplate.queryForObject(
+        "select coalesce((select id from batch.job_definition where tenant_id=? and"
+            + " job_code=?), 0)",
+        Long.class,
+        TENANT,
+        jobCode);
     if (existing != null && existing > 0) {
       return existing;
     }
@@ -178,12 +179,11 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
             + " values (?, 'WF1', 'wf', 'DAG', 1, true, '')"
             + " on conflict do nothing",
         TENANT);
-    Long defId =
-        jdbcTemplate.queryForObject(
-            "select id from batch.workflow_definition where tenant_id=? and workflow_code=?",
-            Long.class,
-            TENANT,
-            "WF1");
+    Long defId = jdbcTemplate.queryForObject(
+        "select id from batch.workflow_definition where tenant_id=? and workflow_code=?",
+        Long.class,
+        TENANT,
+        "WF1");
     jdbcTemplate.update(
         "insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status,"
             + " trace_id) values (?, ?, ?, 'RUNNING', 't-stub')",

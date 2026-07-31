@@ -51,7 +51,8 @@ public class DispatchChannelGateway {
           false, null, null, false, false, "channel_type missing in channel_config", null);
     }
     String requestedChannelType = String.valueOf(rawChannelType);
-    String channelType = DispatchChannelTypePolicy.normalize(requestedChannelType).orElse(null);
+    String channelType =
+        DispatchChannelTypePolicy.normalize(requestedChannelType).orElse(null);
     if (channelType == null) {
       deliveryMetrics.recordDelivery(requestedChannelType, false, false);
       return new DispatchResult(
@@ -63,10 +64,9 @@ public class DispatchChannelGateway {
           "unsupported channel type: " + requestedChannelType,
           null);
     }
-    String channelCode =
-        channelConfig == null || channelConfig.get("channel_code") == null
-            ? DispatchGatewayConstants.DEFAULT_CHANNEL_CODE
-            : String.valueOf(channelConfig.get(DispatchGatewayConstants.CHANNEL_CODE_KEY));
+    String channelCode = channelConfig == null || channelConfig.get("channel_code") == null
+        ? DispatchGatewayConstants.DEFAULT_CHANNEL_CODE
+        : String.valueOf(channelConfig.get(DispatchGatewayConstants.CHANNEL_CODE_KEY));
     if (!healthService.allowDispatch(channelConfig)) {
       deliveryMetrics.recordDelivery(channelType, false, true);
       return new DispatchResult(

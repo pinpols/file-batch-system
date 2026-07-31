@@ -84,9 +84,8 @@ public class TriggerRequestLaunchReconciler {
     int skipped = 0;
     for (TriggerRequestLaunchReconcileRow row : rows) {
       try {
-        int updated =
-            triggerRequestMapper.reconcileLaunched(
-                row.getTenantId(), row.getRequestId(), row.getJobInstanceId());
+        int updated = triggerRequestMapper.reconcileLaunched(
+            row.getTenantId(), row.getRequestId(), row.getJobInstanceId());
         if (updated > 0) {
           reconciled++;
           counter(METRIC_RECONCILED, "tenant", row.getTenantId()).increment();

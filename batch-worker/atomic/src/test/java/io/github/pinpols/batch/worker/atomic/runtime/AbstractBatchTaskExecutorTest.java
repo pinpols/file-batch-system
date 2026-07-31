@@ -20,44 +20,43 @@ class AbstractBatchTaskExecutorTest {
   @Test
   void successPathRunsAllHooksInOrder() {
     List<String> log = new java.util.ArrayList<>();
-    AbstractBatchTaskExecutor exec =
-        new AbstractBatchTaskExecutor() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public TaskCapability capability() {
-            return TaskCapability.of();
-          }
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of();
+      }
 
-          @Override
-          protected void validate(TaskContext c) {
-            log.add("validate");
-          }
+      @Override
+      protected void validate(TaskContext c) {
+        log.add("validate");
+      }
 
-          @Override
-          protected void before(TaskContext c) {
-            log.add("before");
-          }
+      @Override
+      protected void before(TaskContext c) {
+        log.add("before");
+      }
 
-          @Override
-          protected TaskResult doExecute(TaskContext c) {
-            log.add("doExecute");
-            return TaskResult.ok("done", Map.of("rows", 5));
-          }
+      @Override
+      protected TaskResult doExecute(TaskContext c) {
+        log.add("doExecute");
+        return TaskResult.ok("done", Map.of("rows", 5));
+      }
 
-          @Override
-          protected void after(TaskContext c, TaskResult r) {
-            log.add("after");
-          }
+      @Override
+      protected void after(TaskContext c, TaskResult r) {
+        log.add("after");
+      }
 
-          @Override
-          protected void cleanup(TaskContext c) {
-            log.add("cleanup");
-          }
-        };
+      @Override
+      protected void cleanup(TaskContext c) {
+        log.add("cleanup");
+      }
+    };
 
     TaskResult r = exec.execute(ctx());
 
@@ -68,28 +67,27 @@ class AbstractBatchTaskExecutorTest {
   @Test
   void doExecuteExceptionStillRunsCleanup() {
     AtomicInteger cleanupCount = new AtomicInteger();
-    AbstractBatchTaskExecutor exec =
-        new AbstractBatchTaskExecutor() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public TaskCapability capability() {
-            return TaskCapability.of();
-          }
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of();
+      }
 
-          @Override
-          protected TaskResult doExecute(TaskContext c) {
-            throw new RuntimeException("biz boom");
-          }
+      @Override
+      protected TaskResult doExecute(TaskContext c) {
+        throw new RuntimeException("biz boom");
+      }
 
-          @Override
-          protected void cleanup(TaskContext c) {
-            cleanupCount.incrementAndGet();
-          }
-        };
+      @Override
+      protected void cleanup(TaskContext c) {
+        cleanupCount.incrementAndGet();
+      }
+    };
 
     TaskResult r = exec.execute(ctx());
 
@@ -102,38 +100,37 @@ class AbstractBatchTaskExecutorTest {
   void validateFailureSkipsBeforeAndCleanup() {
     AtomicInteger cleanupCount = new AtomicInteger();
     AtomicInteger beforeCount = new AtomicInteger();
-    AbstractBatchTaskExecutor exec =
-        new AbstractBatchTaskExecutor() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public TaskCapability capability() {
-            return TaskCapability.of();
-          }
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of();
+      }
 
-          @Override
-          protected void validate(TaskContext c) {
-            throw new IllegalArgumentException("bad input");
-          }
+      @Override
+      protected void validate(TaskContext c) {
+        throw new IllegalArgumentException("bad input");
+      }
 
-          @Override
-          protected void before(TaskContext c) {
-            beforeCount.incrementAndGet();
-          }
+      @Override
+      protected void before(TaskContext c) {
+        beforeCount.incrementAndGet();
+      }
 
-          @Override
-          protected TaskResult doExecute(TaskContext c) {
-            throw new AssertionError("must not run");
-          }
+      @Override
+      protected TaskResult doExecute(TaskContext c) {
+        throw new AssertionError("must not run");
+      }
 
-          @Override
-          protected void cleanup(TaskContext c) {
-            cleanupCount.incrementAndGet();
-          }
-        };
+      @Override
+      protected void cleanup(TaskContext c) {
+        cleanupCount.incrementAndGet();
+      }
+    };
 
     TaskResult r = exec.execute(ctx());
 
@@ -149,35 +146,34 @@ class AbstractBatchTaskExecutorTest {
     AtomicInteger beforeCount = new AtomicInteger();
     AtomicInteger doExecuteCount = new AtomicInteger();
     AtomicInteger cleanupCount = new AtomicInteger();
-    AbstractBatchTaskExecutor exec =
-        new AbstractBatchTaskExecutor() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public TaskCapability capability() {
-            return TaskCapability.of();
-          }
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of();
+      }
 
-          @Override
-          protected void before(TaskContext c) {
-            beforeCount.incrementAndGet();
-            throw new IllegalStateException("acquire failed");
-          }
+      @Override
+      protected void before(TaskContext c) {
+        beforeCount.incrementAndGet();
+        throw new IllegalStateException("acquire failed");
+      }
 
-          @Override
-          protected TaskResult doExecute(TaskContext c) {
-            doExecuteCount.incrementAndGet();
-            return TaskResult.ok();
-          }
+      @Override
+      protected TaskResult doExecute(TaskContext c) {
+        doExecuteCount.incrementAndGet();
+        return TaskResult.ok();
+      }
 
-          @Override
-          protected void cleanup(TaskContext c) {
-            cleanupCount.incrementAndGet();
-          }
-        };
+      @Override
+      protected void cleanup(TaskContext c) {
+        cleanupCount.incrementAndGet();
+      }
+    };
 
     TaskResult r = exec.execute(ctx());
 
@@ -190,23 +186,22 @@ class AbstractBatchTaskExecutorTest {
 
   @Test
   void nullResultTreatedAsFailure() {
-    AbstractBatchTaskExecutor exec =
-        new AbstractBatchTaskExecutor() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public TaskCapability capability() {
-            return TaskCapability.of();
-          }
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of();
+      }
 
-          @Override
-          protected TaskResult doExecute(TaskContext c) {
-            return null;
-          }
-        };
+      @Override
+      protected TaskResult doExecute(TaskContext c) {
+        return null;
+      }
+    };
 
     TaskResult r = exec.execute(ctx());
     assertThat(r.success()).isFalse();
@@ -215,28 +210,27 @@ class AbstractBatchTaskExecutorTest {
 
   @Test
   void cleanupExceptionDoesNotMaskOriginalResult() {
-    AbstractBatchTaskExecutor exec =
-        new AbstractBatchTaskExecutor() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public TaskCapability capability() {
-            return TaskCapability.of();
-          }
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of();
+      }
 
-          @Override
-          protected TaskResult doExecute(TaskContext c) {
-            return TaskResult.ok("ok", Map.of());
-          }
+      @Override
+      protected TaskResult doExecute(TaskContext c) {
+        return TaskResult.ok("ok", Map.of());
+      }
 
-          @Override
-          protected void cleanup(TaskContext c) {
-            throw new RuntimeException("cleanup boom");
-          }
-        };
+      @Override
+      protected void cleanup(TaskContext c) {
+        throw new RuntimeException("cleanup boom");
+      }
+    };
 
     TaskResult r = exec.execute(ctx());
     assertThat(r.success()).isTrue(); // 原 success 不被 cleanup 异常覆盖

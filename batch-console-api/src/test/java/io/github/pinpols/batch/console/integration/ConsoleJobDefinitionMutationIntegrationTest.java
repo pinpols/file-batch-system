@@ -59,17 +59,15 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("\"jobCode\":\"" + jobCode + "\"");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("\"jobCode\":\"" + jobCode + "\"");
+        });
 
     // 行已入库,tenant_id 严格遵循 body 而非漂移
-    List<Map<String, Object>> rows =
-        jdbcTemplate.queryForList(
-            "SELECT tenant_id, job_code, enabled FROM batch.job_definition WHERE job_code = ?",
-            jobCode);
+    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+        "SELECT tenant_id, job_code, enabled FROM batch.job_definition WHERE job_code = ?",
+        jobCode);
     assertThat(rows).hasSize(1);
     assertThat(rows.get(0).get("tenant_id")).isEqualTo("int-ta");
     assertThat(rows.get(0).get("job_code")).isEqualTo(jobCode);
@@ -93,9 +91,8 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         .value(body -> assertThat(body).contains("VALIDATION_ERROR"));
 
     // 守护:非法 jobCode 不能入库
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.job_definition WHERE job_code = ?", Long.class, "q q q");
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.job_definition WHERE job_code = ?", Long.class, "q q q");
     assertThat(cnt).isZero();
   }
 
@@ -153,9 +150,8 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         .exchange()
         .expectStatus()
         .isOk();
-    Long id =
-        jdbcTemplate.queryForObject(
-            "SELECT id FROM batch.job_definition WHERE job_code = ?", Long.class, jobCode);
+    Long id = jdbcTemplate.queryForObject(
+        "SELECT id FROM batch.job_definition WHERE job_code = ?", Long.class, jobCode);
     assertThat(id).isNotNull();
 
     // PUT 更新 jobName
@@ -172,9 +168,8 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         .expectStatus()
         .isOk();
 
-    String name =
-        jdbcTemplate.queryForObject(
-            "SELECT job_name FROM batch.job_definition WHERE id = ?", String.class, id);
+    String name = jdbcTemplate.queryForObject(
+        "SELECT job_name FROM batch.job_definition WHERE id = ?", String.class, id);
     assertThat(name).isEqualTo("updated name");
 
     // 清理
@@ -195,21 +190,16 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
           .expectStatus()
           .isOk()
           .expectBody(String.class)
-          .value(
-              body -> {
-                assertThat(body).contains("\"code\":\"SUCCESS\"");
-                assertThat(body).contains("\"dependsOnJobCode\":\"UPSTREAM_JOB\"");
-              });
+          .value(body -> {
+            assertThat(body).contains("\"code\":\"SUCCESS\"");
+            assertThat(body).contains("\"dependsOnJobCode\":\"UPSTREAM_JOB\"");
+          });
 
-      Long id =
-          jdbcTemplate.queryForObject(
-              "SELECT id FROM batch.job_definition WHERE job_code = ?", Long.class, jobCode);
+      Long id = jdbcTemplate.queryForObject(
+          "SELECT id FROM batch.job_definition WHERE job_code = ?", Long.class, jobCode);
       assertThat(id).isNotNull();
-      String createdDepends =
-          jdbcTemplate.queryForObject(
-              "SELECT depends_on_job_code FROM batch.job_definition WHERE id = ?",
-              String.class,
-              id);
+      String createdDepends = jdbcTemplate.queryForObject(
+          "SELECT depends_on_job_code FROM batch.job_definition WHERE id = ?", String.class, id);
       assertThat(createdDepends).isEqualTo("UPSTREAM_JOB");
 
       client
@@ -224,11 +214,8 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
           .expectBody(String.class)
           .value(body -> assertThat(body).contains("\"dependsOnJobCode\":\"NEXT_UPSTREAM\""));
 
-      String updatedDepends =
-          jdbcTemplate.queryForObject(
-              "SELECT depends_on_job_code FROM batch.job_definition WHERE id = ?",
-              String.class,
-              id);
+      String updatedDepends = jdbcTemplate.queryForObject(
+          "SELECT depends_on_job_code FROM batch.job_definition WHERE id = ?", String.class, id);
       assertThat(updatedDepends).isEqualTo("NEXT_UPSTREAM");
     } finally {
       jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);

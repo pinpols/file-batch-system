@@ -14,7 +14,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class StaleTempFileCleanupTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   private String originalTmpDir;
 

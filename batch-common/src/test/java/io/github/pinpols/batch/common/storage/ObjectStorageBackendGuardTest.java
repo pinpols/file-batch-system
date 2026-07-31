@@ -39,10 +39,9 @@ class ObjectStorageBackendGuardTest {
 
     assertThat(desired.backend()).isEqualTo("filesystem");
     assertThat(desired.backendIdentity())
-        .isEqualTo(
-            "root="
-                + Path.of("./target/object-store").toAbsolutePath().normalize()
-                + "|bucket=batch-prod");
+        .isEqualTo("root="
+            + Path.of("./target/object-store").toAbsolutePath().normalize()
+            + "|bucket=batch-prod");
   }
 
   @Test

@@ -45,14 +45,13 @@ class ExportTaskExecutorTest {
   void executeTranslatesContextToStepRequest() {
     when(delegate.execute(any())).thenReturn(StepExecutionResponse.successResponse());
 
-    TaskContext ctx =
-        new TaskContext(
-            "tenant-1",
-            "job-export-1",
-            "ti-9",
-            "worker-7",
-            Map.of(),
-            Map.of("pipelineInstanceId", 42L));
+    TaskContext ctx = new TaskContext(
+        "tenant-1",
+        "job-export-1",
+        "ti-9",
+        "worker-7",
+        Map.of(),
+        Map.of("pipelineInstanceId", 42L));
 
     TaskResult r = executor.execute(ctx);
 

@@ -54,14 +54,13 @@ public class SlackNotificationSender implements NotificationSender {
 
   public SlackNotificationSender(ObjectMapper objectMapper, SsrfGuardedDns ssrfGuardedDns) {
     this.objectMapper = objectMapper;
-    this.httpClient =
-        new OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT)
-            .readTimeout(REQUEST_TIMEOUT)
-            .writeTimeout(REQUEST_TIMEOUT)
-            .callTimeout(CALL_TIMEOUT)
-            .dns(ssrfGuardedDns)
-            .build();
+    this.httpClient = new OkHttpClient.Builder()
+        .connectTimeout(CONNECT_TIMEOUT)
+        .readTimeout(REQUEST_TIMEOUT)
+        .writeTimeout(REQUEST_TIMEOUT)
+        .callTimeout(CALL_TIMEOUT)
+        .dns(ssrfGuardedDns)
+        .build();
   }
 
   @Override
@@ -150,7 +149,8 @@ public class SlackNotificationSender implements NotificationSender {
 
   /** 抽出便于单测覆盖：POST JSON 到 url，返回状态码 + 响应体。 */
   protected SlackResponse postJson(String url, String body) throws IOException {
-    Request request = new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
+    Request request =
+        new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
     try (Response response = httpClient.newCall(request).execute()) {
       String responseBody = response.body() == null ? "" : response.body().string();
       return new SlackResponse(response.code(), responseBody);

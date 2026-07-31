@@ -92,17 +92,11 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
    * 回收,daemon 线程不阻塞 JVM 退出。仅用于给 blocking 的 SDK 调用套一层应用层硬超时,防 Tomcat 线程被拖住。
    */
   private final ExecutorService modelCallExecutor =
-      new ThreadPoolExecutor(
-          0,
-          16,
-          60L,
-          TimeUnit.SECONDS,
-          new SynchronousQueue<>(),
-          runnable -> {
-            Thread thread = new Thread(runnable, "console-ai-model-call");
-            thread.setDaemon(true);
-            return thread;
-          });
+      new ThreadPoolExecutor(0, 16, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
+        Thread thread = new Thread(runnable, "console-ai-model-call");
+        thread.setDaemon(true);
+        return thread;
+      });
 
   @PreDestroy
   void shutdownModelCallExecutor() {
@@ -126,28 +120,23 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     if (!gateResult.approved()) {
       aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_REJECTED);
       AiChatResponse response = buildRejectedResponse(requestId, traceId, sessionId, gateResult);
-      auditService.record(
-          buildAuditCommand(
-              AuditContext.builder()
-                  .request(
-                      AuditRequest.builder()
-                          .tenantId(tenantId)
-                          .requestId(requestId)
-                          .traceId(traceId)
-                          .sessionId(sessionId)
-                          .operatorId(requestMetadata.operatorId())
-                          .build())
-                  .result(
-                      AuditResult.builder()
-                          .promptCategory(gateResult.category())
-                          .decision(gateResult.decision())
-                          .prompt(prompt)
-                          .response(
-                              ConsoleTextSanitizer.safeInput(
-                                  response.getAnswer(), aiProperties.getMaxResponseLength()))
-                          .refusalReason(ConsoleTextSanitizer.safeInput(gateResult.reason(), 512))
-                          .build())
-                  .build()));
+      auditService.record(buildAuditCommand(AuditContext.builder()
+          .request(AuditRequest.builder()
+              .tenantId(tenantId)
+              .requestId(requestId)
+              .traceId(traceId)
+              .sessionId(sessionId)
+              .operatorId(requestMetadata.operatorId())
+              .build())
+          .result(AuditResult.builder()
+              .promptCategory(gateResult.category())
+              .decision(gateResult.decision())
+              .prompt(prompt)
+              .response(ConsoleTextSanitizer.safeInput(
+                  response.getAnswer(), aiProperties.getMaxResponseLength()))
+              .refusalReason(ConsoleTextSanitizer.safeInput(gateResult.reason(), 512))
+              .build())
+          .build()));
       return response;
     }
 
@@ -188,7 +177,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     // 成本计量:从 ChatResponse metadata 取 token usage 打指标 + 落审计(租户成本靠审计聚合)。
     Integer promptTokens = null;
     Integer completionTokens = null;
-    Usage usage = chatResponse.getMetadata() == null ? null : chatResponse.getMetadata().getUsage();
+    Usage usage =
+        chatResponse.getMetadata() == null ? null : chatResponse.getMetadata().getUsage();
     if (usage != null) {
       promptTokens = usage.getPromptTokens();
       completionTokens = usage.getCompletionTokens();
@@ -210,30 +200,24 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setAnswer(answer);
     response.setRefusalReason(null);
 
-    auditService.record(
-        buildAuditCommand(
-            AuditContext.builder()
-                .request(
-                    AuditRequest.builder()
-                        .tenantId(tenantId)
-                        .requestId(requestId)
-                        .traceId(traceId)
-                        .sessionId(sessionId)
-                        .operatorId(requestMetadata.operatorId())
-                        .build())
-                .result(
-                    AuditResult.builder()
-                        .promptCategory(gateResult.category())
-                        .decision(AiPromptDecision.APPROVED)
-                        .modelName(aiProperties.getModel())
-                        .prompt(prompt)
-                        .response(
-                            ConsoleTextSanitizer.safeInput(
-                                answer, aiProperties.getMaxResponseLength()))
-                        .promptTokens(promptTokens)
-                        .completionTokens(completionTokens)
-                        .build())
-                .build()));
+    auditService.record(buildAuditCommand(AuditContext.builder()
+        .request(AuditRequest.builder()
+            .tenantId(tenantId)
+            .requestId(requestId)
+            .traceId(traceId)
+            .sessionId(sessionId)
+            .operatorId(requestMetadata.operatorId())
+            .build())
+        .result(AuditResult.builder()
+            .promptCategory(gateResult.category())
+            .decision(AiPromptDecision.APPROVED)
+            .modelName(aiProperties.getModel())
+            .prompt(prompt)
+            .response(ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()))
+            .promptTokens(promptTokens)
+            .completionTokens(completionTokens)
+            .build())
+        .build()));
     return response;
   }
 
@@ -267,9 +251,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         DefaultConsoleAiApplicationService.class, "catch:ai-model-call-failed", exception);
     aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_FAILED);
     String degraded = "AI 助手暂时不可用，请稍后重试。";
-    String reason =
-        ConsoleTextSanitizer.safeInput(
-            "model_call_failed:" + exception.getClass().getSimpleName(), 512);
+    String reason = ConsoleTextSanitizer.safeInput(
+        "model_call_failed:" + exception.getClass().getSimpleName(), 512);
 
     AiChatResponse response = new AiChatResponse();
     response.setRequestId(request.requestId());
@@ -281,20 +264,17 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setAnswer(ConsoleTextSanitizer.safeDisplay(degraded, degraded.length()));
     response.setRefusalReason(null);
 
-    auditService.record(
-        buildAuditCommand(
-            AuditContext.builder()
-                .request(request)
-                .result(
-                    AuditResult.builder()
-                        .promptCategory(gateResult.category())
-                        .decision(AiPromptDecision.FAILED)
-                        .modelName(aiProperties.getModel())
-                        .prompt(prompt)
-                        .response(degraded)
-                        .refusalReason(reason)
-                        .build())
-                .build()));
+    auditService.record(buildAuditCommand(AuditContext.builder()
+        .request(request)
+        .result(AuditResult.builder()
+            .promptCategory(gateResult.category())
+            .decision(AiPromptDecision.FAILED)
+            .modelName(aiProperties.getModel())
+            .prompt(prompt)
+            .response(degraded)
+            .refusalReason(reason)
+            .build())
+        .build()));
     return response;
   }
 
@@ -331,9 +311,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setPromptCategory(gateResult.category().code());
     response.setPromptDecision(gateResult.decision().code());
     response.setModelName(aiProperties.getModel());
-    response.setAnswer(
-        ConsoleTextSanitizer.safeDisplay(
-            refusalMessage(gateResult), aiProperties.getMaxResponseLength()));
+    response.setAnswer(ConsoleTextSanitizer.safeDisplay(
+        refusalMessage(gateResult), aiProperties.getMaxResponseLength()));
     response.setRefusalReason(ConsoleTextSanitizer.safeDisplay(gateResult.reason(), 512));
     return response;
   }
@@ -376,7 +355,11 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       Map<String, Object> context,
       AiPromptCategory category) {
     StringBuilder builder = new StringBuilder();
-    builder.append("[tenantId]").append('\n').append(tenantId == null ? "" : tenantId).append('\n');
+    builder
+        .append("[tenantId]")
+        .append('\n')
+        .append(tenantId == null ? "" : tenantId)
+        .append('\n');
     builder.append("[sessionId]").append('\n').append(sessionId).append('\n');
     builder.append("[category]").append('\n').append(category.code()).append('\n');
     builder
@@ -404,8 +387,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   private String buildSystemPrompt(
       List<ConsoleAiKnowledgeBase.Snippet> snippets, boolean toolsEnabled) {
     StringBuilder builder = new StringBuilder();
-    builder.append(
-        """
+    builder.append("""
         你是 file-batch-system 控制台 AI 助手，只回答本批量调度平台相关的问题。
         范围:调度、编排、orchestrator、worker、文件治理、控制台查询、重试、死信、归档、对账、DAG、实例、分片、任务租约、错误码等。
         铁律:
@@ -416,8 +398,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         5. 回答简洁、具体、可操作，用中文。无需自己罗列来源，系统会自动附上参考来源。
         """);
     if (toolsEnabled) {
-      builder.append(
-          """
+      builder.append("""
 
           你可以调用只读工具拉取实时系统状态:getJobInstance(查实例状态/失败分类)、getJobExecutionLogs(查执行日志)、listRecentFailedJobInstances(列近期失败实例)、getClusterDiagnostics(查集群健康:ShedLock 租约/worker 一致性/outbox 健康/终态遗留子项)、getOpenAlerts(列当前未决 OPEN 告警)、getRecentAlerts(列近期告警,不限状态)。
           当用户问某个具体 job 实例为什么失败、或提到实例 id、或问「最近有哪些失败」时，先调用查询工具拿到真实数据再据此回答;当用户问「任务卡住/stuck/不推进/定时任务不跑/worker 失联/事件积压」这类集群面卡点时，调用 getClusterDiagnostics 判断卡在哪一层再给处置建议。都不要凭空臆测;工具只在当前租户内只读查询,实例不存在就如实说明。你只给受控处置建议,绝不代执行、不写库。
@@ -447,11 +428,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     if (snippets.isEmpty()) {
       return base;
     }
-    String sources =
-        snippets.stream()
-            .map(ConsoleAiKnowledgeBase.Snippet::source)
-            .distinct()
-            .collect(Collectors.joining(", "));
+    String sources = snippets.stream()
+        .map(ConsoleAiKnowledgeBase.Snippet::source)
+        .distinct()
+        .collect(Collectors.joining(", "));
     return base + "\n\n参考来源:" + sources;
   }
 

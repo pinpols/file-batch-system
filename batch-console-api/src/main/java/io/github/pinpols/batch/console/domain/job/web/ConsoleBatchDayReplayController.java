@@ -50,13 +50,12 @@ public class ConsoleBatchDayReplayController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchDayReplaySubmitRequest command) {
     command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        proxyClient()
-            .post()
-            .uri("/internal/orchestrator/batch-day-replay/sessions")
-            .body(command)
-            .retrieve()
-            .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = proxyClient()
+        .post()
+        .uri("/internal/orchestrator/batch-day-replay/sessions")
+        .body(command)
+        .retrieve()
+        .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -64,13 +63,12 @@ public class ConsoleBatchDayReplayController {
   public CommonResponse<ConsoleBatchDayReplayPreviewResponse> preview(
       @Valid @RequestBody BatchDayReplaySubmitRequest command) {
     command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
-    CommonResponse<ConsoleBatchDayReplayPreviewResponse> resp =
-        proxyClient()
-            .post()
-            .uri("/internal/orchestrator/batch-day-replay/sessions/preview")
-            .body(command)
-            .retrieve()
-            .body(new ParameterizedTypeReference<>() {});
+    CommonResponse<ConsoleBatchDayReplayPreviewResponse> resp = proxyClient()
+        .post()
+        .uri("/internal/orchestrator/batch-day-replay/sessions/preview")
+        .body(command)
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -82,17 +80,16 @@ public class ConsoleBatchDayReplayController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("approver") String approver) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        proxyClient()
-            .post()
-            .uri(
-                "/internal/orchestrator/batch-day-replay/sessions/{id}/approve"
-                    + "?tenantId={tenantId}&approver={approver}",
-                sessionId,
-                resolved,
-                approver)
-            .retrieve()
-            .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = proxyClient()
+        .post()
+        .uri(
+            "/internal/orchestrator/batch-day-replay/sessions/{id}/approve"
+                + "?tenantId={tenantId}&approver={approver}",
+            sessionId,
+            resolved,
+            approver)
+        .retrieve()
+        .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -103,15 +100,14 @@ public class ConsoleBatchDayReplayController {
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        proxyClient()
-            .post()
-            .uri(
-                "/internal/orchestrator/batch-day-replay/sessions/{id}/cancel?tenantId={tenantId}",
-                sessionId,
-                resolved)
-            .retrieve()
-            .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = proxyClient()
+        .post()
+        .uri(
+            "/internal/orchestrator/batch-day-replay/sessions/{id}/cancel?tenantId={tenantId}",
+            sessionId,
+            resolved)
+        .retrieve()
+        .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -120,15 +116,14 @@ public class ConsoleBatchDayReplayController {
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        proxyClient()
-            .get()
-            .uri(
-                "/internal/orchestrator/batch-day-replay/sessions/{id}?tenantId={tenantId}",
-                sessionId,
-                resolved)
-            .retrieve()
-            .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = proxyClient()
+        .get()
+        .uri(
+            "/internal/orchestrator/batch-day-replay/sessions/{id}?tenantId={tenantId}",
+            sessionId,
+            resolved)
+        .retrieve()
+        .body(sessionResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -141,10 +136,9 @@ public class ConsoleBatchDayReplayController {
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String uri =
-        status == null || status.isBlank()
-            ? "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}"
-            : "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}&status={status}";
+    String uri = status == null || status.isBlank()
+        ? "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}"
+        : "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}&status={status}";
     CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> resp =
         status == null || status.isBlank()
             ? proxyClient()

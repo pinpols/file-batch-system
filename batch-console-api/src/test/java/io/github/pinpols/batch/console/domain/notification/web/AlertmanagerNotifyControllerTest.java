@@ -26,7 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AlertmanagerNotifyControllerTest {
 
-  @Mock private AlertmanagerNotifyService notifyService;
+  @Mock
+  private AlertmanagerNotifyService notifyService;
 
   private AlertmanagerNotifyProperties properties;
   private AlertmanagerNotifyController controller;
@@ -95,9 +96,8 @@ class AlertmanagerNotifyControllerTest {
 
     assertThatThrownBy(() -> controller.receive("Bearer s3cr3t", "batch-default", payload()))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            e ->
-                assertThat(((BizException) e).getCode()).isEqualTo(ResultCode.SERVICE_UNAVAILABLE));
+        .satisfies(e ->
+            assertThat(((BizException) e).getCode()).isEqualTo(ResultCode.SERVICE_UNAVAILABLE));
     verify(notifyService, never()).deliver(any(), any());
   }
 }

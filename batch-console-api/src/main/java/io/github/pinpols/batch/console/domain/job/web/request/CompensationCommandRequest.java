@@ -9,7 +9,8 @@ import lombok.Data;
 @Data
 public class CompensationCommandRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 64, message = "compensationType too long (max 64)")
@@ -21,7 +22,9 @@ public class CompensationCommandRequest {
   @Size(max = 128, message = "jobCode too long (max 128)")
   private String jobCode;
 
-  @ValidBizDate private String bizDate;
+  @ValidBizDate
+  private String bizDate;
+
   private String batchNo;
   private Long relatedFileId;
   private String channelCode;

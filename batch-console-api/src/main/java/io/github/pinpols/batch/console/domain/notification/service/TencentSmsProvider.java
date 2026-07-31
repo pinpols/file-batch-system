@@ -71,7 +71,8 @@ public class TencentSmsProvider implements SmsProvider {
   public TencentSmsProvider(SmsProperties properties, ObjectMapper objectMapper) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    this.httpClient =
+        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
   }
 
   @Override
@@ -131,15 +132,14 @@ public class TencentSmsProvider implements SmsProvider {
     }
 
     String url = "https://" + endpoint + CANONICAL_URI;
-    Map<String, String> headers =
-        Map.of(
-            "Host", endpoint,
-            "Content-Type", CONTENT_TYPE,
-            "X-TC-Action", ACTION,
-            "X-TC-Version", VERSION,
-            "X-TC-Timestamp", Long.toString(timestamp),
-            "X-TC-Region", properties.getTencentRegion(),
-            "Authorization", authorization);
+    Map<String, String> headers = Map.of(
+        "Host", endpoint,
+        "Content-Type", CONTENT_TYPE,
+        "X-TC-Action", ACTION,
+        "X-TC-Version", VERSION,
+        "X-TC-Timestamp", Long.toString(timestamp),
+        "X-TC-Region", properties.getTencentRegion(),
+        "Authorization", authorization);
 
     try {
       // SSRF/rebinding 防护:投递前二次解析校验 endpoint host IP 不落内网/回环/链路本地。
@@ -223,10 +223,9 @@ public class TencentSmsProvider implements SmsProvider {
 
   /** 模板参数值取事件类型，超长截断，保持简单。 */
   private String templateParam(NotificationMessage message) {
-    String eventType =
-        (message.payload() != null && message.payload().eventType() != null)
-            ? message.payload().eventType()
-            : "UNKNOWN";
+    String eventType = (message.payload() != null && message.payload().eventType() != null)
+        ? message.payload().eventType()
+        : "UNKNOWN";
     if (eventType.length() > MAX_TEMPLATE_PARAM_CHARS) {
       eventType = eventType.substring(0, MAX_TEMPLATE_PARAM_CHARS);
     }
@@ -244,28 +243,26 @@ public class TencentSmsProvider implements SmsProvider {
     String signedHeaders = "content-type;host";
     String hashedPayload = sha256Hex(payload);
 
-    String canonicalRequest =
-        HTTP_METHOD
-            + '\n'
-            + CANONICAL_URI
-            + '\n'
-            // canonical query string 为空(参数全在 body)。
-            + ""
-            + '\n'
-            + canonicalHeaders
-            + '\n'
-            + signedHeaders
-            + '\n'
-            + hashedPayload;
+    String canonicalRequest = HTTP_METHOD
+        + '\n'
+        + CANONICAL_URI
+        + '\n'
+        // canonical query string 为空(参数全在 body)。
+        + ""
+        + '\n'
+        + canonicalHeaders
+        + '\n'
+        + signedHeaders
+        + '\n'
+        + hashedPayload;
 
     String date = UTC_DATE_FORMAT.format(Instant.ofEpochSecond(timestamp));
     String credentialScope = date + "/" + SERVICE + "/tc3_request";
     String stringToSign =
         ALGORITHM + '\n' + timestamp + '\n' + credentialScope + '\n' + sha256Hex(canonicalRequest);
 
-    byte[] secretDate =
-        hmacSha256(
-            ("TC3" + properties.getTencentSecretKey()).getBytes(StandardCharsets.UTF_8), date);
+    byte[] secretDate = hmacSha256(
+        ("TC3" + properties.getTencentSecretKey()).getBytes(StandardCharsets.UTF_8), date);
     byte[] secretService = hmacSha256(secretDate, SERVICE);
     byte[] secretSigning = hmacSha256(secretService, "tc3_request");
     String signature = toHex(hmacSha256(secretSigning, stringToSign));
@@ -320,8 +317,9 @@ public class TencentSmsProvider implements SmsProvider {
     for (Map.Entry<String, String> e : headers.entrySet()) {
       builder.header(e.getKey(), e.getValue());
     }
-    HttpRequest request =
-        builder.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
+    HttpRequest request = builder
+        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+        .build();
     HttpResponse<String> response =
         httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     int status = response.statusCode();

@@ -36,32 +36,33 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class ProcessStepExecutionAdapterTest {
 
-  @Mock private ProcessStageExecutor processStageExecutor;
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private ProcessStageExecutor processStageExecutor;
+
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   @Test
   @SuppressWarnings("unchecked")
   void execute_createsProcessPipelineAndPassesPluginCodeFromPayload() {
-    ProcessStepExecutionAdapter adapter =
-        new ProcessStepExecutionAdapter(
-            processStageExecutor,
-            new ObjectMapper(),
-            runtimeRepository,
-            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        runtimeRepository,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     when(runtimeRepository.findPipelineDefinition(eq("tenant-a"), eq("job-process")))
         .thenReturn(10L);
     when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
         .thenReturn(List.of(ProcessStageResult.success(ProcessStage.PREPARE)));
-    StepExecutionRequest request =
-        new StepExecutionRequest(
-            "tenant-a",
-            "job-process",
-            "PROCESS",
-            "worker-1",
-            Map.of("payload", "{\"processImplCode\":\"dailySummary\"}"));
+    StepExecutionRequest request = new StepExecutionRequest(
+        "tenant-a",
+        "job-process",
+        "PROCESS",
+        "worker-1",
+        Map.of("payload", "{\"processImplCode\":\"dailySummary\"}"));
 
     StepExecutionResponse response = adapter.execute(request);
 
@@ -79,29 +80,25 @@ class ProcessStepExecutionAdapterTest {
   @SuppressWarnings("unchecked")
   void execute_preservesLocalizedErrorFromFailedStageResult() {
     ObjectMapper objectMapper = new ObjectMapper();
-    ProcessStepExecutionAdapter adapter =
-        new ProcessStepExecutionAdapter(
-            processStageExecutor,
-            objectMapper,
-            runtimeRepository,
-            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        objectMapper,
+        runtimeRepository,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     when(runtimeRepository.findPipelineDefinition(eq("tenant-a"), eq("job-process")))
         .thenReturn(10L);
     when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
-        .thenReturn(
-            List.of(
-                ProcessStageResult.failure(
-                    ProcessStage.PREPARE,
-                    "PROCESS_PREPARE_FAILED",
-                    BizException.of(
-                        ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"),
-                    objectMapper)));
-    StepExecutionRequest request =
-        new StepExecutionRequest(
-            "tenant-a", "job-process", "PROCESS", "worker-1", Map.of("payload", "{}"));
+        .thenReturn(List.of(ProcessStageResult.failure(
+            ProcessStage.PREPARE,
+            "PROCESS_PREPARE_FAILED",
+            BizException.of(
+                ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"),
+            objectMapper)));
+    StepExecutionRequest request = new StepExecutionRequest(
+        "tenant-a", "job-process", "PROCESS", "worker-1", Map.of("payload", "{}"));
 
     StepExecutionResponse response = adapter.execute(request);
 
@@ -119,13 +116,12 @@ class ProcessStepExecutionAdapterTest {
   @SuppressWarnings("unchecked")
   @DisplayName("ADR-041 Phase1.3:buildSuccessResponse 输出归一化 count 信封 inputCount/outputCount")
   void buildSuccessResponse_emitsNormalizedCountEnvelope() {
-    ProcessStepExecutionAdapter adapter =
-        new ProcessStepExecutionAdapter(
-            processStageExecutor,
-            new ObjectMapper(),
-            runtimeRepository,
-            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        runtimeRepository,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     ProcessJobContext context = new ProcessJobContext();
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put("processedCount", 1000L);
@@ -142,13 +138,12 @@ class ProcessStepExecutionAdapterTest {
   @SuppressWarnings("unchecked")
   @DisplayName("publishedCount 缺省时 outputCount 回落 stagedCount")
   void buildSuccessResponse_outputCountFallsBackToStaged() {
-    ProcessStepExecutionAdapter adapter =
-        new ProcessStepExecutionAdapter(
-            processStageExecutor,
-            new ObjectMapper(),
-            runtimeRepository,
-            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-            (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        runtimeRepository,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     ProcessJobContext context = new ProcessJobContext();
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put("processedCount", 1000L);

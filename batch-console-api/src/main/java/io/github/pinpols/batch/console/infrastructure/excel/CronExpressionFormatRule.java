@@ -39,27 +39,25 @@ public final class CronExpressionFormatRule {
         continue;
       }
       if (isBlank(expr)) {
-        issues.add(
-            new WorkbookIssue(
-                SHEET,
-                rowNo,
-                ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
-                "schedule_expr is required when schedule_type=CRON"));
+        issues.add(new WorkbookIssue(
+            SHEET,
+            rowNo,
+            ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
+            "schedule_expr is required when schedule_type=CRON"));
         continue;
       }
       String[] parts = expr.trim().split("\\s+");
       if (parts.length != 6 && parts.length != 7) {
-        issues.add(
-            new WorkbookIssue(
-                SHEET,
-                rowNo,
-                ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
-                "schedule_expr must be a Quartz 6 or 7-field cron (sec min hour dom mon dow"
-                    + " [year]); found "
-                    + parts.length
-                    + " fields: '"
-                    + expr
-                    + "'"));
+        issues.add(new WorkbookIssue(
+            SHEET,
+            rowNo,
+            ConfigPackageExcelValidator.COL_SCHEDULE_EXPR,
+            "schedule_expr must be a Quartz 6 or 7-field cron (sec min hour dom mon dow"
+                + " [year]); found "
+                + parts.length
+                + " fields: '"
+                + expr
+                + "'"));
       }
     }
     return issues;

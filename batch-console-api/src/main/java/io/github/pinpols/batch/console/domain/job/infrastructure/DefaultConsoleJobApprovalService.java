@@ -50,16 +50,15 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
   public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
     if (!ops.hasText(request.getApprovalId())) {
-      ApprovalSubmitContext approvalCtx =
-          ApprovalSubmitContext.builder()
-              .approvalType("CATCH_UP")
-              .actionType("CATCH_UP")
-              .targetType("CATCH_UP")
-              .targetId(request.getRequestId())
-              .payload(request)
-              .approvalReason(request.getReason())
-              .idempotencyKey(idempotencyKey)
-              .build();
+      ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
+          .approvalType("CATCH_UP")
+          .actionType("CATCH_UP")
+          .targetType("CATCH_UP")
+          .targetId(request.getRequestId())
+          .payload(request)
+          .approvalReason(request.getReason())
+          .idempotencyKey(idempotencyKey)
+          .build();
       String result = ops.submitApproval(approvalCtx);
       ops.publishRefresh(tenantId);
       return result;
@@ -76,14 +75,13 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     params.put("catchUpApproved", true);
     params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
     params.put("scheduledAt", request.getScheduledAt());
-    String result =
-        ops.delegateLaunch(
-            tenantId,
-            ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
-            request.getBizDate(),
-            TriggerType.CATCH_UP,
-            params,
-            idempotencyKey);
+    String result = ops.delegateLaunch(
+        tenantId,
+        ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
+        request.getBizDate(),
+        TriggerType.CATCH_UP,
+        params,
+        idempotencyKey);
     ops.publishRefresh(tenantId);
     return result;
   }
@@ -116,12 +114,10 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         params.put("jobCode", jobCode);
         params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
         params.put("catchUpPolicy", catchUpPolicy);
-        String instanceNo =
-            ops.delegateLaunch(
-                tenantId, jobCode, bizDate, TriggerType.CATCH_UP, params, itemIdempotencyKey);
-        items.add(
-            new ConsoleBatchDayCatchUpItemResponse(
-                jobCode, "LAUNCHED", instanceNo, TriggerType.CATCH_UP.code(), "LAUNCHED"));
+        String instanceNo = ops.delegateLaunch(
+            tenantId, jobCode, bizDate, TriggerType.CATCH_UP, params, itemIdempotencyKey);
+        items.add(new ConsoleBatchDayCatchUpItemResponse(
+            jobCode, "LAUNCHED", instanceNo, TriggerType.CATCH_UP.code(), "LAUNCHED"));
       } else {
         ConsoleCatchUpApprovalRequest approvalRequest = new ConsoleCatchUpApprovalRequest();
         approvalRequest.setTenantId(tenantId);
@@ -131,9 +127,8 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         approvalRequest.setScheduledAt(BatchDateTimeSupport.utcNow().toString());
         approvalRequest.setReason(ConsoleTextSanitizer.safeInput(request.getReason(), 512));
         String approvalNo = approveCatchUp(approvalRequest, itemIdempotencyKey);
-        items.add(
-            new ConsoleBatchDayCatchUpItemResponse(
-                jobCode, "APPROVAL_CREATED", approvalNo, TriggerType.CATCH_UP.code(), "PENDING"));
+        items.add(new ConsoleBatchDayCatchUpItemResponse(
+            jobCode, "APPROVAL_CREATED", approvalNo, TriggerType.CATCH_UP.code(), "PENDING"));
       }
     }
     ConsoleBatchDayCatchUpResponse response =
@@ -148,20 +143,18 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     // P0-1(2026-05-16):同 ConsoleJobOpsSupport.delegateLaunch — 走带 X-Internal-Secret 的 client
     RestClient restClient = triggerInternalRestClient.build();
-    CommonResponse<LaunchResponse> response =
-        restClient
-            .post()
-            .uri("/api/triggers/catch-up/approve")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-            .body(
-                new CatchUpApprovalPayload(
-                    tenantId,
-                    ConsoleTextSanitizer.safeInput(request.getRequestId(), 128),
-                    ConsoleTextSanitizer.safeInput(request.getReason(), 512)))
-            .retrieve()
-            .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
+    CommonResponse<LaunchResponse> response = restClient
+        .post()
+        .uri("/api/triggers/catch-up/approve")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(new CatchUpApprovalPayload(
+            tenantId,
+            ConsoleTextSanitizer.safeInput(request.getRequestId(), 128),
+            ConsoleTextSanitizer.safeInput(request.getReason(), 512)))
+        .retrieve()
+        .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
     if (response == null || response.data() == null) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
     }

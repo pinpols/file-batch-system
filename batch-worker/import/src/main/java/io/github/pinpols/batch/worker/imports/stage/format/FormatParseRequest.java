@@ -50,10 +50,9 @@ public record FormatParseRequest(
   public BufferedReader openTextReader() throws IOException {
     if (spoolPath != null) {
       Charset cs = spoolCharset != null ? spoolCharset : StandardCharsets.UTF_8;
-      CharsetDecoder decoder =
-          cs.newDecoder()
-              .onMalformedInput(CodingErrorAction.REPORT)
-              .onUnmappableCharacter(CodingErrorAction.REPORT);
+      CharsetDecoder decoder = cs.newDecoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT);
       // S1-6 / R2-P2-7：InputStreamReader ctor 罕见情况下抛异常时，原始 InputStream 未关闭 → fd 泄漏。
       // 包一层 try-catch 在中间环节失败时显式关 in。正常路径下 BufferedReader.close 会向下关闭。
       InputStream in = Files.newInputStream(spoolPath);

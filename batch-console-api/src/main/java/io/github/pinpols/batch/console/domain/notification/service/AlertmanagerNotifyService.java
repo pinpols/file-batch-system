@@ -75,14 +75,13 @@ public class AlertmanagerNotifyService {
     // eventType 用稳定常量 ALERTMANAGER(与 delivery_log 一侧一致):WebhookDispatcher 会把 eventType 写进
     // X-Batch-Event-Type 头,若放含 CR/LF 的异形 alertname/title,JDK http client 抛错 → WEBHOOK 投递静默失败。
     // 人类可读 title 只进 body(rendered.structured() 的 "text" 字段已含),不进 header。
-    WebhookEventPayload eventPayload =
-        new WebhookEventPayload(
-            tenantId,
-            EVENT_TYPE,
-            "alertmanager",
-            payload.groupKey(),
-            BatchDateTimeSupport.utcNow(),
-            rendered.structured());
+    WebhookEventPayload eventPayload = new WebhookEventPayload(
+        tenantId,
+        EVENT_TYPE,
+        "alertmanager",
+        payload.groupKey(),
+        BatchDateTimeSupport.utcNow(),
+        rendered.structured());
 
     WebhookDeliveryResult result =
         deliver(tenantId, channelCode, channelType, configJson, eventPayload, payloadJson);
@@ -155,9 +154,8 @@ public class AlertmanagerNotifyService {
       return WebhookDeliveryResult.failure(
           null, "no sender registered for channel type: " + channelType);
     }
-    return sender.send(
-        new NotificationMessage(
-            tenantId, channelCode, channelType, configJson, payload, payloadJson));
+    return sender.send(new NotificationMessage(
+        tenantId, channelCode, channelType, configJson, payload, payloadJson));
   }
 
   private void writeDeliveryLog(
@@ -201,10 +199,8 @@ public class AlertmanagerNotifyService {
       return Map.of();
     }
     try {
-      Map<String, Object> parsed =
-          JsonUtils.fromJson(
-              configJson,
-              new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+      Map<String, Object> parsed = JsonUtils.fromJson(
+          configJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
       return parsed == null ? Map.of() : parsed;
     } catch (RuntimeException ex) {
       log.info("AM notify config_json parse failed", ex);

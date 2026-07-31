@@ -12,7 +12,8 @@ public class JobExecutionLogQueryRequest extends PageQueryRequest {
 
   private String tenantId;
 
-  @NotNull private Long jobInstanceId;
+  @NotNull
+  private Long jobInstanceId;
 
   /** 可选:只看某个分区的日志。 */
   private Long jobPartitionId;

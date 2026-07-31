@@ -91,7 +91,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             request.setApprovalId(approvalNo);
             // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
             // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
-            if (request.getCompensationType() == null || request.getCompensationType().isBlank()) {
+            if (request.getCompensationType() == null
+                || request.getCompensationType().isBlank()) {
               request.setCompensationType(deriveCompensationType(record.getTargetType()));
             }
             yield consoleJobApplicationService.compensation(request, approvalNo);
@@ -151,10 +152,10 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             yield approvalNo;
           }
           default ->
-              throw BizException.of(
-                  ResultCode.INVALID_ARGUMENT,
-                  "error.common.invalid_argument_detail",
-                  "unsupported approval action: " + actionType);
+            throw BizException.of(
+                ResultCode.INVALID_ARGUMENT,
+                "error.common.invalid_argument_detail",
+                "unsupported approval action: " + actionType);
         };
     markExecutedRemote(tenantId, approvalNo);
     return result;
@@ -194,9 +195,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         SwallowedExceptionLogger.warn(
             DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
 
-        results.add(
-            new ConsoleBatchApprovalResultResponse(
-                approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
+        results.add(new ConsoleBatchApprovalResultResponse(
+            approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
       }
     }
     return List.copyOf(results);
@@ -217,9 +217,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         SwallowedExceptionLogger.warn(
             DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
 
-        results.add(
-            new ConsoleBatchApprovalResultResponse(
-                approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
+        results.add(new ConsoleBatchApprovalResultResponse(
+            approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
       }
     }
     return List.copyOf(results);
@@ -227,12 +226,11 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
     RestClient restClient = orchestratorInternalRestClient.build();
-    ApprovalRecordResponse response =
-        restClient
-            .get()
-            .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-            .retrieve()
-            .body(ApprovalRecordResponse.class);
+    ApprovalRecordResponse response = restClient
+        .get()
+        .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
+        .retrieve()
+        .body(ApprovalRecordResponse.class);
     Guard.requireFound(
         response == null ? null : response.getRecord(), "approval request not found");
     return response;
@@ -246,11 +244,10 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-        .body(
-            new ApprovalActionRequest(
-                tenantId,
-                ConsoleTextSanitizer.safeInput(operatorId, 64),
-                ConsoleTextSanitizer.safeInput(reason, 512)))
+        .body(new ApprovalActionRequest(
+            tenantId,
+            ConsoleTextSanitizer.safeInput(operatorId, 64),
+            ConsoleTextSanitizer.safeInput(reason, 512)))
         .retrieve()
         .toBodilessEntity();
   }
@@ -263,11 +260,10 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-        .body(
-            new ApprovalActionRequest(
-                tenantId,
-                ConsoleTextSanitizer.safeInput(operatorId, 64),
-                ConsoleTextSanitizer.safeInput(reason, 512)))
+        .body(new ApprovalActionRequest(
+            tenantId,
+            ConsoleTextSanitizer.safeInput(operatorId, 64),
+            ConsoleTextSanitizer.safeInput(reason, 512)))
         .retrieve()
         .toBodilessEntity();
   }

@@ -29,9 +29,11 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired private DispatchChannelHealthService healthService;
+  @Autowired
+  private DispatchChannelHealthService healthService;
 
-  @Autowired private DispatchChannelHealthRepository healthRepository;
+  @Autowired
+  private DispatchChannelHealthRepository healthRepository;
 
   @Test
   void shouldPersistHealthySnapshotOnSuccessfulDispatch() {

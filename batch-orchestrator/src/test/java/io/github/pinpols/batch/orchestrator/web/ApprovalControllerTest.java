@@ -24,16 +24,16 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class ApprovalControllerTest {
 
-  @Mock private ApprovalWorkflowService approvalWorkflowService;
+  @Mock
+  private ApprovalWorkflowService approvalWorkflowService;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ApprovalController(approvalWorkflowService))
-            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ApprovalController(approvalWorkflowService))
+        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+        .build();
   }
 
   @Test
@@ -41,11 +41,7 @@ class ApprovalControllerTest {
     when(approvalWorkflowService.submit(any())).thenReturn("appr-001");
 
     mockMvc
-        .perform(
-            post("/internal/approvals")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/internal/approvals").contentType(APPLICATION_JSON).content("""
                     {
                       "tenantId": "t1",
                       "approvalType": "CATCH_UP",

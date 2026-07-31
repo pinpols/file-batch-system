@@ -100,7 +100,8 @@ public final class BusinessDataSourceBuilder {
   /** 业务库连接池回退,避免默认值导致连接耗尽 + 主备切换硬化(逐字保留原 per-worker 语义)。 */
   private static void applyPoolDefaults(
       HikariConfig hikariConfig, BusinessDataSourceProperties properties) {
-    if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
+    if (hikariConfig.getDriverClassName() == null
+        || hikariConfig.getDriverClassName().isBlank()) {
       hikariConfig.setDriverClassName("org.postgresql.Driver");
     }
     if (hikariConfig.getMaximumPoolSize() <= 1) {

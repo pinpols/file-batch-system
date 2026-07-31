@@ -47,13 +47,11 @@ class ConsoleResourceTagControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleResourceTagController(
-                    tagService, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleResourceTagController(tagService, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -68,11 +66,10 @@ class ConsoleResourceTagControllerTest {
     when(tagService.listByResource("t1", "JOB", "job-001")).thenReturn(List.of(entity));
 
     mockMvc
-        .perform(
-            get("/api/console/tags")
-                .param("tenantId", "t1")
-                .param("resourceType", "JOB")
-                .param("resourceCode", "job-001"))
+        .perform(get("/api/console/tags")
+            .param("tenantId", "t1")
+            .param("resourceType", "JOB")
+            .param("resourceCode", "job-001"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].tagKey").value("env"))
@@ -91,11 +88,10 @@ class ConsoleResourceTagControllerTest {
     when(tagService.listByTagKey("t1", "env", "prod")).thenReturn(List.of(entity));
 
     mockMvc
-        .perform(
-            get("/api/console/tags/search")
-                .param("tenantId", "t1")
-                .param("tagKey", "env")
-                .param("tagValue", "prod"))
+        .perform(get("/api/console/tags/search")
+            .param("tenantId", "t1")
+            .param("tagKey", "env")
+            .param("tagValue", "prod"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].resourceCode").value("job-001"));
@@ -104,12 +100,10 @@ class ConsoleResourceTagControllerTest {
   @Test
   void shouldUpsertTag() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/tags")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/tags")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "resourceType":"JOB",
                       "resourceCode":"job-001",
@@ -126,12 +120,11 @@ class ConsoleResourceTagControllerTest {
   @Test
   void shouldDeleteTag() throws Exception {
     mockMvc
-        .perform(
-            delete("/api/console/tags")
-                .param("tenantId", "t1")
-                .param("resourceType", "JOB")
-                .param("resourceCode", "job-001")
-                .param("tagKey", "env"))
+        .perform(delete("/api/console/tags")
+            .param("tenantId", "t1")
+            .param("resourceType", "JOB")
+            .param("resourceCode", "job-001")
+            .param("tagKey", "env"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 

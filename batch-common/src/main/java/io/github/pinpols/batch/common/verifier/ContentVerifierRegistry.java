@@ -87,11 +87,10 @@ public class ContentVerifierRegistry {
           context.taskId(),
           context.stageCode(),
           ex);
-      result =
-          VerifyResult.fail(
-              code + "_EXCEPTION",
-              ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
-              Map.of("exception", ex.getClass().getSimpleName()));
+      result = VerifyResult.fail(
+          code + "_EXCEPTION",
+          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
+          Map.of("exception", ex.getClass().getSimpleName()));
       outcome = "error";
     }
     recordMetrics(code, outcome, result, startNanos);
@@ -103,26 +102,22 @@ public class ContentVerifierRegistry {
       return;
     }
     long elapsedNanos = System.nanoTime() - startNanos;
-    Timer timer =
-        timerCache.computeIfAbsent(
-            code + "::" + outcome,
-            key ->
-                Timer.builder(METRIC_DURATION)
-                    .description("ContentVerifier execution time per code/outcome")
-                    .tags(Tags.of("code", code, "outcome", outcome))
-                    .register(meterRegistry));
+    Timer timer = timerCache.computeIfAbsent(
+        code + "::" + outcome,
+        key -> Timer.builder(METRIC_DURATION)
+            .description("ContentVerifier execution time per code/outcome")
+            .tags(Tags.of("code", code, "outcome", outcome))
+            .register(meterRegistry));
     timer.record(Duration.ofNanos(elapsedNanos));
 
     if (!result.passed()) {
       String reason = result.code() == null ? "UNKNOWN" : result.code();
-      Counter counter =
-          failureCounterCache.computeIfAbsent(
-              code + "::" + reason,
-              key ->
-                  Counter.builder(METRIC_FAILURES)
-                      .description("ContentVerifier failure count per code/reason")
-                      .tags(Tags.of("code", code, "reason", reason))
-                      .register(meterRegistry));
+      Counter counter = failureCounterCache.computeIfAbsent(
+          code + "::" + reason,
+          key -> Counter.builder(METRIC_FAILURES)
+              .description("ContentVerifier failure count per code/reason")
+              .tags(Tags.of("code", code, "reason", reason))
+              .register(meterRegistry));
       counter.increment();
     }
   }

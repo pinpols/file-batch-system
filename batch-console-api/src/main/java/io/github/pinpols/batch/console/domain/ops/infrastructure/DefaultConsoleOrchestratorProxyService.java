@@ -45,13 +45,12 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "instance-action",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .post()
-                .uri("/internal/instances/{id}/{action}?tenantId={tenantId}", id, action, resolved)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri("/internal/instances/{id}/{action}?tenantId={tenantId}", id, action, resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
   }
 
   @Override
@@ -60,17 +59,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "partition-action",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .post()
-                .uri(
-                    "/internal/instances/partitions/{id}/{action}?tenantId={tenantId}",
-                    id,
-                    action,
-                    resolved)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(
+                "/internal/instances/partitions/{id}/{action}?tenantId={tenantId}",
+                id,
+                action,
+                resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
   }
 
   @Override
@@ -79,36 +77,29 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "retry-failed-partitions",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .post()
-                .uri(
-                    "/internal/instances/{id}/partitions/retry-failed?tenantId={tenantId}",
-                    instanceId,
-                    resolved)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(
+                "/internal/instances/{id}/partitions/retry-failed?tenantId={tenantId}",
+                instanceId,
+                resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
   }
 
   @Override
   public Map<String, Object> workflowRunAction(Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> response =
-        downstreamFallback.callOrThrow(
-            SVC,
-            "workflow-run-action",
-            () ->
-                orchestratorInternalRestClient
-                    .build()
-                    .post()
-                    .uri(
-                        "/internal/workflow-runs/{id}/{action}?tenantId={tenantId}",
-                        id,
-                        action,
-                        resolved)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+    Map<String, Object> response = downstreamFallback.callOrThrow(
+        SVC,
+        "workflow-run-action",
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri("/internal/workflow-runs/{id}/{action}?tenantId={tenantId}", id, action, resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
     publishRefresh(resolved);
     return response;
   }
@@ -116,21 +107,19 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> response =
-        downstreamFallback.callOrThrow(
-            SVC,
-            "workflow-run-skip-node",
-            () ->
-                orchestratorInternalRestClient
-                    .build()
-                    .post()
-                    .uri(
-                        "/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
-                        id,
-                        resolved,
-                        nodeCode)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+    Map<String, Object> response = downstreamFallback.callOrThrow(
+        SVC,
+        "workflow-run-skip-node",
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(
+                "/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
+                id,
+                resolved,
+                nodeCode)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
     publishRefresh(resolved);
     return response;
   }
@@ -150,18 +139,15 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "scheduler-snapshot",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .get()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/scheduler/snapshot")
-                            .queryParam(PARAM_TENANT_ID, resolved)
-                            .build())
-                .retrieve()
-                .body(ConsoleSchedulerSnapshotResponse.class));
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/scheduler/snapshot")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .build())
+            .retrieve()
+            .body(ConsoleSchedulerSnapshotResponse.class));
   }
 
   @Override
@@ -180,21 +166,17 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrFallback(
         SVC,
         "scheduler-snapshot-history",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .get()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/scheduler/snapshot/history")
-                            .queryParam(PARAM_TENANT_ID, resolved)
-                            .queryParam("limit", limit)
-                            .build())
-                .retrieve()
-                .body(
-                    new ParameterizedTypeReference<
-                        List<ConsoleSchedulerSnapshotHistoryResponse>>() {}),
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/scheduler/snapshot/history")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("limit", limit)
+                .build())
+            .retrieve()
+            .body(
+                new ParameterizedTypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {}),
         ex -> List.of());
   }
 
@@ -204,19 +186,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "outbox-cleanup",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .post()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/outbox/cleanup")
-                            .queryParam(PARAM_TENANT_ID, resolved)
-                            .queryParam("retainDays", retainDays)
-                            .build())
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/outbox/cleanup")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("retainDays", retainDays)
+                .build())
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
   }
 
   @Override
@@ -225,19 +204,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "outbox-republish",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .post()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/outbox/republish")
-                            .queryParam(PARAM_TENANT_ID, resolved)
-                            .build())
-                .body(Map.of("ids", ids == null ? List.of() : ids))
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/outbox/republish")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .build())
+            .body(Map.of("ids", ids == null ? List.of() : ids))
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
   }
 
   @Override
@@ -245,18 +221,15 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "admin-test-data-cleanup",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .delete()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/admin/test-data")
-                            .queryParam("prefix", prefix)
-                            .build())
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .delete()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/admin/test-data")
+                .queryParam("prefix", prefix)
+                .build())
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
   }
 
   @Override
@@ -265,18 +238,15 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "admin-test-data-cleanup-by-ids",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .delete()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/admin/test-data/by-ids")
-                            .queryParam("ids", ids)
-                            .build())
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .delete()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/admin/test-data/by-ids")
+                .queryParam("ids", ids)
+                .build())
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
   }
 
   @Override
@@ -295,18 +265,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     body.put("action", action);
     body.put("operatorId", operatorId);
     body.put("reason", reason);
-    Map<String, Object> response =
-        downstreamFallback.callOrThrow(
-            SVC,
-            "batch-day-operate",
-            () ->
-                orchestratorInternalRestClient
-                    .build()
-                    .post()
-                    .uri("/internal/batch-days/operate")
-                    .body(body)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+    Map<String, Object> response = downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-operate",
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri("/internal/batch-days/operate")
+            .body(body)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
     publishRefresh(resolved);
     return response;
   }
@@ -330,14 +298,13 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "forensic-export-request",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .post()
-                .uri("/internal/forensic/export")
-                .body(body)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri("/internal/forensic/export")
+            .body(body)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
   }
 
   @Override
@@ -346,18 +313,15 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrThrow(
         SVC,
         "forensic-export-download",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .get()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/forensic/export/{exportId}/download")
-                            .queryParam(PARAM_TENANT_ID, resolved)
-                            .build(exportId))
-                .retrieve()
-                .body(byte[].class));
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/forensic/export/{exportId}/download")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .build(exportId))
+            .retrieve()
+            .body(byte[].class));
   }
 
   @Override
@@ -367,26 +331,22 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     downstreamFallback.callOrThrow(
         SVC,
         "forensic-export-download-stream",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .get()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/forensic/export/{exportId}/download")
-                            .queryParam(PARAM_TENANT_ID, resolved)
-                            .build(exportId))
-                .exchange(
-                    (request, response) -> {
-                      try (InputStream input = response.getBody()) {
-                        if (input == null) {
-                          throw new IOException("forensic export response body is empty");
-                        }
-                        input.transferTo(outputStream);
-                      }
-                      return null;
-                    }));
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/forensic/export/{exportId}/download")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .build(exportId))
+            .exchange((request, response) -> {
+              try (InputStream input = response.getBody()) {
+                if (input == null) {
+                  throw new IOException("forensic export response body is empty");
+                }
+                input.transferTo(outputStream);
+              }
+              return null;
+            }));
   }
 
   @Override
@@ -399,19 +359,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return downstreamFallback.callOrFallback(
         SVC,
         "pipeline-progress",
-        () ->
-            orchestratorInternalRestClient
-                .build()
-                .get()
-                .uri(
-                    uriBuilder ->
-                        uriBuilder
-                            .path("/internal/pipeline-progress")
-                            .queryParam(PARAM_TENANT_ID, resolved)
-                            .queryParam("workerCodes", workerCodesParam)
-                            .build())
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {}),
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/pipeline-progress")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("workerCodes", workerCodesParam)
+                .build())
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {}),
         ex -> List.of());
   }
 

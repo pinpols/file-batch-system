@@ -59,10 +59,17 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
   private static final String FIELD_FAILED_POLLS = "failedPolls";
   private static final String FIELD_OPEN_UNTIL_MS = "openUntilMs";
 
-  @Autowired private DefaultScheduleForwarder scheduleForwarder;
-  @Autowired private OutboxPublishCircuitBreaker circuitBreaker;
-  @Autowired private OutboxEventMapper outboxEventMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private DefaultScheduleForwarder scheduleForwarder;
+
+  @Autowired
+  private OutboxPublishCircuitBreaker circuitBreaker;
+
+  @Autowired
+  private OutboxEventMapper outboxEventMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void kafkaBrokerFailureOpensOutboxCircuitBreakerAfterThreshold() {
@@ -116,9 +123,8 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
   }
 
   private void assertStatus(Long eventId, String expected) {
-    String status =
-        jdbcTemplate.queryForObject(
-            "select publish_status from batch.outbox_event where id = ?", String.class, eventId);
+    String status = jdbcTemplate.queryForObject(
+        "select publish_status from batch.outbox_event where id = ?", String.class, eventId);
     assertThat(status).isEqualTo(expected);
   }
 

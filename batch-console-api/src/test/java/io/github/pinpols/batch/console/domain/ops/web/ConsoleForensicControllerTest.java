@@ -50,18 +50,16 @@ class ConsoleForensicControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(requestMetadataResolver.current())
-        .thenReturn(
-            new io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata(
-                "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
+        .thenReturn(new io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata(
+            "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleForensicController(proxy, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleForensicController(proxy, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   // @Idempotent 走 WebMvcConfigurer 全局拦截器,standalone MockMvc 不装;
@@ -70,12 +68,10 @@ class ConsoleForensicControllerTest {
   @Test
   void requestExportShouldRejectInvalidTenantIdFormat() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/forensic/export")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/forensic/export")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"../escape","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19","requestedBy":"admin"}
                     """))
         .andExpect(status().isBadRequest());
@@ -86,12 +82,10 @@ class ConsoleForensicControllerTest {
     when(proxy.requestForensicExport(anyString(), any(), any(), any(), anyString(), anyString()))
         .thenReturn(Map.of("exportId", "fx-001"));
     mockMvc
-        .perform(
-            post("/api/console/forensic/export")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/forensic/export")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19",
                      "jobCodes":["JOB_A"],"exportFormat":"BUNDLE","requestedBy":"admin"}
                     """))
@@ -105,19 +99,17 @@ class ConsoleForensicControllerTest {
   @Test
   void downloadShouldReturnZipBytesWithAttachmentHeader() throws Exception {
     byte[] payload = new byte[] {1, 2, 3};
-    doAnswer(
-            invocation -> {
-              invocation.getArgument(2, OutputStream.class).write(payload);
-              return null;
-            })
+    doAnswer(invocation -> {
+          invocation.getArgument(2, OutputStream.class).write(payload);
+          return null;
+        })
         .when(proxy)
         .downloadForensicExport(eq("t1"), eq("fx-001"), any(OutputStream.class));
-    MvcResult asyncResult =
-        mockMvc
-            .perform(get("/api/console/forensic/export/fx-001/download").param("tenantId", "t1"))
-            .andExpect(status().isOk())
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    MvcResult asyncResult = mockMvc
+        .perform(get("/api/console/forensic/export/fx-001/download").param("tenantId", "t1"))
+        .andExpect(status().isOk())
+        .andExpect(request().asyncStarted())
+        .andReturn();
     mockMvc
         .perform(asyncDispatch(asyncResult))
         .andExpect(status().isOk())

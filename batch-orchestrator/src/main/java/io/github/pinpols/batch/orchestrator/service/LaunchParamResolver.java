@@ -72,9 +72,8 @@ public class LaunchParamResolver {
         || jobDefinition.jobType() == null) {
       return;
     }
-    CustomTaskTypeRegistryEntity entity =
-        customTaskTypeRegistryMapper.selectByTenantAndCode(
-            jobDefinition.tenantId(), jobDefinition.jobType());
+    CustomTaskTypeRegistryEntity entity = customTaskTypeRegistryMapper.selectByTenantAndCode(
+        jobDefinition.tenantId(), jobDefinition.jobType());
     if (entity == null || entity.descriptor() == null || entity.descriptor().isBlank()) {
       return;
     }
@@ -203,9 +202,8 @@ public class LaunchParamResolver {
   }
 
   Long resolveRelatedFileId(Map<String, Object> params) {
-    return toPositiveLong(
-        firstNonNull(
-            params.get("relatedFileId"), params.get("fileId"), params.get("sourceFileId")));
+    return toPositiveLong(firstNonNull(
+        params.get("relatedFileId"), params.get("fileId"), params.get("sourceFileId")));
   }
 
   Long resolveParentInstanceId(Map<String, Object> params) {
@@ -219,11 +217,9 @@ public class LaunchParamResolver {
       JobDefinitionEntity jobDefinition,
       Map<String, Object> params,
       Instant batchDaySlaDeadlineAt) {
-    Instant explicit =
-        parseDeadlineInstant(
-            firstNonNull(
-                params.get("deadlineAt"), params.get("deadline"), params.get("slaDeadlineAt")),
-            bizDate);
+    Instant explicit = parseDeadlineInstant(
+        firstNonNull(params.get("deadlineAt"), params.get("deadline"), params.get("slaDeadlineAt")),
+        bizDate);
     Instant deadlineTime = parseDeadlineInstant(params.get("deadlineTime"), bizDate);
     Instant jobDeadlineAt = resolveJobDeadlineAt(createdAt, jobDefinition);
     return earliest(explicit, deadlineTime, jobDeadlineAt, batchDaySlaDeadlineAt);
@@ -241,12 +237,11 @@ public class LaunchParamResolver {
 
   Integer resolveExpectedDurationSeconds(
       JobDefinitionEntity jobDefinition, Map<String, Object> params) {
-    Integer explicitValue =
-        firstPositiveInt(
-            params.get("expectedDurationSeconds"),
-            params.get("expected_duration_seconds"),
-            params.get("expectedDuration"),
-            params.get("slaExpectedDurationSeconds"));
+    Integer explicitValue = firstPositiveInt(
+        params.get("expectedDurationSeconds"),
+        params.get("expected_duration_seconds"),
+        params.get("expectedDuration"),
+        params.get("slaExpectedDurationSeconds"));
     if (explicitValue != null) {
       return explicitValue;
     }
@@ -268,7 +263,8 @@ public class LaunchParamResolver {
     snapshot.put("jobDefinitionVersion", jobDefinition == null ? null : jobDefinition.version());
     snapshot.put("jobCode", request.jobCode());
     snapshot.put(
-        "triggerType", request.triggerType() == null ? null : request.triggerType().code());
+        "triggerType",
+        request.triggerType() == null ? null : request.triggerType().code());
     snapshot.put("traceId", traceId);
     snapshot.put("priorityOrder", List.of("defaultParams", "requestParams", "effectiveParams"));
     snapshot.put(
@@ -320,7 +316,9 @@ public class LaunchParamResolver {
     }
     try {
       LocalDate d = resolveDateOrTodayInDefaultZone(bizDate);
-      return d.atTime(LocalTime.parse(text)).atZone(timezoneProvider.defaultZone()).toInstant();
+      return d.atTime(LocalTime.parse(text))
+          .atZone(timezoneProvider.defaultZone())
+          .toInstant();
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }

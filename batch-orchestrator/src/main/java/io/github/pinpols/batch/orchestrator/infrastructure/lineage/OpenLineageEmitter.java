@@ -68,23 +68,21 @@ public class OpenLineageEmitter {
     this.meterRegistryProvider = meterRegistryProvider;
     this.datasetMapperProvider = datasetMapperProvider;
     if (props.isEnabled() && !props.getEndpoint().isBlank()) {
-      this.httpClient =
-          HttpClient.newBuilder()
-              .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMs()))
-              .build();
-      ThreadPoolExecutor pool =
-          new ThreadPoolExecutor(
-              1,
-              Math.max(1, props.getEmitThreads()),
-              30L,
-              TimeUnit.SECONDS,
-              new LinkedBlockingQueue<>(256),
-              r -> {
-                Thread t = new Thread(r, "openlineage-emit");
-                t.setDaemon(true);
-                return t;
-              },
-              new ThreadPoolExecutor.AbortPolicy());
+      this.httpClient = HttpClient.newBuilder()
+          .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMs()))
+          .build();
+      ThreadPoolExecutor pool = new ThreadPoolExecutor(
+          1,
+          Math.max(1, props.getEmitThreads()),
+          30L,
+          TimeUnit.SECONDS,
+          new LinkedBlockingQueue<>(256),
+          r -> {
+            Thread t = new Thread(r, "openlineage-emit");
+            t.setDaemon(true);
+            return t;
+          },
+          new ThreadPoolExecutor.AbortPolicy());
       this.executor = pool;
       log.info(
           "OpenLineageEmitter enabled: endpoint={}, namespace={}",
@@ -116,13 +114,12 @@ public class OpenLineageEmitter {
     try {
       String body =
           JsonUtils.toJson(buildRunEvent(run, terminalStatus, finishedAt, datasetsFor(run)));
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(props.getEndpoint()))
-              .timeout(Duration.ofMillis(props.getRequestTimeoutMs()))
-              .header("Content-Type", "application/json")
-              .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-              .build();
+      HttpRequest request = HttpRequest.newBuilder()
+          .uri(URI.create(props.getEndpoint()))
+          .timeout(Duration.ofMillis(props.getRequestTimeoutMs()))
+          .header("Content-Type", "application/json")
+          .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+          .build();
       HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
       int sc = resp.statusCode();
       if (sc >= 200 && sc < 300) {
@@ -153,9 +150,8 @@ public class OpenLineageEmitter {
       String terminalStatus,
       Instant finishedAt,
       List<OpenLineageDatasetRow> datasets) {
-    boolean success =
-        WorkflowRunStatus.SUCCESS.code().equals(terminalStatus)
-            || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(terminalStatus);
+    boolean success = WorkflowRunStatus.SUCCESS.code().equals(terminalStatus)
+        || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(terminalStatus);
     Instant eventTime = finishedAt != null ? finishedAt : Instant.now();
 
     Map<String, Object> nominalTime = new LinkedHashMap<>();

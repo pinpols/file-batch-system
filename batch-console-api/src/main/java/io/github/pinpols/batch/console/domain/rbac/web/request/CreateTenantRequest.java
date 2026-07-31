@@ -28,9 +28,8 @@ public class CreateTenantRequest {
   @Size(min = 2, max = 128)
   @Pattern(
       regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
-      message =
-          "username must start with alphanumeric and contain only letters, digits,"
-              + " '.', '_', '-'")
+      message = "username must start with alphanumeric and contain only letters, digits,"
+          + " '.', '_', '-'")
   private String username;
 
   @NotBlank
@@ -46,5 +45,6 @@ public class CreateTenantRequest {
   private String initConfigFrom;
 
   /** 配置初始化模式,默认 SKIP_EXISTING。仅 initConfigFrom 非空时生效。 */
-  @Nullable private InitMode initMode;
+  @Nullable
+  private InitMode initMode;
 }

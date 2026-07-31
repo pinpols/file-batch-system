@@ -171,9 +171,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> businessCalendars =
         withCalendarHolidayValues(businessCalendarMapper.selectByQuery(tid, null, null, null));
     List<Map<String, Object>> batchWindows = batchWindowMapper.selectByQuery(tid, null, null, null);
-    List<Map<String, Object>> jobs =
-        rowProjections.toJobRows(
-            jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null)));
+    List<Map<String, Object>> jobs = rowProjections.toJobRows(
+        jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null)));
     List<Map<String, Object>> channels =
         fileChannelConfigMapper.selectByQuery(tid, null, null, null, null);
     List<Map<String, Object>> fileTemplates =
@@ -186,19 +185,18 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities);
     List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
     List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
-    List<List<Map<String, Object>>> sheets =
-        List.of(
-            resourceQueues,
-            businessCalendars,
-            batchWindows,
-            jobs,
-            channels,
-            fileTemplates,
-            pipelines,
-            steps,
-            wfDefs,
-            wfNodes,
-            wfEdges);
+    List<List<Map<String, Object>>> sheets = List.of(
+        resourceQueues,
+        businessCalendars,
+        batchWindows,
+        jobs,
+        channels,
+        fileTemplates,
+        pipelines,
+        steps,
+        wfDefs,
+        wfNodes,
+        wfEdges);
     Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     String fileName =
@@ -245,9 +243,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private List<Map<String, Object>> withCalendarHolidayValues(List<Map<String, Object>> rows) {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Map<String, Object> row : rows) {
-      out.add(
-          ConfigPackageExcelSchema.BusinessCalendar.toExportRow(
-              row, calendarHolidaysText(row.get(KEY_ID))));
+      out.add(ConfigPackageExcelSchema.BusinessCalendar.toExportRow(
+          row, calendarHolidaysText(row.get(KEY_ID))));
     }
     return out;
   }
@@ -256,10 +253,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     if (!(idValue instanceof Number number)) {
       return null;
     }
-    List<String> dates =
-        calendarHolidayMapper.selectByCalendarId(number.longValue()).stream()
-            .map(row -> String.valueOf(row.get("bizDate")))
-            .toList();
+    List<String> dates = calendarHolidayMapper.selectByCalendarId(number.longValue()).stream()
+        .map(row -> String.valueOf(row.get("bizDate")))
+        .toList();
     return dates.isEmpty() ? null : String.join(",", dates);
   }
 
@@ -310,12 +306,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     Map<String, String> target = rows.get(idx);
     if (values != null) {
       // 只合并该行已有的列键,挡掉前端传错列名凭空塞键;value 走与解析期一致的 normalize(trim)
-      values.forEach(
-          (k, v) -> {
-            if (target.containsKey(k)) {
-              target.put(k, v == null ? "" : v.trim());
-            }
-          });
+      values.forEach((k, v) -> {
+        if (target.containsKey(k)) {
+          target.put(k, v == null ? "" : v.trim());
+        }
+      });
     }
     PackageValidationResult result = validator().validate(session);
     return toPreviewResponse(uploadToken, session, result);
@@ -342,9 +337,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_rows");
     }
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    ApplyContext ctx =
-        new ApplyContext(
-            session.tenantId(), metadata.operatorId(), request.getReason(), metadata.traceId());
+    ApplyContext ctx = new ApplyContext(
+        session.tenantId(), metadata.operatorId(), request.getReason(), metadata.traceId());
 
     ApplyStats resourceQueueStats = applyResourceQueues(result.validResourceQueues(), ctx);
     ApplyStats businessCalendarStats = applyBusinessCalendars(result.validBusinessCalendars(), ctx);
@@ -482,9 +476,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       if (!issues.isEmpty()) {
         throw invalidParsedRow(BUSINESS_CALENDAR_SHEET, issues);
       }
-      Map<String, Object> existing =
-          businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-              ctx.tenantId(), calendar.calendarCode());
+      Map<String, Object> existing = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+          ctx.tenantId(), calendar.calendarCode());
       businessCalendarMapper.upsertBusinessCalendar(
           BusinessCalendarExcelRowParser.toUpsertParam(calendar, safeOp(ctx.operatorId())));
       applyCalendarHolidays(ctx.tenantId(), calendar);
@@ -518,9 +511,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private void applyCalendarHolidays(String tenantId, CalendarRow calendar) {
-    Map<String, Object> saved =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-            tenantId, calendar.calendarCode());
+    Map<String, Object> saved = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+        tenantId, calendar.calendarCode());
     if (saved == null || saved.get(KEY_ID) == null) {
       return;
     }
@@ -659,9 +651,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
             "error.common.invalid_argument_detail",
             "invalid file_template_config row: " + issues);
       }
-      Map<String, Object> existing =
-          fileTemplateConfigMapper.selectByUniqueKey(
-              ctx.tenantId(), template.templateCode(), template.version());
+      Map<String, Object> existing = fileTemplateConfigMapper.selectByUniqueKey(
+          ctx.tenantId(), template.templateCode(), template.version());
       fileTemplateConfigMapper.upsertFileTemplateConfig(
           FileTemplateExcelRowParser.toUpsertParam(ctx.tenantId(), template, ctx.operatorId()));
       if (existing == null || existing.isEmpty()) {
@@ -677,14 +668,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       List<Map<String, String>> pipelineRows,
       List<Map<String, String>> stepRows,
       ApplyContext ctx) {
-    Map<String, List<Map<String, String>>> stepsByKey =
-        stepRows.stream()
-            .collect(
-                Collectors.groupingBy(
-                    r ->
-                        normalize(r.get(COL_JOB_CODE))
-                            + KEY_SEP_COLON
-                            + normalize(r.get(COL_VERSION))));
+    Map<String, List<Map<String, String>>> stepsByKey = stepRows.stream()
+        .collect(Collectors.groupingBy(
+            r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION))));
     int inserted = 0, updated = 0;
     for (Map<String, String> row : pipelineRows) {
       String jobCode = normalize(row.get(COL_JOB_CODE));
@@ -723,22 +709,14 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       List<Map<String, String>> nodeRows,
       List<Map<String, String>> edgeRows,
       ApplyContext ctx) {
-    Map<String, List<Map<String, String>>> nodesByWf =
-        nodeRows.stream()
-            .collect(
-                Collectors.groupingBy(
-                    r ->
-                        normalize(r.get(COL_WORKFLOW_CODE))
-                            + KEY_SEP_COLON
-                            + normalize(r.get(COL_WORKFLOW_VERSION))));
-    Map<String, List<Map<String, String>>> edgesByWf =
-        edgeRows.stream()
-            .collect(
-                Collectors.groupingBy(
-                    r ->
-                        normalize(r.get(COL_WORKFLOW_CODE))
-                            + KEY_SEP_COLON
-                            + normalize(r.get(COL_WORKFLOW_VERSION))));
+    Map<String, List<Map<String, String>>> nodesByWf = nodeRows.stream()
+        .collect(Collectors.groupingBy(r -> normalize(r.get(COL_WORKFLOW_CODE))
+            + KEY_SEP_COLON
+            + normalize(r.get(COL_WORKFLOW_VERSION))));
+    Map<String, List<Map<String, String>>> edgesByWf = edgeRows.stream()
+        .collect(Collectors.groupingBy(r -> normalize(r.get(COL_WORKFLOW_CODE))
+            + KEY_SEP_COLON
+            + normalize(r.get(COL_WORKFLOW_VERSION))));
     int inserted = 0, updated = 0;
     for (Map<String, String> row : defRows) {
       String wfCode = normalize(row.get(COL_WORKFLOW_CODE));
@@ -856,23 +834,21 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private TenantConfigPackageExcelPreviewResponse toPreviewResponse(
       String uploadToken, PackageExcelSession session, PackageValidationResult result) {
-    List<SheetStats> sheets =
-        List.of(
-            toSheetStats(result.resourceQueues()),
-            toSheetStats(result.businessCalendars()),
-            toSheetStats(result.batchWindows()),
-            toSheetStats(result.jobs()),
-            toSheetStats(result.channels()),
-            toSheetStats(result.fileTemplates()),
-            toSheetStats(result.pipelines()),
-            toSheetStats(result.steps()),
-            toSheetStats(result.wfDefs()),
-            toSheetStats(result.wfNodes()),
-            toSheetStats(result.wfEdges()));
-    List<IssueDto> issues =
-        result.allIssues().stream()
-            .map(i -> new IssueDto(i.sheetName(), i.rowNo(), i.columnName(), i.message()))
-            .toList();
+    List<SheetStats> sheets = List.of(
+        toSheetStats(result.resourceQueues()),
+        toSheetStats(result.businessCalendars()),
+        toSheetStats(result.batchWindows()),
+        toSheetStats(result.jobs()),
+        toSheetStats(result.channels()),
+        toSheetStats(result.fileTemplates()),
+        toSheetStats(result.pipelines()),
+        toSheetStats(result.steps()),
+        toSheetStats(result.wfDefs()),
+        toSheetStats(result.wfNodes()),
+        toSheetStats(result.wfEdges()));
+    List<IssueDto> issues = result.allIssues().stream()
+        .map(i -> new IssueDto(i.sheetName(), i.rowNo(), i.columnName(), i.message()))
+        .toList();
     int total = sheets.stream().mapToInt(SheetStats::totalRows).sum();
     int valid = sheets.stream().mapToInt(SheetStats::validRows).sum();
     return new TenantConfigPackageExcelPreviewResponse(
@@ -1001,7 +977,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private static void validateSheetHeaders(
       String sheetName, Map<String, Integer> headerIndex, Set<String> required) {
-    List<String> missing = required.stream().filter(h -> !headerIndex.containsKey(h)).toList();
+    List<String> missing =
+        required.stream().filter(h -> !headerIndex.containsKey(h)).toList();
     if (!missing.isEmpty()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

@@ -52,8 +52,11 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
   // 租户 B 的可辨识文件字节：若跨租户泄漏，A 的 total_file_bytes 会被这个巨值污染。
   private static final long TENANT_B_FILE_BYTES = 888_888_888L;
 
-  @Autowired private CapacityProfileMapper capacityProfileMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private CapacityProfileMapper capacityProfileMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void selectTenantProfile_isTenantScoped_doesNotLeakOtherTenantRows() {
@@ -131,15 +134,14 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
     long fileA1 = insertFileRecord(tenantA, "a1", 1_000L);
     long fileA2 = insertFileRecord(tenantA, "a2", 500L);
 
-    long a1 =
-        insertJobInstance(
-            tenantA,
-            jobDefId,
-            JOB_CODE_A,
-            "SUCCESS",
-            fileA1,
-            "2026-05-01T10:00:00Z",
-            "2026-05-01T10:00:10Z"); // 10000ms
+    long a1 = insertJobInstance(
+        tenantA,
+        jobDefId,
+        JOB_CODE_A,
+        "SUCCESS",
+        fileA1,
+        "2026-05-01T10:00:00Z",
+        "2026-05-01T10:00:10Z"); // 10000ms
     insertJobInstance(
         tenantA,
         jobDefId,
@@ -160,43 +162,40 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
   private void seedTenantB() {
     long jobDefId = insertJobDefinition(tenantB, JOB_CODE_B);
     long fileB1 = insertFileRecord(tenantB, "b1", TENANT_B_FILE_BYTES);
-    long b1 =
-        insertJobInstance(
-            tenantB,
-            jobDefId,
-            JOB_CODE_B,
-            "SUCCESS",
-            fileB1,
-            "2026-05-01T12:00:00Z",
-            "2026-05-01T12:00:33Z");
+    long b1 = insertJobInstance(
+        tenantB,
+        jobDefId,
+        JOB_CODE_B,
+        "SUCCESS",
+        fileB1,
+        "2026-05-01T12:00:00Z",
+        "2026-05-01T12:00:33Z");
     insertJobTask(tenantB, b1, WORKER_B, "SUCCESS", "2026-05-01T12:00:00Z", "2026-05-01T12:00:33Z");
   }
 
   private long insertJobDefinition(String tenantId, String jobCode) {
-    Long id =
-        jdbcTemplate.queryForObject(
-            "insert into batch.job_definition (tenant_id, job_code, job_name, job_type,"
-                + " schedule_type, timezone) values (?, ?, ?, 'GENERAL', 'MANUAL',"
-                + " 'Asia/Shanghai') returning id",
-            Long.class,
-            tenantId,
-            jobCode,
-            jobCode + "-name");
+    Long id = jdbcTemplate.queryForObject(
+        "insert into batch.job_definition (tenant_id, job_code, job_name, job_type,"
+            + " schedule_type, timezone) values (?, ?, ?, 'GENERAL', 'MANUAL',"
+            + " 'Asia/Shanghai') returning id",
+        Long.class,
+        tenantId,
+        jobCode,
+        jobCode + "-name");
     assertThat(id).isNotNull();
     return id;
   }
 
   private long insertFileRecord(String tenantId, String tag, long sizeBytes) {
-    Long id =
-        jdbcTemplate.queryForObject(
-            "insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,"
-                + " file_size_bytes, storage_type, storage_path, source_type, file_status) values"
-                + " (?, 'INPUT', ?, 'DELIMITED', ?, 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id",
-            Long.class,
-            tenantId,
-            "file-" + tag,
-            sizeBytes,
-            "/seed/" + tenantId + "/" + tag);
+    Long id = jdbcTemplate.queryForObject(
+        "insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,"
+            + " file_size_bytes, storage_type, storage_path, source_type, file_status) values"
+            + " (?, 'INPUT', ?, 'DELIMITED', ?, 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id",
+        Long.class,
+        tenantId,
+        "file-" + tag,
+        sizeBytes,
+        "/seed/" + tenantId + "/" + tag);
     assertThat(id).isNotNull();
     return id;
   }
@@ -212,53 +211,50 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
     // trigger_type=MANUAL 满足 ck_job_instance_trigger_source（trigger_request_id 允许 NULL）。
     // instance_no/dedup_key 唯一化;related_file_id 显式 ::bigint 以便可为 NULL。
     String unique = tenantId + ":" + jobCode + ":" + status + ":" + System.nanoTime();
-    Long id =
-        jdbcTemplate.queryForObject(
-            "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no,"
-                + " biz_date, trigger_type, instance_status, worker_group, dedup_key,"
-                + " related_file_id, started_at, finished_at) values (?, ?, ?, ?, ?::date,"
-                + " 'MANUAL', ?, 'wg', ?, ?::bigint, ?::timestamptz, ?::timestamptz) returning id",
-            Long.class,
-            tenantId,
-            jobDefId,
-            jobCode,
-            "ino-" + unique,
-            BIZ_DATE,
-            status,
-            "dedup-" + unique,
-            relatedFileId,
-            startedAt,
-            finishedAt);
+    Long id = jdbcTemplate.queryForObject(
+        "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no,"
+            + " biz_date, trigger_type, instance_status, worker_group, dedup_key,"
+            + " related_file_id, started_at, finished_at) values (?, ?, ?, ?, ?::date,"
+            + " 'MANUAL', ?, 'wg', ?, ?::bigint, ?::timestamptz, ?::timestamptz) returning id",
+        Long.class,
+        tenantId,
+        jobDefId,
+        jobCode,
+        "ino-" + unique,
+        BIZ_DATE,
+        status,
+        "dedup-" + unique,
+        relatedFileId,
+        startedAt,
+        finishedAt);
     assertThat(id).isNotNull();
     return id;
   }
 
   private long insertPipelineDefinition(String tenantId, String jobCode) {
-    Long id =
-        jdbcTemplate.queryForObject(
-            "insert into batch.pipeline_definition (tenant_id, job_code, pipeline_name,"
-                + " pipeline_type) values (?, ?, ?, 'IMPORT') returning id",
-            Long.class,
-            tenantId,
-            jobCode,
-            jobCode + "-pipeline");
+    Long id = jdbcTemplate.queryForObject(
+        "insert into batch.pipeline_definition (tenant_id, job_code, pipeline_name,"
+            + " pipeline_type) values (?, ?, ?, 'IMPORT') returning id",
+        Long.class,
+        tenantId,
+        jobCode,
+        jobCode + "-pipeline");
     assertThat(id).isNotNull();
     return id;
   }
 
   private long insertPipelineInstance(
       String tenantId, long pipelineDefId, String jobCode, long fileId, long relatedJobInstanceId) {
-    Long id =
-        jdbcTemplate.queryForObject(
-            "insert into batch.pipeline_instance (tenant_id, pipeline_definition_id, job_code,"
-                + " pipeline_type, file_id, related_job_instance_id, run_status) values (?, ?, ?,"
-                + " 'IMPORT', ?, ?, 'SUCCESS') returning id",
-            Long.class,
-            tenantId,
-            pipelineDefId,
-            jobCode,
-            fileId,
-            relatedJobInstanceId);
+    Long id = jdbcTemplate.queryForObject(
+        "insert into batch.pipeline_instance (tenant_id, pipeline_definition_id, job_code,"
+            + " pipeline_type, file_id, related_job_instance_id, run_status) values (?, ?, ?,"
+            + " 'IMPORT', ?, ?, 'SUCCESS') returning id",
+        Long.class,
+        tenantId,
+        pipelineDefId,
+        jobCode,
+        fileId,
+        relatedJobInstanceId);
     assertThat(id).isNotNull();
     return id;
   }

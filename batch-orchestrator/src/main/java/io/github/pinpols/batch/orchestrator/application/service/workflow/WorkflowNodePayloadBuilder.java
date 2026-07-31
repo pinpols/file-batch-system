@@ -104,9 +104,8 @@ public class WorkflowNodePayloadBuilder {
     if (jobInstance == null || jobInstance.getId() == null) {
       return;
     }
-    List<JobPartitionEntity> siblings =
-        jobMappers.jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
+    List<JobPartitionEntity> siblings = jobMappers.jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
     if (siblings == null || siblings.isEmpty()) {
       return;
     }
@@ -172,22 +171,20 @@ public class WorkflowNodePayloadBuilder {
     }
     Long fileId = null;
     if (jobInstance.getTraceId() != null && !jobInstance.getTraceId().isBlank()) {
-      fileId =
-          safeFileIdLookup(
-              fileRecordLookupMapper::selectIdByTenantAndTraceId,
-              jobInstance.getTenantId(),
-              jobInstance.getTraceId(),
-              "traceId");
+      fileId = safeFileIdLookup(
+          fileRecordLookupMapper::selectIdByTenantAndTraceId,
+          jobInstance.getTenantId(),
+          jobInstance.getTraceId(),
+          "traceId");
     }
     if (fileId == null) {
       Object batchNo = payload.get("batchNo");
       if (batchNo != null && !String.valueOf(batchNo).isBlank()) {
-        fileId =
-            safeFileIdLookup(
-                fileRecordLookupMapper::selectIdByTenantAndSourceRef,
-                jobInstance.getTenantId(),
-                String.valueOf(batchNo),
-                "sourceRef");
+        fileId = safeFileIdLookup(
+            fileRecordLookupMapper::selectIdByTenantAndSourceRef,
+            jobInstance.getTenantId(),
+            String.valueOf(batchNo),
+            "sourceRef");
       }
     }
     if (fileId != null) {

@@ -81,25 +81,22 @@ public class BatchDayCutoffScheduler {
       }
       // RLS Phase B：resolveCutoffAt 走 config cache（可能回源 DB）+ applyCutoff 在 short tx 内写
       // batch_day_instance + audit log；统一绑租户后再处理，保证两段都在 holder 作用域内。
-      RlsTenantContextHolder.runWithTenant(
-          tenantId,
-          () -> {
-            Instant cutoffAt = candidate.cutoffAt();
-            if (cutoffAt == null) {
-              cutoffAt =
-                  resolveCutoffAt(
-                      candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
-            }
-            if (cutoffAt == null) {
-              return;
-            }
-            if (!now.isBefore(cutoffAt)) {
-              Instant cutoffAtFinal = cutoffAt;
-              // 每个候选行一笔 short tx：CAS 更新 + 审计日志同事务原子。
-              TransactionTemplate tx = new TransactionTemplate(transactionManager);
-              tx.executeWithoutResult(status -> applyCutoff(candidate, cutoffAtFinal, now));
-            }
-          });
+      RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+        Instant cutoffAt = candidate.cutoffAt();
+        if (cutoffAt == null) {
+          cutoffAt =
+              resolveCutoffAt(candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
+        }
+        if (cutoffAt == null) {
+          return;
+        }
+        if (!now.isBefore(cutoffAt)) {
+          Instant cutoffAtFinal = cutoffAt;
+          // 每个候选行一笔 short tx：CAS 更新 + 审计日志同事务原子。
+          TransactionTemplate tx = new TransactionTemplate(transactionManager);
+          tx.executeWithoutResult(status -> applyCutoff(candidate, cutoffAtFinal, now));
+        }
+      });
     }
   }
 

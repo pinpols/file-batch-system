@@ -43,20 +43,17 @@ class SparkSubmitTaskExecutorTest {
 
   @Test
   void dryRun_buildsArgvWithoutForking() {
-    TaskResult r =
-        executor.execute(
-            ctx(
-                Map.of(
-                    "appResource",
-                    "s3a://jobs/etl.jar",
-                    "mainClass",
-                    "com.acme.Etl",
-                    "sparkConf",
-                    Map.of("spark.executor.memory", "2g"),
-                    "appArgs",
-                    List.of("--date", "2026-06-15"),
-                    "dryRun",
-                    true)));
+    TaskResult r = executor.execute(ctx(Map.of(
+        "appResource",
+        "s3a://jobs/etl.jar",
+        "mainClass",
+        "com.acme.Etl",
+        "sparkConf",
+        Map.of("spark.executor.memory", "2g"),
+        "appArgs",
+        List.of("--date", "2026-06-15"),
+        "dryRun",
+        true)));
 
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("plannedAction", "spark-submit");
@@ -78,13 +75,10 @@ class SparkSubmitTaskExecutorTest {
 
   @Test
   void outputPath_injectsConfAndReturnsOutputUri() {
-    TaskResult r =
-        executor.execute(
-            ctx(
-                Map.of(
-                    "appResource", "s3a://jobs/etl.jar",
-                    "outputPath", "s3a://batch-out/t1/SPARK_JOB/2026-06-15/",
-                    "dryRun", true)));
+    TaskResult r = executor.execute(ctx(Map.of(
+        "appResource", "s3a://jobs/etl.jar",
+        "outputPath", "s3a://batch-out/t1/SPARK_JOB/2026-06-15/",
+        "dryRun", true)));
 
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("outputUri", "s3a://batch-out/t1/SPARK_JOB/2026-06-15/");
@@ -111,13 +105,10 @@ class SparkSubmitTaskExecutorTest {
 
   @Test
   void clusterDeployMode_failsConfigInvalid() {
-    TaskResult r =
-        executor.execute(
-            ctx(
-                Map.of(
-                    "appResource", "s3a://jobs/x.jar",
-                    "deployMode", "cluster",
-                    "dryRun", true)));
+    TaskResult r = executor.execute(ctx(Map.of(
+        "appResource", "s3a://jobs/x.jar",
+        "deployMode", "cluster",
+        "dryRun", true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
     assertThat(r.message()).contains("cluster");
@@ -130,13 +121,10 @@ class SparkSubmitTaskExecutorTest {
     props.setAllowedMasterPrefixes(List.of("yarn", "k8s://"));
     SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
 
-    TaskResult r =
-        restricted.execute(
-            ctx(
-                Map.of(
-                    "appResource", "s3a://jobs/x.jar",
-                    "master", "spark://attacker:7077",
-                    "dryRun", true)));
+    TaskResult r = restricted.execute(ctx(Map.of(
+        "appResource", "s3a://jobs/x.jar",
+        "master", "spark://attacker:7077",
+        "dryRun", true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
   }
@@ -149,16 +137,13 @@ class SparkSubmitTaskExecutorTest {
     props.setAppArgRegexAllowlist(List.of("^--date$", "^\\d{4}-\\d{2}-\\d{2}$"));
     SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
 
-    TaskResult r =
-        restricted.execute(
-            ctx(
-                Map.of(
-                    "appResource",
-                    "s3a://jobs/x.jar",
-                    "appArgs",
-                    List.of("--date", "; rm -rf /"),
-                    "dryRun",
-                    true)));
+    TaskResult r = restricted.execute(ctx(Map.of(
+        "appResource",
+        "s3a://jobs/x.jar",
+        "appArgs",
+        List.of("--date", "; rm -rf /"),
+        "dryRun",
+        true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
   }
@@ -171,16 +156,13 @@ class SparkSubmitTaskExecutorTest {
     props.setAllowedConfKeyPrefixes(Set.of("spark.sql."));
     SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
 
-    TaskResult r =
-        restricted.execute(
-            ctx(
-                Map.of(
-                    "appResource",
-                    "s3a://jobs/x.jar",
-                    "sparkConf",
-                    Map.of("spark.driver.extraJavaOptions", "-Devil=1"),
-                    "dryRun",
-                    true)));
+    TaskResult r = restricted.execute(ctx(Map.of(
+        "appResource",
+        "s3a://jobs/x.jar",
+        "sparkConf",
+        Map.of("spark.driver.extraJavaOptions", "-Devil=1"),
+        "dryRun",
+        true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
   }

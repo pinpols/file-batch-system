@@ -32,12 +32,20 @@ class BatchDayWaitingReleaseSchedulerTest {
   private static final LocalDate DAY2 = LocalDate.of(2026, 5, 31);
   private static final LocalDate DAY1 = DAY2.minusDays(1);
 
-  @Mock BatchDayWaitingLaunchMapper waitingLaunchMapper;
-  @Mock BatchDayInstanceMapper batchDayInstanceMapper;
-  @Mock BatchDayOperationService batchDayOperationService;
-  @Mock OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  BatchDayWaitingLaunchMapper waitingLaunchMapper;
 
-  @InjectMocks BatchDayWaitingReleaseScheduler scheduler;
+  @Mock
+  BatchDayInstanceMapper batchDayInstanceMapper;
+
+  @Mock
+  BatchDayOperationService batchDayOperationService;
+
+  @Mock
+  OrchestratorGracefulShutdown gracefulShutdown;
+
+  @InjectMocks
+  BatchDayWaitingReleaseScheduler scheduler;
 
   @Test
   void shouldSkipWhenDraining() {
@@ -106,7 +114,8 @@ class BatchDayWaitingReleaseSchedulerTest {
     when(waitingLaunchMapper.selectWaiting(
             null, BatchDayWaitingReleaseScheduler.WAITING_SCAN_LIMIT))
         .thenReturn(List.of(waitingRow(TENANT, CAL, DAY2, "req-1")));
-    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(TENANT, CAL, DAY1)).thenReturn(null);
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(TENANT, CAL, DAY1))
+        .thenReturn(null);
 
     scheduler.release();
 
@@ -119,14 +128,14 @@ class BatchDayWaitingReleaseSchedulerTest {
     // 同一 (tenant, calendar, bizDate) 的多条 waiting 行(不同 job)只触发一次前一日查询 + 一次 release
     when(waitingLaunchMapper.selectWaiting(
             null, BatchDayWaitingReleaseScheduler.WAITING_SCAN_LIMIT))
-        .thenReturn(
-            List.of(
-                waitingRow(TENANT, CAL, DAY2, "req-1"),
-                waitingRow(TENANT, CAL, DAY2, "req-2"),
-                waitingRow(TENANT, CAL, DAY2, "req-3")));
+        .thenReturn(List.of(
+            waitingRow(TENANT, CAL, DAY2, "req-1"),
+            waitingRow(TENANT, CAL, DAY2, "req-2"),
+            waitingRow(TENANT, CAL, DAY2, "req-3")));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(TENANT, CAL, DAY1))
         .thenReturn(previousDay("SETTLED"));
-    when(batchDayOperationService.releaseWaitingLaunchesForBatchDay(any(), any())).thenReturn(3);
+    when(batchDayOperationService.releaseWaitingLaunchesForBatchDay(any(), any()))
+        .thenReturn(3);
 
     scheduler.release();
 
@@ -151,14 +160,13 @@ class BatchDayWaitingReleaseSchedulerTest {
     // tenantA 抛错,tenantB 正常释放
     when(batchDayOperationService.releaseWaitingLaunchesForBatchDay(
             any(BatchDayInstanceEntity.class), any()))
-        .thenAnswer(
-            inv -> {
-              BatchDayInstanceEntity arg = inv.getArgument(0);
-              if ("tenantA".equals(arg.tenantId())) {
-                throw new RuntimeException("simulated db error");
-              }
-              return 1;
-            });
+        .thenAnswer(inv -> {
+          BatchDayInstanceEntity arg = inv.getArgument(0);
+          if ("tenantA".equals(arg.tenantId())) {
+            throw new RuntimeException("simulated db error");
+          }
+          return 1;
+        });
 
     scheduler.release();
 
@@ -172,15 +180,14 @@ class BatchDayWaitingReleaseSchedulerTest {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(waitingLaunchMapper.selectWaiting(
             null, BatchDayWaitingReleaseScheduler.WAITING_SCAN_LIMIT))
-        .thenReturn(
-            List.of(
-                waitingRow("tenantA", CAL, DAY2, "req-a"),
-                waitingRow("tenantB", CAL, DAY2, "req-b")));
+        .thenReturn(List.of(
+            waitingRow("tenantA", CAL, DAY2, "req-a"), waitingRow("tenantB", CAL, DAY2, "req-b")));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate("tenantA", CAL, DAY1))
         .thenReturn(previousDayFor("tenantA", "SKIPPED"));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate("tenantB", CAL, DAY1))
         .thenReturn(previousDayFor("tenantB", "MANUAL_RELEASED"));
-    when(batchDayOperationService.releaseWaitingLaunchesForBatchDay(any(), any())).thenReturn(1);
+    when(batchDayOperationService.releaseWaitingLaunchesForBatchDay(any(), any()))
+        .thenReturn(1);
 
     scheduler.release();
 

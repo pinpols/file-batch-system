@@ -33,9 +33,14 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class DefaultHeartbeatServiceTest {
 
-  @Mock private WorkerSelfRegistrationService registrationService;
-  @Mock private WorkerRuntimeState runtimeState;
-  @Mock private ObjectProvider<WorkerLoadProvider> loadProviders;
+  @Mock
+  private WorkerSelfRegistrationService registrationService;
+
+  @Mock
+  private WorkerRuntimeState runtimeState;
+
+  @Mock
+  private ObjectProvider<WorkerLoadProvider> loadProviders;
 
   private DefaultHeartbeatService service;
 
@@ -85,7 +90,9 @@ class DefaultHeartbeatServiceTest {
 
     ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
     verify(registrationService, times(1)).renew(captor.capture());
-    assertThat(captor.getValue().getCurrentLoad()).as("renew 时应携带刚收集的 currentLoad 求和").isEqualTo(8);
+    assertThat(captor.getValue().getCurrentLoad())
+        .as("renew 时应携带刚收集的 currentLoad 求和")
+        .isEqualTo(8);
 
     verify(runtimeState, times(1)).put(renewed);
   }
@@ -96,12 +103,9 @@ class DefaultHeartbeatServiceTest {
     WorkerRegistration current = new WorkerRegistration();
     current.setWorkerId("w-2");
     when(runtimeState.get("w-2")).thenReturn(current);
-    when(loadProviders.stream())
-        .thenReturn(
-            Stream.of(
-                () -> {
-                  throw new RuntimeException("provider boom");
-                }));
+    when(loadProviders.stream()).thenReturn(Stream.of(() -> {
+      throw new RuntimeException("provider boom");
+    }));
 
     WorkerRegistration renewed = new WorkerRegistration();
     renewed.setWorkerId("w-2");

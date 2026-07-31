@@ -34,6 +34,9 @@ public record DataQualityGateOutcome(GateStatus status, List<RuleFinding> findin
       String ruleCode, String ruleType, String severity, String status, String message) {}
 
   public static DataQualityGateOutcome noRules() {
-    return DataQualityGateOutcome.builder().status(GateStatus.NO_RULES).findings(List.of()).build();
+    return DataQualityGateOutcome.builder()
+        .status(GateStatus.NO_RULES)
+        .findings(List.of())
+        .build();
   }
 }

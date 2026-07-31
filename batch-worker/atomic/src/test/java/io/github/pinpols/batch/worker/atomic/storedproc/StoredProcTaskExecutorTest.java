@@ -66,9 +66,8 @@ class StoredProcTaskExecutorTest {
 
     @Test
     void rejectsSensitiveCredentialInParameters_LaneC() {
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("procedureName", "batch.foo", "client_secret", "leak")));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("procedureName", "batch.foo", "client_secret", "leak")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("SENSITIVE_DATA_IN_PARAMETERS");
     }
@@ -122,18 +121,16 @@ class StoredProcTaskExecutorTest {
 
     @Test
     void rejectsBadOutType() {
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("procedureName", "p", "outParams", List.of("STRUCT"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("procedureName", "p", "outParams", List.of("STRUCT"))));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("not in allowedOutSqlTypes");
     }
 
     @Test
     void rejectsNonPositiveTimeout() {
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("procedureName", "p", "statementTimeoutSeconds", -1)));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("procedureName", "p", "statementTimeoutSeconds", -1)));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("must be positive");
     }
@@ -176,13 +173,10 @@ class StoredProcTaskExecutorTest {
       when(conn.getAutoCommit()).thenReturn(true);
       when(conn.prepareCall(anyString())).thenReturn(cs);
 
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of(
-                      "procedureName", "batch.proc",
-                      "inParams", List.of(1, "x"),
-                      "outParams", List.of("INTEGER", "VARCHAR"))));
+      TaskResult r = executor.execute(ctxWithParams(Map.of(
+          "procedureName", "batch.proc",
+          "inParams", List.of(1, "x"),
+          "outParams", List.of("INTEGER", "VARCHAR"))));
 
       assertThat(r.success()).isTrue();
       // 2 in + 2 out = 4 placeholders
@@ -204,10 +198,8 @@ class StoredProcTaskExecutorTest {
       when(cs.getObject(1)).thenReturn(42);
       when(cs.getObject(2)).thenReturn("hello");
 
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of("procedureName", "p", "outParams", List.of("INTEGER", "VARCHAR"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("procedureName", "p", "outParams", List.of("INTEGER", "VARCHAR"))));
 
       assertThat(r.success()).isTrue();
       @SuppressWarnings("unchecked")
@@ -255,9 +247,8 @@ class StoredProcTaskExecutorTest {
       when(conn.prepareCall(anyString())).thenReturn(cs);
       when(cs.getObject(1)).thenReturn("0123456789ABCDEFGH");
 
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("procedureName", "p", "outParams", List.of("VARCHAR"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("procedureName", "p", "outParams", List.of("VARCHAR"))));
 
       @SuppressWarnings("unchecked")
       Map<String, Object> out = (Map<String, Object>) r.output().get("outValues");

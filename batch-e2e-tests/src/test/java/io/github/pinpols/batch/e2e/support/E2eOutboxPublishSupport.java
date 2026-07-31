@@ -43,18 +43,16 @@ public class E2eOutboxPublishSupport {
   }
 
   public void publishAllPending(String tenantId) {
-    List<OutboxEventEntity> pending =
-        outboxEventMapper.selectPending(
-            new OutboxEventQuery(
-                tenantId,
-                null,
-                null,
-                null,
-                OutboxPublishStatus.NEW.code(),
-                OutboxPublishStatus.FAILED.code(),
-                500,
-                1,
-                0));
+    List<OutboxEventEntity> pending = outboxEventMapper.selectPending(new OutboxEventQuery(
+        tenantId,
+        null,
+        null,
+        null,
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code(),
+        500,
+        1,
+        0));
     ensureTopicsExist(pending);
     for (OutboxEventEntity event : pending) {
       outboxPublisher.publish(event);
@@ -62,11 +60,10 @@ public class E2eOutboxPublishSupport {
   }
 
   private void ensureTopicsExist(List<OutboxEventEntity> pendingEvents) {
-    Set<String> topics =
-        pendingEvents.stream()
-            .map(this::resolveTargetTopic)
-            .filter(topic -> topic != null && !topic.isBlank())
-            .collect(Collectors.toCollection(LinkedHashSet::new));
+    Set<String> topics = pendingEvents.stream()
+        .map(this::resolveTargetTopic)
+        .filter(topic -> topic != null && !topic.isBlank())
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     if (topics.isEmpty()) {
       return;
     }

@@ -62,14 +62,29 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-  @Autowired private LaunchService launchService;
-  @Autowired private TaskControllerApplicationService taskControllerApplicationService;
-  @Autowired private TaskExecutionService taskExecutionService;
-  @Autowired private JobInstanceMapper jobInstanceMapper;
-  @Autowired private JobPartitionMapper jobPartitionMapper;
-  @Autowired private JobTaskMapper jobTaskMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private WorkerRegistryCache workerRegistryCache;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private TaskControllerApplicationService taskControllerApplicationService;
+
+  @Autowired
+  private TaskExecutionService taskExecutionService;
+
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private WorkerRegistryCache workerRegistryCache;
 
   @BeforeEach
   void refreshWorkers() {
@@ -85,35 +100,27 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
    * 结果确定(本机偶发对齐、CI 必现该非确定性)。
    */
   private LaunchedTask launchOne(int idx) {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate,
-            TENANT,
-            "IMPORT",
-            "ITGRP_" + idx + "_" + System.nanoTime(),
-            TriggerType.API);
-    LaunchRequest req =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-batch-" + idx + "-" + seed.requestId())
-            .params(Map.of())
-            .build();
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "ITGRP_" + idx + "_" + System.nanoTime(), TriggerType.API);
+    LaunchRequest req = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-batch-" + idx + "-" + seed.requestId())
+        .params(Map.of())
+        .build();
     launchService.launch(req);
 
     JobInstanceEntity instance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
-    JobTaskEntity task =
-        jobTaskMapper
-            .selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null))
-            .get(0);
-    JobPartitionEntity partition =
-        jobPartitionMapper
-            .selectByQuery(new JobPartitionQuery(TENANT, instance.getId(), null, null))
-            .get(0);
+    JobTaskEntity task = jobTaskMapper
+        .selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null))
+        .get(0);
+    JobPartitionEntity partition = jobPartitionMapper
+        .selectByQuery(new JobPartitionQuery(TENANT, instance.getId(), null, null))
+        .get(0);
     return new LaunchedTask(seed, instance.getId(), task.getId(), partition.getId());
   }
 
@@ -151,43 +158,41 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
       LaunchedTask lt = launched.get(i);
       JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
       if (i < 2) {
-        reportItems.add(
-            new TaskExecutionReportCommand(
-                lt.taskId(),
-                TENANT,
-                lt.seed().workerCode(),
-                true,
-                null,
-                null,
-                "{\"records\":" + (i + 1) + "}",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                p.getCurrentInvocationId(),
-                null,
-                null));
+        reportItems.add(new TaskExecutionReportCommand(
+            lt.taskId(),
+            TENANT,
+            lt.seed().workerCode(),
+            true,
+            null,
+            null,
+            "{\"records\":" + (i + 1) + "}",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            p.getCurrentInvocationId(),
+            null,
+            null));
       } else {
-        reportItems.add(
-            new TaskExecutionReportCommand(
-                lt.taskId(),
-                TENANT,
-                lt.seed().workerCode(),
-                false,
-                "E_IT_FAIL",
-                "intentional failure for per-item isolation",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                p.getCurrentInvocationId(),
-                null,
-                null));
+        reportItems.add(new TaskExecutionReportCommand(
+            lt.taskId(),
+            TENANT,
+            lt.seed().workerCode(),
+            false,
+            "E_IT_FAIL",
+            "intentional failure for per-item isolation",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            p.getCurrentInvocationId(),
+            null,
+            null));
       }
     }
     TaskReportBatchResult reportResp =
@@ -198,20 +203,17 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     assertThat(reportResp.results()).allMatch(TaskReportItemResult::ok);
 
     // assert 3:成功项 partition→SUCCESS、失败项 partition→FAILED(逐项独立、互不影响)
-    assertThat(
-            jobPartitionMapper
-                .selectById(TENANT, launched.get(0).partitionId())
-                .getPartitionStatus())
+    assertThat(jobPartitionMapper
+            .selectById(TENANT, launched.get(0).partitionId())
+            .getPartitionStatus())
         .isEqualTo(PartitionStatus.SUCCESS.code());
-    assertThat(
-            jobPartitionMapper
-                .selectById(TENANT, launched.get(1).partitionId())
-                .getPartitionStatus())
+    assertThat(jobPartitionMapper
+            .selectById(TENANT, launched.get(1).partitionId())
+            .getPartitionStatus())
         .isEqualTo(PartitionStatus.SUCCESS.code());
-    assertThat(
-            jobPartitionMapper
-                .selectById(TENANT, launched.get(2).partitionId())
-                .getPartitionStatus())
+    assertThat(jobPartitionMapper
+            .selectById(TENANT, launched.get(2).partitionId())
+            .getPartitionStatus())
         .isEqualTo(PartitionStatus.FAILED.code());
   }
 
@@ -228,24 +230,21 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     assertThat(claimedA).isNotNull();
 
     // claim-batch 用「另一个 worker」尝试认领 a + b:a 已被领走 → claimed=false;b 正常 → claimed=true
-    List<TaskClaimItemCommand> items =
-        List.of(
-            new TaskClaimItemCommand(TENANT, a.taskId(), b.seed().workerCode(), null),
-            new TaskClaimItemCommand(TENANT, b.taskId(), b.seed().workerCode(), null));
+    List<TaskClaimItemCommand> items = List.of(
+        new TaskClaimItemCommand(TENANT, a.taskId(), b.seed().workerCode(), null),
+        new TaskClaimItemCommand(TENANT, b.taskId(), b.seed().workerCode(), null));
     TaskClaimBatchResult resp =
         taskControllerApplicationService.claimBatch(new TaskClaimBatchCommand(items));
 
     assertThat(resp.results()).hasSize(2);
-    TaskClaimItemResult ra =
-        resp.results().stream()
-            .filter(r -> r.taskId().equals(a.taskId()))
-            .findFirst()
-            .orElseThrow();
-    TaskClaimItemResult rb =
-        resp.results().stream()
-            .filter(r -> r.taskId().equals(b.taskId()))
-            .findFirst()
-            .orElseThrow();
+    TaskClaimItemResult ra = resp.results().stream()
+        .filter(r -> r.taskId().equals(a.taskId()))
+        .findFirst()
+        .orElseThrow();
+    TaskClaimItemResult rb = resp.results().stream()
+        .filter(r -> r.taskId().equals(b.taskId()))
+        .findFirst()
+        .orElseThrow();
     assertThat(ra.claimed()).isFalse(); // a 被对手领走,逐项 skip 不抛异常
     assertThat(rb.claimed()).isTrue(); // b 正常领到
     assertThat(rb.config()).isNotNull();

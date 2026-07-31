@@ -56,7 +56,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class TaskControllerApplicationServiceTest {
 
-  @Mock private TaskExecutionService taskExecutionService;
+  @Mock
+  private TaskExecutionService taskExecutionService;
 
   private TaskControllerApplicationService service;
 
@@ -65,9 +66,8 @@ class TaskControllerApplicationServiceTest {
 
   @BeforeEach
   void setUp() {
-    service =
-        new TaskControllerApplicationService(
-            taskExecutionService, new ObjectMapper(), batchClaimProperties, meterRegistry);
+    service = new TaskControllerApplicationService(
+        taskExecutionService, new ObjectMapper(), batchClaimProperties, meterRegistry);
     // reportBatch 经 self 代理逐项调 report;单测里无 Spring 代理,自引用指回本实例即可触发真逻辑
     ReflectionTestUtils.setField(service, "self", service);
   }
@@ -134,13 +134,10 @@ class TaskControllerApplicationServiceTest {
     // task 3:不存在(assignWorker 返 null)
     when(taskExecutionService.assignWorker(eq("ta"), eq(3L), eq("w1"), any())).thenReturn(null);
 
-    TaskClaimBatchResult resp =
-        service.claimBatch(
-            new TaskClaimBatchCommand(
-                List.of(
-                    new TaskClaimItemCommand("ta", 1L, "w1", "inv-1"),
-                    new TaskClaimItemCommand("ta", 2L, "w1", "inv-2"),
-                    new TaskClaimItemCommand("ta", 3L, "w1", "inv-3"))));
+    TaskClaimBatchResult resp = service.claimBatch(new TaskClaimBatchCommand(List.of(
+        new TaskClaimItemCommand("ta", 1L, "w1", "inv-1"),
+        new TaskClaimItemCommand("ta", 2L, "w1", "inv-2"),
+        new TaskClaimItemCommand("ta", 3L, "w1", "inv-3"))));
 
     assertThat(resp.results()).hasSize(3);
     assertThat(resp.results().get(0).taskId()).isEqualTo(1L);
@@ -158,14 +155,10 @@ class TaskControllerApplicationServiceTest {
   void claimBatchRejectsOversizeBatch() {
     batchClaimProperties.setMaxBatchSize(2);
 
-    assertThatThrownBy(
-            () ->
-                service.claimBatch(
-                    new TaskClaimBatchCommand(
-                        List.of(
-                            new TaskClaimItemCommand("ta", 1L, "w1", "i1"),
-                            new TaskClaimItemCommand("ta", 2L, "w1", "i2"),
-                            new TaskClaimItemCommand("ta", 3L, "w1", "i3")))))
+    assertThatThrownBy(() -> service.claimBatch(new TaskClaimBatchCommand(List.of(
+            new TaskClaimItemCommand("ta", 1L, "w1", "i1"),
+            new TaskClaimItemCommand("ta", 2L, "w1", "i2"),
+            new TaskClaimItemCommand("ta", 3L, "w1", "i3")))))
         .isInstanceOf(BizException.class);
     verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString());
     verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString(), any());
@@ -184,19 +177,16 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("reportBatch: 批内某项失败只标记该项,其余照常推进(逐项独立)")
   void reportBatchPartialFailureIsolatesFailingItem() {
     // taskId=2 的 applyTaskOutcome 抛(模拟版本 CAS 冲突);1/3 正常
-    when(taskExecutionService.applyTaskOutcome(any()))
-        .thenAnswer(
-            inv -> {
-              TaskOutcomeCommand c = inv.getArgument(0);
-              if (c.taskId() == 2L) {
-                throw new RuntimeException("version CAS conflict");
-              }
-              return null;
-            });
+    when(taskExecutionService.applyTaskOutcome(any())).thenAnswer(inv -> {
+      TaskOutcomeCommand c = inv.getArgument(0);
+      if (c.taskId() == 2L) {
+        throw new RuntimeException("version CAS conflict");
+      }
+      return null;
+    });
 
-    TaskReportBatchResult resp =
-        service.reportBatch(
-            new TaskReportBatchCommand(List.of(reportDto(1L), reportDto(2L), reportDto(3L))));
+    TaskReportBatchResult resp = service.reportBatch(
+        new TaskReportBatchCommand(List.of(reportDto(1L), reportDto(2L), reportDto(3L))));
 
     assertThat(resp.results()).hasSize(3);
     assertThat(resp.results().get(0).ok()).isTrue();
@@ -212,11 +202,8 @@ class TaskControllerApplicationServiceTest {
   void reportBatchRejectsOversize() {
     batchClaimProperties.setMaxBatchSize(2);
 
-    assertThatThrownBy(
-            () ->
-                service.reportBatch(
-                    new TaskReportBatchCommand(
-                        List.of(reportDto(1L), reportDto(2L), reportDto(3L)))))
+    assertThatThrownBy(() -> service.reportBatch(
+            new TaskReportBatchCommand(List.of(reportDto(1L), reportDto(2L), reportDto(3L)))))
         .isInstanceOf(BizException.class);
     verify(taskExecutionService, never()).applyTaskOutcome(any());
   }
@@ -238,45 +225,41 @@ class TaskControllerApplicationServiceTest {
         .thenReturn(task(TaskStatus.RUNNING.code(), "w1"));
     when(taskExecutionService.assignWorker(eq("ta"), eq(2L), eq("w1"), any()))
         .thenReturn(task(TaskStatus.RUNNING.code(), "w-other"));
-    service.claimBatch(
-        new TaskClaimBatchCommand(
-            List.of(
-                new TaskClaimItemCommand("ta", 1L, "w1", "i1"),
-                new TaskClaimItemCommand("ta", 2L, "w1", "i2"))));
+    service.claimBatch(new TaskClaimBatchCommand(List.of(
+        new TaskClaimItemCommand("ta", 1L, "w1", "i1"),
+        new TaskClaimItemCommand("ta", 2L, "w1", "i2"))));
 
     assertThat(meterRegistry.summary("batch.task.batch_claim.size").count()).isEqualTo(1);
-    assertThat(meterRegistry.summary("batch.task.batch_claim.size").totalAmount()).isEqualTo(2.0);
-    assertThat(
-            meterRegistry
-                .counter("batch.task.batch_claim.items.total", "outcome", "claimed")
-                .count())
+    assertThat(meterRegistry.summary("batch.task.batch_claim.size").totalAmount())
+        .isEqualTo(2.0);
+    assertThat(meterRegistry
+            .counter("batch.task.batch_claim.items.total", "outcome", "claimed")
+            .count())
         .isEqualTo(1.0);
-    assertThat(
-            meterRegistry
-                .counter("batch.task.batch_claim.items.total", "outcome", "skipped")
-                .count())
+    assertThat(meterRegistry
+            .counter("batch.task.batch_claim.items.total", "outcome", "skipped")
+            .count())
         .isEqualTo(1.0);
 
     // report:taskId=2 抛 → 1 ok + 1 failed
-    when(taskExecutionService.applyTaskOutcome(any()))
-        .thenAnswer(
-            inv -> {
-              TaskOutcomeCommand c = inv.getArgument(0);
-              if (c.taskId() == 2L) {
-                throw new RuntimeException("boom");
-              }
-              return null;
-            });
+    when(taskExecutionService.applyTaskOutcome(any())).thenAnswer(inv -> {
+      TaskOutcomeCommand c = inv.getArgument(0);
+      if (c.taskId() == 2L) {
+        throw new RuntimeException("boom");
+      }
+      return null;
+    });
     service.reportBatch(new TaskReportBatchCommand(List.of(reportDto(1L), reportDto(2L))));
 
-    assertThat(meterRegistry.summary("batch.task.batch_report.size").totalAmount()).isEqualTo(2.0);
-    assertThat(
-            meterRegistry.counter("batch.task.batch_report.items.total", "outcome", "ok").count())
+    assertThat(meterRegistry.summary("batch.task.batch_report.size").totalAmount())
+        .isEqualTo(2.0);
+    assertThat(meterRegistry
+            .counter("batch.task.batch_report.items.total", "outcome", "ok")
+            .count())
         .isEqualTo(1.0);
-    assertThat(
-            meterRegistry
-                .counter("batch.task.batch_report.items.total", "outcome", "failed")
-                .count())
+    assertThat(meterRegistry
+            .counter("batch.task.batch_report.items.total", "outcome", "failed")
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -421,8 +404,10 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("renewBatch: null/空 入参 → 返空 list,不调底层")
   void renewBatch_empty_input() {
     assertThat(service.renewBatch(null).results()).isEmpty();
-    assertThat(service.renewBatch(new TaskLeaseRenewBatchCommand(null)).results()).isEmpty();
-    assertThat(service.renewBatch(new TaskLeaseRenewBatchCommand(List.of())).results()).isEmpty();
+    assertThat(service.renewBatch(new TaskLeaseRenewBatchCommand(null)).results())
+        .isEmpty();
+    assertThat(service.renewBatch(new TaskLeaseRenewBatchCommand(List.of())).results())
+        .isEmpty();
     verify(taskExecutionService, never()).renewLeaseBatch(any());
   }
 
@@ -430,19 +415,15 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("renewBatch: PERF(5.3) set-based 一次下发,逐项结果与入参对齐")
   void renewBatch_independent_results() {
     when(taskExecutionService.renewLeaseBatch(any()))
-        .thenReturn(
-            List.of(
-                new TaskAssignmentService.TaskHeartbeatResult(true, false),
-                new TaskAssignmentService.TaskHeartbeatResult(false, false),
-                new TaskAssignmentService.TaskHeartbeatResult(true, true)));
+        .thenReturn(List.of(
+            new TaskAssignmentService.TaskHeartbeatResult(true, false),
+            new TaskAssignmentService.TaskHeartbeatResult(false, false),
+            new TaskAssignmentService.TaskHeartbeatResult(true, true)));
 
-    TaskLeaseRenewBatchResult resp =
-        service.renewBatch(
-            new TaskLeaseRenewBatchCommand(
-                List.of(
-                    new TaskLeaseRenewItemCommand("ta", 1L, "w1", "inv-1"),
-                    new TaskLeaseRenewItemCommand("ta", 2L, "w1", "inv-2"),
-                    new TaskLeaseRenewItemCommand("ta", 3L, "w1", "inv-3"))));
+    TaskLeaseRenewBatchResult resp = service.renewBatch(new TaskLeaseRenewBatchCommand(List.of(
+        new TaskLeaseRenewItemCommand("ta", 1L, "w1", "inv-1"),
+        new TaskLeaseRenewItemCommand("ta", 2L, "w1", "inv-2"),
+        new TaskLeaseRenewItemCommand("ta", 3L, "w1", "inv-3"))));
 
     assertThat(resp.results()).hasSize(3);
     assertThat(resp.results().get(0).taskId()).isEqualTo(1L);

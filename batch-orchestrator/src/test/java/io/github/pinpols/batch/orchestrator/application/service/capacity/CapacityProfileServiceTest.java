@@ -25,24 +25,22 @@ class CapacityProfileServiceTest {
     Instant from = Instant.parse("2026-06-30T00:00:00Z");
     Instant to = Instant.parse("2026-06-30T01:00:00Z");
     when(mapper.selectJobProfile("ta", from, to, 10))
-        .thenReturn(
-            List.of(
-                new CapacityProfileRow(
-                    "ta",
-                    "import_daily",
-                    null,
-                    "import",
-                    2,
-                    0,
-                    2,
-                    0,
-                    2_000,
-                    1_000,
-                    1_500,
-                    10 * 1024 * 1024,
-                    4_000,
-                    0,
-                    0)));
+        .thenReturn(List.of(new CapacityProfileRow(
+            "ta",
+            "import_daily",
+            null,
+            "import",
+            2,
+            0,
+            2,
+            0,
+            2_000,
+            1_000,
+            1_500,
+            10 * 1024 * 1024,
+            4_000,
+            0,
+            0)));
 
     CapacityProfileReport report = service.query("ta", from, to, CapacityProfileGroupBy.JOB, 10);
 

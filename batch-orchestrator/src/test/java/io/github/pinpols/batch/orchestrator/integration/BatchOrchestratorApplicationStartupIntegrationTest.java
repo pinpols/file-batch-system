@@ -19,7 +19,8 @@ import org.springframework.context.ApplicationContext;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired ApplicationContext applicationContext;
+  @Autowired
+  ApplicationContext applicationContext;
 
   @Test
   void contextLoads() {

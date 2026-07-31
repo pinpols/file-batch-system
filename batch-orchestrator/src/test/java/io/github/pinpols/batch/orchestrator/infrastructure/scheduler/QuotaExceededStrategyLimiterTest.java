@@ -140,9 +140,8 @@ class QuotaExceededStrategyLimiterTest {
     when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(99L);
     when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy(strategy));
     when(quotaRuntime.evaluateAndReserve(any()))
-        .thenReturn(
-            ResourceCheck.waitForCapacity(
-                "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)"));
+        .thenReturn(ResourceCheck.waitForCapacity(
+            "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)"));
   }
 
   private static TenantQuotaPolicyEntity policy(String exceededStrategy) {

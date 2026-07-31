@@ -55,10 +55,9 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   public Map<String, Object> loadBatch(ExportDataContext context) {
     JdbcMappedExportSpec spec = JdbcMappedExportSpec.parse(context.templateConfig(), objectMapper);
     spec.validateIdentifiers(securityProperties.getAllowedSchemas());
-    String fq =
-        JdbcMappedSqlValidator.quotePg(spec.schema())
-            + "."
-            + JdbcMappedSqlValidator.quotePg(spec.batchTable());
+    String fq = JdbcMappedSqlValidator.quotePg(spec.schema())
+        + "."
+        + JdbcMappedSqlValidator.quotePg(spec.batchTable());
     StringBuilder cols = new StringBuilder();
     for (String c : spec.batchSelectColumns()) {
       cols.append(JdbcMappedSqlValidator.quotePg(c)).append(',');
@@ -68,12 +67,10 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     String bno = JdbcMappedSqlValidator.quotePg(spec.batchNoColumn());
     String sql =
         "SELECT " + cols + " FROM " + fq + " WHERE " + tenant + " = ? AND " + bno + " = ? LIMIT 1";
-    List<Map<String, Object>> rows =
-        txTemplate.execute(
-            status -> {
-              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-              return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
-            });
+    List<Map<String, Object>> rows = txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
+    });
     if (rows == null || rows.isEmpty()) {
       return Map.of();
     }
@@ -88,10 +85,9 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     }
     JdbcMappedExportSpec spec = JdbcMappedExportSpec.parse(context.templateConfig(), objectMapper);
     spec.validateIdentifiers(securityProperties.getAllowedSchemas());
-    String fq =
-        JdbcMappedSqlValidator.quotePg(spec.schema())
-            + "."
-            + JdbcMappedSqlValidator.quotePg(spec.detailTable());
+    String fq = JdbcMappedSqlValidator.quotePg(spec.schema())
+        + "."
+        + JdbcMappedSqlValidator.quotePg(spec.detailTable());
     StringBuilder cols = new StringBuilder();
     boolean orderColumnSelected = false;
     for (String c : spec.detailSelectColumns()) {
@@ -109,26 +105,22 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
     ExportKeysetRange keysetRange =
         keysetRangePlanner.resolve(context, () -> minMax(spec, batchId));
-    PagedQuery pq =
-        buildDetailQuery(
-            new DetailSql(cols.toString(), fq, fk, ob), batchId, cursor, pageSize, keysetRange);
+    PagedQuery pq = buildDetailQuery(
+        new DetailSql(cols.toString(), fq, fk, ob), batchId, cursor, pageSize, keysetRange);
     final String finalSql = pq.sql();
     final Object[] sqlArgs = pq.args();
-    List<Map<String, Object>> rows =
-        txTemplate.execute(
-            status -> {
-              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-              return jdbcTemplate.queryForList(finalSql, sqlArgs);
-            });
+    List<Map<String, Object>> rows = txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      return jdbcTemplate.queryForList(finalSql, sqlArgs);
+    });
     if (rows == null || rows.isEmpty()) {
       return DetailPage.empty();
     }
     Object nextCursor = null;
     for (Map<String, Object> row : rows) {
-      nextCursor =
-          orderColumnSelected
-              ? row.get(spec.detailOrderByColumn())
-              : row.remove("__cursor_value__");
+      nextCursor = orderColumnSelected
+          ? row.get(spec.detailOrderByColumn())
+          : row.remove("__cursor_value__");
     }
     return new DetailPage(rows, nextCursor);
   }
@@ -155,14 +147,13 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     String fq = q.fq();
     String fk = q.fk();
     String ob = q.ob();
-    StringBuilder sql =
-        new StringBuilder("SELECT ")
-            .append(cols)
-            .append(" FROM ")
-            .append(fq)
-            .append(" WHERE ")
-            .append(fk)
-            .append(" = ?");
+    StringBuilder sql = new StringBuilder("SELECT ")
+        .append(cols)
+        .append(" FROM ")
+        .append(fq)
+        .append(" WHERE ")
+        .append(fk)
+        .append(" = ?");
     List<Object> args = new ArrayList<>();
     args.add(batchId);
     if (range != null && range.active()) {
@@ -199,20 +190,17 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
   /** 物理表游标列 [min,max];非数值列 → 元素 null(planner 退 hashtext)。复用只读 RLS tx。 */
   private BigDecimal[] minMax(JdbcMappedExportSpec spec, Long batchId) {
-    String fq =
-        JdbcMappedSqlValidator.quotePg(spec.schema())
-            + "."
-            + JdbcMappedSqlValidator.quotePg(spec.detailTable());
+    String fq = JdbcMappedSqlValidator.quotePg(spec.schema())
+        + "."
+        + JdbcMappedSqlValidator.quotePg(spec.detailTable());
     String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
     String fk = JdbcMappedSqlValidator.quotePg(spec.detailFkColumn());
     String sql =
         "SELECT min(" + ob + ") lo, max(" + ob + ") hi FROM " + fq + " WHERE " + fk + " = ?";
-    Map<String, Object> row =
-        txTemplate.execute(
-            status -> {
-              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-              return jdbcTemplate.queryForMap(sql, batchId);
-            });
+    Map<String, Object> row = txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      return jdbcTemplate.queryForMap(sql, batchId);
+    });
     return new BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
   }
 

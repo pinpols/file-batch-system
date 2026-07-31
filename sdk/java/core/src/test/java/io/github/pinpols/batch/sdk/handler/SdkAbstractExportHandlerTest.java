@@ -173,9 +173,8 @@ class SdkAbstractExportHandlerTest {
   @DisplayName("streamRows 抛异常 → fail")
   void fails_whenStreamRowsThrows() {
     // 准备
-    ProbeExportHandler h =
-        new ProbeExportHandler(
-            rows(5), "q", null, null, new IllegalStateException("stream boom"), null, null);
+    ProbeExportHandler h = new ProbeExportHandler(
+        rows(5), "q", null, null, new IllegalStateException("stream boom"), null, null);
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -190,9 +189,8 @@ class SdkAbstractExportHandlerTest {
   @DisplayName("formatRow 抛异常 → fail")
   void fails_whenFormatRowThrows() {
     // 准备
-    ProbeExportHandler h =
-        new ProbeExportHandler(
-            rows(5), "q", null, null, null, new IllegalStateException("format boom"), null);
+    ProbeExportHandler h = new ProbeExportHandler(
+        rows(5), "q", null, null, null, new IllegalStateException("format boom"), null);
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -221,9 +219,8 @@ class SdkAbstractExportHandlerTest {
   @DisplayName("formatRow 中途抛异常 → 行流仍 close()(try-with-resources 回退,不泄露)")
   void closesRowStream_whenFormatRowThrowsMidIteration() {
     // 准备
-    ProbeExportHandler h =
-        new ProbeExportHandler(
-            rows(5), "q", null, null, null, new IllegalStateException("format boom"), null);
+    ProbeExportHandler h = new ProbeExportHandler(
+        rows(5), "q", null, null, null, new IllegalStateException("format boom"), null);
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -237,9 +234,8 @@ class SdkAbstractExportHandlerTest {
   @DisplayName("writeOut 抛异常 → fail")
   void fails_whenWriteOutThrows() {
     // 准备
-    ProbeExportHandler h =
-        new ProbeExportHandler(
-            rows(5), "q", null, null, null, null, new IllegalStateException("writeout boom"));
+    ProbeExportHandler h = new ProbeExportHandler(
+        rows(5), "q", null, null, null, null, new IllegalStateException("writeout boom"));
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -254,9 +250,8 @@ class SdkAbstractExportHandlerTest {
   @DisplayName("openSink 抛异常 → 后续都不调,fail")
   void fails_whenOpenSinkThrows() {
     // 准备
-    ProbeExportHandler h =
-        new ProbeExportHandler(
-            rows(5), "q", null, new IllegalStateException("sink boom"), null, null, null);
+    ProbeExportHandler h = new ProbeExportHandler(
+        rows(5), "q", null, new IllegalStateException("sink boom"), null, null, null);
 
     // 执行
     SdkTaskResult r = h.execute(ctx());

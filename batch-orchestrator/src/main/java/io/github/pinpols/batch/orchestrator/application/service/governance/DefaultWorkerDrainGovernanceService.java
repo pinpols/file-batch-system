@@ -54,14 +54,12 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
     }
-    int seconds =
-        timeoutSeconds != null && timeoutSeconds > 0
-            ? timeoutSeconds
-            : workerDrainProperties.getDefaultTimeoutSeconds();
+    int seconds = timeoutSeconds != null && timeoutSeconds > 0
+        ? timeoutSeconds
+        : workerDrainProperties.getDefaultTimeoutSeconds();
     Instant now = BatchDateTimeSupport.utcNow();
-    registry =
-        registry.withDrain(
-            WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);
+    registry = registry.withDrain(
+        WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);
     workerRegistryMapper.updateById(registry);
     return registry;
   }

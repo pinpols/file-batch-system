@@ -74,9 +74,13 @@ public record ConsoleInstanceDiagnosisResponse(
         return null;
       }
       return new DiagnosisSummary(
-          mapList(row.get("partitionStatusCounts")).stream().map(StatusCount::from).toList(),
+          mapList(row.get("partitionStatusCounts")).stream()
+              .map(StatusCount::from)
+              .toList(),
           mapList(row.get("taskStatusCounts")).stream().map(StatusCount::from).toList(),
-          mapList(row.get("outboxStatusCounts")).stream().map(OutboxStatusCount::from).toList(),
+          mapList(row.get("outboxStatusCounts")).stream()
+              .map(OutboxStatusCount::from)
+              .toList(),
           longValue(row, "onlineWorkersForGroup"));
     }
   }

@@ -33,7 +33,8 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
   @Override
   public WorkerRegistration start(WorkerRegistration registration) {
     WorkerRegistration activeRegistration = registration;
-    if (activeRegistration.getWorkerId() == null || activeRegistration.getWorkerId().isBlank()) {
+    if (activeRegistration.getWorkerId() == null
+        || activeRegistration.getWorkerId().isBlank()) {
       activeRegistration.setWorkerId("worker-" + UUID.randomUUID());
     }
     activeRegistration.setStatus(WorkerRegistryStatus.ONLINE.code());
@@ -63,10 +64,9 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
     activeRegistration.setActive(Boolean.FALSE);
 
     // 先标记为 DRAINING，让 Orchestrator 立即停止分发新任务。
-    String finalStatus =
-        hasActiveLeases(workerId)
-            ? WorkerRegistryStatus.DRAINING.code()
-            : WorkerRegistryStatus.DECOMMISSIONED.code();
+    String finalStatus = hasActiveLeases(workerId)
+        ? WorkerRegistryStatus.DRAINING.code()
+        : WorkerRegistryStatus.DECOMMISSIONED.code();
     // R2-P1-7：之前 catch 仅 warn + e.getMessage()，registry 留 ONLINE → orchestrator 继续派任务给死 worker。
     // 改为：最多 3 次指数退避重试，全部失败 ERROR + 完整 stack。
     // finally 仍清本地 map（本地状态已不准确，留着无意义）；DB 状态由 PartitionLeaseReclaimScheduler 回退。

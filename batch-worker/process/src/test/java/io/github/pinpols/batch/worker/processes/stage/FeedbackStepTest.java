@@ -31,28 +31,27 @@ class FeedbackStepTest {
   }
 
   private static ProcessMetrics realMetrics(SimpleMeterRegistry registry) {
-    ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider =
-        new ObjectProvider<>() {
-          @Override
-          public io.micrometer.core.instrument.MeterRegistry getObject(Object... args) {
-            return registry;
-          }
+    ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider = new ObjectProvider<>() {
+      @Override
+      public io.micrometer.core.instrument.MeterRegistry getObject(Object... args) {
+        return registry;
+      }
 
-          @Override
-          public io.micrometer.core.instrument.MeterRegistry getObject() {
-            return registry;
-          }
+      @Override
+      public io.micrometer.core.instrument.MeterRegistry getObject() {
+        return registry;
+      }
 
-          @Override
-          public io.micrometer.core.instrument.MeterRegistry getIfAvailable() {
-            return registry;
-          }
+      @Override
+      public io.micrometer.core.instrument.MeterRegistry getIfAvailable() {
+        return registry;
+      }
 
-          @Override
-          public io.micrometer.core.instrument.MeterRegistry getIfUnique() {
-            return registry;
-          }
-        };
+      @Override
+      public io.micrometer.core.instrument.MeterRegistry getIfUnique() {
+        return registry;
+      }
+    };
     return new ProcessMetrics(provider);
   }
 
@@ -127,6 +126,7 @@ class FeedbackStepTest {
     // metric: process_feedback_swallowed_total = 1
     // tenantId 不再作为 tag(高基数 → Prometheus 内存爆),改单全局 counter
     assertThat(registry.find("process_feedback_swallowed_total").counter()).isNotNull();
-    assertThat(registry.find("process_feedback_swallowed_total").counter().count()).isEqualTo(1.0);
+    assertThat(registry.find("process_feedback_swallowed_total").counter().count())
+        .isEqualTo(1.0);
   }
 }

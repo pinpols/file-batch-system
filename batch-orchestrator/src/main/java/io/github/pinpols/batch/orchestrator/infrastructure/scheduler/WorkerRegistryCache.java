@@ -114,23 +114,23 @@ public class WorkerRegistryCache {
   private static List<Entry> toEntries(List<WorkerRegistryEntity> records) {
     List<Entry> entries = new ArrayList<>(records.size());
     for (WorkerRegistryEntity r : records) {
-      Entry entry =
-          Entry.builder()
-              .id(r.id())
-              .tenantId(r.tenantId())
-              .workerCode(r.workerCode())
-              .workerGroup(r.workerGroup())
-              .capabilityTagsJson(r.capabilityTags() == null ? null : r.capabilityTags().getValue())
-              .resourceTag(r.resourceTag())
-              .status(r.status())
-              .heartbeatMillis(r.heartbeatAt() == null ? null : r.heartbeatAt().toEpochMilli())
-              .currentLoad(r.currentLoad())
-              .maxConcurrent(r.maxConcurrent())
-              .drainStartedMillis(
-                  r.drainStartedAt() == null ? null : r.drainStartedAt().toEpochMilli())
-              .drainDeadlineMillis(
-                  r.drainDeadlineAt() == null ? null : r.drainDeadlineAt().toEpochMilli())
-              .build();
+      Entry entry = Entry.builder()
+          .id(r.id())
+          .tenantId(r.tenantId())
+          .workerCode(r.workerCode())
+          .workerGroup(r.workerGroup())
+          .capabilityTagsJson(
+              r.capabilityTags() == null ? null : r.capabilityTags().getValue())
+          .resourceTag(r.resourceTag())
+          .status(r.status())
+          .heartbeatMillis(r.heartbeatAt() == null ? null : r.heartbeatAt().toEpochMilli())
+          .currentLoad(r.currentLoad())
+          .maxConcurrent(r.maxConcurrent())
+          .drainStartedMillis(
+              r.drainStartedAt() == null ? null : r.drainStartedAt().toEpochMilli())
+          .drainDeadlineMillis(
+              r.drainDeadlineAt() == null ? null : r.drainDeadlineAt().toEpochMilli())
+          .build();
       entries.add(entry);
     }
     return entries;
@@ -139,20 +139,19 @@ public class WorkerRegistryCache {
   private static List<WorkerRegistryEntity> toRecords(List<Entry> entries) {
     List<WorkerRegistryEntity> records = new ArrayList<>(entries.size());
     for (Entry e : entries) {
-      records.add(
-          new WorkerRegistryEntity(
-              e.id,
-              e.tenantId,
-              e.workerCode,
-              e.workerGroup,
-              e.capabilityTagsJson == null ? null : new JsonbString(e.capabilityTagsJson),
-              e.resourceTag,
-              e.status,
-              e.heartbeatMillis == null ? null : Instant.ofEpochMilli(e.heartbeatMillis),
-              e.currentLoad,
-              e.maxConcurrent,
-              e.drainStartedMillis == null ? null : Instant.ofEpochMilli(e.drainStartedMillis),
-              e.drainDeadlineMillis == null ? null : Instant.ofEpochMilli(e.drainDeadlineMillis)));
+      records.add(new WorkerRegistryEntity(
+          e.id,
+          e.tenantId,
+          e.workerCode,
+          e.workerGroup,
+          e.capabilityTagsJson == null ? null : new JsonbString(e.capabilityTagsJson),
+          e.resourceTag,
+          e.status,
+          e.heartbeatMillis == null ? null : Instant.ofEpochMilli(e.heartbeatMillis),
+          e.currentLoad,
+          e.maxConcurrent,
+          e.drainStartedMillis == null ? null : Instant.ofEpochMilli(e.drainStartedMillis),
+          e.drainDeadlineMillis == null ? null : Instant.ofEpochMilli(e.drainDeadlineMillis)));
     }
     return records;
   }

@@ -22,11 +22,14 @@ import org.springframework.transaction.support.TransactionTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private JobPartitionMapper jobPartitionMapper;
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private TransactionTemplate transactionTemplate;
+  @Autowired
+  private TransactionTemplate transactionTemplate;
 
   @Test
   void promoteStatus_onlyOneWins_whenTwoThreadsRaceConcurrently() throws Exception {
@@ -34,61 +37,43 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
     String suffix = "promote-" + System.nanoTime();
     String jobCode = "JOB_" + suffix;
 
-    Long jobDefinitionId =
-        jdbcTemplate.queryForObject(
-            """
+    Long jobDefinitionId = jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_definition (
                 tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode
             ) VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', 'API')
             RETURNING id
-            """,
-            Long.class,
-            tenantId,
-            jobCode,
-            jobCode);
+            """, Long.class, tenantId, jobCode, jobCode);
 
-    Long triggerRequestId =
-        jdbcTemplate.queryForObject(
-            """
+    Long triggerRequestId = jdbcTemplate.queryForObject(
+        """
             INSERT INTO batch.trigger_request (
                 tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
             ) VALUES (?, ?, 'API', ?, ?, 'LAUNCHED')
             RETURNING id
-            """,
-            Long.class,
-            tenantId,
-            "REQ_" + suffix,
-            jobCode,
-            "TR_DEDUP_" + suffix);
+            """, Long.class, tenantId, "REQ_" + suffix, jobCode, "TR_DEDUP_" + suffix);
 
-    Long jobInstanceId =
-        jdbcTemplate.queryForObject(
-            """
+    Long jobInstanceId = jdbcTemplate.queryForObject(
+        """
             INSERT INTO batch.job_instance (
                 tenant_id, job_definition_id, trigger_request_id, job_code, instance_no, trigger_type, instance_status, dedup_key, biz_date
             ) VALUES (?, ?, ?, ?, ?, 'API', 'RUNNING', ?, CURRENT_DATE)
             RETURNING id
             """,
-            Long.class,
-            tenantId,
-            jobDefinitionId,
-            triggerRequestId,
-            jobCode,
-            "INST_" + suffix,
-            "DEDUP_" + suffix);
+        Long.class,
+        tenantId,
+        jobDefinitionId,
+        triggerRequestId,
+        jobCode,
+        "INST_" + suffix,
+        "DEDUP_" + suffix);
 
     Long partitionId =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_partition (
                 tenant_id, job_instance_id, partition_no, partition_key, partition_status, worker_group, retry_count, idempotency_key, version
             ) VALUES (?, ?, 1, 'p1', 'WAITING', 'g1', 0, ?, 0)
             RETURNING id
-            """,
-            Long.class,
-            tenantId,
-            jobInstanceId,
-            "idem_" + suffix);
+            """, Long.class, tenantId, jobInstanceId, "idem_" + suffix);
     assertThat(partitionId).isNotNull();
 
     try {
@@ -97,15 +82,11 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
 
       List<Future<Integer>> futures = new ArrayList<>();
       for (int i = 0; i < 2; i++) {
-        futures.add(
-            pool.submit(
-                () -> {
-                  startGate.await();
-                  return transactionTemplate.execute(
-                      status ->
-                          jobPartitionMapper.promoteStatus(
-                              tenantId, partitionId, "WAITING", "READY", 0L));
-                }));
+        futures.add(pool.submit(() -> {
+          startGate.await();
+          return transactionTemplate.execute(status ->
+              jobPartitionMapper.promoteStatus(tenantId, partitionId, "WAITING", "READY", 0L));
+        }));
       }
 
       startGate.countDown();
@@ -118,16 +99,14 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
 
       assertThat(totalUpdated).as("exactly one thread must win the CAS update").isEqualTo(1);
 
-      String finalStatus =
-          jdbcTemplate.queryForObject(
-              "SELECT partition_status FROM batch.job_partition WHERE id = ?",
-              String.class,
-              partitionId);
+      String finalStatus = jdbcTemplate.queryForObject(
+          "SELECT partition_status FROM batch.job_partition WHERE id = ?",
+          String.class,
+          partitionId);
       assertThat(finalStatus).isEqualTo("READY");
 
-      Long finalVersion =
-          jdbcTemplate.queryForObject(
-              "SELECT version FROM batch.job_partition WHERE id = ?", Long.class, partitionId);
+      Long finalVersion = jdbcTemplate.queryForObject(
+          "SELECT version FROM batch.job_partition WHERE id = ?", Long.class, partitionId);
       assertThat(finalVersion).isEqualTo(1L);
     } finally {
       jdbcTemplate.update("DELETE FROM batch.job_partition WHERE id = ?", partitionId);

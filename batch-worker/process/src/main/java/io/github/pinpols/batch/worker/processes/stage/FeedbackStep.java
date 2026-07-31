@@ -30,7 +30,8 @@ public class FeedbackStep implements ProcessStageStep {
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
     // ADR-026: 演练模式 plugin.feedback() 通常推水位 / 清 staging / 写审计 — 全部跳过。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return ProcessStageResult.success(stage());
     }
     ProcessComputePlugin plugin = context.getResolvedPlugin();

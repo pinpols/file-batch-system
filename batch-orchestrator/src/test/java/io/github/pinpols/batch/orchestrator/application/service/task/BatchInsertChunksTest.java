@@ -26,16 +26,13 @@ class BatchInsertChunksTest {
     List<Integer> chunkSizes = new ArrayList<>();
     AtomicInteger nextId = new AtomicInteger(1000);
 
-    BatchInsertChunks.insertInChunks(
-        rows,
-        500,
-        chunk -> {
-          chunkSizes.add(chunk.size());
-          // useGeneratedKeys 语义:回填落到子 list 元素(= 原 list 同一对象引用)
-          for (Row r : chunk) {
-            r.id = (long) nextId.getAndIncrement();
-          }
-        });
+    BatchInsertChunks.insertInChunks(rows, 500, chunk -> {
+      chunkSizes.add(chunk.size());
+      // useGeneratedKeys 语义:回填落到子 list 元素(= 原 list 同一对象引用)
+      for (Row r : chunk) {
+        r.id = (long) nextId.getAndIncrement();
+      }
+    });
 
     assertThat(chunkSizes).containsExactly(500, 500, 200);
     // 回填顺序:原 list 第 i 个元素拿到第 i 个生成 id(拼接回原顺序天然正确)

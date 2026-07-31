@@ -11,9 +11,11 @@ import lombok.Data;
 
 @Data
 public class BatchWindowCreateRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String windowCode;
+  @ValidResourceCode
+  private String windowCode;
 
   @Size(max = 256)
   private String windowName;
@@ -22,8 +24,11 @@ public class BatchWindowCreateRequest {
   @Size(max = 64)
   private String timezone;
 
-  @NotBlank private String startTime;
-  @NotBlank private String endTime;
+  @NotBlank
+  private String startTime;
+
+  @NotBlank
+  private String endTime;
 
   @Size(max = 32)
   private String endStrategy;

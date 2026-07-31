@@ -63,22 +63,19 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
     if (envelope.launchRequest().tenantId() != null) {
       record
           .headers()
-          .add(
-              new RecordHeader(
-                  HEADER_TENANT_ID,
-                  envelope.launchRequest().tenantId().getBytes(StandardCharsets.UTF_8)));
+          .add(new RecordHeader(
+              HEADER_TENANT_ID,
+              envelope.launchRequest().tenantId().getBytes(StandardCharsets.UTF_8)));
     }
     record
         .headers()
-        .add(
-            new RecordHeader(
-                HEADER_ENVELOPE_VERSION,
-                String.valueOf(envelope.envelopeVersion()).getBytes(StandardCharsets.UTF_8)));
+        .add(new RecordHeader(
+            HEADER_ENVELOPE_VERSION,
+            String.valueOf(envelope.envelopeVersion()).getBytes(StandardCharsets.UTF_8)));
     try {
-      SendResult<String, String> result =
-          triggerKafkaTemplate
-              .send(record)
-              .get(kafkaProperties.getSendTimeoutSeconds(), TimeUnit.SECONDS);
+      SendResult<String, String> result = triggerKafkaTemplate
+          .send(record)
+          .get(kafkaProperties.getSendTimeoutSeconds(), TimeUnit.SECONDS);
       log.debug(
           "KafkaTriggerEventPublisher 发送成功: topic={} key={} partition={} offset={}",
           topic,

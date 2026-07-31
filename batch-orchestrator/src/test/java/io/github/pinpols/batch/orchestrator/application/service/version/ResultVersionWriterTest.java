@@ -39,13 +39,11 @@ class ResultVersionWriterTest {
   void setUp() {
     mapper = mock(ResultVersionMapper.class);
     assetPartitionService = mock(AssetPartitionService.class);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    dqExecutor =
-        mock(
-            io.github.pinpols.batch.orchestrator.application.service.dataquality
-                .DataQualityCheckExecutor.class);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    dqExecutor = mock(
+        io.github.pinpols.batch.orchestrator.application.service.dataquality
+            .DataQualityCheckExecutor.class);
     @SuppressWarnings("unchecked")
     org.springframework.beans.factory.ObjectProvider<
             io.github.pinpols.batch.orchestrator.application.service.dataquality
@@ -53,9 +51,8 @@ class ResultVersionWriterTest {
         dqProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
     when(dqProvider.getIfAvailable()).thenReturn(dqExecutor);
     when(dqExecutor.execute(any(), anyString()))
-        .thenReturn(
-            io.github.pinpols.batch.orchestrator.application.service.dataquality
-                .DataQualityGateOutcome.noRules());
+        .thenReturn(io.github.pinpols.batch.orchestrator.application.service.dataquality
+            .DataQualityGateOutcome.noRules());
     writer = new ResultVersionWriter(mapper, dateTimeSupport, assetPartitionService, dqProvider);
   }
 
@@ -84,13 +81,12 @@ class ResultVersionWriterTest {
 
   @Test
   void rerunWithCreateNewVersionPromotesV2EffectiveAndSupersedesV1() {
-    JobInstanceEntity instance =
-        success(
-            "t1",
-            101L,
-            "DAILY_PNL",
-            LocalDate.of(2026, 5, 4),
-            "{\"resultPolicy\":\"CREATE_NEW_VERSION\"}");
+    JobInstanceEntity instance = success(
+        "t1",
+        101L,
+        "DAILY_PNL",
+        LocalDate.of(2026, 5, 4),
+        "{\"resultPolicy\":\"CREATE_NEW_VERSION\"}");
     when(mapper.selectByJobInstanceId("t1", 101L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(1);
 
@@ -105,9 +101,8 @@ class ResultVersionWriterTest {
 
   @Test
   void rerunWithKeepBothCreatesPendingVersion() {
-    JobInstanceEntity instance =
-        success(
-            "t1", 102L, "DAILY_PNL", LocalDate.of(2026, 5, 4), "{\"resultPolicy\":\"KEEP_BOTH\"}");
+    JobInstanceEntity instance = success(
+        "t1", 102L, "DAILY_PNL", LocalDate.of(2026, 5, 4), "{\"resultPolicy\":\"KEEP_BOTH\"}");
     when(mapper.selectByJobInstanceId("t1", 102L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(1);
 
@@ -125,13 +120,12 @@ class ResultVersionWriterTest {
 
   @Test
   void rerunWithManualConfirmEffectiveCreatesPendingVersion() {
-    JobInstanceEntity instance =
-        success(
-            "t1",
-            103L,
-            "DAILY_PNL",
-            LocalDate.of(2026, 5, 4),
-            "{\"resultPolicy\":\"MANUAL_CONFIRM_EFFECTIVE\"}");
+    JobInstanceEntity instance = success(
+        "t1",
+        103L,
+        "DAILY_PNL",
+        LocalDate.of(2026, 5, 4),
+        "{\"resultPolicy\":\"MANUAL_CONFIRM_EFFECTIVE\"}");
     when(mapper.selectByJobInstanceId("t1", 103L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(2);
 
@@ -230,24 +224,22 @@ class ResultVersionWriterTest {
 
   @Test
   void dqGateBlockedForcesPendingAndManualApprovalEvenWithCreateNewVersion() {
-    JobInstanceEntity instance =
-        success(
-            "t1",
-            500L,
-            "DAILY_PNL",
-            LocalDate.of(2026, 5, 4),
-            "{\"resultPolicy\":\"CREATE_NEW_VERSION\"}");
+    JobInstanceEntity instance = success(
+        "t1",
+        500L,
+        "DAILY_PNL",
+        LocalDate.of(2026, 5, 4),
+        "{\"resultPolicy\":\"CREATE_NEW_VERSION\"}");
     when(mapper.selectByJobInstanceId("t1", 500L)).thenReturn(null);
     when(mapper.selectMaxVersionNo(anyString(), anyString())).thenReturn(null);
     when(dqExecutor.execute(any(), anyString()))
-        .thenReturn(
-            io.github.pinpols.batch.orchestrator.application.service.dataquality
-                .DataQualityGateOutcome.builder()
-                .status(
-                    io.github.pinpols.batch.orchestrator.application.service.dataquality
-                        .DataQualityGateOutcome.GateStatus.BLOCKED)
-                .findings(java.util.List.of())
-                .build());
+        .thenReturn(io.github.pinpols.batch.orchestrator.application.service.dataquality
+            .DataQualityGateOutcome.builder()
+            .status(
+                io.github.pinpols.batch.orchestrator.application.service.dataquality
+                    .DataQualityGateOutcome.GateStatus.BLOCKED)
+            .findings(java.util.List.of())
+            .build());
 
     writer.writeOnTerminal(instance, Map.of("recordCount", 1));
 

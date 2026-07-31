@@ -119,18 +119,17 @@ class ConsoleInternalRequestSizeFilterTest {
   }
 
   private MockHttpServletRequest chunkedPost(int actualBytes) {
-    MockHttpServletRequest request =
-        new MockHttpServletRequest("POST", "/internal/am-notify/ops") {
-          @Override
-          public int getContentLength() {
-            return -1;
-          }
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/internal/am-notify/ops") {
+      @Override
+      public int getContentLength() {
+        return -1;
+      }
 
-          @Override
-          public long getContentLengthLong() {
-            return -1L;
-          }
-        };
+      @Override
+      public long getContentLengthLong() {
+        return -1L;
+      }
+    };
     request.setContentType("application/json");
     request.setContent(new byte[actualBytes]);
     return request;

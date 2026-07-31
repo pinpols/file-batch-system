@@ -21,15 +21,14 @@ import org.mockito.ArgumentCaptor;
 
 class LeaseRenewalSchedulerTest {
 
-  private final BatchPlatformClientConfig cfg =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://x")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("k:9092")
-          .kafkaTopicPattern("t.*")
-          .kafkaGroupId("g")
-          .build();
+  private final BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
+      .baseUrl("http://x")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("k:9092")
+      .kafkaTopicPattern("t.*")
+      .kafkaGroupId("g")
+      .build();
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   private static ArgumentCaptor<Map<String, Object>> mapCaptor() {

@@ -98,16 +98,15 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (existingPartition == null) {
       return null;
     }
-    ClaimPartitionParam claimPartitionParam =
-        ClaimPartitionParam.builder()
-            .tenantId(tenantId)
-            .id(partitionId)
-            .workerCode(workerCode)
-            .leaseExpireAt(leaseExpireAt)
-            .fromStatus(PartitionStatus.READY.code())
-            .toStatus(PartitionStatus.RUNNING.code())
-            .expectedVersion(existingPartition.getVersion())
-            .build();
+    ClaimPartitionParam claimPartitionParam = ClaimPartitionParam.builder()
+        .tenantId(tenantId)
+        .id(partitionId)
+        .workerCode(workerCode)
+        .leaseExpireAt(leaseExpireAt)
+        .fromStatus(PartitionStatus.READY.code())
+        .toStatus(PartitionStatus.RUNNING.code())
+        .expectedVersion(existingPartition.getVersion())
+        .build();
     int updated = jobPartitionMapper.claimPartition(claimPartitionParam);
     return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
   }
@@ -120,15 +119,13 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (existingPartition == null) {
       return null;
     }
-    int updated =
-        jobPartitionMapper.renewLease(
-            RenewLeaseParam.builder()
-                .tenantId(tenantId)
-                .id(partitionId)
-                .workerCode(workerCode)
-                .leaseExpireAt(leaseExpireAt)
-                .expectedInvocationId(null)
-                .build());
+    int updated = jobPartitionMapper.renewLease(RenewLeaseParam.builder()
+        .tenantId(tenantId)
+        .id(partitionId)
+        .workerCode(workerCode)
+        .leaseExpireAt(leaseExpireAt)
+        .expectedInvocationId(null)
+        .build());
     return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
   }
 
@@ -140,23 +137,20 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
   @Transactional
   public int reclaimExpiredPartitions(String tenantId) {
     int reclaimed = 0;
-    List<JobPartitionEntity> expired =
-        jobPartitionMapper.selectExpiredLeases(
-            tenantId, PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
+    List<JobPartitionEntity> expired = jobPartitionMapper.selectExpiredLeases(
+        tenantId, PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
     for (JobPartitionEntity partition : expired) {
-      reclaimed +=
-          jobPartitionMapper.markStatus(
-              MarkPartitionStatusParam.builder()
-                  .tenantId(tenantId)
-                  .id(partition.getId())
-                  .partitionStatus(PartitionStatus.WAITING.code())
-                  .runningStatus(PartitionStatus.RUNNING.code())
-                  .terminalStatus1(PartitionStatus.SUCCESS.code())
-                  .terminalStatus2(PartitionStatus.FAILED.code())
-                  .terminalStatus3(PartitionStatus.CANCELLED.code())
-                  .terminalStatus4(PartitionStatus.TERMINATED.code())
-                  .expectedVersion(partition.getVersion())
-                  .build());
+      reclaimed += jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
+          .tenantId(tenantId)
+          .id(partition.getId())
+          .partitionStatus(PartitionStatus.WAITING.code())
+          .runningStatus(PartitionStatus.RUNNING.code())
+          .terminalStatus1(PartitionStatus.SUCCESS.code())
+          .terminalStatus2(PartitionStatus.FAILED.code())
+          .terminalStatus3(PartitionStatus.CANCELLED.code())
+          .terminalStatus4(PartitionStatus.TERMINATED.code())
+          .expectedVersion(partition.getVersion())
+          .build());
     }
     return reclaimed;
   }
@@ -172,23 +166,21 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (partition == null || task == null) {
       return false;
     }
-    int partitionUpdated =
-        jobPartitionMapper.promoteStatus(
-            partition.getTenantId(),
-            partition.getId(),
-            fromPartitionStatus,
-            PartitionStatus.READY.code(),
-            partition.getVersion());
+    int partitionUpdated = jobPartitionMapper.promoteStatus(
+        partition.getTenantId(),
+        partition.getId(),
+        fromPartitionStatus,
+        PartitionStatus.READY.code(),
+        partition.getVersion());
     if (partitionUpdated <= 0) {
       return false;
     }
-    int taskUpdated =
-        jobTaskMapper.promoteStatus(
-            task.getTenantId(),
-            task.getId(),
-            fromTaskStatus,
-            TaskStatus.READY.code(),
-            task.getVersion());
+    int taskUpdated = jobTaskMapper.promoteStatus(
+        task.getTenantId(),
+        task.getId(),
+        fromTaskStatus,
+        TaskStatus.READY.code(),
+        task.getVersion());
     if (taskUpdated <= 0) {
       // 分片与任务是”必须一起推进”的原子语义：
       // - partition 已 READY 但 task 还没 READY，会导致派发链路选择/查询出现不一致

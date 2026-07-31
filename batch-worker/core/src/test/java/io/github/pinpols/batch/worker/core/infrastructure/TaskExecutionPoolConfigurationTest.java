@@ -13,10 +13,8 @@ class TaskExecutionPoolConfigurationTest {
   void startFailsWhenPoolSizeIsSmallerThanMaxConcurrentTasks() {
     WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
     properties.setPoolSize(2);
-    TaskExecutionPool pool =
-        new TaskExecutionPool(
-            properties,
-            new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+    TaskExecutionPool pool = new TaskExecutionPool(
+        properties, new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
 
     assertThatThrownBy(pool::start)
         .isInstanceOf(IllegalStateException.class)
@@ -27,10 +25,8 @@ class TaskExecutionPoolConfigurationTest {
   void startSucceedsWhenPoolSizeMatchesMaxConcurrentTasks() {
     WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
     properties.setPoolSize(4);
-    TaskExecutionPool pool =
-        new TaskExecutionPool(
-            properties,
-            new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+    TaskExecutionPool pool = new TaskExecutionPool(
+        properties, new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
 
     assertThatCode(pool::start).doesNotThrowAnyException();
     pool.shutdown();

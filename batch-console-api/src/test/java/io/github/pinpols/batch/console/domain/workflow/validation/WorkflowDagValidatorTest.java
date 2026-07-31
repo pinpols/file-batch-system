@@ -44,11 +44,20 @@ class WorkflowDagValidatorTest {
 
   private static final String TENANT = "ta";
 
-  @Mock private PipelineDefinitionMapper pipelineDefinitionMapper;
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
-  @Mock private WorkflowDefinitionMapper workflowDefinitionMapper;
-  @Mock private WorkflowNodeMapper workflowNodeMapper;
-  @InjectMocks private WorkflowDagValidator validator;
+  @Mock
+  private PipelineDefinitionMapper pipelineDefinitionMapper;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
+
+  @Mock
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @InjectMocks
+  private WorkflowDagValidator validator;
 
   @Test
   @DisplayName("成功:START → JOB → END 三节点链路 + JOB 引用合法")
@@ -144,9 +153,8 @@ class WorkflowDagValidatorTest {
   @DisplayName("DAG 含环 → cycle_detected")
   void shouldFail_whenCycleDetected() {
     WorkflowDefinitionSaveRequest req = baseRequest();
-    req.setNodes(
-        Arrays.asList(
-            node("start", "START"), node("a", "TASK"), node("b", "TASK"), node("end", "END")));
+    req.setNodes(Arrays.asList(
+        node("start", "START"), node("a", "TASK"), node("b", "TASK"), node("end", "END")));
     req.setEdges(
         Arrays.asList(edge("start", "a"), edge("a", "b"), edge("b", "a"), edge("a", "end")));
 
@@ -194,17 +202,16 @@ class WorkflowDagValidatorTest {
     fs.setRelatedPipelineCode("ghost_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(eq(TENANT), eq("ghost_pipeline"))).thenReturn(0L);
+    when(pipelineDefinitionMapper.countByJobCode(eq(TENANT), eq("ghost_pipeline")))
+        .thenReturn(0L);
 
     // 不能走 assertBizError helper(那个 helper 会 lenient stub 覆盖此处的 0L)
     assertThatThrownBy(() -> validator.validate(TENANT, req))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            ex -> {
-              assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);
-              assertThat(ex.getMessageKey())
-                  .isEqualTo("error.workflow.dag.file_step_pipeline_not_found");
-            });
+        .isInstanceOfSatisfying(BizException.class, ex -> {
+          assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);
+          assertThat(ex.getMessageKey())
+              .isEqualTo("error.workflow.dag.file_step_pipeline_not_found");
+        });
   }
 
   @Test
@@ -215,7 +222,8 @@ class WorkflowDagValidatorTest {
     fs.setRelatedPipelineCode("known_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(eq(TENANT), eq("known_pipeline"))).thenReturn(1L);
+    when(pipelineDefinitionMapper.countByJobCode(eq(TENANT), eq("known_pipeline")))
+        .thenReturn(1L);
 
     assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
   }
@@ -238,16 +246,10 @@ class WorkflowDagValidatorTest {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem gw = node("gw", "GATEWAY");
     // 出度 2,但缺 strategy
-    req.setNodes(
-        Arrays.asList(
-            node("start", "START"), gw, node("a", "TASK"), node("b", "TASK"), node("end", "END")));
-    req.setEdges(
-        Arrays.asList(
-            edge("start", "gw"),
-            edge("gw", "a"),
-            edge("gw", "b"),
-            edge("a", "end"),
-            edge("b", "end")));
+    req.setNodes(Arrays.asList(
+        node("start", "START"), gw, node("a", "TASK"), node("b", "TASK"), node("end", "END")));
+    req.setEdges(Arrays.asList(
+        edge("start", "gw"), edge("gw", "a"), edge("gw", "b"), edge("a", "end"), edge("b", "end")));
 
     assertBizError(req, "error.workflow.dag.gateway_strategy_missing");
   }
@@ -258,16 +260,10 @@ class WorkflowDagValidatorTest {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem gw = node("gw", "GATEWAY");
     gw.setNodeParams("{\"strategy\":\"XOR\"}");
-    req.setNodes(
-        Arrays.asList(
-            node("start", "START"), gw, node("a", "TASK"), node("b", "TASK"), node("end", "END")));
-    req.setEdges(
-        Arrays.asList(
-            edge("start", "gw"),
-            edge("gw", "a"),
-            edge("gw", "b"),
-            edge("a", "end"),
-            edge("b", "end")));
+    req.setNodes(Arrays.asList(
+        node("start", "START"), gw, node("a", "TASK"), node("b", "TASK"), node("end", "END")));
+    req.setEdges(Arrays.asList(
+        edge("start", "gw"), edge("gw", "a"), edge("gw", "b"), edge("a", "end"), edge("b", "end")));
 
     assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
   }
@@ -311,9 +307,8 @@ class WorkflowDagValidatorTest {
     assertThatThrownBy(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
         .isInstanceOfSatisfying(
             BizException.class,
-            ex ->
-                assertThat(ex.getMessageKey())
-                    .isEqualTo("error.workflow.dag.cross_workflow_cycle_detected"));
+            ex -> assertThat(ex.getMessageKey())
+                .isEqualTo("error.workflow.dag.cross_workflow_cycle_detected"));
   }
 
   @Test
@@ -333,9 +328,8 @@ class WorkflowDagValidatorTest {
     assertThatThrownBy(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
         .isInstanceOfSatisfying(
             BizException.class,
-            ex ->
-                assertThat(ex.getMessageKey())
-                    .isEqualTo("error.workflow.dag.cross_workflow_cycle_detected"));
+            ex -> assertThat(ex.getMessageKey())
+                .isEqualTo("error.workflow.dag.cross_workflow_cycle_detected"));
   }
 
   @Test
@@ -406,12 +400,10 @@ class WorkflowDagValidatorTest {
         .when(pipelineDefinitionMapper.countByJobCode(anyString(), anyString()))
         .thenReturn(1L);
     assertThatThrownBy(() -> validator.validate(TENANT, req))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            ex -> {
-              assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);
-              assertThat(ex.getMessageKey()).isEqualTo(expectedKey);
-            });
+        .isInstanceOfSatisfying(BizException.class, ex -> {
+          assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);
+          assertThat(ex.getMessageKey()).isEqualTo(expectedKey);
+        });
   }
 
   private static WorkflowDefinitionSaveRequest baseRequest() {

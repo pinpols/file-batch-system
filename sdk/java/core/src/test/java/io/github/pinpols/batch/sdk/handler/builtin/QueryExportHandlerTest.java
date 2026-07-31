@@ -22,7 +22,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class QueryExportHandlerTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   @Test
   void shouldExportWithHeaderAndQuoting() throws Exception {
@@ -47,10 +48,8 @@ class QueryExportHandlerTest {
     var handler =
         new QueryExportHandler(QueryExportConfig.defaults("exp", "select id, name from t"), ds);
 
-    SdkTaskResult result =
-        handler.execute(
-            new SdkTaskContext(
-                "t1", "job1", "ti1", 1L, "w1", Map.of("outputPath", out.toString()), Map.of()));
+    SdkTaskResult result = handler.execute(new SdkTaskContext(
+        "t1", "job1", "ti1", 1L, "w1", Map.of("outputPath", out.toString()), Map.of()));
 
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("rowCount", 2L);
@@ -64,16 +63,8 @@ class QueryExportHandlerTest {
     DataSource ds = mock(DataSource.class);
     var handler = new QueryExportHandler(QueryExportConfig.defaults("exp", "select 1"), ds);
 
-    SdkTaskResult result =
-        handler.execute(
-            new SdkTaskContext(
-                "t1",
-                "job1",
-                "ti1",
-                1L,
-                "w1",
-                Map.of("outputPath", "/no/such/dir/out.csv"),
-                Map.of()));
+    SdkTaskResult result = handler.execute(new SdkTaskContext(
+        "t1", "job1", "ti1", 1L, "w1", Map.of("outputPath", "/no/such/dir/out.csv"), Map.of()));
 
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("output directory");

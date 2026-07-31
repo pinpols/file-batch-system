@@ -34,16 +34,15 @@ class DispatchChannelHealthServiceTest {
     DispatchChannelHealthProperties properties = new DispatchChannelHealthProperties();
     DispatchCircuitBreakerProperties circuitBreakerProperties =
         new DispatchCircuitBreakerProperties();
-    service =
-        new DispatchChannelHealthService(
-            repository,
-            properties,
-            circuitBreakerProperties,
-            new S3StorageProperties(),
-            new BatchSecurityProperties(),
-            new ObjectMapper(),
-            new SimpleMeterRegistry(),
-            objectStoreProvider);
+    service = new DispatchChannelHealthService(
+        repository,
+        properties,
+        circuitBreakerProperties,
+        new S3StorageProperties(),
+        new BatchSecurityProperties(),
+        new ObjectMapper(),
+        new SimpleMeterRegistry(),
+        objectStoreProvider);
     service.init();
   }
 

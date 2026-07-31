@@ -31,25 +31,23 @@ class NoSpringDataJdbcQueryGuardTest {
 
   private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
 
-  private static final List<String> SCAN_MODULES =
-      List.of(
-          "batch-common",
-          "batch-trigger",
-          "batch-orchestrator",
-          "batch-worker-core",
-          "batch-worker-import",
-          "batch-worker-export",
-          "batch-worker-process",
-          "batch-worker-dispatch",
-          "batch-console-api");
+  private static final List<String> SCAN_MODULES = List.of(
+      "batch-common",
+      "batch-trigger",
+      "batch-orchestrator",
+      "batch-worker-core",
+      "batch-worker-import",
+      "batch-worker-export",
+      "batch-worker-process",
+      "batch-worker-dispatch",
+      "batch-console-api");
 
-  private static final List<String> FORBIDDEN_TOKENS =
-      List.of(
-          "org.springframework.data.jdbc.repository.query.Query",
-          "org.springframework.data.jdbc.repository.config.EnableJdbcRepositories",
-          "org.springframework.data.repository.Repository",
-          "org.springframework.data.repository.CrudRepository",
-          "org.springframework.data.relational.core.mapping.Column");
+  private static final List<String> FORBIDDEN_TOKENS = List.of(
+      "org.springframework.data.jdbc.repository.query.Query",
+      "org.springframework.data.jdbc.repository.config.EnableJdbcRepositories",
+      "org.springframework.data.repository.Repository",
+      "org.springframework.data.repository.CrudRepository",
+      "org.springframework.data.relational.core.mapping.Column");
 
   @Test
   void noSpringDataJdbcQueryInMain() throws IOException {
@@ -64,10 +62,9 @@ class NoSpringDataJdbcQueryGuardTest {
       }
     }
     assertThat(violations)
-        .as(
-            "全 reactor 已统一走 MyBatis(ADR-001);新增查询请走 mapper,不要再引入 Spring Data JDBC @Query /"
-                + " Repository / @Column / EnableJdbcRepositories。详见 commit 7870f06e + Phase 0-4"
-                + " 迁移历史。")
+        .as("全 reactor 已统一走 MyBatis(ADR-001);新增查询请走 mapper,不要再引入 Spring Data JDBC @Query /"
+            + " Repository / @Column / EnableJdbcRepositories。详见 commit 7870f06e + Phase 0-4"
+            + " 迁移历史。")
         .isEmpty();
   }
 

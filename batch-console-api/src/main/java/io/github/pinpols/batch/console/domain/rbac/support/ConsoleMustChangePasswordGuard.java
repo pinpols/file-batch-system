@@ -42,19 +42,20 @@ public class ConsoleMustChangePasswordGuard extends OncePerRequestFilter {
   private final BatchSecurityProperties batchSecurityProperties;
 
   /** must_change 期间仍放行的登录态端点(改密自助 + 会话管理 + 只读画像)。 */
-  private static final Set<String> ALLOWED_PATHS =
-      Set.of(
-          "/api/console/auth/change-password",
-          "/api/console/auth/logout",
-          "/api/console/auth/token",
-          "/api/console/auth/me",
-          "/api/console/auth/check");
+  private static final Set<String> ALLOWED_PATHS = Set.of(
+      "/api/console/auth/change-password",
+      "/api/console/auth/logout",
+      "/api/console/auth/token",
+      "/api/console/auth/me",
+      "/api/console/auth/check");
 
   private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
   /** 短 TTL 缓存:username → mustChangePassword,避免每个写请求都查库。改密后 ≤10s 内自动放行(配合踢会话强制重登)。 */
-  private final Cache<String, Boolean> flagCache =
-      Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(10)).maximumSize(10_000).build();
+  private final Cache<String, Boolean> flagCache = Caffeine.newBuilder()
+      .expireAfterWrite(Duration.ofSeconds(10))
+      .maximumSize(10_000)
+      .build();
 
   @Override
   protected void doFilterInternal(
@@ -70,11 +71,10 @@ public class ConsoleMustChangePasswordGuard extends OncePerRequestFilter {
       response.setContentType("application/json;charset=UTF-8");
       response
           .getWriter()
-          .write(
-              "{\"code\":\""
-                  + ResultCode.FORBIDDEN.name()
-                  + "\",\"message\":\"password change required before any sensitive operation\","
-                  + "\"messageKey\":\"error.password.must_change\"}");
+          .write("{\"code\":\""
+              + ResultCode.FORBIDDEN.name()
+              + "\",\"message\":\"password change required before any sensitive operation\","
+              + "\"messageKey\":\"error.password.must_change\"}");
       return;
     }
     filterChain.doFilter(request, response);
@@ -98,11 +98,10 @@ public class ConsoleMustChangePasswordGuard extends OncePerRequestFilter {
     if (cached != null) {
       return cached;
     }
-    boolean flag =
-        userAccountMapper
-            .findByUsernameIgnoreCase(username)
-            .map(account -> account.isMustChangePassword())
-            .orElse(false);
+    boolean flag = userAccountMapper
+        .findByUsernameIgnoreCase(username)
+        .map(account -> account.isMustChangePassword())
+        .orElse(false);
     flagCache.put(username, flag);
     return flag;
   }

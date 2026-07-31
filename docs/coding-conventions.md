@@ -2,6 +2,20 @@
 
 > 本文档总结项目中实际遵循的编码规范与设计约定，供团队成员参考。
 
+## 0. Java 格式化工具
+
+Java 源码统一由根目录 `pom.xml` 中的 Spotless 执行 **Palantir Java Format 2.92.0**，采用
+Google 风格兼容模式和 120 列布局。CI、Git Hook 和本地命令必须使用 Spotless，不以 IDE 的
+个人格式化配置作为项目规范。
+
+```bash
+make spotless       # 检查
+make spotless-fix   # 自动修复
+```
+
+格式化变更必须与业务逻辑分开提交。IDE 只负责调用项目 formatter 或导入兼容的 Palantir
+Java Format 插件，不能自行改用 IntelliJ/Eclipse 格式化后提交。
+
 ---
 
 ## 1. 方法参数约束

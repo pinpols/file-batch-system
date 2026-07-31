@@ -54,22 +54,21 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void rejects_invalid_workflowCode() throws Exception {
-    String body =
-        "{\"tenantId\":\"ta\",\"workflowCode\":\"q q q\",\"workflowName\":\"wf\","
-            + "\"workflowType\":\"DAG\"}";
+    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"q q q\",\"workflowName\":\"wf\","
+        + "\"workflowType\":\"DAG\"}";
     mockMvc
-        .perform(
-            post("/api/console/workflow-definitions").contentType(APPLICATION_JSON).content(body))
+        .perform(post("/api/console/workflow-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verify(service, never()).create(ArgumentMatchers.any());
@@ -78,13 +77,13 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
   @Test
   void rejects_nested_invalid_nodeCode() throws Exception {
     // 顶层 workflowCode 合法,但 nodes[0].nodeCode 含空格 → @Valid 应下钻 → 400
-    String body =
-        "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-            + "\"workflowType\":\"DAG\",\"nodes\":["
-            + "{\"nodeCode\":\"bad node\",\"nodeType\":\"TASK\"}],\"edges\":[]}";
+    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
+        + "\"workflowType\":\"DAG\",\"nodes\":["
+        + "{\"nodeCode\":\"bad node\",\"nodeType\":\"TASK\"}],\"edges\":[]}";
     mockMvc
-        .perform(
-            post("/api/console/workflow-definitions").contentType(APPLICATION_JSON).content(body))
+        .perform(post("/api/console/workflow-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verify(service, never()).create(ArgumentMatchers.any());
@@ -92,13 +91,13 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
 
   @Test
   void rejects_nested_invalid_edge_fromNodeCode() throws Exception {
-    String body =
-        "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-            + "\"workflowType\":\"DAG\",\"nodes\":[],"
-            + "\"edges\":[{\"fromNodeCode\":\"中文\",\"toNodeCode\":\"end\"}]}";
+    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
+        + "\"workflowType\":\"DAG\",\"nodes\":[],"
+        + "\"edges\":[{\"fromNodeCode\":\"中文\",\"toNodeCode\":\"end\"}]}";
     mockMvc
-        .perform(
-            post("/api/console/workflow-definitions").contentType(APPLICATION_JSON).content(body))
+        .perform(post("/api/console/workflow-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -106,15 +105,15 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
   @Test
   void acceptsAllValidCodes() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    String body =
-        "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-            + "\"workflowType\":\"DAG\","
-            + "\"nodes\":[{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
-            + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}],"
-            + "\"edges\":[{\"fromNodeCode\":\"start\",\"toNodeCode\":\"end\"}]}";
+    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
+        + "\"workflowType\":\"DAG\","
+        + "\"nodes\":[{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
+        + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}],"
+        + "\"edges\":[{\"fromNodeCode\":\"start\",\"toNodeCode\":\"end\"}]}";
     mockMvc
-        .perform(
-            post("/api/console/workflow-definitions").contentType(APPLICATION_JSON).content(body))
+        .perform(post("/api/console/workflow-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     verify(service).create(ArgumentMatchers.any());

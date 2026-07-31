@@ -25,7 +25,8 @@ import org.springframework.kafka.support.SendResult;
 @ExtendWith(MockitoExtension.class)
 class DeadLetterPublisherTest {
 
-  @Mock private KafkaTemplate<String, String> kafkaTemplate;
+  @Mock
+  private KafkaTemplate<String, String> kafkaTemplate;
 
   private DeadLetterPublisher publisher;
   private MeterRegistry registry;
@@ -56,10 +57,9 @@ class DeadLetterPublisherTest {
     assertThat(sent).contains("workerType");
     assertThat(sent).contains("errorMessage");
     assertThat(sent).contains("failedAt");
-    assertThat(
-            registry
-                .counter("worker.dlq.publish.success.total", "topic", BatchTopics.TASK_DEAD_LETTER)
-                .count())
+    assertThat(registry
+            .counter("worker.dlq.publish.success.total", "topic", BatchTopics.TASK_DEAD_LETTER)
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -112,10 +112,9 @@ class DeadLetterPublisherTest {
 
     // 必须在 5s ~ 10s 之间返回 (超时常量 5s + 调度抖动)
     assertThat(elapsed).isBetween(4500L, 10_000L);
-    assertThat(
-            registry
-                .counter("worker.dlq.publish.timeout.total", "topic", BatchTopics.TASK_DEAD_LETTER)
-                .count())
+    assertThat(registry
+            .counter("worker.dlq.publish.timeout.total", "topic", BatchTopics.TASK_DEAD_LETTER)
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -129,10 +128,9 @@ class DeadLetterPublisherTest {
     assertThatThrownBy(() -> publisher.publish("p", "t", "w", "err"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("publish failed");
-    assertThat(
-            registry
-                .counter("worker.dlq.publish.failed.total", "topic", BatchTopics.TASK_DEAD_LETTER)
-                .count())
+    assertThat(registry
+            .counter("worker.dlq.publish.failed.total", "topic", BatchTopics.TASK_DEAD_LETTER)
+            .count())
         .isEqualTo(1.0);
   }
 }

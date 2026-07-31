@@ -33,10 +33,17 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAuthApplicationServiceTest {
 
-  @Mock private ConsoleJwtService jwtService;
-  @Mock private ConsoleLoginService loginService;
-  @Mock private ConsoleSessionRegistry sessionRegistry;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock
+  private ConsoleJwtService jwtService;
+
+  @Mock
+  private ConsoleLoginService loginService;
+
+  @Mock
+  private ConsoleSessionRegistry sessionRegistry;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private ConsoleSecurityProperties securityProperties;
   private ConsoleAuthApplicationService service;
@@ -47,14 +54,13 @@ class ConsoleAuthApplicationServiceTest {
     securityProperties.setDefaultTenantId("default-tenant");
     securityProperties.setDefaultAuthorities(List.of("ROLE_ADMIN"));
 
-    service =
-        new ConsoleAuthApplicationService(
-            jwtService,
-            loginService,
-            sessionRegistry,
-            securityProperties,
-            requestMetadataResolver,
-            new ConsoleMenuRegistry(new ConsoleMenuProperties()));
+    service = new ConsoleAuthApplicationService(
+        jwtService,
+        loginService,
+        sessionRegistry,
+        securityProperties,
+        requestMetadataResolver,
+        new ConsoleMenuRegistry(new ConsoleMenuProperties()));
   }
 
   @Test
@@ -74,9 +80,8 @@ class ConsoleAuthApplicationServiceTest {
   @Test
   void issueToken_usesConsolePrincipalWhenPresent() {
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-    UsernamePasswordAuthenticationToken auth =
-        new UsernamePasswordAuthenticationToken(
-            principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
     when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(1L);
     when(jwtService.issueToken(anyString(), anyString(), any(), anyLong()))
         .thenReturn(stubTokenResponse());
@@ -89,9 +94,8 @@ class ConsoleAuthApplicationServiceTest {
   @Test
   void profile_returnsConsolePrincipalFieldsWhenPresent() {
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-    UsernamePasswordAuthenticationToken auth =
-        new UsernamePasswordAuthenticationToken(
-            principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
 
     ConsoleAuthProfileResponse response = service.profile(auth);
 
@@ -102,9 +106,8 @@ class ConsoleAuthApplicationServiceTest {
 
   @Test
   void profile_usesRequestMetadataTenantWhenNoConsolePrincipal() {
-    UsernamePasswordAuthenticationToken auth =
-        new UsernamePasswordAuthenticationToken(
-            "non-principal-user", "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        "non-principal-user", "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
@@ -116,9 +119,8 @@ class ConsoleAuthApplicationServiceTest {
 
   @Test
   void profile_fallsBackToDefaultTenantWhenMetadataEmpty() {
-    UsernamePasswordAuthenticationToken auth =
-        new UsernamePasswordAuthenticationToken(
-            "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
@@ -129,9 +131,8 @@ class ConsoleAuthApplicationServiceTest {
 
   @Test
   void profile_usesDefaultAuthoritiesWhenGrantedContainsOnlyRoleUser() {
-    UsernamePasswordAuthenticationToken auth =
-        new UsernamePasswordAuthenticationToken(
-            "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 

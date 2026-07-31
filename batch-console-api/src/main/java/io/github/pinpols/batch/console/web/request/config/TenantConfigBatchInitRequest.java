@@ -25,25 +25,35 @@ public class TenantConfigBatchInitRequest {
    */
   private boolean strict;
 
-  @Valid private List<JobDefinitionSpec> jobDefinitions;
+  @Valid
+  private List<JobDefinitionSpec> jobDefinitions;
 
-  @Valid private List<WorkflowDefinitionSpec> workflowDefinitions;
+  @Valid
+  private List<WorkflowDefinitionSpec> workflowDefinitions;
 
-  @Valid private List<PipelineDefinitionSpec> pipelineDefinitions;
+  @Valid
+  private List<PipelineDefinitionSpec> pipelineDefinitions;
 
-  @Valid private List<FileChannelSpec> fileChannels;
+  @Valid
+  private List<FileChannelSpec> fileChannels;
 
-  @Valid private List<FileTemplateSpec> fileTemplates;
+  @Valid
+  private List<FileTemplateSpec> fileTemplates;
 
-  @Valid private List<ResourceQueueSpec> resourceQueues;
+  @Valid
+  private List<ResourceQueueSpec> resourceQueues;
 
-  @Valid private List<BatchWindowSpec> batchWindows;
+  @Valid
+  private List<BatchWindowSpec> batchWindows;
 
-  @Valid private List<BusinessCalendarSpec> businessCalendars;
+  @Valid
+  private List<BusinessCalendarSpec> businessCalendars;
 
-  @Valid private List<TenantQuotaPolicySpec> quotaPolicies;
+  @Valid
+  private List<TenantQuotaPolicySpec> quotaPolicies;
 
-  @Valid private List<AlertRoutingSpec> alertRoutings;
+  @Valid
+  private List<AlertRoutingSpec> alertRoutings;
 
   public enum InitMode {
     SKIP_EXISTING,
@@ -58,9 +68,8 @@ public class TenantConfigBatchInitRequest {
     @Size(max = 64)
     @Pattern(
         regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-        message =
-            "dependsOnJobCode must start with a letter and contain only letters, digits,"
-                + " underscore or hyphen")
+        message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
+            + " underscore or hyphen")
     private String dependsOnJobCode;
 
     @Size(max = 256)

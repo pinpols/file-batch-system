@@ -58,17 +58,16 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   void setUp() {
     s3StorageProperties.setBucket("default-bucket");
     batchSecurityProperties.setBypassMode(false);
-    service =
-        new DefaultConsoleFileDownloadApplicationService(
-            tenantGuard,
-            fileRecordMapper,
-            fileErrorRecordMapper,
-            fileTemplateConfigMapper,
-            s3StorageProperties,
-            objectStore,
-            cryptoService,
-            batchSecurityProperties,
-            approvalClient);
+    service = new DefaultConsoleFileDownloadApplicationService(
+        tenantGuard,
+        fileRecordMapper,
+        fileErrorRecordMapper,
+        fileTemplateConfigMapper,
+        s3StorageProperties,
+        objectStore,
+        cryptoService,
+        batchSecurityProperties,
+        approvalClient);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
   }
 
@@ -88,16 +87,15 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
 
   private void stubEncryptedFile(long fileId) {
     when(fileRecordMapper.selectFileRecordById("t1", fileId))
-        .thenReturn(
-            Map.of(
-                "storage_bucket",
-                "bucket-a",
-                "storage_path",
-                "uploads/t1/" + fileId + ".bin",
-                "file_name",
-                "f" + fileId + ".csv",
-                "mime_type",
-                "application/octet-stream"));
+        .thenReturn(Map.of(
+            "storage_bucket",
+            "bucket-a",
+            "storage_path",
+            "uploads/t1/" + fileId + ".bin",
+            "file_name",
+            "f" + fileId + ".csv",
+            "mime_type",
+            "application/octet-stream"));
     when(fileRecordMapper.selectTemplateCodeByFileId("t1", fileId)).thenReturn("TPL");
     when(fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode("t1", "TPL"))
         .thenReturn(Map.of("content_encryption_enabled", Boolean.TRUE));

@@ -50,13 +50,11 @@ class ConsoleApiKeyControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleApiKeyController(
-                    apiKeyService, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleApiKeyController(apiKeyService, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -88,12 +86,10 @@ class ConsoleApiKeyControllerTest {
         .thenReturn(new ConsoleApiKeyService.CreateResult(entity, "bk_raw_secret_key"));
 
     mockMvc
-        .perform(
-            post("/api/console/api-keys")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/api-keys")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"keyName":"my-key","scopes":"read,write"}
                     """))
         .andExpect(status().isOk())

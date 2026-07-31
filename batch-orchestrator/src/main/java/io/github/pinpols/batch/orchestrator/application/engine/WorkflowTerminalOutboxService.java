@@ -58,14 +58,13 @@ public class WorkflowTerminalOutboxService {
     payload.put("finishedAt", finishedAt == null ? null : finishedAt.toString());
     payload.put("traceId", workflowRun.getTraceId());
 
-    domainEventPublisher.publish(
-        DomainEvent.builder(workflowRun.getTenantId())
-            .aggregate("WORKFLOW_RUN", workflowRun.getId())
-            .type("WORKFLOW_TERMINAL")
-            .key(workflowRun.getTenantId() + ":workflow:" + workflowRun.getId() + ":terminal")
-            .payload(payload)
-            .traceId(workflowRun.getTraceId())
-            .build());
+    domainEventPublisher.publish(DomainEvent.builder(workflowRun.getTenantId())
+        .aggregate("WORKFLOW_RUN", workflowRun.getId())
+        .type("WORKFLOW_TERMINAL")
+        .key(workflowRun.getTenantId() + ":workflow:" + workflowRun.getId() + ":terminal")
+        .payload(payload)
+        .traceId(workflowRun.getTraceId())
+        .build());
 
     // P1 OpenLineage:终态真提交后 fire-and-forget emit 血缘 RunEvent。
     // 注册 afterCommit 同步,避免事务回滚时发出假血缘;emitter 内部 disabled 即 no-op,不阻塞主链。
@@ -78,12 +77,11 @@ public class WorkflowTerminalOutboxService {
       openLineageEmitter.emitWorkflowTerminal(workflowRun, terminalStatus, finishedAt);
       return;
     }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            openLineageEmitter.emitWorkflowTerminal(workflowRun, terminalStatus, finishedAt);
-          }
-        });
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        openLineageEmitter.emitWorkflowTerminal(workflowRun, terminalStatus, finishedAt);
+      }
+    });
   }
 }

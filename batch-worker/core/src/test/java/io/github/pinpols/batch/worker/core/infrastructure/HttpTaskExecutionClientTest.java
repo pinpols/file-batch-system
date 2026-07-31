@@ -48,27 +48,25 @@ class HttpTaskExecutionClientTest {
       @SuppressWarnings("unchecked")
       ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
       when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client =
-          new HttpTaskExecutionClient(
-              props,
-              new BatchSecurityProperties(),
-              restClientBuilderProvider(),
-              new MockEnvironment(),
-              registry,
-              noopCoordinator,
-              new WorkerLeaseProperties(),
-              new WorkerBatchClaimProperties());
+      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+          props,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          registry,
+          noopCoordinator,
+          new WorkerLeaseProperties(),
+          new WorkerBatchClaimProperties());
 
       TaskExecutionReport report = report(42L);
       client.report(report);
 
       assertThat(server.getRequestCount()).isEqualTo(2);
-      assertThat(
-              registry
-                  .find("worker.report.failed.total")
-                  .tag("reason", "SERVER_ERROR")
-                  .counter()
-                  .count())
+      assertThat(registry
+              .find("worker.report.failed.total")
+              .tag("reason", "SERVER_ERROR")
+              .counter()
+              .count())
           .isEqualTo(1.0d);
     }
   }
@@ -77,20 +75,17 @@ class HttpTaskExecutionClientTest {
   void claimBatchMapsPerItemResultsFromSingleHttpCall() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       // 一次 /claim-batch 调用返回 2 项:1 领到(含 config)+ 1 没领到
-      server.enqueue(
-          new MockResponse.Builder()
-              .code(200)
-              .addHeader("Content-Type", "application/json")
-              .body(
-                  "{\"results\":[{\"taskId\":1,\"claimed\":true,\"config\":{\"jobCode\":\"J\"}},"
-                      + "{\"taskId\":2,\"claimed\":false,\"config\":null}]}")
-              .build());
+      server.enqueue(new MockResponse.Builder()
+          .code(200)
+          .addHeader("Content-Type", "application/json")
+          .body("{\"results\":[{\"taskId\":1,\"claimed\":true,\"config\":{\"jobCode\":\"J\"}},"
+              + "{\"taskId\":2,\"claimed\":false,\"config\":null}]}")
+          .build());
       server.start();
 
       HttpTaskExecutionClient client = newClient(server.getPort());
-      List<TaskClaimResult> results =
-          client.claimBatch(
-              List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
+      List<TaskClaimResult> results = client.claimBatch(
+          List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
 
       assertThat(server.getRequestCount()).isEqualTo(1); // 一次 HTTP 领 2 个
       assertThat(results).hasSize(2);
@@ -111,9 +106,8 @@ class HttpTaskExecutionClientTest {
       server.start();
 
       HttpTaskExecutionClient client = newClient(server.getPort());
-      List<TaskClaimResult> results =
-          client.claimBatch(
-              List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
+      List<TaskClaimResult> results = client.claimBatch(
+          List.of(new TaskClaimItem("ta", 1L, "w1"), new TaskClaimItem("ta", 2L, "w1")));
 
       // 1 次 batch(404) + 2 次单条降级
       assertThat(server.getRequestCount()).isEqualTo(3);
@@ -178,7 +172,10 @@ class HttpTaskExecutionClientTest {
       assertThat(expectedRoundTrips).isLessThan(n); // 3 « 25:对照单条路径的 O(N)
       assertThat(results).hasSize(n);
       assertThat(results).allMatch(TaskClaimResult::claimed);
-      assertThat(results).extracting(TaskClaimResult::taskId).doesNotHaveDuplicates().hasSize(n);
+      assertThat(results)
+          .extracting(TaskClaimResult::taskId)
+          .doesNotHaveDuplicates()
+          .hasSize(n);
     }
   }
 
@@ -218,26 +215,24 @@ class HttpTaskExecutionClientTest {
       @SuppressWarnings("unchecked")
       ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
       when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client =
-          new HttpTaskExecutionClient(
-              props,
-              new BatchSecurityProperties(),
-              restClientBuilderProvider(),
-              new MockEnvironment(),
-              registry,
-              noopCoordinator,
-              new WorkerLeaseProperties(),
-              new WorkerBatchClaimProperties());
+      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+          props,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          registry,
+          noopCoordinator,
+          new WorkerLeaseProperties(),
+          new WorkerBatchClaimProperties());
 
       client.report(report(7L));
 
       assertThat(server.getRequestCount()).isEqualTo(3);
-      assertThat(
-              registry
-                  .find("worker.report.failed.total")
-                  .tag("reason", "RATE_LIMITED")
-                  .counter()
-                  .count())
+      assertThat(registry
+              .find("worker.report.failed.total")
+              .tag("reason", "RATE_LIMITED")
+              .counter()
+              .count())
           .isEqualTo(2.0d);
     }
   }
@@ -262,27 +257,25 @@ class HttpTaskExecutionClientTest {
       @SuppressWarnings("unchecked")
       ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
       when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client =
-          new HttpTaskExecutionClient(
-              props,
-              new BatchSecurityProperties(),
-              restClientBuilderProvider(),
-              new MockEnvironment(),
-              registry,
-              noopCoordinator,
-              new WorkerLeaseProperties(),
-              new WorkerBatchClaimProperties());
+      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+          props,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          registry,
+          noopCoordinator,
+          new WorkerLeaseProperties(),
+          new WorkerBatchClaimProperties());
 
       // 不应抛出
       client.report(report(99L));
 
       assertThat(server.getRequestCount()).isEqualTo(3);
-      assertThat(
-              registry
-                  .find("worker.report.dropped.total")
-                  .tag("reason", "outbox_disabled")
-                  .counter()
-                  .count())
+      assertThat(registry
+              .find("worker.report.dropped.total")
+              .tag("reason", "outbox_disabled")
+              .counter()
+              .count())
           .isEqualTo(1.0d);
     }
   }
@@ -308,25 +301,23 @@ class HttpTaskExecutionClientTest {
       ObjectProvider<WorkerReportOutboxCoordinator> coordinatorProvider =
           mock(ObjectProvider.class);
       when(coordinatorProvider.getIfAvailable()).thenReturn(coordinator);
-      HttpTaskExecutionClient client =
-          new HttpTaskExecutionClient(
-              props,
-              new BatchSecurityProperties(),
-              restClientBuilderProvider(),
-              new MockEnvironment(),
-              registry,
-              coordinatorProvider,
-              new WorkerLeaseProperties(),
-              new WorkerBatchClaimProperties());
+      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+          props,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          registry,
+          coordinatorProvider,
+          new WorkerLeaseProperties(),
+          new WorkerBatchClaimProperties());
 
       client.report(report(100L));
 
-      assertThat(
-              registry
-                  .find("worker.report.dropped.total")
-                  .tag("reason", "outbox_enqueue_failed")
-                  .counter()
-                  .count())
+      assertThat(registry
+              .find("worker.report.dropped.total")
+              .tag("reason", "outbox_enqueue_failed")
+              .counter()
+              .count())
           .isEqualTo(1.0d);
     }
   }
@@ -334,14 +325,12 @@ class HttpTaskExecutionClientTest {
   @Test
   void renewLeasesBatchUsesSingleHttpCallForChunk() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(
-          new MockResponse.Builder()
-              .code(200)
-              .setHeader("Content-Type", "application/json")
-              .body(
-                  "{\"results\":[{\"taskId\":1,\"renewed\":true,\"cancelRequested\":true},"
-                      + "{\"taskId\":2,\"renewed\":false}]}")
-              .build());
+      server.enqueue(new MockResponse.Builder()
+          .code(200)
+          .setHeader("Content-Type", "application/json")
+          .body("{\"results\":[{\"taskId\":1,\"renewed\":true,\"cancelRequested\":true},"
+              + "{\"taskId\":2,\"renewed\":false}]}")
+          .build());
       server.start();
 
       OrchestratorTaskClientProperties props = clientProperties(server.getPort());
@@ -350,21 +339,19 @@ class HttpTaskExecutionClientTest {
       @SuppressWarnings("unchecked")
       ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
       when(noopCoordinator.getIfAvailable()).thenReturn(null);
-      HttpTaskExecutionClient client =
-          new HttpTaskExecutionClient(
-              props,
-              new BatchSecurityProperties(),
-              restClientBuilderProvider(),
-              new MockEnvironment(),
-              null,
-              noopCoordinator,
-              new WorkerLeaseProperties(),
-              new WorkerBatchClaimProperties());
+      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+          props,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          null,
+          noopCoordinator,
+          new WorkerLeaseProperties(),
+          new WorkerBatchClaimProperties());
 
-      List<TaskLeaseRenewItem> items =
-          List.of(
-              new TaskLeaseRenewItem("t1", 1L, "w1", null),
-              new TaskLeaseRenewItem("t1", 2L, "w1", "inv"));
+      List<TaskLeaseRenewItem> items = List.of(
+          new TaskLeaseRenewItem("t1", 1L, "w1", null),
+          new TaskLeaseRenewItem("t1", 2L, "w1", "inv"));
       Map<Long, TaskLeaseRenewResult> out = client.renewLeasesBatch(items);
 
       assertThat(out.get(1L).renewed()).isTrue();
@@ -377,10 +364,8 @@ class HttpTaskExecutionClientTest {
 
   private static RestClient.Builder jsonRestClientBuilder() {
     return RestClient.builder()
-        .configureMessageConverters(
-            b ->
-                b.configureMessageConvertersList(
-                    converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
+        .configureMessageConverters(b -> b.configureMessageConvertersList(
+            converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
   }
 
   private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {

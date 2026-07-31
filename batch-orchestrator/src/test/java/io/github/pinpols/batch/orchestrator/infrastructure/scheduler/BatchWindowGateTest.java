@@ -67,19 +67,18 @@ class BatchWindowGateTest {
     PartitionThrottle partThrottle = mock(PartitionThrottle.class);
     doReturn(ResourceCheck.allow()).when(partThrottle).check(any(), any());
 
-    scheduler =
-        new DefaultResourceScheduler(
-            queueManager,
-            concLimit,
-            partThrottle,
-            mockWorkerSelector(),
-            prioritySched,
-            configCacheService,
-            mock(JobInstanceMapper.class),
-            mock(JobPartitionMapper.class),
-            timezoneProvider,
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
-            new ResourceSchedulerProperties());
+    scheduler = new DefaultResourceScheduler(
+        queueManager,
+        concLimit,
+        partThrottle,
+        mockWorkerSelector(),
+        prioritySched,
+        configCacheService,
+        mock(JobInstanceMapper.class),
+        mock(JobPartitionMapper.class),
+        timezoneProvider,
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        new ResourceSchedulerProperties());
   }
 
   /** in-window：当前时间在窗口内，schedule 不被门禁挡住（allow 路径，可能后续被并发 / worker 等其他门禁挡，但不是 batch_window 挡的）。 */

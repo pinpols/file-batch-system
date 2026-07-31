@@ -17,11 +17,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleTaskControllerTest {
 
-  @Mock private ConsoleTaskHeartbeatService heartbeatService;
-  @Mock private ConsoleTenantGuard tenantGuard;
-  @Mock private ConsoleResponseFactory responseFactory;
+  @Mock
+  private ConsoleTaskHeartbeatService heartbeatService;
 
-  @InjectMocks private ConsoleTaskController controller;
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private ConsoleResponseFactory responseFactory;
+
+  @InjectMocks
+  private ConsoleTaskController controller;
 
   @Test
   void resolvesTenantThenReturnsDetails() {

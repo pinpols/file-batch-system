@@ -145,9 +145,8 @@ public class DefaultTriggerService implements TriggerService {
     if (requestFromPending == null
         && command.getIdempotencyKey() != null
         && !command.getIdempotencyKey().isBlank()) {
-      TriggerRequestEntity existing =
-          triggerRequestMapper.selectByTenantAndDedupKey(
-              command.getTenantId(), command.getIdempotencyKey());
+      TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndDedupKey(
+          command.getTenantId(), command.getIdempotencyKey());
       if (existing != null && "LAUNCHED".equalsIgnoreCase(existing.getRequestStatus())) {
         return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
       }
@@ -159,74 +158,65 @@ public class DefaultTriggerService implements TriggerService {
     // orchestrator 端消费触发实际 launch；最终一致性由 outbox + (tenant,request_id) 唯一约束保证。
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    LaunchResponse result =
-        tx.execute(
-            ignored -> {
-              TriggerRequestEntity pendingRequest =
-                  requestFromPending != null
-                      ? triggerRequestMapper.selectById(requestFromPending.getId())
-                      : triggerRequestMapper.selectByTenantAndRequestId(
-                          command.getTenantId(), command.getRequestId());
-              Guard.requireFound(pendingRequest, "pending catch-up request not found");
-              if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
-                throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.not_catch_up");
-              }
-              if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-                throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
-              }
-              if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-                return new LaunchResponse(
-                    pendingRequest.getRequestId(), pendingRequest.getTraceId());
-              }
-              // 原子 CAS：ACCEPTED → PROCESSING，并发审批只有一个能进入
-              int claimed =
-                  triggerRequestMapper.updateRequestStatusConditional(
-                      command.getTenantId(), command.getRequestId(), "PROCESSING", "ACCEPTED");
-              if (claimed <= 0) {
-                // 另一实例正在处理；返回当前状态，重试方需重新查询
-                return new LaunchResponse(
-                    pendingRequest.getRequestId(), pendingRequest.getTraceId());
-              }
-              if (pendingTarget != null && pendingTarget.approvePending()) {
-                triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
-              }
-              LaunchRequest launchRequest =
-                  new LaunchRequest(
-                      pendingRequest.getTenantId(),
-                      pendingRequest.getJobCode(),
-                      pendingRequest.getBizDate(),
-                      TriggerType.CATCH_UP,
-                      pendingRequest.getRequestId(),
-                      pendingRequest.getTraceId(),
-                      Map.of(
-                          "operationType",
-                          "CATCH_UP_APPROVAL",
-                          "approvalMode",
-                          "MANUAL_APPROVAL",
-                          "catchUpApproved",
-                          true,
-                          "reason",
-                          command.getReason() == null ? "" : command.getReason()));
-              String dedupKey =
-                  Texts.hasText(pendingRequest.getDedupKey())
-                      ? pendingRequest.getDedupKey()
-                      : pendingRequest.getRequestId();
-              publishLaunchOutbox(launchRequest, dedupKey);
-              // 同事务推进到 LAUNCHED — outbox 保证 at-least-once 投递；
-              // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再长期停滞。
-              // CAS 守卫:前态必须仍是本次刚 CAS 进入的 PROCESSING,防止并发场景下把已被其它路径推进的行覆盖。
-              int launched =
-                  triggerRequestMapper.updateRequestStatusConditional(
-                      command.getTenantId(), command.getRequestId(), "LAUNCHED", "PROCESSING");
-              if (launched <= 0) {
-                log.warn(
-                    "updateRequestStatusConditional(LAUNCHED) 0 行受影响,行状态已非 PROCESSING:"
-                        + " tenantId={} requestId={}",
-                    command.getTenantId(),
-                    command.getRequestId());
-              }
-              return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-            });
+    LaunchResponse result = tx.execute(ignored -> {
+      TriggerRequestEntity pendingRequest = requestFromPending != null
+          ? triggerRequestMapper.selectById(requestFromPending.getId())
+          : triggerRequestMapper.selectByTenantAndRequestId(
+              command.getTenantId(), command.getRequestId());
+      Guard.requireFound(pendingRequest, "pending catch-up request not found");
+      if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
+        throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.not_catch_up");
+      }
+      if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+        throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
+      }
+      if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+        return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
+      }
+      // 原子 CAS：ACCEPTED → PROCESSING，并发审批只有一个能进入
+      int claimed = triggerRequestMapper.updateRequestStatusConditional(
+          command.getTenantId(), command.getRequestId(), "PROCESSING", "ACCEPTED");
+      if (claimed <= 0) {
+        // 另一实例正在处理；返回当前状态，重试方需重新查询
+        return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
+      }
+      if (pendingTarget != null && pendingTarget.approvePending()) {
+        triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
+      }
+      LaunchRequest launchRequest = new LaunchRequest(
+          pendingRequest.getTenantId(),
+          pendingRequest.getJobCode(),
+          pendingRequest.getBizDate(),
+          TriggerType.CATCH_UP,
+          pendingRequest.getRequestId(),
+          pendingRequest.getTraceId(),
+          Map.of(
+              "operationType",
+              "CATCH_UP_APPROVAL",
+              "approvalMode",
+              "MANUAL_APPROVAL",
+              "catchUpApproved",
+              true,
+              "reason",
+              command.getReason() == null ? "" : command.getReason()));
+      String dedupKey = Texts.hasText(pendingRequest.getDedupKey())
+          ? pendingRequest.getDedupKey()
+          : pendingRequest.getRequestId();
+      publishLaunchOutbox(launchRequest, dedupKey);
+      // 同事务推进到 LAUNCHED — outbox 保证 at-least-once 投递；
+      // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再长期停滞。
+      // CAS 守卫:前态必须仍是本次刚 CAS 进入的 PROCESSING,防止并发场景下把已被其它路径推进的行覆盖。
+      int launched = triggerRequestMapper.updateRequestStatusConditional(
+          command.getTenantId(), command.getRequestId(), "LAUNCHED", "PROCESSING");
+      if (launched <= 0) {
+        log.warn(
+            "updateRequestStatusConditional(LAUNCHED) 0 行受影响,行状态已非 PROCESSING:"
+                + " tenantId={} requestId={}",
+            command.getTenantId(),
+            command.getRequestId());
+      }
+      return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
+    });
     return result;
   }
 
@@ -236,9 +226,8 @@ public class DefaultTriggerService implements TriggerService {
       return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
     }
     // CAS 守卫:前态必须仍是刚插入的 PENDING,防止覆盖被并发路径推进过的行(0 行时 reconciler 兜底,不抛异常)。
-    int accepted =
-        triggerRequestMapper.updateRequestStatusConditional(
-            launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED", "PENDING");
+    int accepted = triggerRequestMapper.updateRequestStatusConditional(
+        launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED", "PENDING");
     if (accepted <= 0) {
       log.warn(
           "updateRequestStatusConditional(ACCEPTED) 0 行受影响,行状态已非 PENDING: tenantId={}"
@@ -261,18 +250,17 @@ public class DefaultTriggerService implements TriggerService {
     // 数组 workaround 是 lambda effectively-final 限制的反模式，AtomicReference 语义更清晰
     // 且无并发开销（TransactionTemplate.execute 单线程内同步执行）。
     AtomicReference<TriggerRequestEntity> existingHolder = new AtomicReference<>();
-    tx.execute(
-        ignored -> {
-          TriggerRequestEntity existing =
-              triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-          if (existing != null) {
-            existingHolder.set(existing);
-            return null;
-          }
-          triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
-          publishLaunchOutbox(launchRequest, dedupKey);
-          return null;
-        });
+    tx.execute(ignored -> {
+      TriggerRequestEntity existing =
+          triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
+      if (existing != null) {
+        existingHolder.set(existing);
+        return null;
+      }
+      triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
+      publishLaunchOutbox(launchRequest, dedupKey);
+      return null;
+    });
     return existingHolder.get();
   }
 
@@ -337,11 +325,10 @@ public class DefaultTriggerService implements TriggerService {
     try {
       triggerMisfirePendingMapper.insertPending(pending);
     } catch (DuplicateKeyException dup) {
-      pending =
-          triggerMisfirePendingMapper.selectBySchedule(
-              command.descriptor().getTenantId(),
-              command.descriptor().getJobCode(),
-              command.fireTime());
+      pending = triggerMisfirePendingMapper.selectBySchedule(
+          command.descriptor().getTenantId(),
+          command.descriptor().getJobCode(),
+          command.fireTime());
     }
     if (pending != null && pending.getId() != null && request.getId() != null) {
       triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
@@ -352,10 +339,9 @@ public class DefaultTriggerService implements TriggerService {
     if (command.getPendingId() == null) {
       return null;
     }
-    TriggerMisfirePendingEntity pending =
-        Guard.requireFound(
-            triggerMisfirePendingMapper.selectById(command.getPendingId()),
-            "misfire pending not found");
+    TriggerMisfirePendingEntity pending = Guard.requireFound(
+        triggerMisfirePendingMapper.selectById(command.getPendingId()),
+        "misfire pending not found");
     if (!command.getTenantId().equals(pending.getTenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
@@ -370,9 +356,8 @@ public class DefaultTriggerService implements TriggerService {
           "error.common.business_error_detail",
           "misfire pending is not linked to catch-up request");
     }
-    TriggerRequestEntity request =
-        Guard.requireFound(
-            triggerRequestMapper.selectById(requestId), "catch-up request not found");
+    TriggerRequestEntity request = Guard.requireFound(
+        triggerRequestMapper.selectById(requestId), "catch-up request not found");
     command.setRequestId(request.getRequestId());
     return new PendingApprovalTarget(
         request, pending.getId(), "PENDING".equalsIgnoreCase(pending.getStatus()));
@@ -411,9 +396,8 @@ public class DefaultTriggerService implements TriggerService {
     if (!Texts.hasText(calendarCode)) {
       return null;
     }
-    TriggerCalendarConfig calendar =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-            command.descriptor().getTenantId(), calendarCode);
+    TriggerCalendarConfig calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+        command.descriptor().getTenantId(), calendarCode);
     if (calendar == null || calendar.getId() == null) {
       // M-14: 配置了日历码但数据库中未找到——告警使错误配置在日志中可见
       log.warn(
@@ -431,16 +415,14 @@ public class DefaultTriggerService implements TriggerService {
     // R-arch-audit-2026-05-23 P1: 用 toUnmodifiableSet 替代 toSet，防止下游意外修改 holidays /
     // workdayOverrides。CalendarBizDateDefinition 是 record，字段引用不可变但 Set 本身可写，
     // toUnmodifiableSet 明确回退，符合 CLAUDE.md §集合 "返回不可变集合" 约定。
-    Set<LocalDate> holidays =
-        rules.stream()
-            .filter(rule -> isDayType(rule, "HOLIDAY"))
-            .map(CalendarHolidayRule::getBizDate)
-            .collect(Collectors.toUnmodifiableSet());
-    Set<LocalDate> workdayOverrides =
-        rules.stream()
-            .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
-            .map(CalendarHolidayRule::getBizDate)
-            .collect(Collectors.toUnmodifiableSet());
+    Set<LocalDate> holidays = rules.stream()
+        .filter(rule -> isDayType(rule, "HOLIDAY"))
+        .map(CalendarHolidayRule::getBizDate)
+        .collect(Collectors.toUnmodifiableSet());
+    Set<LocalDate> workdayOverrides = rules.stream()
+        .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
+        .map(CalendarHolidayRule::getBizDate)
+        .collect(Collectors.toUnmodifiableSet());
     return new CalendarBizDateDefinition(
         calendar.getTimezone(),
         calendar.getCutoffTime(),
@@ -483,7 +465,8 @@ public class DefaultTriggerService implements TriggerService {
     if (command.request() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
     }
-    if (command.request().getTenantId() == null || command.request().getTenantId().isBlank()) {
+    if (command.request().getTenantId() == null
+        || command.request().getTenantId().isBlank()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
     if (command.request().getJobCode() == null || command.request().getJobCode().isBlank()) {

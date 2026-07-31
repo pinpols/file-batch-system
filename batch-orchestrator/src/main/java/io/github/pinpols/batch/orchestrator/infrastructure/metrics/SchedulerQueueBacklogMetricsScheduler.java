@@ -58,13 +58,12 @@ public class SchedulerQueueBacklogMetricsScheduler {
       return;
     }
     try {
-      QueuePartitionBacklogStats stats =
-          jobPartitionMapper.summarizeGlobalQueueBacklog(
-              PartitionStatus.CREATED.code(),
-              PartitionStatus.WAITING.code(),
-              PartitionStatus.READY.code(),
-              PartitionStatus.RUNNING.code(),
-              PartitionStatus.RETRYING.code());
+      QueuePartitionBacklogStats stats = jobPartitionMapper.summarizeGlobalQueueBacklog(
+          PartitionStatus.CREATED.code(),
+          PartitionStatus.WAITING.code(),
+          PartitionStatus.READY.code(),
+          PartitionStatus.RUNNING.code(),
+          PartitionStatus.RETRYING.code());
       if (stats == null) {
         stats = new QueuePartitionBacklogStats("ALL", 0, 0, 0, 0, 0, 0);
       }

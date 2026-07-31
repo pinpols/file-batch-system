@@ -50,17 +50,19 @@ class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void exportJobReportsFailedWhenTemplateDoesNotExist() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchNo", "E2E-FAIL-BATCH-001");
@@ -70,42 +72,34 @@ class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
     params.put("bizType", "SETTLEMENT");
     params.put("fileCode", "e2e-export-fail-file");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-export-fail",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-export-fail",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("FAILED");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("FAILED");
+        });
 
-    String instanceStatus =
-        jdbcTemplate.queryForObject(
-            "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            String.class,
-            TENANT,
-            seed.dedupKey());
+    String instanceStatus = jdbcTemplate.queryForObject(
+        "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        String.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
   }
 }

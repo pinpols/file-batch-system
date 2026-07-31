@@ -51,21 +51,20 @@ public final class SelectSqlAstValidator {
    *
    * <p>调用方需要可变副本时应 {@code new ArrayList<>(DEFAULT_FORBIDDEN_FUNCTIONS)}——这里返回的是不可变列表。
    */
-  public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS =
-      List.of(
-          "dblink",
-          "pg_terminate_backend",
-          "pg_cancel_backend",
-          "pg_read_file",
-          "pg_read_binary_file",
-          "pg_read_server_files",
-          "pg_ls_dir",
-          "copy_from_program",
-          "lo_import",
-          "lo_export",
-          "pg_sleep",
-          "pg_sleep_for",
-          "pg_sleep_until");
+  public static final List<String> DEFAULT_FORBIDDEN_FUNCTIONS = List.of(
+      "dblink",
+      "pg_terminate_backend",
+      "pg_cancel_backend",
+      "pg_read_file",
+      "pg_read_binary_file",
+      "pg_read_server_files",
+      "pg_ls_dir",
+      "copy_from_program",
+      "lo_import",
+      "lo_export",
+      "pg_sleep",
+      "pg_sleep_for",
+      "pg_sleep_until");
 
   /** SELECT/WITH 主体（含所有 WITH 子查询、UNION 分支、嵌套子查询）中是否出现 {@code SELECT *} 或 {@code SELECT table.*}。 */
   public static boolean containsSelectStar(Select select) {
@@ -210,95 +209,94 @@ public final class SelectSqlAstValidator {
    */
   private static Set<String> collectFunctionNames(Statement statement) {
     Set<String> names = new HashSet<>();
-    TablesNamesFinder<Void> finder =
-        new TablesNamesFinder<>() {
-          @Override
-          public <S> Void visit(Function function, S context) {
-            if (function.getName() != null) {
-              // 去引号：防 "pg_read_server_files"(...) 这类带引号标识符逃逸比对。
-              names.add(function.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
-            }
-            return super.visit(function, context);
-          }
+    TablesNamesFinder<Void> finder = new TablesNamesFinder<>() {
+      @Override
+      public <S> Void visit(Function function, S context) {
+        if (function.getName() != null) {
+          // 去引号：防 "pg_read_server_files"(...) 这类带引号标识符逃逸比对。
+          names.add(function.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
+        }
+        return super.visit(function, context);
+      }
 
-          @Override
-          public <S> Void visit(AnalyticExpression aexpr, S context) {
-            // 窗口/分析函数是 AnalyticExpression 而非 Function 节点,名字单独采集,内部表达式手动下钻。
-            if (aexpr.getName() != null) {
-              names.add(aexpr.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
-            }
-            acceptIfPresent(aexpr.getExpression(), context);
-            acceptIfPresent(aexpr.getOffset(), context);
-            acceptIfPresent(aexpr.getDefaultValue(), context);
-            if (aexpr.getPartitionExpressionList() != null) {
-              aexpr.getPartitionExpressionList().accept(this, context);
-            }
-            acceptOrderBy(aexpr.getOrderByElements(), context);
-            return super.visit(aexpr, context);
-          }
+      @Override
+      public <S> Void visit(AnalyticExpression aexpr, S context) {
+        // 窗口/分析函数是 AnalyticExpression 而非 Function 节点,名字单独采集,内部表达式手动下钻。
+        if (aexpr.getName() != null) {
+          names.add(aexpr.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
+        }
+        acceptIfPresent(aexpr.getExpression(), context);
+        acceptIfPresent(aexpr.getOffset(), context);
+        acceptIfPresent(aexpr.getDefaultValue(), context);
+        if (aexpr.getPartitionExpressionList() != null) {
+          aexpr.getPartitionExpressionList().accept(this, context);
+        }
+        acceptOrderBy(aexpr.getOrderByElements(), context);
+        return super.visit(aexpr, context);
+      }
 
-          @Override
-          public <S> Void visit(PlainSelect plainSelect, S context) {
-            Void r = super.visit(plainSelect, context);
-            acceptScalarClauses(
-                plainSelect.getGroupBy() == null
-                    ? null
-                    : plainSelect.getGroupBy().getGroupByExpressionList(),
-                plainSelect.getHaving(),
-                plainSelect.getOrderByElements(),
-                plainSelect.getLimit(),
-                plainSelect.getOffset(),
-                context);
-            return r;
-          }
+      @Override
+      public <S> Void visit(PlainSelect plainSelect, S context) {
+        Void r = super.visit(plainSelect, context);
+        acceptScalarClauses(
+            plainSelect.getGroupBy() == null
+                ? null
+                : plainSelect.getGroupBy().getGroupByExpressionList(),
+            plainSelect.getHaving(),
+            plainSelect.getOrderByElements(),
+            plainSelect.getLimit(),
+            plainSelect.getOffset(),
+            context);
+        return r;
+      }
 
-          @Override
-          public <S> Void visit(SetOperationList setOpList, S context) {
-            Void r = super.visit(setOpList, context);
-            acceptScalarClauses(
-                null,
-                null,
-                setOpList.getOrderByElements(),
-                setOpList.getLimit(),
-                setOpList.getOffset(),
-                context);
-            return r;
-          }
+      @Override
+      public <S> Void visit(SetOperationList setOpList, S context) {
+        Void r = super.visit(setOpList, context);
+        acceptScalarClauses(
+            null,
+            null,
+            setOpList.getOrderByElements(),
+            setOpList.getLimit(),
+            setOpList.getOffset(),
+            context);
+        return r;
+      }
 
-          /** 补走 TablesNamesFinder 缺席的标量表达式子句:GROUP BY / HAVING / ORDER BY / LIMIT / OFFSET。 */
-          private <S> void acceptScalarClauses(
-              Expression groupByExpressions,
-              Expression having,
-              List<OrderByElement> orderBy,
-              net.sf.jsqlparser.statement.select.Limit limit,
-              net.sf.jsqlparser.statement.select.Offset offset,
-              S context) {
-            acceptIfPresent(groupByExpressions, context);
-            acceptIfPresent(having, context);
-            acceptOrderBy(orderBy, context);
-            if (limit != null) {
-              acceptIfPresent(limit.getRowCount(), context);
-              acceptIfPresent(limit.getOffset(), context);
-            }
-            if (offset != null) {
-              acceptIfPresent(offset.getOffset(), context);
-            }
-          }
+      /** 补走 TablesNamesFinder 缺席的标量表达式子句:GROUP BY / HAVING / ORDER BY / LIMIT / OFFSET。 */
+      private <S> void acceptScalarClauses(
+          Expression groupByExpressions,
+          Expression having,
+          List<OrderByElement> orderBy,
+          net.sf.jsqlparser.statement.select.Limit limit,
+          net.sf.jsqlparser.statement.select.Offset offset,
+          S context) {
+        acceptIfPresent(groupByExpressions, context);
+        acceptIfPresent(having, context);
+        acceptOrderBy(orderBy, context);
+        if (limit != null) {
+          acceptIfPresent(limit.getRowCount(), context);
+          acceptIfPresent(limit.getOffset(), context);
+        }
+        if (offset != null) {
+          acceptIfPresent(offset.getOffset(), context);
+        }
+      }
 
-          private <S> void acceptOrderBy(List<OrderByElement> orderBy, S context) {
-            if (orderBy != null) {
-              for (OrderByElement obe : orderBy) {
-                acceptIfPresent(obe.getExpression(), context);
-              }
-            }
+      private <S> void acceptOrderBy(List<OrderByElement> orderBy, S context) {
+        if (orderBy != null) {
+          for (OrderByElement obe : orderBy) {
+            acceptIfPresent(obe.getExpression(), context);
           }
+        }
+      }
 
-          private <S> void acceptIfPresent(Expression e, S context) {
-            if (e != null) {
-              e.accept(this, context);
-            }
-          }
-        };
+      private <S> void acceptIfPresent(Expression e, S context) {
+        if (e != null) {
+          e.accept(this, context);
+        }
+      }
+    };
     finder.getTables(statement); // 触发全树遍历；副作用填充 names
     return names;
   }

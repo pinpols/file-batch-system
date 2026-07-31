@@ -18,7 +18,8 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class ProcessStagingCleanupYamlIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ProcessStagingCleanupProperties processStagingCleanupProperties;
+  @Autowired
+  private ProcessStagingCleanupProperties processStagingCleanupProperties;
 
   @Test
   void applicationTestYamlDisablesStagingOrphanCleaner() {

@@ -50,17 +50,15 @@ class BatchDayReplayDispatcherTest {
     properties.setEnabled(true);
     properties.setSessionBatchSize(10);
     properties.setEntryBatchSize(20);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    dispatcher =
-        new BatchDayReplayDispatcher(
-            sessionMapper,
-            entryMapper,
-            compensationService,
-            properties,
-            gracefulShutdown,
-            dateTimeSupport);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    dispatcher = new BatchDayReplayDispatcher(
+        sessionMapper,
+        entryMapper,
+        compensationService,
+        properties,
+        gracefulShutdown,
+        dateTimeSupport);
   }
 
   @Test
@@ -99,24 +97,22 @@ class BatchDayReplayDispatcherTest {
     BatchDayReplaySessionEntity session =
         sessionAt(8L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION");
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
-    BatchDayReplayEntryEntity e1 =
-        BatchDayReplayEntryEntity.builder()
-            .id(1L)
-            .sessionId(8L)
-            .tenantId("t1")
-            .jobCode("JOB_A")
-            .sourceInstanceId(101L)
-            .status("PENDING")
-            .build();
-    BatchDayReplayEntryEntity e2 =
-        BatchDayReplayEntryEntity.builder()
-            .id(2L)
-            .sessionId(8L)
-            .tenantId("t1")
-            .jobCode("JOB_B")
-            .sourceInstanceId(102L)
-            .status("PENDING")
-            .build();
+    BatchDayReplayEntryEntity e1 = BatchDayReplayEntryEntity.builder()
+        .id(1L)
+        .sessionId(8L)
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .sourceInstanceId(101L)
+        .status("PENDING")
+        .build();
+    BatchDayReplayEntryEntity e2 = BatchDayReplayEntryEntity.builder()
+        .id(2L)
+        .sessionId(8L)
+        .tenantId("t1")
+        .jobCode("JOB_B")
+        .sourceInstanceId(102L)
+        .status("PENDING")
+        .build();
     when(entryMapper.selectBySessionAndStatus(8L, "PENDING", 20)).thenReturn(List.of(e1, e2));
     when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-OK");
 
@@ -128,10 +124,8 @@ class BatchDayReplayDispatcherTest {
     assertThat(captor.getAllValues())
         .allSatisfy(cmd -> assertThat(cmd.replaySessionId()).isEqualTo(8L));
     assertThat(captor.getAllValues())
-        .allSatisfy(
-            cmd ->
-                assertThat(cmd.resultPolicy())
-                    .isEqualTo("CREATE_NEW_VERSION")); // 透传 session policy
+        .allSatisfy(cmd ->
+            assertThat(cmd.resultPolicy()).isEqualTo("CREATE_NEW_VERSION")); // 透传 session policy
     verify(entryMapper, times(2))
         .updateStatus(anyLong(), eq("RUNNING"), any(), any(), any(), any(), any(), any());
   }
@@ -141,15 +135,14 @@ class BatchDayReplayDispatcherTest {
     BatchDayReplaySessionEntity session =
         sessionAt(9L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION");
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
-    BatchDayReplayEntryEntity entry =
-        BatchDayReplayEntryEntity.builder()
-            .id(1L)
-            .sessionId(9L)
-            .tenantId("t1")
-            .jobCode("JOB_A")
-            .sourceInstanceId(101L)
-            .status("PENDING")
-            .build();
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(1L)
+        .sessionId(9L)
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .sourceInstanceId(101L)
+        .status("PENDING")
+        .build();
     when(entryMapper.selectBySessionAndStatus(9L, "PENDING", 20)).thenReturn(List.of(entry));
     when(compensationService.submit(any(CompensationSubmitCommand.class)))
         .thenThrow(new RuntimeException("compensation backpressure"));

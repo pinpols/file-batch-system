@@ -19,7 +19,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SmsNotificationSenderTest {
 
-  @Mock private SmsProvider aliyunProvider;
+  @Mock
+  private SmsProvider aliyunProvider;
+
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   private NotificationMessage message(String configJson) {

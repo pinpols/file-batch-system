@@ -20,9 +20,8 @@ class DispatchChannelStartupAuditContributorTest {
     when(repository.countByHealthStatus("UNHEALTHY")).thenReturn(1L);
     // 已被本轮 probe 验证过（overdue=0），UNHEALTHY 是真实故障
     when(repository.countProbeOverdue(any(Instant.class))).thenReturn(0L);
-    DispatchChannelStartupAuditContributor contributor =
-        new DispatchChannelStartupAuditContributor(
-            repository, new DispatchChannelHealthProperties());
+    DispatchChannelStartupAuditContributor contributor = new DispatchChannelStartupAuditContributor(
+        repository, new DispatchChannelHealthProperties());
 
     WorkerStartupAuditResult result = contributor.audit();
 
@@ -34,9 +33,8 @@ class DispatchChannelStartupAuditContributorTest {
   @Test
   void auditExposesOfficialChannelSafetyProfiles() {
     DispatchChannelHealthRepository repository = mock(DispatchChannelHealthRepository.class);
-    DispatchChannelStartupAuditContributor contributor =
-        new DispatchChannelStartupAuditContributor(
-            repository, new DispatchChannelHealthProperties());
+    DispatchChannelStartupAuditContributor contributor = new DispatchChannelStartupAuditContributor(
+        repository, new DispatchChannelHealthProperties());
 
     WorkerStartupAuditResult result = contributor.audit();
 
@@ -59,9 +57,8 @@ class DispatchChannelStartupAuditContributorTest {
     when(repository.countByHealthStatus("UNHEALTHY")).thenReturn(1L);
     // 启动瞬间 probe scheduler 尚未首跑 → 所有 UNHEALTHY 都是 overdue 残留
     when(repository.countProbeOverdue(any(Instant.class))).thenReturn(1L);
-    DispatchChannelStartupAuditContributor contributor =
-        new DispatchChannelStartupAuditContributor(
-            repository, new DispatchChannelHealthProperties());
+    DispatchChannelStartupAuditContributor contributor = new DispatchChannelStartupAuditContributor(
+        repository, new DispatchChannelHealthProperties());
 
     WorkerStartupAuditResult result = contributor.audit();
 
@@ -78,9 +75,8 @@ class DispatchChannelStartupAuditContributorTest {
     when(repository.countByHealthStatus("DEGRADED")).thenReturn(3L);
     when(repository.countByHealthStatus("UNHEALTHY")).thenReturn(1L);
     when(repository.countProbeOverdue(any(Instant.class))).thenReturn(3L);
-    DispatchChannelStartupAuditContributor contributor =
-        new DispatchChannelStartupAuditContributor(
-            repository, new DispatchChannelHealthProperties());
+    DispatchChannelStartupAuditContributor contributor = new DispatchChannelStartupAuditContributor(
+        repository, new DispatchChannelHealthProperties());
 
     WorkerStartupAuditResult result = contributor.audit();
 

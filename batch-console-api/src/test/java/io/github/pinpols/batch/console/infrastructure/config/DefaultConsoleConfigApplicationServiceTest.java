@@ -48,13 +48,23 @@ class DefaultConsoleConfigApplicationServiceTest {
 
   private static final String TENANT = "t1";
 
-  @Mock private ConsoleTenantGuard tenantGuard;
-  @Mock private ConfigReleaseMapper configReleaseMapper;
-  @Mock private SecretVersionMapper secretVersionMapper;
-  @Mock private ConfigChangeLogMapper configChangeLogMapper;
-  @Mock private ConsoleDashboardQueryMapper dashboardQueryMapper;
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
 
-  @InjectMocks private DefaultConsoleConfigApplicationService service;
+  @Mock
+  private ConfigReleaseMapper configReleaseMapper;
+
+  @Mock
+  private SecretVersionMapper secretVersionMapper;
+
+  @Mock
+  private ConfigChangeLogMapper configChangeLogMapper;
+
+  @Mock
+  private ConsoleDashboardQueryMapper dashboardQueryMapper;
+
+  @InjectMocks
+  private DefaultConsoleConfigApplicationService service;
 
   @BeforeEach
   void setUp() {

@@ -35,16 +35,15 @@ public class ConsoleAssetPartitionController {
       @RequestParam("jobCode") String jobCode,
       @RequestParam("bizDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    AssetPartitionReadinessResponse resp =
-        proxyClient()
-            .get()
-            .uri(
-                "/internal/readiness/job?tenantId={tenantId}&jobCode={jobCode}&bizDate={bizDate}",
-                resolved,
-                jobCode,
-                bizDate)
-            .retrieve()
-            .body(AssetPartitionReadinessResponse.class);
+    AssetPartitionReadinessResponse resp = proxyClient()
+        .get()
+        .uri(
+            "/internal/readiness/job?tenantId={tenantId}&jobCode={jobCode}&bizDate={bizDate}",
+            resolved,
+            jobCode,
+            bizDate)
+        .retrieve()
+        .body(AssetPartitionReadinessResponse.class);
     return responseFactory.success(resp);
   }
 

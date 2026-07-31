@@ -10,7 +10,8 @@ import lombok.EqualsAndHashCode;
 @Data
 public class AlertEventQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @Size(max = 16, message = "severity too long (max 16)")
   private String severity;

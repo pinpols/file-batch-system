@@ -86,9 +86,8 @@ public class DefaultConsoleResourceQueueApplicationService
   @Override
   public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
-        Guard.requireFound(
-            resourceQueueMapper.selectById(tenantId, id), "resource queue not found");
+    Map<String, Object> existing = Guard.requireFound(
+        resourceQueueMapper.selectById(tenantId, id), "resource queue not found");
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put("id", id);

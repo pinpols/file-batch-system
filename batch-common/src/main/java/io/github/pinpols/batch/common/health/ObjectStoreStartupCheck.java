@@ -92,14 +92,13 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
   }
 
   private IllegalStateException fail(String reason, String key, Exception cause) {
-    String msg =
-        "object store startup check failed("
-            + reason
-            + "):bucket="
-            + bucket
-            + ", probeKey="
-            + key
-            + "。请核对 endpoint/凭据/bucket 权限,以及该 S3 兼容后端是否需要 path-style / checksum 配置。";
+    String msg = "object store startup check failed("
+        + reason
+        + "):bucket="
+        + bucket
+        + ", probeKey="
+        + key
+        + "。请核对 endpoint/凭据/bucket 权限,以及该 S3 兼容后端是否需要 path-style / checksum 配置。";
     return cause == null ? new IllegalStateException(msg) : new IllegalStateException(msg, cause);
   }
 }

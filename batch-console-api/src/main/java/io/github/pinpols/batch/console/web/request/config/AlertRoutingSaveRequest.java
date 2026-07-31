@@ -9,9 +9,11 @@ import lombok.Data;
 
 @Data
 public class AlertRoutingSaveRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String routeCode;
+  @ValidResourceCode
+  private String routeCode;
 
   @Size(max = 128)
   private String routeName;

@@ -24,9 +24,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class RetryDispatchStepTest {
 
-  @Mock private FileDispatchRepository fileDispatchRepository;
-  @Mock private DispatchChannelGateway dispatchChannelGateway;
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private FileDispatchRepository fileDispatchRepository;
+
+  @Mock
+  private DispatchChannelGateway dispatchChannelGateway;
+
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   private RetryDispatchStep step;
 
@@ -66,7 +71,8 @@ class RetryDispatchStepTest {
     when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(true, "ext-retry", "R-retry", true, false, "ok", null));
-    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchJobContext context = buildContextWithRetryRequested();
     DispatchStageResult result = step.execute(context);
@@ -99,7 +105,8 @@ class RetryDispatchStepTest {
     when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(true, "ext-retry", "R-retry", true, false, "ok", null));
-    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any())).thenReturn(0);
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(0);
 
     DispatchJobContext context = buildContextWithRetryRequested();
     DispatchStageResult result = step.execute(context);

@@ -24,25 +24,35 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class OrchestratorConfigCacheServiceTest {
 
-  @Mock private OrchestratorRedisSupport redis;
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
-  @Mock private WorkflowDefinitionMapper workflowDefinitionMapper;
-  @Mock private BusinessCalendarMapper businessCalendarMapper;
-  @Mock private BatchWindowMapper batchWindowMapper;
-  @Mock private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+  @Mock
+  private OrchestratorRedisSupport redis;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
+
+  @Mock
+  private BusinessCalendarMapper businessCalendarMapper;
+
+  @Mock
+  private BatchWindowMapper batchWindowMapper;
+
+  @Mock
+  private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
 
   private OrchestratorConfigCacheService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new OrchestratorConfigCacheService(
-            redis,
-            jobDefinitionMapper,
-            workflowDefinitionMapper,
-            businessCalendarMapper,
-            batchWindowMapper,
-            tenantQuotaPolicyMapper);
+    service = new OrchestratorConfigCacheService(
+        redis,
+        jobDefinitionMapper,
+        workflowDefinitionMapper,
+        businessCalendarMapper,
+        batchWindowMapper,
+        tenantQuotaPolicyMapper);
   }
 
   @Test

@@ -70,18 +70,17 @@ class DefaultRetryGovernanceServiceTest {
     governance = mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.retry()).thenReturn(properties);
 
-    service =
-        new DefaultRetryGovernanceService(
-            retryScheduleMapper,
-            deadLetterTaskMapper,
-            jobDefinitionMapper,
-            jobTaskMapper,
-            jobPartitionMapper,
-            jobInstanceMapper,
-            jobStepInstanceMapper,
-            taskDispatchOutboxService,
-            governance,
-            null /* jobExecutionLogMapper: audit 在本测试不覆盖 */);
+    service = new DefaultRetryGovernanceService(
+        retryScheduleMapper,
+        deadLetterTaskMapper,
+        jobDefinitionMapper,
+        jobTaskMapper,
+        jobPartitionMapper,
+        jobInstanceMapper,
+        jobStepInstanceMapper,
+        taskDispatchOutboxService,
+        governance,
+        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */);
   }
 
   // ── scheduleRetryIfNecessary — null guards ────────────────────────────────
@@ -113,9 +112,8 @@ class DefaultRetryGovernanceServiceTest {
   void shouldCreateDeadLetterWhenRetryPolicyIsNone() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "NONE", 3));
 
-    boolean result =
-        service.scheduleRetryIfNecessary(
-            task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "none policy");
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "none policy");
 
     assertThat(result).isFalse();
     verify(deadLetterTaskMapper).insert(any());
@@ -126,9 +124,8 @@ class DefaultRetryGovernanceServiceTest {
   void shouldCreateDeadLetterWhenMaxRetryCountZero() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 0));
 
-    boolean result =
-        service.scheduleRetryIfNecessary(
-            task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "max zero");
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "ERR", "max zero");
 
     assertThat(result).isFalse();
     verify(deadLetterTaskMapper).insert(any());
@@ -141,9 +138,8 @@ class DefaultRetryGovernanceServiceTest {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 2));
 
     // partition already has 2 retries, max is 2 → exhausted
-    boolean result =
-        service.scheduleRetryIfNecessary(
-            task("t1", 1L, 1L), partition(1L, 2), jobInstance(1L), "ERR", "exhausted");
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L), partition(1L, 2), jobInstance(1L), "ERR", "exhausted");
 
     assertThat(result).isFalse();
     verify(deadLetterTaskMapper).insert(any());
@@ -156,9 +152,8 @@ class DefaultRetryGovernanceServiceTest {
   void shouldInsertRetryScheduleWithCorrectStatusAndDedup() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
 
-    boolean result =
-        service.scheduleRetryIfNecessary(
-            task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "PARSE_ERR", "parse failed");
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), "PARSE_ERR", "parse failed");
 
     assertThat(result).isTrue();
     ArgumentCaptor<RetryScheduleEntity> captor = ArgumentCaptor.forClass(RetryScheduleEntity.class);
@@ -179,9 +174,8 @@ class DefaultRetryGovernanceServiceTest {
   void shouldDeadLetterAsBusinessForPermanentImportErrors(String errorCode) {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
 
-    boolean result =
-        service.scheduleRetryIfNecessary(
-            task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "permanent input");
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "permanent input");
 
     assertThat(result).as(errorCode + " 永久失败,不应排重试").isFalse();
     ArgumentCaptor<DeadLetterTaskEntity> dl = ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
@@ -196,9 +190,8 @@ class DefaultRetryGovernanceServiceTest {
   void shouldUseDefaultRetryPolicyWhenJobDefinitionNotFound() {
     when(jobDefinitionMapper.selectById(anyLong())).thenReturn(null);
 
-    boolean result =
-        service.scheduleRetryIfNecessary(
-            task("t1", 1L, 999L), partition(1L, 0), jobInstance(999L), "ERR", "msg");
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 999L), partition(1L, 0), jobInstance(999L), "ERR", "msg");
 
     assertThat(result).isTrue();
     verify(retryScheduleMapper).insert(any());
@@ -207,9 +200,8 @@ class DefaultRetryGovernanceServiceTest {
   @Test
   void shouldUseDefaultRetryPolicyWhenJobDefinitionIdIsNull() {
     JobInstanceEntity jobInst = jobInstance(null);
-    boolean result =
-        service.scheduleRetryIfNecessary(
-            task("t1", 1L, null), partition(1L, 0), jobInst, "ERR", "msg");
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, null), partition(1L, 0), jobInst, "ERR", "msg");
 
     assertThat(result).isTrue();
   }

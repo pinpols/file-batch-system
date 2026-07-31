@@ -36,10 +36,8 @@ public final class ExportRegionResolver {
   public static String resolve(Map<String, Object> templateConfig, Map<String, Object> metadata) {
     String triggerRegion = stringValue(metadata == null ? null : metadata.get("region"));
     Map<String, Object> regionCfg = regionConfig(templateConfig);
-    String defaultRegion =
-        firstNonBlank(
-            stringValue(regionCfg.get("defaultRegion")),
-            stringValue(regionCfg.get("default_region")));
+    String defaultRegion = firstNonBlank(
+        stringValue(regionCfg.get("defaultRegion")), stringValue(regionCfg.get("default_region")));
     List<String> allowed =
         stringList(regionCfg.get("allowedRegions"), regionCfg.get("allowed_regions"));
 

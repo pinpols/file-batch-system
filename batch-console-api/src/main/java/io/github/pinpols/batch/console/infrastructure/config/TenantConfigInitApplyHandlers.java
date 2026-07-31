@@ -56,7 +56,9 @@ public class TenantConfigInitApplyHandlers {
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_ID = "id";
 
-  @Lazy @Autowired private TenantConfigInitApplyHandlers self;
+  @Lazy
+  @Autowired
+  private TenantConfigInitApplyHandlers self;
 
   private final TenantDefinitionConfigMappers definitionMappers;
   private final PlatformTransactionManager transactionManager;
@@ -170,25 +172,24 @@ public class TenantConfigInitApplyHandlers {
     for (T spec : specs) {
       String code = handler.code(spec);
       try {
-        nested.executeWithoutResult(
-            status -> {
-              Optional<E> existing = handler.find(ctx.tenantId(), spec);
-              if (existing.isPresent()) {
-                if (ctx.mode() == InitMode.UPSERT) {
-                  if (!ctx.dryRun()) {
-                    handler.update(ctx, spec, existing.get());
-                  }
-                  acc.recordUpdated(code);
-                } else {
-                  acc.recordSkipped(code);
-                }
-              } else {
-                if (!ctx.dryRun()) {
-                  handler.insert(ctx, spec);
-                }
-                acc.recordCreated(code);
+        nested.executeWithoutResult(status -> {
+          Optional<E> existing = handler.find(ctx.tenantId(), spec);
+          if (existing.isPresent()) {
+            if (ctx.mode() == InitMode.UPSERT) {
+              if (!ctx.dryRun()) {
+                handler.update(ctx, spec, existing.get());
               }
-            });
+              acc.recordUpdated(code);
+            } else {
+              acc.recordSkipped(code);
+            }
+          } else {
+            if (!ctx.dryRun()) {
+              handler.insert(ctx, spec);
+            }
+            acc.recordCreated(code);
+          }
+        });
       } catch (Exception ex) {
         log.warn(
             "[TenantConfigBatchInit] {} code={} tenant={} failed: {}",
@@ -211,9 +212,8 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.of(
             "jobDef",
             JobDefinitionSpec::getJobCode,
-            (tid, s) ->
-                Optional.ofNullable(
-                    definitionMappers.jobDefinition.selectByUniqueKey(tid, s.getJobCode())),
+            (tid, s) -> Optional.ofNullable(
+                definitionMappers.jobDefinition.selectByUniqueKey(tid, s.getJobCode())),
             (c, s) -> insertJobDefinition(c.tenantId(), s, c.operator()),
             (c, s, existing) -> updateJobDefinition(existing, s, c.operator())));
   }
@@ -265,23 +265,18 @@ public class TenantConfigInitApplyHandlers {
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(existing.getTenantId());
     param.setJobCode(existing.getJobCode());
-    param.setDependsOnJobCode(
-        Nullables.coalesce(
-            CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode()));
+    param.setDependsOnJobCode(Nullables.coalesce(
+        CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode()));
     param.setJobName(Nullables.coalesce(spec.getJobName(), existing.getJobName()));
-    param.setQueueCode(
-        Nullables.coalesce(
-            CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()), existing.getQueueCode()));
-    param.setWorkerGroup(
-        Nullables.coalesce(
-            CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()), existing.getWorkerGroup()));
+    param.setQueueCode(Nullables.coalesce(
+        CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()), existing.getQueueCode()));
+    param.setWorkerGroup(Nullables.coalesce(
+        CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()), existing.getWorkerGroup()));
     param.setScheduleExpr(Nullables.coalesce(spec.getScheduleExpr(), existing.getScheduleExpr()));
-    param.setCalendarCode(
-        Nullables.coalesce(
-            CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()), existing.getCalendarCode()));
-    param.setWindowCode(
-        Nullables.coalesce(
-            CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()), existing.getWindowCode()));
+    param.setCalendarCode(Nullables.coalesce(
+        CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()), existing.getCalendarCode()));
+    param.setWindowCode(Nullables.coalesce(
+        CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()), existing.getWindowCode()));
     param.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), existing.getRetryPolicy()));
     param.setRetryMaxCount(
         Nullables.coalesce(spec.getRetryMaxCount(), existing.getRetryMaxCount()));
@@ -306,10 +301,8 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.of(
             "workflow",
             WorkflowDefinitionSpec::getWorkflowCode,
-            (tid, s) ->
-                Optional.ofNullable(
-                    definitionMappers.workflowDefinition.selectByUniqueKey(
-                        tid, s.getWorkflowCode(), 1)),
+            (tid, s) -> Optional.ofNullable(definitionMappers.workflowDefinition.selectByUniqueKey(
+                tid, s.getWorkflowCode(), 1)),
             (c, s) -> self.upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
             (c, s, existing) ->
                 self.upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
@@ -384,15 +377,13 @@ public class TenantConfigInitApplyHandlers {
             "pipeline",
             s -> s.getJobCode() + ":" + s.getPipelineType(),
             (tid, s) -> {
-              List<Map<String, Object>> rows =
-                  definitionMappers.pipelineDefinition.selectByQuery(
-                      tid, s.getJobCode(), s.getPipelineType(), null, new PageRequest(1, 1));
+              List<Map<String, Object>> rows = definitionMappers.pipelineDefinition.selectByQuery(
+                  tid, s.getJobCode(), s.getPipelineType(), null, new PageRequest(1, 1));
               return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
             },
             (c, s) -> self.insertPipelineDefinition(c.tenantId(), s),
-            (c, s, existing) ->
-                self.updatePipelineDefinition(
-                    c.tenantId(), ((Number) existing.get(KEY_ID)).longValue(), s, existing)));
+            (c, s, existing) -> self.updatePipelineDefinition(
+                c.tenantId(), ((Number) existing.get(KEY_ID)).longValue(), s, existing)));
   }
 
   @Transactional
@@ -512,12 +503,10 @@ public class TenantConfigInitApplyHandlers {
             "calendar",
             BusinessCalendarSpec::getCalendarCode,
             (tid, s) -> Optional.ofNullable(operationalConfigSupport.findBusinessCalendar(tid, s)),
-            (c, s) ->
-                operationalConfigSupport.upsertBusinessCalendar(
-                    c.tenantId(), s, c.operator(), null),
-            (c, s, existing) ->
-                operationalConfigSupport.upsertBusinessCalendar(
-                    c.tenantId(), s, c.operator(), ((Number) existing.get(KEY_ID)).longValue())));
+            (c, s) -> operationalConfigSupport.upsertBusinessCalendar(
+                c.tenantId(), s, c.operator(), null),
+            (c, s, existing) -> operationalConfigSupport.upsertBusinessCalendar(
+                c.tenantId(), s, c.operator(), ((Number) existing.get(KEY_ID)).longValue())));
   }
 
   ItemStats applyQuotaPolicies(List<TenantQuotaPolicySpec> specs, ApplyContext ctx) {

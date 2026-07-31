@@ -146,28 +146,18 @@ public final class E2eScenarioFixture {
 
     provisionPipelineDefinition(spec.jdbc(), spec.tenantId(), jobCode, spec.workerGroup());
 
-    spec.jdbc()
-        .update(
-            """
+    spec.jdbc().update("""
             insert into batch.workflow_definition (
                 tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
             ) values (?, ?, 'e2e wf', 'DAG', 1, true)
-            """,
-            spec.tenantId(),
-            jobCode);
+            """, spec.tenantId(), jobCode);
 
     spec.jdbc()
-        .update(
-            """
+        .update("""
             insert into batch.trigger_request (
                 tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key, request_status, trace_id
             ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace')
-            """,
-            spec.tenantId(),
-            requestId,
-            spec.triggerType().code(),
-            jobCode,
-            dedupKey);
+            """, spec.tenantId(), requestId, spec.triggerType().code(), jobCode, dedupKey);
 
     return new LaunchSeed(jobCode, requestId, dedupKey);
   }
@@ -186,47 +176,46 @@ public final class E2eScenarioFixture {
       return;
     }
 
-    Long pipelineDefinitionId =
-        jdbc.queryForObject(
-            """
+    Long pipelineDefinitionId = jdbc.queryForObject(
+        """
             insert into batch.pipeline_definition (
                 tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
                 version, enabled
             ) values (?, ?, ?, ?, 'E2E', ?, 1, true)
             returning id
             """,
-            Long.class,
-            tenantId,
-            jobCode,
-            "e2e " + pipelineType.toLowerCase(Locale.ROOT) + " pipeline",
-            pipelineType,
-            pipelineType);
+        Long.class,
+        tenantId,
+        jobCode,
+        "e2e " + pipelineType.toLowerCase(Locale.ROOT) + " pipeline",
+        pipelineType,
+        pipelineType);
 
     List<PipelineStepSeed> steps =
         switch (pipelineType) {
           case "IMPORT" ->
-              List.of(
-                  step("IMPORT_RECEIVE", "RECEIVE", "{}"),
-                  step("IMPORT_PREPROCESS", "PREPROCESS", "{}"),
-                  step("IMPORT_PARSE", "PARSE", "{}"),
-                  step("IMPORT_VALIDATE", "VALIDATE", "{}"),
-                  step("IMPORT_LOAD", "LOAD", "{}"),
-                  step("IMPORT_FEEDBACK", "FEEDBACK", "{}"));
+            List.of(
+                step("IMPORT_RECEIVE", "RECEIVE", "{}"),
+                step("IMPORT_PREPROCESS", "PREPROCESS", "{}"),
+                step("IMPORT_PARSE", "PARSE", "{}"),
+                step("IMPORT_VALIDATE", "VALIDATE", "{}"),
+                step("IMPORT_LOAD", "LOAD", "{}"),
+                step("IMPORT_FEEDBACK", "FEEDBACK", "{}"));
           case "EXPORT" ->
-              List.of(
-                  step("EXPORT_PREPARE", "PREPARE", "{}"),
-                  step("EXPORT_GENERATE", "GENERATE", "{}"),
-                  step("EXPORT_STORE", "STORE", "{}"),
-                  step("EXPORT_REGISTER", "REGISTER", "{}"),
-                  step("EXPORT_COMPLETE", "COMPLETE", "{}"));
+            List.of(
+                step("EXPORT_PREPARE", "PREPARE", "{}"),
+                step("EXPORT_GENERATE", "GENERATE", "{}"),
+                step("EXPORT_STORE", "STORE", "{}"),
+                step("EXPORT_REGISTER", "REGISTER", "{}"),
+                step("EXPORT_COMPLETE", "COMPLETE", "{}"));
           case "DISPATCH" ->
-              List.of(
-                  step("DISPATCH_PREPARE", "PREPARE", "{}"),
-                  step("DISPATCH_DISPATCH", "DISPATCH", "{}"),
-                  step("DISPATCH_ACK", "ACK", "{\"onSuccessNextStageCode\":\"COMPLETE\"}"),
-                  step("DISPATCH_RETRY", "RETRY", "{\"onFailureNextStageCode\":\"COMPENSATE\"}"),
-                  step("DISPATCH_COMPENSATE", "COMPENSATE", "{\"terminalOnSuccess\":true}"),
-                  step("DISPATCH_COMPLETE", "COMPLETE", "{\"terminalOnSuccess\":true}"));
+            List.of(
+                step("DISPATCH_PREPARE", "PREPARE", "{}"),
+                step("DISPATCH_DISPATCH", "DISPATCH", "{}"),
+                step("DISPATCH_ACK", "ACK", "{\"onSuccessNextStageCode\":\"COMPLETE\"}"),
+                step("DISPATCH_RETRY", "RETRY", "{\"onFailureNextStageCode\":\"COMPENSATE\"}"),
+                step("DISPATCH_COMPENSATE", "COMPENSATE", "{\"terminalOnSuccess\":true}"),
+                step("DISPATCH_COMPLETE", "COMPLETE", "{\"terminalOnSuccess\":true}"));
           default -> List.of();
         };
     for (int i = 0; i < steps.size(); i++) {

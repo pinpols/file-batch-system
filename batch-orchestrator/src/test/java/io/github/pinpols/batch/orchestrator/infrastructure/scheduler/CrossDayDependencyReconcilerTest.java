@@ -63,13 +63,12 @@ class CrossDayDependencyReconcilerTest {
     nodeMapper = mock(WorkflowNodeMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     workflowMappers = new OrchestratorWorkflowMappers(nodeMapper, runMapper, nodeRunMapper);
-    jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            mock(io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper.class),
-            mock(io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper.class),
-            mock(io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper.class),
-            mock(io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper.class));
+    jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        mock(io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper.class),
+        mock(io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper.class),
+        mock(io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper.class),
+        mock(io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper.class));
     resolver = mock(CrossDayDependencyResolver.class);
     dispatchService = mock(WorkflowNodeDispatchService.class);
     @SuppressWarnings("unchecked")
@@ -82,19 +81,17 @@ class CrossDayDependencyReconcilerTest {
     properties.setEnabled(true);
     properties.setBatchSize(50);
     properties.setDefaultTimeoutSeconds(86_400L);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    reconciler =
-        new CrossDayDependencyReconciler(
-            workflowMappers,
-            jobMappers,
-            resolver,
-            provider,
-            alertEventService,
-            properties,
-            gracefulShutdown,
-            dateTimeSupport);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    reconciler = new CrossDayDependencyReconciler(
+        workflowMappers,
+        jobMappers,
+        resolver,
+        provider,
+        alertEventService,
+        properties,
+        gracefulShutdown,
+        dateTimeSupport);
   }
 
   @Test
@@ -125,11 +122,10 @@ class CrossDayDependencyReconcilerTest {
     when(jobInstanceMapper.selectById("t1", 333L)).thenReturn(jobInstance);
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
     when(resolver.resolve(eq("t1"), eq(LocalDate.of(2026, 5, 4)), anyString()))
-        .thenReturn(
-            ResolutionResult.builder()
-                .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
-                .resolved(Map.of("alias", Map.of("k", "v")))
-                .build());
+        .thenReturn(ResolutionResult.builder()
+            .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
+            .resolved(Map.of("alias", Map.of("k", "v")))
+            .build());
 
     reconciler.scheduledReconcile();
 
@@ -158,12 +154,11 @@ class CrossDayDependencyReconcilerTest {
     when(jobInstanceMapper.selectById("t1", 334L)).thenReturn(jobInstance);
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
     when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString()))
-        .thenReturn(
-            ResolutionResult.builder()
-                .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
-                .resolved(Map.of())
-                .waitingReasons(List.of("MISSING:alias=t_minus_1"))
-                .build());
+        .thenReturn(ResolutionResult.builder()
+            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
+            .resolved(Map.of())
+            .waitingReasons(List.of("MISSING:alias=t_minus_1"))
+            .build());
 
     reconciler.scheduledReconcile();
 
@@ -207,12 +202,11 @@ class CrossDayDependencyReconcilerTest {
     when(jobInstanceMapper.selectById("t1", 336L)).thenReturn(jobInstance);
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
     when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString()))
-        .thenReturn(
-            ResolutionResult.builder()
-                .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
-                .resolved(Map.of())
-                .waitingReasons(List.of("MISSING:alias=t_minus_1"))
-                .build());
+        .thenReturn(ResolutionResult.builder()
+            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
+            .resolved(Map.of())
+            .waitingReasons(List.of("MISSING:alias=t_minus_1"))
+            .build());
 
     reconciler.scheduledReconcile();
 
@@ -234,12 +228,11 @@ class CrossDayDependencyReconcilerTest {
     when(jobInstanceMapper.selectById("t1", 337L)).thenReturn(jobInstance);
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
     when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString()))
-        .thenReturn(
-            ResolutionResult.builder()
-                .status(CrossDayDependencyResolver.ResolutionStatus.FAILED)
-                .resolved(Map.of())
-                .failureCode("CROSS_DAY_DEP_INVALID_SPEC")
-                .build());
+        .thenReturn(ResolutionResult.builder()
+            .status(CrossDayDependencyResolver.ResolutionStatus.FAILED)
+            .resolved(Map.of())
+            .failureCode("CROSS_DAY_DEP_INVALID_SPEC")
+            .build());
 
     reconciler.scheduledReconcile();
 

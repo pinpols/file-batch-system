@@ -70,7 +70,11 @@ public class S3ObjectStore implements BatchObjectStore {
       byte[] payload = exact.readNBytes((int) size);
       exact.verifyEndOfStream();
       s3Client.putObject(
-          PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
+          PutObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .contentType(contentType)
+              .build(),
           RequestBody.fromBytes(payload));
     } catch (ObjectStoreException ex) {
       throw ex;
@@ -82,13 +86,12 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public void copy(String bucket, String srcKey, String dstKey) {
     try {
-      s3Client.copyObject(
-          CopyObjectRequest.builder()
-              .sourceBucket(bucket)
-              .sourceKey(srcKey)
-              .destinationBucket(bucket)
-              .destinationKey(dstKey)
-              .build());
+      s3Client.copyObject(CopyObjectRequest.builder()
+          .sourceBucket(bucket)
+          .sourceKey(srcKey)
+          .destinationBucket(bucket)
+          .destinationKey(dstKey)
+          .build());
     } catch (Exception ex) {
       throw mapException("copy", bucket, srcKey, ex);
     }
@@ -97,7 +100,8 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public void delete(String bucket, String key) {
     try {
-      s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+      s3Client.deleteObject(
+          DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     } catch (Exception ex) {
       throw mapException("delete", bucket, key, ex);
     }
@@ -109,22 +113,20 @@ public class S3ObjectStore implements BatchObjectStore {
     if (keys == null || keys.isEmpty()) {
       return;
     }
-    List<String> deduped = keys.stream().filter(k -> k != null && !k.isBlank()).distinct().toList();
+    List<String> deduped =
+        keys.stream().filter(k -> k != null && !k.isBlank()).distinct().toList();
     for (int i = 0; i < deduped.size(); i += MAX_BATCH_DELETE) {
       List<String> chunk = deduped.subList(i, Math.min(i + MAX_BATCH_DELETE, deduped.size()));
       try {
-        s3Client.deleteObjects(
-            DeleteObjectsRequest.builder()
-                .bucket(bucket)
-                .delete(
-                    Delete.builder()
-                        .objects(
-                            chunk.stream()
-                                .map(k -> ObjectIdentifier.builder().key(k).build())
-                                .toList())
-                        .quiet(true)
-                        .build())
-                .build());
+        s3Client.deleteObjects(DeleteObjectsRequest.builder()
+            .bucket(bucket)
+            .delete(Delete.builder()
+                .objects(chunk.stream()
+                    .map(k -> ObjectIdentifier.builder().key(k).build())
+                    .toList())
+                .quiet(true)
+                .build())
+            .build());
       } catch (S3Exception ex) {
         // 部分 S3 兼容后端(个别 SeaweedFS/RustFS 版本)不实现 DeleteObjects(501/NotImplemented):
         // 退化为逐个删,保证可移植。其它错误(权限等)仍按映射抛出。
@@ -148,7 +150,8 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public InputStream get(String bucket, String key) {
     try {
-      return s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build());
+      return s3Client.getObject(
+          GetObjectRequest.builder().bucket(bucket).key(key).build());
     } catch (Exception ex) {
       throw mapException("get", bucket, key, ex);
     }
@@ -157,12 +160,11 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public InputStream getFrom(String bucket, String key, long offset) {
     try {
-      return s3Client.getObject(
-          GetObjectRequest.builder()
-              .bucket(bucket)
-              .key(key)
-              .range("bytes=" + offset + "-")
-              .build());
+      return s3Client.getObject(GetObjectRequest.builder()
+          .bucket(bucket)
+          .key(key)
+          .range("bytes=" + offset + "-")
+          .build());
     } catch (Exception ex) {
       throw mapException("getFrom", bucket, key, ex);
     }
@@ -201,14 +203,12 @@ public class S3ObjectStore implements BatchObjectStore {
     List<ObjectSummary> summaries = new ArrayList<>();
     boolean truncated;
     try {
-      ListObjectsV2Response resp =
-          s3Client.listObjectsV2(
-              ListObjectsV2Request.builder()
-                  .bucket(bucket)
-                  .prefix(prefix)
-                  .startAfter(afterMarker)
-                  .maxKeys(maxKeys)
-                  .build());
+      ListObjectsV2Response resp = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+          .bucket(bucket)
+          .prefix(prefix)
+          .startAfter(afterMarker)
+          .maxKeys(maxKeys)
+          .build());
       for (S3Object item : resp.contents()) {
         summaries.add(new ObjectSummary(item.key(), item.size(), item.lastModified(), item.eTag()));
       }
@@ -227,8 +227,10 @@ public class S3ObjectStore implements BatchObjectStore {
   public String presign(String bucket, String key, Duration ttl) {
     try {
       GetObjectRequest get = GetObjectRequest.builder().bucket(bucket).key(key).build();
-      GetObjectPresignRequest req =
-          GetObjectPresignRequest.builder().signatureDuration(ttl).getObjectRequest(get).build();
+      GetObjectPresignRequest req = GetObjectPresignRequest.builder()
+          .signatureDuration(ttl)
+          .getObjectRequest(get)
+          .build();
       return presigner.presignGetObject(req).url().toString();
     } catch (Exception ex) {
       throw mapException("presign", bucket, key, ex);
@@ -247,11 +249,10 @@ public class S3ObjectStore implements BatchObjectStore {
       if (contentType != null && !contentType.isBlank()) {
         put.contentType(contentType);
       }
-      PutObjectPresignRequest req =
-          PutObjectPresignRequest.builder()
-              .signatureDuration(ttl)
-              .putObjectRequest(put.build())
-              .build();
+      PutObjectPresignRequest req = PutObjectPresignRequest.builder()
+          .signatureDuration(ttl)
+          .putObjectRequest(put.build())
+          .build();
       return presigner.presignPutObject(req).url().toString();
     } catch (Exception ex) {
       throw mapException("presignPut", bucket, key, ex);
@@ -272,12 +273,11 @@ public class S3ObjectStore implements BatchObjectStore {
   private void putMultipart(
       String bucket, String key, ExactSizeInputStream in, long size, String contentType) {
     CreateMultipartUploadResponse created =
-        s3Client.createMultipartUpload(
-            CreateMultipartUploadRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .contentType(contentType)
-                .build());
+        s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
+            .bucket(bucket)
+            .key(key)
+            .contentType(contentType)
+            .build());
     String uploadId = created.uploadId();
     List<CompletedPart> completedParts = new ArrayList<>();
     long remaining = size;
@@ -287,29 +287,28 @@ public class S3ObjectStore implements BatchObjectStore {
       while (remaining > 0) {
         int len = (int) Math.min(partSize, remaining);
         byte[] bytes = in.readNBytes(len);
-        UploadPartResponse uploaded =
-            s3Client.uploadPart(
-                UploadPartRequest.builder()
-                    .bucket(bucket)
-                    .key(key)
-                    .uploadId(uploadId)
-                    .partNumber(partNumber)
-                    .contentLength((long) bytes.length)
-                    .build(),
-                RequestBody.fromBytes(bytes));
+        UploadPartResponse uploaded = s3Client.uploadPart(
+            UploadPartRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .uploadId(uploadId)
+                .partNumber(partNumber)
+                .contentLength((long) bytes.length)
+                .build(),
+            RequestBody.fromBytes(bytes));
         completedParts.add(
             CompletedPart.builder().partNumber(partNumber).eTag(uploaded.eTag()).build());
         remaining -= bytes.length;
         partNumber++;
       }
       in.verifyEndOfStream();
-      s3Client.completeMultipartUpload(
-          CompleteMultipartUploadRequest.builder()
-              .bucket(bucket)
-              .key(key)
-              .uploadId(uploadId)
-              .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
-              .build());
+      s3Client.completeMultipartUpload(CompleteMultipartUploadRequest.builder()
+          .bucket(bucket)
+          .key(key)
+          .uploadId(uploadId)
+          .multipartUpload(
+              CompletedMultipartUpload.builder().parts(completedParts).build())
+          .build());
     } catch (Exception ex) {
       abortMultipart(bucket, key, uploadId);
       if (ex instanceof ObjectStoreException ose) {
@@ -321,8 +320,11 @@ public class S3ObjectStore implements BatchObjectStore {
 
   private void abortMultipart(String bucket, String key, String uploadId) {
     try {
-      s3Client.abortMultipartUpload(
-          AbortMultipartUploadRequest.builder().bucket(bucket).key(key).uploadId(uploadId).build());
+      s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder()
+          .bucket(bucket)
+          .key(key)
+          .uploadId(uploadId)
+          .build());
     } catch (Exception abortEx) {
       log.warn(
           "s3 multipart abort failed: bucket={}, key={}, uploadId={}",
@@ -350,7 +352,7 @@ public class S3ObjectStore implements BatchObjectStore {
       return switch (code == null ? "" : code) {
         case "NoSuchKey", "NoSuchObject" -> new ObjectNotFoundException(message, ex);
         case "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch" ->
-            new ObjectStoreAccessException(message, ex);
+          new ObjectStoreAccessException(message, ex);
         default -> new ObjectStoreException(message, ex);
       };
     }

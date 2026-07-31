@@ -36,8 +36,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class TaskDispatchOutboxServiceBehaviorTest {
 
-  @Mock private DomainEventPublisher domainEventPublisher;
-  @Mock private JobTaskMapper jobTaskMapper;
+  @Mock
+  private DomainEventPublisher domainEventPublisher;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
 
   private TaskDispatchOutboxService service;
 

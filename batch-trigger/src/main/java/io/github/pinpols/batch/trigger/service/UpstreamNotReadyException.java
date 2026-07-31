@@ -21,15 +21,14 @@ public class UpstreamNotReadyException extends RuntimeException {
 
   public UpstreamNotReadyException(
       String tenantId, String jobCode, String dependsOnJobCode, LocalDate bizDate) {
-    super(
-        "upstream not ready: tenantId="
-            + tenantId
-            + " jobCode="
-            + jobCode
-            + " dependsOn="
-            + dependsOnJobCode
-            + " bizDate="
-            + bizDate);
+    super("upstream not ready: tenantId="
+        + tenantId
+        + " jobCode="
+        + jobCode
+        + " dependsOn="
+        + dependsOnJobCode
+        + " bizDate="
+        + bizDate);
     this.tenantId = tenantId;
     this.jobCode = jobCode;
     this.dependsOnJobCode = dependsOnJobCode;

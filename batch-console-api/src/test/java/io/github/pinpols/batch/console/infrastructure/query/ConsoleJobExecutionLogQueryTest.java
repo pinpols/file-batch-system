@@ -34,26 +34,40 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleJobExecutionLogQueryTest {
 
-  @Mock private ConsoleTenantGuard tenantGuard;
-  @Mock private JobExecutionLogMapper jobExecutionLogMapper;
-  @Mock private LocalizedErrorRenderer localizedErrorRenderer;
-  @Mock private BatchTimezoneProvider timezoneProvider;
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private JobExecutionLogMapper jobExecutionLogMapper;
+
+  @Mock
+  private LocalizedErrorRenderer localizedErrorRenderer;
+
+  @Mock
+  private BatchTimezoneProvider timezoneProvider;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
 
   private ConsoleJobQueryService service;
 
   @BeforeEach
   void setUp() {
-    ConsoleJobQueryMappers mappers =
-        new ConsoleJobQueryMappers(
-            jobDefinitionMapper,
-            jobInstanceMapper,
-            jobStepInstanceMapper,
-            jobPartitionMapper,
-            jobExecutionLogMapper);
+    ConsoleJobQueryMappers mappers = new ConsoleJobQueryMappers(
+        jobDefinitionMapper,
+        jobInstanceMapper,
+        jobStepInstanceMapper,
+        jobPartitionMapper,
+        jobExecutionLogMapper);
     service =
         new ConsoleJobQueryService(tenantGuard, mappers, localizedErrorRenderer, timezoneProvider);
   }

@@ -72,9 +72,7 @@ public final class ExportFileVerifier implements E2eVerifier {
   // ─── Individual assertion methods (package-visible for direct test use) ───
 
   private void verifyFileRecord() {
-    List<Map<String, Object>> fileRecords =
-        platformJdbc.queryForList(
-            """
+    List<Map<String, Object>> fileRecords = platformJdbc.queryForList("""
             select fr.storage_path, fr.file_status, fr.file_size_bytes
             from batch.file_record fr
             join batch.job_instance ji on ji.tenant_id = fr.tenant_id
@@ -82,9 +80,7 @@ public final class ExportFileVerifier implements E2eVerifier {
               and fr.file_category = 'OUTPUT'
             order by fr.id desc
             limit 1
-            """,
-            tenantId,
-            dedupKey);
+            """, tenantId, dedupKey);
 
     if (fileRecords.isEmpty()) {
       // No file_record yet — could be a pipeline without file output; skip.
@@ -103,12 +99,11 @@ public final class ExportFileVerifier implements E2eVerifier {
   }
 
   private void verifySettlementAmount() {
-    BigDecimal totalAmount =
-        businessJdbc.queryForObject(
-            "select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?",
-            BigDecimal.class,
-            tenantId,
-            batchNo);
+    BigDecimal totalAmount = businessJdbc.queryForObject(
+        "select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?",
+        BigDecimal.class,
+        tenantId,
+        batchNo);
     if (expectedMinTotalAmount != null) {
       assertThat(totalAmount)
           .as("export: settlement_batch.total_amount must be >= %s", expectedMinTotalAmount)
@@ -129,25 +124,22 @@ public final class ExportFileVerifier implements E2eVerifier {
         || s3Endpoint == null) {
       return;
     }
-    try (S3Client client =
-        S3Client.builder()
-            .endpointOverride(URI.create(s3Endpoint))
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create("minioadmin", "minioadmin")))
-            .forcePathStyle(true)
-            .region(Region.US_EAST_1)
-            .build()) {
+    try (S3Client client = S3Client.builder()
+        .endpointOverride(URI.create(s3Endpoint))
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create("minioadmin", "minioadmin")))
+        .forcePathStyle(true)
+        .region(Region.US_EAST_1)
+        .build()) {
       String bucket = s3Bucket != null ? s3Bucket : "batch-dev";
-      String objectKey =
-          storagePath.startsWith(bucket + "/")
-              ? storagePath.substring(bucket.length() + 1)
-              : storagePath;
+      String objectKey = storagePath.startsWith(bucket + "/")
+          ? storagePath.substring(bucket.length() + 1)
+          : storagePath;
 
-      byte[] objectBytes =
-          client
-              .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(objectKey).build())
-              .asByteArray();
+      byte[] objectBytes = client
+          .getObjectAsBytes(
+              GetObjectRequest.builder().bucket(bucket).key(objectKey).build())
+          .asByteArray();
       try (var stream = new ByteArrayInputStream(objectBytes);
           BufferedReader reader =
               new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {

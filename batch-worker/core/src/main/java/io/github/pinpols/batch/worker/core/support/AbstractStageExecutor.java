@@ -49,9 +49,8 @@ public abstract class AbstractStageExecutor<
       results.add(stepMissingFailure());
       return results;
     }
-    Long pipelineInstanceId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    Long pipelineInstanceId = runtimeRepository.toLong(
+        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
     // P1-7: visited-set 早期检测真正的 cycle (重访同一 stepCode),与数值 guard 双保险。
     // 数值 guard 是回退 (恶意配置耗尽循环次数);visited 是直接检测 (一旦重访立即停)。
@@ -62,15 +61,13 @@ public abstract class AbstractStageExecutor<
     // 集合在进循环前读一次,只含**历史** attempt 的成功记录;本次 attempt 尚未写 SUCCESS,不会自跳。
     // 多分区守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):partitionCount>1 时
     // 整体降级为不跳,防兄弟 partition 的 SUCCESS 记录误判(共享 pipeline_instance,粒度不一致)。
-    boolean stageSkipEnabled =
-        stageSkipEnabled()
-            && pipelineInstanceId != null
-            && !stageSkipDegradedByMultiPartition(context, pipelineInstanceId);
+    boolean stageSkipEnabled = stageSkipEnabled()
+        && pipelineInstanceId != null
+        && !stageSkipDegradedByMultiPartition(context, pipelineInstanceId);
     Set<String> skipSafeStages = stageSkipEnabled ? skipSafeStages() : Set.of();
-    Set<String> priorSucceededStepCodes =
-        (stageSkipEnabled && !skipSafeStages.isEmpty())
-            ? runtimeRepository.loadSucceededStepCodes(pipelineInstanceId)
-            : Set.of();
+    Set<String> priorSucceededStepCodes = (stageSkipEnabled && !skipSafeStages.isEmpty())
+        ? runtimeRepository.loadSucceededStepCodes(pipelineInstanceId)
+        : Set.of();
     PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
     while (currentStep != null) {
       if (!visitedStepCodes.add(currentStep.stepCode())) {
@@ -101,9 +98,8 @@ public abstract class AbstractStageExecutor<
             currentStep.stepCode(),
             currentStep.stageCode(),
             pipelineInstanceId);
-        currentStep =
-            PipelineStepFlowSupport.resolveNextStep(
-                currentStep, true, configuredSteps, context.getAttributes());
+        currentStep = PipelineStepFlowSupport.resolveNextStep(
+            currentStep, true, configuredSteps, context.getAttributes());
         continue;
       }
       String lastSuccessStage =
@@ -111,12 +107,11 @@ public abstract class AbstractStageExecutor<
       runtimeRepository.updatePipelineStage(
           pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
       injectCurrentStepAttributes(context, currentStep);
-      Long stepRunId =
-          runtimeRepository.startStepRun(
-              pipelineInstanceId,
-              currentStep.stepCode(),
-              currentStep.stageCode(),
-              buildInputSummary(context, currentStep));
+      Long stepRunId = runtimeRepository.startStepRun(
+          pipelineInstanceId,
+          currentStep.stepCode(),
+          currentStep.stageCode(),
+          buildInputSummary(context, currentStep));
       context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, stepRunId);
 
       R result = executeOneStep(context, currentStep);
@@ -136,9 +131,8 @@ public abstract class AbstractStageExecutor<
             result.errorArgs(),
             buildOutputSummary(context, result));
       }
-      currentStep =
-          PipelineStepFlowSupport.resolveNextStep(
-              currentStep, result.success(), configuredSteps, context.getAttributes());
+      currentStep = PipelineStepFlowSupport.resolveNextStep(
+          currentStep, result.success(), configuredSteps, context.getAttributes());
       if (!result.success() && currentStep == null) {
         break;
       }
@@ -181,9 +175,8 @@ public abstract class AbstractStageExecutor<
     if (keys.isEmpty() || pipelineInstanceId == null) {
       return;
     }
-    Map<String, Object> summary =
-        runtimeRepository.loadLatestSucceededStepOutputSummary(
-            pipelineInstanceId, currentStep.stepCode());
+    Map<String, Object> summary = runtimeRepository.loadLatestSucceededStepOutputSummary(
+        pipelineInstanceId, currentStep.stepCode());
     if (summary.isEmpty()) {
       return;
     }
@@ -237,9 +230,8 @@ public abstract class AbstractStageExecutor<
         return List.copyOf(resolved);
       }
     }
-    Long pipelineDefinitionId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
+    Long pipelineDefinitionId = runtimeRepository.toLong(
+        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
     return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
   }
 
@@ -295,19 +287,18 @@ public abstract class AbstractStageExecutor<
     List<PipelineStepTemplate> templates = new ArrayList<>();
     int order = 1;
     for (StageStepDescriptor descriptor : orderedSteps) {
-      templates.add(
-          PipelineStepTemplate.builder()
-              .stepCode(descriptor.stepCode())
-              .stepName(descriptor.stepName())
-              .stageCode(descriptor.stageCode())
-              .stepOrder(order++)
-              .implCode(descriptor.implCode())
-              .stepParams(Map.of())
-              .timeoutSeconds(0)
-              .retryPolicy("NONE")
-              .retryMaxCount(0)
-              .enabled(true)
-              .build());
+      templates.add(PipelineStepTemplate.builder()
+          .stepCode(descriptor.stepCode())
+          .stepName(descriptor.stepName())
+          .stageCode(descriptor.stageCode())
+          .stepOrder(order++)
+          .implCode(descriptor.implCode())
+          .stepParams(Map.of())
+          .timeoutSeconds(0)
+          .retryPolicy("NONE")
+          .retryMaxCount(0)
+          .enabled(true)
+          .build());
     }
     return List.copyOf(templates);
   }

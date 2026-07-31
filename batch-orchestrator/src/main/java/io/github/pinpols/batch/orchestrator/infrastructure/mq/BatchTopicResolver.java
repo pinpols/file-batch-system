@@ -38,11 +38,11 @@ public class BatchTopicResolver {
     }
     return switch (routingProperties.getMode()) {
       case TENANT ->
-          Texts.hasText(dispatch.tenantId()) ? base + "." + safe(dispatch.tenantId()) : base;
+        Texts.hasText(dispatch.tenantId()) ? base + "." + safe(dispatch.tenantId()) : base;
       case PRIORITY ->
-          Texts.hasText(dispatch.priorityBand())
-              ? base + "." + safe(dispatch.priorityBand()).toLowerCase(Locale.ROOT)
-              : base;
+        Texts.hasText(dispatch.priorityBand())
+            ? base + "." + safe(dispatch.priorityBand()).toLowerCase(Locale.ROOT)
+            : base;
       default -> base;
     };
   }

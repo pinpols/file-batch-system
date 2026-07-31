@@ -39,16 +39,15 @@ public class ConsoleGovernanceController {
   private static final String PREFIX = "governance.";
 
   /** Well-known governance parameter keys with default values. */
-  private static final Map<String, String> KNOWN_KEYS =
-      Map.of(
-          "governance.outbox.circuit-breaker.failure-threshold", "3",
-          "governance.outbox.circuit-breaker.cooldown-millis", "60000",
-          "governance.dispatch.circuit-breaker.failure-threshold", "5",
-          "governance.dispatch.circuit-breaker.cooldown-millis", "60000",
-          "governance.rate-limit.login-ip-per-minute", "10",
-          "governance.rate-limit.sensitive-op-user-per-minute", "30",
-          "governance.rate-limit.launch-per-tenant-per-minute", "0",
-          "governance.rate-limit.release-per-tenant-per-minute", "0");
+  private static final Map<String, String> KNOWN_KEYS = Map.of(
+      "governance.outbox.circuit-breaker.failure-threshold", "3",
+      "governance.outbox.circuit-breaker.cooldown-millis", "60000",
+      "governance.dispatch.circuit-breaker.failure-threshold", "5",
+      "governance.dispatch.circuit-breaker.cooldown-millis", "60000",
+      "governance.rate-limit.login-ip-per-minute", "10",
+      "governance.rate-limit.sensitive-op-user-per-minute", "30",
+      "governance.rate-limit.launch-per-tenant-per-minute", "0",
+      "governance.rate-limit.release-per-tenant-per-minute", "0");
 
   private final ConsoleSystemParameterService parameterService;
   private final ConsoleResponseFactory responseFactory;
@@ -78,10 +77,9 @@ public class ConsoleGovernanceController {
       return responseFactory.success(null);
     }
     String operator = requestMetadataResolver.current().operatorId();
-    String description =
-        KNOWN_KEYS.containsKey(param.key())
-            ? "Governance parameter: " + param.key()
-            : "Custom governance parameter";
+    String description = KNOWN_KEYS.containsKey(param.key())
+        ? "Governance parameter: " + param.key()
+        : "Custom governance parameter";
     parameterService.upsert(resolved, param.key(), param.value(), description, operator);
     return responseFactory.success(null);
   }
@@ -97,5 +95,6 @@ public class ConsoleGovernanceController {
   }
 
   record UpdateGovernanceParam(
-      @NotBlank @Size(max = 128) String key, @NotBlank @Size(max = 256) String value) {}
+      @NotBlank @Size(max = 128) String key,
+      @NotBlank @Size(max = 256) String value) {}
 }

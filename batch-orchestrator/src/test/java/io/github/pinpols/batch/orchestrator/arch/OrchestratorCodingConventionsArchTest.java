@@ -9,10 +9,9 @@ import org.junit.jupiter.api.Test;
 /** batch-orchestrator CLAUDE.md 规约守护,规则源自 batch-common 测试 jar 的 CodingConventionsArchRules。 */
 class OrchestratorCodingConventionsArchTest {
 
-  private static final JavaClasses CLASSES =
-      new ClassFileImporter()
-          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-          .importPackages("io.github.pinpols.batch.orchestrator..");
+  private static final JavaClasses CLASSES = new ClassFileImporter()
+      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+      .importPackages("io.github.pinpols.batch.orchestrator..");
 
   @Test
   void zoneIdSystemDefault() {

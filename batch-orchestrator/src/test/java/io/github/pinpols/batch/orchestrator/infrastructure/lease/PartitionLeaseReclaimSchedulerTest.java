@@ -51,9 +51,8 @@ class PartitionLeaseReclaimSchedulerTest {
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.partitionLease()).thenReturn(props);
 
-    scheduler =
-        new PartitionLeaseReclaimScheduler(
-            jobPartitionMapper, reclaimUnit, governance, gracefulShutdown);
+    scheduler = new PartitionLeaseReclaimScheduler(
+        jobPartitionMapper, reclaimUnit, governance, gracefulShutdown);
   }
 
   @Test
@@ -88,7 +87,9 @@ class PartitionLeaseReclaimSchedulerTest {
     when(jobPartitionMapper.selectExpiredLeasesGlobal(
             PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
         .thenReturn(List.of(p1, p2));
-    doThrow(new ReclaimRetryableException("task version conflict")).when(reclaimUnit).reclaim(p1);
+    doThrow(new ReclaimRetryableException("task version conflict"))
+        .when(reclaimUnit)
+        .reclaim(p1);
     doNothing().when(reclaimUnit).reclaim(p2);
 
     scheduler.reclaimExpiredPartitions();

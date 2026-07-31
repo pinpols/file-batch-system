@@ -54,49 +54,43 @@ class GenerateStepTest {
     pluginRegistry = mock(ExportDataPluginRegistry.class);
     when(pluginRegistry.require(any())).thenReturn(dataPlugin);
 
-    ExportWorkerConfiguration config =
-        new ExportWorkerConfiguration(
-            "worker-test",
-            "EXPORT",
-            "tenant-test",
-            5000L,
-            "batch-export",
-            "group-export",
-            null,
-            500_000L,
-            new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
+    ExportWorkerConfiguration config = new ExportWorkerConfiguration(
+        "worker-test",
+        "EXPORT",
+        "tenant-test",
+        5000L,
+        "batch-export",
+        "group-export",
+        null,
+        500_000L,
+        new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
 
     ObjectMapper objectMapper = new ObjectMapper();
-    ExportFormatStrategyRegistry formatStrategyRegistry =
-        new ExportFormatStrategyRegistry(
-            List.of(
-                new JsonExportFormat(objectMapper),
-                new DelimitedExportFormat(objectMapper),
-                new ExcelExportFormat(objectMapper),
-                new FixedWidthExportFormat(objectMapper)));
+    ExportFormatStrategyRegistry formatStrategyRegistry = new ExportFormatStrategyRegistry(List.of(
+        new JsonExportFormat(objectMapper),
+        new DelimitedExportFormat(objectMapper),
+        new ExcelExportFormat(objectMapper),
+        new FixedWidthExportFormat(objectMapper)));
     // 本类测非续跑 GENERATE 行为。checkpoint 默认值已在 P0 翻 true,故显式关闭 → positionStore 不会被调用,
     // 行为同未引入本特性;续跑路径由 GenerateStepCheckpointTest 覆盖。
     WorkerCheckpointProperties checkpointDisabled = new WorkerCheckpointProperties();
     checkpointDisabled.setEnabled(false);
-    generateStep =
-        new GenerateStep(
-            pluginRegistry,
-            formatStrategyRegistry,
-            config,
-            objectMapper,
-            checkpointDisabled,
-            mock(ProcessingPositionStore.class),
-            new GenerateCursorCodec());
+    generateStep = new GenerateStep(
+        pluginRegistry,
+        formatStrategyRegistry,
+        config,
+        objectMapper,
+        checkpointDisabled,
+        mock(ProcessingPositionStore.class),
+        new GenerateCursorCodec());
   }
 
   // ── DELIMITED / CSV ────────────────────────────────────────────────────────
 
   @Test
   void delimited_shouldWriteHeaderAndDataRows() throws Exception {
-    stubSinglePage(
-        List.of(
-            Map.of("name", "Alice", "amount", "100.00"),
-            Map.of("name", "Bob", "amount", "200.50")));
+    stubSinglePage(List.of(
+        Map.of("name", "Alice", "amount", "100.00"), Map.of("name", "Bob", "amount", "200.50")));
 
     ExportJobContext context = buildContext("DELIMITED", Map.of("export_data_ref", PLUGIN_ID));
 
@@ -113,13 +107,12 @@ class GenerateStepTest {
   void delimited_shouldQuoteValueContainingDelimiter() throws Exception {
     stubSinglePage(List.of(Map.of("name", "Smith, Jr.", "amount", "50.00")));
 
-    ExportJobContext context =
-        buildContext(
-            "DELIMITED",
-            Map.of(
-                "export_data_ref", PLUGIN_ID,
-                "delimiter", ",",
-                "quote_policy", "REQUIRED"));
+    ExportJobContext context = buildContext(
+        "DELIMITED",
+        Map.of(
+            "export_data_ref", PLUGIN_ID,
+            "delimiter", ",",
+            "quote_policy", "REQUIRED"));
 
     ExportStageResult result = generateStep.execute(context);
 
@@ -133,13 +126,12 @@ class GenerateStepTest {
   void delimited_shouldEscapeQuoteWithDoubleQuote() throws Exception {
     stubSinglePage(List.of(Map.of("description", "He said \"hello\"", "amount", "10")));
 
-    ExportJobContext context =
-        buildContext(
-            "DELIMITED",
-            Map.of(
-                "export_data_ref", PLUGIN_ID,
-                "quote_policy", "REQUIRED",
-                "escape_policy", "DOUBLE_QUOTE"));
+    ExportJobContext context = buildContext(
+        "DELIMITED",
+        Map.of(
+            "export_data_ref", PLUGIN_ID,
+            "quote_policy", "REQUIRED",
+            "escape_policy", "DOUBLE_QUOTE"));
 
     ExportStageResult result = generateStep.execute(context);
 
@@ -185,13 +177,12 @@ class GenerateStepTest {
     row.put("col2", "val2");
     stubSinglePage(List.of(row));
 
-    ExportJobContext context =
-        buildContext(
-            "DELIMITED",
-            Map.of(
-                "export_data_ref", PLUGIN_ID,
-                "delimiter", "\t",
-                "quote_policy", "NONE"));
+    ExportJobContext context = buildContext(
+        "DELIMITED",
+        Map.of(
+            "export_data_ref", PLUGIN_ID,
+            "delimiter", "\t",
+            "quote_policy", "NONE"));
 
     ExportStageResult result = generateStep.execute(context);
 
@@ -206,20 +197,19 @@ class GenerateStepTest {
   void fixedWidth_shouldPadShortValue() throws Exception {
     stubSinglePage(List.of(Map.of("code", "A", "amount", "10")));
 
-    ExportJobContext context =
-        buildContext(
-            "FIXED_WIDTH",
-            Map.of(
-                "export_data_ref",
-                PLUGIN_ID,
-                "fixed_width_columns",
-                List.of(
-                    Map.of(
-                        "header", "code", "source", "code", "width", 5, "align", "LEFT", "padChar",
-                        " "),
-                    Map.of(
-                        "header", "amount", "source", "amount", "width", 8, "align", "RIGHT",
-                        "padChar", "0"))));
+    ExportJobContext context = buildContext(
+        "FIXED_WIDTH",
+        Map.of(
+            "export_data_ref",
+            PLUGIN_ID,
+            "fixed_width_columns",
+            List.of(
+                Map.of(
+                    "header", "code", "source", "code", "width", 5, "align", "LEFT", "padChar",
+                    " "),
+                Map.of(
+                    "header", "amount", "source", "amount", "width", 8, "align", "RIGHT", "padChar",
+                    "0"))));
 
     ExportStageResult result = generateStep.execute(context);
 
@@ -235,16 +225,15 @@ class GenerateStepTest {
   void fixedWidth_shouldTruncateLongValue() throws Exception {
     stubSinglePage(List.of(Map.of("name", "AliceLongName", "id", "1")));
 
-    ExportJobContext context =
-        buildContext(
-            "FIXED_WIDTH",
-            Map.of(
-                "export_data_ref",
-                PLUGIN_ID,
-                "fixed_width_columns",
-                List.of(
-                    Map.of("header", "id", "source", "id", "width", 3),
-                    Map.of("header", "name", "source", "name", "width", 5))));
+    ExportJobContext context = buildContext(
+        "FIXED_WIDTH",
+        Map.of(
+            "export_data_ref",
+            PLUGIN_ID,
+            "fixed_width_columns",
+            List.of(
+                Map.of("header", "id", "source", "id", "width", 3),
+                Map.of("header", "name", "source", "name", "width", 5))));
 
     ExportStageResult result = generateStep.execute(context);
 
@@ -259,18 +248,17 @@ class GenerateStepTest {
   void fixedWidth_shouldEnforceRecordLength() throws Exception {
     stubSinglePage(List.of(Map.of("code", "A", "val", "B")));
 
-    ExportJobContext context =
-        buildContext(
-            "FIXED_WIDTH",
-            Map.of(
-                "export_data_ref",
-                PLUGIN_ID,
-                "record_length",
-                20,
-                "fixed_width_columns",
-                List.of(
-                    Map.of("header", "code", "source", "code", "width", 3),
-                    Map.of("header", "val", "source", "val", "width", 3))));
+    ExportJobContext context = buildContext(
+        "FIXED_WIDTH",
+        Map.of(
+            "export_data_ref",
+            PLUGIN_ID,
+            "record_length",
+            20,
+            "fixed_width_columns",
+            List.of(
+                Map.of("header", "code", "source", "code", "width", 3),
+                Map.of("header", "val", "source", "val", "width", 3))));
 
     ExportStageResult result = generateStep.execute(context);
 
@@ -310,9 +298,8 @@ class GenerateStepTest {
     stubSinglePage(List.of(Map.of("col", "val")));
 
     // Sheet name with illegal characters for Excel (e.g. '/')
-    ExportJobContext context =
-        buildContext(
-            "EXCEL", Map.of("export_data_ref", PLUGIN_ID, "sheet_name", "Report/2026:Q1[1]"));
+    ExportJobContext context = buildContext(
+        "EXCEL", Map.of("export_data_ref", PLUGIN_ID, "sheet_name", "Report/2026:Q1[1]"));
 
     // Should not throw; sheet name sanitized to "Report_2026_Q1_1_"
     ExportStageResult result = generateStep.execute(context);
@@ -324,14 +311,13 @@ class GenerateStepTest {
     stubSinglePage(List.of(Map.of("col", "val")));
 
     // Sheet names are limited to 31 chars in Excel
-    ExportJobContext context =
-        buildContext(
-            "EXCEL",
-            Map.of(
-                "export_data_ref",
-                PLUGIN_ID,
-                "sheet_name",
-                "VeryLongSheetNameThatExceedsThirtyOneCharactersLimit"));
+    ExportJobContext context = buildContext(
+        "EXCEL",
+        Map.of(
+            "export_data_ref",
+            PLUGIN_ID,
+            "sheet_name",
+            "VeryLongSheetNameThatExceedsThirtyOneCharactersLimit"));
 
     ExportStageResult result = generateStep.execute(context);
     assertThat(result.success()).isTrue();
@@ -417,9 +403,8 @@ class GenerateStepTest {
     context.setJobCode("GEN_JOB");
     context.setWorkerId("worker-1");
 
-    ExportPayload payload =
-        new ExportPayload(
-            null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
+    ExportPayload payload = new ExportPayload(
+        null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
     context.getAttributes().put("exportPayload", payload);
     context.getAttributes().put("exportFileFormatType", fileFormatType);
     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);

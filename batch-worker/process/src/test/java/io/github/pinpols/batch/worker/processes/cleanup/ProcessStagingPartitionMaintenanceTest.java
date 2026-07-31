@@ -23,8 +23,11 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class ProcessStagingPartitionMaintenanceTest {
 
-  @Mock private ProcessStagingMapper mapper;
-  @Mock private ObjectProvider<MeterRegistry> meterRegistryProvider;
+  @Mock
+  private ProcessStagingMapper mapper;
+
+  @Mock
+  private ObjectProvider<MeterRegistry> meterRegistryProvider;
 
   private ProcessStagingCleanupProperties properties;
   private ProcessStagingOrphanCleaner cleaner;

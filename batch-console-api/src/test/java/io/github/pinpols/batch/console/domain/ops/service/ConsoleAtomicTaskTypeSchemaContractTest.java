@@ -52,12 +52,11 @@ class ConsoleAtomicTaskTypeSchemaContractTest {
   private static final String HTTP_PROPS_FQCN =
       "io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties";
 
-  private static final Map<String, ExecutorContract> CONTRACTS =
-      Map.of(
-          "sql", new ExecutorContract(SQL_EXECUTOR_FQCN, SQL_PROPS_FQCN),
-          "stored_proc", new ExecutorContract(STORED_PROC_EXECUTOR_FQCN, STORED_PROC_PROPS_FQCN),
-          "shell", new ExecutorContract(SHELL_EXECUTOR_FQCN, SHELL_PROPS_FQCN),
-          "http", new ExecutorContract(HTTP_EXECUTOR_FQCN, HTTP_PROPS_FQCN));
+  private static final Map<String, ExecutorContract> CONTRACTS = Map.of(
+      "sql", new ExecutorContract(SQL_EXECUTOR_FQCN, SQL_PROPS_FQCN),
+      "stored_proc", new ExecutorContract(STORED_PROC_EXECUTOR_FQCN, STORED_PROC_PROPS_FQCN),
+      "shell", new ExecutorContract(SHELL_EXECUTOR_FQCN, SHELL_PROPS_FQCN),
+      "http", new ExecutorContract(HTTP_EXECUTOR_FQCN, HTTP_PROPS_FQCN));
 
   private final ConsoleAtomicTaskTypeSchemaService service =
       new ConsoleAtomicTaskTypeSchemaService();
@@ -75,10 +74,9 @@ class ConsoleAtomicTaskTypeSchemaContractTest {
   void parameterNamesMatchExecutorParamConstants(String taskType) throws Exception {
     // 准备
     AtomicTaskTypeSchema schema = locateSchema(taskType);
-    Set<String> catalogParams =
-        schema.parameters().stream()
-            .map(ParamSpec::name)
-            .collect(Collectors.toCollection(TreeSet::new));
+    Set<String> catalogParams = schema.parameters().stream()
+        .map(ParamSpec::name)
+        .collect(Collectors.toCollection(TreeSet::new));
     Class<?> executorClass = Class.forName(CONTRACTS.get(taskType).executorFqcn());
     Set<String> executorParams = collectParamConstantValues(executorClass);
 
@@ -107,10 +105,9 @@ class ConsoleAtomicTaskTypeSchemaContractTest {
   void securityGateFieldsExistOnExecutorProperties(String taskType) throws Exception {
     // 准备
     AtomicTaskTypeSchema schema = locateSchema(taskType);
-    Set<String> catalogGates =
-        schema.securityGates().stream()
-            .map(SecurityGate::field)
-            .collect(Collectors.toCollection(TreeSet::new));
+    Set<String> catalogGates = schema.securityGates().stream()
+        .map(SecurityGate::field)
+        .collect(Collectors.toCollection(TreeSet::new));
     Class<?> propsClass = Class.forName(CONTRACTS.get(taskType).propertiesFqcn());
     Set<String> propsFieldNames = collectInstanceFieldNames(propsClass);
 

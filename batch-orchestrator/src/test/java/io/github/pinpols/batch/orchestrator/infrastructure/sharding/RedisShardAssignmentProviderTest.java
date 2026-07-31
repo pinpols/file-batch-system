@@ -23,9 +23,11 @@ import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 @ExtendWith(MockitoExtension.class)
 class RedisShardAssignmentProviderTest {
 
-  @Mock private StringRedisTemplate redis;
+  @Mock
+  private StringRedisTemplate redis;
 
-  @Mock private ZSetOperations<String, String> zset;
+  @Mock
+  private ZSetOperations<String, String> zset;
 
   private RedisShardAssignmentProvider provider(String memberId) {
     when(redis.opsForZSet()).thenReturn(zset);

@@ -101,22 +101,20 @@ public class PipelineVerifierHook {
       Map<String, Object> payload = new LinkedHashMap<>(attributes);
       Object outputs = attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
       if (outputs instanceof Map<?, ?> outputsMap) {
-        outputsMap.forEach(
-            (k, v) -> {
-              if (k != null) {
-                payload.put(k.toString(), v);
-              }
-            });
+        outputsMap.forEach((k, v) -> {
+          if (k != null) {
+            payload.put(k.toString(), v);
+          }
+        });
       }
-      VerifyContext context =
-          VerifyContext.builder()
-              .tenantId(tenantId)
-              .jobType(jobType)
-              .jobInstanceId(jobInstanceId)
-              .taskId(taskId)
-              .stageCode(stageCode)
-              .payload(payload)
-              .build();
+      VerifyContext context = VerifyContext.builder()
+          .tenantId(tenantId)
+          .jobType(jobType)
+          .jobInstanceId(jobInstanceId)
+          .taskId(taskId)
+          .stageCode(stageCode)
+          .payload(payload)
+          .build();
       List<Map<String, Object>> failures = new ArrayList<>();
       String firstFatalCode = null;
       String firstFatalMessage = null;

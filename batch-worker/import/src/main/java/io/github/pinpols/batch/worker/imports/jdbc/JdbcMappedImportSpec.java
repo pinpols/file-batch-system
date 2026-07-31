@@ -167,7 +167,8 @@ public record JdbcMappedImportSpec(
         Object from = m.get("from");
         Object to = m.get("to");
         if (from != null && to != null) {
-          out.add(new ColumnMapping(String.valueOf(from).trim(), String.valueOf(to).trim()));
+          out.add(
+              new ColumnMapping(String.valueOf(from).trim(), String.valueOf(to).trim()));
         }
       }
     }
@@ -192,10 +193,9 @@ public record JdbcMappedImportSpec(
       }
       String name = String.valueOf(nameRaw).trim();
       Object target = fm.get("targetColumn");
-      String to =
-          target != null && Texts.hasText(String.valueOf(target))
-              ? String.valueOf(target).trim()
-              : normalizeColumn(name);
+      String to = target != null && Texts.hasText(String.valueOf(target))
+          ? String.valueOf(target).trim()
+          : normalizeColumn(name);
       if (Texts.hasText(to)) {
         out.add(new ColumnMapping(name, to));
       }
@@ -330,23 +330,21 @@ public record JdbcMappedImportSpec(
       return Map.of();
     }
     Map<String, String> out = new LinkedHashMap<>();
-    m.forEach(
-        (k, v) -> {
-          if (k != null && v != null) {
-            out.put(String.valueOf(k).trim(), String.valueOf(v).trim());
-          }
-        });
+    m.forEach((k, v) -> {
+      if (k != null && v != null) {
+        out.put(String.valueOf(k).trim(), String.valueOf(v).trim());
+      }
+    });
     return out;
   }
 
   /** B3 标准审计绑定:平台运行时变量 → 常见审计列。用户显式 systemBindings 同名项优先。 */
-  private static final Map<String, String> STANDARD_AUDIT_BINDINGS =
-      Map.of(
-          "source_file_name", "${sourceFileName}",
-          "source_batch_no", "${batchNo}",
-          "source_trace_id", "${traceId}",
-          "created_by", "${workerId}",
-          "updated_by", "${workerId}");
+  private static final Map<String, String> STANDARD_AUDIT_BINDINGS = Map.of(
+      "source_file_name", "${sourceFileName}",
+      "source_batch_no", "${batchNo}",
+      "source_trace_id", "${traceId}",
+      "created_by", "${workerId}",
+      "updated_by", "${workerId}");
 
   private static Map<String, String> withStandardAuditBindings(Map<String, String> explicit) {
     Map<String, String> out = new LinkedHashMap<>(STANDARD_AUDIT_BINDINGS);
@@ -437,25 +435,23 @@ public record JdbcMappedImportSpec(
     for (ColumnMapping m : columnMappings) {
       String prevTo = byFrom.putIfAbsent(m.from(), m.to());
       if (prevTo != null) {
-        throw new WorkerConfigException(
-            "columnMappings: source field '"
-                + m.from()
-                + "' maps to multiple columns ('"
-                + prevTo
-                + "', '"
-                + m.to()
-                + "'); fan-out is not supported");
+        throw new WorkerConfigException("columnMappings: source field '"
+            + m.from()
+            + "' maps to multiple columns ('"
+            + prevTo
+            + "', '"
+            + m.to()
+            + "'); fan-out is not supported");
       }
       String prevFrom = byTo.putIfAbsent(m.to(), m.from());
       if (prevFrom != null) {
-        throw new WorkerConfigException(
-            "columnMappings: target column '"
-                + m.to()
-                + "' is mapped from multiple source fields ('"
-                + prevFrom
-                + "', '"
-                + m.from()
-                + "'); each column must have a single source");
+        throw new WorkerConfigException("columnMappings: target column '"
+            + m.to()
+            + "' is mapped from multiple source fields ('"
+            + prevFrom
+            + "', '"
+            + m.from()
+            + "'); each column must have a single source");
       }
     }
   }

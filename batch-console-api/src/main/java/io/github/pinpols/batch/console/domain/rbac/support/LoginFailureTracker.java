@@ -40,17 +40,15 @@ public class LoginFailureTracker {
   static {
     RECORD_SCRIPT = new DefaultRedisScript<>();
     RECORD_SCRIPT.setResultType(Long.class);
-    RECORD_SCRIPT.setScriptText(
-        "redis.call('ZADD', KEYS[1], ARGV[1], ARGV[3]) "
-            + "redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[2]) "
-            + "redis.call('EXPIRE', KEYS[1], ARGV[4]) "
-            + "return redis.call('ZCARD', KEYS[1])");
+    RECORD_SCRIPT.setScriptText("redis.call('ZADD', KEYS[1], ARGV[1], ARGV[3]) "
+        + "redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[2]) "
+        + "redis.call('EXPIRE', KEYS[1], ARGV[4]) "
+        + "return redis.call('ZCARD', KEYS[1])");
 
     COUNT_SCRIPT = new DefaultRedisScript<>();
     COUNT_SCRIPT.setResultType(Long.class);
-    COUNT_SCRIPT.setScriptText(
-        "redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1]) "
-            + "return redis.call('ZCARD', KEYS[1])");
+    COUNT_SCRIPT.setScriptText("redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1]) "
+        + "return redis.call('ZCARD', KEYS[1])");
   }
 
   private final StringRedisTemplate redisTemplate;
@@ -80,22 +78,20 @@ public class LoginFailureTracker {
     long now = dateTimeSupport.currentEpochMillis();
     long windowStart = now - windowMillis();
     long ttlSeconds = (windowMillis() / 1000) + 1;
-    Long count =
-        redisTemplate.execute(
-            RECORD_SCRIPT,
-            List.of("rate_limit:" + key),
-            String.valueOf(now),
-            String.valueOf(windowStart),
-            UUID.randomUUID().toString(),
-            String.valueOf(ttlSeconds));
+    Long count = redisTemplate.execute(
+        RECORD_SCRIPT,
+        List.of("rate_limit:" + key),
+        String.valueOf(now),
+        String.valueOf(windowStart),
+        UUID.randomUUID().toString(),
+        String.valueOf(ttlSeconds));
     return count == null ? 0L : count;
   }
 
   private long count(String key) {
     long windowStart = dateTimeSupport.currentEpochMillis() - windowMillis();
-    Long count =
-        redisTemplate.execute(
-            COUNT_SCRIPT, List.of("rate_limit:" + key), String.valueOf(windowStart));
+    Long count = redisTemplate.execute(
+        COUNT_SCRIPT, List.of("rate_limit:" + key), String.valueOf(windowStart));
     return count == null ? 0L : count;
   }
 

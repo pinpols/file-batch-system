@@ -53,18 +53,17 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("未标 @RetryOn → wrap 原样返回")
   void shouldReturnDelegate_whenNotAnnotated() {
-    SdkTaskHandler plain =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "plain";
-          }
+    SdkTaskHandler plain = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "plain";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            return SdkTaskResult.ok();
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        return SdkTaskResult.ok();
+      }
+    };
     assertThat(SdkRetryableHandler.wrap(plain)).isSameAs(plain);
   }
 

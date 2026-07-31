@@ -73,10 +73,8 @@ class SensorSqlValidatorTest {
 
   @Test
   void validate_pgReadFile_throws() {
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate(
-                    "SELECT pg_read_file('/etc/passwd') AS c FROM biz.signal", ALLOWED))
+    assertThatThrownBy(() -> SensorSqlValidator.validate(
+            "SELECT pg_read_file('/etc/passwd') AS c FROM biz.signal", ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function")
         .hasMessageContaining("pg_read_file");
@@ -84,12 +82,9 @@ class SensorSqlValidatorTest {
 
   @Test
   void validate_dblinkInSubquery_throws() {
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate(
-                    "SELECT id FROM biz.signal WHERE id IN"
-                        + " (SELECT dblink('x','y') FROM biz.other)",
-                    ALLOWED))
+    assertThatThrownBy(() -> SensorSqlValidator.validate(
+            "SELECT id FROM biz.signal WHERE id IN" + " (SELECT dblink('x','y') FROM biz.other)",
+            ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function");
   }
@@ -97,10 +92,8 @@ class SensorSqlValidatorTest {
   @Test
   void validate_pgSleepInOrderBy_throws() {
     // #769 C1 递归下钻 ORDER BY 标量表达式 —— 顶层 select item 干净但 ORDER BY 藏 DoS 调用。
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate(
-                    "SELECT id FROM biz.signal ORDER BY pg_sleep(5)", ALLOWED))
+    assertThatThrownBy(() ->
+            SensorSqlValidator.validate("SELECT id FROM biz.signal ORDER BY pg_sleep(5)", ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function");
   }
@@ -108,29 +101,24 @@ class SensorSqlValidatorTest {
   // ── S9: 子查询 / CTE 内的 SELECT * 也要拦 ──────────────────────────────────
   @Test
   void validate_selectStarInSubquery_throws() {
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate("SELECT c FROM (SELECT * FROM biz.signal) t", ALLOWED))
+    assertThatThrownBy(() ->
+            SensorSqlValidator.validate("SELECT c FROM (SELECT * FROM biz.signal) t", ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbids SELECT *");
   }
 
   @Test
   void validate_selectStarInCte_throws() {
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate(
-                    "WITH s AS (SELECT * FROM biz.signal) SELECT c FROM s", ALLOWED))
+    assertThatThrownBy(() -> SensorSqlValidator.validate(
+            "WITH s AS (SELECT * FROM biz.signal) SELECT c FROM s", ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbids SELECT *");
   }
 
   @Test
   void validate_pgSleepFor_throws() {
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate(
-                    "SELECT pg_sleep_for('10 seconds') AS c FROM biz.signal", ALLOWED))
+    assertThatThrownBy(() -> SensorSqlValidator.validate(
+            "SELECT pg_sleep_for('10 seconds') AS c FROM biz.signal", ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function")
         .hasMessageContaining("pg_sleep_for");
@@ -138,10 +126,8 @@ class SensorSqlValidatorTest {
 
   @Test
   void validate_pgSleepUntil_throws() {
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate(
-                    "SELECT pg_sleep_until(now() + '1h') AS c FROM biz.signal", ALLOWED))
+    assertThatThrownBy(() -> SensorSqlValidator.validate(
+            "SELECT pg_sleep_until(now() + '1h') AS c FROM biz.signal", ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function")
         .hasMessageContaining("pg_sleep_until");
@@ -150,11 +136,10 @@ class SensorSqlValidatorTest {
   @Test
   void validate_dblinkFamily_throws() {
     // 家族前缀匹配:dblink 一条覆盖 dblink_exec / dblink_connect / dblink_send_query。
-    for (String fn :
-        List.of(
-            "dblink_exec('x','drop table biz.signal')",
-            "dblink_connect('host=evil')",
-            "dblink_send_query('c','select 1')")) {
+    for (String fn : List.of(
+        "dblink_exec('x','drop table biz.signal')",
+        "dblink_connect('host=evil')",
+        "dblink_send_query('c','select 1')")) {
       assertThatThrownBy(
               () -> SensorSqlValidator.validate("SELECT " + fn + " AS c FROM biz.signal", ALLOWED))
           .as("expected %s rejected", fn)
@@ -186,10 +171,8 @@ class SensorSqlValidatorTest {
     List<String> extended = new ArrayList<>(SelectSqlAstValidator.DEFAULT_FORBIDDEN_FUNCTIONS);
     extended.add("w1_4_test_only_marker_fn");
 
-    assertThatThrownBy(
-            () ->
-                SensorSqlValidator.validate(
-                    "SELECT w1_4_test_only_marker_fn(1) AS c FROM biz.signal", ALLOWED, extended))
+    assertThatThrownBy(() -> SensorSqlValidator.validate(
+            "SELECT w1_4_test_only_marker_fn(1) AS c FROM biz.signal", ALLOWED, extended))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function")
         .hasMessageContaining("w1_4_test_only_marker_fn");

@@ -41,12 +41,11 @@ public class NotValidConstraintGuard {
         "NOT VALID constraint drift detected: {} constraint(s) still convalidated=false: {}",
         invalid.size(),
         invalid);
-    throw new IllegalStateException(
-        "NOT VALID constraint drift: "
-            + invalid.size()
-            + " constraint(s) not yet VALIDATEd: "
-            + invalid
-            + ". Add migration ALTER TABLE ... VALIDATE CONSTRAINT ... before next deploy. "
-            + "See V127 for template.");
+    throw new IllegalStateException("NOT VALID constraint drift: "
+        + invalid.size()
+        + " constraint(s) not yet VALIDATEd: "
+        + invalid
+        + ". Add migration ALTER TABLE ... VALIDATE CONSTRAINT ... before next deploy. "
+        + "See V127 for template.");
   }
 }

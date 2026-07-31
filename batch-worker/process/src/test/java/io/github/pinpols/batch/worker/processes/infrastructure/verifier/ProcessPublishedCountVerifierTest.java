@@ -15,7 +15,8 @@ class ProcessPublishedCountVerifierTest {
 
   @Test
   void passesWhenPublishedCountPositive() {
-    assertThat(verifier.verify(contextWith(Map.of("publishedCount", 10L))).passed()).isTrue();
+    assertThat(verifier.verify(contextWith(Map.of("publishedCount", 10L))).passed())
+        .isTrue();
   }
 
   @Test
@@ -38,7 +39,8 @@ class ProcessPublishedCountVerifierTest {
 
   @Test
   void parsesStringNumber() {
-    assertThat(verifier.verify(contextWith(Map.of("publishedCount", "5"))).passed()).isTrue();
+    assertThat(verifier.verify(contextWith(Map.of("publishedCount", "5"))).passed())
+        .isTrue();
   }
 
   private static VerifyContext contextWith(Map<String, Object> payload) {

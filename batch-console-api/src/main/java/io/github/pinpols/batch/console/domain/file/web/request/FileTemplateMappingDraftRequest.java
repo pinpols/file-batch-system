@@ -12,7 +12,8 @@ import lombok.Data;
 @Data
 public class FileTemplateMappingDraftRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   /** IMPORT / EXPORT；缺省按 IMPORT 生成。 */
   @Size(max = 16)

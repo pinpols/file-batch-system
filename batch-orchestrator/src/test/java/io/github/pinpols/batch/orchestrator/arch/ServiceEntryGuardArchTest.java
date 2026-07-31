@@ -21,12 +21,11 @@ import org.junit.jupiter.api.Test;
 class ServiceEntryGuardArchTest {
 
   /** 必守护的 service 实现类相对路径(从模块 src/main 起算)。 */
-  private static final List<Path> GUARDED_SERVICES =
-      List.of(
-          Paths.get(
-              "src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchValidationService.java"),
-          Paths.get(
-              "src/main/java/io/github/pinpols/batch/orchestrator/service/BatchDayGateService.java"));
+  private static final List<Path> GUARDED_SERVICES = List.of(
+      Paths.get(
+          "src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchValidationService.java"),
+      Paths.get(
+          "src/main/java/io/github/pinpols/batch/orchestrator/service/BatchDayGateService.java"));
 
   @Test
   void coreServiceEntriesMustGuardAgainstNullInputs() throws IOException {
@@ -37,17 +36,18 @@ class ServiceEntryGuardArchTest {
         continue;
       }
       String src = Files.readString(rel);
-      boolean hasGuard =
-          src.contains("Guard.require")
-              || src.contains("Guard.requireFound")
-              || src.contains("Objects.requireNonNull")
-              || src.contains("== null")
-              || src.contains("!= null");
+      boolean hasGuard = src.contains("Guard.require")
+          || src.contains("Guard.requireFound")
+          || src.contains("Objects.requireNonNull")
+          || src.contains("== null")
+          || src.contains("!= null");
       if (!hasGuard) {
         violations.add(rel.getFileName() + " — 缺 null 守护(Guard.* / requireNonNull / == null 检查任一)");
       }
     }
-    assertThat(violations).as("core service entries must defend against null inputs").isEmpty();
+    assertThat(violations)
+        .as("core service entries must defend against null inputs")
+        .isEmpty();
   }
 
   @Test
@@ -60,19 +60,18 @@ class ServiceEntryGuardArchTest {
     try (Stream<Path> files = Files.walk(mainDir)) {
       files
           .filter(p -> p.toString().endsWith("Service.java") || p.toString().endsWith("Impl.java"))
-          .forEach(
-              p -> {
-                String src;
-                try {
-                  src = Files.readString(p);
-                } catch (IOException ex) {
-                  violations.add(p + " — read failed");
-                  return;
-                }
-                if (src.contains("throw new NullPointerException")) {
-                  violations.add(p.getFileName() + " — 显式 throw new NullPointerException");
-                }
-              });
+          .forEach(p -> {
+            String src;
+            try {
+              src = Files.readString(p);
+            } catch (IOException ex) {
+              violations.add(p + " — read failed");
+              return;
+            }
+            if (src.contains("throw new NullPointerException")) {
+              violations.add(p.getFileName() + " — 显式 throw new NullPointerException");
+            }
+          });
     }
     assertThat(violations)
         .as("service impl 不应显式抛 NPE — 应改用 BizException 或 Guard.require")

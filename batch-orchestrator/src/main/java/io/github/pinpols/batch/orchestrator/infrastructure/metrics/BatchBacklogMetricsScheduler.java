@@ -77,13 +77,11 @@ public class BatchBacklogMetricsScheduler {
     }
     try {
       outboxPending.set(outboxEventMapper.countByStatuses(OUTBOX_PENDING_STATUSES));
-      outboxStalePublishing.set(
-          outboxEventMapper.countStalePublishing(
-              OutboxPublishStatus.PUBLISHING.code(),
-              governance.outbox().getPublishingTimeoutSeconds()));
-      outboxDuplicateEventKeys.set(
-          outboxEventMapper.countDuplicateEventKeysSince(
-              BatchDateTimeSupport.utcNow().minus(duplicateDetectionWindow())));
+      outboxStalePublishing.set(outboxEventMapper.countStalePublishing(
+          OutboxPublishStatus.PUBLISHING.code(),
+          governance.outbox().getPublishingTimeoutSeconds()));
+      outboxDuplicateEventKeys.set(outboxEventMapper.countDuplicateEventKeysSince(
+          BatchDateTimeSupport.utcNow().minus(duplicateDetectionWindow())));
       dlqPending.set(deadLetterTaskMapper.countByReplayStatuses(DLQ_PENDING_STATUSES));
     } catch (RuntimeException ex) {
       log.warn("batch backlog metrics sampling failed: {}", ex.getMessage());

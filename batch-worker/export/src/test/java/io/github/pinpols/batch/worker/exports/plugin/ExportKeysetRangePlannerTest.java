@@ -51,11 +51,10 @@ class ExportKeysetRangePlannerTest {
   void resolve_active_callsMinMaxOnce_andCaches() {
     ExportDataContext ctx = context(1, 4, true);
     AtomicInteger calls = new AtomicInteger();
-    Supplier<BigDecimal[]> supplier =
-        () -> {
-          calls.incrementAndGet();
-          return new BigDecimal[] {new BigDecimal("0"), new BigDecimal("100")};
-        };
+    Supplier<BigDecimal[]> supplier = () -> {
+      calls.incrementAndGet();
+      return new BigDecimal[] {new BigDecimal("0"), new BigDecimal("100")};
+    };
 
     ExportKeysetRange first = planner.resolve(ctx, supplier);
     ExportKeysetRange second = planner.resolve(ctx, supplier);
@@ -89,21 +88,19 @@ class ExportKeysetRangePlannerTest {
   @Test
   void resolve_optedInFromPostgresJsonbNestedSqlTemplate_active() {
     PGobject queryParamSchema = new PGobject();
-    Assertions.assertDoesNotThrow(
-        () -> {
-          queryParamSchema.setType("jsonb");
-          queryParamSchema.setValue("{\"sqlTemplateExport\":{\"partitionKeysetRange\":true}}");
-        });
-    ExportDataContext ctx =
-        new ExportDataContext(
-            "t1",
-            "job",
-            "batch",
-            "tpl",
-            Map.of("query_param_schema", queryParamSchema),
-            new LinkedHashMap<>(),
-            3,
-            4);
+    Assertions.assertDoesNotThrow(() -> {
+      queryParamSchema.setType("jsonb");
+      queryParamSchema.setValue("{\"sqlTemplateExport\":{\"partitionKeysetRange\":true}}");
+    });
+    ExportDataContext ctx = new ExportDataContext(
+        "t1",
+        "job",
+        "batch",
+        "tpl",
+        Map.of("query_param_schema", queryParamSchema),
+        new LinkedHashMap<>(),
+        3,
+        4);
 
     ExportKeysetRange r = planner.resolve(ctx, minMax("0", "100"));
 
@@ -122,12 +119,9 @@ class ExportKeysetRangePlannerTest {
   @Test
   void resolve_supplierThrows_inactiveFallback() {
     ExportDataContext ctx = context(1, 4, true);
-    ExportKeysetRange r =
-        planner.resolve(
-            ctx,
-            () -> {
-              throw new IllegalStateException("boom");
-            });
+    ExportKeysetRange r = planner.resolve(ctx, () -> {
+      throw new IllegalStateException("boom");
+    });
     assertThat(r.active()).isFalse();
   }
 

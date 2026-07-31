@@ -141,16 +141,19 @@ public class WaitingPartitionDispatchScheduler {
     } finally {
       DefaultResourceScheduler.closeTickCache();
     }
-    Comparator<WaitingDispatchCandidate> comparator =
-        Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore)
-            .reversed()
-            .thenComparing(Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
-            .thenComparingLong(WaitingDispatchCandidate::partitionId);
+    Comparator<WaitingDispatchCandidate> comparator = Comparator.comparingLong(
+            WaitingDispatchCandidate::fairnessScore)
+        .reversed()
+        .thenComparing(
+            Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
+        .thenComparingLong(WaitingDispatchCandidate::partitionId);
     // 逐个 partition 走独立 REQUIRES_NEW 事务：release + outbox + instance/workflow 状态推进作为原子单元。
     // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；self-proxy 触发 @Transactional AOP。
-    List<WaitingDispatchCandidate> sorted = candidates.stream().sorted(comparator).toList();
+    List<WaitingDispatchCandidate> sorted =
+        candidates.stream().sorted(comparator).toList();
     for (WaitingDispatchCandidate candidate : sorted) {
-      String tenantId = candidate.partition() == null ? null : candidate.partition().getTenantId();
+      String tenantId =
+          candidate.partition() == null ? null : candidate.partition().getTenantId();
       if (tenantId == null || tenantId.isBlank()) {
         continue;
       }
@@ -160,14 +163,13 @@ public class WaitingPartitionDispatchScheduler {
         // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
         RlsTenantContextHolder.runWithTenant(
             tenantId,
-            () ->
-                selfProvider
-                    .getObject()
-                    .dispatchWaitingPartition(
-                        candidate.partition(),
-                        candidate.task(),
-                        candidate.jobInstance(),
-                        candidate.decision()));
+            () -> selfProvider
+                .getObject()
+                .dispatchWaitingPartition(
+                    candidate.partition(),
+                    candidate.task(),
+                    candidate.jobInstance(),
+                    candidate.decision()));
       } catch (RuntimeException exception) {
         log.warn(
             "dispatch waiting partition failed, will retry next tick: tenantId={},"
@@ -183,9 +185,8 @@ public class WaitingPartitionDispatchScheduler {
     if (partition == null) {
       return null;
     }
-    JobTaskEntity task =
-        jobMappers.jobTaskMapper.selectByPartitionAndSeq(
-            partition.getTenantId(), partition.getId(), 1);
+    JobTaskEntity task = jobMappers.jobTaskMapper.selectByPartitionAndSeq(
+        partition.getTenantId(), partition.getId(), 1);
     if (task == null || !TaskStatus.CREATED.code().equals(task.getTaskStatus())) {
       log.debug(
           "skip partitionId={}: task missing or not CREATED (status={})",
@@ -193,16 +194,14 @@ public class WaitingPartitionDispatchScheduler {
           task == null ? "null" : task.getTaskStatus());
       return null;
     }
-    JobInstanceEntity jobInstance =
-        jobMappers.jobInstanceMapper.selectById(
-            partition.getTenantId(), partition.getJobInstanceId());
+    JobInstanceEntity jobInstance = jobMappers.jobInstanceMapper.selectById(
+        partition.getTenantId(), partition.getJobInstanceId());
     if (jobInstance == null) {
       log.debug("skip partitionId={}: job_instance missing", partition.getId());
       return null;
     }
-    JobDefinitionEntity jobDefinition =
-        configCacheService.findEnabledJobDefinition(
-            jobInstance.getTenantId(), jobInstance.getJobCode());
+    JobDefinitionEntity jobDefinition = configCacheService.findEnabledJobDefinition(
+        jobInstance.getTenantId(), jobInstance.getJobCode());
     ResourceSchedulingDecision decision =
         resourceScheduler.schedule(buildRequest(jobInstance, partition, task, jobDefinition));
     if (!decision.isDispatchable()) {
@@ -233,19 +232,16 @@ public class WaitingPartitionDispatchScheduler {
         || !decision.isDispatchable()) {
       return;
     }
-    BatchMdc.withTenantAndTrace(
-        jobInstance.getTenantId(),
-        jobInstance.getTraceId(),
-        () -> {
-          BatchMdc.put(
-              StructuredLogField.JOB_INSTANCE_ID,
-              jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
-          try {
-            selfProvider.getObject().executeDispatch(partition, task, jobInstance, decision);
-          } finally {
-            BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-          }
-        });
+    BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
+      BatchMdc.put(
+          StructuredLogField.JOB_INSTANCE_ID,
+          jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
+      try {
+        selfProvider.getObject().executeDispatch(partition, task, jobInstance, decision);
+      } finally {
+        BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+      }
+    });
   }
 
   /**
@@ -261,9 +257,8 @@ public class WaitingPartitionDispatchScheduler {
       JobTaskEntity task,
       JobInstanceEntity jobInstance,
       ResourceSchedulingDecision decision) {
-    boolean allowed =
-        tenantActionRateLimiter.tryConsume(
-            jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE);
+    boolean allowed = tenantActionRateLimiter.tryConsume(
+        jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE);
     if (!allowed) {
       return;
     }
@@ -278,24 +273,21 @@ public class WaitingPartitionDispatchScheduler {
         jobInstance.getTraceId(),
         OutboxEventKeyGenerator.forDispatch(task.getTenantId(), task.getId()));
     if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
-      int updated =
-          jobMappers.jobInstanceMapper.markRunning(
-              MarkInstanceRunningParam.builder()
-                  .tenantId(jobInstance.getTenantId())
-                  .id(jobInstance.getId())
-                  .instanceStatus(JobInstanceStatus.RUNNING.code())
-                  .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
-                  .startedAt(BatchDateTimeSupport.utcNow())
-                  .expectedVersion(jobInstance.getVersion())
-                  .build());
+      int updated = jobMappers.jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+          .tenantId(jobInstance.getTenantId())
+          .id(jobInstance.getId())
+          .instanceStatus(JobInstanceStatus.RUNNING.code())
+          .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
+          .startedAt(BatchDateTimeSupport.utcNow())
+          .expectedVersion(jobInstance.getVersion())
+          .build());
       if (updated > 0) {
         jobInstance.setVersion(
             (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
       }
     }
-    WorkflowRunEntity workflowRun =
-        workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
-            jobInstance.getTenantId(), jobInstance.getId());
+    WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
+        jobInstance.getTenantId(), jobInstance.getId());
     if (workflowRun != null
         && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
       workflowMappers.workflowRunMapper.markRunning(

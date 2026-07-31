@@ -32,9 +32,8 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     configReleaseMapper = mock(ConfigReleaseMapper.class);
     configApprovalMapper = mock(ConfigApprovalMapper.class);
     configChangeLogMapper = mock(ConfigChangeLogMapper.class);
-    service =
-        new DefaultConsoleConfigApprovalApplicationService(
-            tenantGuard, configReleaseMapper, configApprovalMapper, configChangeLogMapper);
+    service = new DefaultConsoleConfigApprovalApplicationService(
+        tenantGuard, configReleaseMapper, configApprovalMapper, configChangeLogMapper);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
   }
 
@@ -60,11 +59,10 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
   void shouldApproveAndPublishRelease() {
     ConfigReleaseEntity release = release("PENDING_APPROVAL");
     when(configApprovalMapper.selectById("t1", 9L))
-        .thenReturn(
-            Map.of(
-                "id", 9L,
-                "releaseId", 10L,
-                "approvalStatus", "PENDING"));
+        .thenReturn(Map.of(
+            "id", 9L,
+            "releaseId", 10L,
+            "approvalStatus", "PENDING"));
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release);
     when(configApprovalMapper.approve(anyMap())).thenReturn(1);
     when(configApprovalMapper.selectLatestByRelease("t1", 10L))

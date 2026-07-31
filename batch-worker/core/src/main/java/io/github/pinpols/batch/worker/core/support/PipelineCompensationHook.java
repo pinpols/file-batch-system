@@ -192,10 +192,9 @@ public class PipelineCompensationHook {
       Long fileId,
       Map<String, Object> attributes,
       CompensationResult result) {
-    String traceId =
-        attributes.get(PipelineRuntimeKeys.TRACE_ID) == null
-            ? null
-            : String.valueOf(attributes.get(PipelineRuntimeKeys.TRACE_ID));
+    String traceId = attributes.get(PipelineRuntimeKeys.TRACE_ID) == null
+        ? null
+        : String.valueOf(attributes.get(PipelineRuntimeKeys.TRACE_ID));
     // 结构化 info 日志(始终落,即便 fileId 为 null):删了什么 / 影响行数 / SKIPPED / FAILED 原因。
     log.info(
         "pipeline compensation done: tenantId={}, pipelineType={}, pipelineInstanceId={},"
@@ -218,16 +217,15 @@ public class PipelineCompensationHook {
     detail.put("reversedCount", result.reversedCount());
     detail.put("detail", result.detail());
     try {
-      runtimeRepository.appendAudit(
-          FileAuditParam.builder()
-              .tenantId(tenantId)
-              .fileId(fileId)
-              .operationType(AUDIT_OPERATION_TYPE)
-              .operationResult(result.outcome().name())
-              .operatorType("SYSTEM")
-              .traceId(traceId)
-              .detailSummary(detail)
-              .build());
+      runtimeRepository.appendAudit(FileAuditParam.builder()
+          .tenantId(tenantId)
+          .fileId(fileId)
+          .operationType(AUDIT_OPERATION_TYPE)
+          .operationResult(result.outcome().name())
+          .operatorType("SYSTEM")
+          .traceId(traceId)
+          .detailSummary(detail)
+          .build());
     } catch (RuntimeException ex) {
       // 审计写入数据库失败不影响 pipeline 落终态;info 日志已是补充审计。
       log.warn(

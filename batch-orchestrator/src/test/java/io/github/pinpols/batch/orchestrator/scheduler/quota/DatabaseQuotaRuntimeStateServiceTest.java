@@ -105,11 +105,10 @@ class DatabaseQuotaRuntimeStateServiceTest {
     // 等 reconcileOne 的事务语义由集成测试覆盖
     org.springframework.beans.factory.ObjectProvider<DatabaseQuotaRuntimeStateService>
         selfProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
-    service =
-        new DatabaseQuotaRuntimeStateService(
-            quotaRuntimeStateMapper,
-            new BatchTimezoneProvider(new BatchTimezoneProperties()),
-            selfProvider);
+    service = new DatabaseQuotaRuntimeStateService(
+        quotaRuntimeStateMapper,
+        new BatchTimezoneProvider(new BatchTimezoneProperties()),
+        selfProvider);
     org.mockito.Mockito.when(selfProvider.getObject()).thenReturn(service);
   }
 
@@ -117,41 +116,35 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldAllowWhenTenantIdIsBlank() {
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .tenantId("")
-                .baseCap(10)
-                .burstLimit(2)
-                .currentActiveCount(0)
-                .reason("OVER", "over limit")
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .tenantId("")
+        .baseCap(10)
+        .burstLimit(2)
+        .currentActiveCount(0)
+        .reason("OVER", "over limit")
+        .build());
     assertThat(result.allowed()).isTrue();
   }
 
   @Test
   void shouldAllowWhenBaseCapIsZero() {
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .baseCap(0)
-                .burstLimit(2)
-                .currentActiveCount(0)
-                .reason("OVER", "over limit")
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .baseCap(0)
+        .burstLimit(2)
+        .currentActiveCount(0)
+        .reason("OVER", "over limit")
+        .build());
     assertThat(result.allowed()).isTrue();
   }
 
   @Test
   void shouldAllowWhenBaseCapIsNegative() {
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .baseCap(-5)
-                .burstLimit(2)
-                .currentActiveCount(0)
-                .reason("OVER", "over limit")
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .baseCap(-5)
+        .burstLimit(2)
+        .currentActiveCount(0)
+        .reason("OVER", "over limit")
+        .build());
     assertThat(result.allowed()).isTrue();
   }
 
@@ -160,41 +153,36 @@ class DatabaseQuotaRuntimeStateServiceTest {
   @Test
   void shouldAllowWhenNonePolicyAndWithinCap() {
     // baseCap=10, burst=0, active=5, requested=1 → 5+1=6 ≤ 10
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec().baseCap(10).burstLimit(0).currentActiveCount(5).build());
+    ResourceCheck result = service.evaluateAndReserve(
+        new ReservationSpec().baseCap(10).burstLimit(0).currentActiveCount(5).build());
     assertThat(result.allowed()).isTrue();
   }
 
   @Test
   void shouldBlockWhenNonePolicyAndOverCap() {
     // baseCap=10, burst=0, active=10, requested=1 → 11 > 10
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .baseCap(10)
-                .burstLimit(0)
-                .currentActiveCount(10)
-                .reason("OVER_CAP", "over cap")
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .baseCap(10)
+        .burstLimit(0)
+        .currentActiveCount(10)
+        .reason("OVER_CAP", "over cap")
+        .build());
     assertThat(result.allowed()).isFalse();
   }
 
   @Test
   void shouldAllowWhenNonePolicyWithBurstAndWithinCombinedCap() {
     // baseCap=10, burst=5, combined=15, active=12, requested=1 → 13 ≤ 15
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec().baseCap(10).burstLimit(5).currentActiveCount(12).build());
+    ResourceCheck result = service.evaluateAndReserve(
+        new ReservationSpec().baseCap(10).burstLimit(5).currentActiveCount(12).build());
     assertThat(result.allowed()).isTrue();
   }
 
   @Test
   void shouldBlockWhenNonePolicyWithBurstAndOverCombinedCap() {
     // baseCap=10, burst=5, combined=15, active=15, requested=1 → 16 > 15
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec().baseCap(10).burstLimit(5).currentActiveCount(15).build());
+    ResourceCheck result = service.evaluateAndReserve(
+        new ReservationSpec().baseCap(10).burstLimit(5).currentActiveCount(15).build());
     assertThat(result.allowed()).isFalse();
   }
 
@@ -207,16 +195,14 @@ class DatabaseQuotaRuntimeStateServiceTest {
     when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=5, burst=10, active=7, requested=1 → borrowed=7+1-5=3, burst=10 → ok
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode("job-sw")
-                .quotaResetPolicy("SLIDING_WINDOW")
-                .baseCap(5)
-                .burstLimit(10)
-                .currentActiveCount(7)
-                .slidingWindowHours(2)
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("job-sw")
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(7)
+        .slidingWindowHours(2)
+        .build());
 
     assertThat(result.allowed()).isTrue();
     verify(quotaRuntimeStateMapper).insert(any());
@@ -229,17 +215,15 @@ class DatabaseQuotaRuntimeStateServiceTest {
     when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=5, burst=3, active=8, requested=2 → borrowed=8+2-5=5 > burst=3
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode("job-sw")
-                .quotaResetPolicy("SLIDING_WINDOW")
-                .baseCap(5)
-                .burstLimit(3)
-                .currentActiveCount(8)
-                .requestedCount(2)
-                .slidingWindowHours(2)
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("job-sw")
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(5)
+        .burstLimit(3)
+        .currentActiveCount(8)
+        .requestedCount(2)
+        .slidingWindowHours(2)
+        .build());
 
     assertThat(result.allowed()).isFalse();
   }
@@ -252,17 +236,15 @@ class DatabaseQuotaRuntimeStateServiceTest {
     when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=10, burst=5, active=3, requested=2 → borrowed=0, no burst needed
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode("job-sw")
-                .quotaResetPolicy("SLIDING_WINDOW")
-                .baseCap(10)
-                .burstLimit(5)
-                .currentActiveCount(3)
-                .requestedCount(2)
-                .slidingWindowHours(2)
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("job-sw")
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(10)
+        .burstLimit(5)
+        .currentActiveCount(3)
+        .requestedCount(2)
+        .slidingWindowHours(2)
+        .build());
 
     assertThat(result.allowed()).isTrue();
   }
@@ -276,35 +258,32 @@ class DatabaseQuotaRuntimeStateServiceTest {
     when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=5, burst=10, active=7, requested=1 → borrowed=3 ≤ burst=10
-    ResourceCheck result =
-        service.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode("job-cal")
-                .quotaResetPolicy("CALENDAR_DAY")
-                .baseCap(5)
-                .burstLimit(10)
-                .currentActiveCount(7)
-                .build());
+    ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("job-cal")
+        .quotaResetPolicy("CALENDAR_DAY")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(7)
+        .build());
 
     assertThat(result.allowed()).isTrue();
   }
 
   @Test
   void shouldUpdatePeakBorrowedCountWhenHigherBorrowDetected() {
-    QuotaRuntimeStateEntity existingState =
-        new QuotaRuntimeStateEntity(
-            null,
-            "t1",
-            "JOB",
-            "job-cal",
-            "CALENDAR_DAY",
-            BatchDateTimeSupport.utcNow().minusSeconds(3600),
-            BatchDateTimeSupport.utcNow().plusSeconds(82800),
-            1,
-            null,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow(),
-            null);
+    QuotaRuntimeStateEntity existingState = new QuotaRuntimeStateEntity(
+        null,
+        "t1",
+        "JOB",
+        "job-cal",
+        "CALENDAR_DAY",
+        BatchDateTimeSupport.utcNow().minusSeconds(3600),
+        BatchDateTimeSupport.utcNow().plusSeconds(82800),
+        1,
+        null,
+        BatchDateTimeSupport.utcNow(),
+        BatchDateTimeSupport.utcNow(),
+        null);
     // 窗口仍然有效（远未到期）
 
     when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-cal"))
@@ -312,14 +291,13 @@ class DatabaseQuotaRuntimeStateServiceTest {
     when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // active=8, baseCap=5, requested=1 → borrowed=4 > current peak=1
-    service.evaluateAndReserve(
-        new ReservationSpec()
-            .ownerCode("job-cal")
-            .quotaResetPolicy("CALENDAR_DAY")
-            .baseCap(5)
-            .burstLimit(10)
-            .currentActiveCount(8)
-            .build());
+    service.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("job-cal")
+        .quotaResetPolicy("CALENDAR_DAY")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(8)
+        .build());
 
     verify(quotaRuntimeStateMapper, times(2)).insert(any(QuotaRuntimeStateEntity.class));
   }
@@ -329,12 +307,11 @@ class DatabaseQuotaRuntimeStateServiceTest {
   @Test
   void shouldReturnDefaultSnapshotWhenTenantIdIsBlank() {
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        service.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("", "JOB", "job-001"),
-                "CALENDAR_DAY",
-                5,
-                24));
+        service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("", "JOB", "job-001"),
+            "CALENDAR_DAY",
+            5,
+            24));
 
     assertThat(snap.burstLimit()).isEqualTo(5);
     assertThat(snap.peakBorrowedCount()).isZero();
@@ -344,12 +321,11 @@ class DatabaseQuotaRuntimeStateServiceTest {
   @Test
   void shouldReturnDefaultSnapshotWhenBurstLimitZeroOrNone() {
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        service.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "job-001"),
-                "NONE",
-                5,
-                0));
+        service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "job-001"),
+            "NONE",
+            5,
+            0));
 
     assertThat(snap.quotaResetPolicy()).isEqualTo("NONE");
     assertThat(snap.peakBorrowedCount()).isZero();
@@ -361,12 +337,11 @@ class DatabaseQuotaRuntimeStateServiceTest {
         .thenReturn(null);
 
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        service.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "job-001"),
-                "CALENDAR_DAY",
-                5,
-                24));
+        service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "job-001"),
+            "CALENDAR_DAY",
+            5,
+            24));
 
     assertThat(snap.peakBorrowedCount()).isZero();
     assertThat(snap.remainingBurst()).isEqualTo(5);
@@ -387,20 +362,19 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldResetExpiredSlidingWindowState() {
-    QuotaRuntimeStateEntity expired =
-        new QuotaRuntimeStateEntity(
-            null,
-            "t1",
-            "JOB",
-            "job-sw",
-            "SLIDING_WINDOW",
-            BatchDateTimeSupport.utcNow().minusSeconds(7200),
-            BatchDateTimeSupport.utcNow().minusSeconds(3600),
-            5,
-            null,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow(),
-            null); // already expired
+    QuotaRuntimeStateEntity expired = new QuotaRuntimeStateEntity(
+        null,
+        "t1",
+        "JOB",
+        "job-sw",
+        "SLIDING_WINDOW",
+        BatchDateTimeSupport.utcNow().minusSeconds(7200),
+        BatchDateTimeSupport.utcNow().minusSeconds(3600),
+        5,
+        null,
+        BatchDateTimeSupport.utcNow(),
+        BatchDateTimeSupport.utcNow(),
+        null); // already expired
 
     when(quotaRuntimeStateMapper.selectExpired(any(Instant.class))).thenReturn(List.of(expired));
     when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);

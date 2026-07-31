@@ -35,8 +35,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Import(QuartzLaunchJobIntegrationTest.TestConfig.class)
 class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired QuartzLaunchJob quartzLaunchJob;
-  @Autowired JdbcTemplate jdbcTemplate;
+  @Autowired
+  QuartzLaunchJob quartzLaunchJob;
+
+  @Autowired
+  JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void cleanUp() {
@@ -65,11 +68,8 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
     quartzLaunchJob.execute(context);
 
     // ADR-010: 异步路径写 trigger_outbox_event 而非调 HTTP adapter
-    Integer outboxCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.trigger_outbox_event where tenant_id = ?",
-            Integer.class,
-            "t1");
+    Integer outboxCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_outbox_event where tenant_id = ?", Integer.class, "t1");
     assertThat(outboxCount).as("Quartz fire should produce one outbox event").isEqualTo(1);
   }
 

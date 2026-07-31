@@ -19,9 +19,8 @@ class BatchTaskExecutorRegistryPhase5Test {
   @Test
   void noPropsBeanRegistersAll() {
     // Spring 容器内无 BatchWorkerAtomicProperties bean → 不过滤
-    BatchTaskExecutorRegistry registry =
-        new BatchTaskExecutorRegistry(
-            List.of(stub("import"), stub("shell"), stub("http")), providerOf(null));
+    BatchTaskExecutorRegistry registry = new BatchTaskExecutorRegistry(
+        List.of(stub("import"), stub("shell"), stub("http")), providerOf(null));
 
     assertThat(registry.registeredTypes()).containsExactlyInAnyOrder("import", "shell", "http");
   }
@@ -42,9 +41,8 @@ class BatchTaskExecutorRegistryPhase5Test {
     BatchWorkerAtomicProperties props = new BatchWorkerAtomicProperties();
     props.setEnabledTaskTypes(Set.of("import", "shell"));
 
-    BatchTaskExecutorRegistry registry =
-        new BatchTaskExecutorRegistry(
-            List.of(stub("import"), stub("shell"), stub("http"), stub("sql")), providerOf(props));
+    BatchTaskExecutorRegistry registry = new BatchTaskExecutorRegistry(
+        List.of(stub("import"), stub("shell"), stub("http"), stub("sql")), providerOf(props));
 
     // 只剩白名单的 2 个
     assertThat(registry.registeredTypes()).containsExactlyInAnyOrder("import", "shell");

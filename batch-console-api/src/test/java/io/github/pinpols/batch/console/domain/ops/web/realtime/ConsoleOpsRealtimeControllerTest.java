@@ -31,19 +31,18 @@ class ConsoleOpsRealtimeControllerTest {
 
   @BeforeEach
   void setUp() {
-    ConsoleApiExceptionHandler exceptionHandler =
-        ConsoleApiExceptionHandler.forStandaloneTest(
-            new ConsoleResponseFactory(requestMetadataResolver));
+    ConsoleApiExceptionHandler exceptionHandler = ConsoleApiExceptionHandler.forStandaloneTest(
+        new ConsoleResponseFactory(requestMetadataResolver));
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(summaryRealtimeStream.subscribe(anyString(), isNull(), anyBoolean()))
         .thenReturn(new SseEmitter());
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleOpsRealtimeController(summaryRealtimeStream))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleOpsRealtimeController(summaryRealtimeStream))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -59,10 +58,9 @@ class ConsoleOpsRealtimeControllerTest {
   @Test
   void shouldAllowSkippingInitialSnapshot() throws Exception {
     mockMvc
-        .perform(
-            get("/api/console/ops/summary/events")
-                .param("tenantId", "t1")
-                .param("initialSnapshot", "false"))
+        .perform(get("/api/console/ops/summary/events")
+            .param("tenantId", "t1")
+            .param("initialSnapshot", "false"))
         .andExpect(request().asyncStarted())
         .andReturn();
 

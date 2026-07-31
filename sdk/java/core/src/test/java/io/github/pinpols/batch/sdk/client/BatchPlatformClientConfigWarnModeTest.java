@@ -50,8 +50,10 @@ class BatchPlatformClientConfigWarnModeTest {
   @Test
   @DisplayName("strict=false 违反 hb<1s → 不抛,validate 通过")
   void shouldWarnInsteadOfThrowWhenStrictFalse_heartbeat() {
-    BatchPlatformClientConfig c =
-        valid().strictTimingValidation(false).heartbeatInterval(Duration.ofMillis(500)).build();
+    BatchPlatformClientConfig c = valid()
+        .strictTimingValidation(false)
+        .heartbeatInterval(Duration.ofMillis(500))
+        .build();
     assertThat(c.isStrictTimingValidation()).isFalse();
     assertThatCode(c::validate).doesNotThrowAnyException();
   }
@@ -59,50 +61,47 @@ class BatchPlatformClientConfigWarnModeTest {
   @Test
   @DisplayName("strict=false 违反 lease > hb×3 → 不抛")
   void shouldWarnWhenStrictFalse_leaseUpperBound() {
-    BatchPlatformClientConfig c =
-        valid()
-            .strictTimingValidation(false)
-            .heartbeatInterval(Duration.ofSeconds(10))
-            .leaseRenewInterval(Duration.ofSeconds(40))
-            .httpTimeout(Duration.ofSeconds(5))
-            .build();
+    BatchPlatformClientConfig c = valid()
+        .strictTimingValidation(false)
+        .heartbeatInterval(Duration.ofSeconds(10))
+        .leaseRenewInterval(Duration.ofSeconds(40))
+        .httpTimeout(Duration.ofSeconds(5))
+        .build();
     assertThatCode(c::validate).doesNotThrowAnyException();
   }
 
   @Test
   @DisplayName("strict=false 违反 httpTimeout > hb/2 → 不抛")
   void shouldWarnWhenStrictFalse_httpTimeout() {
-    BatchPlatformClientConfig c =
-        valid()
-            .strictTimingValidation(false)
-            .heartbeatInterval(Duration.ofSeconds(10))
-            .leaseRenewInterval(Duration.ofSeconds(20))
-            .httpTimeout(Duration.ofSeconds(8))
-            .build();
+    BatchPlatformClientConfig c = valid()
+        .strictTimingValidation(false)
+        .heartbeatInterval(Duration.ofSeconds(10))
+        .leaseRenewInterval(Duration.ofSeconds(20))
+        .httpTimeout(Duration.ofSeconds(8))
+        .build();
     assertThatCode(c::validate).doesNotThrowAnyException();
   }
 
   @Test
   @DisplayName("strict=false + 配置稍偏 → BatchPlatformClient.builder 仍可 build(避免 K8s 重启循环)")
   void shouldAllowClientBuildWhenStrictFalse() {
-    BatchPlatformClientConfig bad =
-        valid().strictTimingValidation(false).heartbeatInterval(Duration.ofMillis(500)).build();
-    assertThatCode(
-            () ->
-                BatchPlatformClient.builder(bad)
-                    .register(
-                        new SdkTaskHandler() {
-                          @Override
-                          public String taskType() {
-                            return "t";
-                          }
+    BatchPlatformClientConfig bad = valid()
+        .strictTimingValidation(false)
+        .heartbeatInterval(Duration.ofMillis(500))
+        .build();
+    assertThatCode(() -> BatchPlatformClient.builder(bad)
+            .register(new SdkTaskHandler() {
+              @Override
+              public String taskType() {
+                return "t";
+              }
 
-                          @Override
-                          public SdkTaskResult execute(SdkTaskContext ctx) {
-                            return SdkTaskResult.ok();
-                          }
-                        })
-                    .build())
+              @Override
+              public SdkTaskResult execute(SdkTaskContext ctx) {
+                return SdkTaskResult.ok();
+              }
+            })
+            .build())
         .doesNotThrowAnyException();
   }
 

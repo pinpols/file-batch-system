@@ -55,18 +55,17 @@ class BatchDayOpenSchedulerTest {
     disasterDayOverrideMapper = mock(DisasterDayOverrideMapper.class);
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
-    scheduler =
-        new BatchDayOpenScheduler(
-            businessCalendarMapper,
-            batchDayInstanceMapper,
-            jobExecutionLogMapper,
-            gracefulShutdown,
-            timezoneProvider,
-            new BatchDayTimePolicyResolver(timezoneProvider, new CutoffScheduleResolver()),
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
-            calendarDependencyMapper,
-            disasterDayOverrideMapper,
-            noopTransactionManager());
+    scheduler = new BatchDayOpenScheduler(
+        businessCalendarMapper,
+        batchDayInstanceMapper,
+        jobExecutionLogMapper,
+        gracefulShutdown,
+        timezoneProvider,
+        new BatchDayTimePolicyResolver(timezoneProvider, new CutoffScheduleResolver()),
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        calendarDependencyMapper,
+        disasterDayOverrideMapper,
+        noopTransactionManager());
   }
 
   private static PlatformTransactionManager noopTransactionManager() {
@@ -133,24 +132,21 @@ class BatchDayOpenSchedulerTest {
             "t1", "CAL", LocalDate.of(2026, 5, 5)))
         .thenReturn(null);
     when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL"))
-        .thenReturn(
-            List.of(
-                CalendarDependencyEntity.builder()
-                    .id(1L)
-                    .tenantId("t1")
-                    .upstreamCode("CAL_CN")
-                    .downstreamCode("CAL")
-                    .rule("WAIT_SETTLED")
-                    .enabled(true)
-                    .build()));
-    BatchDayInstanceEntity upstreamRunning =
-        BatchDayInstanceEntity.builder()
-            .id(99L)
+        .thenReturn(List.of(CalendarDependencyEntity.builder()
+            .id(1L)
             .tenantId("t1")
-            .calendarCode("CAL_CN")
-            .bizDate(LocalDate.of(2026, 5, 5))
-            .dayStatus("IN_FLIGHT")
-            .build();
+            .upstreamCode("CAL_CN")
+            .downstreamCode("CAL")
+            .rule("WAIT_SETTLED")
+            .enabled(true)
+            .build()));
+    BatchDayInstanceEntity upstreamRunning = BatchDayInstanceEntity.builder()
+        .id(99L)
+        .tenantId("t1")
+        .calendarCode("CAL_CN")
+        .bizDate(LocalDate.of(2026, 5, 5))
+        .dayStatus("IN_FLIGHT")
+        .build();
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
             "t1", "CAL_CN", LocalDate.of(2026, 5, 5)))
         .thenReturn(upstreamRunning);
@@ -168,24 +164,21 @@ class BatchDayOpenSchedulerTest {
             "t1", "CAL", LocalDate.of(2026, 5, 5)))
         .thenReturn(null);
     when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL"))
-        .thenReturn(
-            List.of(
-                CalendarDependencyEntity.builder()
-                    .id(1L)
-                    .tenantId("t1")
-                    .upstreamCode("CAL_CN")
-                    .downstreamCode("CAL")
-                    .rule("WAIT_SETTLED")
-                    .enabled(true)
-                    .build()));
-    BatchDayInstanceEntity upstreamSettled =
-        BatchDayInstanceEntity.builder()
-            .id(99L)
+        .thenReturn(List.of(CalendarDependencyEntity.builder()
+            .id(1L)
             .tenantId("t1")
-            .calendarCode("CAL_CN")
-            .bizDate(LocalDate.of(2026, 5, 5))
-            .dayStatus("SETTLED")
-            .build();
+            .upstreamCode("CAL_CN")
+            .downstreamCode("CAL")
+            .rule("WAIT_SETTLED")
+            .enabled(true)
+            .build()));
+    BatchDayInstanceEntity upstreamSettled = BatchDayInstanceEntity.builder()
+        .id(99L)
+        .tenantId("t1")
+        .calendarCode("CAL_CN")
+        .bizDate(LocalDate.of(2026, 5, 5))
+        .dayStatus("SETTLED")
+        .build();
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
             "t1", "CAL_CN", LocalDate.of(2026, 5, 5)))
         .thenReturn(upstreamSettled);
@@ -205,19 +198,18 @@ class BatchDayOpenSchedulerTest {
         .thenReturn(null);
     when(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
             "t1", "CAL", LocalDate.of(2026, 5, 5), now))
-        .thenReturn(
-            DisasterDayOverrideEntity.builder()
-                .id(1L)
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 5))
-                .action("SKIP")
-                .reason("typhoon shutdown")
-                .approvedBy("ops-1")
-                .approvedAt(now)
-                .effectiveAt(now)
-                .ttlUntil(now.plusSeconds(86400))
-                .build());
+        .thenReturn(DisasterDayOverrideEntity.builder()
+            .id(1L)
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 5))
+            .action("SKIP")
+            .reason("typhoon shutdown")
+            .approvedBy("ops-1")
+            .approvedAt(now)
+            .effectiveAt(now)
+            .ttlUntil(now.plusSeconds(86400))
+            .build());
     when(batchDayInstanceMapper.insert(any())).thenReturn(1);
 
     scheduler.openDueBatchDays(now);
@@ -239,19 +231,18 @@ class BatchDayOpenSchedulerTest {
         .thenReturn(null);
     when(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
             "t1", "CAL", LocalDate.of(2026, 5, 5), now))
-        .thenReturn(
-            DisasterDayOverrideEntity.builder()
-                .id(2L)
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 5))
-                .action("DEFER_TO_NEXT_BIZDAY")
-                .reason("system maintenance")
-                .approvedBy("ops-2")
-                .approvedAt(now)
-                .effectiveAt(now)
-                .ttlUntil(now.plusSeconds(86400))
-                .build());
+        .thenReturn(DisasterDayOverrideEntity.builder()
+            .id(2L)
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 5))
+            .action("DEFER_TO_NEXT_BIZDAY")
+            .reason("system maintenance")
+            .approvedBy("ops-2")
+            .approvedAt(now)
+            .effectiveAt(now)
+            .ttlUntil(now.plusSeconds(86400))
+            .build());
 
     scheduler.openDueBatchDays(now);
 

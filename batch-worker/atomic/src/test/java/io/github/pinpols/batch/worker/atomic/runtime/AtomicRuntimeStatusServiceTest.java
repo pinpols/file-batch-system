@@ -28,11 +28,20 @@ import org.springframework.mock.env.MockEnvironment;
 @ExtendWith(MockitoExtension.class)
 class AtomicRuntimeStatusServiceTest {
 
-  @Mock private ObjectProvider<ShellExecutorProperties> shellProvider;
-  @Mock private ObjectProvider<SqlExecutorProperties> sqlProvider;
-  @Mock private ObjectProvider<HttpExecutorProperties> httpProvider;
-  @Mock private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
-  @Mock private ObjectProvider<DataSource> dataSourceProvider;
+  @Mock
+  private ObjectProvider<ShellExecutorProperties> shellProvider;
+
+  @Mock
+  private ObjectProvider<SqlExecutorProperties> sqlProvider;
+
+  @Mock
+  private ObjectProvider<HttpExecutorProperties> httpProvider;
+
+  @Mock
+  private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
+
+  @Mock
+  private ObjectProvider<DataSource> dataSourceProvider;
 
   private MockEnvironment env;
   private AtomicWorkerConfiguration workerCfg;
@@ -40,9 +49,8 @@ class AtomicRuntimeStatusServiceTest {
   @BeforeEach
   void setUp() {
     env = new MockEnvironment();
-    workerCfg =
-        new AtomicWorkerConfiguration(
-            "atomic-node-1", "ATOMIC", "tenant-x", 15000L, "topic.x", "group.x", List.of());
+    workerCfg = new AtomicWorkerConfiguration(
+        "atomic-node-1", "ATOMIC", "tenant-x", 15000L, "topic.x", "group.x", List.of());
   }
 
   private AtomicRuntimeStatusService newService() {

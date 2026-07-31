@@ -60,27 +60,23 @@ public class DeadLetterPublisher {
       this.publishTimer = null;
     } else {
       Tags base = Tags.of("topic", BatchTopics.TASK_DEAD_LETTER);
-      this.successCounter =
-          Counter.builder("worker.dlq.publish.success.total")
-              .description("DLQ 发布成功累计")
-              .tags(base)
-              .register(registry);
-      this.timeoutCounter =
-          Counter.builder("worker.dlq.publish.timeout.total")
-              .description("DLQ 发布超时累计 (broker 抖动 / 容量不足时上升)")
-              .tags(base)
-              .register(registry);
-      this.failureCounter =
-          Counter.builder("worker.dlq.publish.failed.total")
-              .description("DLQ 发布失败累计 (超时之外的异常)")
-              .tags(base)
-              .register(registry);
-      this.publishTimer =
-          Timer.builder("worker.dlq.publish.duration")
-              .description("DLQ 发布耗时分位")
-              .tags(base)
-              .publishPercentiles(0.5, 0.95, 0.99)
-              .register(registry);
+      this.successCounter = Counter.builder("worker.dlq.publish.success.total")
+          .description("DLQ 发布成功累计")
+          .tags(base)
+          .register(registry);
+      this.timeoutCounter = Counter.builder("worker.dlq.publish.timeout.total")
+          .description("DLQ 发布超时累计 (broker 抖动 / 容量不足时上升)")
+          .tags(base)
+          .register(registry);
+      this.failureCounter = Counter.builder("worker.dlq.publish.failed.total")
+          .description("DLQ 发布失败累计 (超时之外的异常)")
+          .tags(base)
+          .register(registry);
+      this.publishTimer = Timer.builder("worker.dlq.publish.duration")
+          .description("DLQ 发布耗时分位")
+          .tags(base)
+          .publishPercentiles(0.5, 0.95, 0.99)
+          .register(registry);
     }
   }
 

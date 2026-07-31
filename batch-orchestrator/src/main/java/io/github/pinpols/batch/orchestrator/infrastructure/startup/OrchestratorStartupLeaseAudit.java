@@ -48,19 +48,16 @@ public class OrchestratorStartupLeaseAudit {
   public void audit() {
     try {
       long drainingStale = workerRegistryMapper.countDrainingPastDeadline();
-      long staleOnlineWorkers =
-          workerRegistryMapper.countStaleOnline(
-              (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
-                  + workerDrainProperties.getHeartbeatGraceSeconds());
+      long staleOnlineWorkers = workerRegistryMapper.countStaleOnline(
+          (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
+              + workerDrainProperties.getHeartbeatGraceSeconds());
       long decommissionedActiveClaims = workerRegistryMapper.countDecommissionedWithActiveTasks();
       long invalidCapabilityTags = workerRegistryMapper.countInvalidCapabilityTags();
       long terminalActiveChildren = jobInstanceMapper.countTerminalInstancesWithActiveChildren();
-      long leasesExpired =
-          jobPartitionMapper.countLeaseExpired(
-              PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
-      long outboxStuck =
-          outboxEventMapper.countStalePublishing(
-              OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);
+      long leasesExpired = jobPartitionMapper.countLeaseExpired(
+          PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
+      long outboxStuck = outboxEventMapper.countStalePublishing(
+          OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);
 
       if (drainingStale == 0
           && staleOnlineWorkers == 0
@@ -69,10 +66,9 @@ public class OrchestratorStartupLeaseAudit {
           && terminalActiveChildren == 0
           && leasesExpired == 0
           && outboxStuck == 0) {
-        log.info(
-            "启动运行态审计通过（orchestrator）：无 stale worker / drain overdue / active decommissioned"
-                + " claims / invalid capability_tags / terminal active children / 过期租约 / 长期停滞"
-                + " PUBLISHING");
+        log.info("启动运行态审计通过（orchestrator）：无 stale worker / drain overdue / active decommissioned"
+            + " claims / invalid capability_tags / terminal active children / 过期租约 / 长期停滞"
+            + " PUBLISHING");
         return;
       }
 

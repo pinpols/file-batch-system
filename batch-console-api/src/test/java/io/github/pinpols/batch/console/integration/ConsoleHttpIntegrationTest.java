@@ -45,27 +45,40 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
 class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
-  @LocalServerPort private int port;
+  @LocalServerPort
+  private int port;
 
   private WebTestClient webTestClient;
 
-  @MockitoBean private ConsoleJobTriggerService jobTriggerService;
-  @MockitoBean private ConsoleJobRecoveryService jobRecoveryService;
-  @MockitoBean private ConsoleJobApprovalService jobApprovalService;
+  @MockitoBean
+  private ConsoleJobTriggerService jobTriggerService;
 
-  @MockitoBean private ConsoleWorkerApplicationService workerApplicationService;
+  @MockitoBean
+  private ConsoleJobRecoveryService jobRecoveryService;
 
-  @MockitoBean private ConsoleApprovalApplicationService approvalApplicationService;
+  @MockitoBean
+  private ConsoleJobApprovalService jobApprovalService;
 
-  @MockitoBean private ConsoleFileApplicationService fileApplicationService;
+  @MockitoBean
+  private ConsoleWorkerApplicationService workerApplicationService;
 
-  @MockitoBean private ConsoleConfigApplicationService configApplicationService;
+  @MockitoBean
+  private ConsoleApprovalApplicationService approvalApplicationService;
 
-  @MockitoBean private ConsoleReportExcelApplicationService reportExcelApplicationService;
+  @MockitoBean
+  private ConsoleFileApplicationService fileApplicationService;
 
-  @MockitoBean private ConsoleAiApplicationService aiApplicationService;
+  @MockitoBean
+  private ConsoleConfigApplicationService configApplicationService;
 
-  @MockitoBean private ConsoleFileDownloadApplicationService fileDownloadApplicationService;
+  @MockitoBean
+  private ConsoleReportExcelApplicationService reportExcelApplicationService;
+
+  @MockitoBean
+  private ConsoleAiApplicationService aiApplicationService;
+
+  @MockitoBean
+  private ConsoleFileDownloadApplicationService fileDownloadApplicationService;
 
   @BeforeEach
   void setUpClient() {
@@ -73,11 +86,10 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
     // Content-Length 响应头 fail-fast 抛 "Multiple Content-Length values found"(Netty 安全加固),
     // 在 CI runner(JDK25 + Tomcat 响应管线)上偶发触发,与被测业务无关。JDK 连接器对此宽容,
     // 消除该环境 flake;不改任何生产行为,仅约束测试客户端。
-    webTestClient =
-        WebTestClient.bindToServer(new JdkClientHttpConnector())
-            .baseUrl("http://localhost:" + port)
-            .responseTimeout(Duration.ofSeconds(60))
-            .build();
+    webTestClient = WebTestClient.bindToServer(new JdkClientHttpConnector())
+        .baseUrl("http://localhost:" + port)
+        .responseTimeout(Duration.ofSeconds(60))
+        .build();
   }
 
   @Test
@@ -89,19 +101,17 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .uri("/api/console/jobs/trigger")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-trigger-001")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","jobCode":"JOB_A","bizDate":"2026-03-27","triggerType":"MANUAL"}
             """)
         .exchange()
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("\"job-instance-001\"");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("\"job-instance-001\"");
+        });
 
     verify(jobTriggerService).trigger(any(), anyString());
   }
@@ -132,8 +142,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .uri("/api/console/jobs/trigger")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-trigger-002")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","bizDate":"2026-03-27"}
             """)
         .exchange()
@@ -148,38 +157,35 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldDrainWorkerViaHttp() {
     when(workerApplicationService.drain(anyString(), any(), anyString()))
-        .thenReturn(
-            new ConsoleWorkerRegistryResponse(
-                1L,
-                "tenant-a",
-                "worker-001",
-                "group-a",
-                null,
-                null,
-                "DRAINING",
-                BatchDateTimeSupport.utcNow(),
-                0,
-                null,
-                null));
+        .thenReturn(new ConsoleWorkerRegistryResponse(
+            1L,
+            "tenant-a",
+            "worker-001",
+            "group-a",
+            null,
+            null,
+            "DRAINING",
+            BatchDateTimeSupport.utcNow(),
+            0,
+            null,
+            null));
 
     webTestClient
         .post()
         .uri("/api/console/workers/worker-001/drain")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-worker-001")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","timeoutSeconds":600}
             """)
         .exchange()
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("\"status\":\"DRAINING\"");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("\"status\":\"DRAINING\"");
+        });
 
     verify(workerApplicationService).drain(anyString(), any(), anyString());
   }
@@ -194,19 +200,17 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .uri("/api/console/approvals/appr-001/approve")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-approval-001")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","operatorId":"user-1","reason":"ok"}
             """)
         .exchange()
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("\"APPROVED\"");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("\"APPROVED\"");
+        });
 
     verify(approvalApplicationService).approve("tenant-a", "appr-001", "user-1", "ok");
   }
@@ -221,19 +225,17 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .uri("/api/console/files/archive")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-001")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","fileId":1001,"reason":"cleanup"}
             """)
         .exchange()
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("\"status\":\"ARCHIVED\"");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("\"status\":\"ARCHIVED\"");
+        });
 
     verify(fileApplicationService).archive(any(), anyString());
   }
@@ -248,19 +250,17 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .uri("/api/console/files/presign-download")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-002")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","fileId":1001,"reason":"cleanup","approvalId":"appr-001"}
             """)
         .exchange()
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("\"approvalNo\":\"appr-001\"");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("\"approvalNo\":\"appr-001\"");
+        });
 
     verify(fileApplicationService).presignDownload(any(), anyString());
   }
@@ -274,19 +274,17 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .uri("/api/console/config/secrets/rotate")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-config-001")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","secretRef":"DEFAULT_TEST","secretName":"console-secret","reason":"rotation"}
             """)
         .exchange()
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("11");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("11");
+        });
 
     verify(configApplicationService).rotateSecretVersion(any());
   }
@@ -308,20 +306,18 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .uri("/api/console/ai/chat")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ai-001")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            """
+        .bodyValue("""
             {"tenantId":"tenant-a","sessionId":"session-1","prompt":"给我一个调度概览","context":{"topic":"summary"}}
             """)
         .exchange()
         .expectStatus()
         .isOk()
         .expectBody(String.class)
-        .value(
-            body -> {
-              assertThat(body).contains("\"code\":\"SUCCESS\"");
-              assertThat(body).contains("\"session-1\"");
-              assertThat(body).contains("\"ok\"");
-            });
+        .value(body -> {
+          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("\"session-1\"");
+          assertThat(body).contains("\"ok\"");
+        });
 
     verify(aiApplicationService).chat(any(), anyString());
   }

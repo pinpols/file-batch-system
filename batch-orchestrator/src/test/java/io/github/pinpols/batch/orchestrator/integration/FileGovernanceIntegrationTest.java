@@ -132,9 +132,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     S3Client s3Client(S3StorageProperties props) {
       return S3Client.builder()
           .endpointOverride(URI.create(props.getEndpoint()))
-          .credentialsProvider(
-              StaticCredentialsProvider.create(
-                  AwsBasicCredentials.create(props.getAccessKey(), props.getSecretKey())))
+          .credentialsProvider(StaticCredentialsProvider.create(
+              AwsBasicCredentials.create(props.getAccessKey(), props.getSecretKey())))
           .forcePathStyle(true)
           .region(Region.US_EAST_1)
           .build();
@@ -143,13 +142,17 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT_ID = "t1";
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private FileGovernanceScheduler fileGovernanceScheduler;
+  @Autowired
+  private FileGovernanceScheduler fileGovernanceScheduler;
 
-  @Autowired private FileGovernanceRepository fileGovernanceRepository;
+  @Autowired
+  private FileGovernanceRepository fileGovernanceRepository;
 
-  @Autowired private MeterRegistry meterRegistry;
+  @Autowired
+  private MeterRegistry meterRegistry;
 
   @Test
   void shouldCollectLatencyMetricsForDelayedArrivalFiles() {
@@ -158,18 +161,17 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     String latencyTenantId = "default-tenant";
     Instant now = BatchDateTimeSupport.utcNow();
     String suffix = suffix();
-    insertFileRecord(
-        new FileRecordSpec(
-                latencyTenantId,
-                "delay-file-" + suffix + ".csv",
-                "INPUT",
-                "RECEIVED",
-                "S3",
-                "incoming/delay-file-" + suffix + ".csv",
-                "{\"expectedArrivalTime\":\"" + now.minusSeconds(7200) + "\"}")
-            .storageBucket(s3Bucket())
-            .createdAt(now)
-            .updatedAt(now));
+    insertFileRecord(new FileRecordSpec(
+            latencyTenantId,
+            "delay-file-" + suffix + ".csv",
+            "INPUT",
+            "RECEIVED",
+            "S3",
+            "incoming/delay-file-" + suffix + ".csv",
+            "{\"expectedArrivalTime\":\"" + now.minusSeconds(7200) + "\"}")
+        .storageBucket(s3Bucket())
+        .createdAt(now)
+        .updatedAt(now));
 
     fileGovernanceScheduler.collectLatencyMetrics();
 
@@ -185,46 +187,37 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     String objectName = "archive/cleanup/" + suffix() + ".csv";
     putObject(objectName, "one,two,three\n");
 
-    Long fileId =
-        insertFileRecord(
-            new FileRecordSpec(
-                    TENANT_ID,
-                    "archive-file-" + suffix() + ".csv",
-                    "INPUT",
-                    "ARCHIVED",
-                    "S3",
-                    objectName,
-                    "{}")
-                .storageBucket(s3Bucket())
-                .createdAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L))
-                .updatedAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L)));
+    Long fileId = insertFileRecord(new FileRecordSpec(
+            TENANT_ID,
+            "archive-file-" + suffix() + ".csv",
+            "INPUT",
+            "ARCHIVED",
+            "S3",
+            objectName,
+            "{}")
+        .storageBucket(s3Bucket())
+        .createdAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L))
+        .updatedAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L)));
 
     fileGovernanceScheduler.cleanupArchivedFiles();
 
-    Map<String, Object> fileRecord =
-        jdbcTemplate.queryForMap(
-            "select file_status, metadata_json->>'cleanupReason' as cleanup_reason from"
-                + " batch.file_record where id = ?",
-            fileId);
+    Map<String, Object> fileRecord = jdbcTemplate.queryForMap(
+        "select file_status, metadata_json->>'cleanupReason' as cleanup_reason from"
+            + " batch.file_record where id = ?",
+        fileId);
     assertThat(fileRecord.get("file_status")).isEqualTo("DELETED");
     assertThat(fileRecord.get("cleanup_reason")).isEqualTo("ARCHIVE_RETENTION_EXPIRED");
 
-    Integer auditCount =
-        jdbcTemplate.queryForObject(
-            """
+    Integer auditCount = jdbcTemplate.queryForObject("""
             select count(1)::int
             from batch.file_audit_log
             where file_id = ? and operation_type = 'CLEANUP' and operation_result = 'SUCCESS'
-            """,
-            Integer.class,
-            fileId);
+            """, Integer.class, fileId);
     assertThat(auditCount).isEqualTo(1);
 
     S3Client client = s3Client();
-    assertThatThrownBy(
-            () ->
-                client.headObject(
-                    HeadObjectRequest.builder().bucket(s3Bucket()).key(objectName).build()))
+    assertThatThrownBy(() -> client.headObject(
+            HeadObjectRequest.builder().bucket(s3Bucket()).key(objectName).build()))
         .isInstanceOf(Exception.class);
   }
 
@@ -235,32 +228,26 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
     fileGovernanceScheduler.reconcileObjectStorage();
 
-    Map<String, Object> reconciled =
-        jdbcTemplate.queryForMap(
-            """
+    Map<String, Object> reconciled = jdbcTemplate.queryForMap("""
             select file_name,
                    file_status,
                    metadata_json->>'reconciled' as reconciled_flag,
                    storage_path
             from batch.file_record
             where storage_path = ?
-            """,
-            objectName);
+            """, objectName);
     assertThat(reconciled.get("file_name"))
         .isEqualTo(objectName.substring(objectName.lastIndexOf('/') + 1));
     assertThat(reconciled.get("file_status")).isEqualTo("RECEIVED");
     assertThat(reconciled.get("reconciled_flag")).isEqualTo("true");
     assertThat(reconciled.get("storage_path")).isEqualTo(objectName);
 
-    Integer auditCount =
-        jdbcTemplate.queryForObject(
-            """
+    Integer auditCount = jdbcTemplate.queryForObject("""
             select count(1)::int
             from batch.file_audit_log
             where operation_type = 'RECONCILE_REGISTER'
               and trace_id like 'reconcile-%'
-            """,
-            Integer.class);
+            """, Integer.class);
     assertThat(auditCount).isGreaterThanOrEqualTo(1);
   }
 
@@ -278,53 +265,44 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
           "triggerOnComplete": true,
           "latestTolerableTime": "%s"
         }
-        """
-            .formatted(groupCode, requiredSet, BatchDateTimeSupport.utcNow().plusSeconds(3600));
+        """.formatted(groupCode, requiredSet, BatchDateTimeSupport.utcNow().plusSeconds(3600));
 
-    insertFileRecord(
-        new FileRecordSpec(
-                TENANT_ID,
-                "file-a.csv",
-                "INPUT",
-                "RECEIVED",
-                "LOCAL",
-                "incoming/" + groupCode + "/file-a.csv",
-                metadata)
-            .createdAt(BatchDateTimeSupport.utcNow())
-            .updatedAt(BatchDateTimeSupport.utcNow()));
-    insertFileRecord(
-        new FileRecordSpec(
-                TENANT_ID,
-                "file-b.csv",
-                "INPUT",
-                "RECEIVED",
-                "LOCAL",
-                "incoming/" + groupCode + "/file-b.csv",
-                metadata)
-            .createdAt(BatchDateTimeSupport.utcNow())
-            .updatedAt(BatchDateTimeSupport.utcNow()));
+    insertFileRecord(new FileRecordSpec(
+            TENANT_ID,
+            "file-a.csv",
+            "INPUT",
+            "RECEIVED",
+            "LOCAL",
+            "incoming/" + groupCode + "/file-a.csv",
+            metadata)
+        .createdAt(BatchDateTimeSupport.utcNow())
+        .updatedAt(BatchDateTimeSupport.utcNow()));
+    insertFileRecord(new FileRecordSpec(
+            TENANT_ID,
+            "file-b.csv",
+            "INPUT",
+            "RECEIVED",
+            "LOCAL",
+            "incoming/" + groupCode + "/file-b.csv",
+            metadata)
+        .createdAt(BatchDateTimeSupport.utcNow())
+        .updatedAt(BatchDateTimeSupport.utcNow()));
 
     fileGovernanceScheduler.manageFileArrivalGroups();
 
-    var rows =
-        jdbcTemplate.queryForList(
-            """
+    var rows = jdbcTemplate.queryForList("""
             select file_name,
                    metadata_json->>'arrivalState' as arrival_state,
                    metadata_json->>'arrivalReason' as arrival_reason
             from batch.file_record
             where tenant_id = ? and metadata_json->>'fileGroupCode' = ?
             order by file_name
-            """,
-            TENANT_ID,
-            groupCode);
+            """, TENANT_ID, groupCode);
     assertThat(rows).hasSize(2);
-    assertThat(rows)
-        .allSatisfy(
-            row -> {
-              assertThat(row.get("arrival_state")).isEqualTo("TRIGGERED");
-              assertThat(row.get("arrival_reason")).isEqualTo("ALL_FILES_ARRIVED");
-            });
+    assertThat(rows).allSatisfy(row -> {
+      assertThat(row.get("arrival_state")).isEqualTo("TRIGGERED");
+      assertThat(row.get("arrival_reason")).isEqualTo("ALL_FILES_ARRIVED");
+    });
 
     var summaries =
         fileGovernanceRepository.selectArrivalGroupSummaries(TENANT_ID, groupCode, "TRIGGERED");
@@ -380,9 +358,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   private S3Client s3Client() {
     return S3Client.builder()
         .endpointOverride(URI.create(s3Endpoint()))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create("minioadmin", "minioadmin123")))
         .forcePathStyle(true)
         .region(Region.US_EAST_1)
         .build();

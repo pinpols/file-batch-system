@@ -30,8 +30,7 @@ public final class LaunchIntegrationFixture {
     String dedupKey = "dedup-" + suffix;
     String workerCode = "wk-" + suffix;
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -39,44 +38,25 @@ public final class LaunchIntegrationFixture {
         ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
             5, 'q-it', ?, 'API', false, 'NONE',
             'NONE', 0, 0, true, 1)
-        """,
-        tenantId,
-        jobCode,
-        "integration " + jobCode,
-        jobType,
-        "IT",
-        workerGroup);
+        """, tenantId, jobCode, "integration " + jobCode, jobType, "IT", workerGroup);
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
         ) values (?, ?, 'integration wf', 'DAG', 1, true)
-        """,
-        tenantId,
-        jobCode);
+        """, tenantId, jobCode);
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key, request_status, trace_id
         ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'trace-it')
-        """,
-        tenantId,
-        requestId,
-        triggerType.code(),
-        jobCode,
-        dedupKey);
+        """, tenantId, requestId, triggerType.code(), jobCode, dedupKey);
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
         ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
-        """,
-        tenantId,
-        workerCode,
-        workerGroup);
+        """, tenantId, workerCode, workerGroup);
 
     return new LaunchSeed(jobCode, requestId, dedupKey, workerCode);
   }
@@ -94,8 +74,7 @@ public final class LaunchIntegrationFixture {
     String dedupKey = "dedup-" + suffix;
     String workerCode = "wk-" + suffix;
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -103,35 +82,19 @@ public final class LaunchIntegrationFixture {
         ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
             5, 'q-it', ?, 'API', false, 'DYNAMIC',
             'NONE', 0, 0, true, 1)
-        """,
-        tenantId,
-        jobCode,
-        "integration " + jobCode,
-        bundleJobType,
-        "IT",
-        workerGroup);
+        """, tenantId, jobCode, "integration " + jobCode, bundleJobType, "IT", workerGroup);
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key, request_status, trace_id
         ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'trace-it')
-        """,
-        tenantId,
-        requestId,
-        TriggerType.EVENT.code(),
-        jobCode,
-        dedupKey);
+        """, tenantId, requestId, TriggerType.EVENT.code(), jobCode, dedupKey);
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
         ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
-        """,
-        tenantId,
-        workerCode,
-        workerGroup);
+        """, tenantId, workerCode, workerGroup);
 
     return new LaunchSeed(jobCode, requestId, dedupKey, workerCode);
   }
@@ -141,15 +104,13 @@ public final class LaunchIntegrationFixture {
    * worker 复位心跳与时间戳对齐 DB，收敛跨用例串扰。（不触碰 DRAINING/DECOMMISSIONED）
    */
   public static void refreshAssignableWorkersForTenant(JdbcTemplate jdbc, String tenantId) {
-    jdbc.update(
-        """
+    jdbc.update("""
         update batch.worker_registry
         set heartbeat_at = current_timestamp,
             status = 'ONLINE'
         where tenant_id = ?
           and status in ('ONLINE', 'OFFLINE')
-        """,
-        tenantId);
+        """, tenantId);
   }
 
   /** 与 {@link #prepareLaunchWithWorker} 相同但不插入 Worker 行 —— 用于”无可用容量”的调度场景。 */
@@ -164,8 +125,7 @@ public final class LaunchIntegrationFixture {
     String requestId = "req-" + suffix;
     String dedupKey = "dedup-" + suffix;
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -173,45 +133,29 @@ public final class LaunchIntegrationFixture {
         ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
             5, 'q-it', ?, 'API', false, 'NONE',
             'NONE', 0, 0, true, 1)
-        """,
-        tenantId,
-        jobCode,
-        "integration " + jobCode,
-        jobType,
-        "IT",
-        orphanWorkerGroup);
+        """, tenantId, jobCode, "integration " + jobCode, jobType, "IT", orphanWorkerGroup);
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
         ) values (?, ?, 'integration wf', 'DAG', 1, true)
-        """,
-        tenantId,
-        jobCode);
+        """, tenantId, jobCode);
 
-    jdbc.update(
-        """
+    jdbc.update("""
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key, request_status, trace_id
         ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'trace-it')
-        """,
-        tenantId,
-        requestId,
-        triggerType.code(),
-        jobCode,
-        dedupKey);
+        """, tenantId, requestId, triggerType.code(), jobCode, dedupKey);
 
     return new LaunchSeed(jobCode, requestId, dedupKey, null);
   }
 
   public static long countOutboxByEventType(JdbcTemplate jdbc, String tenantId, String eventType) {
-    Long n =
-        jdbc.queryForObject(
-            "select count(*) from batch.outbox_event where tenant_id = ? and event_type = ?",
-            Long.class,
-            tenantId,
-            eventType);
+    Long n = jdbc.queryForObject(
+        "select count(*) from batch.outbox_event where tenant_id = ? and event_type = ?",
+        Long.class,
+        tenantId,
+        eventType);
     return n == null ? 0L : n;
   }
 }

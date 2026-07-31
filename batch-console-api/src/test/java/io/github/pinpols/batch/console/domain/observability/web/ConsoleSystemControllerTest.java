@@ -46,10 +46,10 @@ class ConsoleSystemControllerTest {
     stateHolder = new MaintenanceStateHolder(props);
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleSystemController(stateHolder, timezoneProvider))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleSystemController(stateHolder, timezoneProvider))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -63,9 +63,8 @@ class ConsoleSystemControllerTest {
 
   @Test
   void maintenanceStatusShouldReflectHolderState() throws Exception {
-    stateHolder.update(
-        new MaintenanceState(
-            true, true, "DB 灰度中", Instant.parse("2026-05-20T15:00:00Z"), List.of("job-schedule")));
+    stateHolder.update(new MaintenanceState(
+        true, true, "DB 灰度中", Instant.parse("2026-05-20T15:00:00Z"), List.of("job-schedule")));
     mockMvc
         .perform(get("/api/console/system/maintenance"))
         .andExpect(status().isOk())
@@ -107,10 +106,9 @@ class ConsoleSystemControllerTest {
   @Test
   void cronPreviewShouldCapCountToMax() throws Exception {
     mockMvc
-        .perform(
-            get("/api/console/system/cron-preview")
-                .param("expr", "0 0 12 * * ?")
-                .param("count", "999"))
+        .perform(get("/api/console/system/cron-preview")
+            .param("expr", "0 0 12 * * ?")
+            .param("count", "999"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.nextRuns.length()").value(20));
   }

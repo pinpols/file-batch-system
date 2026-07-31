@@ -10,16 +10,15 @@ class SdkTaskContextTest {
 
   @Test
   void schedulingGettersDelegateToContext() {
-    SdkSchedulingContext sc =
-        new SdkSchedulingContext(
-            LocalDate.of(2026, 6, 1),
-            LocalDate.of(2026, 5, 29),
-            LocalDate.of(2026, 6, 2),
-            false,
-            2,
-            "SCHEDULED",
-            null,
-            null);
+    SdkSchedulingContext sc = new SdkSchedulingContext(
+        LocalDate.of(2026, 6, 1),
+        LocalDate.of(2026, 5, 29),
+        LocalDate.of(2026, 6, 2),
+        false,
+        2,
+        "SCHEDULED",
+        null,
+        null);
     SdkTaskContext ctx =
         new SdkTaskContext("t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of(), sc);
 
@@ -70,9 +69,8 @@ class SdkTaskContextTest {
   @Test
   void reportProgressWritesLatestSnapshot() {
     ProgressReporter reporter = new ProgressReporter();
-    SdkTaskContext ctx =
-        new SdkTaskContext(
-            "t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of(), null, null, reporter);
+    SdkTaskContext ctx = new SdkTaskContext(
+        "t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of(), null, null, reporter);
 
     assertThat(reporter.latest()).isNull();
     ctx.reportProgress(Map.of("processed", 10, "total", 100));

@@ -19,12 +19,10 @@ class RouteToPrimaryAspectTest {
     RouteToPrimaryAspect aspect = new RouteToPrimaryAspect();
     ProceedingJoinPoint pjp = Mockito.mock(ProceedingJoinPoint.class);
     boolean[] insideHint = new boolean[1];
-    Mockito.when(pjp.proceed())
-        .thenAnswer(
-            inv -> {
-              insideHint[0] = RoutingHints.isForcePrimary();
-              return "ok";
-            });
+    Mockito.when(pjp.proceed()).thenAnswer(inv -> {
+      insideHint[0] = RoutingHints.isForcePrimary();
+      return "ok";
+    });
 
     Object result = aspect.wrap(pjp);
 

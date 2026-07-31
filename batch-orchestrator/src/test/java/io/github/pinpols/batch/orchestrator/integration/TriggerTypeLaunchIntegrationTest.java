@@ -31,29 +31,30 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JobInstanceMapper jobInstanceMapper;
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @ParameterizedTest
   @EnumSource(TriggerType.class)
   void shouldLaunchAndPersistTriggerTypeForEachTriggerType(TriggerType triggerType) {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", triggerType);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", triggerType);
 
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(LocalDate.of(2026, 1, 15))
-            .triggerType(triggerType)
-            .requestId(seed.requestId())
-            .traceId("trace-" + seed.requestId())
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(triggerType)
+        .requestId(seed.requestId())
+        .traceId("trace-" + seed.requestId())
+        .params(Map.of())
+        .build();
     LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();

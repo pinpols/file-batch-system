@@ -55,54 +55,80 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
-  @Mock private WorkflowDefinitionMapper workflowDefinitionMapper;
-  @Mock private WorkflowNodeMapper workflowNodeMapper;
-  @Mock private WorkflowEdgeMapper workflowEdgeMapper;
-  @Mock private PipelineDefinitionMapper pipelineDefinitionMapper;
-  @Mock private PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
-  @Mock private FileChannelConfigMapper fileChannelConfigMapper;
-  @Mock private FileTemplateConfigMapper fileTemplateConfigMapper;
-  @Mock private ResourceQueueMapper resourceQueueMapper;
-  @Mock private BatchWindowMapper batchWindowMapper;
-  @Mock private BusinessCalendarMapper businessCalendarMapper;
-  @Mock private CalendarHolidayMapper calendarHolidayMapper;
-  @Mock private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
-  @Mock private AlertRoutingConfigMapper alertRoutingConfigMapper;
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
+
+  @Mock
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  private WorkflowEdgeMapper workflowEdgeMapper;
+
+  @Mock
+  private PipelineDefinitionMapper pipelineDefinitionMapper;
+
+  @Mock
+  private PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
+
+  @Mock
+  private FileChannelConfigMapper fileChannelConfigMapper;
+
+  @Mock
+  private FileTemplateConfigMapper fileTemplateConfigMapper;
+
+  @Mock
+  private ResourceQueueMapper resourceQueueMapper;
+
+  @Mock
+  private BatchWindowMapper batchWindowMapper;
+
+  @Mock
+  private BusinessCalendarMapper businessCalendarMapper;
+
+  @Mock
+  private CalendarHolidayMapper calendarHolidayMapper;
+
+  @Mock
+  private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+
+  @Mock
+  private AlertRoutingConfigMapper alertRoutingConfigMapper;
 
   private DefaultConsoleTenantConfigInitApplicationService service;
 
   @BeforeEach
   void setUp() {
-    TenantConfigInitApplyHandlers handlers =
-        new TenantConfigInitApplyHandlers(
-            new TenantDefinitionConfigMappers(
-                jobDefinitionMapper,
-                workflowDefinitionMapper,
-                workflowNodeMapper,
-                workflowEdgeMapper,
-                pipelineDefinitionMapper,
-                pipelineStepDefinitionMapper),
-            new PlatformTransactionManager() {
-              @Override
-              public TransactionStatus getTransaction(TransactionDefinition definition) {
-                return new SimpleTransactionStatus();
-              }
+    TenantConfigInitApplyHandlers handlers = new TenantConfigInitApplyHandlers(
+        new TenantDefinitionConfigMappers(
+            jobDefinitionMapper,
+            workflowDefinitionMapper,
+            workflowNodeMapper,
+            workflowEdgeMapper,
+            pipelineDefinitionMapper,
+            pipelineStepDefinitionMapper),
+        new PlatformTransactionManager() {
+          @Override
+          public TransactionStatus getTransaction(TransactionDefinition definition) {
+            return new SimpleTransactionStatus();
+          }
 
-              @Override
-              public void commit(TransactionStatus status) {}
+          @Override
+          public void commit(TransactionStatus status) {}
 
-              @Override
-              public void rollback(TransactionStatus status) {}
-            },
-            new TenantFileConfigApplySupport(fileChannelConfigMapper, fileTemplateConfigMapper),
-            new TenantOperationalConfigApplySupport(
-                resourceQueueMapper,
-                batchWindowMapper,
-                businessCalendarMapper,
-                calendarHolidayMapper,
-                tenantQuotaPolicyMapper,
-                alertRoutingConfigMapper));
+          @Override
+          public void rollback(TransactionStatus status) {}
+        },
+        new TenantFileConfigApplySupport(fileChannelConfigMapper, fileTemplateConfigMapper),
+        new TenantOperationalConfigApplySupport(
+            resourceQueueMapper,
+            batchWindowMapper,
+            businessCalendarMapper,
+            calendarHolidayMapper,
+            tenantQuotaPolicyMapper,
+            alertRoutingConfigMapper));
     ReflectionTestUtils.setField(handlers, "self", handlers);
     service = new DefaultConsoleTenantConfigInitApplicationService(handlers);
     ReflectionTestUtils.setField(service, "self", service);
@@ -122,11 +148,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     assertThat(response.results().get(0).jobDefinitions().created()).isEqualTo(1);
     assertThat(response.results().get(0).jobDefinitions().skipped()).isEqualTo(0);
     verify(jobDefinitionMapper)
-        .insert(
-            argThat(
-                entity ->
-                    "upstream-job".equals(entity.getDependsOnJobCode())
-                        && "t1".equals(entity.getTenantId())));
+        .insert(argThat(entity -> "upstream-job".equals(entity.getDependsOnJobCode())
+            && "t1".equals(entity.getTenantId())));
   }
 
   @Test
@@ -141,11 +164,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     service.batchInit(request, "admin", "batch-test-inc");
 
     verify(jobDefinitionMapper)
-        .insert(
-            argThat(
-                entity ->
-                    "INCREMENTAL".equals(entity.getExecutionMode())
-                        && "updated_at".equals(entity.getWatermarkField())));
+        .insert(argThat(entity -> "INCREMENTAL".equals(entity.getExecutionMode())
+            && "updated_at".equals(entity.getWatermarkField())));
   }
 
   @Test
@@ -282,33 +302,29 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1", "t2"));
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
     when(jobDefinitionMapper.selectByUniqueKey("t2", "job-1")).thenReturn(null);
-    when(jobDefinitionMapper.insert(any()))
-        .thenAnswer(
-            inv -> {
-              JobDefinitionEntity e = inv.getArgument(0);
-              if ("t2".equals(e.getTenantId())) {
-                throw new RuntimeException("DB error for t2");
-              }
-              return 1;
-            });
+    when(jobDefinitionMapper.insert(any())).thenAnswer(inv -> {
+      JobDefinitionEntity e = inv.getArgument(0);
+      if ("t2".equals(e.getTenantId())) {
+        throw new RuntimeException("DB error for t2");
+      }
+      return 1;
+    });
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
     // t1 succeeds with 1 created; t2 has 1 failed item but tenant-level success=true
     assertThat(response.totalTenants()).isEqualTo(2);
-    TenantConfigBatchInitResponse.TenantInitResult t1Result =
-        response.results().stream()
-            .filter(r -> "t1".equals(r.tenantId()))
-            .findFirst()
-            .orElseThrow();
+    TenantConfigBatchInitResponse.TenantInitResult t1Result = response.results().stream()
+        .filter(r -> "t1".equals(r.tenantId()))
+        .findFirst()
+        .orElseThrow();
     assertThat(t1Result.success()).isTrue();
     assertThat(t1Result.jobDefinitions().created()).isEqualTo(1);
 
-    TenantConfigBatchInitResponse.TenantInitResult t2Result =
-        response.results().stream()
-            .filter(r -> "t2".equals(r.tenantId()))
-            .findFirst()
-            .orElseThrow();
+    TenantConfigBatchInitResponse.TenantInitResult t2Result = response.results().stream()
+        .filter(r -> "t2".equals(r.tenantId()))
+        .findFirst()
+        .orElseThrow();
     assertThat(t2Result.success()).isTrue();
     assertThat(t2Result.jobDefinitions().failed()).isEqualTo(1);
   }
@@ -340,14 +356,11 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
     assertThat(response.successTenants()).isEqualTo(2);
     assertThat(response.results()).hasSize(2);
-    response
-        .results()
-        .forEach(
-            r -> {
-              assertThat(r.success()).isTrue();
-              assertThat(r.jobDefinitions().created()).isEqualTo(0);
-              assertThat(r.fileChannels().created()).isEqualTo(0);
-            });
+    response.results().forEach(r -> {
+      assertThat(r.success()).isTrue();
+      assertThat(r.jobDefinitions().created()).isEqualTo(0);
+      assertThat(r.fileChannels().created()).isEqualTo(0);
+    });
   }
 
   // ------------------------------------------------------------------ workflow definitions

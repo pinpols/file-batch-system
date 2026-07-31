@@ -42,18 +42,22 @@ import org.mockito.MockitoAnnotations;
  */
 class DefaultLaunchValidationServiceTest {
 
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private OrchestratorConfigCacheService configCacheService;
-  @Mock private JobInstanceMapper jobInstanceMapper;
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private OrchestratorConfigCacheService configCacheService;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
 
   private DefaultLaunchValidationService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service =
-        new DefaultLaunchValidationService(
-            triggerRequestMapper, configCacheService, jobInstanceMapper);
+    service = new DefaultLaunchValidationService(
+        triggerRequestMapper, configCacheService, jobInstanceMapper);
   }
 
   private LaunchRequest validRequest() {
@@ -70,9 +74,8 @@ class DefaultLaunchValidationServiceTest {
   @Test
   @DisplayName("缺 tenantId → INVALID_ARGUMENT")
   void rejects_missing_tenantId() {
-    LaunchRequest bad =
-        new LaunchRequest(
-            null, "j", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
+    LaunchRequest bad = new LaunchRequest(
+        null, "j", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
     assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
     verify(triggerRequestMapper, never()).selectByTenantAndRequestId(anyString(), anyString());
   }
@@ -80,9 +83,8 @@ class DefaultLaunchValidationServiceTest {
   @Test
   @DisplayName("缺 jobCode → INVALID_ARGUMENT")
   void rejects_missing_jobCode() {
-    LaunchRequest bad =
-        new LaunchRequest(
-            "ta", "  ", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
+    LaunchRequest bad = new LaunchRequest(
+        "ta", "  ", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
     assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
   }
 
@@ -106,7 +108,8 @@ class DefaultLaunchValidationServiceTest {
   @DisplayName("trigger_request 不存在 → NOT_FOUND,且不打 REJECTED(尚未确认 request 存在)")
   void rejectsWhenTriggerRequestMissing() {
     LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001"))).thenReturn(null);
+    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
+        .thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req))
         .isInstanceOf(BizException.class)
@@ -137,7 +140,8 @@ class DefaultLaunchValidationServiceTest {
         .thenReturn(triggerRequestEntity());
     when(configCacheService.findEnabledJobDefinition(eq("ta"), eq("job_ok")))
         .thenReturn(jobDefinitionEntity(JobType.WORKFLOW.code()));
-    when(configCacheService.findEnabledWorkflowDefinition(eq("ta"), eq("job_ok"))).thenReturn(null);
+    when(configCacheService.findEnabledWorkflowDefinition(eq("ta"), eq("job_ok")))
+        .thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
     verify(triggerRequestMapper)
@@ -151,7 +155,8 @@ class DefaultLaunchValidationServiceTest {
     TriggerRequestEntity trig = triggerRequestEntity();
     JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.GENERAL.code());
 
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001"))).thenReturn(trig);
+    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
+        .thenReturn(trig);
     when(configCacheService.findEnabledJobDefinition(eq("ta"), eq("job_ok"))).thenReturn(jobDef);
     when(jobInstanceMapper.selectByTenantAndDedupKey(eq("ta"), anyString())).thenReturn(null);
 
@@ -173,9 +178,11 @@ class DefaultLaunchValidationServiceTest {
         new WorkflowDefinitionEntity(1L, "ta", "job_ok", "wf-name", "DAG", 1, true);
     JobInstanceEntity existing = new JobInstanceEntity();
 
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001"))).thenReturn(trig);
+    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
+        .thenReturn(trig);
     when(configCacheService.findEnabledJobDefinition(eq("ta"), eq("job_ok"))).thenReturn(jobDef);
-    when(configCacheService.findEnabledWorkflowDefinition(eq("ta"), eq("job_ok"))).thenReturn(wf);
+    when(configCacheService.findEnabledWorkflowDefinition(eq("ta"), eq("job_ok")))
+        .thenReturn(wf);
     when(jobInstanceMapper.selectByTenantAndDedupKey(eq("ta"), anyString())).thenReturn(existing);
 
     LaunchValidationService.LaunchLoadResult result = service.load(req);

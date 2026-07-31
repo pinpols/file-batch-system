@@ -20,9 +20,14 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @ExtendWith(MockitoExtension.class)
 class ConsoleRealtimeRedisPublisherTest {
 
-  @Mock private StringRedisTemplate redisTemplate;
-  @Mock private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
-  @Mock private ConsoleRealtimeReplayStore replayStore;
+  @Mock
+  private StringRedisTemplate redisTemplate;
+
+  @Mock
+  private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
+
+  @Mock
+  private ConsoleRealtimeReplayStore replayStore;
 
   private ConsoleRealtimeRedisPublisher publisher;
 
@@ -42,14 +47,8 @@ class ConsoleRealtimeRedisPublisherTest {
   @Test
   void publishAppendsToReplayStoreAndSendsToChannel() {
     when(instanceIdProvider.instanceId()).thenReturn("instance-1");
-    ConsoleSseEvent event =
-        new ConsoleSseEvent(
-            "t1",
-            "job-instance",
-            "JOB_STATUS",
-            "cursor-abc",
-            "payload",
-            BatchDateTimeSupport.utcNow());
+    ConsoleSseEvent event = new ConsoleSseEvent(
+        "t1", "job-instance", "JOB_STATUS", "cursor-abc", "payload", BatchDateTimeSupport.utcNow());
 
     publisher.publish(event);
 
@@ -70,9 +69,8 @@ class ConsoleRealtimeRedisPublisherTest {
   @Test
   void publishNullDataSerializesAsEmptyString() {
     when(instanceIdProvider.instanceId()).thenReturn("instance-2");
-    ConsoleSseEvent event =
-        new ConsoleSseEvent(
-            "t1", "ops", "SUMMARY", "cursor-1", null, BatchDateTimeSupport.utcNow());
+    ConsoleSseEvent event = new ConsoleSseEvent(
+        "t1", "ops", "SUMMARY", "cursor-1", null, BatchDateTimeSupport.utcNow());
 
     publisher.publish(event);
 

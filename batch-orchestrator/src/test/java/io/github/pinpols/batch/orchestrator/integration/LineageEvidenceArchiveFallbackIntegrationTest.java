@@ -39,9 +39,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private LineageEvidenceService lineageEvidenceService;
-  @Autowired private LineageEvidenceMapper lineageEvidenceMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private LineageEvidenceService lineageEvidenceService;
+
+  @Autowired
+  private LineageEvidenceMapper lineageEvidenceMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   @SuppressWarnings("unchecked")
@@ -107,14 +112,16 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
     insertArchivedDispatchRecord(tenantB, fileB, null);
 
     // job_instance: A 看不到 B 的实例；B 自己能看到
-    assertThat(lineageEvidenceMapper.selectArchivedJobInstance(tenantA, instanceB)).isNull();
+    assertThat(lineageEvidenceMapper.selectArchivedJobInstance(tenantA, instanceB))
+        .isNull();
     Map<String, Object> bInstance =
         lineageEvidenceMapper.selectArchivedJobInstance(tenantB, instanceB);
     assertThat(bInstance).isNotNull();
     assertThat(bInstance.get("tenant_id")).isEqualTo(tenantB);
 
     // pipeline_instance: 用 B 的 jobInstanceId 查 A → 空（无 tenant 过滤则会漏 B 的 pipeline）
-    assertThat(lineageEvidenceMapper.selectArchivedPipelineInstances(tenantA, instanceB)).isEmpty();
+    assertThat(lineageEvidenceMapper.selectArchivedPipelineInstances(tenantA, instanceB))
+        .isEmpty();
     assertThat(lineageEvidenceMapper.selectArchivedPipelineInstances(tenantB, instanceB))
         .hasSize(1);
 
@@ -165,13 +172,7 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
         ) values (?, 1, 'LINEAGE_JOB', ?, current_date, 'MANUAL', 'SUCCESS', 5, ?, 1, 1, 0, ?, ?,
                   now())
         returning id
-        """,
-        Long.class,
-        tenant,
-        unique("inst"),
-        unique("dedup"),
-        unique("trace"),
-        relatedFileId);
+        """, Long.class, tenant, unique("inst"), unique("dedup"), unique("trace"), relatedFileId);
   }
 
   private long insertArchivedPipelineInstance(String tenant, long jobInstanceId, long fileId) {
@@ -182,27 +183,17 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
           related_job_instance_id, run_status, trace_id, finished_at
         ) values (?, 1, 'LINEAGE_JOB', 'IMPORT', ?, ?, 'SUCCESS', ?, now())
         returning id
-        """,
-        Long.class,
-        tenant,
-        fileId,
-        jobInstanceId,
-        unique("trace"));
+        """, Long.class, tenant, fileId, jobInstanceId, unique("trace"));
   }
 
   private long insertArchivedDispatchRecord(String tenant, long fileId, Long pipelineInstanceId) {
-    return jdbcTemplate.queryForObject(
-        """
+    return jdbcTemplate.queryForObject("""
         insert into archive.file_dispatch_record_archive(
           tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target,
           dispatch_status, dispatch_attempt, receipt_status, dispatched_at
         ) values (?, ?, ?, 'CH_MAIN', 'sftp://target', 'ACKED', 1, 'SUCCESS', now())
         returning id
-        """,
-        Long.class,
-        tenant,
-        fileId,
-        pipelineInstanceId);
+        """, Long.class, tenant, fileId, pipelineInstanceId);
   }
 
   private long insertLiveResultVersion(String tenant, long jobInstanceId, String payloadRef) {
@@ -214,12 +205,7 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
         ) values (?, ?, 1, ?, 'EFFECTIVE', current_timestamp, 'FILE_RECORD', ?,
                   current_timestamp, 'it', 'AUTO_LATEST')
         returning id
-        """,
-        Long.class,
-        tenant,
-        unique("bizkey"),
-        jobInstanceId,
-        payloadRef);
+        """, Long.class, tenant, unique("bizkey"), jobInstanceId, payloadRef);
   }
 
   private static long longValue(Object value) {

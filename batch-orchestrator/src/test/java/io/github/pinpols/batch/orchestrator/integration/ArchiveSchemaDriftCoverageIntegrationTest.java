@@ -40,17 +40,19 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
   /** 已知未注册但故意豁免的 archive 表(临时归档 / 工具表)。 任何新增豁免必须带注释说明原因,代码审查时拒收"无故跳过登记"。 */
   private static final Set<String> EXEMPTED_ARCHIVE_TABLES = Set.of();
 
-  @Autowired private ArchiveSchemaDriftCheck check;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private ArchiveSchemaDriftCheck check;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void everyArchiveTableMustBeRegisteredInArchivedTables() {
-    List<String> physicalArchiveTables =
-        jdbcTemplate.queryForList(
-            "SELECT table_name FROM information_schema.tables"
-                + " WHERE table_schema = 'archive' AND table_name LIKE '%_archive'"
-                + " ORDER BY table_name",
-            String.class);
+    List<String> physicalArchiveTables = jdbcTemplate.queryForList(
+        "SELECT table_name FROM information_schema.tables"
+            + " WHERE table_schema = 'archive' AND table_name LIKE '%_archive'"
+            + " ORDER BY table_name",
+        String.class);
 
     Set<String> registered = registeredArchivedTables();
 
@@ -65,9 +67,8 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
     Set<String> missing = new HashSet<>(physicalHotNames);
     missing.removeAll(registered);
     assertThat(missing)
-        .as(
-            "下列 archive.*_archive 表存在于 DB 但未在 ArchiveSchemaDriftCheck.ARCHIVED_TABLES 登记 — "
-                + "新加归档表必须同步登记,否则列差异静默漏过。如确为临时表请加入 EXEMPTED_ARCHIVE_TABLES 并注释原因。")
+        .as("下列 archive.*_archive 表存在于 DB 但未在 ArchiveSchemaDriftCheck.ARCHIVED_TABLES 登记 — "
+            + "新加归档表必须同步登记,否则列差异静默漏过。如确为临时表请加入 EXEMPTED_ARCHIVE_TABLES 并注释原因。")
         .isEmpty();
   }
 
@@ -81,18 +82,19 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
       if (check.columnsOf("archive", name + "_archive").isEmpty()) missingCold.add(name);
     }
     assertThat(missingHot).as("ARCHIVED_TABLES 登记的 hot 表在 batch schema 中不存在").isEmpty();
-    assertThat(missingCold).as("ARCHIVED_TABLES 登记的 cold 表在 archive schema 中不存在").isEmpty();
+    assertThat(missingCold)
+        .as("ARCHIVED_TABLES 登记的 cold 表在 archive schema 中不存在")
+        .isEmpty();
   }
 
   @Test
   void registeredCountMatchesPhysicalArchiveCount() {
     // 数量级冗余守护:登记数应与 DB 中物理 archive 表数(去豁免后)一致
-    int physical =
-        jdbcTemplate.queryForObject(
-                "SELECT count(*)::int FROM information_schema.tables"
-                    + " WHERE table_schema = 'archive' AND table_name LIKE '%_archive'",
-                Integer.class)
-            - EXEMPTED_ARCHIVE_TABLES.size();
+    int physical = jdbcTemplate.queryForObject(
+            "SELECT count(*)::int FROM information_schema.tables"
+                + " WHERE table_schema = 'archive' AND table_name LIKE '%_archive'",
+            Integer.class)
+        - EXEMPTED_ARCHIVE_TABLES.size();
     int registered = registeredArchivedTables().size();
     assertThat(registered)
         .as("ARCHIVED_TABLES 数(%d) ≠ 物理 archive.*_archive 表数(%d),登记漂移", registered, physical)

@@ -57,13 +57,12 @@ public class RlsClosedWorldChecker {
    * 闭世界扫真实 biz 表:只取普通表('r')+ 分区父表('p'),用 {@code relispartition=false} 排除分区子表(RLS 加父表、子表继承,不该被当缺
    * policy 误报)。
    */
-  private static final String LIST_BIZ_TABLES_SQL =
-      "SELECT c.relname FROM pg_class c "
-          + "JOIN pg_namespace n ON n.oid = c.relnamespace "
-          + "JOIN information_schema.columns col "
-          + "ON col.table_schema = n.nspname AND col.table_name = c.relname "
-          + "AND col.column_name = 'tenant_id' "
-          + "WHERE n.nspname = ? AND c.relkind IN ('r','p') AND c.relispartition = false";
+  private static final String LIST_BIZ_TABLES_SQL = "SELECT c.relname FROM pg_class c "
+      + "JOIN pg_namespace n ON n.oid = c.relnamespace "
+      + "JOIN information_schema.columns col "
+      + "ON col.table_schema = n.nspname AND col.table_name = c.relname "
+      + "AND col.column_name = 'tenant_id' "
+      + "WHERE n.nspname = ? AND c.relkind IN ('r','p') AND c.relispartition = false";
 
   private static final String CHECK_ENABLE_FORCE_SQL =
       "SELECT relrowsecurity, relforcerowsecurity FROM pg_class c "
@@ -236,9 +235,8 @@ public class RlsClosedWorldChecker {
   }
 
   private boolean tableExists(Connection conn, String schema, String table) throws SQLException {
-    try (PreparedStatement ps =
-        conn.prepareStatement(
-            "SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ?")) {
+    try (PreparedStatement ps = conn.prepareStatement(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ?")) {
       ps.setString(1, schema);
       ps.setString(2, table);
       try (ResultSet rs = ps.executeQuery()) {

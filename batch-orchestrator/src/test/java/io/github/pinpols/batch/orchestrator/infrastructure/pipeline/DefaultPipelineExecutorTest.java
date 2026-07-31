@@ -114,16 +114,14 @@ class DefaultPipelineExecutorTest {
     defaultRoute.setPriority(5);
 
     Step mockStep = mock(Step.class);
-    when(mockStep.execute(any(), any()))
-        .thenAnswer(
-            invocation -> {
-              WorkerRouteModel usedRoute = invocation.getArgument(1);
-              // the step-level workerType should override default
-              assertThat(usedRoute.getWorkerType()).isEqualTo("EXPORT");
-              assertThat(usedRoute.getCapabilityTags()).contains("HIGH_MEM");
-              assertThat(usedRoute.getResourceProfile()).isEqualTo("large");
-              return new StepResult();
-            });
+    when(mockStep.execute(any(), any())).thenAnswer(invocation -> {
+      WorkerRouteModel usedRoute = invocation.getArgument(1);
+      // the step-level workerType should override default
+      assertThat(usedRoute.getWorkerType()).isEqualTo("EXPORT");
+      assertThat(usedRoute.getCapabilityTags()).contains("HIGH_MEM");
+      assertThat(usedRoute.getResourceProfile()).isEqualTo("large");
+      return new StepResult();
+    });
     when(stepRegistry.find("S1")).thenReturn(Optional.of(mockStep));
 
     ExecutionContext context = contextWithSteps(List.of(s1));
@@ -140,13 +138,11 @@ class DefaultPipelineExecutorTest {
     defaultRoute.setWorkerType("IMPORT");
 
     Step mockStep = mock(Step.class);
-    when(mockStep.execute(any(), any()))
-        .thenAnswer(
-            invocation -> {
-              WorkerRouteModel usedRoute = invocation.getArgument(1);
-              assertThat(usedRoute.getWorkerType()).isEqualTo("IMPORT");
-              return new StepResult();
-            });
+    when(mockStep.execute(any(), any())).thenAnswer(invocation -> {
+      WorkerRouteModel usedRoute = invocation.getArgument(1);
+      assertThat(usedRoute.getWorkerType()).isEqualTo("IMPORT");
+      return new StepResult();
+    });
     when(stepRegistry.find("S1")).thenReturn(Optional.of(mockStep));
 
     ExecutionContext context = contextWithSteps(List.of(s1));
@@ -166,13 +162,11 @@ class DefaultPipelineExecutorTest {
     when(workerRouter.route(anyString(), anyString(), anyString())).thenReturn(routed);
 
     Step mockStep = mock(Step.class);
-    when(mockStep.execute(any(), any()))
-        .thenAnswer(
-            invocation -> {
-              WorkerRouteModel usedRoute = invocation.getArgument(1);
-              assertThat(usedRoute.getWorkerType()).isEqualTo("DISPATCH");
-              return new StepResult();
-            });
+    when(mockStep.execute(any(), any())).thenAnswer(invocation -> {
+      WorkerRouteModel usedRoute = invocation.getArgument(1);
+      assertThat(usedRoute.getWorkerType()).isEqualTo("DISPATCH");
+      return new StepResult();
+    });
     when(stepRegistry.find("S1")).thenReturn(Optional.of(mockStep));
 
     ExecutionContext context = contextWithSteps(List.of(s1));

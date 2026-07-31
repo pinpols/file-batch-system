@@ -21,13 +21,17 @@ import org.springframework.scheduling.quartz.SchedulerFactoryBean;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private Scheduler scheduler;
+  @Autowired
+  private Scheduler scheduler;
 
-  @Autowired private TriggerRegistrationService triggerRegistrationService;
+  @Autowired
+  private TriggerRegistrationService triggerRegistrationService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private DataSource dataSource;
+  @Autowired
+  private DataSource dataSource;
 
   @Test
   void shouldPersistQuartzJobAndTriggerIntoJdbcStore() throws Exception {
@@ -54,25 +58,17 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
       assertThat(scheduler.getMetaData().isJobStoreClustered()).isTrue();
 
       Integer jobDetailCount =
-          jdbcTemplate.queryForObject(
-              """
+          jdbcTemplate.queryForObject("""
               select count(*)::int
               from quartz.QRTZ_JOB_DETAILS
               where JOB_NAME = ? and JOB_GROUP = ?
-              """,
-              Integer.class,
-              jobKeyName,
-              "batch-trigger");
+              """, Integer.class, jobKeyName, "batch-trigger");
       Integer triggerCount =
-          jdbcTemplate.queryForObject(
-              """
+          jdbcTemplate.queryForObject("""
               select count(*)::int
               from quartz.QRTZ_CRON_TRIGGERS
               where TRIGGER_NAME = ? and TRIGGER_GROUP = ?
-              """,
-              Integer.class,
-              jobKeyName,
-              "batch-trigger");
+              """, Integer.class, jobKeyName, "batch-trigger");
 
       assertThat(jobDetailCount).isEqualTo(1);
       assertThat(triggerCount).isEqualTo(1);
@@ -116,25 +112,18 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void insertBusinessCalendar(String tenantId, String calendarCode) {
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
             holiday_roll_rule, catch_up_policy, catch_up_max_days,
             cutoff_time, late_arrival_tolerance_min, sla_offset_min, enabled
         ) values (?, ?, ?, ?, 'SKIP', 'AUTO', 3, ?, 30, 120, true)
-        """,
-        tenantId,
-        calendarCode,
-        calendarCode,
-        "UTC",
-        LocalTime.of(0, 0));
+        """, tenantId, calendarCode, calendarCode, "UTC", LocalTime.of(0, 0));
   }
 
   private void insertCronJobDefinition(
       String tenantId, String jobCode, String calendarCode, String cronExpr) {
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type,
             schedule_expr, timezone, priority, queue_code, worker_group,
@@ -142,13 +131,7 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
             retry_max_count, timeout_seconds, enabled, version
         ) values (?, ?, ?, 'GENERAL', 'IT', 'CRON', ?, 'UTC', 5, 'q-quartz', ?,
             ?, 'SCHEDULED', false, 'NONE', 'NONE', 0, 0, true, 1)
-        """,
-        tenantId,
-        jobCode,
-        jobCode,
-        cronExpr,
-        jobCode,
-        calendarCode);
+        """, tenantId, jobCode, jobCode, cronExpr, jobCode, calendarCode);
   }
 
   private Properties clusterProperties(String instanceId) throws Exception {
@@ -179,11 +162,10 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int querySchedulerStateRows(String schedulerName) {
-    Integer count =
-        jdbcTemplate.queryForObject(
-            "select count(*)::int from quartz.QRTZ_SCHEDULER_STATE where SCHED_NAME = ?",
-            Integer.class,
-            schedulerName);
+    Integer count = jdbcTemplate.queryForObject(
+        "select count(*)::int from quartz.QRTZ_SCHEDULER_STATE where SCHED_NAME = ?",
+        Integer.class,
+        schedulerName);
     return count == null ? 0 : count;
   }
 }

@@ -27,10 +27,9 @@ public record HttpAtomicConfig(
   public HttpAtomicConfig {
     Objects.requireNonNull(taskType, "taskType");
     blockedHostPatterns = blockedHostPatterns == null ? Set.of() : Set.copyOf(blockedHostPatterns);
-    allowedMethods =
-        allowedMethods == null || allowedMethods.isEmpty()
-            ? DEFAULT_METHODS
-            : Set.copyOf(allowedMethods);
+    allowedMethods = allowedMethods == null || allowedMethods.isEmpty()
+        ? DEFAULT_METHODS
+        : Set.copyOf(allowedMethods);
     if (timeoutSeconds <= 0) {
       throw new IllegalArgumentException("timeoutSeconds must be > 0");
     }

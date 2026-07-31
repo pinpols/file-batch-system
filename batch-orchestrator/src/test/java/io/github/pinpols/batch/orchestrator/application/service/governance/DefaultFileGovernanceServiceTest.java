@@ -49,12 +49,23 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultFileGovernanceServiceTest {
 
-  @Mock private FileGovernanceRepository fileGovernanceRepository;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private TaskDispatchOutboxService taskDispatchOutboxService;
-  @Mock private S3GovernanceStorage s3GovernanceStorage;
+  @Mock
+  private FileGovernanceRepository fileGovernanceRepository;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private TaskDispatchOutboxService taskDispatchOutboxService;
+
+  @Mock
+  private S3GovernanceStorage s3GovernanceStorage;
 
   private final FileGovernanceProperties fileGovernanceProperties = new FileGovernanceProperties();
   private final BatchSecurityProperties batchSecurityProperties = new BatchSecurityProperties();
@@ -63,16 +74,15 @@ class DefaultFileGovernanceServiceTest {
 
   @BeforeEach
   void setUp() {
-    service =
-        new DefaultFileGovernanceService(
-            fileGovernanceRepository,
-            jobTaskMapper,
-            jobPartitionMapper,
-            jobInstanceMapper,
-            taskDispatchOutboxService,
-            fileGovernanceProperties,
-            s3GovernanceStorage,
-            batchSecurityProperties);
+    service = new DefaultFileGovernanceService(
+        fileGovernanceRepository,
+        jobTaskMapper,
+        jobPartitionMapper,
+        jobInstanceMapper,
+        taskDispatchOutboxService,
+        fileGovernanceProperties,
+        s3GovernanceStorage,
+        batchSecurityProperties);
   }
 
   // ── validateCommand / validateArrivalGroupCommand ────────────────────────
@@ -94,23 +104,21 @@ class DefaultFileGovernanceServiceTest {
 
   @Test
   void shouldThrow_whenArrivalGroupCodeBlank() {
-    ArrivalGroupGovernanceCommand cmd =
-        ArrivalGroupGovernanceCommand.builder()
-            .tenantId("t1")
-            .fileGroupCode("")
-            .action("CONTINUE_WAITING")
-            .build();
+    ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
+        .tenantId("t1")
+        .fileGroupCode("")
+        .action("CONTINUE_WAITING")
+        .build();
     assertThatThrownBy(() -> service.operateArrivalGroup(cmd)).isInstanceOf(BizException.class);
   }
 
   @Test
   void shouldThrow_whenArrivalActionBlank() {
-    ArrivalGroupGovernanceCommand cmd =
-        ArrivalGroupGovernanceCommand.builder()
-            .tenantId("t1")
-            .fileGroupCode("grp")
-            .action("")
-            .build();
+    ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
+        .tenantId("t1")
+        .fileGroupCode("grp")
+        .action("")
+        .build();
     assertThatThrownBy(() -> service.operateArrivalGroup(cmd)).isInstanceOf(BizException.class);
   }
 
@@ -268,10 +276,9 @@ class DefaultFileGovernanceServiceTest {
   void shouldReturnPresignedUrl_forPlainFile() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(
-            Map.of(
-                "storage_bucket", "bucket-a",
-                "storage_path", "path/to/file.csv"));
+        .thenReturn(Map.of(
+            "storage_bucket", "bucket-a",
+            "storage_path", "path/to/file.csv"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
     when(s3GovernanceStorage.createPresignedDownloadUrl(
             eq("bucket-a"), eq("path/to/file.csv"), anyInt()))
@@ -290,7 +297,8 @@ class DefaultFileGovernanceServiceTest {
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
         .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
-    when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), eq(60))).thenReturn("u");
+    when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), eq(60)))
+        .thenReturn("u");
 
     String url = service.presignFileDownload(cmd);
 
@@ -304,11 +312,10 @@ class DefaultFileGovernanceServiceTest {
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
         .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L))
-        .thenReturn(
-            Map.of(
-                "content_encryption_enabled", true,
-                "download_requires_approval", true,
-                "encryption_key_ref", "kms-1"));
+        .thenReturn(Map.of(
+            "content_encryption_enabled", true,
+            "download_requires_approval", true,
+            "encryption_key_ref", "kms-1"));
 
     String url = service.presignFileDownload(cmd);
 
@@ -364,10 +371,9 @@ class DefaultFileGovernanceServiceTest {
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
         .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L))
-        .thenReturn(
-            Map.of(
-                "content_encryption_enabled", true,
-                "download_requires_approval", true));
+        .thenReturn(Map.of(
+            "content_encryption_enabled", true,
+            "download_requires_approval", true));
     when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), anyInt()))
         .thenReturn("https://direct-objectStore");
 
@@ -497,16 +503,15 @@ class DefaultFileGovernanceServiceTest {
 
   @Test
   void shouldReturnWaitingArrival_andUpdateAllFiles_whenContinueWaiting() {
-    ArrivalGroupGovernanceCommand cmd =
-        ArrivalGroupGovernanceCommand.builder()
-            .tenantId("t1")
-            .fileGroupCode("grp")
-            .action("CONTINUE_WAITING")
-            .operatorId("op-1")
-            .traceId("tr")
-            .reason("延期")
-            .extendWaitSeconds(120L)
-            .build();
+    ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
+        .tenantId("t1")
+        .fileGroupCode("grp")
+        .action("CONTINUE_WAITING")
+        .operatorId("op-1")
+        .traceId("tr")
+        .reason("延期")
+        .extendWaitSeconds(120L)
+        .build();
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
         .thenReturn(List.of(fileMap(11L, Map.of()), fileMap(12L, Map.of())));
 
@@ -531,10 +536,9 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowStateConflict_whenArrivalGroupSpansBizDatesWithoutBizDate() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("TRIGGER_NOW");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
-        .thenReturn(
-            List.of(
-                fileMap(11L, Map.of("biz_date", "2026-06-21")),
-                fileMap(12L, Map.of("biz_date", "2026-06-20"))));
+        .thenReturn(List.of(
+            fileMap(11L, Map.of("biz_date", "2026-06-21")),
+            fileMap(12L, Map.of("biz_date", "2026-06-20"))));
 
     assertThatThrownBy(() -> service.operateArrivalGroup(cmd))
         .isInstanceOf(BizException.class)
@@ -545,16 +549,15 @@ class DefaultFileGovernanceServiceTest {
 
   @Test
   void shouldScopeArrivalGroupOperationByBizDateWhenProvided() {
-    ArrivalGroupGovernanceCommand cmd =
-        ArrivalGroupGovernanceCommand.builder()
-            .tenantId("t1")
-            .fileGroupCode("grp")
-            .bizDate("2026-06-21")
-            .action("TRIGGER_NOW")
-            .operatorId("op")
-            .traceId("tr")
-            .reason("r")
-            .build();
+    ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
+        .tenantId("t1")
+        .fileGroupCode("grp")
+        .bizDate("2026-06-21")
+        .action("TRIGGER_NOW")
+        .operatorId("op")
+        .traceId("tr")
+        .reason("r")
+        .build();
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp", "2026-06-21"))
         .thenReturn(List.of(fileMap(11L, Map.of("biz_date", "2026-06-21"))));
 
@@ -637,14 +640,13 @@ class DefaultFileGovernanceServiceTest {
   @Test
   void shouldUseDefaultManualWaitExtension_whenExtendSecondsNullOrZero() {
     fileGovernanceProperties.getArrival().setManualWaitExtensionSeconds(999L);
-    ArrivalGroupGovernanceCommand cmd =
-        ArrivalGroupGovernanceCommand.builder()
-            .tenantId("t1")
-            .fileGroupCode("grp")
-            .action("CONTINUE_WAITING")
-            .operatorId("op")
-            .extendWaitSeconds(0L)
-            .build();
+    ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
+        .tenantId("t1")
+        .fileGroupCode("grp")
+        .action("CONTINUE_WAITING")
+        .operatorId("op")
+        .extendWaitSeconds(0L)
+        .build();
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
         .thenReturn(List.of(fileMap(11L, Map.of())));
 
@@ -659,14 +661,13 @@ class DefaultFileGovernanceServiceTest {
   void shouldCreateUploadSessionAsObjectStoreBackedRecord() {
     when(s3GovernanceStorage.defaultBucket()).thenReturn("bucket-a");
     when(fileGovernanceRepository.createReconciledFileRecord(any())).thenReturn(42L);
-    FileUploadSessionCommand command =
-        FileUploadSessionCommand.builder()
-            .tenantId("t1")
-            .channelCode("ch-1")
-            .fileName("../中文 order.csv")
-            .operatorId("op")
-            .traceId("trace")
-            .build();
+    FileUploadSessionCommand command = FileUploadSessionCommand.builder()
+        .tenantId("t1")
+        .channelCode("ch-1")
+        .fileName("../中文 order.csv")
+        .operatorId("op")
+        .traceId("trace")
+        .build();
 
     Map<String, Object> response = service.createUploadSession(command);
 

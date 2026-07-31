@@ -38,9 +38,8 @@ public class DefaultConsoleOutboxOpsApplicationService
         "dashboard:" + ConsoleQueryCacheService.keySegment(resolved) + ":outbox-stats",
         ConsoleQueryCacheService.DASHBOARD_TTL,
         ConsoleOutboxStatsResponse.class,
-        () ->
-            new ConsoleOutboxStatsResponse(
-                resolved, consoleOutboxEventReadMapper.statsByStatus(resolved)));
+        () -> new ConsoleOutboxStatsResponse(
+            resolved, consoleOutboxEventReadMapper.statsByStatus(resolved)));
   }
 
   @Override

@@ -27,7 +27,8 @@ class BatchPlatformClientConfigValidationTest {
   @Test
   @DisplayName("heartbeatInterval < 1s → IllegalStateException(防 orchestrator 心跳过载)")
   void shouldRejectHeartbeatTooSmall() {
-    BatchPlatformClientConfig c = valid().heartbeatInterval(Duration.ofMillis(500)).build();
+    BatchPlatformClientConfig c =
+        valid().heartbeatInterval(Duration.ofMillis(500)).build();
     assertThatThrownBy(c::validate)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("heartbeatInterval")
@@ -38,12 +39,11 @@ class BatchPlatformClientConfigValidationTest {
   @DisplayName("heartbeatInterval = 2s + lease=5s + http=1s → 接受(各规则边界)")
   void shouldAcceptHeartbeatNearFloor() {
     // 注:hb=1s 时 lease 上限 = 3s 但 lease 下限 = 5s 自相冲突,故下限是 hb=2s 起
-    BatchPlatformClientConfig ok =
-        valid()
-            .heartbeatInterval(Duration.ofSeconds(2))
-            .leaseRenewInterval(Duration.ofSeconds(5))
-            .httpTimeout(Duration.ofSeconds(1))
-            .build();
+    BatchPlatformClientConfig ok = valid()
+        .heartbeatInterval(Duration.ofSeconds(2))
+        .leaseRenewInterval(Duration.ofSeconds(5))
+        .httpTimeout(Duration.ofSeconds(1))
+        .build();
     assertThatCode(ok::validate).doesNotThrowAnyException();
   }
 
@@ -51,7 +51,8 @@ class BatchPlatformClientConfigValidationTest {
   @Test
   @DisplayName("leaseRenewInterval < 5s → IllegalStateException")
   void shouldRejectLeaseTooSmall() {
-    BatchPlatformClientConfig c = valid().leaseRenewInterval(Duration.ofSeconds(3)).build();
+    BatchPlatformClientConfig c =
+        valid().leaseRenewInterval(Duration.ofSeconds(3)).build();
     assertThatThrownBy(c::validate)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("leaseRenewInterval")
@@ -63,12 +64,11 @@ class BatchPlatformClientConfigValidationTest {
   @DisplayName("leaseRenewInterval > heartbeatInterval × 3 → IllegalStateException(防 task 被误回收)")
   void shouldRejectLeaseGreaterThanThreeHeartbeats() {
     // hb=10s × 3 = 30s,lease=40s 超出
-    BatchPlatformClientConfig c =
-        valid()
-            .heartbeatInterval(Duration.ofSeconds(10))
-            .leaseRenewInterval(Duration.ofSeconds(40))
-            .httpTimeout(Duration.ofSeconds(5))
-            .build();
+    BatchPlatformClientConfig c = valid()
+        .heartbeatInterval(Duration.ofSeconds(10))
+        .leaseRenewInterval(Duration.ofSeconds(40))
+        .httpTimeout(Duration.ofSeconds(5))
+        .build();
     assertThatThrownBy(c::validate)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("leaseRenewInterval")
@@ -78,12 +78,11 @@ class BatchPlatformClientConfigValidationTest {
   @Test
   @DisplayName("leaseRenewInterval = heartbeatInterval × 3 → 接受(边界)")
   void shouldAcceptLeaseAtUpperBound() {
-    BatchPlatformClientConfig c =
-        valid()
-            .heartbeatInterval(Duration.ofSeconds(10))
-            .leaseRenewInterval(Duration.ofSeconds(30))
-            .httpTimeout(Duration.ofSeconds(5))
-            .build();
+    BatchPlatformClientConfig c = valid()
+        .heartbeatInterval(Duration.ofSeconds(10))
+        .leaseRenewInterval(Duration.ofSeconds(30))
+        .httpTimeout(Duration.ofSeconds(5))
+        .build();
     assertThatCode(c::validate).doesNotThrowAnyException();
   }
 
@@ -92,12 +91,11 @@ class BatchPlatformClientConfigValidationTest {
   @DisplayName("httpTimeout > heartbeatInterval / 2 → IllegalStateException(防超时堆积)")
   void shouldRejectHttpTimeoutTooLarge() {
     // hb=10s / 2 = 5s,httpTimeout=8s 超出
-    BatchPlatformClientConfig c =
-        valid()
-            .heartbeatInterval(Duration.ofSeconds(10))
-            .leaseRenewInterval(Duration.ofSeconds(20))
-            .httpTimeout(Duration.ofSeconds(8))
-            .build();
+    BatchPlatformClientConfig c = valid()
+        .heartbeatInterval(Duration.ofSeconds(10))
+        .leaseRenewInterval(Duration.ofSeconds(20))
+        .httpTimeout(Duration.ofSeconds(8))
+        .build();
     assertThatThrownBy(c::validate)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("httpTimeout")
@@ -107,12 +105,11 @@ class BatchPlatformClientConfigValidationTest {
   @Test
   @DisplayName("httpTimeout = heartbeatInterval / 2 → 接受(边界)")
   void shouldAcceptHttpTimeoutAtUpperBound() {
-    BatchPlatformClientConfig c =
-        valid()
-            .heartbeatInterval(Duration.ofSeconds(10))
-            .leaseRenewInterval(Duration.ofSeconds(20))
-            .httpTimeout(Duration.ofSeconds(5))
-            .build();
+    BatchPlatformClientConfig c = valid()
+        .heartbeatInterval(Duration.ofSeconds(10))
+        .leaseRenewInterval(Duration.ofSeconds(20))
+        .httpTimeout(Duration.ofSeconds(5))
+        .build();
     assertThatCode(c::validate).doesNotThrowAnyException();
   }
 
@@ -126,23 +123,21 @@ class BatchPlatformClientConfigValidationTest {
   @Test
   @DisplayName("BatchPlatformClient.builder 构造时验失败 → IllegalStateException 直接异常退出")
   void shouldFailFastInClientConstructor() {
-    BatchPlatformClientConfig bad = valid().heartbeatInterval(Duration.ofMillis(100)).build();
-    assertThatThrownBy(
-            () ->
-                BatchPlatformClient.builder(bad)
-                    .register(
-                        new SdkTaskHandler() {
-                          @Override
-                          public String taskType() {
-                            return "t";
-                          }
+    BatchPlatformClientConfig bad =
+        valid().heartbeatInterval(Duration.ofMillis(100)).build();
+    assertThatThrownBy(() -> BatchPlatformClient.builder(bad)
+            .register(new SdkTaskHandler() {
+              @Override
+              public String taskType() {
+                return "t";
+              }
 
-                          @Override
-                          public SdkTaskResult execute(SdkTaskContext ctx) {
-                            return SdkTaskResult.ok();
-                          }
-                        })
-                    .build())
+              @Override
+              public SdkTaskResult execute(SdkTaskContext ctx) {
+                return SdkTaskResult.ok();
+              }
+            })
+            .build())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("BatchPlatformClient config invalid");
   }

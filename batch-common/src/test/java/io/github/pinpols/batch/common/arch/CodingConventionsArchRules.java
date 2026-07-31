@@ -29,9 +29,8 @@ public final class CodingConventionsArchRules {
             "io.github.pinpols.batch.common.config..", "io.github.pinpols.batch.common.time..")
         .should(callMethod("java.time.ZoneId", "systemDefault"))
         .allowEmptyShould(true)
-        .because(
-            "CLAUDE.md §时区策略:禁止业务代码 ZoneId.systemDefault();注入 BatchTimezoneProvider"
-                + " 或调用 provider.defaultZone()。白名单 = batch-common.config / batch-common.time。");
+        .because("CLAUDE.md §时区策略:禁止业务代码 ZoneId.systemDefault();注入 BatchTimezoneProvider"
+            + " 或调用 provider.defaultZone()。白名单 = batch-common.config / batch-common.time。");
   }
 
   /**
@@ -43,9 +42,8 @@ public final class CodingConventionsArchRules {
         .doNotHaveFullyQualifiedName("io.github.pinpols.batch.common.utils.EncodingUtils")
         .should(callMethod("java.nio.charset.Charset", "forName"))
         .allowEmptyShould(true)
-        .because(
-            "CLAUDE.md §字符编码:禁止 Charset.forName(\"UTF-8\") / 字面量;改用 StandardCharsets.UTF_8"
-                + " 或 EncodingUtils.resolve(raw)。白名单 = EncodingUtils 自身。");
+        .because("CLAUDE.md §字符编码:禁止 Charset.forName(\"UTF-8\") / 字面量;改用 StandardCharsets.UTF_8"
+            + " 或 EncodingUtils.resolve(raw)。白名单 = EncodingUtils 自身。");
   }
 
   /**
@@ -60,18 +58,16 @@ public final class CodingConventionsArchRules {
         .haveSimpleNameEndingWith("Record")
         .and()
         .haveSimpleNameNotEndingWith("RecordEntity")
-        .and(
-            new DescribedPredicate<>("is not the bare name \"Record\"") {
-              @Override
-              public boolean test(JavaClass clazz) {
-                return !"Record".equals(clazz.getSimpleName());
-              }
-            })
+        .and(new DescribedPredicate<>("is not the bare name \"Record\"") {
+          @Override
+          public boolean test(JavaClass clazz) {
+            return !"Record".equals(clazz.getSimpleName());
+          }
+        })
         .should(existAtAll())
         .allowEmptyShould(true)
-        .because(
-            "CLAUDE.md §持久化(ADR-001):表行/领域类一律 *Entity 后缀,禁 *Record。"
-                + "新增以 Record 结尾的类必须改名 *Entity(例如 ApiKeyEntity / ImportBadRecordEntity)。");
+        .because("CLAUDE.md §持久化(ADR-001):表行/领域类一律 *Entity 后缀,禁 *Record。"
+            + "新增以 Record 结尾的类必须改名 *Entity(例如 ApiKeyEntity / ImportBadRecordEntity)。");
   }
 
   /**
@@ -81,14 +77,12 @@ public final class CodingConventionsArchRules {
    */
   public static ArchRule noTransactionalOnEventListenerRule() {
     return ArchRuleDefinition.noMethods()
-        .should(
-            haveBothAnnotations(
-                "org.springframework.context.event.EventListener",
-                "org.springframework.transaction.annotation.Transactional"))
+        .should(haveBothAnnotations(
+            "org.springframework.context.event.EventListener",
+            "org.springframework.transaction.annotation.Transactional"))
         .allowEmptyShould(true)
-        .because(
-            "CLAUDE.md #4:@EventListener 方法禁直接叠 @Transactional(误用);"
-                + "事件监听不走 Service 代理边界,改用 TransactionTemplate 显式包裹事务。");
+        .because("CLAUDE.md #4:@EventListener 方法禁直接叠 @Transactional(误用);"
+            + "事件监听不走 Service 代理边界,改用 TransactionTemplate 显式包裹事务。");
   }
 
   /**
@@ -98,39 +92,34 @@ public final class CodingConventionsArchRules {
    */
   public static ArchRule noTransactionalOnScheduledRule() {
     return ArchRuleDefinition.noMethods()
-        .should(
-            haveBothAnnotations(
-                "org.springframework.scheduling.annotation.Scheduled",
-                "org.springframework.transaction.annotation.Transactional"))
+        .should(haveBothAnnotations(
+            "org.springframework.scheduling.annotation.Scheduled",
+            "org.springframework.transaction.annotation.Transactional"))
         .allowEmptyShould(true)
-        .because(
-            "CLAUDE.md #4:@Scheduled 方法禁直接叠 @Transactional(误用);"
-                + "调度不走 Service 代理边界,抽 Service 方法或改用 TransactionTemplate。");
+        .because("CLAUDE.md #4:@Scheduled 方法禁直接叠 @Transactional(误用);"
+            + "调度不走 Service 代理边界,抽 Service 方法或改用 TransactionTemplate。");
   }
 
   /** 命中条件 = 方法同时带 triggerAnnotation 与 transactional 两个注解(同一方法)。 */
   private static ArchCondition<com.tngtech.archunit.core.domain.JavaMethod> haveBothAnnotations(
       String triggerAnnotation, String transactionalAnnotation) {
-    return new ArchCondition<>(
-        "be annotated with both @"
-            + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
-            + " and @"
-            + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)) {
+    return new ArchCondition<>("be annotated with both @"
+        + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
+        + " and @"
+        + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)) {
       @Override
       public void check(
           com.tngtech.archunit.core.domain.JavaMethod method, ConditionEvents events) {
         if (method.isAnnotatedWith(triggerAnnotation)
             && method.isAnnotatedWith(transactionalAnnotation)) {
-          events.add(
-              SimpleConditionEvent.violated(
-                  method,
-                  method.getFullName()
-                      + " 同时标了 @"
-                      + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
-                      + " 与 @"
-                      + transactionalAnnotation.substring(
-                          transactionalAnnotation.lastIndexOf('.') + 1)
-                      + " — 违反 CLAUDE.md #4,改用 TransactionTemplate 显式包裹事务"));
+          events.add(SimpleConditionEvent.violated(
+              method,
+              method.getFullName()
+                  + " 同时标了 @"
+                  + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
+                  + " 与 @"
+                  + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)
+                  + " — 违反 CLAUDE.md #4,改用 TransactionTemplate 显式包裹事务"));
         }
       }
     };
@@ -140,10 +129,8 @@ public final class CodingConventionsArchRules {
     return new ArchCondition<>("not exist (any match = violation)") {
       @Override
       public void check(JavaClass item, ConditionEvents events) {
-        events.add(
-            SimpleConditionEvent.violated(
-                item,
-                item.getName() + " ends with \"Record\" — 违反 CLAUDE.md §持久化命名约束,请改为 *Entity 后缀"));
+        events.add(SimpleConditionEvent.violated(
+            item, item.getName() + " ends with \"Record\" — 违反 CLAUDE.md §持久化命名约束,请改为 *Entity 后缀"));
       }
     };
   }
@@ -181,17 +168,15 @@ public final class CodingConventionsArchRules {
         .that(isSpringStereotype())
         .should(haveExactlyOnePublicCtorOrOneAutowired())
         .allowEmptyShould(true)
-        .because(
-            "Spring Boot 4 不再隐式取参数最多 ctor;多 ctor 必须显式 @Autowired 标主。否则启动"
-                + " NoSuchMethodException(no-arg fallback 没找到)。见 PR #111 fix(main-red).");
+        .because("Spring Boot 4 不再隐式取参数最多 ctor;多 ctor 必须显式 @Autowired 标主。否则启动"
+            + " NoSuchMethodException(no-arg fallback 没找到)。见 PR #111 fix(main-red).");
   }
 
   // ─── 上述 2 条规则的辅助 ─────────────────────────────────────────────────────
 
   private static ArchCondition<JavaClass> coversRequiredPackages(String... requiredPrefixes) {
-    String description =
-        "have @SpringBootApplication / @ComponentScan covering: "
-            + String.join(", ", requiredPrefixes);
+    String description = "have @SpringBootApplication / @ComponentScan covering: "
+        + String.join(", ", requiredPrefixes);
     return new ArchCondition<>(description) {
       @Override
       public void check(JavaClass item, ConditionEvents events) {
@@ -204,15 +189,14 @@ public final class CodingConventionsArchRules {
           boolean covered =
               scanList.stream().anyMatch(entry -> req.equals(entry) || req.startsWith(entry + "."));
           if (!covered) {
-            events.add(
-                SimpleConditionEvent.violated(
-                    item,
-                    item.getName()
-                        + ": @ComponentScan basePackages "
-                        + scanList
-                        + " does not cover required package \""
-                        + req
-                        + "\""));
+            events.add(SimpleConditionEvent.violated(
+                item,
+                item.getName()
+                    + ": @ComponentScan basePackages "
+                    + scanList
+                    + " does not cover required package \""
+                    + req
+                    + "\""));
           }
         }
       }
@@ -224,11 +208,10 @@ public final class CodingConventionsArchRules {
             .ifPresent(a -> addStringArrayProperty(a, "scanBasePackages", out));
         clazz
             .tryGetAnnotationOfType("org.springframework.context.annotation.ComponentScan")
-            .ifPresent(
-                a -> {
-                  addStringArrayProperty(a, "basePackages", out);
-                  addStringArrayProperty(a, "value", out);
-                });
+            .ifPresent(a -> {
+              addStringArrayProperty(a, "basePackages", out);
+              addStringArrayProperty(a, "value", out);
+            });
         return out;
       }
 
@@ -248,14 +231,13 @@ public final class CodingConventionsArchRules {
 
   private static DescribedPredicate<JavaClass> isSpringStereotype() {
     return new DescribedPredicate<>("is Spring @Component / stereotype") {
-      private final java.util.Set<String> stereotypes =
-          java.util.Set.of(
-              "org.springframework.stereotype.Component",
-              "org.springframework.stereotype.Service",
-              "org.springframework.stereotype.Repository",
-              "org.springframework.stereotype.Controller",
-              "org.springframework.web.bind.annotation.RestController",
-              "org.springframework.context.annotation.Configuration");
+      private final java.util.Set<String> stereotypes = java.util.Set.of(
+          "org.springframework.stereotype.Component",
+          "org.springframework.stereotype.Service",
+          "org.springframework.stereotype.Repository",
+          "org.springframework.stereotype.Controller",
+          "org.springframework.web.bind.annotation.RestController",
+          "org.springframework.context.annotation.Configuration");
 
       @Override
       public boolean test(JavaClass clazz) {
@@ -272,29 +254,23 @@ public final class CodingConventionsArchRules {
       public void check(JavaClass item, ConditionEvents events) {
         java.util.Set<com.tngtech.archunit.core.domain.JavaConstructor> publicCtors =
             item.getConstructors().stream()
-                .filter(
-                    c ->
-                        c.getModifiers()
-                            .contains(com.tngtech.archunit.core.domain.JavaModifier.PUBLIC))
+                .filter(c ->
+                    c.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PUBLIC))
                 .collect(java.util.stream.Collectors.toSet());
         if (publicCtors.size() < 2) {
           return; // 0 或 1 个 public ctor:Spring 自动选,无歧义
         }
-        boolean anyAutowired =
-            publicCtors.stream()
-                .anyMatch(
-                    c ->
-                        c.isAnnotatedWith(
-                            "org.springframework.beans.factory.annotation.Autowired"));
+        boolean anyAutowired = publicCtors.stream()
+            .anyMatch(
+                c -> c.isAnnotatedWith("org.springframework.beans.factory.annotation.Autowired"));
         if (!anyAutowired) {
-          events.add(
-              SimpleConditionEvent.violated(
-                  item,
-                  item.getName()
-                      + ": has "
-                      + publicCtors.size()
-                      + " public ctors but none is @Autowired — Spring Boot 4 will fall back to"
-                      + " no-arg ctor and fail startup"));
+          events.add(SimpleConditionEvent.violated(
+              item,
+              item.getName()
+                  + ": has "
+                  + publicCtors.size()
+                  + " public ctors but none is @Autowired — Spring Boot 4 will fall back to"
+                  + " no-arg ctor and fail startup"));
         }
       }
     };
@@ -307,18 +283,15 @@ public final class CodingConventionsArchRules {
         item.getMethodCallsFromSelf().stream()
             .filter(call -> call.getTargetOwner().getName().equals(targetOwner))
             .filter(call -> call.getName().equals(methodName))
-            .forEach(
-                call ->
-                    events.add(
-                        SimpleConditionEvent.violated(
-                            item,
-                            item.getName()
-                                + " calls "
-                                + targetOwner
-                                + "."
-                                + methodName
-                                + "() at "
-                                + call.getSourceCodeLocation())));
+            .forEach(call -> events.add(SimpleConditionEvent.violated(
+                item,
+                item.getName()
+                    + " calls "
+                    + targetOwner
+                    + "."
+                    + methodName
+                    + "() at "
+                    + call.getSourceCodeLocation())));
       }
     };
   }

@@ -78,10 +78,9 @@ public class BatchObjectStoreAutoConfiguration {
   @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "filesystem")
   public BatchObjectStore filesystemRawObjectStore(
       FilesystemStorageProperties properties, BatchSecurityProperties securityProperties) {
-    String secret =
-        Texts.hasText(properties.getPresignSecret())
-            ? properties.getPresignSecret()
-            : securityProperties.getInternalSecret();
+    String secret = Texts.hasText(properties.getPresignSecret())
+        ? properties.getPresignSecret()
+        : securityProperties.getInternalSecret();
     return new FilesystemObjectStore(
         properties.getRoot(),
         properties.getDownloadBaseUrl(),
@@ -113,13 +112,12 @@ public class BatchObjectStoreAutoConfiguration {
       store = raw;
     } else {
       String defaultKeyRef = kmsProperties == null ? null : kmsProperties.getDefaultKeyRef();
-      store =
-          new EncryptingObjectStore(
-              raw,
-              crypto,
-              securityProperties,
-              defaultKeyRef,
-              encryptionProperties.getMaxInMemoryEncryptBytes());
+      store = new EncryptingObjectStore(
+          raw,
+          crypto,
+          securityProperties,
+          defaultKeyRef,
+          encryptionProperties.getMaxInMemoryEncryptBytes());
     }
     // 指标装饰挂最外层：有 MeterRegistry 即包裹（actuator 起则有），缺失则无声跳过，零回归。
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();

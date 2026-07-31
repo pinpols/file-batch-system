@@ -50,11 +50,9 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
   public ResponseEntity<CommonResponse<Void>> handleMessageNotReadable(
       HttpMessageNotReadableException exception) {
     return ResponseEntity.badRequest()
-        .body(
-            CommonResponse.failure(
-                ResultCode.INVALID_ARGUMENT,
-                resolveCommonCode(
-                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
+        .body(CommonResponse.failure(
+            ResultCode.INVALID_ARGUMENT,
+            resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
   }
 
   /**
@@ -69,11 +67,10 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
     log.warn(
         "transient DB concurrency failure (retryable, mapped to 503): {}", exception.getMessage());
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-        .body(
-            CommonResponse.failure(
-                ResultCode.SERVICE_UNAVAILABLE,
-                resolveCommonCode(
-                    ResultCode.SERVICE_UNAVAILABLE, ResultCode.SERVICE_UNAVAILABLE.label())));
+        .body(CommonResponse.failure(
+            ResultCode.SERVICE_UNAVAILABLE,
+            resolveCommonCode(
+                ResultCode.SERVICE_UNAVAILABLE, ResultCode.SERVICE_UNAVAILABLE.label())));
   }
 
   /** orchestrator 特有：把 Spring 的 ResponseStatusException 映射回 CommonResponse。 */

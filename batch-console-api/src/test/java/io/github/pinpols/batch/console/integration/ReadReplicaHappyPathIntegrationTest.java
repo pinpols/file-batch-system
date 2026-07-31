@@ -62,18 +62,18 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
   private static final String REPLICA_DB_NAME = "batch_replica";
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer REPLICA_PG =
-      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-          .withDatabaseName(REPLICA_DB_NAME)
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123")
-          .withUrlParam("sslmode", "disable")
-          // socketTimeout：query 在已建立连接上读响应的最大时长（秒）。Hikari 的 connectionTimeout
-          // 只覆盖"从池里借连接"，不覆盖"连接已借出后查询读响应"。replica 容器被 pause 后，
-          // 在已校验过的存量连接上跑 query 会挂死在 TCP read，需要 driver 层的 socketTimeout 回退。
-          .withUrlParam("socketTimeout", "2")
-          .withUrlParam("loginTimeout", "2")
-          .withInitScript("db/platform-init.sql");
+  private static final PostgreSQLContainer REPLICA_PG = new PostgreSQLContainer(
+          DockerImageName.parse(TestContainerImages.POSTGRES))
+      .withDatabaseName(REPLICA_DB_NAME)
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123")
+      .withUrlParam("sslmode", "disable")
+      // socketTimeout：query 在已建立连接上读响应的最大时长（秒）。Hikari 的 connectionTimeout
+      // 只覆盖"从池里借连接"，不覆盖"连接已借出后查询读响应"。replica 容器被 pause 后，
+      // 在已校验过的存量连接上跑 query 会挂死在 TCP read，需要 driver 层的 socketTimeout 回退。
+      .withUrlParam("socketTimeout", "2")
+      .withUrlParam("loginTimeout", "2")
+      .withInitScript("db/platform-init.sql");
 
   @BeforeAll
   static void startReplica() {
@@ -104,9 +104,14 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
     registry.add("batch.console.read-replica.replica.validation-timeout-millis", () -> "1000");
   }
 
-  @Autowired private DataSource dataSource;
-  @Autowired private PlatformTransactionManager transactionManager;
-  @Autowired private MeterRegistry meterRegistry;
+  @Autowired
+  private DataSource dataSource;
+
+  @Autowired
+  private PlatformTransactionManager transactionManager;
+
+  @Autowired
+  private MeterRegistry meterRegistry;
 
   @Test
   @Order(1)
@@ -164,7 +169,10 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
           .isGreaterThanOrEqualTo(1d);
     } finally {
       // 3. 恢复 replica
-      REPLICA_PG.getDockerClient().unpauseContainerCmd(REPLICA_PG.getContainerId()).exec();
+      REPLICA_PG
+          .getDockerClient()
+          .unpauseContainerCmd(REPLICA_PG.getContainerId())
+          .exec();
     }
 
     // 4. quarantine 2s 期满 + 一点缓冲后，下一次 readOnly 应自动回到 replica
@@ -177,9 +185,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
   private String dbFromTransaction(boolean readOnly) {
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setReadOnly(readOnly);
-    return tx.execute(
-        status ->
-            new JdbcTemplate(dataSource).queryForObject("SELECT current_database()", String.class));
+    return tx.execute(status ->
+        new JdbcTemplate(dataSource).queryForObject("SELECT current_database()", String.class));
   }
 
   /**

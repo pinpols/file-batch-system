@@ -33,8 +33,11 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleBusinessTenantPlacementControllerTest {
 
-  @Mock private ConsoleBusinessTenantPlacementService service;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock
+  private ConsoleBusinessTenantPlacementService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private MockMvc mockMvc;
 
@@ -48,13 +51,11 @@ class ConsoleBusinessTenantPlacementControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleBusinessTenantPlacementController(
-                    service, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBusinessTenantPlacementController(
+            service, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -76,10 +77,9 @@ class ConsoleBusinessTenantPlacementControllerTest {
         .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", null, "ops:alice", null, null));
 
     mockMvc
-        .perform(
-            put("/api/console/ops/tenant-placements")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t-1\",\"placementKey\":\"shard-1\"}"))
+        .perform(put("/api/console/ops/tenant-placements")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t-1\",\"placementKey\":\"shard-1\"}"))
         .andExpect(status().isOk());
     verify(service).upsert(any(BusinessTenantPlacementUpsertParam.class));
   }
@@ -87,17 +87,18 @@ class ConsoleBusinessTenantPlacementControllerTest {
   @Test
   void upsertShouldRejectInvalidPlacementKey() throws Exception {
     mockMvc
-        .perform(
-            put("/api/console/ops/tenant-placements")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t-1\",\"placementKey\":\"Shard_1!\"}"))
+        .perform(put("/api/console/ops/tenant-placements")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t-1\",\"placementKey\":\"Shard_1!\"}"))
         .andExpect(status().is4xxClientError());
   }
 
   @Test
   void deleteShouldDelegate() throws Exception {
     when(service.delete("t-1")).thenReturn(true);
-    mockMvc.perform(delete("/api/console/ops/tenant-placements/t-1")).andExpect(status().isOk());
+    mockMvc
+        .perform(delete("/api/console/ops/tenant-placements/t-1"))
+        .andExpect(status().isOk());
     verify(service).delete("t-1");
   }
 }

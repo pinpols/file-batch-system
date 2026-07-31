@@ -37,9 +37,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("ConsoleWorkflowVersions Controller")
 class ConsoleWorkflowVersionsControllerTest {
 
-  @Mock private ConsoleWorkflowDefinitionApplicationService service;
-  @Mock private WorkflowDesignLockService lockService;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock
+  private ConsoleWorkflowDefinitionApplicationService service;
+
+  @Mock
+  private WorkflowDesignLockService lockService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private MockMvc mockMvc;
 
@@ -52,11 +57,10 @@ class ConsoleWorkflowVersionsControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -84,9 +88,8 @@ class ConsoleWorkflowVersionsControllerTest {
   @DisplayName("降级仍返当前一条:无历史表 follow-up 文档化,list 仍正常返回 1 条")
   void shouldReturnSingleEntryFallback_whenHistoryTableAbsent() throws Exception {
     // 准备:模拟仅当前版本 = 1 的新 workflow(刚 create 未编辑)
-    WorkflowDefinitionVersionSummaryResponse summary =
-        new WorkflowDefinitionVersionSummaryResponse(
-            1, null, Instant.parse("2026-06-04T01:00:00Z"), null, Boolean.TRUE);
+    WorkflowDefinitionVersionSummaryResponse summary = new WorkflowDefinitionVersionSummaryResponse(
+        1, null, Instant.parse("2026-06-04T01:00:00Z"), null, Boolean.TRUE);
     when(service.listVersions(eq(7L), eq("ta"))).thenReturn(List.of(summary));
 
     // 执行并断言
@@ -115,20 +118,19 @@ class ConsoleWorkflowVersionsControllerTest {
   @DisplayName("单版本 detail:存在版本 → 200,不存在版本 → 404 workflow_version.not_found")
   void shouldReturnDetail_whenVersionMatches_andNotFound_whenVersionStale() throws Exception {
     // 准备:current = 3,GET v3 走通,GET v1 因降级无历史 → 404
-    WorkflowDefinitionDetailResponse detail =
-        new WorkflowDefinitionDetailResponse(
-            42L,
-            "ta",
-            "wf_ok",
-            "wf",
-            "DAG",
-            3,
-            Boolean.TRUE,
-            null,
-            Instant.parse("2026-06-01T00:00:00Z"),
-            Instant.parse("2026-06-04T03:00:00Z"),
-            List.of(),
-            List.of());
+    WorkflowDefinitionDetailResponse detail = new WorkflowDefinitionDetailResponse(
+        42L,
+        "ta",
+        "wf_ok",
+        "wf",
+        "DAG",
+        3,
+        Boolean.TRUE,
+        null,
+        Instant.parse("2026-06-01T00:00:00Z"),
+        Instant.parse("2026-06-04T03:00:00Z"),
+        List.of(),
+        List.of());
     when(service.getVersion(eq(42L), eq("ta"), eq(3))).thenReturn(detail);
     when(service.getVersion(eq(42L), eq("ta"), eq(1)))
         .thenThrow(

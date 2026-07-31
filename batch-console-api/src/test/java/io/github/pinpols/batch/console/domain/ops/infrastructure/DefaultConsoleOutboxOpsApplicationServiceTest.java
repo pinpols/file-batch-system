@@ -35,13 +35,12 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
     consoleOutboxEventReadMapper = mock(ConsoleOutboxEventReadMapper.class);
     orchestratorProxy = mock(ConsoleOrchestratorProxyService.class);
     cacheService = passThroughCache();
-    service =
-        new DefaultConsoleOutboxOpsApplicationService(
-            tenantGuard,
-            consoleOutboxEventReadMapper,
-            mock(ConsoleRealtimeDomainEventPublisher.class),
-            orchestratorProxy,
-            cacheService);
+    service = new DefaultConsoleOutboxOpsApplicationService(
+        tenantGuard,
+        consoleOutboxEventReadMapper,
+        mock(ConsoleRealtimeDomainEventPublisher.class),
+        orchestratorProxy,
+        cacheService);
   }
 
   private static ConsoleQueryCacheService passThroughCache() {

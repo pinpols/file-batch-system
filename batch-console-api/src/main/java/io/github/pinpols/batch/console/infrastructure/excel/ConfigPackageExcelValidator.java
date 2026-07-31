@@ -135,31 +135,29 @@ public class ConfigPackageExcelValidator {
   // 旧的 STAGE_CODES 是跨 module 的 union，现在只保留做"基础形状校验"；精确校验按
   // pipeline_type 查 STAGES_BY_TYPE（对齐 worker 侧 ImportStage / ExportStage / DispatchStage
   // 三个 enum 的实际值，避免 Excel 里填 PREPROCESS 到 EXPORT 管线这种 cross-module 错配）。
-  public static final Set<String> STAGE_CODES =
-      Set.of(
-          "RECEIVE",
-          "PREPROCESS",
-          "PARSE",
-          "VALIDATE",
-          "LOAD",
-          "FEEDBACK",
-          "PREPARE",
-          "COMPUTE",
-          "GENERATE",
-          "STORE",
-          "REGISTER",
-          "COMPLETE",
-          "COMMIT",
-          "DISPATCH",
-          "ACK",
-          "RETRY",
-          "COMPENSATE");
-  public static final Map<String, Set<String>> STAGES_BY_TYPE =
-      Map.of(
-          "IMPORT", Set.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
-          "EXPORT", Set.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
-          "PROCESS", Set.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
-          "DISPATCH", Set.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
+  public static final Set<String> STAGE_CODES = Set.of(
+      "RECEIVE",
+      "PREPROCESS",
+      "PARSE",
+      "VALIDATE",
+      "LOAD",
+      "FEEDBACK",
+      "PREPARE",
+      "COMPUTE",
+      "GENERATE",
+      "STORE",
+      "REGISTER",
+      "COMPLETE",
+      "COMMIT",
+      "DISPATCH",
+      "ACK",
+      "RETRY",
+      "COMPENSATE");
+  public static final Map<String, Set<String>> STAGES_BY_TYPE = Map.of(
+      "IMPORT", Set.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
+      "EXPORT", Set.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
+      "PROCESS", Set.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
+      "DISPATCH", Set.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
   public static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
   public static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
   public static final Set<String> EDGE_TYPES = DictEnum.codes(WorkflowEdgeType.class);
@@ -330,21 +328,19 @@ public class ConfigPackageExcelValidator {
     SheetResult steps = validateStepRows(session.pipelineStepRows(), pipelines.validRows());
     SheetResult wfDefs = validateWfDefRows(tid, session.workflowDefinitionRows());
     SheetResult wfNodes = validateWfNodeRows(tid, session.workflowNodeRows(), wfDefs.validRows());
-    SheetResult wfEdges =
-        validateWfEdgeRows(
-            tid, session.workflowEdgeRows(), wfDefs.validRows(), wfNodes.validRows());
-    List<WorkbookIssue> crossIssues =
-        validateCrossReferences(
-            tid,
-            resourceQueues.validRows(),
-            businessCalendars.validRows(),
-            batchWindows.validRows(),
-            jobs.validRows(),
-            fileTemplates.validRows(),
-            pipelines.validRows(),
-            steps.validRows(),
-            wfNodes.validRows(),
-            session.pipelineRows());
+    SheetResult wfEdges = validateWfEdgeRows(
+        tid, session.workflowEdgeRows(), wfDefs.validRows(), wfNodes.validRows());
+    List<WorkbookIssue> crossIssues = validateCrossReferences(
+        tid,
+        resourceQueues.validRows(),
+        businessCalendars.validRows(),
+        batchWindows.validRows(),
+        jobs.validRows(),
+        fileTemplates.validRows(),
+        pipelines.validRows(),
+        steps.validRows(),
+        wfNodes.validRows(),
+        session.pipelineRows());
     // ADR-025:Excel import 阶段静态 DAG 拓扑校验,拒绝有环/不可达/孤立终端/CONDITION 缺 expr/
     // DSL 引用非法或非上游节点的图。复杂规则(V9/V10 GATEWAY join_mode 与 V16 WAIT sensor_spec)留 enable 时由
     // orchestrator WorkflowGraphValidator 回退,Excel 阶段先拦截致命问题。
@@ -366,42 +362,33 @@ public class ConfigPackageExcelValidator {
 
   private SheetResult validateResourceQueueRows(String tenantId, List<Map<String, String>> rows) {
     Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        RESOURCE_QUEUE_SHEET,
-        rows,
-        (row, rowNo, ri) -> {
-          QueueRow queue = ResourceQueueExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-          if (hasText(queue.queueCode()) && !seen.add(queue.queueCode())) {
-            ri.add("duplicate queue_code in excel: " + queue.queueCode());
-          }
-        });
+    return validateRows(RESOURCE_QUEUE_SHEET, rows, (row, rowNo, ri) -> {
+      QueueRow queue = ResourceQueueExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      if (hasText(queue.queueCode()) && !seen.add(queue.queueCode())) {
+        ri.add("duplicate queue_code in excel: " + queue.queueCode());
+      }
+    });
   }
 
   private SheetResult validateBusinessCalendarRows(
       String tenantId, List<Map<String, String>> rows) {
     Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        BUSINESS_CALENDAR_SHEET,
-        rows,
-        (row, rowNo, ri) -> {
-          CalendarRow calendar = BusinessCalendarExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-          if (hasText(calendar.calendarCode()) && !seen.add(calendar.calendarCode())) {
-            ri.add("duplicate calendar_code in excel: " + calendar.calendarCode());
-          }
-        });
+    return validateRows(BUSINESS_CALENDAR_SHEET, rows, (row, rowNo, ri) -> {
+      CalendarRow calendar = BusinessCalendarExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      if (hasText(calendar.calendarCode()) && !seen.add(calendar.calendarCode())) {
+        ri.add("duplicate calendar_code in excel: " + calendar.calendarCode());
+      }
+    });
   }
 
   private SheetResult validateBatchWindowRows(String tenantId, List<Map<String, String>> rows) {
     Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        BATCH_WINDOW_SHEET,
-        rows,
-        (row, rowNo, ri) -> {
-          WindowRow window = BatchWindowExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-          if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
-            ri.add("duplicate window_code in excel: " + window.windowCode());
-          }
-        });
+    return validateRows(BATCH_WINDOW_SHEET, rows, (row, rowNo, ri) -> {
+      WindowRow window = BatchWindowExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
+        ri.add("duplicate window_code in excel: " + window.windowCode());
+      }
+    });
   }
 
   private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
@@ -444,13 +431,12 @@ public class ConfigPackageExcelValidator {
     }
     int fields = expr.trim().split("\\s+").length;
     if (fields != 6 && fields != 7) {
-      ri.add(
-          "schedule_expr must be a Quartz 6 or 7-field cron (sec min hour dom mon dow [year]);"
-              + " found "
-              + fields
-              + " fields: '"
-              + expr
-              + "'");
+      ri.add("schedule_expr must be a Quartz 6 or 7-field cron (sec min hour dom mon dow [year]);"
+          + " found "
+          + fields
+          + " fields: '"
+          + expr
+          + "'");
     }
   }
 
@@ -477,19 +463,16 @@ public class ConfigPackageExcelValidator {
 
   private SheetResult validateFileTemplateRows(String tenantId, List<Map<String, String>> rows) {
     Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        FILE_TEMPLATE_SHEET,
-        rows,
-        (row, rowNo, ri) -> {
-          TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
-          validateFormatConditionals(row, ri);
-          validateExportSql(row, ri);
-          validateTemplateJsonStructure(row, ri);
-          String key = templateKey(template.templateCode(), template.version());
-          if (hasText(template.templateCode()) && !seen.add(key)) {
-            ri.add("duplicate template_code + version in excel: " + key);
-          }
-        });
+    return validateRows(FILE_TEMPLATE_SHEET, rows, (row, rowNo, ri) -> {
+      TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      validateFormatConditionals(row, ri);
+      validateExportSql(row, ri);
+      validateTemplateJsonStructure(row, ri);
+      String key = templateKey(template.templateCode(), template.version());
+      if (hasText(template.templateCode()) && !seen.add(key)) {
+        ri.add("duplicate template_code + version in excel: " + key);
+      }
+    });
   }
 
   private static final Pattern SELECT_STAR = Pattern.compile("(?i)select\\s+\\*");
@@ -595,25 +578,20 @@ public class ConfigPackageExcelValidator {
 
   private SheetResult validateStepRows(
       List<Map<String, String>> rows, List<Map<String, String>> validPipelineRows) {
-    Set<String> pipelineKeys =
-        validPipelineRows.stream()
-            .map(
-                r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
-            .collect(Collectors.toSet());
+    Set<String> pipelineKeys = validPipelineRows.stream()
+        .map(r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+        .collect(Collectors.toSet());
     Map<String, String> pipelineKeyToType = buildPipelineKeyToType(validPipelineRows);
     // 按模块懒加载 step_registry 白名单；空集表示该 module 的 worker 未启动过登记，降级为不校验
     // （防止首次部署没跑 worker 就导致所有上传被拒）
     Map<String, Set<String>> registryByModule = new HashMap<>();
     Set<String> seen = new LinkedHashSet<>();
-    return validateRows(
-        STEP_SHEET,
-        rows,
-        (row, rowNo, ri) -> {
-          validateStepRow(row, pipelineKeys, pipelineKeyToType, registryByModule, seen, ri);
-          // 业务表/列精确校验的"硬拦截"故意不放在这里——Validator 只做 Excel 格式 + 枚举 / registry
-          // 层面的校验，不耦合业务 schema。biz_table_schema 的信息通过模板下拉在 ConfigPackageExcelWorkbookWriter
-          // 里以下拉选项形式呈现给填表用户；真正的 schema 漂移由 LoadStep 在运行时报业务错。
-        });
+    return validateRows(STEP_SHEET, rows, (row, rowNo, ri) -> {
+      validateStepRow(row, pipelineKeys, pipelineKeyToType, registryByModule, seen, ri);
+      // 业务表/列精确校验的"硬拦截"故意不放在这里——Validator 只做 Excel 格式 + 枚举 / registry
+      // 层面的校验，不耦合业务 schema。biz_table_schema 的信息通过模板下拉在 ConfigPackageExcelWorkbookWriter
+      // 里以下拉选项形式呈现给填表用户；真正的 schema 漂移由 LoadStep 在运行时报业务错。
+    });
   }
 
   private static Map<String, String> buildPipelineKeyToType(
@@ -731,27 +709,24 @@ public class ConfigPackageExcelValidator {
       String prefix = implCode.substring(0, colonIdx);
       if (PIPELINE_TYPES.contains(prefix)) {
         if (!prefix.equals(pipelineType)) {
-          ri.add(
-              "impl_code prefix '"
-                  + prefix
-                  + "' 与 pipeline_type '"
-                  + pipelineType
-                  + "' 不匹配，请改选同模块的 Step");
+          ri.add("impl_code prefix '"
+              + prefix
+              + "' 与 pipeline_type '"
+              + pipelineType
+              + "' 不匹配，请改选同模块的 Step");
         }
         normalizedImpl = implCode.substring(colonIdx + 1).trim();
         row.put(COL_IMPL_CODE, normalizedImpl);
       }
     }
-    Set<String> registered =
-        registryByModule.computeIfAbsent(
-            pipelineType, m -> new HashSet<>(stepRegistryQueryMapper.selectImplCodesByModule(m)));
+    Set<String> registered = registryByModule.computeIfAbsent(
+        pipelineType, m -> new HashSet<>(stepRegistryQueryMapper.selectImplCodesByModule(m)));
     if (!registered.isEmpty() && !registered.contains(normalizedImpl)) {
-      ri.add(
-          "impl_code '"
-              + normalizedImpl
-              + "' not registered in module "
-              + pipelineType
-              + "（检查 Spring bean name 是否存在或 worker 是否启动过以刷新 step_registry）");
+      ri.add("impl_code '"
+          + normalizedImpl
+          + "' not registered in module "
+          + pipelineType
+          + "（检查 Spring bean name 是否存在或 worker 是否启动过以刷新 step_registry）");
     }
   }
 
@@ -778,14 +753,10 @@ public class ConfigPackageExcelValidator {
 
   private SheetResult validateWfNodeRows(
       String tenantId, List<Map<String, String>> rows, List<Map<String, String>> validWfDefs) {
-    Set<String> wfKeys =
-        validWfDefs.stream()
-            .map(
-                r ->
-                    normalize(r.get(COL_WORKFLOW_CODE))
-                        + KEY_SEP_COLON
-                        + normalize(r.get(COL_VERSION)))
-            .collect(Collectors.toSet());
+    Set<String> wfKeys = validWfDefs.stream()
+        .map(r ->
+            normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+        .collect(Collectors.toSet());
     Set<String> seen = new LinkedHashSet<>();
     return validateRows(
         WF_NODE_SHEET, rows, (row, rowNo, ri) -> validateWfNodeRow(row, wfKeys, seen, ri));
@@ -820,24 +791,17 @@ public class ConfigPackageExcelValidator {
       List<Map<String, String>> rows,
       List<Map<String, String>> validWfDefs,
       List<Map<String, String>> validNodes) {
-    Set<String> wfKeys =
-        validWfDefs.stream()
-            .map(
-                r ->
-                    normalize(r.get(COL_WORKFLOW_CODE))
-                        + KEY_SEP_COLON
-                        + normalize(r.get(COL_VERSION)))
-            .collect(Collectors.toSet());
-    Set<String> nodeKeys =
-        validNodes.stream()
-            .map(
-                r ->
-                    normalize(r.get(COL_WORKFLOW_CODE))
-                        + KEY_SEP_COLON
-                        + normalize(r.get(COL_WORKFLOW_VERSION))
-                        + KEY_SEP_HASH
-                        + normalize(r.get(COL_NODE_CODE)))
-            .collect(Collectors.toSet());
+    Set<String> wfKeys = validWfDefs.stream()
+        .map(r ->
+            normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+        .collect(Collectors.toSet());
+    Set<String> nodeKeys = validNodes.stream()
+        .map(r -> normalize(r.get(COL_WORKFLOW_CODE))
+            + KEY_SEP_COLON
+            + normalize(r.get(COL_WORKFLOW_VERSION))
+            + KEY_SEP_HASH
+            + normalize(r.get(COL_NODE_CODE)))
+        .collect(Collectors.toSet());
     return validateRows(
         WF_EDGE_SHEET, rows, (row, rowNo, ri) -> validateWfEdgeRow(row, wfKeys, nodeKeys, ri));
   }
@@ -891,16 +855,14 @@ public class ConfigPackageExcelValidator {
       List<Map<String, String>> validSteps,
       List<Map<String, String>> validWfNodes,
       List<Map<String, String>> allPipelineRows) {
-    Set<String> jobCodesInExcel =
-        validJobs.stream()
-            .map(r -> normalize(r.get(COL_JOB_CODE)))
-            .filter(Texts::hasText)
-            .collect(Collectors.toSet());
-    Set<String> pipelineJobCodesInExcel =
-        validPipelines.stream()
-            .map(r -> normalize(r.get(COL_JOB_CODE)))
-            .filter(Texts::hasText)
-            .collect(Collectors.toSet());
+    Set<String> jobCodesInExcel = validJobs.stream()
+        .map(r -> normalize(r.get(COL_JOB_CODE)))
+        .filter(Texts::hasText)
+        .collect(Collectors.toSet());
+    Set<String> pipelineJobCodesInExcel = validPipelines.stream()
+        .map(r -> normalize(r.get(COL_JOB_CODE)))
+        .filter(Texts::hasText)
+        .collect(Collectors.toSet());
     Set<String> fileTemplatesInExcel = buildFileTemplateKeys(validFileTemplates);
     Set<String> queueCodesInExcel = extractCodes(validResourceQueues, "queue_code");
     Set<String> calendarCodesInExcel = extractCodes(validBusinessCalendars, "calendar_code");
@@ -922,12 +884,11 @@ public class ConfigPackageExcelValidator {
       if (hasText(jobCode)
           && !jobCodesInExcel.contains(jobCode)
           && jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode) == null) {
-        issues.add(
-            new WorkbookIssue(
-                PIPELINE_SHEET,
-                rowNo,
-                COL_JOB_CODE,
-                "job_code references unknown job definition: " + jobCode));
+        issues.add(new WorkbookIssue(
+            PIPELINE_SHEET,
+            rowNo,
+            COL_JOB_CODE,
+            "job_code references unknown job definition: " + jobCode));
       }
       rowNo++;
     }
@@ -944,37 +905,33 @@ public class ConfigPackageExcelValidator {
       if (hasText(relatedJob)
           && !jobCodesInExcel.contains(relatedJob)
           && jobDefinitionMapper.selectByUniqueKey(tenantId, relatedJob) == null) {
-        issues.add(
-            new WorkbookIssue(
-                WF_NODE_SHEET,
-                wfNodeRowNo,
-                COL_RELATED_JOB_CODE,
-                "related_job_code references unknown job definition: " + relatedJob));
+        issues.add(new WorkbookIssue(
+            WF_NODE_SHEET,
+            wfNodeRowNo,
+            COL_RELATED_JOB_CODE,
+            "related_job_code references unknown job definition: " + relatedJob));
       }
       String relatedPipeline = normalize(row.get(COL_RELATED_PIPELINE_CODE));
       if (hasText(relatedPipeline) && !pipelineJobCodesInExcel.contains(relatedPipeline)) {
-        List<Map<String, Object>> found =
-            pipelineDefinitionMapper.selectByQuery(
-                tenantId, relatedPipeline, null, null, new PageRequest(1, 1));
+        List<Map<String, Object>> found = pipelineDefinitionMapper.selectByQuery(
+            tenantId, relatedPipeline, null, null, new PageRequest(1, 1));
         if (found == null || found.isEmpty()) {
-          issues.add(
-              new WorkbookIssue(
-                  WF_NODE_SHEET,
-                  wfNodeRowNo,
-                  COL_RELATED_PIPELINE_CODE,
-                  "related_pipeline_code references unknown pipeline: " + relatedPipeline));
+          issues.add(new WorkbookIssue(
+              WF_NODE_SHEET,
+              wfNodeRowNo,
+              COL_RELATED_PIPELINE_CODE,
+              "related_pipeline_code references unknown pipeline: " + relatedPipeline));
         }
       }
       String windowCode = normalize(row.get(COL_WINDOW_CODE));
       if (hasText(windowCode)
           && !windowCodesInExcel.contains(windowCode)
           && !batchWindowExists(tenantId, windowCode)) {
-        issues.add(
-            new WorkbookIssue(
-                WF_NODE_SHEET,
-                wfNodeRowNo,
-                COL_WINDOW_CODE,
-                "window_code references unknown batch_window: " + windowCode));
+        issues.add(new WorkbookIssue(
+            WF_NODE_SHEET,
+            wfNodeRowNo,
+            COL_WINDOW_CODE,
+            "window_code references unknown batch_window: " + windowCode));
       }
       fallbackRowNo++;
     }
@@ -1014,10 +971,9 @@ public class ConfigPackageExcelValidator {
   }
 
   private static String wfTopoKey(Map<String, String> row) {
-    String v =
-        Texts.hasText(row.get(COL_WORKFLOW_VERSION))
-            ? normalize(row.get(COL_WORKFLOW_VERSION))
-            : normalize(row.get(COL_VERSION));
+    String v = Texts.hasText(row.get(COL_WORKFLOW_VERSION))
+        ? normalize(row.get(COL_WORKFLOW_VERSION))
+        : normalize(row.get(COL_VERSION));
     return normalize(row.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + v;
   }
 
@@ -1063,53 +1019,48 @@ public class ConfigPackageExcelValidator {
     if (startCodes.isEmpty() && !byCode.isEmpty()) {
       // 没有 START 节点,挑首节点定位
       Map<String, String> first = byCode.values().iterator().next();
-      issues.add(
-          new WorkbookIssue(
-              WF_NODE_SHEET,
-              excelRowNo(first, fallbackRowNo),
-              COL_NODE_TYPE,
-              "workflow graph missing START node"));
+      issues.add(new WorkbookIssue(
+          WF_NODE_SHEET,
+          excelRowNo(first, fallbackRowNo),
+          COL_NODE_TYPE,
+          "workflow graph missing START node"));
     }
     if (endCodes.isEmpty() && !byCode.isEmpty()) {
       Map<String, String> first = byCode.values().iterator().next();
-      issues.add(
-          new WorkbookIssue(
-              WF_NODE_SHEET,
-              excelRowNo(first, fallbackRowNo),
-              COL_NODE_TYPE,
-              "workflow graph requires at least 1 END node"));
+      issues.add(new WorkbookIssue(
+          WF_NODE_SHEET,
+          excelRowNo(first, fallbackRowNo),
+          COL_NODE_TYPE,
+          "workflow graph requires at least 1 END node"));
     }
     if (startCodes.size() > 1) {
       for (String s : startCodes) {
         Map<String, String> n = byCode.get(s);
-        issues.add(
-            new WorkbookIssue(
-                WF_NODE_SHEET,
-                excelRowNo(n, fallbackRowNo),
-                COL_NODE_TYPE,
-                "workflow graph has multiple START nodes: " + startCodes));
+        issues.add(new WorkbookIssue(
+            WF_NODE_SHEET,
+            excelRowNo(n, fallbackRowNo),
+            COL_NODE_TYPE,
+            "workflow graph has multiple START nodes: " + startCodes));
       }
     }
     for (String s : startCodes) {
       if (!incoming.getOrDefault(s, List.of()).isEmpty()) {
         Map<String, String> n = byCode.get(s);
-        issues.add(
-            new WorkbookIssue(
-                WF_NODE_SHEET,
-                excelRowNo(n, fallbackRowNo),
-                COL_NODE_TYPE,
-                "START node cannot have incoming edges: " + s));
+        issues.add(new WorkbookIssue(
+            WF_NODE_SHEET,
+            excelRowNo(n, fallbackRowNo),
+            COL_NODE_TYPE,
+            "START node cannot have incoming edges: " + s));
       }
     }
     for (String e : endCodes) {
       if (!outgoing.getOrDefault(e, List.of()).isEmpty()) {
         Map<String, String> n = byCode.get(e);
-        issues.add(
-            new WorkbookIssue(
-                WF_NODE_SHEET,
-                excelRowNo(n, fallbackRowNo),
-                COL_NODE_TYPE,
-                "END node cannot have outgoing edges: " + e));
+        issues.add(new WorkbookIssue(
+            WF_NODE_SHEET,
+            excelRowNo(n, fallbackRowNo),
+            COL_NODE_TYPE,
+            "END node cannot have outgoing edges: " + e));
       }
     }
     // V1 — self-loop + cycle
@@ -1118,12 +1069,11 @@ public class ConfigPackageExcelValidator {
       String f = normalize(e.get(COL_FROM_NODE_CODE));
       String t = normalize(e.get(COL_TO_NODE_CODE));
       if (Texts.hasText(f) && f.equals(t)) {
-        issues.add(
-            new WorkbookIssue(
-                WF_EDGE_SHEET,
-                excelRowNo(e, fallbackEdgeRow),
-                COL_TO_NODE_CODE,
-                "self-loop edge on node: " + f));
+        issues.add(new WorkbookIssue(
+            WF_EDGE_SHEET,
+            excelRowNo(e, fallbackEdgeRow),
+            COL_TO_NODE_CODE,
+            "self-loop edge on node: " + f));
       }
       fallbackEdgeRow++;
     }
@@ -1142,12 +1092,11 @@ public class ConfigPackageExcelValidator {
       for (String code : byCode.keySet()) {
         if (!reachFromStart.contains(code)) {
           Map<String, String> n = byCode.get(code);
-          issues.add(
-              new WorkbookIssue(
-                  WF_NODE_SHEET,
-                  excelRowNo(n, fallbackRowNo),
-                  COL_NODE_CODE,
-                  "node unreachable from START: " + code));
+          issues.add(new WorkbookIssue(
+              WF_NODE_SHEET,
+              excelRowNo(n, fallbackRowNo),
+              COL_NODE_CODE,
+              "node unreachable from START: " + code));
         }
       }
     }
@@ -1160,12 +1109,11 @@ public class ConfigPackageExcelValidator {
       for (String code : byCode.keySet()) {
         if (!reachToEnd.contains(code) && !endCodes.contains(code)) {
           Map<String, String> n = byCode.get(code);
-          issues.add(
-              new WorkbookIssue(
-                  WF_NODE_SHEET,
-                  excelRowNo(n, fallbackRowNo),
-                  COL_NODE_CODE,
-                  "node cannot reach any END: " + code));
+          issues.add(new WorkbookIssue(
+              WF_NODE_SHEET,
+              excelRowNo(n, fallbackRowNo),
+              COL_NODE_CODE,
+              "node cannot reach any END: " + code));
         }
       }
     }
@@ -1175,12 +1123,11 @@ public class ConfigPackageExcelValidator {
       String type = normalizeEnum(e.get(COL_EDGE_TYPE));
       String expr = normalize(e.get(COL_CONDITION_EXPR));
       if ("CONDITION".equals(type) && !Texts.hasText(expr)) {
-        issues.add(
-            new WorkbookIssue(
-                WF_EDGE_SHEET,
-                excelRowNo(e, rowNo),
-                COL_CONDITION_EXPR,
-                "CONDITION edge requires non-empty condition_expr"));
+        issues.add(new WorkbookIssue(
+            WF_EDGE_SHEET,
+            excelRowNo(e, rowNo),
+            COL_CONDITION_EXPR,
+            "CONDITION edge requires non-empty condition_expr"));
       }
       rowNo++;
     }
@@ -1196,26 +1143,24 @@ public class ConfigPackageExcelValidator {
       while (m.find()) {
         String ref = m.group(1);
         if (!byCode.containsKey(ref)) {
-          issues.add(
-              new WorkbookIssue(
-                  WF_NODE_SHEET,
-                  excelRowNo(n, fallbackRowNo),
-                  COL_NODE_PARAMS,
-                  "node_params DSL references missing node: " + ref));
+          issues.add(new WorkbookIssue(
+              WF_NODE_SHEET,
+              excelRowNo(n, fallbackRowNo),
+              COL_NODE_PARAMS,
+              "node_params DSL references missing node: " + ref));
           continue;
         }
         Set<String> ancSet = ancestors.getOrDefault(e.getKey(), Set.of());
         if (!ancSet.contains(ref)) {
-          issues.add(
-              new WorkbookIssue(
-                  WF_NODE_SHEET,
-                  excelRowNo(n, fallbackRowNo),
-                  COL_NODE_PARAMS,
-                  "node_params DSL can only reference upstream nodes; '"
-                      + ref
-                      + "' is not an ancestor of '"
-                      + e.getKey()
-                      + "'"));
+          issues.add(new WorkbookIssue(
+              WF_NODE_SHEET,
+              excelRowNo(n, fallbackRowNo),
+              COL_NODE_PARAMS,
+              "node_params DSL can only reference upstream nodes; '"
+                  + ref
+                  + "' is not an ancestor of '"
+                  + e.getKey()
+                  + "'"));
         }
       }
     }
@@ -1233,12 +1178,11 @@ public class ConfigPackageExcelValidator {
       Integer c = color.getOrDefault(next, 0);
       if (c == 1) {
         Map<String, String> n = byCode.get(node);
-        issues.add(
-            new WorkbookIssue(
-                WF_EDGE_SHEET,
-                n == null ? fallback : excelRowNo(n, fallback),
-                COL_TO_NODE_CODE,
-                "topology cycle detected through edge: " + node + " -> " + next));
+        issues.add(new WorkbookIssue(
+            WF_EDGE_SHEET,
+            n == null ? fallback : excelRowNo(n, fallback),
+            COL_TO_NODE_CODE,
+            "topology cycle detected through edge: " + node + " -> " + next));
         return;
       }
       if (c == 0) {
@@ -1311,45 +1255,41 @@ public class ConfigPackageExcelValidator {
       if (hasText(queueCode)
           && !queueCodesInExcel.contains(queueCode)
           && !resourceQueueExists(tenantId, queueCode)) {
-        issues.add(
-            new WorkbookIssue(
-                JOB_SHEET,
-                rowNo,
-                COL_QUEUE_CODE,
-                "queue_code references unknown resource_queue: " + queueCode));
+        issues.add(new WorkbookIssue(
+            JOB_SHEET,
+            rowNo,
+            COL_QUEUE_CODE,
+            "queue_code references unknown resource_queue: " + queueCode));
       }
       String dependsOnJobCode = normalize(row.get(COL_DEPENDS_ON_JOB_CODE));
       if (hasText(dependsOnJobCode)
           && !jobCodesInExcel.contains(dependsOnJobCode)
           && jobDefinitionMapper.selectByUniqueKey(tenantId, dependsOnJobCode) == null) {
-        issues.add(
-            new WorkbookIssue(
-                JOB_SHEET,
-                rowNo,
-                COL_DEPENDS_ON_JOB_CODE,
-                "depends_on_job_code references unknown job definition: " + dependsOnJobCode));
+        issues.add(new WorkbookIssue(
+            JOB_SHEET,
+            rowNo,
+            COL_DEPENDS_ON_JOB_CODE,
+            "depends_on_job_code references unknown job definition: " + dependsOnJobCode));
       }
       String calendarCode = normalize(row.get(COL_CALENDAR_CODE));
       if (hasText(calendarCode)
           && !calendarCodesInExcel.contains(calendarCode)
           && !businessCalendarExists(tenantId, calendarCode)) {
-        issues.add(
-            new WorkbookIssue(
-                JOB_SHEET,
-                rowNo,
-                COL_CALENDAR_CODE,
-                "calendar_code references unknown business_calendar: " + calendarCode));
+        issues.add(new WorkbookIssue(
+            JOB_SHEET,
+            rowNo,
+            COL_CALENDAR_CODE,
+            "calendar_code references unknown business_calendar: " + calendarCode));
       }
       String windowCode = normalize(row.get(COL_WINDOW_CODE));
       if (hasText(windowCode)
           && !windowCodesInExcel.contains(windowCode)
           && !batchWindowExists(tenantId, windowCode)) {
-        issues.add(
-            new WorkbookIssue(
-                JOB_SHEET,
-                rowNo,
-                COL_WINDOW_CODE,
-                "window_code references unknown batch_window: " + windowCode));
+        issues.add(new WorkbookIssue(
+            JOB_SHEET,
+            rowNo,
+            COL_WINDOW_CODE,
+            "window_code references unknown batch_window: " + windowCode));
       }
       fallbackRowNo++;
     }
@@ -1410,13 +1350,12 @@ public class ConfigPackageExcelValidator {
       if (ref.hasTemplateCode()
           && !fileTemplatesInExcel.contains(templateKey(ref.templateCode(), ref.version()))
           && !fileTemplateExists(tenantId, ref)) {
-        issues.add(
-            new WorkbookIssue(
-                sheetName,
-                rowNo,
-                jsonColumn,
-                "templateCode references unknown file_template_config: "
-                    + templateKey(ref.templateCode(), ref.version())));
+        issues.add(new WorkbookIssue(
+            sheetName,
+            rowNo,
+            jsonColumn,
+            "templateCode references unknown file_template_config: "
+                + templateKey(ref.templateCode(), ref.version())));
       }
       fallbackRowNo++;
     }
@@ -1535,9 +1474,8 @@ public class ConfigPackageExcelValidator {
       return;
     }
     if (!value.matches("^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")) {
-      ri.add(
-          "depends_on_job_code must start with a letter and contain only letters, digits,"
-              + " underscore or hyphen");
+      ri.add("depends_on_job_code must start with a letter and contain only letters, digits,"
+          + " underscore or hyphen");
     }
   }
 

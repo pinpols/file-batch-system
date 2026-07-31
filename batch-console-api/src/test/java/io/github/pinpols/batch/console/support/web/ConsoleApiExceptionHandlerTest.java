@@ -29,16 +29,15 @@ import org.springframework.web.client.RestClientResponseException;
 @ExtendWith(MockitoExtension.class)
 class ConsoleApiExceptionHandlerTest {
 
-  @Mock private ConsoleResponseFactory responseFactory;
+  @Mock
+  private ConsoleResponseFactory responseFactory;
 
   private ConsoleApiExceptionHandler handler() {
     // responseFactory 直接产出带 code 的 CommonResponse,便于断言映射后的 code。
     lenient()
         .when(responseFactory.failure(any(), any()))
-        .thenAnswer(
-            inv ->
-                CommonResponse.failure(
-                    inv.getArgument(0, ResultCode.class), inv.getArgument(1, String.class)));
+        .thenAnswer(inv -> CommonResponse.failure(
+            inv.getArgument(0, ResultCode.class), inv.getArgument(1, String.class)));
     return new ConsoleApiExceptionHandler(responseFactory, null);
   }
 
@@ -53,11 +52,9 @@ class ConsoleApiExceptionHandlerTest {
 
   @Test
   void shouldReturn409Conflict_whenUniqueConstraintViolation() {
-    ResponseEntity<?> response =
-        handler()
-            .handleDataIntegrityViolation(
-                divFrom(
-                    "ERROR: duplicate key value violates unique constraint \"uk_tenant_code\""));
+    ResponseEntity<?> response = handler()
+        .handleDataIntegrityViolation(
+            divFrom("ERROR: duplicate key value violates unique constraint \"uk_tenant_code\""));
 
     assertThat(response.getStatusCode().value()).isEqualTo(409);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.CONFLICT);
@@ -65,12 +62,10 @@ class ConsoleApiExceptionHandlerTest {
 
   @Test
   void shouldReturn409Conflict_whenForeignKeyConstraintViolation() {
-    ResponseEntity<?> response =
-        handler()
-            .handleDataIntegrityViolation(
-                divFrom(
-                    "ERROR: update or delete on table \"parent\" violates foreign key constraint"
-                        + " \"fk_child_parent\" on table \"child\""));
+    ResponseEntity<?> response = handler()
+        .handleDataIntegrityViolation(
+            divFrom("ERROR: update or delete on table \"parent\" violates foreign key constraint"
+                + " \"fk_child_parent\" on table \"child\""));
 
     assertThat(response.getStatusCode().value()).isEqualTo(409);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.CONFLICT);
@@ -78,10 +73,9 @@ class ConsoleApiExceptionHandlerTest {
 
   @Test
   void shouldReturn400Validation_whenCheckConstraintViolation() {
-    ResponseEntity<?> response =
-        handler()
-            .handleDataIntegrityViolation(
-                divFrom("ERROR: new row violates check constraint \"ck_amount_positive\""));
+    ResponseEntity<?> response = handler()
+        .handleDataIntegrityViolation(
+            divFrom("ERROR: new row violates check constraint \"ck_amount_positive\""));
 
     assertThat(response.getStatusCode().value()).isEqualTo(400);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.VALIDATION_ERROR);
@@ -89,10 +83,9 @@ class ConsoleApiExceptionHandlerTest {
 
   @Test
   void shouldReturn400Validation_whenNotNullConstraintViolation() {
-    ResponseEntity<?> response =
-        handler()
-            .handleDataIntegrityViolation(
-                divFrom("ERROR: null value in column \"name\" violates not-null constraint"));
+    ResponseEntity<?> response = handler()
+        .handleDataIntegrityViolation(
+            divFrom("ERROR: null value in column \"name\" violates not-null constraint"));
 
     assertThat(response.getStatusCode().value()).isEqualTo(400);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.VALIDATION_ERROR);
@@ -127,10 +120,8 @@ class ConsoleApiExceptionHandlerTest {
 
   @Test
   void shouldFallBackToSystemError_whenDownstream500WithUnparseableBody() {
-    ResponseEntity<?> response =
-        handler()
-            .handleDownstreamRestError(
-                restError(HttpStatus.INTERNAL_SERVER_ERROR, "boom not json"));
+    ResponseEntity<?> response = handler()
+        .handleDownstreamRestError(restError(HttpStatus.INTERNAL_SERVER_ERROR, "boom not json"));
 
     assertThat(response.getStatusCode().value()).isEqualTo(500);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.SYSTEM_ERROR);

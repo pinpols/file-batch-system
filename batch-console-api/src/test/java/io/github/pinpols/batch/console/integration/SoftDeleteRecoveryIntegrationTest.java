@@ -34,7 +34,8 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "int-sdr-ta";
 
-  @Autowired private JdbcTemplate jdbc;
+  @Autowired
+  private JdbcTemplate jdbc;
 
   @AfterEach
   void cleanup() {
@@ -56,24 +57,22 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + "(tenant_id, channel_code, channel_name, channel_type, auth_type, config_json,"
             + " enabled) VALUES (?, 'sdr-ch-1', 'first', 'SFTP', 'PASSWORD', '{}'::jsonb, true)",
         TENANT);
-    Long originalId =
-        jdbc.queryForObject(
-            "SELECT id FROM batch.file_channel_config WHERE tenant_id = ? AND channel_code ="
-                + " 'sdr-ch-1'",
-            Long.class,
-            TENANT);
+    Long originalId = jdbc.queryForObject(
+        "SELECT id FROM batch.file_channel_config WHERE tenant_id = ? AND channel_code ="
+            + " 'sdr-ch-1'",
+        Long.class,
+        TENANT);
     assertThat(originalId).isNotNull();
 
     // 2) 软删除
     jdbc.update("UPDATE batch.file_channel_config SET is_deleted = true WHERE id = ?", originalId);
 
     // 3) 默认 SELECT 过滤(activePredicate) → 不可见
-    Long visibleCount =
-        jdbc.queryForObject(
-            "SELECT COUNT(*) FROM batch.file_channel_config WHERE tenant_id = ? AND channel_code ="
-                + " 'sdr-ch-1' AND is_deleted = false",
-            Long.class,
-            TENANT);
+    Long visibleCount = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM batch.file_channel_config WHERE tenant_id = ? AND channel_code ="
+            + " 'sdr-ch-1' AND is_deleted = false",
+        Long.class,
+        TENANT);
     assertThat(visibleCount).isZero();
 
     // 4) upsert 同 code → ON CONFLICT 复活
@@ -88,22 +87,20 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
         TENANT);
 
     // 5) id 保留(同一逻辑实体不产生重复逻辑行)+ 字段被新值覆盖 + is_deleted 复位
-    Map<String, Object> row =
-        jdbc.queryForMap(
-            "SELECT id, channel_name, channel_type, is_deleted FROM batch.file_channel_config "
-                + "WHERE tenant_id = ? AND channel_code = 'sdr-ch-1'",
-            TENANT);
+    Map<String, Object> row = jdbc.queryForMap(
+        "SELECT id, channel_name, channel_type, is_deleted FROM batch.file_channel_config "
+            + "WHERE tenant_id = ? AND channel_code = 'sdr-ch-1'",
+        TENANT);
     assertThat(row.get("id")).isEqualTo(originalId);
     assertThat(row.get("channel_name")).isEqualTo("second");
     assertThat(row.get("channel_type")).isEqualTo("API");
     assertThat(row.get("is_deleted")).isEqualTo(false);
 
-    Long totalRows =
-        jdbc.queryForObject(
-            "SELECT COUNT(*) FROM batch.file_channel_config WHERE tenant_id = ? AND channel_code ="
-                + " 'sdr-ch-1'",
-            Long.class,
-            TENANT);
+    Long totalRows = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM batch.file_channel_config WHERE tenant_id = ? AND channel_code ="
+            + " 'sdr-ch-1'",
+        Long.class,
+        TENANT);
     assertThat(totalRows).isOne();
   }
 
@@ -117,12 +114,11 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + "(tenant_id, channel_code, channel_name, channel_type, config_json, enabled)"
             + " VALUES (?, 'sdr-nc-1', 'first', 'EMAIL', '{}'::jsonb, true)",
         TENANT);
-    Long originalId =
-        jdbc.queryForObject(
-            "SELECT id FROM batch.notification_channel WHERE tenant_id = ? AND channel_code ="
-                + " 'sdr-nc-1'",
-            Long.class,
-            TENANT);
+    Long originalId = jdbc.queryForObject(
+        "SELECT id FROM batch.notification_channel WHERE tenant_id = ? AND channel_code ="
+            + " 'sdr-nc-1'",
+        Long.class,
+        TENANT);
     jdbc.update("UPDATE batch.notification_channel SET is_deleted = true WHERE id = ?", originalId);
 
     // 再次 insert 同 code — 模拟 NotificationChannelMapper.insert(已加 ON CONFLICT 复活)
@@ -136,11 +132,10 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + "  is_deleted = false, updated_at = CURRENT_TIMESTAMP",
         TENANT);
 
-    Map<String, Object> row =
-        jdbc.queryForMap(
-            "SELECT id, channel_name, channel_type, is_deleted FROM batch.notification_channel "
-                + "WHERE tenant_id = ? AND channel_code = 'sdr-nc-1'",
-            TENANT);
+    Map<String, Object> row = jdbc.queryForMap(
+        "SELECT id, channel_name, channel_type, is_deleted FROM batch.notification_channel "
+            + "WHERE tenant_id = ? AND channel_code = 'sdr-nc-1'",
+        TENANT);
     assertThat(row.get("id")).isEqualTo(originalId);
     assertThat(row.get("channel_type")).isEqualTo("DINGTALK");
     assertThat(row.get("is_deleted")).isEqualTo(false);
@@ -156,36 +151,32 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + "(tenant_id, route_code, route_name, team, alert_group, severity, receiver, enabled)"
             + " VALUES (?, 'sdr-ar-1', 'name-1', 'ops', 'grp', 'WARN', 'r@x', true)",
         TENANT);
-    Long id =
-        jdbc.queryForObject(
-            "SELECT id FROM batch.alert_routing_config WHERE tenant_id = ? AND route_code ="
-                + " 'sdr-ar-1'",
-            Long.class,
-            TENANT);
+    Long id = jdbc.queryForObject(
+        "SELECT id FROM batch.alert_routing_config WHERE tenant_id = ? AND route_code ="
+            + " 'sdr-ar-1'",
+        Long.class,
+        TENANT);
     jdbc.update("UPDATE batch.alert_routing_config SET is_deleted = true WHERE id = ?", id);
 
     // 模拟 AlertRoutingConfigMapper.toggleEnabled — 带 guard
-    int toggled =
-        jdbc.update(
-            "UPDATE batch.alert_routing_config SET enabled = false, updated_at ="
-                + " current_timestamp WHERE tenant_id = ? AND id = ? AND is_deleted = false",
-            TENANT,
-            id);
+    int toggled = jdbc.update(
+        "UPDATE batch.alert_routing_config SET enabled = false, updated_at ="
+            + " current_timestamp WHERE tenant_id = ? AND id = ? AND is_deleted = false",
+        TENANT,
+        id);
     assertThat(toggled).as("toggleEnabled 应被 is_deleted guard 拦截,不影响 0 行").isZero();
 
     // 模拟 AlertRoutingConfigMapper.updateById — 带 guard
-    int updated =
-        jdbc.update(
-            "UPDATE batch.alert_routing_config SET route_name = 'changed', updated_at ="
-                + " current_timestamp WHERE tenant_id = ? AND id = ? AND is_deleted = false",
-            TENANT,
-            id);
+    int updated = jdbc.update(
+        "UPDATE batch.alert_routing_config SET route_name = 'changed', updated_at ="
+            + " current_timestamp WHERE tenant_id = ? AND id = ? AND is_deleted = false",
+        TENANT,
+        id);
     assertThat(updated).as("updateById 应被 is_deleted guard 拦截,不影响 0 行").isZero();
 
     // route_name 仍是原值(没被改)
-    String routeName =
-        jdbc.queryForObject(
-            "SELECT route_name FROM batch.alert_routing_config WHERE id = ?", String.class, id);
+    String routeName = jdbc.queryForObject(
+        "SELECT route_name FROM batch.alert_routing_config WHERE id = ?", String.class, id);
     assertThat(routeName).isEqualTo("name-1");
   }
 
@@ -199,11 +190,10 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + "(tenant_id, name, callback_url, event_types, enabled)"
             + " VALUES (?, 'sdr-wh-1', 'https://a.example', 'job.*', true)",
         TENANT);
-    Long id =
-        jdbc.queryForObject(
-            "SELECT id FROM batch.webhook_subscription WHERE tenant_id = ? AND name = 'sdr-wh-1'",
-            Long.class,
-            TENANT);
+    Long id = jdbc.queryForObject(
+        "SELECT id FROM batch.webhook_subscription WHERE tenant_id = ? AND name = 'sdr-wh-1'",
+        Long.class,
+        TENANT);
     jdbc.update("UPDATE batch.webhook_subscription SET is_deleted = true WHERE id = ?", id);
 
     jdbc.update(
@@ -216,11 +206,10 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + "  updated_at = current_timestamp",
         TENANT);
 
-    Map<String, Object> row =
-        jdbc.queryForMap(
-            "SELECT id, callback_url, event_types, is_deleted FROM batch.webhook_subscription "
-                + "WHERE tenant_id = ? AND name = 'sdr-wh-1'",
-            TENANT);
+    Map<String, Object> row = jdbc.queryForMap(
+        "SELECT id, callback_url, event_types, is_deleted FROM batch.webhook_subscription "
+            + "WHERE tenant_id = ? AND name = 'sdr-wh-1'",
+        TENANT);
     assertThat(row.get("id")).isEqualTo(id);
     assertThat(row.get("callback_url")).isEqualTo("https://b.example");
     assertThat(row.get("event_types")).isEqualTo("workflow.*");
@@ -240,26 +229,23 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
             + " VALUES (?, 'sdr-ft-1', 'tpl', 'IMPORT', 'settlement', 'DELIMITED', 'UTF-8',"
             + " 'NONE', 'NONE', 'NONE', false, true, 1)",
         TENANT);
-    Long id =
-        jdbc.queryForObject(
-            "SELECT id FROM batch.file_template_config WHERE tenant_id = ? AND template_code ="
-                + " 'sdr-ft-1'",
-            Long.class,
-            TENANT);
+    Long id = jdbc.queryForObject(
+        "SELECT id FROM batch.file_template_config WHERE tenant_id = ? AND template_code ="
+            + " 'sdr-ft-1'",
+        Long.class,
+        TENANT);
     jdbc.update("UPDATE batch.file_template_config SET is_deleted = true WHERE id = ?", id);
 
     // toggleEnabled 带 guard,已删除行不能再被 enable
-    int toggled =
-        jdbc.update(
-            "UPDATE batch.file_template_config SET enabled = true, updated_at ="
-                + " current_timestamp WHERE tenant_id = ? AND id = ? AND is_deleted = false",
-            TENANT,
-            id);
+    int toggled = jdbc.update(
+        "UPDATE batch.file_template_config SET enabled = true, updated_at ="
+            + " current_timestamp WHERE tenant_id = ? AND id = ? AND is_deleted = false",
+        TENANT,
+        id);
     assertThat(toggled).isZero();
 
-    Boolean enabled =
-        jdbc.queryForObject(
-            "SELECT enabled FROM batch.file_template_config WHERE id = ?", Boolean.class, id);
+    Boolean enabled = jdbc.queryForObject(
+        "SELECT enabled FROM batch.file_template_config WHERE id = ?", Boolean.class, id);
     assertThat(enabled).as("toggleEnabled 应被 guard 拦截,enabled 仍为软删前的 true").isTrue();
 
     // 清理(file_template_config 复合键 version)

@@ -23,11 +23,10 @@ class PipelineVerifierHookTest {
 
   @Test
   void writesFailuresIntoAttributes() {
-    StubVerifier failing =
-        new StubVerifier(
-            "EXPORT_NON_EMPTY",
-            Set.of(JobType.EXPORT),
-            VerifyResult.fail("EXPORT_FILE_EMPTY", "empty"));
+    StubVerifier failing = new StubVerifier(
+        "EXPORT_NON_EMPTY",
+        Set.of(JobType.EXPORT),
+        VerifyResult.fail("EXPORT_FILE_EMPTY", "empty"));
     ContentVerifierRegistry registry = registryWith(failing);
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
     Map<String, Object> attributes = new HashMap<>();
@@ -87,11 +86,10 @@ class PipelineVerifierHookTest {
 
   @Test
   void returnsFatalFailureWhenFatalVerifierFails() {
-    FatalStubVerifier failing =
-        new FatalStubVerifier(
-            "DISPATCH_RECEIPT_PRESENT",
-            Set.of(JobType.DISPATCH),
-            VerifyResult.fail("DISPATCH_RECEIPT_MISSING", "no receipt"));
+    FatalStubVerifier failing = new FatalStubVerifier(
+        "DISPATCH_RECEIPT_PRESENT",
+        Set.of(JobType.DISPATCH),
+        VerifyResult.fail("DISPATCH_RECEIPT_MISSING", "no receipt"));
     ContentVerifierRegistry registry = registryWith(failing);
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
     Map<String, Object> attributes = new HashMap<>();
@@ -110,11 +108,10 @@ class PipelineVerifierHookTest {
 
   @Test
   void softFailureDoesNotMarkFatal() {
-    StubVerifier failing =
-        new StubVerifier(
-            "EXPORT_NON_EMPTY",
-            Set.of(JobType.EXPORT),
-            VerifyResult.fail("EXPORT_FILE_EMPTY", "empty"));
+    StubVerifier failing = new StubVerifier(
+        "EXPORT_NON_EMPTY",
+        Set.of(JobType.EXPORT),
+        VerifyResult.fail("EXPORT_FILE_EMPTY", "empty"));
     ContentVerifierRegistry registry = registryWith(failing);
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
     Map<String, Object> attributes = new HashMap<>();
@@ -130,17 +127,16 @@ class PipelineVerifierHookTest {
     ContentVerifierRegistry registry = mock(ContentVerifierRegistry.class);
     when(registry.verifiersFor(any(JobType.class), any())).thenAnswer(invocation -> List.of(beans));
     when(registry.run(any(ContentVerifier.class), any(VerifyContext.class)))
-        .thenAnswer(
-            invocation -> {
-              ContentVerifier v = invocation.getArgument(0);
-              if (v instanceof StubVerifier stub) {
-                return stub.resultToReturn();
-              }
-              if (v instanceof FatalStubVerifier fatal) {
-                return fatal.resultToReturn();
-              }
-              throw new IllegalStateException("Unknown stub type: " + v.getClass());
-            });
+        .thenAnswer(invocation -> {
+          ContentVerifier v = invocation.getArgument(0);
+          if (v instanceof StubVerifier stub) {
+            return stub.resultToReturn();
+          }
+          if (v instanceof FatalStubVerifier fatal) {
+            return fatal.resultToReturn();
+          }
+          throw new IllegalStateException("Unknown stub type: " + v.getClass());
+        });
     return registry;
   }
 

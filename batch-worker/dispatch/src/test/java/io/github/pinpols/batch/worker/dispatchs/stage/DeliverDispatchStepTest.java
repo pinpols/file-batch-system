@@ -26,9 +26,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DeliverDispatchStepTest {
 
-  @Mock private FileDispatchRepository fileDispatchRepository;
-  @Mock private DispatchChannelGateway dispatchChannelGateway;
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private FileDispatchRepository fileDispatchRepository;
+
+  @Mock
+  private DispatchChannelGateway dispatchChannelGateway;
+
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   private DeliverDispatchStep step;
 
@@ -74,7 +79,8 @@ class DeliverDispatchStepTest {
   void execute_insertsNewDispatchRecordWhenNoneExists() {
     setupMocksForNewRecord();
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
-    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchJobContext context = buildContext();
     DispatchStageResult result = step.execute(context);
@@ -91,7 +97,8 @@ class DeliverDispatchStepTest {
     when(fileDispatchRepository.loadLatestDispatchRecord("t1", 10L, "CH1"))
         .thenReturn(Map.of("id", 5L));
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
-    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchJobContext context = buildContext(fileRecord, channelConfig);
     DispatchStageResult result = step.execute(context);
@@ -123,7 +130,8 @@ class DeliverDispatchStepTest {
   void execute_failsWhenMarkSentReturnsZero() {
     setupMocksForNewRecord();
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
-    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any())).thenReturn(0);
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(0);
 
     DispatchJobContext context = buildContext();
     DispatchStageResult result = step.execute(context);
@@ -151,7 +159,8 @@ class DeliverDispatchStepTest {
   void execute_updatesFileStatusToDispatching() {
     setupMocksForNewRecord();
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
-    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchJobContext context = buildContext();
     step.execute(context);

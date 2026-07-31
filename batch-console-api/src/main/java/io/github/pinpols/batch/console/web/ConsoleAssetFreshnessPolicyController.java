@@ -84,7 +84,10 @@ public class ConsoleAssetFreshnessPolicyController {
   record UpsertAssetFreshnessPolicyRequest(
       @NotBlank @Size(max = 128) String assetCode,
       @Size(max = 32) String assetType,
-      @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime expectedByLocalTime,
+
+      @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.TIME)
+      LocalTime expectedByLocalTime,
+
       @Size(max = 64) String timezone,
       @Min(0) Integer staleAfterSeconds,
       @Min(1) @Max(31) Integer lookbackDays,

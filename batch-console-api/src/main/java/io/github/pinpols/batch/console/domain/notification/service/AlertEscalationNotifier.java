@@ -92,28 +92,24 @@ public class AlertEscalationNotifier {
     this.domainEventPublisher = domainEventPublisher;
     this.lockingTaskExecutor = lockingTaskExecutor;
     this.properties = properties;
-    this.notifyCounter =
-        Counter.builder("batch.alert.escalation.notifications")
-            .description("告警升级被推到平台内通知链路(webhook)的累计次数")
-            .tags(Tags.empty())
-            .register(meterRegistry);
+    this.notifyCounter = Counter.builder("batch.alert.escalation.notifications")
+        .description("告警升级被推到平台内通知链路(webhook)的累计次数")
+        .tags(Tags.empty())
+        .register(meterRegistry);
   }
 
   @PostConstruct
   public void start() {
-    executor =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "alert-escalation-notifier");
-              t.setDaemon(true);
-              return t;
-            });
-    scheduledTask =
-        executor.scheduleWithFixedDelay(
-            this::poll,
-            properties.getPollIntervalMillis(),
-            properties.getPollIntervalMillis(),
-            TimeUnit.MILLISECONDS);
+    executor = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "alert-escalation-notifier");
+      t.setDaemon(true);
+      return t;
+    });
+    scheduledTask = executor.scheduleWithFixedDelay(
+        this::poll,
+        properties.getPollIntervalMillis(),
+        properties.getPollIntervalMillis(),
+        TimeUnit.MILLISECONDS);
     log.info(
         "AlertEscalationNotifier 已启动:poll={}ms batch={}",
         properties.getPollIntervalMillis(),
@@ -252,9 +248,8 @@ public class AlertEscalationNotifier {
             alert.getTitle(),
             tier,
             alert.getTraceId()));
-    int marked =
-        alertEventMapper.markEscalationNotified(
-            alert.getTenantId(), alert.getId(), notifiedTier, tier);
+    int marked = alertEventMapper.markEscalationNotified(
+        alert.getTenantId(), alert.getId(), notifiedTier, tier);
     if (marked == 0) {
       // 被并发 ack 或其它实例抢先通知,水位线没动 —— 不重复计数。
       return;

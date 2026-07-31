@@ -33,16 +33,14 @@ class BusinessMultiShardRoutingIntegrationTest {
   private static final DockerImageName PG = DockerImageName.parse(TestContainerImages.POSTGRES);
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer SHARD0 =
-      new PostgreSQLContainer(PG)
-          .withDatabaseName("batch_business")
-          .withUrlParam("sslmode", "disable");
+  private static final PostgreSQLContainer SHARD0 = new PostgreSQLContainer(PG)
+      .withDatabaseName("batch_business")
+      .withUrlParam("sslmode", "disable");
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer SHARD1 =
-      new PostgreSQLContainer(PG)
-          .withDatabaseName("batch_business")
-          .withUrlParam("sslmode", "disable");
+  private static final PostgreSQLContainer SHARD1 = new PostgreSQLContainer(PG)
+      .withDatabaseName("batch_business")
+      .withUrlParam("sslmode", "disable");
 
   private static HikariDataSource ds0;
   private static HikariDataSource ds1;
@@ -59,10 +57,9 @@ class BusinessMultiShardRoutingIntegrationTest {
     try (Connection c = ds0.getConnection();
         Statement st = c.createStatement()) {
       st.execute("CREATE SCHEMA IF NOT EXISTS batch");
-      st.execute(
-          "CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64)"
-              + " PRIMARY KEY, placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL"
-              + " DEFAULT now(), updated_by varchar(128))");
+      st.execute("CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64)"
+          + " PRIMARY KEY, placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL"
+          + " DEFAULT now(), updated_by varchar(128))");
     }
   }
 
@@ -138,9 +135,8 @@ class BusinessMultiShardRoutingIntegrationTest {
       Map<String, String> map = new LinkedHashMap<>();
       try (Connection c = ds0.getConnection();
           Statement st = c.createStatement();
-          ResultSet rs =
-              st.executeQuery(
-                  "SELECT tenant_id, placement_key FROM batch.business_tenant_placement")) {
+          ResultSet rs = st.executeQuery(
+              "SELECT tenant_id, placement_key FROM batch.business_tenant_placement")) {
         while (rs.next()) {
           map.put(rs.getString(1), rs.getString(2));
         }
@@ -167,10 +163,9 @@ class BusinessMultiShardRoutingIntegrationTest {
       st.execute(
           "CREATE TABLE IF NOT EXISTS biz.__shard_identity (only_one boolean PRIMARY KEY DEFAULT"
               + " true, shard_key text NOT NULL)");
-      st.execute(
-          "INSERT INTO biz.__shard_identity(only_one,shard_key) VALUES (true,'"
-              + key
-              + "') ON CONFLICT (only_one) DO UPDATE SET shard_key=EXCLUDED.shard_key");
+      st.execute("INSERT INTO biz.__shard_identity(only_one,shard_key) VALUES (true,'"
+          + key
+          + "') ON CONFLICT (only_one) DO UPDATE SET shard_key=EXCLUDED.shard_key");
     }
   }
 

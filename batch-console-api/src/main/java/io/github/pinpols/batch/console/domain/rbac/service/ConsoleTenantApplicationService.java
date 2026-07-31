@@ -98,23 +98,21 @@ public class ConsoleTenantApplicationService {
     String tenantScope = tenantGuard.currentTenantScopeOrNull();
     if (tenantScope != null) {
       Map<String, Object> row = tenantMapper.selectByTenantId(tenantScope);
-      List<ConsoleTenantResponse> scoped =
-          row == null
-              ? List.of()
-              : java.util.stream.Stream.of(row)
-                  .map(this::toResponse)
-                  .filter(t -> !HIDDEN_TENANT_IDS.contains(t.tenantId()))
-                  .toList();
+      List<ConsoleTenantResponse> scoped = row == null
+          ? List.of()
+          : java.util.stream.Stream.of(row)
+              .map(this::toResponse)
+              .filter(t -> !HIDDEN_TENANT_IDS.contains(t.tenantId()))
+              .toList();
       return new PageResponse<>(
           scoped.size(), pageRequest.pageNo(), pageRequest.pageSize(), scoped);
     }
     List<Map<String, Object>> rows = tenantMapper.selectByQuery(keyword, status, pageRequest);
     long total = tenantMapper.countByQuery(keyword, status);
-    List<ConsoleTenantResponse> items =
-        rows.stream()
-            .map(this::toResponse)
-            .filter(t -> !HIDDEN_TENANT_IDS.contains(t.tenantId()))
-            .toList();
+    List<ConsoleTenantResponse> items = rows.stream()
+        .map(this::toResponse)
+        .filter(t -> !HIDDEN_TENANT_IDS.contains(t.tenantId()))
+        .toList();
     // total 不精确扣 1:filter 后量级影响 ≤ HIDDEN_TENANT_IDS.size(),分页显示可接受,
     // 避免再发一次 count 查询。
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
@@ -124,9 +122,8 @@ public class ConsoleTenantApplicationService {
     // SEC(跨租户越权修复):非全局角色只能读自身租户,path tenantId 与 JWT 不符 → FORBIDDEN;
     // 全局角色(ADMIN / AUDITOR)可读任意租户。
     tenantGuard.assertTenantAllowed(tenantId);
-    return toResponse(
-        Guard.requireFound(
-            tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId));
+    return toResponse(Guard.requireFound(
+        tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId));
   }
 
   @Transactional
@@ -196,11 +193,11 @@ public class ConsoleTenantApplicationService {
   private List<ConsoleTenantResponse> doBatchCreateTenants(BatchCreateTenantCommand cmd) {
     String prefix = cmd.usernamePrefix();
     // R7-A3-P1: 预检从 N 条单查改成 1 条 IN 查询；插入后 response 也 1 条批量取，整体 SELECT 数固定 = 2 + N。
-    List<String> requestedTenantIds = cmd.tenants().stream().map(TenantSpec::tenantId).toList();
-    Set<String> conflictingTenantIds =
-        tenantMapper.selectByTenantIds(requestedTenantIds).stream()
-            .map(row -> str(row, "tenant_id"))
-            .collect(Collectors.toSet());
+    List<String> requestedTenantIds =
+        cmd.tenants().stream().map(TenantSpec::tenantId).toList();
+    Set<String> conflictingTenantIds = tenantMapper.selectByTenantIds(requestedTenantIds).stream()
+        .map(row -> str(row, "tenant_id"))
+        .collect(Collectors.toSet());
     for (TenantSpec spec : cmd.tenants()) {
       if (conflictingTenantIds.contains(spec.tenantId())) {
         throw BizException.of(ResultCode.CONFLICT, "error.tenant.already_exists", spec.tenantId());

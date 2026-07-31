@@ -81,13 +81,12 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
       String host = URI.create(endpoint).getHost();
       long timestamp = epochSeconds();
 
-      Map<String, String> headers =
-          buildSignedHeaders(
-              host,
-              payload,
-              timestamp,
-              properties.getTencentSecretId(),
-              properties.getTencentSecretKey());
+      Map<String, String> headers = buildSignedHeaders(
+          host,
+          payload,
+          timestamp,
+          properties.getTencentSecretId(),
+          properties.getTencentSecretKey());
 
       String json = postJson(endpoint, headers, payload);
       JsonNode response = objectMapper.readTree(json).path("Response");
@@ -128,10 +127,9 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
    */
   Map<String, String> buildSignedHeaders(
       String host, String payload, long timestamp, String secretId, String secretKey) {
-    String date =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd")
-            .withZone(ZoneOffset.UTC)
-            .format(Instant.ofEpochSecond(timestamp));
+    String date = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        .withZone(ZoneOffset.UTC)
+        .format(Instant.ofEpochSecond(timestamp));
     String authorization = buildAuthorization(host, payload, timestamp, date, secretId, secretKey);
 
     Map<String, String> headers = new LinkedHashMap<>();
@@ -203,14 +201,12 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
 
   /** 执行 application/json POST 带签名头,返回响应体字符串。抽 protected 以便单测覆盖返回预置 JSON、无网络验证各分支。 */
   protected String postJson(String url, Map<String, String> headers, String body) throws Exception {
-    HttpRequest.Builder builder =
-        HttpRequest.newBuilder(URI.create(url))
-            .timeout(REQUEST_TIMEOUT)
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+        .timeout(REQUEST_TIMEOUT)
+        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
     headers.forEach(builder::header);
-    HttpResponse<String> response =
-        httpClient.send(
-            builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    HttpResponse<String> response = httpClient.send(
+        builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     return response.body();
   }
 

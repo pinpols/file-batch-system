@@ -43,8 +43,11 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   // result_version.job_instance_id 是 NOT NULL 但 V108..V189 均无 FK；用固定桩值即可。
   private static final long STUB_JOB_INSTANCE_ID = 1L;
 
-  @Autowired private AssetPartitionMapper assetPartitionMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private AssetPartitionMapper assetPartitionMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void
@@ -124,21 +127,20 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   }
 
   private long insertResultVersion(String businessKey, int versionNo, String status) {
-    Long id =
-        jdbcTemplate.queryForObject(
-            "insert into batch.result_version (tenant_id, business_key, version_no,"
-                + " job_instance_id, status, effective_at, payload_storage, payload_json,"
-                + " generated_at, generated_by, promotion_policy) values (?, ?, ?, ?, ?,"
-                + " case when ? = 'EFFECTIVE' then current_timestamp else null end,"
-                + " 'INLINE_JSON', '{\"recordCount\":100}'::jsonb, current_timestamp, 'it',"
-                + " 'AUTO_LATEST') returning id",
-            Long.class,
-            TENANT,
-            businessKey,
-            versionNo,
-            STUB_JOB_INSTANCE_ID,
-            status,
-            status);
+    Long id = jdbcTemplate.queryForObject(
+        "insert into batch.result_version (tenant_id, business_key, version_no,"
+            + " job_instance_id, status, effective_at, payload_storage, payload_json,"
+            + " generated_at, generated_by, promotion_policy) values (?, ?, ?, ?, ?,"
+            + " case when ? = 'EFFECTIVE' then current_timestamp else null end,"
+            + " 'INLINE_JSON', '{\"recordCount\":100}'::jsonb, current_timestamp, 'it',"
+            + " 'AUTO_LATEST') returning id",
+        Long.class,
+        TENANT,
+        businessKey,
+        versionNo,
+        STUB_JOB_INSTANCE_ID,
+        status,
+        status);
     assertThat(id).isNotNull();
     return id;
   }

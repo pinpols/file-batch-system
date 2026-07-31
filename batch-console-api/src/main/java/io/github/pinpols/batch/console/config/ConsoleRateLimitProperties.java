@@ -32,11 +32,10 @@ public class ConsoleRateLimitProperties {
    * 昂贵接口路径前缀白名单（任一前缀命中即按 {@link #expensiveOpUserLimitPerMinute} 限流）。 可经 {@code
    * batch.console.security.rate-limit.expensive-op-path-prefixes[N]} 扩展。
    */
-  private List<String> expensiveOpPathPrefixes =
-      List.of(
-          "/api/console/config/sync/",
-          "/api/console/config/tenant-package/excel/",
-          "/api/console/reports/excel");
+  private List<String> expensiveOpPathPrefixes = List.of(
+      "/api/console/config/sync/",
+      "/api/console/config/tenant-package/excel/",
+      "/api/console/reports/excel");
 
   /**
    * 文件操作接口（下载、错误导出、归档、重派、到达组操作等）：每个已认证用户每分钟最多请求次数。 任意 HTTP 方法都计入（下载/导出常为 GET）。高水位默认

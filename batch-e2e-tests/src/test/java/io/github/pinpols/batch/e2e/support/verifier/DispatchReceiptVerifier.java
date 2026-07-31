@@ -53,9 +53,8 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
   // ─── Individual assertions ────────────────────────────────────────────────
 
   private void verifyFileStatus() {
-    String status =
-        platformJdbc.queryForObject(
-            "select file_status from batch.file_record where id = ?", String.class, fileId);
+    String status = platformJdbc.queryForObject(
+        "select file_status from batch.file_record where id = ?", String.class, fileId);
     assertThat(status)
         .as(
             "dispatch: file_record.file_status must be '%s' for file id=%d",
@@ -67,17 +66,13 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
     if (expectedReceiptCode == null && expectedChannelCode == null) {
       return;
     }
-    List<Map<String, Object>> receipts =
-        platformJdbc.queryForList(
-            """
+    List<Map<String, Object>> receipts = platformJdbc.queryForList("""
             select receipt_code, channel_code, dispatch_status
             from batch.file_dispatch_record
             where tenant_id = ? and file_id = ?
             order by id desc
             limit 1
-            """,
-            tenantId,
-            fileId);
+            """, tenantId, fileId);
 
     assertThat(receipts)
         .as("dispatch: file_dispatch_record must exist for tenant=%s, fileId=%d", tenantId, fileId)
@@ -101,12 +96,11 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
     if (expectedMinAuditCount <= 0) {
       return;
     }
-    Long auditCount =
-        platformJdbc.queryForObject(
-            "select count(*) from batch.file_audit_log where tenant_id = ? and file_id = ?",
-            Long.class,
-            tenantId,
-            fileId);
+    Long auditCount = platformJdbc.queryForObject(
+        "select count(*) from batch.file_audit_log where tenant_id = ? and file_id = ?",
+        Long.class,
+        tenantId,
+        fileId);
     assertThat(auditCount)
         .as(
             "dispatch: file_audit_log must have at least %d entries for fileId=%d",

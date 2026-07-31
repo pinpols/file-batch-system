@@ -215,13 +215,16 @@ class ReadReplicaRoutingDataSourceTest {
     assertThat(actual).isSameAs(replicaConn);
 
     // v6 hardening：曾 quarantine 过的恢复必须发 recovery counter，否则运维静默无感
-    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter()).isNotNull();
-    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter().count())
+    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter())
+        .isNotNull();
+    assertThat(
+            meterRegistry.find("batch.console.replica.recovery.count").counter().count())
         .isEqualTo(1.0);
     // 第二次成功不应再 +1（已不再 quarantineEverEntered）
     when(replica.getConnection()).thenReturn(replicaConn);
     ds.getConnection();
-    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter().count())
+    assertThat(
+            meterRegistry.find("batch.console.replica.recovery.count").counter().count())
         .isEqualTo(1.0);
   }
 
@@ -237,7 +240,8 @@ class ReadReplicaRoutingDataSourceTest {
     ds.getConnection(); // 失败 1 次
     ds.getConnection(); // 成功 → 重置计数但不发 recovery
 
-    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter()).isNull();
+    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter())
+        .isNull();
   }
 
   private static MockingDetails mockingDetails(Object target) {

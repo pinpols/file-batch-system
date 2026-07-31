@@ -50,16 +50,15 @@ public class PartitionLeaseProperties {
   void assertLeaseVsMaxPollWindow() {
     long maxPollSec = maxPollIntervalMillisInjected / 1000L;
     if (expireSeconds >= maxPollSec) {
-      throw new IllegalStateException(
-          "FATAL: batch.partition-lease.expire-seconds ("
-              + expireSeconds
-              + "s) 必须 < spring.kafka.consumer.properties.max-poll-interval-ms ("
-              + maxPollSec
-              + "s)。"
-              + " rebalance 窗口与 lease 过期同时发生会触发双执行（worker reclaim + Kafka 再派给新 consumer）。"
-              + " 建议 expire-seconds ≤ max-poll-interval/2（当前推荐 ≤"
-              + (maxPollSec / 2)
-              + "s）。");
+      throw new IllegalStateException("FATAL: batch.partition-lease.expire-seconds ("
+          + expireSeconds
+          + "s) 必须 < spring.kafka.consumer.properties.max-poll-interval-ms ("
+          + maxPollSec
+          + "s)。"
+          + " rebalance 窗口与 lease 过期同时发生会触发双执行（worker reclaim + Kafka 再派给新 consumer）。"
+          + " 建议 expire-seconds ≤ max-poll-interval/2（当前推荐 ≤"
+          + (maxPollSec / 2)
+          + "s）。");
     }
     if (expireSeconds >= maxPollSec / 2) {
       log.warn(

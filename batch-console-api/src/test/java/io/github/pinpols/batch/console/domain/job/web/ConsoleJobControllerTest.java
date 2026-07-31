@@ -50,23 +50,17 @@ class ConsoleJobControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleJobController(
-                    triggerService, recoveryService, approvalService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleJobController(
+            triggerService, recoveryService, approvalService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/jobs/trigger")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/jobs/trigger").contentType(APPLICATION_JSON).content("""
                     {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}
                     """))
         .andExpect(status().isBadRequest())
@@ -80,12 +74,10 @@ class ConsoleJobControllerTest {
     when(triggerService.trigger(any(), anyString())).thenReturn("OK");
 
     mockMvc
-        .perform(
-            post("/api/console/jobs/trigger")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/jobs/trigger")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}
                     """))
         .andExpect(status().isOk())
@@ -98,11 +90,7 @@ class ConsoleJobControllerTest {
     when(triggerService.dryRunTrigger(any())).thenReturn(Map.of("dryRun", true, "valid", true));
 
     mockMvc
-        .perform(
-            post("/api/console/jobs/trigger")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/jobs/trigger").contentType(APPLICATION_JSON).content("""
                     {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27","dryRun":true}
                     """))
         .andExpect(status().isOk())
@@ -116,18 +104,14 @@ class ConsoleJobControllerTest {
   @Test
   void shouldBatchTriggerJobs() throws Exception {
     when(triggerService.batchTrigger(any(), anyString()))
-        .thenReturn(
-            List.of(
-                new ConsoleBatchTriggerEntryResponse(
-                    0, "IMPORT_JOB", "2026-03-27", null, "SUCCESS", null, "INS-1", null)));
+        .thenReturn(List.of(new ConsoleBatchTriggerEntryResponse(
+            0, "IMPORT_JOB", "2026-03-27", null, "SUCCESS", null, "INS-1", null)));
 
     mockMvc
-        .perform(
-            post("/api/console/jobs/batch-trigger")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-batch-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/jobs/batch-trigger")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-batch-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     [{"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}]
                     """))
         .andExpect(status().isOk())

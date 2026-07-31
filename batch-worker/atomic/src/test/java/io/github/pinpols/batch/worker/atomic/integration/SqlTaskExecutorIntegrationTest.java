@@ -30,8 +30,11 @@ class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired DataSource dataSource;
-  @Autowired BeanFactory beanFactory;
+  @Autowired
+  DataSource dataSource;
+
+  @Autowired
+  BeanFactory beanFactory;
 
   private SqlTaskExecutor executor() {
     SqlExecutorProperties props = new SqlExecutorProperties();

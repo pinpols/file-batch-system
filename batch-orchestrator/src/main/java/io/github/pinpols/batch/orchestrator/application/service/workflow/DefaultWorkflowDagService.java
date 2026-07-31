@@ -74,12 +74,12 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (registry == null) {
       return null;
     }
-    cachedReadyCheckTimer =
-        io.micrometer.core.instrument.Timer.builder("batch.workflow.dag.ready_check.duration")
-            .description(
-                "DefaultWorkflowDagService.isNodeReadyForDispatch latency (DAG advance hot path)")
-            .publishPercentiles(0.5, 0.95, 0.99)
-            .register(registry);
+    cachedReadyCheckTimer = io.micrometer.core.instrument.Timer.builder(
+            "batch.workflow.dag.ready_check.duration")
+        .description(
+            "DefaultWorkflowDagService.isNodeReadyForDispatch latency (DAG advance hot path)")
+        .publishPercentiles(0.5, 0.95, 0.99)
+        .register(registry);
     return cachedReadyCheckTimer;
   }
 
@@ -348,7 +348,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       case SUCCESS -> success;
       case FAILURE -> !success;
       case CONDITION ->
-          success && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
+        success && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
     };
   }
 
@@ -364,12 +364,12 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     // ALL 模式的 join 节点会一并被 cascadeSkipDownstream 标 SKIPPED，避免漏过空跑下游。
     return switch (type) {
       case ALWAYS ->
-          isTerminal(predecessorStatus) && !"SKIPPED".equalsIgnoreCase(predecessorStatus);
+        isTerminal(predecessorStatus) && !"SKIPPED".equalsIgnoreCase(predecessorStatus);
       case SUCCESS -> STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus);
       case FAILURE -> "FAILED".equalsIgnoreCase(predecessorStatus);
       case CONDITION ->
-          STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
-              && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
+        STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
+            && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
     };
   }
 

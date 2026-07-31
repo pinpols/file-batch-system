@@ -103,14 +103,13 @@ public class VerifierFailureOutboxService {
 
     // event_key 加 index 后缀:若同一 task 出多个失败且 reason 相同(同 verifier 重跑 /
     // 不同 verifier 撞 code),不会触发 outbox_event 唯一约束冲突导致整事务回滚
-    String eventKey =
-        command.tenantId()
-            + ":verifier:"
-            + command.taskId()
-            + ":"
-            + (reason == null ? "UNKNOWN" : reason)
-            + ":"
-            + index;
+    String eventKey = command.tenantId()
+        + ":verifier:"
+        + command.taskId()
+        + ":"
+        + (reason == null ? "UNKNOWN" : reason)
+        + ":"
+        + index;
     return DomainEvent.builder(command.tenantId())
         .aggregate(AGGREGATE_TYPE, task.getJobInstanceId())
         .type(EVENT_TYPE)

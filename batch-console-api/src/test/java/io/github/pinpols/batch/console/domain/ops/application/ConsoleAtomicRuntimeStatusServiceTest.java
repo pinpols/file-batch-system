@@ -11,23 +11,22 @@ class ConsoleAtomicRuntimeStatusServiceTest {
 
   @Test
   void shouldMapRawActuatorPayload_intoFlatResponse() {
-    Map<String, Object> raw =
-        Map.of(
-            "workerCode", "atomic-node-1",
-            "workerType", "ATOMIC",
-            "shell", Map.of("enabled", false, "commandWhitelistSize", 0),
-            "sql", Map.of("enabled", true, "dialect", "PostgreSQL"),
-            "http",
-                Map.of(
-                    "enabled",
-                    true,
-                    "enforceAllowlist",
-                    true,
-                    "enforceAllowlistSource",
-                    "prod-default",
-                    "allowlistHostsSize",
-                    5),
-            "storedProc", Map.of("enabled", true, "allowedSchemasSize", 2));
+    Map<String, Object> raw = Map.of(
+        "workerCode", "atomic-node-1",
+        "workerType", "ATOMIC",
+        "shell", Map.of("enabled", false, "commandWhitelistSize", 0),
+        "sql", Map.of("enabled", true, "dialect", "PostgreSQL"),
+        "http",
+            Map.of(
+                "enabled",
+                true,
+                "enforceAllowlist",
+                true,
+                "enforceAllowlistSource",
+                "prod-default",
+                "allowlistHostsSize",
+                5),
+        "storedProc", Map.of("enabled", true, "allowedSchemasSize", 2));
 
     ConsoleAtomicRuntimeStatusResponse resp = ConsoleAtomicRuntimeStatusService.toResponse(raw);
 

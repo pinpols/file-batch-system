@@ -19,16 +19,13 @@ class SqlTransformComputeSqlValidatorTest {
    * IllegalArgumentException 落到 catch(Exception) 被误判 INFRA_ERROR。
    */
   private static void assertRejected(ThrowingCallable call, String detailSubstring) {
-    assertThatThrownBy(call)
-        .isInstanceOf(BizException.class)
-        .satisfies(
-            e -> {
-              BizException be = (BizException) e;
-              assertThat(be.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
-              if (detailSubstring != null) {
-                assertThat(be.getMessageArgs()[0].toString()).contains(detailSubstring);
-              }
-            });
+    assertThatThrownBy(call).isInstanceOf(BizException.class).satisfies(e -> {
+      BizException be = (BizException) e;
+      assertThat(be.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+      if (detailSubstring != null) {
+        assertThat(be.getMessageArgs()[0].toString()).contains(detailSubstring);
+      }
+    });
   }
 
   @Test
@@ -37,9 +34,8 @@ class SqlTransformComputeSqlValidatorTest {
     security.setAllowedSchemas(List.of("biz"));
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
-    String sql =
-        validator.validateSelect(
-            "select tenant_id, account_id from biz.order_event where tenant_id = :tenantId");
+    String sql = validator.validateSelect(
+        "select tenant_id, account_id from biz.order_event where tenant_id = :tenantId");
 
     assertThat(sql).contains("biz.order_event");
   }
@@ -60,9 +56,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select id from pg_catalog.pg_tables where schemaname = 'biz'"),
+        () -> validator.validateSelect(
+            "select id from pg_catalog.pg_tables where schemaname = 'biz'"),
         "disallowed schema");
   }
 
@@ -72,9 +67,8 @@ class SqlTransformComputeSqlValidatorTest {
         new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
 
     assertRejected(
-        () ->
-            validator.validateUserCheckSelect(
-                "select true AS pass, 'ok' AS message from biz.order_event"),
+        () -> validator.validateUserCheckSelect(
+            "select true AS pass, 'ok' AS message from biz.order_event"),
         "validation SQL may only read batch.process_staging");
   }
 
@@ -85,9 +79,8 @@ class SqlTransformComputeSqlValidatorTest {
 
     // CTAS 被 JSqlParser 解析为 CreateTable, instanceof Select 检查直接拦,但要有显式守护
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "create table biz.foo as select tenant_id from biz.order_event"),
+        () -> validator.validateSelect(
+            "create table biz.foo as select tenant_id from biz.order_event"),
         "only allows SELECT");
   }
 
@@ -131,9 +124,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select upper(coalesce(pg_terminate_backend(pid), 'x')) from biz.t"),
+        () -> validator.validateSelect(
+            "select upper(coalesce(pg_terminate_backend(pid), 'x')) from biz.t"),
         "forbidden function 'pg_terminate_backend'");
   }
 
@@ -156,9 +148,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select \"pg_read_server_files\"('/etc/passwd') as c from biz.t"),
+        () -> validator.validateSelect(
+            "select \"pg_read_server_files\"('/etc/passwd') as c from biz.t"),
         "forbidden function");
   }
 
@@ -170,10 +161,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select c1 from biz.t where tenant_id = :tenantId"
-                    + " order by pg_terminate_backend(pid)"),
+        () -> validator.validateSelect("select c1 from biz.t where tenant_id = :tenantId"
+            + " order by pg_terminate_backend(pid)"),
         "forbidden function 'pg_terminate_backend'");
   }
 
@@ -184,9 +173,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select max(c1) from biz.t group by pg_terminate_backend(pid)"),
+        () -> validator.validateSelect(
+            "select max(c1) from biz.t group by pg_terminate_backend(pid)"),
         "forbidden function 'pg_terminate_backend'");
   }
 
@@ -198,9 +186,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select row_number() over (order by pg_terminate_backend(pid)) as rn from biz.t"),
+        () -> validator.validateSelect(
+            "select row_number() over (order by pg_terminate_backend(pid)) as rn from biz.t"),
         "forbidden function 'pg_terminate_backend'");
   }
 
@@ -211,9 +198,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select c1 from biz.t order by c1 offset pg_terminate_backend(1)"),
+        () -> validator.validateSelect(
+            "select c1 from biz.t order by c1 offset pg_terminate_backend(1)"),
         "forbidden function 'pg_terminate_backend'");
   }
 
@@ -224,9 +210,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select pg_terminate_backend(pid) from biz.fake where tenant_id = :tenantId"),
+        () -> validator.validateSelect(
+            "select pg_terminate_backend(pid) from biz.fake where tenant_id = :tenantId"),
         "forbidden function 'pg_terminate_backend'");
   }
 
@@ -238,15 +223,13 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select dblink_exec('h','drop table biz.t') from biz.t where tenant_id ="
-                    + " :tenantId"),
+        () -> validator.validateSelect(
+            "select dblink_exec('h','drop table biz.t') from biz.t where tenant_id ="
+                + " :tenantId"),
         "forbidden function");
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select pg_sleep_for('5s') from biz.t where tenant_id = :tenantId"),
+        () -> validator.validateSelect(
+            "select pg_sleep_for('5s') from biz.t where tenant_id = :tenantId"),
         "forbidden function");
   }
 
@@ -259,9 +242,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select tenant_id from biz.order_event where tenant_id = :tenantId"),
+        () -> validator.validateSelect(
+            "select tenant_id from biz.order_event where tenant_id = :tenantId"),
         "LIMIT");
   }
 
@@ -274,9 +256,8 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select tenant_id from biz.order_event where tenant_id = :tenantId limit 50000"),
+        () -> validator.validateSelect(
+            "select tenant_id from biz.order_event where tenant_id = :tenantId limit 50000"),
         "exceeds max");
   }
 
@@ -288,9 +269,8 @@ class SqlTransformComputeSqlValidatorTest {
     security.setMaxLimitRows(10_000L);
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
-    String sql =
-        validator.validateSelect(
-            "select tenant_id from biz.order_event where tenant_id = :tenantId limit 5000");
+    String sql = validator.validateSelect(
+        "select tenant_id from biz.order_event where tenant_id = :tenantId limit 5000");
 
     assertThat(sql).contains("limit 5000");
   }
@@ -306,10 +286,9 @@ class SqlTransformComputeSqlValidatorTest {
 
     // LIMIT :p 之前被 catch 后当 0 放行 → maxLimitRows 上限被完全绕过。
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select tenant_id from biz.order_event where tenant_id = :tenantId limit"
-                    + " :pageSize"),
+        () -> validator.validateSelect(
+            "select tenant_id from biz.order_event where tenant_id = :tenantId limit"
+                + " :pageSize"),
         "numeric");
   }
 
@@ -322,10 +301,9 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select tenant_id from biz.order_event where tenant_id = :tenantId"
-                    + " limit (select 999999)"),
+        () -> validator.validateSelect(
+            "select tenant_id from biz.order_event where tenant_id = :tenantId"
+                + " limit (select 999999)"),
         "numeric");
   }
 
@@ -334,10 +312,9 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator =
         new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
 
-    String sql =
-        validator.validateUserCheckSelect(
-            "select bool_and(tenant_id = :tenantId) AS pass from batch.process_staging"
-                + " where batch_key = :batchKey");
+    String sql = validator.validateUserCheckSelect(
+        "select bool_and(tenant_id = :tenantId) AS pass from batch.process_staging"
+            + " where batch_key = :batchKey");
 
     assertThat(sql).contains("batch.process_staging");
   }
@@ -363,10 +340,9 @@ class SqlTransformComputeSqlValidatorTest {
     SqlTransformComputeSqlValidator validator = new SqlTransformComputeSqlValidator(security);
 
     assertRejected(
-        () ->
-            validator.validateSelect(
-                "select w1_4_test_only_marker_fn(tenant_id) from biz.order_event where tenant_id"
-                    + " = :tenantId"),
+        () -> validator.validateSelect(
+            "select w1_4_test_only_marker_fn(tenant_id) from biz.order_event where tenant_id"
+                + " = :tenantId"),
         "w1_4_test_only_marker_fn");
   }
 }

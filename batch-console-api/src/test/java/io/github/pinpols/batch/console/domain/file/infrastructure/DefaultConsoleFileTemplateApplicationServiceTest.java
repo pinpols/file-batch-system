@@ -40,19 +40,17 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   @Test
   void draftMapping_generatesImportTemplateJson() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    FileTemplateMappingDraftCommand command =
-        new FileTemplateMappingDraftCommand(
-            "t1",
-            "IMPORT",
-            "biz",
-            "orders",
-            null,
-            List.of("order_no"),
-            null,
-            null,
-            List.of(
-                new FileTemplateMappingDraftCommand.Field(
-                    "orderNo", "order_no", null, "STRING", true, null, null)));
+    FileTemplateMappingDraftCommand command = new FileTemplateMappingDraftCommand(
+        "t1",
+        "IMPORT",
+        "biz",
+        "orders",
+        null,
+        List.of("order_no"),
+        null,
+        null,
+        List.of(new FileTemplateMappingDraftCommand.Field(
+            "orderNo", "order_no", null, "STRING", true, null, null)));
 
     FileTemplateMappingDraftResult response = service.draftMapping(command);
 
@@ -73,33 +71,32 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   void update_shouldPersistPluginRefs() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(mapper.selectById("t1", 1L))
-        .thenReturn(
-            Map.ofEntries(
-                Map.entry("template_code", "IMP-ORDER"),
-                Map.entry("version", 1),
-                Map.entry("template_name", "orders"),
-                Map.entry("template_type", "IMPORT"),
-                Map.entry("biz_type", "demo"),
-                Map.entry("file_format_type", "DELIMITED"),
-                Map.entry("charset", "UTF-8"),
-                Map.entry("target_charset", "UTF-8"),
-                Map.entry("with_bom", false),
-                Map.entry("record_length", 0),
-                Map.entry("header_rows", 1),
-                Map.entry("footer_rows", 0),
-                Map.entry("checksum_type", "NONE"),
-                Map.entry("compress_type", "NONE"),
-                Map.entry("encrypt_type", "NONE"),
-                Map.entry("streaming_enabled", true),
-                Map.entry("page_size", 1000),
-                Map.entry("fetch_size", 1000),
-                Map.entry("chunk_size", 500),
-                Map.entry("preview_masking_enabled", false),
-                Map.entry("error_line_masking_enabled", false),
-                Map.entry("log_masking_enabled", false),
-                Map.entry("content_encryption_enabled", false),
-                Map.entry("download_requires_approval", false),
-                Map.entry("enabled", true)));
+        .thenReturn(Map.ofEntries(
+            Map.entry("template_code", "IMP-ORDER"),
+            Map.entry("version", 1),
+            Map.entry("template_name", "orders"),
+            Map.entry("template_type", "IMPORT"),
+            Map.entry("biz_type", "demo"),
+            Map.entry("file_format_type", "DELIMITED"),
+            Map.entry("charset", "UTF-8"),
+            Map.entry("target_charset", "UTF-8"),
+            Map.entry("with_bom", false),
+            Map.entry("record_length", 0),
+            Map.entry("header_rows", 1),
+            Map.entry("footer_rows", 0),
+            Map.entry("checksum_type", "NONE"),
+            Map.entry("compress_type", "NONE"),
+            Map.entry("encrypt_type", "NONE"),
+            Map.entry("streaming_enabled", true),
+            Map.entry("page_size", 1000),
+            Map.entry("fetch_size", 1000),
+            Map.entry("chunk_size", 500),
+            Map.entry("preview_masking_enabled", false),
+            Map.entry("error_line_masking_enabled", false),
+            Map.entry("log_masking_enabled", false),
+            Map.entry("content_encryption_enabled", false),
+            Map.entry("download_requires_approval", false),
+            Map.entry("enabled", true)));
     FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
     request.setTenantId("t1");
     request.setLoadTargetRef("jdbc_mapped");
@@ -122,12 +119,11 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
     // 而回读仍按旧 id 取回陈旧行。此处断言 upsert 用的是现有行的 version(1),回读按 path id。
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(mapper.selectById("t1", 1L))
-        .thenReturn(
-            Map.ofEntries(
-                Map.entry("template_code", "IMP-ORDER"),
-                Map.entry("version", 1),
-                Map.entry("template_name", "orders"),
-                Map.entry("enabled", true)));
+        .thenReturn(Map.ofEntries(
+            Map.entry("template_code", "IMP-ORDER"),
+            Map.entry("version", 1),
+            Map.entry("template_name", "orders"),
+            Map.entry("enabled", true)));
     FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
     request.setTenantId("t1");
     request.setVersion(9);

@@ -138,14 +138,13 @@ public class BatchSecurityProperties implements EnvironmentAware {
       }
     }
     if (value.trim().length() < MIN_SECRET_LENGTH) {
-      throw new IllegalStateException(
-          "FATAL: 生产环境密钥强度不足: "
-              + key
-              + " 长度="
-              + value.trim().length()
-              + " < 最小要求 "
-              + MIN_SECRET_LENGTH
-              + "，请用 secret manager 注入足够熵的密钥");
+      throw new IllegalStateException("FATAL: 生产环境密钥强度不足: "
+          + key
+          + " 长度="
+          + value.trim().length()
+          + " < 最小要求 "
+          + MIN_SECRET_LENGTH
+          + "，请用 secret manager 注入足够熵的密钥");
     }
   }
 

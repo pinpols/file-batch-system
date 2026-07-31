@@ -55,18 +55,16 @@ class ConsoleTenantSelfServiceControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleTenantSelfServiceController(
-                    quotaPolicyService,
-                    parameterService,
-                    responseFactory,
-                    requestMetadataResolver,
-                    tenantGuard,
-                    dateTimeSupport()))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleTenantSelfServiceController(
+            quotaPolicyService,
+            parameterService,
+            responseFactory,
+            requestMetadataResolver,
+            tenantGuard,
+            dateTimeSupport()))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private static BatchDateTimeSupport dateTimeSupport() {

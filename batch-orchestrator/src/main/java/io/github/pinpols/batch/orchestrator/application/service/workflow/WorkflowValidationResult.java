@@ -22,7 +22,10 @@ public record WorkflowValidationResult(
   }
 
   public static WorkflowValidationResult clean() {
-    return WorkflowValidationResult.builder().errors(List.of()).warnings(List.of()).build();
+    return WorkflowValidationResult.builder()
+        .errors(List.of())
+        .warnings(List.of())
+        .build();
   }
 
   /** 单条校验问题。 */

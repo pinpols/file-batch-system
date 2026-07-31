@@ -77,7 +77,8 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
 
     try (AdminClient client = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
       ListOffsetsResult result = client.listOffsets(Map.of(tp, OffsetSpec.latest()));
-      long endOffset = result.partitionResult(tp).get(timeoutMs, TimeUnit.MILLISECONDS).offset();
+      long endOffset =
+          result.partitionResult(tp).get(timeoutMs, TimeUnit.MILLISECONDS).offset();
       if (endOffset >= minOffset) {
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("currentOffset", endOffset);

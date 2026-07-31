@@ -60,11 +60,10 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
         .expectStatus()
         .isOk();
 
-    var row =
-        jdbcTemplate.queryForMap(
-            "SELECT tenant_id, template_code, template_type, charset, encrypt_type"
-                + " FROM batch.file_template_config WHERE template_code = ?",
-            code);
+    var row = jdbcTemplate.queryForMap(
+        "SELECT tenant_id, template_code, template_type, charset, encrypt_type"
+            + " FROM batch.file_template_config WHERE template_code = ?",
+        code);
     assertThat(row.get("tenant_id")).isEqualTo("int-ft-ta");
     assertThat(row.get("template_code")).isEqualTo(code);
     assertThat(row.get("template_type")).isEqualTo("IMPORT");
@@ -88,11 +87,10 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.file_template_config WHERE template_code = ?",
-            Long.class,
-            "q q q");
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.file_template_config WHERE template_code = ?",
+        Long.class,
+        "q q q");
     assertThat(cnt).isZero();
   }
 

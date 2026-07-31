@@ -77,22 +77,19 @@ class ConsoleResultVersionControllerTest {
     when(responseSpec.body(any(ParameterizedTypeReference.class)))
         .thenReturn(CommonResponse.success(List.of()));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleResultVersionController(
-                    orchestratorInternalRestClient, tenantGuard, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleResultVersionController(
+            orchestratorInternalRestClient, tenantGuard, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
   void listShouldPassResolvedTenantAndBusinessKey() throws Exception {
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     mockMvc
-        .perform(
-            get("/api/console/result-versions")
-                .param("tenantId", "ta")
-                .param("businessKey", "BK_A"))
+        .perform(get("/api/console/result-versions")
+            .param("tenantId", "ta")
+            .param("businessKey", "BK_A"))
         .andExpect(status().isOk());
     verify(tenantGuard).resolveTenant("ta");
     verify(getUriSpec)
@@ -107,10 +104,9 @@ class ConsoleResultVersionControllerTest {
   void effectiveShouldRouteToEffectiveEndpoint() throws Exception {
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     mockMvc
-        .perform(
-            get("/api/console/result-versions/effective")
-                .param("tenantId", "ta")
-                .param("businessKey", "BK_A"))
+        .perform(get("/api/console/result-versions/effective")
+            .param("tenantId", "ta")
+            .param("businessKey", "BK_A"))
         .andExpect(status().isOk());
     verify(getUriSpec)
         .uri(
@@ -133,10 +129,9 @@ class ConsoleResultVersionControllerTest {
   void promoteShouldPostToPromoteEndpoint() throws Exception {
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     mockMvc
-        .perform(
-            post("/api/console/result-versions/7/promote")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .param("tenantId", "ta"))
+        .perform(post("/api/console/result-versions/7/promote")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .param("tenantId", "ta"))
         .andExpect(status().isOk());
     verify(postUriSpec)
         .uri("/internal/orchestrator/result-versions/{id}/promote?tenantId={tenantId}", 7L, "ta");
@@ -146,10 +141,9 @@ class ConsoleResultVersionControllerTest {
   void rejectShouldPostToRejectEndpoint() throws Exception {
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     mockMvc
-        .perform(
-            post("/api/console/result-versions/7/reject")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .param("tenantId", "ta"))
+        .perform(post("/api/console/result-versions/7/reject")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .param("tenantId", "ta"))
         .andExpect(status().isOk());
     verify(postUriSpec)
         .uri("/internal/orchestrator/result-versions/{id}/reject?tenantId={tenantId}", 7L, "ta");
@@ -161,10 +155,9 @@ class ConsoleResultVersionControllerTest {
         .when(tenantGuard)
         .resolveTenant("tb");
     mockMvc
-        .perform(
-            get("/api/console/result-versions")
-                .param("tenantId", "tb")
-                .param("businessKey", "BK_A"))
+        .perform(get("/api/console/result-versions")
+            .param("tenantId", "tb")
+            .param("businessKey", "BK_A"))
         .andExpect(status().isForbidden());
     verify(orchestratorInternalRestClient, org.mockito.Mockito.never()).build();
   }

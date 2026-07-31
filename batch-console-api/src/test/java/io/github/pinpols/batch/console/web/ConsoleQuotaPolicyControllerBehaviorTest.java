@@ -47,11 +47,11 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleQuotaPolicyController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleQuotaPolicyController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String saveBody(String policyCode) {
@@ -70,11 +70,10 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
     when(service.list(eq("ta"), eq("QP_A"), eq(true), eq(1), eq(20)))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
-        .perform(
-            get("/api/console/quota-policies")
-                .param("tenantId", "ta")
-                .param("policyCode", "QP_A")
-                .param("enabled", "true"))
+        .perform(get("/api/console/quota-policies")
+            .param("tenantId", "ta")
+            .param("policyCode", "QP_A")
+            .param("enabled", "true"))
         .andExpect(status().isOk());
     verify(service).list("ta", "QP_A", true, 1, 20);
   }
@@ -83,10 +82,9 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   void createShouldReturnRow() throws Exception {
     when(service.create(any(QuotaPolicySaveRequest.class))).thenReturn(policy(1L, "QP_NEW"));
     mockMvc
-        .perform(
-            post("/api/console/quota-policies")
-                .contentType(APPLICATION_JSON)
-                .content(saveBody("QP_NEW")))
+        .perform(post("/api/console/quota-policies")
+            .contentType(APPLICATION_JSON)
+            .content(saveBody("QP_NEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.policyCode").value("QP_NEW"));
   }
@@ -95,10 +93,9 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   void updateShouldPassPathId() throws Exception {
     when(service.update(eq(7L), any(QuotaPolicySaveRequest.class))).thenReturn(policy(7L, "QP_U"));
     mockMvc
-        .perform(
-            put("/api/console/quota-policies/7")
-                .contentType(APPLICATION_JSON)
-                .content(saveBody("QP_U")))
+        .perform(put("/api/console/quota-policies/7")
+            .contentType(APPLICATION_JSON)
+            .content(saveBody("QP_U")))
         .andExpect(status().isOk());
     verify(service).update(eq(7L), any(QuotaPolicySaveRequest.class));
   }
@@ -106,10 +103,9 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   @Test
   void toggleShouldDelegate() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/quota-policies/9/toggle")
-                .param("tenantId", "ta")
-                .param("enabled", "false"))
+        .perform(post("/api/console/quota-policies/9/toggle")
+            .param("tenantId", "ta")
+            .param("enabled", "false"))
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", false);
   }

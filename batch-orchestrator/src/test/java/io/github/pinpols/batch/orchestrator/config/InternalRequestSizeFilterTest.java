@@ -19,7 +19,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @ExtendWith(MockitoExtension.class)
 class InternalRequestSizeFilterTest {
 
-  @Mock private FilterChain chain;
+  @Mock
+  private FilterChain chain;
 
   private InternalRequestSizeFilter filter(long maxBytes) {
     InternalRequestProperties props = new InternalRequestProperties();
@@ -145,18 +146,17 @@ class InternalRequestSizeFilterTest {
   }
 
   private MockHttpServletRequest chunkedPost(String uri, int actualBytes) {
-    MockHttpServletRequest req =
-        new MockHttpServletRequest("POST", uri) {
-          @Override
-          public int getContentLength() {
-            return -1;
-          }
+    MockHttpServletRequest req = new MockHttpServletRequest("POST", uri) {
+      @Override
+      public int getContentLength() {
+        return -1;
+      }
 
-          @Override
-          public long getContentLengthLong() {
-            return -1L;
-          }
-        };
+      @Override
+      public long getContentLengthLong() {
+        return -1L;
+      }
+    };
     req.setContentType("application/json");
     req.setContent(new byte[actualBytes]);
     return req;

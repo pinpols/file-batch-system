@@ -25,7 +25,8 @@ class ActiveTaskLeaseRegistryTest {
     registry.register("task-1", "tenant-A", "worker-1");
 
     assertThat(registry.snapshot()).hasSize(1);
-    ActiveTaskLeaseRegistry.ActiveTaskLease lease = registry.snapshot().iterator().next();
+    ActiveTaskLeaseRegistry.ActiveTaskLease lease =
+        registry.snapshot().iterator().next();
     assertThat(lease.getTaskId()).isEqualTo("task-1");
     assertThat(lease.getTenantId()).isEqualTo("tenant-A");
     assertThat(lease.getWorkerId()).isEqualTo("worker-1");
@@ -120,12 +121,10 @@ class ActiveTaskLeaseRegistryTest {
 
     java.util.concurrent.CountDownLatch awaitStarted = new java.util.concurrent.CountDownLatch(1);
     ExecutorService pool = Executors.newSingleThreadExecutor();
-    Future<Boolean> f =
-        pool.submit(
-            () -> {
-              awaitStarted.countDown();
-              return registry.awaitDrain(Duration.ofSeconds(2));
-            });
+    Future<Boolean> f = pool.submit(() -> {
+      awaitStarted.countDown();
+      return registry.awaitDrain(Duration.ofSeconds(2));
+    });
 
     awaitStarted.await(1, java.util.concurrent.TimeUnit.SECONDS);
     // 给 awaitDrain 线程从 countDown 到进入 monitor wait 的极短窗口（不再依赖 200ms 业务等待）

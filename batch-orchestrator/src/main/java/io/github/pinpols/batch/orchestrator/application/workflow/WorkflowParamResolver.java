@@ -100,8 +100,8 @@ public class WorkflowParamResolver {
       case NODES_ROOT -> resolveNodeRef(text, tail, context);
       case WORKFLOW_RUN_ROOT -> resolveWorkflowRunRef(text, tail, context);
       default ->
-          throw BizException.of(
-              ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", text);
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.workflow.param_ref_invalid", text);
     };
   }
 

@@ -37,12 +37,10 @@ public class OutboxPublishCircuitBreaker {
   private static final String FIELD_FAILED_POLLS = "failedPolls";
   private static final String FIELD_OPEN_UNTIL_MS = "openUntilMs";
   // 返回 openUntilMs 原始值：<= now 表示熔断关闭，> now 表示熔断开启中
-  private static final String ALLOW_SCRIPT =
-      """
+  private static final String ALLOW_SCRIPT = """
       return tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
       """;
-  private static final String ADVANCE_SCRIPT =
-      """
+  private static final String ADVANCE_SCRIPT = """
       local failedField = ARGV[1]
       local openField = ARGV[2]
       local failed = tonumber(ARGV[3])
@@ -113,12 +111,11 @@ public class OutboxPublishCircuitBreaker {
             "Cluster-wide outbox publish circuit breaker state (1=open → all orchestrators pause"
                 + " outbox delivery; 0=closed). One of the most severe degradations.")
         .register(meterRegistry);
-    failOpenCounter =
-        Counter.builder("batch.outbox.circuit.failopen.total")
-            .description(
-                "Outbox circuit breaker fell back to cached state because Redis was unreachable"
-                    + " (fail-open). Non-zero rate signals Redis degradation, not delivery loss.")
-            .register(meterRegistry);
+    failOpenCounter = Counter.builder("batch.outbox.circuit.failopen.total")
+        .description(
+            "Outbox circuit breaker fell back to cached state because Redis was unreachable"
+                + " (fail-open). Non-zero rate signals Redis degradation, not delivery loss.")
+        .register(meterRegistry);
   }
 
   /**
@@ -195,17 +192,16 @@ public class OutboxPublishCircuitBreaker {
     long ttlMillis = Math.max(outboxProperties.getCircuitBreakerCooldownMillis(), 60_000L);
     Long openUntilMs;
     try {
-      openUntilMs =
-          redis.evalLong(
-              ADVANCE_SCRIPT,
-              BatchRedisKeys.outboxCircuit(),
-              FIELD_FAILED_POLLS,
-              FIELD_OPEN_UNTIL_MS,
-              String.valueOf(Math.max(publishFailed, 0)),
-              String.valueOf(outboxProperties.getCircuitBreakerFailureThresholdConsecutivePolls()),
-              String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
-              String.valueOf(now),
-              String.valueOf(ttlMillis));
+      openUntilMs = redis.evalLong(
+          ADVANCE_SCRIPT,
+          BatchRedisKeys.outboxCircuit(),
+          FIELD_FAILED_POLLS,
+          FIELD_OPEN_UNTIL_MS,
+          String.valueOf(Math.max(publishFailed, 0)),
+          String.valueOf(outboxProperties.getCircuitBreakerFailureThresholdConsecutivePolls()),
+          String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
+          String.valueOf(now),
+          String.valueOf(ttlMillis));
     } catch (DataAccessException ex) {
       // Redis 不可达时 best-effort：本轮不更新集群熔断态,保留本地 state,重置半开标记避免泄漏,
       // 不向 OutboxPollScheduler 抛异常(否则每轮栽在 Redis 上,把 Redis 故障放大成投递停摆)。

@@ -27,13 +27,12 @@ class ConsoleMetaEnumRegistrationTest {
   private static final String ENUM_PACKAGE = "io.github.pinpols.batch.common.enums";
 
   /** 不对外暴露的枚举；新增条目必须附上原因。 */
-  private static final Set<String> EXCLUDED =
-      Set.of(
-          "ResultCode", // RPC 错误码协议，非业务字典
-          "WorkflowNodeCode", // 内部节点标记常量（仅 START/END）
-          "JobStatus", // 死代码（无其它引用），候选移除
-          "BatchLifecycleStatus" // 派生公共投影，非可选字典；用户仍选具体 *Status，UI 不暴露
-          );
+  private static final Set<String> EXCLUDED = Set.of(
+      "ResultCode", // RPC 错误码协议，非业务字典
+      "WorkflowNodeCode", // 内部节点标记常量（仅 START/END）
+      "JobStatus", // 死代码（无其它引用），候选移除
+      "BatchLifecycleStatus" // 派生公共投影，非可选字典；用户仍选具体 *Status，UI 不暴露
+      );
 
   @Test
   void everyCommonEnumImplementsDictEnum() {
@@ -53,28 +52,25 @@ class ConsoleMetaEnumRegistrationTest {
   @Test
   void everyCommonEnumIsRegisteredOrExplicitlyExcluded() {
     Set<String> scanned = scanEnumSimpleNames();
-    Set<String> registered =
-        ConsoleMetaQueryService.registeredEnumClasses().stream()
-            .map(Class::getSimpleName)
-            .collect(Collectors.toUnmodifiableSet());
+    Set<String> registered = ConsoleMetaQueryService.registeredEnumClasses().stream()
+        .map(Class::getSimpleName)
+        .collect(Collectors.toUnmodifiableSet());
 
     Set<String> unaccounted = new TreeSet<>(scanned);
     unaccounted.removeAll(registered);
     unaccounted.removeAll(EXCLUDED);
 
     assertThat(unaccounted)
-        .as(
-            "新增枚举必须二选一：在 ConsoleMetaQueryService.REGISTRATIONS 中注册，"
-                + "或加入 ConsoleMetaEnumRegistrationTest.EXCLUDED 白名单并注明原因")
+        .as("新增枚举必须二选一：在 ConsoleMetaQueryService.REGISTRATIONS 中注册，"
+            + "或加入 ConsoleMetaEnumRegistrationTest.EXCLUDED 白名单并注明原因")
         .isEmpty();
   }
 
   @Test
   void excludedEnumsAreNotRegistered() {
-    Set<String> registered =
-        ConsoleMetaQueryService.registeredEnumClasses().stream()
-            .map(Class::getSimpleName)
-            .collect(Collectors.toUnmodifiableSet());
+    Set<String> registered = ConsoleMetaQueryService.registeredEnumClasses().stream()
+        .map(Class::getSimpleName)
+        .collect(Collectors.toUnmodifiableSet());
 
     assertThat(registered)
         .as("EXCLUDED 白名单中的枚举不应同时出现在 REGISTRATIONS 中")

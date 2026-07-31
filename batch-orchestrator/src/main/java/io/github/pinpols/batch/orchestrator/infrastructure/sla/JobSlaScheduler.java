@@ -118,17 +118,16 @@ public class JobSlaScheduler {
             candidate.getId(),
             candidate.getInstanceNo(),
             buildExtra(candidate, now));
-        AlertEmitRequest emitRequest =
-            AlertEmitRequest.builder()
-                .tenantId(candidate.getTenantId())
-                .serviceName("batch-orchestrator")
-                .alertType("JOB_SLA_VIOLATION")
-                .severity("WARN")
-                .title(buildMessage(candidate, now))
-                .detailJson(JsonUtils.toJson(buildExtra(candidate, now)))
-                .resourceKey(String.valueOf(candidate.getId()))
-                .traceId(candidate.getTraceId())
-                .build();
+        AlertEmitRequest emitRequest = AlertEmitRequest.builder()
+            .tenantId(candidate.getTenantId())
+            .serviceName("batch-orchestrator")
+            .alertType("JOB_SLA_VIOLATION")
+            .severity("WARN")
+            .title(buildMessage(candidate, now))
+            .detailJson(JsonUtils.toJson(buildExtra(candidate, now)))
+            .resourceKey(String.valueOf(candidate.getId()))
+            .traceId(candidate.getTraceId())
+            .build();
         alertEventService.emit(emitRequest);
       } finally {
         BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
@@ -152,9 +151,8 @@ public class JobSlaScheduler {
     }
     Instant escalationBefore = now.minusSeconds(delaySeconds);
     escalationCount.set(jobInstanceMapper.countSlaEscalationCandidates(escalationBefore));
-    List<JobInstanceEntity> escalations =
-        jobInstanceMapper.selectSlaEscalationCandidates(
-            escalationBefore, governance.sla().getBatchSize());
+    List<JobInstanceEntity> escalations = jobInstanceMapper.selectSlaEscalationCandidates(
+        escalationBefore, governance.sla().getBatchSize());
     if (escalations == null || escalations.isEmpty()) {
       return;
     }
@@ -165,17 +163,16 @@ public class JobSlaScheduler {
         continue;
       }
       Map<String, Object> extra = buildEscalationExtra(candidate, now, delaySeconds);
-      AlertEmitRequest emitRequest =
-          AlertEmitRequest.builder()
-              .tenantId(candidate.getTenantId())
-              .serviceName("batch-orchestrator")
-              .alertType("JOB_SLA_VIOLATION_ESCALATED")
-              .severity(resolvedSeverity)
-              .title("job SLA still violating after escalation window")
-              .detailJson(JsonUtils.toJson(extra))
-              .resourceKey(String.valueOf(candidate.getId()))
-              .traceId(candidate.getTraceId())
-              .build();
+      AlertEmitRequest emitRequest = AlertEmitRequest.builder()
+          .tenantId(candidate.getTenantId())
+          .serviceName("batch-orchestrator")
+          .alertType("JOB_SLA_VIOLATION_ESCALATED")
+          .severity(resolvedSeverity)
+          .title("job SLA still violating after escalation window")
+          .detailJson(JsonUtils.toJson(extra))
+          .resourceKey(String.valueOf(candidate.getId()))
+          .traceId(candidate.getTraceId())
+          .build();
       alertEventService.emit(emitRequest);
     }
   }
@@ -187,7 +184,8 @@ public class JobSlaScheduler {
     extra.put("slaAlertedAt", candidate.getSlaAlertedAt());
     if (candidate.getSlaAlertedAt() != null) {
       extra.put(
-          "alertedElapsedSeconds", Duration.between(candidate.getSlaAlertedAt(), now).getSeconds());
+          "alertedElapsedSeconds",
+          Duration.between(candidate.getSlaAlertedAt(), now).getSeconds());
     }
     return extra;
   }
@@ -207,7 +205,8 @@ public class JobSlaScheduler {
     if (candidate.getDeadlineAt() != null && candidate.getDeadlineAt().isBefore(now)) {
       extra.put(KEY_VIOLATION_REASON, "DEADLINE_EXCEEDED");
       extra.put(
-          "deadlineDelaySeconds", Duration.between(candidate.getDeadlineAt(), now).getSeconds());
+          "deadlineDelaySeconds",
+          Duration.between(candidate.getDeadlineAt(), now).getSeconds());
     } else if (candidate.getExpectedDurationSeconds() != null
         && candidate.getExpectedDurationSeconds() > 0
         && candidate.getStartedAt() != null) {

@@ -55,12 +55,10 @@ class StoredProcAtomicHandlerTest {
 
   /** 把闸 1 角色查询接到 rolePs/roleRs,闸 3 secdef 查询接到 secdefPs/secdefRs(按 SQL 文本路由)。 */
   private void stubGateQueries() throws Exception {
-    when(connection.prepareStatement(anyString()))
-        .thenAnswer(
-            inv -> {
-              String sql = inv.getArgument(0);
-              return sql.contains("pg_execute_server_program") ? rolePs : secdefPs;
-            });
+    when(connection.prepareStatement(anyString())).thenAnswer(inv -> {
+      String sql = inv.getArgument(0);
+      return sql.contains("pg_execute_server_program") ? rolePs : secdefPs;
+    });
   }
 
   private void stubRoleGate(boolean osCapable) throws Exception {
@@ -100,10 +98,8 @@ class StoredProcAtomicHandlerTest {
     when(callableStatement.getObject(1)).thenReturn(42); // p1 (out at pos 1, no in params)
 
     // 执行
-    SdkTaskResult r =
-        defaultsHandler(dataSource)
-            .execute(
-                ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
+    SdkTaskResult r = defaultsHandler(dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
 
     // 断言
     assertThat(r.success()).isTrue();
@@ -129,9 +125,8 @@ class StoredProcAtomicHandlerTest {
   @Test
   @DisplayName("非法 procedureName 格式 → fail")
   void shouldFail_whenProcedureNameIllegal() {
-    SdkTaskResult r =
-        defaultsHandler(dataSource)
-            .execute(ctx(Map.of("procedureName", "batch.refresh; DROP TABLE x")));
+    SdkTaskResult r = defaultsHandler(dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh; DROP TABLE x")));
 
     assertThat(r.success()).isFalse();
     assertThat(r.message()).contains("procedureName must match");
@@ -142,13 +137,11 @@ class StoredProcAtomicHandlerTest {
   @Test
   @DisplayName("闸 2:schema 不在白名单 → SecurityException → fail")
   void shouldFail_whenSchemaNotAllowed() {
-    StoredProcAtomicConfig cfg =
-        new StoredProcAtomicConfig(
-            "stored_proc", Set.of("batch"), false, true, false, 60, 65536, false);
+    StoredProcAtomicConfig cfg = new StoredProcAtomicConfig(
+        "stored_proc", Set.of("batch"), false, true, false, 60, 65536, false);
 
-    SdkTaskResult r =
-        new StoredProcAtomicHandler(cfg, dataSource)
-            .execute(ctx(Map.of("procedureName", "public.foo")));
+    SdkTaskResult r = new StoredProcAtomicHandler(cfg, dataSource)
+        .execute(ctx(Map.of("procedureName", "public.foo")));
 
     assertThat(r.success()).isFalse();
     assertThat(r.message()).contains("schema not allowed");
@@ -161,13 +154,11 @@ class StoredProcAtomicHandlerTest {
     stubRoleGate(false);
     stubSecDefGate(false);
     stubCall();
-    StoredProcAtomicConfig cfg =
-        new StoredProcAtomicConfig(
-            "stored_proc", Set.of("batch"), false, true, false, 60, 65536, false);
+    StoredProcAtomicConfig cfg = new StoredProcAtomicConfig(
+        "stored_proc", Set.of("batch"), false, true, false, 60, 65536, false);
 
-    SdkTaskResult r =
-        new StoredProcAtomicHandler(cfg, dataSource)
-            .execute(ctx(Map.of("procedureName", "batch.foo")));
+    SdkTaskResult r = new StoredProcAtomicHandler(cfg, dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.foo")));
 
     assertThat(r.success()).isTrue();
     verify(connection).prepareCall(anyString());
@@ -215,9 +206,8 @@ class StoredProcAtomicHandlerTest {
     StoredProcAtomicConfig cfg =
         new StoredProcAtomicConfig("stored_proc", Set.of(), true, true, false, 60, 65536, false);
 
-    SdkTaskResult r =
-        new StoredProcAtomicHandler(cfg, dataSource)
-            .execute(ctx(Map.of("procedureName", "batch.refresh")));
+    SdkTaskResult r = new StoredProcAtomicHandler(cfg, dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh")));
 
     assertThat(r.success()).isTrue();
     verify(secdefPs, never()).executeQuery();
@@ -233,9 +223,8 @@ class StoredProcAtomicHandlerTest {
     stubSecDefGate(false);
     stubCall();
 
-    SdkTaskResult r =
-        defaultsHandler(dataSource)
-            .execute(ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("JSONB"))));
+    SdkTaskResult r = defaultsHandler(dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("JSONB"))));
 
     assertThat(r.success()).isFalse();
     assertThat(r.message()).contains("unsupported SQL type");
@@ -256,14 +245,12 @@ class StoredProcAtomicHandlerTest {
       throws Exception {
     PreparedStatement execPs = mock(PreparedStatement.class);
     ResultSet execRs = mock(ResultSet.class);
-    when(connection.prepareStatement(anyString()))
-        .thenAnswer(
-            inv -> {
-              String sql = inv.getArgument(0);
-              if (sql.contains("pg_execute_server_program")) return rolePs;
-              if (sql.contains("has_function_privilege")) return execPs;
-              return secdefPs;
-            });
+    when(connection.prepareStatement(anyString())).thenAnswer(inv -> {
+      String sql = inv.getArgument(0);
+      if (sql.contains("pg_execute_server_program")) return rolePs;
+      if (sql.contains("has_function_privilege")) return execPs;
+      return secdefPs;
+    });
     when(rolePs.executeQuery()).thenReturn(roleRs);
     when(roleRs.next()).thenReturn(true);
     when(roleRs.getBoolean(1)).thenReturn(osCapable);
@@ -282,9 +269,8 @@ class StoredProcAtomicHandlerTest {
     stubCall();
     var cfg =
         new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, true, 60, 65536, false);
-    SdkTaskResult r =
-        new StoredProcAtomicHandler(cfg, dataSource)
-            .execute(ctx(Map.of("procedureName", "batch.refresh")));
+    SdkTaskResult r = new StoredProcAtomicHandler(cfg, dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh")));
     assertThat(r.success()).isFalse();
     assertThat(r.message()).contains("EXECUTE privilege");
     verify(callableStatement, never()).execute();
@@ -298,10 +284,8 @@ class StoredProcAtomicHandlerTest {
     when(callableStatement.getObject(1)).thenReturn(1);
     var cfg =
         new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, true, 60, 65536, false);
-    SdkTaskResult r =
-        new StoredProcAtomicHandler(cfg, dataSource)
-            .execute(
-                ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
+    SdkTaskResult r = new StoredProcAtomicHandler(cfg, dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
     assertThat(r.success()).isTrue();
   }
 
@@ -316,10 +300,8 @@ class StoredProcAtomicHandlerTest {
     when(callableStatement.getObject(1)).thenReturn(big);
     var cfg =
         new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, false, 60, 10, false);
-    SdkTaskResult r =
-        new StoredProcAtomicHandler(cfg, dataSource)
-            .execute(
-                ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("VARCHAR"))));
+    SdkTaskResult r = new StoredProcAtomicHandler(cfg, dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("VARCHAR"))));
     assertThat(r.success()).isTrue();
     @SuppressWarnings("unchecked")
     Map<String, Object> out = (Map<String, Object>) r.output().get("outValues");
@@ -336,10 +318,8 @@ class StoredProcAtomicHandlerTest {
     when(callableStatement.getObject(1)).thenReturn(1);
     var cfg =
         new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, false, 60, 65536, false);
-    SdkTaskResult r =
-        new StoredProcAtomicHandler(cfg, dataSource)
-            .execute(
-                ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
+    SdkTaskResult r = new StoredProcAtomicHandler(cfg, dataSource)
+        .execute(ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
     assertThat(r.success()).isTrue();
     verify(connection).commit();
   }

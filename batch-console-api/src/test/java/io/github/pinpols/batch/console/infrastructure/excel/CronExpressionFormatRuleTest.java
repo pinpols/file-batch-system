@@ -42,13 +42,10 @@ class CronExpressionFormatRuleTest {
   @Test
   void shouldReport_whenScheduleExprBlankForCron() {
     List<WorkbookIssue> issues = CronExpressionFormatRule.validate(List.of(row("CRON", null, 4)));
-    assertThat(issues)
-        .singleElement()
-        .satisfies(
-            i -> {
-              assertThat(i.message()).contains("schedule_expr is required when schedule_type=CRON");
-              assertThat(i.rowNo()).isEqualTo(4);
-            });
+    assertThat(issues).singleElement().satisfies(i -> {
+      assertThat(i.message()).contains("schedule_expr is required when schedule_type=CRON");
+      assertThat(i.rowNo()).isEqualTo(4);
+    });
   }
 
   @Test

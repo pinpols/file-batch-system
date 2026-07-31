@@ -37,13 +37,11 @@ class AssetFreshnessPolicyServiceTest {
     policyMapper = mock(AssetFreshnessPolicyMapper.class);
     assetPartitionService = mock(AssetPartitionService.class);
     alertEventService = mock(AlertEventService.class);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.fixed(Instant.parse("2026-06-30T03:30:00Z"), ZoneId.of("UTC")),
-            new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    service =
-        new AssetFreshnessPolicyService(
-            policyMapper, assetPartitionService, alertEventService, dateTimeSupport);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.fixed(Instant.parse("2026-06-30T03:30:00Z"), ZoneId.of("UTC")),
+        new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    service = new AssetFreshnessPolicyService(
+        policyMapper, assetPartitionService, alertEventService, dateTimeSupport);
   }
 
   @Test

@@ -8,9 +8,11 @@ import lombok.Data;
 
 @Data
 public class CalendarSaveRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String calendarCode;
+  @ValidResourceCode
+  private String calendarCode;
 
   @NotBlank
   @Size(max = 256)

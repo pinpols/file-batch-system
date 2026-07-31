@@ -47,7 +47,8 @@ public class ResultVersionController {
   @GetMapping("/effective")
   public CommonResponse<ResultVersionEntity> effective(
       @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    return CommonResponse.success(queryService.findEffective(tenantId, businessKey).orElse(null));
+    return CommonResponse.success(
+        queryService.findEffective(tenantId, businessKey).orElse(null));
   }
 
   @GetMapping("/{id}")

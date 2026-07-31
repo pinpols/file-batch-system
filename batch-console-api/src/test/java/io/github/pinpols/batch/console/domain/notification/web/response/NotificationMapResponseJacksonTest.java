@@ -55,9 +55,8 @@ class NotificationMapResponseJacksonTest {
             "updated_at");
     assertThat(back).containsEntry("channel_code", "WH1").containsEntry("enabled", true);
     assertThat(back).doesNotContainKey("updated_by");
-    assertThat(
-            mapper.convertValue(
-                back.get("config_json"), new TypeReference<Map<String, Object>>() {}))
+    assertThat(mapper.convertValue(
+            back.get("config_json"), new TypeReference<Map<String, Object>>() {}))
         .containsEntry("url", "https://hooks.example/x");
   }
 
@@ -119,9 +118,8 @@ class NotificationMapResponseJacksonTest {
     // alert_event_id / error_message / error_key / error_args 未 put → NON_NULL 省略。
     assertThat(back)
         .doesNotContainKeys("alert_event_id", "error_message", "error_key", "error_args");
-    assertThat(
-            mapper.convertValue(
-                back.get("payload_json"), new TypeReference<Map<String, Object>>() {}))
+    assertThat(mapper.convertValue(
+            back.get("payload_json"), new TypeReference<Map<String, Object>>() {}))
         .containsEntry("message", "hi");
   }
 

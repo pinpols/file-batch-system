@@ -20,9 +20,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class RetryScheduleSchedulerTest {
 
-  @Mock private RetryGovernanceService retryGovernanceService;
+  @Mock
+  private RetryGovernanceService retryGovernanceService;
 
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private RetryScheduleScheduler scheduler;
 
@@ -42,12 +44,11 @@ class RetryScheduleSchedulerTest {
   void shouldDispatchOnlyOnceWhenPollIsCalledConcurrently() throws Exception {
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
-    doAnswer(
-            invocation -> {
-              entered.countDown();
-              release.await();
-              return null;
-            })
+    doAnswer(invocation -> {
+          entered.countDown();
+          release.await();
+          return null;
+        })
         .when(retryGovernanceService)
         .dispatchDueRetries();
 

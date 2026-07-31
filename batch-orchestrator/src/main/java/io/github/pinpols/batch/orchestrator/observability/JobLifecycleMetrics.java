@@ -41,16 +41,15 @@ public class JobLifecycleMetrics {
    */
   public void recordCompletion(
       String tenantId, String jobType, String terminalStatus, boolean dryRun, Duration duration) {
-    Tags tags =
-        Tags.of(
-            TAG_TENANT,
-            safe(tenantId),
-            TAG_JOB_TYPE,
-            safe(jobType),
-            TAG_STATUS,
-            safe(terminalStatus),
-            TAG_DRY_RUN,
-            Boolean.toString(dryRun));
+    Tags tags = Tags.of(
+        TAG_TENANT,
+        safe(tenantId),
+        TAG_JOB_TYPE,
+        safe(jobType),
+        TAG_STATUS,
+        safe(terminalStatus),
+        TAG_DRY_RUN,
+        Boolean.toString(dryRun));
     Timer.builder(JOB_DURATION_SECONDS)
         .tags(tags)
         .publishPercentileHistogram()
@@ -65,16 +64,15 @@ public class JobLifecycleMetrics {
    * <p>同样带 dry_run tag,避免演练 instance 触发 FAILED 时拉爆生产错误率报警。
    */
   public void recordFailure(String tenantId, String jobType, String errorCode, boolean dryRun) {
-    Tags tags =
-        Tags.of(
-            TAG_TENANT,
-            safe(tenantId),
-            TAG_JOB_TYPE,
-            safe(jobType),
-            TAG_ERROR_CODE,
-            safe(errorCode),
-            TAG_DRY_RUN,
-            Boolean.toString(dryRun));
+    Tags tags = Tags.of(
+        TAG_TENANT,
+        safe(tenantId),
+        TAG_JOB_TYPE,
+        safe(jobType),
+        TAG_ERROR_CODE,
+        safe(errorCode),
+        TAG_DRY_RUN,
+        Boolean.toString(dryRun));
     Counter.builder(JOB_FAILURE_TOTAL).tags(tags).register(registry).increment();
   }
 

@@ -21,13 +21,12 @@ public class SensorPolicyRegistry {
     for (SensorPolicy policy : policyBeans) {
       SensorPolicy existing = policies.putIfAbsent(policy.type(), policy);
       if (existing != null) {
-        throw new IllegalStateException(
-            "Duplicate SensorPolicy for type "
-                + policy.type()
-                + ": "
-                + existing.getClass().getName()
-                + " vs "
-                + policy.getClass().getName());
+        throw new IllegalStateException("Duplicate SensorPolicy for type "
+            + policy.type()
+            + ": "
+            + existing.getClass().getName()
+            + " vs "
+            + policy.getClass().getName());
       }
     }
   }

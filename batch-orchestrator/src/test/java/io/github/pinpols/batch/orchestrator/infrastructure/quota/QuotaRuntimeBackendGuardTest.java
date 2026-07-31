@@ -16,11 +16,10 @@ class QuotaRuntimeBackendGuardTest {
   void includesRedisLocationInGuardIdentity() {
     QuotaProperties properties = new QuotaProperties();
     properties.setRuntimeStore("redis");
-    MockEnvironment environment =
-        environment()
-            .withProperty("spring.data.redis.host", "valkey")
-            .withProperty("spring.data.redis.port", "6379")
-            .withProperty("spring.data.redis.database", "2");
+    MockEnvironment environment = environment()
+        .withProperty("spring.data.redis.host", "valkey")
+        .withProperty("spring.data.redis.port", "6379")
+        .withProperty("spring.data.redis.database", "2");
 
     StatefulBackendGuard.DesiredBackend desired = guard(properties, environment).desiredBackend();
 
@@ -33,7 +32,8 @@ class QuotaRuntimeBackendGuardTest {
     QuotaProperties properties = new QuotaProperties();
     properties.setRuntimeStore("database");
 
-    StatefulBackendGuard.DesiredBackend desired = guard(properties, environment()).desiredBackend();
+    StatefulBackendGuard.DesiredBackend desired =
+        guard(properties, environment()).desiredBackend();
 
     assertThat(desired.backend()).isEqualTo("database");
     assertThat(desired.backendIdentity())

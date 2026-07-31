@@ -104,15 +104,13 @@ public class ConsoleApiExceptionHandler {
   public ResponseEntity<?> handleMethodArgumentNotValidException(
       MethodArgumentNotValidException exception) {
     log.warn("console validation exception: {}", exception.getMessage());
-    String message =
-        exception.getBindingResult().getFieldErrors().stream()
-            .map(FieldError::getDefaultMessage)
-            .collect(Collectors.joining("; "));
+    String message = exception.getBindingResult().getFieldErrors().stream()
+        .map(FieldError::getDefaultMessage)
+        .collect(Collectors.joining("; "));
     return ResponseEntity.badRequest()
-        .body(
-            responseFactory.failure(
-                ResultCode.VALIDATION_ERROR,
-                message.isBlank() ? CommonErrorMessages.VALIDATION_FAILED : message));
+        .body(responseFactory.failure(
+            ResultCode.VALIDATION_ERROR,
+            message.isBlank() ? CommonErrorMessages.VALIDATION_FAILED : message));
   }
 
   @ExceptionHandler(ConstraintViolationException.class)
@@ -132,13 +130,12 @@ public class ConsoleApiExceptionHandler {
             ? ResultCode.MISSING_IDEMPOTENCY_KEY
             : ResultCode.INVALID_ARGUMENT;
     return ResponseEntity.badRequest()
-        .body(
-            responseFactory.failure(
-                code,
-                CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(
-                        exception.getHeaderName())
-                    ? CommonErrorMessages.MISSING_IDEMPOTENCY_KEY
-                    : CommonErrorMessages.INVALID_ARGUMENT));
+        .body(responseFactory.failure(
+            code,
+            CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(
+                    exception.getHeaderName())
+                ? CommonErrorMessages.MISSING_IDEMPOTENCY_KEY
+                : CommonErrorMessages.INVALID_ARGUMENT));
   }
 
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -183,12 +180,11 @@ public class ConsoleApiExceptionHandler {
       if (downstream != null && downstream.code() != null) {
         // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
         return ResponseEntity.status(downstream.code().httpStatus())
-            .body(
-                responseFactory.failure(
-                    downstream.code(),
-                    downstream.message() == null || downstream.message().isBlank()
-                        ? downstream.code().defaultMessage()
-                        : downstream.message()));
+            .body(responseFactory.failure(
+                downstream.code(),
+                downstream.message() == null || downstream.message().isBlank()
+                    ? downstream.code().defaultMessage()
+                    : downstream.message()));
       }
     } catch (RuntimeException ignored) {
       SwallowedExceptionLogger.warn(
@@ -200,9 +196,8 @@ public class ConsoleApiExceptionHandler {
     // 避免 4xx（下游入参错误 / 资源冲突）被一律降级成 SYSTEM_ERROR 误导前端。
     ResultCode code = mapStatusToResultCode(exception.getStatusCode());
     return ResponseEntity.status(exception.getStatusCode())
-        .body(
-            responseFactory.failure(
-                code, body == null || body.isBlank() ? exception.getMessage() : body));
+        .body(responseFactory.failure(
+            code, body == null || body.isBlank() ? exception.getMessage() : body));
   }
 
   /**
@@ -294,7 +289,8 @@ public class ConsoleApiExceptionHandler {
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
-    log.warn("console data integrity violation: {}", exception.getMostSpecificCause().getMessage());
+    log.warn(
+        "console data integrity violation: {}", exception.getMostSpecificCause().getMessage());
     Throwable root = exception.getMostSpecificCause();
     String rawMsg = root == null ? null : root.getMessage();
     PgConstraintViolation kind = PgConstraintViolation.classify(rawMsg);

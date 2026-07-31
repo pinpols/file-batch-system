@@ -45,79 +45,77 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
-  @Autowired private ObjectMapper objectMapper;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+
+  @Autowired
+  private ObjectMapper objectMapper;
 
   @Test
   void wap_sqlTransform_validationFailureAbortsCommit() throws Exception {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
     ProcessE2eFixture.cleanProcessRows(jdbcTemplate);
     ProcessE2eFixture.seedDemoOrderEvents(jdbcTemplate, TENANT);
     // 用户校验规则：要求所有行 total_amount >= 1000（本批数据是 30/7，所以会失败）
-    Map<String, Object> validationRule =
-        Map.of(
-            "name",
-            "min_total_threshold",
-            "checkSql",
-            "select bool_and((payload->>'total_amount')::numeric >= 1000) AS pass,"
-                + " 'total_amount must be >= 1000' AS message"
-                + " from batch.process_staging where batch_key = :batchKey");
+    Map<String, Object> validationRule = Map.of(
+        "name",
+        "min_total_threshold",
+        "checkSql",
+        "select bool_and((payload->>'total_amount')::numeric >= 1000) AS pass,"
+            + " 'total_amount must be >= 1000' AS message"
+            + " from batch.process_staging where batch_key = :batchKey");
     ProcessE2eFixture.seedSqlTransformPipelineDefinition(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of(validationRule));
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("bizDate", "2026-01-15");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-process-validate-fail",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-process-validate-fail",
+        params));
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              E2eStatusLogger.logJobFlowSnapshot(
-                  jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-validate-fail");
-              Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
-              assertThat(outcome.get("task_status")).isEqualTo("FAILED");
-              assertThat(outcome.get("instance_status")).isEqualTo("FAILED");
-            });
+        .untilAsserted(() -> {
+          E2eStatusLogger.logJobFlowSnapshot(
+              jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-validate-fail");
+          Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
+          assertThat(outcome.get("task_status")).isEqualTo("FAILED");
+          assertThat(outcome.get("instance_status")).isEqualTo("FAILED");
+        });
 
     // Target 表保持空（COMMIT 没跑）
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*)::int from biz.process_account_summary", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*)::int from biz.process_account_summary", Integer.class))
         .isZero();
     // staging 仍含本批的 2 行（留 forensics，直到下次 prepare 才清）
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*)::int from batch.process_staging where tenant_id=?",
-                Integer.class,
-                TENANT))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*)::int from batch.process_staging where tenant_id=?",
+            Integer.class,
+            TENANT))
         .isEqualTo(2);
   }
 
   private Map<String, Object> loadProcessOutcome(String dedupKey) {
-    return jdbcTemplate.queryForMap(
-        """
+    return jdbcTemplate.queryForMap("""
         select t.task_status, ji.instance_status, ji.high_water_mark_out
         from batch.job_task t
         join batch.job_instance ji on ji.id = t.job_instance_id
         where ji.tenant_id = ? and ji.dedup_key = ?
-        """,
-        TENANT,
-        dedupKey);
+        """, TENANT, dedupKey);
   }
 }

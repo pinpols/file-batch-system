@@ -29,11 +29,10 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
     factory.afterPropertiesSet();
     StringRedisTemplate template = new StringRedisTemplate(factory);
     template.afterPropertiesSet();
-    rateLimiter =
-        new SlidingWindowRateLimiter(
-            template,
-            new BatchDateTimeSupport(
-                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
+    rateLimiter = new SlidingWindowRateLimiter(
+        template,
+        new BatchDateTimeSupport(
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }
 
   @Test
@@ -62,19 +61,18 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
     AtomicInteger allowed = new AtomicInteger();
 
     for (int i = 0; i < threads; i++) {
-      pool.submit(
-          () -> {
-            try {
-              start.await();
-              if (rateLimiter.tryAcquire("test:concurrent", limit)) {
-                allowed.incrementAndGet();
-              }
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            } finally {
-              done.countDown();
-            }
-          });
+      pool.submit(() -> {
+        try {
+          start.await();
+          if (rateLimiter.tryAcquire("test:concurrent", limit)) {
+            allowed.incrementAndGet();
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } finally {
+          done.countDown();
+        }
+      });
     }
     start.countDown();
     done.await();

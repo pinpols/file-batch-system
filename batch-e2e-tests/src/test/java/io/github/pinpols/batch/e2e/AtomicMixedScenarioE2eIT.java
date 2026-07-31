@@ -49,11 +49,14 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final int ROUNDS = 3;
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void mixedExecutorTrafficAllReachesSuccess() throws IOException {
@@ -61,15 +64,13 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
         "CREATE OR REPLACE PROCEDURE batch.e2e_mixed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
 
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext(
-        "/ok",
-        exchange -> {
-          byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
-          exchange.sendResponseHeaders(200, body.length);
-          try (OutputStream os = exchange.getResponseBody()) {
-            os.write(body);
-          }
-        });
+    server.createContext("/ok", exchange -> {
+      byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream os = exchange.getResponseBody()) {
+        os.write(body);
+      }
+    });
     server.start();
 
     try {
@@ -121,18 +122,16 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   }
 
   private String launch(Map<String, Object> params, String triggerId) {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            triggerId,
-            params));
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        triggerId,
+        params));
     return seed.dedupKey();
   }
 
@@ -143,15 +142,14 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
     for (int i = 0; i < dedupKeys.size(); i++) {
       args[i + 1] = dedupKeys.get(i);
     }
-    Integer n =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_task t"
-                + " join batch.job_instance ji on ji.id = t.job_instance_id"
-                + " where ji.tenant_id = ? and ji.dedup_key in ("
-                + inClause
-                + ") and t.task_status = 'SUCCESS'",
-            Integer.class,
-            args);
+    Integer n = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_task t"
+            + " join batch.job_instance ji on ji.id = t.job_instance_id"
+            + " where ji.tenant_id = ? and ji.dedup_key in ("
+            + inClause
+            + ") and t.task_status = 'SUCCESS'",
+        Integer.class,
+        args);
     return n == null ? 0 : n;
   }
 }

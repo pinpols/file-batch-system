@@ -49,14 +49,13 @@ public class StaleCompensationCommandReconciler {
     if (timeoutSeconds <= 0 || batchSize <= 0) {
       return;
     }
-    int updated =
-        compensationCommandMapper.markStaleRunningFailed(
-            CompensationCommandStatus.RUNNING.code(),
-            CompensationCommandStatus.FAILED.code(),
-            BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds),
-            ERROR_CODE,
-            "compensation command stayed RUNNING beyond timeout; marked failed by reconciler",
-            batchSize);
+    int updated = compensationCommandMapper.markStaleRunningFailed(
+        CompensationCommandStatus.RUNNING.code(),
+        CompensationCommandStatus.FAILED.code(),
+        BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds),
+        ERROR_CODE,
+        "compensation command stayed RUNNING beyond timeout; marked failed by reconciler",
+        batchSize);
     if (updated > 0) {
       log.warn(
           "stale compensation RUNNING reconciled: updated={}, timeoutSeconds={}, batchSize={}",

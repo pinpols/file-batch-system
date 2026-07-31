@@ -126,16 +126,15 @@ public class JsonFormatParser implements FormatParser {
     ObjectMapper mapper = support.objectMapper();
     try {
       Map<String, Object> row = mapper.convertValue(node, MAP_TYPE);
-      ParseSupport.ParsedRecordWriteParam writeParam =
-          ParseSupport.ParsedRecordWriteParam.builder()
-              .context(context)
-              .writer(writer)
-              .row(row)
-              .preserveLogicalRow(preserveLogicalRow)
-              .recordNo(recordNo)
-              .errorCode("IMPORT_PARSE_JSON_INVALID")
-              .rawRecord(node)
-              .build();
+      ParseSupport.ParsedRecordWriteParam writeParam = ParseSupport.ParsedRecordWriteParam.builder()
+          .context(context)
+          .writer(writer)
+          .row(row)
+          .preserveLogicalRow(preserveLogicalRow)
+          .recordNo(recordNo)
+          .errorCode("IMPORT_PARSE_JSON_INVALID")
+          .rawRecord(node)
+          .build();
       support.writeParsedRecord(writeParam);
     } catch (Exception exception) {
       SwallowedExceptionLogger.warn(JsonFormatParser.class, "catch:Exception", exception);

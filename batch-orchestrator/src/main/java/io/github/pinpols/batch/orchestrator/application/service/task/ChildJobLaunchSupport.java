@@ -61,15 +61,14 @@ public class ChildJobLaunchSupport {
    * workflowNodeType / targetJobCode} 等)。这些字段是"当前节点"的标记,不应该泄露给下游节点的子作业 — 否则 EXPORT 节点的子作业会 看到
    * IMPORT 节点的 targetJobCode,用错 pipeline(表现为 "unsupported export stage code: RECEIVE")。
    */
-  private static final Set<String> WORKFLOW_INTERNAL_PAYLOAD_KEYS =
-      Set.of(
-          "workflowNodeCode",
-          "workflowNodeType",
-          "targetJobCode",
-          "_parentNodeCode",
-          "_parentVirtualTaskId",
-          "_parentWorkflowRunId",
-          "parentInstanceId");
+  private static final Set<String> WORKFLOW_INTERNAL_PAYLOAD_KEYS = Set.of(
+      "workflowNodeCode",
+      "workflowNodeType",
+      "targetJobCode",
+      "_parentNodeCode",
+      "_parentVirtualTaskId",
+      "_parentWorkflowRunId",
+      "parentInstanceId");
 
   /**
    * 跨 workflow 嵌套环检测上溯 parent_instance_id 链的硬上限。环本身在每次拉起前就会被拦截(见 {@link
@@ -121,18 +120,17 @@ public class ChildJobLaunchSupport {
         writeTriggerRequestForChildJob(jobInstance, refJobCode, idempotencyKey, traceId);
 
     // 子作业启动参数含回指字段，便于子作业完成后回写本虚拟 task
-    ChildLaunchContext launchCtx =
-        ChildLaunchContext.builder()
-            .jobInstance(jobInstance)
-            .workflowRun(workflowRun)
-            .node(node)
-            .refJobCode(refJobCode)
-            .sourcePayload(sourcePayload)
-            .childRequestId(childRequestId)
-            .traceId(traceId)
-            .virtualTask(virtualTask)
-            .workflowNode(workflowNode)
-            .build();
+    ChildLaunchContext launchCtx = ChildLaunchContext.builder()
+        .jobInstance(jobInstance)
+        .workflowRun(workflowRun)
+        .node(node)
+        .refJobCode(refJobCode)
+        .sourcePayload(sourcePayload)
+        .childRequestId(childRequestId)
+        .traceId(traceId)
+        .virtualTask(virtualTask)
+        .workflowNode(workflowNode)
+        .build();
     LaunchRequest childLaunchRequest = buildChildLaunchRequest(launchCtx);
     launchServiceProvider.getObject().launch(childLaunchRequest);
 
@@ -188,16 +186,14 @@ public class ChildJobLaunchSupport {
       WorkflowDagService.DagNodeResolution node,
       String refJobCode,
       String idempotencyKey) {
-    List<JobPartitionEntity> existingPartitions =
-        jobMappers.jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
-    int virtualPartitionNo =
-        existingPartitions.stream()
-                .map(JobPartitionEntity::getPartitionNo)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0)
-            + 1;
+    List<JobPartitionEntity> existingPartitions = jobMappers.jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
+    int virtualPartitionNo = existingPartitions.stream()
+            .map(JobPartitionEntity::getPartitionNo)
+            .filter(Objects::nonNull)
+            .max(Integer::compareTo)
+            .orElse(0)
+        + 1;
 
     JobPartitionEntity virtualPartition = new JobPartitionEntity();
     virtualPartition.setTenantId(jobInstance.getTenantId());
@@ -244,16 +240,14 @@ public class ChildJobLaunchSupport {
   }
 
   private void incrementExpectedPartitionCount(JobInstanceEntity jobInstance, String nodeCode) {
-    int currentExpected =
-        jobInstance.getExpectedPartitionCount() == null
-            ? 0
-            : jobInstance.getExpectedPartitionCount();
-    int updated =
-        jobMappers.jobInstanceMapper.updateExpectedPartitionCount(
-            jobInstance.getTenantId(),
-            jobInstance.getId(),
-            currentExpected + 1,
-            jobInstance.getVersion());
+    int currentExpected = jobInstance.getExpectedPartitionCount() == null
+        ? 0
+        : jobInstance.getExpectedPartitionCount();
+    int updated = jobMappers.jobInstanceMapper.updateExpectedPartitionCount(
+        jobInstance.getTenantId(),
+        jobInstance.getId(),
+        currentExpected + 1,
+        jobInstance.getVersion());
     Guard.require(
         updated > 0,
         ResultCode.STATE_CONFLICT,
@@ -282,12 +276,11 @@ public class ChildJobLaunchSupport {
   private LaunchRequest buildChildLaunchRequest(ChildLaunchContext ctx) {
     Map<String, Object> parsed = WorkflowNodePayloadBuilder.parsePayloadMap(ctx.sourcePayload());
     Map<String, Object> childParams = new LinkedHashMap<>();
-    parsed.forEach(
-        (k, v) -> {
-          if (!WORKFLOW_INTERNAL_PAYLOAD_KEYS.contains(k)) {
-            childParams.put(k, v);
-          }
-        });
+    parsed.forEach((k, v) -> {
+      if (!WORKFLOW_INTERNAL_PAYLOAD_KEYS.contains(k)) {
+        childParams.put(k, v);
+      }
+    });
     // 与 TASK 节点的 buildTaskPayload 对齐：把 workflow_node.node_params 合并进子作业 launch
     // params。否则 JOB 节点在设计器里配的 templateCode / channelCode / seed payload 等字段
     // 永远无法传到子作业 job_instance.params_snapshot → worker 看不到 → import/export 凭空失败。

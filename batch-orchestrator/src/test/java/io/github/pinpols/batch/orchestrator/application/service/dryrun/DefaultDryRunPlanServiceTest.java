@@ -48,16 +48,15 @@ class DefaultDryRunPlanServiceTest {
     ObjectProvider<S3Client> s3ClientProvider = mock(ObjectProvider.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<S3StorageProperties> s3PropsProvider = mock(ObjectProvider.class);
-    service =
-        new DefaultDryRunPlanService(
-            configCache,
-            planBuilder,
-            nodeMapper,
-            edgeMapper,
-            tz,
-            jdbcTemplateProvider,
-            s3ClientProvider,
-            s3PropsProvider);
+    service = new DefaultDryRunPlanService(
+        configCache,
+        planBuilder,
+        nodeMapper,
+        edgeMapper,
+        tz,
+        jdbcTemplateProvider,
+        s3ClientProvider,
+        s3PropsProvider);
   }
 
   @Test
@@ -65,13 +64,11 @@ class DefaultDryRunPlanServiceTest {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(null);
     when(configCache.findEnabledWorkflowDefinition("t1", "JOB_A")).thenReturn(null);
 
-    DryRunPlanResult result =
-        service.plan(
-            DryRunPlanRequest.builder()
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .level(DryRunLevel.CONFIG_VALIDATE)
-                .build());
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .level(DryRunLevel.CONFIG_VALIDATE)
+        .build());
 
     assertThat(result.success()).isFalse();
     assertThat(result.findings())
@@ -82,23 +79,20 @@ class DefaultDryRunPlanServiceTest {
   @Test
   void l1PassesWhenCronExpressionValid() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(
-            JobDefinitionEntity.builder()
-                .id(1L)
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .scheduleType("CRON")
-                .scheduleExpr("0 0 * * * ?")
-                .timezone("Asia/Shanghai")
-                .build());
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(1L)
+            .tenantId("t1")
+            .jobCode("JOB_A")
+            .scheduleType("CRON")
+            .scheduleExpr("0 0 * * * ?")
+            .timezone("Asia/Shanghai")
+            .build());
 
-    DryRunPlanResult result =
-        service.plan(
-            DryRunPlanRequest.builder()
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .level(DryRunLevel.CONFIG_VALIDATE)
-                .build());
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .level(DryRunLevel.CONFIG_VALIDATE)
+        .build());
 
     assertThat(result.success()).isTrue();
     assertThat(result.findings()).extracting(DryRunFinding::code).contains("JOB_CRON_OK");
@@ -107,23 +101,20 @@ class DefaultDryRunPlanServiceTest {
   @Test
   void l1ReportsErrorWhenCronExpressionInvalid() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(
-            JobDefinitionEntity.builder()
-                .id(1L)
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .scheduleType("CRON")
-                .scheduleExpr("invalid cron")
-                .timezone("Asia/Shanghai")
-                .build());
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(1L)
+            .tenantId("t1")
+            .jobCode("JOB_A")
+            .scheduleType("CRON")
+            .scheduleExpr("invalid cron")
+            .timezone("Asia/Shanghai")
+            .build());
 
-    DryRunPlanResult result =
-        service.plan(
-            DryRunPlanRequest.builder()
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .level(DryRunLevel.CONFIG_VALIDATE)
-                .build());
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .level(DryRunLevel.CONFIG_VALIDATE)
+        .build());
 
     assertThat(result.success()).isFalse();
     assertThat(result.findings())
@@ -133,13 +124,11 @@ class DefaultDryRunPlanServiceTest {
 
   @Test
   void l2ErrorsWhenBizDateMissing() {
-    DryRunPlanResult result =
-        service.plan(
-            DryRunPlanRequest.builder()
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .level(DryRunLevel.SCHEDULE_PLAN)
-                .build());
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .level(DryRunLevel.SCHEDULE_PLAN)
+        .build());
 
     assertThat(result.success()).isFalse();
     assertThat(result.findings()).extracting(DryRunFinding::code).contains("BIZDATE_MISSING");
@@ -148,13 +137,12 @@ class DefaultDryRunPlanServiceTest {
   @Test
   void l2EmitsScheduleSummary() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(
-            JobDefinitionEntity.builder()
-                .id(1L)
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .scheduleType("MANUAL")
-                .build());
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(1L)
+            .tenantId("t1")
+            .jobCode("JOB_A")
+            .scheduleType("MANUAL")
+            .build());
     SchedulePlan plan = new SchedulePlan();
     plan.setQueueCode("Q");
     plan.setWorkerGroup("WG");
@@ -166,15 +154,13 @@ class DefaultDryRunPlanServiceTest {
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());
     when(planBuilder.build(any())).thenReturn(plan);
 
-    DryRunPlanResult result =
-        service.plan(
-            DryRunPlanRequest.builder()
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .bizDate(LocalDate.of(2026, 5, 7))
-                .level(DryRunLevel.SCHEDULE_PLAN)
-                .params(Map.of())
-                .build());
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, 5, 7))
+        .level(DryRunLevel.SCHEDULE_PLAN)
+        .params(Map.of())
+        .build());
 
     assertThat(result.success()).isTrue();
     assertThat(result.summary())
@@ -192,14 +178,12 @@ class DefaultDryRunPlanServiceTest {
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());
     when(planBuilder.build(any())).thenReturn(plan);
 
-    DryRunPlanResult result =
-        service.plan(
-            DryRunPlanRequest.builder()
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .bizDate(LocalDate.of(2026, 5, 7))
-                .level(DryRunLevel.EXECUTION_PLAN)
-                .build());
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, 5, 7))
+        .level(DryRunLevel.EXECUTION_PLAN)
+        .build());
 
     assertThat(result.success()).isTrue();
     // L3 真接后：无 SQL/MinIO/endpoint params 时返回 EXEC_PLAN_NO_PROBES_TRIGGERED
@@ -215,20 +199,17 @@ class DefaultDryRunPlanServiceTest {
   @Test
   void l1RequiresParamsWhenSchemaSaysSo() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(
-            JobDefinitionEntity.builder()
-                .id(1L)
-                .scheduleType("MANUAL")
-                .paramSchema(Map.of("required", List.of("targetTable")))
-                .build());
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(1L)
+            .scheduleType("MANUAL")
+            .paramSchema(Map.of("required", List.of("targetTable")))
+            .build());
 
-    DryRunPlanResult result =
-        service.plan(
-            DryRunPlanRequest.builder()
-                .tenantId("t1")
-                .jobCode("JOB_A")
-                .level(DryRunLevel.CONFIG_VALIDATE)
-                .build());
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .level(DryRunLevel.CONFIG_VALIDATE)
+        .build());
 
     assertThat(result.success()).isFalse();
     assertThat(result.findings()).extracting(DryRunFinding::code).contains("JOB_PARAMS_MISSING");
@@ -242,14 +223,13 @@ class DefaultDryRunPlanServiceTest {
     plan.setPartitionCount(1);
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());
     when(planBuilder.build(any())).thenReturn(plan);
-    return service.plan(
-        DryRunPlanRequest.builder()
-            .tenantId("t1")
-            .jobCode("JOB_A")
-            .bizDate(LocalDate.of(2026, 5, 7))
-            .level(DryRunLevel.EXECUTION_PLAN)
-            .params(Map.of("sql", sql))
-            .build());
+    return service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, 5, 7))
+        .level(DryRunLevel.EXECUTION_PLAN)
+        .params(Map.of("sql", sql))
+        .build());
   }
 
   @Test
@@ -282,14 +262,13 @@ class DefaultDryRunPlanServiceTest {
     plan.setPartitionCount(1);
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());
     when(planBuilder.build(any())).thenReturn(plan);
-    return service.plan(
-        DryRunPlanRequest.builder()
-            .tenantId("t1")
-            .jobCode("JOB_A")
-            .bizDate(LocalDate.of(2026, 5, 7))
-            .level(DryRunLevel.EXECUTION_PLAN)
-            .params(Map.of("callbackUrl", callbackUrl))
-            .build());
+    return service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, 5, 7))
+        .level(DryRunLevel.EXECUTION_PLAN)
+        .params(Map.of("callbackUrl", callbackUrl))
+        .build());
   }
 
   @Test

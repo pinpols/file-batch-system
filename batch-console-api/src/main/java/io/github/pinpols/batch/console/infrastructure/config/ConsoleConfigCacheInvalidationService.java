@@ -72,13 +72,12 @@ public class ConsoleConfigCacheInvalidationService {
   public void evictMetaOptions(String tenantId) {
     Runnable evict = () -> queryCacheService.evictMetaOptions(tenantId);
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              evict.run();
-            }
-          });
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          evict.run();
+        }
+      });
       return;
     }
     evict.run();
@@ -90,13 +89,12 @@ public class ConsoleConfigCacheInvalidationService {
     }
     Runnable evict = () -> scanAndDelete(pattern);
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              evict.run();
-            }
-          });
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          evict.run();
+        }
+      });
       return;
     }
     evict.run();
@@ -118,13 +116,12 @@ public class ConsoleConfigCacheInvalidationService {
       return;
     }
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              redisTemplate.delete(key);
-            }
-          });
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          redisTemplate.delete(key);
+        }
+      });
       return;
     }
     redisTemplate.delete(key);

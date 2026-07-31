@@ -33,9 +33,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAuthenticationFilterTest {
 
-  @Mock private ConsoleJwtService jwtService;
-  @Mock private ConsoleSecurityResponseWriter responseWriter;
-  @Mock private SseTicketService sseTicketService;
+  @Mock
+  private ConsoleJwtService jwtService;
+
+  @Mock
+  private ConsoleSecurityResponseWriter responseWriter;
+
+  @Mock
+  private SseTicketService sseTicketService;
 
   private ConsoleSecurityProperties properties;
   private BatchSecurityProperties batchProperties;
@@ -52,9 +57,8 @@ class ConsoleAuthenticationFilterTest {
 
     batchProperties = new BatchSecurityProperties();
 
-    filter =
-        new ConsoleAuthenticationFilter(
-            properties, batchProperties, jwtService, responseWriter, sseTicketService);
+    filter = new ConsoleAuthenticationFilter(
+        properties, batchProperties, jwtService, responseWriter, sseTicketService);
     SecurityContextHolder.clearContext();
   }
 

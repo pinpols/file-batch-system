@@ -75,9 +75,8 @@ class FilesystemObjectStoreTest {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "short".getBytes(StandardCharsets.UTF_8);
 
-    assertThatThrownBy(
-            () ->
-                store.put(BUCKET, "short.txt", new ByteArrayInputStream(payload), 99, "text/plain"))
+    assertThatThrownBy(() ->
+            store.put(BUCKET, "short.txt", new ByteArrayInputStream(payload), 99, "text/plain"))
         .isInstanceOf(ObjectStoreException.class)
         .hasMessageContaining("length mismatch");
     assertThat(store.exists(BUCKET, "short.txt")).isFalse();
@@ -234,10 +233,8 @@ class FilesystemObjectStoreTest {
   @Test
   void shouldRejectTraversalKeys(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
-    assertThatThrownBy(
-            () ->
-                store.put(
-                    BUCKET, "../escape", new ByteArrayInputStream(new byte[0]), 0, "text/plain"))
+    assertThatThrownBy(() ->
+            store.put(BUCKET, "../escape", new ByteArrayInputStream(new byte[0]), 0, "text/plain"))
         .isInstanceOf(ObjectStoreException.class);
     assertThatThrownBy(() -> store.get(BUCKET, "/abs/path"))
         .isInstanceOf(ObjectStoreException.class);
@@ -285,29 +282,31 @@ class FilesystemObjectStoreTest {
     // 提取 e 和 s 并 verify
     long exp = Long.parseLong(extractParam(url, "e"));
     String sig = extractParam(url, "s");
-    assertThat(FilesystemPresignTokens.verify(BUCKET, "f.txt", exp, sig, SECRET)).isTrue();
+    assertThat(FilesystemPresignTokens.verify(BUCKET, "f.txt", exp, sig, SECRET))
+        .isTrue();
 
     // 篡改 sig
-    assertThat(FilesystemPresignTokens.verify(BUCKET, "f.txt", exp, "tampered", SECRET)).isFalse();
+    assertThat(FilesystemPresignTokens.verify(BUCKET, "f.txt", exp, "tampered", SECRET))
+        .isFalse();
     // 篡改 bucket
-    assertThat(FilesystemPresignTokens.verify("other", "f.txt", exp, sig, SECRET)).isFalse();
+    assertThat(FilesystemPresignTokens.verify("other", "f.txt", exp, sig, SECRET))
+        .isFalse();
     // 过期
     String pastSig =
         FilesystemPresignTokens.sign(BUCKET, "f.txt", Instant.now().minusSeconds(60), SECRET);
-    assertThat(
-            FilesystemPresignTokens.verify(
-                BUCKET, "f.txt", Instant.now().getEpochSecond() - 60, pastSig, SECRET))
+    assertThat(FilesystemPresignTokens.verify(
+            BUCKET, "f.txt", Instant.now().getEpochSecond() - 60, pastSig, SECRET))
         .isFalse();
   }
 
   @Test
   void presignShouldUseConfiguredDefaultWhenTtlIsNull(@TempDir Path root) {
-    FilesystemObjectStore store =
-        new FilesystemObjectStore(
-            root.toString(), DOWNLOAD_BASE_URL, SECRET, Duration.ofMinutes(2), 200_000);
+    FilesystemObjectStore store = new FilesystemObjectStore(
+        root.toString(), DOWNLOAD_BASE_URL, SECRET, Duration.ofMinutes(2), 200_000);
 
     String url = store.presign(BUCKET, "default-ttl.txt", null);
-    long remainingSeconds = Long.parseLong(extractParam(url, "e")) - Instant.now().getEpochSecond();
+    long remainingSeconds =
+        Long.parseLong(extractParam(url, "e")) - Instant.now().getEpochSecond();
 
     assertThat(remainingSeconds).isBetween(115L, 120L);
   }

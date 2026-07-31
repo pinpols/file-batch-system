@@ -69,13 +69,11 @@ public class JobInstanceTimeoutEnforcer {
       Instant now = BatchDateTimeSupport.utcNow();
       int failed = 0;
       for (JobInstanceEntity ji : candidates) {
-        String terminalStatus =
-            Boolean.TRUE.equals(ji.getDryRun())
-                ? JobInstanceStatus.FAILED_DRY_RUN.code()
-                : JobInstanceStatus.FAILED.code();
-        JobInstanceTerminalStatusCommand cmd =
-            new JobInstanceTerminalStatusCommand(
-                ji.getTenantId(), ji.getId(), terminalStatus, now, ji.getVersion());
+        String terminalStatus = Boolean.TRUE.equals(ji.getDryRun())
+            ? JobInstanceStatus.FAILED_DRY_RUN.code()
+            : JobInstanceStatus.FAILED.code();
+        JobInstanceTerminalStatusCommand cmd = new JobInstanceTerminalStatusCommand(
+            ji.getTenantId(), ji.getId(), terminalStatus, now, ji.getVersion());
         int rows =
             jobInstanceTerminalStatusApplicationService.updateTerminalStatusAndReconcileChildren(
                 cmd);

@@ -59,16 +59,14 @@ class WorkerReportOutboxPgIntegrationTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    DataSource dataSource =
-        new DriverManagerDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    DataSource dataSource = new DriverManagerDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
 
     jdbcTemplate.execute("drop schema if exists batch cascade");
     jdbcTemplate.execute("create schema batch");
     // V96 batch.worker_report_outbox DDL(平台 PG,worker 读写)。
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table batch.worker_report_outbox (
           id bigserial primary key,
           tenant_id varchar(64) not null,
@@ -102,13 +100,12 @@ class WorkerReportOutboxPgIntegrationTest {
     session = sqlSessionFactory.openSession(true); // autocommit：单线程测试无需显式事务
     WorkerReportOutboxPgMapper pgMapper = session.getMapper(WorkerReportOutboxPgMapper.class);
 
-    repository =
-        new WorkerReportOutboxRepository(
-            new WorkerReportOutboxProperties(),
-            WorkerReportOutboxDialect.POSTGRESQL,
-            pgMapper,
-            null,
-            null);
+    repository = new WorkerReportOutboxRepository(
+        new WorkerReportOutboxProperties(),
+        WorkerReportOutboxDialect.POSTGRESQL,
+        pgMapper,
+        null,
+        null);
   }
 
   @AfterEach

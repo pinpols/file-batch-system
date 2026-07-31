@@ -40,30 +40,44 @@ import org.mockito.MockitoAnnotations;
  */
 class TenantSchedulerSnapshotServiceTest {
 
-  @Mock private TenantQuotaPolicyMapper quotaMapper;
-  @Mock private TenantSchedulerSnapshotMapper snapshotMapper;
-  @Mock private ResourceQueueMapper queueMapper;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private WorkerRegistryMapper workerRegistryMapper;
-  @Mock private QuotaRuntimeStateService quotaRuntimeStateService;
-  @Mock private ResourceSchedulerProperties resourceSchedulerProperties;
+  @Mock
+  private TenantQuotaPolicyMapper quotaMapper;
+
+  @Mock
+  private TenantSchedulerSnapshotMapper snapshotMapper;
+
+  @Mock
+  private ResourceQueueMapper queueMapper;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private WorkerRegistryMapper workerRegistryMapper;
+
+  @Mock
+  private QuotaRuntimeStateService quotaRuntimeStateService;
+
+  @Mock
+  private ResourceSchedulerProperties resourceSchedulerProperties;
 
   private TenantSchedulerSnapshotService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service =
-        new TenantSchedulerSnapshotService(
-            quotaMapper,
-            snapshotMapper,
-            queueMapper,
-            jobInstanceMapper,
-            jobPartitionMapper,
-            workerRegistryMapper,
-            quotaRuntimeStateService,
-            resourceSchedulerProperties);
+    service = new TenantSchedulerSnapshotService(
+        quotaMapper,
+        snapshotMapper,
+        queueMapper,
+        jobInstanceMapper,
+        jobPartitionMapper,
+        workerRegistryMapper,
+        quotaRuntimeStateService,
+        resourceSchedulerProperties);
   }
 
   @Test

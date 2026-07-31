@@ -68,16 +68,14 @@ class SqlTransformComputePluginIntegrationTest {
     jdbcTemplate = new JdbcTemplate(dataSource);
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));
-    plugin =
-        new SqlTransformComputePlugin(
-            dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
+    plugin = new SqlTransformComputePlugin(
+        dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
 
     jdbcTemplate.execute("drop schema if exists biz cascade");
     jdbcTemplate.execute("drop schema if exists batch cascade");
     jdbcTemplate.execute("create schema biz");
     jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table batch.process_staging (
           batch_key text not null,
           row_seq bigserial not null,
@@ -89,8 +87,7 @@ class SqlTransformComputePluginIntegrationTest {
           primary key (batch_key, row_seq)
         )
         """);
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table biz.order_event (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
@@ -98,8 +95,7 @@ class SqlTransformComputePluginIntegrationTest {
           amount numeric(18, 2) not null
         )
         """);
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table biz.account_summary (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
@@ -139,24 +135,19 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(feedback.success()).isTrue();
 
     // 业务结果落到目标表
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select total_amount from biz.account_summary where account_id='A'",
-                BigDecimal.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select total_amount from biz.account_summary where account_id='A'", BigDecimal.class))
         .isEqualByComparingTo("20.00");
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select total_amount from biz.account_summary where account_id='B'",
-                BigDecimal.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select total_amount from biz.account_summary where account_id='B'", BigDecimal.class))
         .isEqualByComparingTo("7.00");
     assertThat(
             jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
         .isEqualTo(2);
 
     // staging 已被 feedback 清空
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from batch.process_staging", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.process_staging", Integer.class))
         .isZero();
 
     // 水位、行数都正确暴露在 context attributes
@@ -174,14 +165,13 @@ class SqlTransformComputePluginIntegrationTest {
     Map<String, Object> spec = nestedSpec(stepParams);
     spec.put(
         "validations",
-        List.of(
-            Map.of(
-                "name",
-                "non_negative_total",
-                "checkSql",
-                "select bool_and((payload->>'total_amount')::numeric > 100) AS pass,"
-                    + " 'total_amount must exceed 100' AS message"
-                    + " from batch.process_staging where batch_key = :batchKey")));
+        List.of(Map.of(
+            "name",
+            "non_negative_total",
+            "checkSql",
+            "select bool_and((payload->>'total_amount')::numeric > 100) AS pass,"
+                + " 'total_amount must exceed 100' AS message"
+                + " from batch.process_staging where batch_key = :batchKey")));
 
     plugin.prepare(context);
     plugin.compute(context);
@@ -196,9 +186,8 @@ class SqlTransformComputePluginIntegrationTest {
             jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
         .isZero();
     // staging 仍有 2 行(留作 forensics,直到下次 prepare/feedback 才清)
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from batch.process_staging", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.process_staging", Integer.class))
         .isEqualTo(2);
   }
 
@@ -208,13 +197,11 @@ class SqlTransformComputePluginIntegrationTest {
 
     plugin.prepare(context);
     plugin.compute(context);
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.process_staging (batch_key, tenant_id, target_schema, target_table, payload)
         values (?, 't2', 'biz', 'account_summary',
                 '{"tenant_id":"t2","account_id":"X","total_amount":99.00,"high_water_mark":9}'::jsonb)
-        """,
-        context.getBatchKey());
+        """, context.getBatchKey());
     ProcessStageResult validate = plugin.validate(context);
     ProcessStageResult commit = plugin.commit(context);
     ProcessStageResult feedback = plugin.feedback(context);
@@ -222,13 +209,11 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(validate.success()).isTrue();
     assertThat(commit.success()).isTrue();
     assertThat(feedback.success()).isTrue();
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from biz.account_summary where tenant_id='t2'", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from biz.account_summary where tenant_id='t2'", Integer.class))
         .isZero();
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from batch.process_staging where tenant_id='t2'", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.process_staging where tenant_id='t2'", Integer.class))
         .isEqualTo(1);
   }
 
@@ -238,9 +223,7 @@ class SqlTransformComputePluginIntegrationTest {
     jdbcTemplate.execute("create sequence biz.watermark_seq start 1 increment 1");
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> spec = nestedSpec(currentStepParams(context));
-    spec.put(
-        "sourceSql",
-        """
+    spec.put("sourceSql", """
         select tenant_id,
                account_id,
                sum(amount) as total_amount,
@@ -286,16 +269,14 @@ class SqlTransformComputePluginIntegrationTest {
 
     assertThatThrownBy(() -> plugin.prepare(context))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            t -> {
-              BizException ex = (BizException) t;
-              assertThat(ex.getMessageKey()).isEqualTo("error.process.target_table_not_found");
-              assertThat(ex.getMessageArgs()).contains("nonexistent_target");
-            });
+        .satisfies(t -> {
+          BizException ex = (BizException) t;
+          assertThat(ex.getMessageKey()).isEqualTo("error.process.target_table_not_found");
+          assertThat(ex.getMessageArgs()).contains("nonexistent_target");
+        });
     // staging 完全空(prepare 早停)
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from batch.process_staging", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.process_staging", Integer.class))
         .isZero();
   }
 
@@ -324,10 +305,9 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(compute.code()).isEqualTo("PROCESS_STAGED_OVERFLOW");
     assertThat(compute.message()).contains("exceeded maxStagedRows 1");
     // 立即清本批 staging,不会污染后续 stage
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from batch.process_staging where batch_key = 'batch-test-1'",
-                Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.process_staging where batch_key = 'batch-test-1'",
+            Integer.class))
         .isZero();
     // target 表仍然为空
     assertThat(
@@ -351,17 +331,14 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(validate.success()).isTrue();
     assertThat(commit.success()).isTrue();
     assertThat(feedback.success()).isTrue();
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from batch.process_staging", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.process_staging", Integer.class))
         .isZero();
     assertThat(
             jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
         .isEqualTo(2);
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select total_amount from biz.account_summary where account_id='A'",
-                BigDecimal.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select total_amount from biz.account_summary where account_id='A'", BigDecimal.class))
         .isEqualByComparingTo("20.00");
     assertThat(context.getAttributes())
         .containsEntry(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 2)
@@ -380,9 +357,7 @@ class SqlTransformComputePluginIntegrationTest {
     context.setBatchKey("batch-test-1");
     context.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, 1L);
     Map<String, Object> sqlTransformSpec = new LinkedHashMap<>();
-    sqlTransformSpec.put(
-        "sourceSql",
-        """
+    sqlTransformSpec.put("sourceSql", """
         select tenant_id,
                account_id,
                sum(amount) as total_amount,

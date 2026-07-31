@@ -52,25 +52,22 @@ public class PartitionReclaimUnit {
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void reclaim(JobPartitionEntity partition) {
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(
-                partition.getTenantId(),
-                partition.getJobInstanceId(),
-                partition.getId(),
-                TaskStatus.RUNNING.code(),
-                null));
+    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(new JobTaskQuery(
+        partition.getTenantId(),
+        partition.getJobInstanceId(),
+        partition.getId(),
+        TaskStatus.RUNNING.code(),
+        null));
     JobTaskEntity task = tasks.stream().findFirst().orElse(null);
 
     if (task == null) {
       // 无 RUNNING task：partition 在 READY 状态等待被 claim，直接重置版本即可。
       // CAS 冲突说明已被其他流程推进，安静放弃；不需要写 outbox（无 task 可派发）。
-      int reset =
-          jobPartitionMapper.resetForDispatch(
-              partition.getTenantId(),
-              partition.getId(),
-              PartitionStatus.READY.code(),
-              partition.getVersion());
+      int reset = jobPartitionMapper.resetForDispatch(
+          partition.getTenantId(),
+          partition.getId(),
+          PartitionStatus.READY.code(),
+          partition.getVersion());
       if (reset <= 0) {
         // R2-P2-5：no-task path 的 CAS 失败可能是另一并发流程已推进（良性），
         // 也可能是历史残留死态（partition=READY + lease_expire_at=NULL + 无 task）。
@@ -91,19 +88,16 @@ public class PartitionReclaimUnit {
       return;
     }
 
-    BatchMdc.withTenantAndTrace(
-        jobInstance.getTenantId(),
-        jobInstance.getTraceId(),
-        () -> {
-          BatchMdc.put(
-              StructuredLogField.JOB_INSTANCE_ID,
-              jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
-          try {
-            doReclaim(partition, task, jobInstance);
-          } finally {
-            BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-          }
-        });
+    BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
+      BatchMdc.put(
+          StructuredLogField.JOB_INSTANCE_ID,
+          jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
+      try {
+        doReclaim(partition, task, jobInstance);
+      } finally {
+        BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+      }
+    });
   }
 
   private void doReclaim(
@@ -148,9 +142,8 @@ public class PartitionReclaimUnit {
               + ", taskId="
               + task.getId());
     }
-    int resetSteps =
-        jobStepInstanceMapper.resetForRetryByJobTaskId(
-            partition.getTenantId(), task.getId(), 0, TaskStatus.READY.code());
+    int resetSteps = jobStepInstanceMapper.resetForRetryByJobTaskId(
+        partition.getTenantId(), task.getId(), 0, TaskStatus.READY.code());
     if (resetSteps <= 0) {
       throw new ReclaimRetryableException(
           "step reset missed, rolling back task/partition reset: partitionId="

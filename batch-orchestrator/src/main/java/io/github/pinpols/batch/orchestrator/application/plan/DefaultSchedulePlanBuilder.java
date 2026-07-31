@@ -73,10 +73,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     plan.setDefaultWorkerRoute(route);
 
     List<SchedulePlan.PartitionPlan> partitionPlans = new ArrayList<>();
-    int partitionCount =
-        plan.getPartitionCount() == null || plan.getPartitionCount() <= 0
-            ? 1
-            : plan.getPartitionCount();
+    int partitionCount = plan.getPartitionCount() == null || plan.getPartitionCount() <= 0
+        ? 1
+        : plan.getPartitionCount();
 
     // ADR-046 文件束:束作业(IMPORT/EXPORT/DISPATCH)「一项一 partition」,各 partition 绑各自
     // 源文件/模板/目标(异构,绑定 profile 按类型不同)。
@@ -92,12 +91,11 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     if (bundleJob && !bundleFiles.isEmpty() && bundleFiles.size() != partitionCount) {
       // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
       // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢绑定项。
-      throw new IllegalStateException(
-          "ADR-046 bundle partition count mismatch: items="
-              + bundleFiles.size()
-              + " partitions="
-              + partitionCount
-              + " (bundle 须 shardStrategy=DYNAMIC 且 bundleFiles 数 ≤ 256)");
+      throw new IllegalStateException("ADR-046 bundle partition count mismatch: items="
+          + bundleFiles.size()
+          + " partitions="
+          + partitionCount
+          + " (bundle 须 shardStrategy=DYNAMIC 且 bundleFiles 数 ≤ 256)");
     }
 
     for (int partitionNo = 1; partitionNo <= partitionCount; partitionNo++) {
@@ -142,27 +140,24 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
   }
 
   private int resolvePartitionCount(JobDefinitionEntity jobDefinition, Map<String, Object> params) {
-    ShardStrategy shardStrategy =
-        jobDefinition == null
-            ? ShardStrategy.NONE
-            : ShardStrategy.fromCode(jobDefinition.shardStrategy());
+    ShardStrategy shardStrategy = jobDefinition == null
+        ? ShardStrategy.NONE
+        : ShardStrategy.fromCode(jobDefinition.shardStrategy());
     int minPartitionCount =
         Math.max(1, firstPositiveInt(params.get("minPartitionCount"), params.get("minShardCount")));
-    int maxPartitionCount =
-        clampMaxPartitionCount(
-            firstPositiveInt(
-                params.get("maxPartitionLimit"),
-                params.get("maxPartitionCount"),
-                params.get("maxShardCount"),
-                params.get("shardMaxCount")));
+    int maxPartitionCount = clampMaxPartitionCount(firstPositiveInt(
+        params.get("maxPartitionLimit"),
+        params.get("maxPartitionCount"),
+        params.get("maxShardCount"),
+        params.get("shardMaxCount")));
     int partitionCount =
         switch (shardStrategy) {
           case STATIC ->
-              firstPositiveInt(
-                  params.get("partitionCount"),
-                  params.get("staticPartitionCount"),
-                  params.get("shardCount"),
-                  params.get("fixedShardCount"));
+            firstPositiveInt(
+                params.get("partitionCount"),
+                params.get("staticPartitionCount"),
+                params.get("shardCount"),
+                params.get("fixedShardCount"));
           case DYNAMIC, AUTO -> resolveDynamicPartitionCount(jobDefinition, params, shardStrategy);
           case NONE -> 1;
         };

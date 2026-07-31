@@ -38,13 +38,12 @@ public class ConsoleSelfServiceJobController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody SelfServiceRerunRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    RerunParam param =
-        new RerunParam(
-            request.tenantId(),
-            request.jobCode(),
-            request.bizDate(),
-            request.targetInstanceNo(),
-            request.reason());
+    RerunParam param = new RerunParam(
+        request.tenantId(),
+        request.jobCode(),
+        request.bizDate(),
+        request.targetInstanceNo(),
+        request.reason());
     return responseFactory.success(
         selfServiceJobService.requestRerun(param, operator, idempotencyKey));
   }
@@ -54,14 +53,13 @@ public class ConsoleSelfServiceJobController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody SelfServiceCompensationRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    CompensationParam param =
-        new CompensationParam(
-            request.tenantId(),
-            request.jobCode(),
-            request.bizDate(),
-            request.compensationType(),
-            request.targetInstanceNo(),
-            request.reason());
+    CompensationParam param = new CompensationParam(
+        request.tenantId(),
+        request.jobCode(),
+        request.bizDate(),
+        request.compensationType(),
+        request.targetInstanceNo(),
+        request.reason());
     return responseFactory.success(
         selfServiceJobService.requestCompensation(param, operator, idempotencyKey));
   }

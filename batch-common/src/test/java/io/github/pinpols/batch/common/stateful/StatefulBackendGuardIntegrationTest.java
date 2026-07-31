@@ -24,11 +24,10 @@ class StatefulBackendGuardIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startPostgres() {
-    postgres =
-        new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-            .withDatabaseName("batch_platform")
-            .withUsername("batch_user")
-            .withPassword("batch_pass_123");
+    postgres = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
+        .withDatabaseName("batch_platform")
+        .withUsername("batch_user")
+        .withPassword("batch_pass_123");
     postgres.start();
     HikariConfig config = new HikariConfig();
     config.setJdbcUrl(postgres.getJdbcUrl());
@@ -38,8 +37,7 @@ class StatefulBackendGuardIntegrationTest {
     dataSource = new HikariDataSource(config);
     jdbc = new JdbcTemplate(dataSource);
     jdbc.execute("CREATE SCHEMA batch");
-    jdbc.execute(
-        """
+    jdbc.execute("""
         CREATE TABLE batch.stateful_backend_binding (
           feature_key VARCHAR(160) PRIMARY KEY,
           backend VARCHAR(64) NOT NULL,
@@ -50,8 +48,7 @@ class StatefulBackendGuardIntegrationTest {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """);
-    jdbc.execute(
-        """
+    jdbc.execute("""
         CREATE TABLE batch.stateful_backend_cutover_history (
           id BIGSERIAL PRIMARY KEY,
           feature_key VARCHAR(160) NOT NULL,
@@ -66,8 +63,7 @@ class StatefulBackendGuardIntegrationTest {
           changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """);
-    jdbc.execute(
-        """
+    jdbc.execute("""
         CREATE UNIQUE INDEX uk_stateful_backend_cutover_token
           ON batch.stateful_backend_cutover_history(feature_key, cutover_id)
           WHERE cutover_id IS NOT NULL
@@ -98,9 +94,8 @@ class StatefulBackendGuardIntegrationTest {
     assertThat(guard.verify(redis).action())
         .isEqualTo(StatefulBackendGuard.GuardAction.BASELINE_RECORDED);
     assertThat(guard.verify(redis).action()).isEqualTo(StatefulBackendGuard.GuardAction.VERIFIED);
-    assertThat(
-            jdbc.queryForObject(
-                "SELECT count(*) FROM batch.stateful_backend_cutover_history", Long.class))
+    assertThat(jdbc.queryForObject(
+            "SELECT count(*) FROM batch.stateful_backend_cutover_history", Long.class))
         .isEqualTo(1L);
   }
 
@@ -134,10 +129,8 @@ class StatefulBackendGuardIntegrationTest {
     guard.verify(
         desired("database", "jdbc=jdbc:postgresql://db/batch", "quota-20260723-rollback-test"));
 
-    assertThatThrownBy(
-            () ->
-                guard.verify(
-                    desired("redis", "host=valkey|port=6379|db=0", "quota-20260723-rollback-test")))
+    assertThatThrownBy(() -> guard.verify(
+            desired("redis", "host=valkey|port=6379|db=0", "quota-20260723-rollback-test")))
         .isInstanceOf(StatefulBackendSwitchRejectedException.class)
         .hasMessageContaining("already used");
   }
@@ -165,7 +158,8 @@ class StatefulBackendGuardIntegrationTest {
 
     assertThatThrownBy(() -> guard.verify(desired("disabled", "disabled", null)))
         .isInstanceOf(StatefulBackendSwitchRejectedException.class);
-    assertThat(guard.verify(desired("disabled", "disabled", "outbox-disable-01")).action())
+    assertThat(
+            guard.verify(desired("disabled", "disabled", "outbox-disable-01")).action())
         .isEqualTo(StatefulBackendGuard.GuardAction.CUTOVER_RECORDED);
   }
 

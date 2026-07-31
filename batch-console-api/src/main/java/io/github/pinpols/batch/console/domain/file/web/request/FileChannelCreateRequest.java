@@ -8,9 +8,11 @@ import lombok.Data;
 
 @Data
 public class FileChannelCreateRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String channelCode;
+  @ValidResourceCode
+  private String channelCode;
 
   @Size(max = 256)
   private String channelName;

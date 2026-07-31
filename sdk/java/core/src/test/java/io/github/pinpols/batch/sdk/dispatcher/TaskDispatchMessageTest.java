@@ -19,10 +19,9 @@ class TaskDispatchMessageTest {
 
   @Test
   void deserializesFromJson() throws Exception {
-    String json =
-        "{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"tt\","
-            + "\"taskInstanceId\":\"ti-9\",\"parameters\":{\"k\":\"v\"},"
-            + "\"runtimeAttributes\":{\"traceId\":\"abc\"}}";
+    String json = "{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"tt\","
+        + "\"taskInstanceId\":\"ti-9\",\"parameters\":{\"k\":\"v\"},"
+        + "\"runtimeAttributes\":{\"traceId\":\"abc\"}}";
     TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
     assertThat(msg.taskId()).isEqualTo(42L);
     assertThat(msg.tenantId()).isEqualTo("tx");
@@ -33,9 +32,8 @@ class TaskDispatchMessageTest {
   @Test
   void ignoresUnknownFields() throws Exception {
     // 平台升级新字段时 SDK 不 break
-    String json =
-        "{\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\","
-            + "\"newPlatformField\":\"future\",\"anotherNewField\":42}";
+    String json = "{\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\","
+        + "\"newPlatformField\":\"future\",\"anotherNewField\":42}";
     TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
     assertThat(msg.taskId()).isEqualTo(1L);
   }
@@ -43,11 +41,10 @@ class TaskDispatchMessageTest {
   @Test
   void deserializesSchedulingContext() throws Exception {
     // 平台以 int-array 下发 LocalDate(WRITE_DATES_AS_TIMESTAMPS 默认开);triggerCode/workflowRunId 平台置 null
-    String json =
-        "{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"tt\","
-            + "\"schedulingContext\":{\"bizDate\":[2026,6,1],\"prevBizDate\":[2026,5,29],"
-            + "\"nextBizDate\":[2026,6,2],\"isHoliday\":false,\"attemptNo\":2,"
-            + "\"triggerType\":\"SCHEDULED\",\"triggerCode\":null,\"workflowRunId\":null}}";
+    String json = "{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"tt\","
+        + "\"schedulingContext\":{\"bizDate\":[2026,6,1],\"prevBizDate\":[2026,5,29],"
+        + "\"nextBizDate\":[2026,6,2],\"isHoliday\":false,\"attemptNo\":2,"
+        + "\"triggerType\":\"SCHEDULED\",\"triggerCode\":null,\"workflowRunId\":null}}";
     TaskDispatchMessage msg = timeAwareMapper.readValue(json, TaskDispatchMessage.class);
 
     assertThat(msg.schedulingContext()).isNotNull();
@@ -81,24 +78,26 @@ class TaskDispatchMessageTest {
   @Test
   void schemaVersionSupportedWhenV1OrV2() throws Exception {
     for (String v : new String[] {"v1", "v2", "v1-rc", "v2-beta", "v2.1"}) {
-      String json =
-          "{\"schemaVersion\":\""
-              + v
-              + "\",\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
+      String json = "{\"schemaVersion\":\""
+          + v
+          + "\",\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
       TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
-      assertThat(msg.isSchemaSupported()).as("schemaVersion=%s should be supported", v).isTrue();
+      assertThat(msg.isSchemaSupported())
+          .as("schemaVersion=%s should be supported", v)
+          .isTrue();
     }
   }
 
   @Test
   void schemaVersionRejectedWhenUnknownMajor() throws Exception {
     for (String v : new String[] {"v3", "v3-rc", "v99", "vNext", "1", "draft"}) {
-      String json =
-          "{\"schemaVersion\":\""
-              + v
-              + "\",\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
+      String json = "{\"schemaVersion\":\""
+          + v
+          + "\",\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
       TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
-      assertThat(msg.isSchemaSupported()).as("schemaVersion=%s should be rejected", v).isFalse();
+      assertThat(msg.isSchemaSupported())
+          .as("schemaVersion=%s should be rejected", v)
+          .isFalse();
     }
   }
 
@@ -122,13 +121,11 @@ class TaskDispatchMessageTest {
   @Test
   void schemaVersionOnlyTrulyMissingFallsBackToV1() {
     // 对照:真正缺省(null / 全空白)才 fallback v1 accept(fixture 16 缺省=v1)。
-    assertThat(
-            new TaskDispatchMessage(null, 1L, "tx", "j", "t", "ti", Map.of(), Map.of())
-                .resolvedMajor())
+    assertThat(new TaskDispatchMessage(null, 1L, "tx", "j", "t", "ti", Map.of(), Map.of())
+            .resolvedMajor())
         .isEqualTo("v1");
-    assertThat(
-            new TaskDispatchMessage("   ", 1L, "tx", "j", "t", "ti", Map.of(), Map.of())
-                .isSchemaSupported())
+    assertThat(new TaskDispatchMessage("   ", 1L, "tx", "j", "t", "ti", Map.of(), Map.of())
+            .isSchemaSupported())
         .isTrue();
   }
 
@@ -149,9 +146,8 @@ class TaskDispatchMessageTest {
 
   @Test
   void validateRejectsMissingFields() {
-    assertThatThrownBy(
-            () ->
-                new TaskDispatchMessage(null, "tx", "j", "t", "ti", Map.of(), Map.of()).validate())
+    assertThatThrownBy(() ->
+            new TaskDispatchMessage(null, "tx", "j", "t", "ti", Map.of(), Map.of()).validate())
         .hasMessageContaining("taskId");
     assertThatThrownBy(
             () -> new TaskDispatchMessage(1L, "", "j", "t", "ti", Map.of(), Map.of()).validate())

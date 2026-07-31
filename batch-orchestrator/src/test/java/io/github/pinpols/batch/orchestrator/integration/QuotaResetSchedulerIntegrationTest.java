@@ -32,13 +32,17 @@ import org.springframework.test.context.TestPropertySource;
     })
 class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private QuotaRuntimeResetScheduler quotaRuntimeResetScheduler;
+  @Autowired
+  private QuotaRuntimeResetScheduler quotaRuntimeResetScheduler;
 
-  @Autowired private QuotaRuntimeStateService quotaRuntimeStateService;
+  @Autowired
+  private QuotaRuntimeStateService quotaRuntimeStateService;
 
-  @Autowired private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
+  @Autowired
+  private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
-  @Autowired private ResourceSchedulerProperties resourceSchedulerProperties;
+  @Autowired
+  private ResourceSchedulerProperties resourceSchedulerProperties;
 
   @Test
   void resourceSchedulerPropertiesAreLoadedCorrectly() {
@@ -51,20 +55,19 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
   void schedulerReconcileResetsExpiredSlidingWindowState() {
     String ownerCode = "sched-reset-" + BatchDateTimeSupport.utcEpochMillis();
 
-    QuotaRuntimeStateEntity expired =
-        new QuotaRuntimeStateEntity(
-            null,
-            "t1",
-            "JOB",
-            ownerCode,
-            "SLIDING_WINDOW",
-            BatchDateTimeSupport.utcNow().minusSeconds(10800),
-            BatchDateTimeSupport.utcNow().minusSeconds(3600), // expired 1 hour ago
-            7,
-            null,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow(),
-            null);
+    QuotaRuntimeStateEntity expired = new QuotaRuntimeStateEntity(
+        null,
+        "t1",
+        "JOB",
+        ownerCode,
+        "SLIDING_WINDOW",
+        BatchDateTimeSupport.utcNow().minusSeconds(10800),
+        BatchDateTimeSupport.utcNow().minusSeconds(3600), // expired 1 hour ago
+        7,
+        null,
+        BatchDateTimeSupport.utcNow(),
+        BatchDateTimeSupport.utcNow(),
+        null);
     quotaRuntimeStateMapper.insert(expired);
 
     // 直接触发调度器（调度间隔为 600 秒，测试中不会自动触发）
@@ -82,20 +85,19 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "sched-no-expired-" + BatchDateTimeSupport.utcEpochMillis();
 
     // 创建一个尚未过期的状态（窗口在未来过期）
-    QuotaRuntimeStateEntity active =
-        new QuotaRuntimeStateEntity(
-            null,
-            "t1",
-            "JOB",
-            ownerCode,
-            "SLIDING_WINDOW",
-            BatchDateTimeSupport.utcNow().minusSeconds(1800),
-            BatchDateTimeSupport.utcNow().plusSeconds(3600), // still valid
-            3,
-            null,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow(),
-            null);
+    QuotaRuntimeStateEntity active = new QuotaRuntimeStateEntity(
+        null,
+        "t1",
+        "JOB",
+        ownerCode,
+        "SLIDING_WINDOW",
+        BatchDateTimeSupport.utcNow().minusSeconds(1800),
+        BatchDateTimeSupport.utcNow().plusSeconds(3600), // still valid
+        3,
+        null,
+        BatchDateTimeSupport.utcNow(),
+        BatchDateTimeSupport.utcNow(),
+        null);
     quotaRuntimeStateMapper.insert(active);
 
     // reconcile() should not touch non-expired states
@@ -113,18 +115,17 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "sched-eval-" + BatchDateTimeSupport.utcEpochMillis();
 
     // base=10, burst=5, active=8, requested=1 — within cap
-    var result =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new QuotaRuntimeStateService.QuotaReservationRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
-                new QuotaRuntimeStateService.QuotaReservationPolicy(
-                    "SLIDING_WINDOW",
-                    10,
-                    5,
-                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours()),
-                8,
-                1,
-                new QuotaRuntimeStateService.QuotaReservationReason("OVER_CAP", "over")));
+    var result = quotaRuntimeStateService.evaluateAndReserve(
+        new QuotaRuntimeStateService.QuotaReservationRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+            new QuotaRuntimeStateService.QuotaReservationPolicy(
+                "SLIDING_WINDOW",
+                10,
+                5,
+                resourceSchedulerProperties.getQuotaResetSlidingWindowHours()),
+            8,
+            1,
+            new QuotaRuntimeStateService.QuotaReservationReason("OVER_CAP", "over")));
 
     assertThat(result.allowed()).isTrue();
   }
@@ -134,18 +135,17 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "sched-burst-" + BatchDateTimeSupport.utcEpochMillis();
 
     // base=5, burst=2, active=10, requested=1 → borrowed=6 > burst=2
-    var result =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new QuotaRuntimeStateService.QuotaReservationRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
-                new QuotaRuntimeStateService.QuotaReservationPolicy(
-                    "SLIDING_WINDOW",
-                    5,
-                    2,
-                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours()),
-                10,
-                1,
-                new QuotaRuntimeStateService.QuotaReservationReason("OVER_BURST", "over burst")));
+    var result = quotaRuntimeStateService.evaluateAndReserve(
+        new QuotaRuntimeStateService.QuotaReservationRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+            new QuotaRuntimeStateService.QuotaReservationPolicy(
+                "SLIDING_WINDOW",
+                5,
+                2,
+                resourceSchedulerProperties.getQuotaResetSlidingWindowHours()),
+            10,
+            1,
+            new QuotaRuntimeStateService.QuotaReservationReason("OVER_BURST", "over burst")));
 
     assertThat(result.allowed()).isFalse();
     assertThat(result.reasonCode()).isNotBlank();

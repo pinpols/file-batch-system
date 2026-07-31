@@ -53,12 +53,11 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .expectStatus()
         .isOk();
 
-    var row =
-        jdbcTemplate.queryForMap(
-            "SELECT tenant_id, task_type, name, parameters::text AS parameters"
-                + " FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?",
-            TENANT,
-            name);
+    var row = jdbcTemplate.queryForMap(
+        "SELECT tenant_id, task_type, name, parameters::text AS parameters"
+            + " FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?",
+        TENANT,
+        name);
     assertThat(row.get("tenant_id")).isEqualTo(TENANT);
     assertThat(row.get("task_type")).isEqualTo("sql");
     assertThat(row.get("name")).isEqualTo(name);
@@ -82,13 +81,11 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
 
     client
         .get()
-        .uri(
-            uriBuilder ->
-                uriBuilder
-                    .path("/api/console/ops/atomic-task-configs")
-                    .queryParam("tenantId", TENANT)
-                    .queryParam("taskType", "sql")
-                    .build())
+        .uri(uriBuilder -> uriBuilder
+            .path("/api/console/ops/atomic-task-configs")
+            .queryParam("tenantId", TENANT)
+            .queryParam("taskType", "sql")
+            .build())
         .exchange()
         .expectStatus()
         .isOk()
@@ -106,21 +103,17 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .post()
         .uri("/api/console/ops/atomic-task-configs")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            body(
-                "sql",
-                "it_sensitive_" + System.currentTimeMillis(),
-                "{\"sql\":\"select 1\",\"dbPassword\":\"oops\"}"))
+        .bodyValue(body(
+            "sql",
+            "it_sensitive_" + System.currentTimeMillis(),
+            "{\"sql\":\"select 1\",\"dbPassword\":\"oops\"}"))
         .exchange()
         .expectStatus()
         .isBadRequest();
 
     // 不应有写入数据库
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.atomic_task_config WHERE tenant_id = ?",
-            Long.class,
-            TENANT);
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.atomic_task_config WHERE tenant_id = ?", Long.class, TENANT);
     // 可能有其它用例残留,但本次 sensitive name 不应入库
     assertThat(cnt).isNotNull();
   }
@@ -132,11 +125,10 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .post()
         .uri("/api/console/ops/atomic-task-configs")
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(
-            body(
-                "sql",
-                "it_extraneous_" + System.currentTimeMillis(),
-                "{\"sql\":\"select 1\",\"notInSchema\":\"x\"}"))
+        .bodyValue(body(
+            "sql",
+            "it_extraneous_" + System.currentTimeMillis(),
+            "{\"sql\":\"select 1\",\"notInSchema\":\"x\"}"))
         .exchange()
         .expectStatus()
         .isBadRequest();
@@ -146,13 +138,11 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
   void shouldRejectUnknownTaskTypeOnList() {
     client
         .get()
-        .uri(
-            uriBuilder ->
-                uriBuilder
-                    .path("/api/console/ops/atomic-task-configs")
-                    .queryParam("tenantId", TENANT)
-                    .queryParam("taskType", "definitely_not_a_real_type")
-                    .build())
+        .uri(uriBuilder -> uriBuilder
+            .path("/api/console/ops/atomic-task-configs")
+            .queryParam("tenantId", TENANT)
+            .queryParam("taskType", "definitely_not_a_real_type")
+            .build())
         .exchange()
         .expectStatus()
         .isBadRequest();

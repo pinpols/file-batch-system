@@ -37,12 +37,10 @@ public class AtomicWorkerInternalRestClient {
     return restClientBuilderProvider
         .getObject()
         .baseUrl(baseUrl)
-        .requestFactory(
-            ClientHttpRequestFactoryBuilder.detect()
-                .build(
-                    HttpClientSettings.defaults()
-                        .withConnectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                        .withReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))))
+        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
+            .build(HttpClientSettings.defaults()
+                .withConnectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+                .withReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))))
         .build();
   }
 }

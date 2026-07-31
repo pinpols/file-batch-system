@@ -21,25 +21,24 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class DeadLetterControllerTest {
 
-  @Mock private RetryGovernanceService retryGovernanceService;
+  @Mock
+  private RetryGovernanceService retryGovernanceService;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new DeadLetterController(retryGovernanceService))
-            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new DeadLetterController(retryGovernanceService))
+        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+        .build();
   }
 
   @Test
   void shouldReplayDeadLetter() throws Exception {
     mockMvc
-        .perform(
-            post("/internal/dead-letters/42/replay")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\"}"))
+        .perform(post("/internal/dead-letters/42/replay")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isOk());
 
     verify(retryGovernanceService).replayDeadLetter("t1", 42L, null, null, null);
@@ -48,12 +47,10 @@ class DeadLetterControllerTest {
   @Test
   void shouldForwardOperatorAndReasonToService() throws Exception {
     mockMvc
-        .perform(
-            post("/internal/dead-letters/77/replay")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"tenantId\":\"t1\",\"operatorId\":\"alice\","
-                        + "\"reason\":\"manual recovery\",\"idempotencyKey\":\"k-1\"}"))
+        .perform(post("/internal/dead-letters/77/replay")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"operatorId\":\"alice\","
+                + "\"reason\":\"manual recovery\",\"idempotencyKey\":\"k-1\"}"))
         .andExpect(status().isOk());
 
     verify(retryGovernanceService).replayDeadLetter("t1", 77L, "alice", "manual recovery", "k-1");
@@ -66,10 +63,9 @@ class DeadLetterControllerTest {
         .replayDeadLetter("t1", 99L, null, null, null);
 
     mockMvc
-        .perform(
-            post("/internal/dead-letters/99/replay")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\"}"))
+        .perform(post("/internal/dead-letters/99/replay")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isConflict());
   }
 }

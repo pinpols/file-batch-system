@@ -47,11 +47,11 @@ class ConsoleAlertRoutingControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleAlertRoutingController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAlertRoutingController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String body(String routeCode) {
@@ -70,10 +70,9 @@ class ConsoleAlertRoutingControllerValidationTest {
   @Test
   void rejects_routeCode_with_space() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/alert-routings")
-                .contentType(APPLICATION_JSON)
-                .content(body("q q q")))
+        .perform(post("/api/console/alert-routings")
+            .contentType(APPLICATION_JSON)
+            .content(body("q q q")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verify(service, never()).create(ArgumentMatchers.any());
@@ -110,10 +109,9 @@ class ConsoleAlertRoutingControllerValidationTest {
   void accepts_valid_routeCode() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     mockMvc
-        .perform(
-            post("/api/console/alert-routings")
-                .contentType(APPLICATION_JSON)
-                .content(body("route_ok_01")))
+        .perform(post("/api/console/alert-routings")
+            .contentType(APPLICATION_JSON)
+            .content(body("route_ok_01")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     verify(service).create(ArgumentMatchers.any());

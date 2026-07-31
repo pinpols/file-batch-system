@@ -37,7 +37,8 @@ class MeteredObjectStoreTest {
 
     assertThat(in).isNotNull();
     verify(delegate).get(BUCKET, KEY);
-    Timer t = registry.find(TIMER).tag("operation", "get").tag("outcome", "success").timer();
+    Timer t =
+        registry.find(TIMER).tag("operation", "get").tag("outcome", "success").timer();
     assertThat(t).isNotNull();
     assertThat(t.count()).isEqualTo(1);
   }
@@ -49,7 +50,8 @@ class MeteredObjectStoreTest {
     metered.put(BUCKET, KEY, new ByteArrayInputStream(payload), payload.length, "text/plain");
 
     verify(delegate).put(anyString(), anyString(), any(), anyLong(), anyString());
-    Timer t = registry.find(TIMER).tag("operation", "put").tag("outcome", "success").timer();
+    Timer t =
+        registry.find(TIMER).tag("operation", "put").tag("outcome", "success").timer();
     assertThat(t).isNotNull();
     assertThat(t.count()).isEqualTo(1);
   }
@@ -62,7 +64,8 @@ class MeteredObjectStoreTest {
         .isInstanceOf(RuntimeException.class)
         .hasMessage("boom");
 
-    Timer t = registry.find(TIMER).tag("operation", "delete").tag("outcome", "error").timer();
+    Timer t =
+        registry.find(TIMER).tag("operation", "delete").tag("outcome", "error").timer();
     assertThat(t).isNotNull();
     assertThat(t.count()).isEqualTo(1);
   }

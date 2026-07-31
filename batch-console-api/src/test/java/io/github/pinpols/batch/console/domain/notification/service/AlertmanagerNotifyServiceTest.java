@@ -28,11 +28,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AlertmanagerNotifyServiceTest {
 
-  @Mock private NotificationChannelMapper channelMapper;
-  @Mock private NotificationDeliveryLogMapper deliveryLogMapper;
-  @Mock private NotificationSenderRegistry senderRegistry;
-  @Mock private WebhookDispatcher webhookDispatcher;
-  @Mock private NotificationSender sender;
+  @Mock
+  private NotificationChannelMapper channelMapper;
+
+  @Mock
+  private NotificationDeliveryLogMapper deliveryLogMapper;
+
+  @Mock
+  private NotificationSenderRegistry senderRegistry;
+
+  @Mock
+  private WebhookDispatcher webhookDispatcher;
+
+  @Mock
+  private NotificationSender sender;
 
   private AlertmanagerNotifyService service;
   private MeterRegistry meterRegistry;
@@ -43,15 +52,14 @@ class AlertmanagerNotifyServiceTest {
     properties.setTenantId("system");
     properties.setMaxAlerts(50);
     meterRegistry = new SimpleMeterRegistry();
-    service =
-        new AlertmanagerNotifyService(
-            properties,
-            channelMapper,
-            deliveryLogMapper,
-            senderRegistry,
-            webhookDispatcher,
-            new AlertmanagerAlertRenderer(),
-            meterRegistry);
+    service = new AlertmanagerNotifyService(
+        properties,
+        channelMapper,
+        deliveryLogMapper,
+        senderRegistry,
+        webhookDispatcher,
+        new AlertmanagerAlertRenderer(),
+        meterRegistry);
   }
 
   private AlertmanagerWebhookPayload payload(String receiver) {
@@ -65,9 +73,8 @@ class AlertmanagerNotifyServiceTest {
         Map.of("alertname", "X", "severity", "critical"),
         Map.of(),
         null,
-        List.of(
-            new AlertmanagerAlert(
-                "firing", Map.of("alertname", "X"), Map.of(), null, null, null, "fp")));
+        List.of(new AlertmanagerAlert(
+            "firing", Map.of("alertname", "X"), Map.of(), null, null, null, "fp")));
   }
 
   @Test
@@ -124,7 +131,9 @@ class AlertmanagerNotifyServiceTest {
     verify(deliveryLogMapper, never()).insert(any());
     verify(senderRegistry, never()).resolve(anyString());
     // I-1: 缺渠道不再静默,计数器自增供 Prometheus 再告警。
-    assertThat(meterRegistry.counter("am.notify.skipped", "receiver", "batch-unknown").count())
+    assertThat(meterRegistry
+            .counter("am.notify.skipped", "receiver", "batch-unknown")
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -134,26 +143,24 @@ class AlertmanagerNotifyServiceTest {
         .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
-    AlertmanagerWebhookPayload evil =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
+    AlertmanagerWebhookPayload evil = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "firing",
+        "batch-dispatch",
+        Map.of(),
+        Map.of("alertname", "Evil\r\nX-Injected: 1"),
+        Map.of(),
+        null,
+        List.of(new AlertmanagerAlert(
             "firing",
-            "batch-dispatch",
-            Map.of(),
             Map.of("alertname", "Evil\r\nX-Injected: 1"),
             Map.of(),
             null,
-            List.of(
-                new AlertmanagerAlert(
-                    "firing",
-                    Map.of("alertname", "Evil\r\nX-Injected: 1"),
-                    Map.of(),
-                    null,
-                    null,
-                    null,
-                    "fp")));
+            null,
+            null,
+            "fp")));
 
     service.deliver("batch-dispatch", evil);
 
@@ -167,26 +174,18 @@ class AlertmanagerNotifyServiceTest {
   @Test
   void reverseLooksUpTenantFromCommonLabels() {
     // §4/§7 硬前置:按 payload 的 tenant label 反查该租户渠道,而非一律落 system。
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
-            "firing",
-            "batch-sla",
-            Map.of(),
-            Map.of("alertname", "X", "severity", "critical", "tenant", "ta"),
-            Map.of(),
-            null,
-            List.of(
-                new AlertmanagerAlert(
-                    "firing",
-                    Map.of("alertname", "X", "tenant", "ta"),
-                    Map.of(),
-                    null,
-                    null,
-                    null,
-                    "fp")));
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "firing",
+        "batch-sla",
+        Map.of(),
+        Map.of("alertname", "X", "severity", "critical", "tenant", "ta"),
+        Map.of(),
+        null,
+        List.of(new AlertmanagerAlert(
+            "firing", Map.of("alertname", "X", "tenant", "ta"), Map.of(), null, null, null, "fp")));
     when(channelMapper.selectByCode("ta", "batch-sla"))
         .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);

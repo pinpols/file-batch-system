@@ -28,14 +28,13 @@ import org.springframework.stereotype.Component;
 public class DefaultStateMachine<T> implements StateMachine<T> {
 
   /** 反射方法名候选,顺序敏感(优先匹配更具体的 getXxxStatus)。 */
-  private static final List<String> GETTER_METHOD_NAMES =
-      List.of(
-          "getInstanceStatus",
-          "getPartitionStatus",
-          "getTaskStatus",
-          "getRunStatus",
-          "getNodeStatus",
-          "getStatus");
+  private static final List<String> GETTER_METHOD_NAMES = List.of(
+      "getInstanceStatus",
+      "getPartitionStatus",
+      "getTaskStatus",
+      "getRunStatus",
+      "getNodeStatus",
+      "getStatus");
 
   /**
    * 按 Class 缓存的 status getter Method,首次反射后驻留,后续 transition 调用 O(1) 查表。 Optional.empty 表示该 class
@@ -79,10 +78,9 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
       }
     }
     // M-1: 返回类名作为状态会静默损坏工作流状态，快速失败以暴露问题而非掩盖。
-    throw new IllegalStateException(
-        "Cannot resolve status from "
-            + target.getClass().getName()
-            + ": implement Stateful or expose a getStatus() / getXxxStatus() method");
+    throw new IllegalStateException("Cannot resolve status from "
+        + target.getClass().getName()
+        + ": implement Stateful or expose a getStatus() / getXxxStatus() method");
   }
 
   /** 首次解析:按 GETTER_METHOD_NAMES 顺序查找一次,命中即缓存。 */
@@ -116,16 +114,15 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
   }
 
   /** 终态集合：到达任意一个后业务认为该实体生命周期结束。 终态收到非自回边事件需要保留原状态 + WARN，避免静默"复活"或"切换终态"。 */
-  private static final Set<String> TERMINAL_STATES =
-      Set.of(
-          "SUCCESS",
-          "FAILED",
-          "PARTIAL_FAILED",
-          "CANCELLED",
-          "TERMINATED",
-          "SKIPPED",
-          "SUCCESS_DRY_RUN",
-          "FAILED_DRY_RUN");
+  private static final Set<String> TERMINAL_STATES = Set.of(
+      "SUCCESS",
+      "FAILED",
+      "PARTIAL_FAILED",
+      "CANCELLED",
+      "TERMINATED",
+      "SKIPPED",
+      "SUCCESS_DRY_RUN",
+      "FAILED_DRY_RUN");
 
   private String resolveToState(String fromState, String event) {
     String candidate =

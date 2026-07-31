@@ -39,13 +39,12 @@ class DispatchDeliveryMetricsTest {
   void shouldRecordSuccessCounter_whenSuccessTrue() {
     metrics.recordDelivery("SFTP", true, false);
 
-    assertThat(
-            registry
-                .find("batch.dispatch.deliveries")
-                .tag("channel_type", "SFTP")
-                .tag("result", "success")
-                .counter()
-                .count())
+    assertThat(registry
+            .find("batch.dispatch.deliveries")
+            .tag("channel_type", "SFTP")
+            .tag("result", "success")
+            .counter()
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -54,13 +53,12 @@ class DispatchDeliveryMetricsTest {
   void shouldRecordFailureCounter_whenSuccessFalseAndNotRejected() {
     metrics.recordDelivery("OSS", false, false);
 
-    assertThat(
-            registry
-                .find("batch.dispatch.deliveries")
-                .tag("channel_type", "OSS")
-                .tag("result", "failure")
-                .counter()
-                .count())
+    assertThat(registry
+            .find("batch.dispatch.deliveries")
+            .tag("channel_type", "OSS")
+            .tag("result", "failure")
+            .counter()
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -71,21 +69,19 @@ class DispatchDeliveryMetricsTest {
     metrics.recordDelivery("API", true, true);
     metrics.recordDelivery("API", false, true);
 
-    assertThat(
-            registry
-                .find("batch.dispatch.deliveries")
-                .tag("channel_type", "API")
-                .tag("result", "circuit_open")
-                .counter()
-                .count())
+    assertThat(registry
+            .find("batch.dispatch.deliveries")
+            .tag("channel_type", "API")
+            .tag("result", "circuit_open")
+            .counter()
+            .count())
         .isEqualTo(2.0);
     // success/failure 桶不应被触达
-    assertThat(
-            registry
-                .find("batch.dispatch.deliveries")
-                .tag("channel_type", "API")
-                .tag("result", "success")
-                .counter())
+    assertThat(registry
+            .find("batch.dispatch.deliveries")
+            .tag("channel_type", "API")
+            .tag("result", "success")
+            .counter())
         .isNull();
   }
 
@@ -94,13 +90,12 @@ class DispatchDeliveryMetricsTest {
   void shouldUseUnknownTag_whenChannelTypeNull() {
     metrics.recordDelivery(null, true, false);
 
-    assertThat(
-            registry
-                .find("batch.dispatch.deliveries")
-                .tag("channel_type", "unknown")
-                .tag("result", "success")
-                .counter()
-                .count())
+    assertThat(registry
+            .find("batch.dispatch.deliveries")
+            .tag("channel_type", "unknown")
+            .tag("result", "success")
+            .counter()
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -111,13 +106,12 @@ class DispatchDeliveryMetricsTest {
     metrics.recordDelivery("NAS", true, false);
     metrics.recordDelivery("NAS", true, false);
 
-    assertThat(
-            registry
-                .find("batch.dispatch.deliveries")
-                .tag("channel_type", "NAS")
-                .tag("result", "success")
-                .counter()
-                .count())
+    assertThat(registry
+            .find("batch.dispatch.deliveries")
+            .tag("channel_type", "NAS")
+            .tag("result", "success")
+            .counter()
+            .count())
         .isEqualTo(3.0);
   }
 

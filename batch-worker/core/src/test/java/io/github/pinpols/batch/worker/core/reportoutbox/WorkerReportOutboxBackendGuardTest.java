@@ -53,10 +53,9 @@ class WorkerReportOutboxBackendGuardTest {
   }
 
   private WorkerReportOutboxBackendGuard guard(WorkerReportOutboxProperties properties) {
-    MockEnvironment environment =
-        new MockEnvironment()
-            .withProperty("spring.application.name", "batch-worker-import")
-            .withProperty("spring.datasource.url", "jdbc:postgresql://platform-db/batch_platform");
+    MockEnvironment environment = new MockEnvironment()
+        .withProperty("spring.application.name", "batch-worker-import")
+        .withProperty("spring.datasource.url", "jdbc:postgresql://platform-db/batch_platform");
     return new WorkerReportOutboxBackendGuard(mock(DataSource.class), properties, environment);
   }
 }

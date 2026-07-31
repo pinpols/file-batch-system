@@ -73,14 +73,13 @@ public class DispatchReceiptPollScheduler {
 
   @PostConstruct
   void initializeMeters() {
-    this.httpClient =
-        new OkHttpClient.Builder()
-            .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-            .readTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))
-            .writeTimeout(Duration.ofMillis(properties.getWriteTimeoutMillis()))
-            .callTimeout(Duration.ofMillis(properties.getCallTimeoutMillis()))
-            .dns(guardedDns())
-            .build();
+    this.httpClient = new OkHttpClient.Builder()
+        .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+        .readTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))
+        .writeTimeout(Duration.ofMillis(properties.getWriteTimeoutMillis()))
+        .callTimeout(Duration.ofMillis(properties.getCallTimeoutMillis()))
+        .dns(guardedDns())
+        .build();
     meterRegistry.gauge("batch.dispatch.receipt.poll.failures", pollFailures);
     meterRegistry.gauge("batch.dispatch.receipt.poll.successes", pollSuccesses);
   }
@@ -141,9 +140,8 @@ public class DispatchReceiptPollScheduler {
     }
     List<Map<String, Object>> rows;
     try {
-      rows =
-          fileDispatchRepository.listPendingReceiptPolls(
-              properties.getBatchSize(), properties.getPendingMaxAgeSeconds());
+      rows = fileDispatchRepository.listPendingReceiptPolls(
+          properties.getBatchSize(), properties.getPendingMaxAgeSeconds());
     } catch (RuntimeException exception) {
       if (stopping.get()) {
         log.info("dispatch receipt poll skipped during shutdown: error={}", exception.getMessage());
@@ -198,10 +196,9 @@ public class DispatchReceiptPollScheduler {
     String tenantId = String.valueOf(row.get("tenant_id"));
     Long fileId = toLong(row.get("file_id"));
     String channelCode = String.valueOf(row.get("channel_code"));
-    String externalRequestId =
-        row.get("external_request_id") == null
-            ? null
-            : String.valueOf(row.get("external_request_id"));
+    String externalRequestId = row.get("external_request_id") == null
+        ? null
+        : String.valueOf(row.get("external_request_id"));
     if (fileId == null || !Texts.hasText(channelCode) || !Texts.hasText(externalRequestId)) {
       return;
     }
@@ -210,19 +207,17 @@ public class DispatchReceiptPollScheduler {
       return;
     }
     Map<String, Object> channel = ChannelConfigMerge.merge(channelRow, objectMapper);
-    String pollUrl =
-        channel.get("receipt_poll_url") == null
-            ? null
-            : String.valueOf(channel.get("receipt_poll_url"));
+    String pollUrl = channel.get("receipt_poll_url") == null
+        ? null
+        : String.valueOf(channel.get("receipt_poll_url"));
     if (!Texts.hasText(pollUrl)) {
       return;
     }
     String sep = pollUrl.contains("?") ? "&" : "?";
-    String url =
-        pollUrl
-            + sep
-            + "externalRequestId="
-            + URLEncoder.encode(externalRequestId, StandardCharsets.UTF_8);
+    String url = pollUrl
+        + sep
+        + "externalRequestId="
+        + URLEncoder.encode(externalRequestId, StandardCharsets.UTF_8);
     Request request = new Request.Builder().url(url).get().build();
     try (Response response = httpClient.newCall(request).execute()) {
       if (!response.isSuccessful() || response.body() == null) {
@@ -249,10 +244,9 @@ public class DispatchReceiptPollScheduler {
         }
         root = objectMapper.readTree(limited);
       }
-      boolean ack =
-          root.path("acknowledged").asBoolean(false)
-              || "ACKED".equalsIgnoreCase(root.path("status").asText())
-              || "SUCCESS".equalsIgnoreCase(root.path("receipt_status").asText());
+      boolean ack = root.path("acknowledged").asBoolean(false)
+          || "ACKED".equalsIgnoreCase(root.path("status").asText())
+          || "SUCCESS".equalsIgnoreCase(root.path("receipt_status").asText());
       if (!ack) {
         return;
       }

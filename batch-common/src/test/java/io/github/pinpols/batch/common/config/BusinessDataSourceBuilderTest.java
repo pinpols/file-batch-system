@@ -14,15 +14,13 @@ class BusinessDataSourceBuilderTest {
     routing.setEnabled(true);
     routing.setShards(Collections.emptyList());
 
-    assertThatThrownBy(
-            () ->
-                BusinessDataSourceBuilder.build(
-                    new HikariConfig(),
-                    new BusinessDataSourceProperties(),
-                    new BatchPgSessionProperties(),
-                    routing,
-                    null,
-                    "test-worker"))
+    assertThatThrownBy(() -> BusinessDataSourceBuilder.build(
+            new HikariConfig(),
+            new BusinessDataSourceProperties(),
+            new BatchPgSessionProperties(),
+            routing,
+            null,
+            "test-worker"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("routing.enabled=true")
         .hasMessageContaining("shard");

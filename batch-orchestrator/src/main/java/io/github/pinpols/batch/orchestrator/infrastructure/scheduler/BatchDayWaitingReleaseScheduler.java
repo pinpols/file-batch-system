@@ -104,30 +104,25 @@ public class BatchDayWaitingReleaseScheduler {
       // try/catch 仍包在 runWithTenant 外，保留"单 day 异常隔离 → 不影响其它 key"语义，且 holder finally 清理。
       Integer releasedCount = null;
       try {
-        releasedCount =
-            RlsTenantContextHolder.runWithTenant(
-                tenantId,
-                () -> {
-                  BatchDayInstanceEntity previousDay =
-                      batchDayInstanceMapper.selectByTenantCalendarBizDate(
-                          entity.tenantId(), entity.calendarCode(), previousBizDate);
-                  if (previousDay == null || !isReleasable(previousDay.dayStatus())) {
-                    return 0;
-                  }
-                  int released =
-                      batchDayOperationService.releaseWaitingLaunchesForBatchDay(
-                          previousDay, AUTO_RELEASE_OPERATOR);
-                  if (released > 0) {
-                    log.info(
-                        "auto-released {} waiting launch(es): tenantId={}, calendarCode={},"
-                            + " previousBizDate={}",
-                        released,
-                        previousDay.tenantId(),
-                        previousDay.calendarCode(),
-                        previousBizDate);
-                  }
-                  return released;
-                });
+        releasedCount = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+          BatchDayInstanceEntity previousDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+              entity.tenantId(), entity.calendarCode(), previousBizDate);
+          if (previousDay == null || !isReleasable(previousDay.dayStatus())) {
+            return 0;
+          }
+          int released = batchDayOperationService.releaseWaitingLaunchesForBatchDay(
+              previousDay, AUTO_RELEASE_OPERATOR);
+          if (released > 0) {
+            log.info(
+                "auto-released {} waiting launch(es): tenantId={}, calendarCode={},"
+                    + " previousBizDate={}",
+                released,
+                previousDay.tenantId(),
+                previousDay.calendarCode(),
+                previousBizDate);
+          }
+          return released;
+        });
       } catch (Exception ex) {
         // 单 day 异常隔离 — 不影响其它 key,下 tick 重试
         log.warn(

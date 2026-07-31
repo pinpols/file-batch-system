@@ -45,16 +45,15 @@ public class ForensicExportController {
 
   @PostMapping("/export")
   public ForensicExportResponse export(@RequestBody ExportRequestBody body) {
-    ForensicExportRequest request =
-        ForensicExportRequest.builder()
-            .tenantId(body.tenantId())
-            .bizDateFrom(body.bizDateFrom())
-            .bizDateTo(body.bizDateTo())
-            .jobCodes(body.jobCodes())
-            .exportFormat(body.exportFormat())
-            .requestedBy(body.requestedBy())
-            .traceId(body.traceId())
-            .build();
+    ForensicExportRequest request = ForensicExportRequest.builder()
+        .tenantId(body.tenantId())
+        .bizDateFrom(body.bizDateFrom())
+        .bizDateTo(body.bizDateTo())
+        .jobCodes(body.jobCodes())
+        .exportFormat(body.exportFormat())
+        .requestedBy(body.requestedBy())
+        .traceId(body.traceId())
+        .build();
     return forensicExportService.export(request);
   }
 

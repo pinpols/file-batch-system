@@ -29,32 +29,29 @@ import org.junit.jupiter.api.Test;
 class KafkaEventSchemaGuardTest {
 
   /** 受守护的跨服务 wire 契约类(新增 Kafka payload 类型时在此登记)。 */
-  private static final List<Class<?>> WIRE_CONTRACTS =
-      List.of(
-          BatchEventMessage.class,
-          BatchRetryMessage.class,
-          TaskDispatchMessage.class,
-          BatchDeadLetterMessage.class,
-          SchedulingContext.class,
-          LaunchEnvelope.class);
+  private static final List<Class<?>> WIRE_CONTRACTS = List.of(
+      BatchEventMessage.class,
+      BatchRetryMessage.class,
+      TaskDispatchMessage.class,
+      BatchDeadLetterMessage.class,
+      SchedulingContext.class,
+      LaunchEnvelope.class);
 
   private static final String GOLDEN = "/kafka-event-schema.golden";
 
   @Test
   void wireSchemaMatchesGolden() {
-    String actual =
-        WIRE_CONTRACTS.stream()
-                .map(KafkaEventSchemaGuardTest::signature)
-                .collect(Collectors.joining("\n"))
-            + "\n";
+    String actual = WIRE_CONTRACTS.stream()
+            .map(KafkaEventSchemaGuardTest::signature)
+            .collect(Collectors.joining("\n"))
+        + "\n";
 
     String golden = readGolden();
     assertThat(actual)
-        .as(
-            "Kafka 事件 wire schema 变了。若为纯新增字段(向后兼容),用以下实际签名更新 "
-                + "batch-common/src/test/resources/kafka-event-schema.golden;"
-                + "若删/改名/改类型(破坏消费者),禁直接改 —— 走版本化 topic(.v2)+ 双写迁移。\n实际签名:\n"
-                + actual)
+        .as("Kafka 事件 wire schema 变了。若为纯新增字段(向后兼容),用以下实际签名更新 "
+            + "batch-common/src/test/resources/kafka-event-schema.golden;"
+            + "若删/改名/改类型(破坏消费者),禁直接改 —— 走版本化 topic(.v2)+ 双写迁移。\n实际签名:\n"
+            + actual)
         .isEqualTo(golden);
   }
 

@@ -25,9 +25,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FeedbackStepTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
-  @InjectMocks private FeedbackStep step;
+  @InjectMocks
+  private FeedbackStep step;
 
   @Test
   void shouldReturnStageFeedback_whenStageAccessed() {

@@ -32,9 +32,11 @@ class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
   @Import({BatchClockConfig.class, ConsoleSessionRegistry.class})
   static class TestApplication {}
 
-  @Autowired private ConsoleSessionRegistry sessionRegistry;
+  @Autowired
+  private ConsoleSessionRegistry sessionRegistry;
 
-  @Autowired private StringRedisTemplate redisTemplate;
+  @Autowired
+  private StringRedisTemplate redisTemplate;
 
   @Test
   void nextSessionVersionIncrementsMonotonically() {

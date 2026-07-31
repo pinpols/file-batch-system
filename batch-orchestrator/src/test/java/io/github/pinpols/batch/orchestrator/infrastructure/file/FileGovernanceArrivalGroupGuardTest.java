@@ -49,14 +49,13 @@ class FileGovernanceArrivalGroupGuardTest {
     when(properties.getArrival().getDefaultTimeoutAction()).thenReturn("MANUAL_CONFIRM");
 
     bundleArrivalLauncher = mock(BundleArrivalLauncher.class);
-    scheduler =
-        new FileGovernanceScheduler(
-            repository,
-            mock(S3GovernanceStorage.class),
-            properties,
-            mock(FileGovernanceMetricsCacheService.class),
-            new SimpleMeterRegistry(),
-            bundleArrivalLauncher);
+    scheduler = new FileGovernanceScheduler(
+        repository,
+        mock(S3GovernanceStorage.class),
+        properties,
+        mock(FileGovernanceMetricsCacheService.class),
+        new SimpleMeterRegistry(),
+        bundleArrivalLauncher);
   }
 
   @Test

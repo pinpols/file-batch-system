@@ -24,7 +24,8 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ShellTaskExecutorTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   private ShellExecutorProperties props;
   private ShellTaskExecutor executor;
@@ -90,9 +91,8 @@ class ShellTaskExecutorTest {
     @Test
     void rejectsTooManyArgs() {
       props.setMaxArgs(2);
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("a", "b", "c"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("a", "b", "c"))));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("too many args");
     }
@@ -100,9 +100,8 @@ class ShellTaskExecutorTest {
     @Test
     void rejectsEnvKeyNotInAllowList() {
       // 默认 allowedEnvKeys 空 → 任何 env key 都被拒
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("command", "/bin/echo", "env", Map.of("MY_VAR", "x"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("command", "/bin/echo", "env", Map.of("MY_VAR", "x"))));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("not in allowedEnvKeys");
     }
@@ -110,9 +109,8 @@ class ShellTaskExecutorTest {
     @Test
     void rejectsBadCharactersInArg() {
       // 默认 regex 不允许引号 / 反斜杠等
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("'; rm -rf /'"))));
+      TaskResult r = executor.execute(
+          ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("'; rm -rf /'"))));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("disallowed characters");
     }
@@ -190,10 +188,8 @@ class ShellTaskExecutorTest {
       // sleep 5s 远超 default,故应按 default 超时被杀(而非按 30s 等待)。
       props.setDefaultTimeout(Duration.ofMillis(300));
       long start = System.currentTimeMillis();
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of("command", "/bin/sleep", "args", List.of("5"), "timeoutSeconds", 30)));
+      TaskResult r = executor.execute(ctxWithParams(
+          Map.of("command", "/bin/sleep", "args", List.of("5"), "timeoutSeconds", 30)));
       long elapsed = System.currentTimeMillis() - start;
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("timed out after 0s"); // default 0.3s → toSeconds()=0
@@ -206,10 +202,8 @@ class ShellTaskExecutorTest {
       // 请求值 < default → 取请求值(缩短允许)。default 10s,请求 1s,sleep 5s → 按 1s 超时。
       props.setDefaultTimeout(Duration.ofSeconds(10));
       long start = System.currentTimeMillis();
-      TaskResult r =
-          executor.execute(
-              ctxWithParams(
-                  Map.of("command", "/bin/sleep", "args", List.of("5"), "timeoutSeconds", 1)));
+      TaskResult r = executor.execute(ctxWithParams(
+          Map.of("command", "/bin/sleep", "args", List.of("5"), "timeoutSeconds", 1)));
       long elapsed = System.currentTimeMillis() - start;
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("timed out after 1s");

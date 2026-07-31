@@ -67,17 +67,18 @@ public class TaskControllerApplicationService {
    * {@code @Retryable}(死锁退避)与 {@code applyTaskOutcome} 的 {@code @Transactional}(逐项独立事务)。 直接
    * this.report() 会绕过代理。
    */
-  @Lazy @Autowired private TaskControllerApplicationService self;
+  @Lazy
+  @Autowired
+  private TaskControllerApplicationService self;
 
   @Timed(
       value = "batch.task.claim.duration",
       description = "Worker task claim latency on orchestrator",
       histogram = true)
   public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
-    JobTaskEntity task =
-        Guard.requireFound(
-            taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId()),
-            "task not found");
+    JobTaskEntity task = Guard.requireFound(
+        taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId()),
+        "task not found");
     if (!isClaimedBy(task, request.workerId())) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.already_claimed");
     }
@@ -111,9 +112,8 @@ public class TaskControllerApplicationService {
     TaskAssignmentService.WorkerLookupMemo workerMemo =
         new TaskAssignmentService.WorkerLookupMemo();
     for (TaskClaimItemCommand item : items) {
-      JobTaskEntity task =
-          taskExecutionService.assignWorker(
-              item.tenantId(), item.taskId(), item.workerId(), workerMemo);
+      JobTaskEntity task = taskExecutionService.assignWorker(
+          item.tenantId(), item.taskId(), item.workerId(), workerMemo);
       if (task != null && isClaimedBy(task, item.workerId())) {
         // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
         EffectiveTaskConfig config =
@@ -150,23 +150,22 @@ public class TaskControllerApplicationService {
     String errorCode = resolveFailureField(request.errorCode(), request.code(), request.success());
     String errorMessage =
         resolveFailureField(request.errorMessage(), request.message(), request.success());
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId(request.tenantId())
-            .taskId(taskId)
-            .workerId(request.workerId())
-            .success(request.success())
-            .resultSummary(request.resultSummary())
-            .errorCode(errorCode)
-            .errorMessage(errorMessage)
-            .errorKey(request.errorKey())
-            .errorArgs(request.errorArgs())
-            .highWaterMarkOut(request.highWaterMarkOut())
-            .outputs(request.outputs())
-            .partitionInvocationId(request.partitionInvocationId())
-            .failureClass(request.success() ? null : request.failureClass())
-            .verifierFailures(request.success() ? request.verifierFailures() : null)
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId(request.tenantId())
+        .taskId(taskId)
+        .workerId(request.workerId())
+        .success(request.success())
+        .resultSummary(request.resultSummary())
+        .errorCode(errorCode)
+        .errorMessage(errorMessage)
+        .errorKey(request.errorKey())
+        .errorArgs(request.errorArgs())
+        .highWaterMarkOut(request.highWaterMarkOut())
+        .outputs(request.outputs())
+        .partitionInvocationId(request.partitionInvocationId())
+        .failureClass(request.success() ? null : request.failureClass())
+        .verifierFailures(request.success() ? request.verifierFailures() : null)
+        .build();
     taskExecutionService.applyTaskOutcome(command);
   }
 
@@ -227,13 +226,12 @@ public class TaskControllerApplicationService {
    */
   public TaskControlPayloads.TaskHeartbeatResult renew(Long taskId, TaskHeartbeatCommand request) {
     String detailsJson = serializeDetails(taskId, request.details());
-    TaskHeartbeatResult result =
-        taskExecutionService.recordHeartbeat(
-            request.tenantId(),
-            taskId,
-            request.workerId(),
-            request.partitionInvocationId(),
-            detailsJson);
+    TaskHeartbeatResult result = taskExecutionService.recordHeartbeat(
+        request.tenantId(),
+        taskId,
+        request.workerId(),
+        request.partitionInvocationId(),
+        detailsJson);
     if (!result.leaseRenewed()) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
     }
@@ -280,18 +278,16 @@ public class TaskControllerApplicationService {
     // 丢租约的项按原逐项语义返回 renewed=false(结果与入参逐位对齐)。
     List<TaskAssignmentService.LeaseRenewCommand> commands = new ArrayList<>(items.size());
     for (TaskLeaseRenewItemCommand item : items) {
-      commands.add(
-          new TaskAssignmentService.LeaseRenewCommand(
-              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()));
+      commands.add(new TaskAssignmentService.LeaseRenewCommand(
+          item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()));
     }
     List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
         taskExecutionService.renewLeaseBatch(commands);
     List<TaskLeaseRenewItemResult> results = new ArrayList<>(items.size());
     for (int i = 0; i < items.size(); i++) {
       TaskAssignmentService.TaskHeartbeatResult result = outcomes.get(i);
-      results.add(
-          new TaskLeaseRenewItemResult(
-              items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
+      results.add(new TaskLeaseRenewItemResult(
+          items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
     }
     return new TaskLeaseRenewBatchResult(results);
   }

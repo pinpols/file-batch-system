@@ -122,27 +122,24 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
     int n = records.size();
     // Phase A RLS:显式 tx 包 SET LOCAL + batchUpdate 共享同一 connection,触发 biz.* policy 过滤
-    txTemplate.execute(
-        status -> {
-          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-          jdbcTemplate.batchUpdate(
-              sql,
-              new BatchPreparedStatementSetter() {
-                @Override
-                public void setValues(PreparedStatement ps, int i) throws SQLException {
-                  Object[] args = buildArgs(insertCols, spec, records.get(i), loadContext);
-                  for (int j = 0; j < args.length; j++) {
-                    ps.setObject(j + 1, args[j]);
-                  }
-                }
+    txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+        @Override
+        public void setValues(PreparedStatement ps, int i) throws SQLException {
+          Object[] args = buildArgs(insertCols, spec, records.get(i), loadContext);
+          for (int j = 0; j < args.length; j++) {
+            ps.setObject(j + 1, args[j]);
+          }
+        }
 
-                @Override
-                public int getBatchSize() {
-                  return n;
-                }
-              });
-          return null;
-        });
+        @Override
+        public int getBatchSize() {
+          return n;
+        }
+      });
+      return null;
+    });
     return n;
   }
 
@@ -164,29 +161,27 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     ImportLoadContext loadContext = applyRegion(context, spec);
     String sql = buildDeleteSql(spec);
     Object[] args = buildPartitionArgs(spec, loadContext);
-    txTemplate.execute(
-        status -> {
-          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-          int deleted =
-              spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY
-                  ? 0
-                  : jdbcTemplate.update(sql, args);
-          if (spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
-            prepareStageSwapTable(loadContext, spec);
-          }
-          if (log.isInfoEnabled()) {
-            log.info(
-                "jdbc-mapped-import partition replace prepared: tenantId={}, template={},"
-                    + " schema={}, table={}, replacePartitionColumns={}, deletedRows={}",
-                loadContext.tenantId(),
-                loadContext.templateCode(),
-                spec.schema(),
-                spec.table(),
-                spec.replacePartitionColumns(),
-                deleted);
-          }
-          return null;
-        });
+    txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      int deleted = spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY
+          ? 0
+          : jdbcTemplate.update(sql, args);
+      if (spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
+        prepareStageSwapTable(loadContext, spec);
+      }
+      if (log.isInfoEnabled()) {
+        log.info(
+            "jdbc-mapped-import partition replace prepared: tenantId={}, template={},"
+                + " schema={}, table={}, replacePartitionColumns={}, deletedRows={}",
+            loadContext.tenantId(),
+            loadContext.templateCode(),
+            spec.schema(),
+            spec.table(),
+            spec.replacePartitionColumns(),
+            deleted);
+      }
+      return null;
+    });
   }
 
   public void finishPartitionStageSwap(ImportLoadContext context) {
@@ -197,25 +192,22 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     String parent = tableName(spec);
     String partition = qualifiedTableName(spec.schema(), spec.stageSwap().partitionTable());
     String staging = stagingTableName(loadContext, spec);
-    txTemplate.execute(
-        status -> {
-          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-          jdbcTemplate.execute("ALTER TABLE " + parent + " DETACH PARTITION " + partition);
-          jdbcTemplate.execute("DROP TABLE " + partition);
-          jdbcTemplate.execute(
-              "ALTER TABLE "
-                  + staging
-                  + " RENAME TO "
-                  + JdbcMappedSqlValidator.quotePg(spec.stageSwap().partitionTable()));
-          jdbcTemplate.execute(
-              "ALTER TABLE "
-                  + parent
-                  + " ATTACH PARTITION "
-                  + partition
-                  + " "
-                  + spec.stageSwap().attachClause());
-          return null;
-        });
+    txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      jdbcTemplate.execute("ALTER TABLE " + parent + " DETACH PARTITION " + partition);
+      jdbcTemplate.execute("DROP TABLE " + partition);
+      jdbcTemplate.execute("ALTER TABLE "
+          + staging
+          + " RENAME TO "
+          + JdbcMappedSqlValidator.quotePg(spec.stageSwap().partitionTable()));
+      jdbcTemplate.execute("ALTER TABLE "
+          + parent
+          + " ATTACH PARTITION "
+          + partition
+          + " "
+          + spec.stageSwap().attachClause());
+      return null;
+    });
   }
 
   private List<String> orderedInsertColumns(JdbcMappedImportSpec spec) {
@@ -306,10 +298,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
    * WorkerConfigException 拒绝。返回 region 已规整(含默认)的 context 供 ${region} binding 用。
    */
   static ImportLoadContext applyRegion(ImportLoadContext context, JdbcMappedImportSpec spec) {
-    String region =
-        context.region() != null && !context.region().isBlank()
-            ? context.region()
-            : spec.defaultRegion();
+    String region = context.region() != null && !context.region().isBlank()
+        ? context.region()
+        : spec.defaultRegion();
     List<String> allowed = spec.allowedRegions();
     if (allowed != null && !allowed.isEmpty() && (region == null || !allowed.contains(region))) {
       throw new WorkerConfigException(
@@ -354,10 +345,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   }
 
   private String buildSql(JdbcMappedImportSpec spec, List<String> insertCols) {
-    String fq =
-        JdbcMappedSqlValidator.quotePg(spec.schema())
-            + "."
-            + JdbcMappedSqlValidator.quotePg(spec.table());
+    String fq = JdbcMappedSqlValidator.quotePg(spec.schema())
+        + "."
+        + JdbcMappedSqlValidator.quotePg(spec.table());
     StringBuilder colPart = new StringBuilder();
     StringBuilder ph = new StringBuilder();
     for (String c : insertCols) {
@@ -409,24 +399,23 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     String copySql = buildCopySql(destinationTable, insertCols);
     String csv = buildCopyCsv(insertCols, spec, records, context);
     int n = records.size();
-    txTemplate.execute(
-        status -> {
-          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-          Connection conn = DataSourceUtils.getConnection(businessDataSource);
-          try {
-            CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
-            long copied = copyManager.copyIn(copySql, new StringReader(csv));
-            if (copied != n) {
-              throw new IllegalStateException(
-                  "PostgreSQL COPY row count mismatch: expected=" + n + ", copied=" + copied);
-            }
-            return null;
-          } catch (Exception ex) {
-            throw new IllegalStateException("PostgreSQL COPY failed: " + ex.getMessage(), ex);
-          } finally {
-            DataSourceUtils.releaseConnection(conn, businessDataSource);
-          }
-        });
+    txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      Connection conn = DataSourceUtils.getConnection(businessDataSource);
+      try {
+        CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
+        long copied = copyManager.copyIn(copySql, new StringReader(csv));
+        if (copied != n) {
+          throw new IllegalStateException(
+              "PostgreSQL COPY row count mismatch: expected=" + n + ", copied=" + copied);
+        }
+        return null;
+      } catch (Exception ex) {
+        throw new IllegalStateException("PostgreSQL COPY failed: " + ex.getMessage(), ex);
+      } finally {
+        DataSourceUtils.releaseConnection(conn, businessDataSource);
+      }
+    });
     return n;
   }
 
@@ -464,14 +453,12 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   }
 
   private String stagingTableName(ImportLoadContext context, JdbcMappedImportSpec spec) {
-    String suffix =
-        Integer.toHexString(
-            Objects.hash(
-                context.tenantId(),
-                context.traceId(),
-                context.batchNo(),
-                context.bizDate(),
-                context.templateCode()));
+    String suffix = Integer.toHexString(Objects.hash(
+        context.tenantId(),
+        context.traceId(),
+        context.batchNo(),
+        context.bizDate(),
+        context.templateCode()));
     return qualifiedTableName(
         spec.schema(), spec.stageSwap().partitionTable() + "__stage_" + suffix);
   }
@@ -504,12 +491,11 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return;
     }
     String text = String.valueOf(value);
-    boolean quote =
-        text.equals("\\N")
-            || text.indexOf(',') >= 0
-            || text.indexOf('"') >= 0
-            || text.indexOf('\n') >= 0
-            || text.indexOf('\r') >= 0;
+    boolean quote = text.equals("\\N")
+        || text.indexOf(',') >= 0
+        || text.indexOf('"') >= 0
+        || text.indexOf('\n') >= 0
+        || text.indexOf('\r') >= 0;
     if (!quote) {
       sb.append(text);
       return;

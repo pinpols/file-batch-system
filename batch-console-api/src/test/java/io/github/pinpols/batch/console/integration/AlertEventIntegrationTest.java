@@ -23,16 +23,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private AlertEventMapper alertEventMapper;
+  @Autowired
+  private AlertEventMapper alertEventMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldReturnEmptyWhenNoAlertsExist() {
-    List<AlertEventEntity> results =
-        alertEventMapper.selectByQuery(
-            AlertEventQuery.ofTenant(
-                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
+    List<AlertEventEntity> results = alertEventMapper.selectByQuery(AlertEventQuery.ofTenant(
+        "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
     assertThat(results).isEmpty();
   }
@@ -43,9 +43,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "Job SLA exceeded");
     insertAlertEvent(tenantId, "SLA_BREACH", "WARN", "OPEN", "File latency exceeded");
 
-    List<AlertEventEntity> highAlerts =
-        alertEventMapper.selectByQuery(
-            AlertEventQuery.ofSeverity(tenantId, "CRITICAL", new PageRequest(1, 10)));
+    List<AlertEventEntity> highAlerts = alertEventMapper.selectByQuery(
+        AlertEventQuery.ofSeverity(tenantId, "CRITICAL", new PageRequest(1, 10)));
 
     assertThat(highAlerts).hasSize(1);
     assertThat(highAlerts.get(0).getSeverity()).isEqualTo("CRITICAL");
@@ -58,9 +57,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "OPEN", "Disk 85% used");
     insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "CLOSED", "Disk resolved");
 
-    List<AlertEventEntity> openAlerts =
-        alertEventMapper.selectByQuery(
-            AlertEventQuery.ofStatus(tenantId, "OPEN", new PageRequest(1, 10)));
+    List<AlertEventEntity> openAlerts = alertEventMapper.selectByQuery(
+        AlertEventQuery.ofStatus(tenantId, "OPEN", new PageRequest(1, 10)));
 
     assertThat(openAlerts).hasSize(1);
     assertThat(openAlerts.get(0).getStatus()).isEqualTo("OPEN");
@@ -72,9 +70,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA alert");
     insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stuck alert");
 
-    List<AlertEventEntity> slaAlerts =
-        alertEventMapper.selectByQuery(
-            AlertEventQuery.ofAlertType(tenantId, "SLA_BREACH", new PageRequest(1, 10)));
+    List<AlertEventEntity> slaAlerts = alertEventMapper.selectByQuery(
+        AlertEventQuery.ofAlertType(tenantId, "SLA_BREACH", new PageRequest(1, 10)));
 
     assertThat(slaAlerts).hasSize(1);
     assertThat(slaAlerts.get(0).getAlertType()).isEqualTo("SLA_BREACH");
@@ -102,9 +99,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "recent", now.minusSeconds(3600));
 
     // fromTime = 2 天前 → 只命中 recent
-    AlertEventQuery query =
-        AlertEventQuery.ofLastSeenRange(
-            tenantId, now.minusSeconds(172800), null, new PageRequest(1, 10));
+    AlertEventQuery query = AlertEventQuery.ofLastSeenRange(
+        tenantId, now.minusSeconds(172800), null, new PageRequest(1, 10));
 
     List<AlertEventEntity> rows = alertEventMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);

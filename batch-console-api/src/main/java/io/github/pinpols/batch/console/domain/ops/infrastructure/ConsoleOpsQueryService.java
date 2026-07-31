@@ -74,10 +74,9 @@ public class ConsoleOpsQueryService {
 
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
     AuditLogQuery query = new AuditLogQuery();
     query.setTenantId(resolveTenant(tenantGuard, request.getTenantId()));
     query.setOperationType(request.getOperationType());
@@ -85,16 +84,14 @@ public class ConsoleOpsQueryService {
     query.setOperatorId(request.getOperatorId());
     query.setFileId(parseLong(request.getFileId(), "fileId"));
     query.setTraceId(request.getTraceId());
-    query.setFromTime(
-        parseFlexibleInstant(
-            firstNonBlank(request.getFromTime(), request.getStartTime()),
-            "fromTime",
-            timezoneProvider.defaultZone()));
-    query.setToTime(
-        parseFlexibleInstant(
-            firstNonBlank(request.getToTime(), request.getEndTime()),
-            "toTime",
-            timezoneProvider.defaultZone()));
+    query.setFromTime(parseFlexibleInstant(
+        firstNonBlank(request.getFromTime(), request.getStartTime()),
+        "fromTime",
+        timezoneProvider.defaultZone()));
+    query.setToTime(parseFlexibleInstant(
+        firstNonBlank(request.getToTime(), request.getEndTime()),
+        "toTime",
+        timezoneProvider.defaultZone()));
     query.setPageRequest(pageRequest);
     query.setCursorId(decodeCursorId(request.getCursor()));
     List<Map<String, Object>> rows = opsMappers.auditLogMapper.selectByQuery(query);
@@ -113,18 +110,16 @@ public class ConsoleOpsQueryService {
       OutboxRetryLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     List<Map<String, Object>> rows =
-        opsMappers.outboxRetryLogMapper.selectByQuery(
-            new OutboxRetryLogQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getRetryStatus(),
-                request.getEventKey(),
-                pageRequest));
-    long total =
-        opsMappers.outboxRetryLogMapper.countByQuery(
+        opsMappers.outboxRetryLogMapper.selectByQuery(new OutboxRetryLogQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getRetryStatus(),
             request.getEventKey(),
-            pageRequest);
+            pageRequest));
+    long total = opsMappers.outboxRetryLogMapper.countByQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getRetryStatus(),
+        request.getEventKey(),
+        pageRequest);
     return page(pageRequest, total, rows, this::toOutboxRetryResponse);
   }
 
@@ -132,87 +127,75 @@ public class ConsoleOpsQueryService {
       OutboxDeliveryLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     List<Map<String, Object>> rows =
-        opsMappers.outboxDeliveryLogMapper.selectByQuery(
-            new OutboxDeliveryLogQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getDeliveryStatus(),
-                request.getEventType(),
-                request.getEventKey(),
-                request.getTraceId(),
-                pageRequest));
-    long total =
-        opsMappers.outboxDeliveryLogMapper.countByQuery(
+        opsMappers.outboxDeliveryLogMapper.selectByQuery(new OutboxDeliveryLogQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getDeliveryStatus(),
             request.getEventType(),
             request.getEventKey(),
             request.getTraceId(),
-            pageRequest);
+            pageRequest));
+    long total = opsMappers.outboxDeliveryLogMapper.countByQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getDeliveryStatus(),
+        request.getEventType(),
+        request.getEventKey(),
+        request.getTraceId(),
+        pageRequest);
     return page(pageRequest, total, rows, this::toOutboxDeliveryResponse);
   }
 
   public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     List<ConsoleAiAuditLogEntity> rows =
-        opsMappers.consoleAiAuditLogMapper.selectByQuery(
-            new ConsoleAiAuditLogQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getSessionId(),
-                request.getOperatorId(),
-                request.getPromptCategory(),
-                request.getPromptDecision(),
-                parseInstant(request.getFromTime(), "fromTime"),
-                parseInstant(request.getToTime(), "toTime"),
-                pageRequest));
-    long total =
-        opsMappers.consoleAiAuditLogMapper.countByQuery(
-            new ConsoleAiAuditLogQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getSessionId(),
-                request.getOperatorId(),
-                request.getPromptCategory(),
-                request.getPromptDecision(),
-                parseInstant(request.getFromTime(), "fromTime"),
-                parseInstant(request.getToTime(), "toTime"),
-                pageRequest));
-    return page(
-        pageRequest,
-        total,
-        rows,
-        entity -> {
-          AiAuditLogResponse row = new AiAuditLogResponse();
-          row.setId(entity.getId());
-          row.setTenantId(entity.getTenantId());
-          row.setRequestId(entity.getRequestId());
-          row.setTraceId(entity.getTraceId());
-          row.setSessionId(entity.getSessionId());
-          row.setOperatorId(entity.getOperatorId());
-          row.setPromptCategory(entity.getPromptCategory());
-          row.setPromptDecision(entity.getPromptDecision());
-          row.setModelName(entity.getModelName());
-          row.setPromptPreview(ConsoleTextSanitizer.safeDisplay(entity.getPromptPreview(), 512));
-          row.setResponsePreview(
-              ConsoleTextSanitizer.safeDisplay(entity.getResponsePreview(), 512));
-          row.setRefusalReason(ConsoleTextSanitizer.safeDisplay(entity.getRefusalReason(), 512));
-          row.setCreatedAt(entity.getCreatedAt());
-          return row;
-        });
+        opsMappers.consoleAiAuditLogMapper.selectByQuery(new ConsoleAiAuditLogQuery(
+            resolveTenant(tenantGuard, request.getTenantId()),
+            request.getSessionId(),
+            request.getOperatorId(),
+            request.getPromptCategory(),
+            request.getPromptDecision(),
+            parseInstant(request.getFromTime(), "fromTime"),
+            parseInstant(request.getToTime(), "toTime"),
+            pageRequest));
+    long total = opsMappers.consoleAiAuditLogMapper.countByQuery(new ConsoleAiAuditLogQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getSessionId(),
+        request.getOperatorId(),
+        request.getPromptCategory(),
+        request.getPromptDecision(),
+        parseInstant(request.getFromTime(), "fromTime"),
+        parseInstant(request.getToTime(), "toTime"),
+        pageRequest));
+    return page(pageRequest, total, rows, entity -> {
+      AiAuditLogResponse row = new AiAuditLogResponse();
+      row.setId(entity.getId());
+      row.setTenantId(entity.getTenantId());
+      row.setRequestId(entity.getRequestId());
+      row.setTraceId(entity.getTraceId());
+      row.setSessionId(entity.getSessionId());
+      row.setOperatorId(entity.getOperatorId());
+      row.setPromptCategory(entity.getPromptCategory());
+      row.setPromptDecision(entity.getPromptDecision());
+      row.setModelName(entity.getModelName());
+      row.setPromptPreview(ConsoleTextSanitizer.safeDisplay(entity.getPromptPreview(), 512));
+      row.setResponsePreview(ConsoleTextSanitizer.safeDisplay(entity.getResponsePreview(), 512));
+      row.setRefusalReason(ConsoleTextSanitizer.safeDisplay(entity.getRefusalReason(), 512));
+      row.setCreatedAt(entity.getCreatedAt());
+      return row;
+    });
   }
 
   public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
-    DeadLetterTaskQuery query =
-        new DeadLetterTaskQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getSourceType(),
-            request.getReplayStatus(),
-            request.getTraceId(),
-            pageRequest,
-            decodeCursorId(request.getCursor()));
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
+    DeadLetterTaskQuery query = new DeadLetterTaskQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getSourceType(),
+        request.getReplayStatus(),
+        request.getTraceId(),
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<DeadLetterTaskEntity> rows = opsMappers.deadLetterTaskMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -224,18 +207,16 @@ public class ConsoleOpsQueryService {
 
   public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
-    RetryScheduleQuery query =
-        new RetryScheduleQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getRelatedType(),
-            request.getRetryPolicy(),
-            request.getRetryStatus(),
-            pageRequest,
-            decodeCursorId(request.getCursor()));
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
+    RetryScheduleQuery query = new RetryScheduleQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getRelatedType(),
+        request.getRetryPolicy(),
+        request.getRetryStatus(),
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<RetryScheduleEntity> rows = opsMappers.retryScheduleMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -248,19 +229,17 @@ public class ConsoleOpsQueryService {
   public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
       PendingCatchUpQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
-    PendingCatchUpQuery query =
-        new PendingCatchUpQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getJobCode(),
-            request.getRequestId(),
-            request.getBizDate(),
-            request.getKeyword(),
-            pageRequest,
-            decodeCursorId(request.getCursor()));
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
+    PendingCatchUpQuery query = new PendingCatchUpQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getJobCode(),
+        request.getRequestId(),
+        request.getBizDate(),
+        request.getKeyword(),
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<PendingCatchUpEntity> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -272,12 +251,11 @@ public class ConsoleOpsQueryService {
 
   public PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    WorkerRegistryQuery query =
-        new WorkerRegistryQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getWorkerGroup(),
-            request.getStatus(),
-            pageRequest);
+    WorkerRegistryQuery query = new WorkerRegistryQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getWorkerGroup(),
+        request.getStatus(),
+        pageRequest);
     List<WorkerRegistryEntity> rows = opsMappers.workerRegistryMapper.selectByQuery(query);
     long total = opsMappers.workerRegistryMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toWorkerRegistryResponse);
@@ -285,22 +263,19 @@ public class ConsoleOpsQueryService {
 
   public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
-    AlertEventQuery query =
-        new AlertEventQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getSeverity(),
-            request.getStatus(),
-            request.getAlertType(),
-            request.getTraceId(),
-            parseFlexibleInstant(
-                request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
-            parseFlexibleInstant(request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
-            pageRequest,
-            decodeCursorId(request.getCursor()));
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
+    AlertEventQuery query = new AlertEventQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getSeverity(),
+        request.getStatus(),
+        request.getAlertType(),
+        request.getTraceId(),
+        parseFlexibleInstant(request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
+        parseFlexibleInstant(request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<AlertEventEntity> rows = opsMappers.alertEventMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toAlertEventResponse, AlertEventEntity::getId);
@@ -314,16 +289,13 @@ public class ConsoleOpsQueryService {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     LocalDate fromBizDate = parseLocalDate(request.getFrom(), "from");
     LocalDate toBizDate = parseLocalDate(request.getTo(), "to");
-    List<Map<String, Object>> rows =
-        opsMappers.batchDayMapper.selectByQuery(
-            tenantId, request.getCalendarCode(), fromBizDate, toBizDate, pageRequest);
-    long total =
-        opsMappers.batchDayMapper.countByQuery(
-            tenantId, request.getCalendarCode(), fromBizDate, toBizDate);
-    List<ConsoleBatchDayResponse> responses =
-        rows.stream()
-            .map(row -> toBatchDayResponse(tenantId, request.getCalendarCode(), row))
-            .toList();
+    List<Map<String, Object>> rows = opsMappers.batchDayMapper.selectByQuery(
+        tenantId, request.getCalendarCode(), fromBizDate, toBizDate, pageRequest);
+    long total = opsMappers.batchDayMapper.countByQuery(
+        tenantId, request.getCalendarCode(), fromBizDate, toBizDate);
+    List<ConsoleBatchDayResponse> responses = rows.stream()
+        .map(row -> toBatchDayResponse(tenantId, request.getCalendarCode(), row))
+        .toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), responses);
   }
 
@@ -385,11 +357,10 @@ public class ConsoleOpsQueryService {
   }
 
   private ConsoleOutboxDeliveryLogResponse toOutboxDeliveryResponse(Map<String, Object> row) {
-    String errorMessage =
-        localizedErrorRenderer.render(
-            stringValue(row, "error_key"),
-            stringValue(row, "error_args"),
-            stringValue(row, "error_message"));
+    String errorMessage = localizedErrorRenderer.render(
+        stringValue(row, "error_key"),
+        stringValue(row, "error_args"),
+        stringValue(row, "error_message"));
     return new ConsoleOutboxDeliveryLogResponse(
         longValue(row, "id"),
         stringValue(row, "tenant_id"),
@@ -432,12 +403,10 @@ public class ConsoleOpsQueryService {
     LocalDate bizDate = localDateValue(row, "bizDate");
     List<ConsoleBatchDaySummaryResponse> summaries =
         loadBatchDaySummaries(tenantId, calendarCode, bizDate);
-    List<ConsoleBatchDaySummaryResponse> catchupSummary =
-        summaries.stream()
-            .filter(
-                summary ->
-                    safeInt(summary.failedJobCount()) > 0 || safeInt(summary.catchupCount()) > 0)
-            .toList();
+    List<ConsoleBatchDaySummaryResponse> catchupSummary = summaries.stream()
+        .filter(
+            summary -> safeInt(summary.failedJobCount()) > 0 || safeInt(summary.catchupCount()) > 0)
+        .toList();
     return new ConsoleBatchDayResponse(
         bizDate,
         stringValue(row, "dayStatus"),
@@ -567,9 +536,8 @@ public class ConsoleOpsQueryService {
   }
 
   private ConsoleRetryScheduleResponse toRetryScheduleResponse(RetryScheduleEntity entity) {
-    String lastErrorMessage =
-        localizedErrorRenderer.render(
-            entity.getLastErrorKey(), entity.getLastErrorArgs(), entity.getLastErrorMessage());
+    String lastErrorMessage = localizedErrorRenderer.render(
+        entity.getLastErrorKey(), entity.getLastErrorArgs(), entity.getLastErrorMessage());
     return new ConsoleRetryScheduleResponse(
         entity.getId(),
         display(entity.getTenantId()),

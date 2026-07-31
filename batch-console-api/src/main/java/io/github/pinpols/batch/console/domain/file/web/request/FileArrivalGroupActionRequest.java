@@ -8,7 +8,8 @@ import lombok.Data;
 @Data
 public class FileArrivalGroupActionRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 128, message = "fileGroupCode too long (max 128)")

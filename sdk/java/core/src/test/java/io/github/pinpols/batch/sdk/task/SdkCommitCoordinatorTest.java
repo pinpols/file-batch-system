@@ -98,24 +98,19 @@ class SdkCommitCoordinatorTest {
     // act + assert: 抛停止,且断点已落(安全点在提交之后)
     assertThatThrownBy(() -> c.commit(Map.of("id", 20)))
         .isInstanceOf(SdkTaskStoppedException.class)
-        .satisfies(
-            ex ->
-                assertThat(((SdkTaskStoppedException) ex).breakPosition()).containsEntry("id", 20));
-    assertThat(cp.load("task-1"))
-        .get()
-        .satisfies(
-            s -> {
-              assertThat(s.succeedCount()).isEqualTo(20L);
-              assertThat(s.breakPosition()).containsEntry("id", 20);
-            });
+        .satisfies(ex ->
+            assertThat(((SdkTaskStoppedException) ex).breakPosition()).containsEntry("id", 20));
+    assertThat(cp.load("task-1")).get().satisfies(s -> {
+      assertThat(s.succeedCount()).isEqualTo(20L);
+      assertThat(s.breakPosition()).containsEntry("id", 20);
+    });
   }
 
   @Test
   @DisplayName("未取消时 commit 正常返回,不抛")
   void shouldNotThrowWhenNotCancelled() {
-    SdkCommitCoordinator c =
-        coordinator(
-            new InMemorySdkCheckpoint(), new ProgressReporter(), new CancellationSignal(), true, 1);
+    SdkCommitCoordinator c = coordinator(
+        new InMemorySdkCheckpoint(), new ProgressReporter(), new CancellationSignal(), true, 1);
     c.recordBatch(1, 0);
     c.commit(Map.of("id", 1)); // no exception
   }
@@ -129,14 +124,11 @@ class SdkCommitCoordinatorTest {
     c.recordBatch(50, 2);
     c.markCompleted(Map.of("id", 50));
 
-    assertThat(cp.load("task-1"))
-        .get()
-        .satisfies(
-            s -> {
-              assertThat(s.completed()).isTrue();
-              assertThat(s.succeedCount()).isEqualTo(50L);
-              assertThat(s.failCount()).isEqualTo(2L);
-            });
+    assertThat(cp.load("task-1")).get().satisfies(s -> {
+      assertThat(s.completed()).isTrue();
+      assertThat(s.succeedCount()).isEqualTo(50L);
+      assertThat(s.failCount()).isEqualTo(2L);
+    });
   }
 
   @Test

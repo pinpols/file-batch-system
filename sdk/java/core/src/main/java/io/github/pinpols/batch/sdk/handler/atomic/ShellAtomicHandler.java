@@ -151,16 +151,13 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
 
   private static void deleteRecursively(Path dir) {
     try (var paths = Files.walk(dir)) {
-      paths
-          .sorted(Comparator.reverseOrder())
-          .forEach(
-              p -> {
-                try {
-                  Files.deleteIfExists(p);
-                } catch (IOException e) {
-                  log.warn("failed to delete temp path {}: {}", p, e.getMessage());
-                }
-              });
+      paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+        try {
+          Files.deleteIfExists(p);
+        } catch (IOException e) {
+          log.warn("failed to delete temp path {}: {}", p, e.getMessage());
+        }
+      });
     } catch (IOException e) {
       log.warn("failed to cleanup workdir {}: {}", dir, e.getMessage());
     }

@@ -66,9 +66,8 @@ public class ExportKeysetRangePlanner {
     }
     Map<String, Object> sqlTemplate =
         toMap(firstNonNull(qps.get("sqlTemplateExport"), qps.get("sql_template_export")));
-    return truthy(
-        firstNonNull(
-            sqlTemplate.get("partitionKeysetRange"), sqlTemplate.get("partition_keyset_range")));
+    return truthy(firstNonNull(
+        sqlTemplate.get("partitionKeysetRange"), sqlTemplate.get("partition_keyset_range")));
   }
 
   private static Object firstNonNull(Object... values) {

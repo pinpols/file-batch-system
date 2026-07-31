@@ -42,20 +42,15 @@ public class TriggerInternalRestClient {
   public RestClient build() {
     String baseUrl = environment.resolvePlaceholders(triggerClientProperties.getBaseUrl());
     String secret = batchSecurityProperties.getInternalSecret();
-    RestClient.Builder builder =
-        restClientBuilderProvider
-            .getObject()
-            .baseUrl(baseUrl)
-            .requestFactory(
-                ClientHttpRequestFactoryBuilder.detect()
-                    .build(
-                        HttpClientSettings.defaults()
-                            .withConnectTimeout(
-                                Duration.ofMillis(
-                                    triggerClientProperties.getConnectTimeoutMillis()))
-                            .withReadTimeout(
-                                Duration.ofMillis(
-                                    triggerClientProperties.getReadTimeoutMillis()))));
+    RestClient.Builder builder = restClientBuilderProvider
+        .getObject()
+        .baseUrl(baseUrl)
+        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
+            .build(HttpClientSettings.defaults()
+                .withConnectTimeout(
+                    Duration.ofMillis(triggerClientProperties.getConnectTimeoutMillis()))
+                .withReadTimeout(
+                    Duration.ofMillis(triggerClientProperties.getReadTimeoutMillis()))));
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }

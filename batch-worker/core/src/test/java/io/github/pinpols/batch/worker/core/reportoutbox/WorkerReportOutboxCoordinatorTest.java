@@ -53,22 +53,20 @@ class WorkerReportOutboxCoordinatorTest {
     // SqlSessionTemplate 原 close() 抛 UnsupportedOperationException(Spring 托管 session),
     // 覆写为 destroy()(DisposableBean)走真正的清理,这样可放进 try-with-resources。
     try (MockWebServer server = new MockWebServer();
-        SqlSessionTemplate sessionTemplate =
-            new SqlSessionTemplate(sf) {
-              @Override
-              public void close() {
-                try {
-                  destroy();
-                } catch (Exception e) {
-                  throw new IllegalStateException("destroy SqlSessionTemplate failed", e);
-                }
-              }
-            }) {
+        SqlSessionTemplate sessionTemplate = new SqlSessionTemplate(sf) {
+          @Override
+          public void close() {
+            try {
+              destroy();
+            } catch (Exception e) {
+              throw new IllegalStateException("destroy SqlSessionTemplate failed", e);
+            }
+          }
+        }) {
       WorkerReportOutboxSqliteMapper sqliteMapper =
           sessionTemplate.getMapper(WorkerReportOutboxSqliteMapper.class);
-      WorkerReportOutboxRepository repo =
-          new WorkerReportOutboxRepository(
-              props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbc);
+      WorkerReportOutboxRepository repo = new WorkerReportOutboxRepository(
+          props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbc);
 
       TransactionTemplate tt = new TransactionTemplate(new DataSourceTransactionManager(ds));
       tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -90,16 +88,15 @@ class WorkerReportOutboxCoordinatorTest {
           mock(ObjectProvider.class);
       when(coordinatorProvider.getIfAvailable()).thenAnswer(invocation -> coordinatorRef.get());
 
-      HttpTaskExecutionClient client =
-          new HttpTaskExecutionClient(
-              httpProps,
-              new BatchSecurityProperties(),
-              restClientBuilderProvider(),
-              new MockEnvironment(),
-              null,
-              coordinatorProvider,
-              new io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties(),
-              new io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties());
+      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+          httpProps,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          null,
+          coordinatorProvider,
+          new io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties(),
+          new io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties());
 
       @SuppressWarnings("unchecked")
       ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
@@ -109,18 +106,16 @@ class WorkerReportOutboxCoordinatorTest {
       ObjectProvider<WorkerTaskLeaseRenewer> leaseRenewerProvider = mock(ObjectProvider.class);
       when(leaseRenewerProvider.getIfAvailable()).thenReturn(null);
 
-      WorkerReportOutboxCoordinator coordinator =
-          new WorkerReportOutboxCoordinator(
-              repo, props, client, meterRegistryProvider, leaseRenewerProvider, pollClaimer);
+      WorkerReportOutboxCoordinator coordinator = new WorkerReportOutboxCoordinator(
+          repo, props, client, meterRegistryProvider, leaseRenewerProvider, pollClaimer);
       coordinatorRef.set(coordinator);
 
       TaskExecutionReport report = report();
       client.report(report);
 
-      assertThat(
-              jdbc.queryForObject(
-                  "SELECT COUNT(*) FROM worker_report_outbox WHERE publish_status='NEW'",
-                  Integer.class))
+      assertThat(jdbc.queryForObject(
+              "SELECT COUNT(*) FROM worker_report_outbox WHERE publish_status='NEW'",
+              Integer.class))
           .isEqualTo(1);
 
       server.enqueue(new MockResponse.Builder().code(200).build());
@@ -133,10 +128,8 @@ class WorkerReportOutboxCoordinatorTest {
 
   private static RestClient.Builder jsonRestClientBuilder() {
     return RestClient.builder()
-        .configureMessageConverters(
-            b ->
-                b.configureMessageConvertersList(
-                    converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
+        .configureMessageConverters(b -> b.configureMessageConvertersList(
+            converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
   }
 
   private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {

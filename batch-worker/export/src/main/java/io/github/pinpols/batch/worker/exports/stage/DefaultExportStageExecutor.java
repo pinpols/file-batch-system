@@ -221,13 +221,12 @@ public class DefaultExportStageExecutor
 
   private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
     List<AbstractStageExecutor.StageStepDescriptor> ordered = new ArrayList<>();
-    for (ExportStage stage :
-        List.of(
-            ExportStage.PREPARE,
-            ExportStage.GENERATE,
-            ExportStage.STORE,
-            ExportStage.REGISTER,
-            ExportStage.COMPLETE)) {
+    for (ExportStage stage : List.of(
+        ExportStage.PREPARE,
+        ExportStage.GENERATE,
+        ExportStage.STORE,
+        ExportStage.REGISTER,
+        ExportStage.COMPLETE)) {
       ExportStageStep step = stepsByStage.get(stage);
       if (step == null) {
         throw new IllegalStateException("missing export step bean for stage: " + stage.name());

@@ -11,9 +11,8 @@ public class SequentialStepOrderResolver {
 
   public List<StepDefinition> sort(List<StepDefinition> steps) {
     return steps.stream()
-        .sorted(
-            Comparator.comparing(
-                step -> step.getStepOrder() == null ? Integer.MAX_VALUE : step.getStepOrder()))
+        .sorted(Comparator.comparing(
+            step -> step.getStepOrder() == null ? Integer.MAX_VALUE : step.getStepOrder()))
         .toList();
   }
 }

@@ -47,12 +47,11 @@ class ConsolePipelineDefinitionControllerBehaviorTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsolePipelineDefinitionController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsolePipelineDefinitionController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private static PipelineDefinitionDetailResponse detailFixture(long id, String code) {
@@ -65,12 +64,11 @@ class ConsolePipelineDefinitionControllerBehaviorTest {
     when(service.list(eq("ta"), eq("JOB_A"), eq("IMPORT"), eq(true), eq(1), eq(20)))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
-        .perform(
-            get("/api/console/pipeline-definitions")
-                .param("tenantId", "ta")
-                .param("jobCode", "JOB_A")
-                .param("pipelineType", "IMPORT")
-                .param("enabled", "true"))
+        .perform(get("/api/console/pipeline-definitions")
+            .param("tenantId", "ta")
+            .param("jobCode", "JOB_A")
+            .param("pipelineType", "IMPORT")
+            .param("enabled", "true"))
         .andExpect(status().isOk());
     verify(service).list("ta", "JOB_A", "IMPORT", true, 1, 20);
   }
@@ -116,10 +114,9 @@ class ConsolePipelineDefinitionControllerBehaviorTest {
   @Test
   void toggleShouldDelegate() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/pipeline-definitions/9/toggle")
-                .param("tenantId", "ta")
-                .param("enabled", "false"))
+        .perform(post("/api/console/pipeline-definitions/9/toggle")
+            .param("tenantId", "ta")
+            .param("enabled", "false"))
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", false);
   }

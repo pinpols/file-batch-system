@@ -15,7 +15,8 @@ import org.springframework.context.ApplicationContext;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class BatchConsoleApiApplicationIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired ApplicationContext applicationContext;
+  @Autowired
+  ApplicationContext applicationContext;
 
   @Test
   void contextLoads() {

@@ -86,10 +86,9 @@ public class TriggerReconciler {
       if (!descriptor.isEnabled()) {
         continue;
       }
-      JobKey key =
-          JobKey.jobKey(
-              descriptor.getTenantId() + ":" + descriptor.getJobCode(),
-              TriggerSchedulerFacade.JOB_GROUP);
+      JobKey key = JobKey.jobKey(
+          descriptor.getTenantId() + ":" + descriptor.getJobCode(),
+          TriggerSchedulerFacade.JOB_GROUP);
       expectedJobs.add(key);
       if (!quartzJobs.contains(key)) {
         triggerRegistrationService.registerByJobCode(

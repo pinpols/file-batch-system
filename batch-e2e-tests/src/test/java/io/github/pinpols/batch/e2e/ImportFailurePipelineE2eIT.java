@@ -52,17 +52,19 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void importJobReportsFailedWhenContentIsUnparseable() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -71,43 +73,35 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
     // Intentionally invalid JSON — ParseStep will throw and return IMPORT_PARSE_FAILED
     params.put("content", "THIS_IS_NOT_VALID_JSON_CONTENT");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-import-fail",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-import-fail",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("FAILED");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("FAILED");
+        });
 
     // Verify job_instance also reflects the failure
-    String instanceStatus =
-        jdbcTemplate.queryForObject(
-            "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            String.class,
-            TENANT,
-            seed.dedupKey());
+    String instanceStatus = jdbcTemplate.queryForObject(
+        "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        String.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
   }
 
@@ -116,9 +110,8 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
     String templateCode = "IMP-CONTROL-TOTAL-E2E-" + System.nanoTime();
     insertControlTotalTemplate(templateCode);
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "DELIMITED");
@@ -131,38 +124,32 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
             + "CTL-2,B,PERSONAL,200.00,CNY,b@example.test,1382,ACTIVE,2026-01-15,ok\n"
             + "T,3,999.00\n");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-import-control-total",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-import-control-total",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              Map<String, Object> row =
-                  jdbcTemplate.queryForMap(
-                      """
+        .untilAsserted(() -> {
+          Map<String, Object> row = jdbcTemplate.queryForMap("""
                       select t.task_status, t.error_code, ji.instance_status
                       from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(row.get("task_status")).isEqualTo("FAILED");
-              assertThat(row.get("instance_status")).isIn("FAILED", "PARTIAL_FAILED");
-              assertThat(String.valueOf(row.get("error_code")))
-                  .containsAnyOf("IMPORT_VALIDATE_CONTROL_RECORD", "IMPORT_VALIDATE_CONTROL_TOTAL");
-            });
+                      """, TENANT, seed.dedupKey());
+          assertThat(row.get("task_status")).isEqualTo("FAILED");
+          assertThat(row.get("instance_status")).isIn("FAILED", "PARTIAL_FAILED");
+          assertThat(String.valueOf(row.get("error_code")))
+              .containsAnyOf("IMPORT_VALIDATE_CONTROL_RECORD", "IMPORT_VALIDATE_CONTROL_TOTAL");
+        });
   }
 
   private void insertControlTotalTemplate(String templateCode) {

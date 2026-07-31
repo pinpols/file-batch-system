@@ -41,9 +41,8 @@ public class S3GovernanceStorage {
               && (objectName.endsWith(".part") || objectName.startsWith("tmp/"))) {
             continue;
           }
-          objects.add(
-              new StorageObjectView(
-                  bucket, objectName, summary.size(), summary.etag(), summary.lastModified()));
+          objects.add(new StorageObjectView(
+              bucket, objectName, summary.size(), summary.etag(), summary.lastModified()));
         }
         marker = listing.nextMarker();
         if (marker == null) {

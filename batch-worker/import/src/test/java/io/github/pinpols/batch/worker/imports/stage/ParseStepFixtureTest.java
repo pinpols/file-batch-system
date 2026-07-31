@@ -139,72 +139,70 @@ class ParseStepFixtureTest {
 
   @Test
   void shouldParseExcelFixture_programmaticallyBuilt() throws Exception {
-    byte[] xlsx =
-        TestExcelFileBuilder.customerImport(
-            List.of(
-                Map.of(
-                    "customerNo",
-                    "C001",
-                    "customerName",
-                    "Alice Wang",
-                    "customerType",
-                    "PERSONAL",
-                    "creditLimit",
-                    "50000.00",
-                    "currencyCode",
-                    "CNY",
-                    "email",
-                    "alice@example.com",
-                    "phone",
-                    "13800138001",
-                    "status",
-                    "ACTIVE",
-                    "openDate",
-                    "2022-01-15",
-                    "remark",
-                    ""),
-                Map.of(
-                    "customerNo",
-                    "C002",
-                    "customerName",
-                    "Bob Li",
-                    "customerType",
-                    "PERSONAL",
-                    "creditLimit",
-                    "30000.00",
-                    "currencyCode",
-                    "CNY",
-                    "email",
-                    "bob@example.com",
-                    "phone",
-                    "13800138002",
-                    "status",
-                    "ACTIVE",
-                    "openDate",
-                    "2022-03-20",
-                    "remark",
-                    ""),
-                Map.of(
-                    "customerNo",
-                    "C003",
-                    "customerName",
-                    "Carol Zhang",
-                    "customerType",
-                    "CORPORATE",
-                    "creditLimit",
-                    "500000.00",
-                    "currencyCode",
-                    "USD",
-                    "email",
-                    "carol@corp.com",
-                    "phone",
-                    "13800138003",
-                    "status",
-                    "ACTIVE",
-                    "openDate",
-                    "2021-06-01",
-                    "remark",
-                    "企业客户")));
+    byte[] xlsx = TestExcelFileBuilder.customerImport(List.of(
+        Map.of(
+            "customerNo",
+            "C001",
+            "customerName",
+            "Alice Wang",
+            "customerType",
+            "PERSONAL",
+            "creditLimit",
+            "50000.00",
+            "currencyCode",
+            "CNY",
+            "email",
+            "alice@example.com",
+            "phone",
+            "13800138001",
+            "status",
+            "ACTIVE",
+            "openDate",
+            "2022-01-15",
+            "remark",
+            ""),
+        Map.of(
+            "customerNo",
+            "C002",
+            "customerName",
+            "Bob Li",
+            "customerType",
+            "PERSONAL",
+            "creditLimit",
+            "30000.00",
+            "currencyCode",
+            "CNY",
+            "email",
+            "bob@example.com",
+            "phone",
+            "13800138002",
+            "status",
+            "ACTIVE",
+            "openDate",
+            "2022-03-20",
+            "remark",
+            ""),
+        Map.of(
+            "customerNo",
+            "C003",
+            "customerName",
+            "Carol Zhang",
+            "customerType",
+            "CORPORATE",
+            "creditLimit",
+            "500000.00",
+            "currencyCode",
+            "USD",
+            "email",
+            "carol@corp.com",
+            "phone",
+            "13800138003",
+            "status",
+            "ACTIVE",
+            "openDate",
+            "2021-06-01",
+            "remark",
+            "企业客户")));
 
     // Excel 内容以 base64 形式传递
     String contentBase64 = Base64.getEncoder().encodeToString(xlsx);
@@ -260,11 +258,10 @@ class ParseStepFixtureTest {
   @Test
   void shouldFailWhenTrailerTemplatePresentForBinaryPayload() {
     String content = "id,name,amount\n1,Alice,10.00\nT,1,10.00\n";
-    ImportJobContext ctx =
-        buildContextBase64(
-            Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8)),
-            "DELIMITED",
-            1);
+    ImportJobContext ctx = buildContextBase64(
+        Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8)),
+        "DELIMITED",
+        1);
     withTrailerTemplate(ctx);
 
     ImportStageResult result = parseStep.execute(ctx);
@@ -310,31 +307,30 @@ class ParseStepFixtureTest {
 
   private ImportJobContext buildContext(
       String content, String fileFormatType, String delimiter, int headerRows, String charset) {
-    ImportPayload importPayload =
-        new ImportPayload(
-            null,
-            "test.csv",
-            "test.csv",
-            "CUSTOMER",
-            fileFormatType,
-            charset,
-            null,
-            null,
-            null,
-            "UPLOAD",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            content,
-            null,
-            delimiter,
-            headerRows,
-            0,
-            headerRows > 0,
-            Map.of());
+    ImportPayload importPayload = new ImportPayload(
+        null,
+        "test.csv",
+        "test.csv",
+        "CUSTOMER",
+        fileFormatType,
+        charset,
+        null,
+        null,
+        null,
+        "UPLOAD",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        content,
+        null,
+        delimiter,
+        headerRows,
+        0,
+        headerRows > 0,
+        Map.of());
 
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("t1");
@@ -355,31 +351,30 @@ class ParseStepFixtureTest {
 
   private ImportJobContext buildContextBase64(
       String contentBase64, String fileFormatType, int headerRows) {
-    ImportPayload importPayload =
-        new ImportPayload(
-            null,
-            "test.xlsx",
-            "test.xlsx",
-            "CUSTOMER",
-            fileFormatType,
-            null,
-            null,
-            null,
-            null,
-            "UPLOAD",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            contentBase64,
-            null,
-            headerRows,
-            0,
-            headerRows > 0,
-            Map.of());
+    ImportPayload importPayload = new ImportPayload(
+        null,
+        "test.xlsx",
+        "test.xlsx",
+        "CUSTOMER",
+        fileFormatType,
+        null,
+        null,
+        null,
+        null,
+        "UPLOAD",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        contentBase64,
+        null,
+        headerRows,
+        0,
+        headerRows > 0,
+        Map.of());
 
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("t1");

@@ -80,14 +80,12 @@ public class BizTableSchemaRegistrar {
       return;
     }
     try {
-      new TransactionTemplate(transactionManager)
-          .executeWithoutResult(
-              status -> {
-                mapper.deleteAll();
-                for (TableColumns tc : snapshot) {
-                  mapper.upsertEntry(tc.schema(), tc.table(), tc.columnsJson());
-                }
-              });
+      new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+        mapper.deleteAll();
+        for (TableColumns tc : snapshot) {
+          mapper.upsertEntry(tc.schema(), tc.table(), tc.columnsJson());
+        }
+      });
       log.info("biz_table_schema snapshot refreshed: schema=biz, tables={}", snapshot.size());
     } catch (Exception ex) {
       log.error("biz_table_schema snapshot failed (write registry): {}", ex.getMessage(), ex);

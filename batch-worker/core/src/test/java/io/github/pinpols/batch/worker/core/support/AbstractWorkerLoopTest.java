@@ -36,7 +36,8 @@ import org.springframework.context.support.StaticApplicationContext;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AbstractWorkerLoopTest {
 
-  @Mock private WorkerRuntimeFacade workerRuntimeFacade;
+  @Mock
+  private WorkerRuntimeFacade workerRuntimeFacade;
 
   private TestWorkerLoop loop;
   private BatchDateTimeSupport dateTimeSupport;

@@ -34,8 +34,11 @@ class DefaultConsoleJobRecoveryServiceTest {
   private static final String TENANT = "t1";
   private static final String IDEMPOTENCY = "idem-1";
 
-  @Mock private ConsoleJobOpsSupport ops;
-  @InjectMocks private DefaultConsoleJobRecoveryService service;
+  @Mock
+  private ConsoleJobOpsSupport ops;
+
+  @InjectMocks
+  private DefaultConsoleJobRecoveryService service;
 
   @BeforeEach
   void setUp() {

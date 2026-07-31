@@ -121,12 +121,11 @@ public class ConsoleMetaQueryService {
    * Pipeline 固定 9 stages 按 jobType 分组（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 保持一致；该
    * Map 是导入校验白名单的事实源）。
    */
-  private static final Map<String, List<String>> PIPELINE_STAGES =
-      Map.of(
-          "IMPORT", List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
-          "EXPORT", List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
-          "PROCESS", List.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
-          "DISPATCH", List.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
+  private static final Map<String, List<String>> PIPELINE_STAGES = Map.of(
+      "IMPORT", List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
+      "EXPORT", List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
+      "PROCESS", List.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
+      "DISPATCH", List.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
 
   public Map<String, List<String>> pipelineStages() {
     return PIPELINE_STAGES;
@@ -221,7 +220,9 @@ public class ConsoleMetaQueryService {
   }
 
   private List<ConsoleMetaOption> toOptions(List<SimpleOptionView> rows) {
-    return rows.stream().map(row -> new ConsoleMetaOption(row.code(), row.label())).toList();
+    return rows.stream()
+        .map(row -> new ConsoleMetaOption(row.code(), row.label()))
+        .toList();
   }
 
   /** 供守护测试读取当前已注册的枚举类集合（校验新增枚举必须注册或显式排除）。 */

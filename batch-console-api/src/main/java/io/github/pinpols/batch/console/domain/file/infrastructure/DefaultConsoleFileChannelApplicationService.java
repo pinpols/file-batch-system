@@ -35,16 +35,14 @@ public class DefaultConsoleFileChannelApplicationService
   public PageResponse<Map<String, Object>> list(FileChannelQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    long total =
-        mapper.countByQuery(
-            tenantId, request.getChannelCode(), request.getChannelType(), request.getEnabled());
-    List<Map<String, Object>> items =
-        mapper.selectByQuery(
-            tenantId,
-            request.getChannelCode(),
-            request.getChannelType(),
-            request.getEnabled(),
-            pageRequest);
+    long total = mapper.countByQuery(
+        tenantId, request.getChannelCode(), request.getChannelType(), request.getEnabled());
+    List<Map<String, Object>> items = mapper.selectByQuery(
+        tenantId,
+        request.getChannelCode(),
+        request.getChannelType(),
+        request.getEnabled(),
+        pageRequest);
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 

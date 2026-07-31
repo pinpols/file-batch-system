@@ -52,14 +52,13 @@ class JobSlaSchedulerTest {
     properties.setBatchSize(200);
     when(governance.sla()).thenReturn(properties);
 
-    scheduler =
-        new JobSlaScheduler(
-            jobInstanceMapper,
-            jobExecutionLogMapper,
-            governance,
-            new SimpleMeterRegistry(),
-            alertEventService,
-            gracefulShutdown);
+    scheduler = new JobSlaScheduler(
+        jobInstanceMapper,
+        jobExecutionLogMapper,
+        governance,
+        new SimpleMeterRegistry(),
+        alertEventService,
+        gracefulShutdown);
     scheduler.initializeMeters();
   }
 

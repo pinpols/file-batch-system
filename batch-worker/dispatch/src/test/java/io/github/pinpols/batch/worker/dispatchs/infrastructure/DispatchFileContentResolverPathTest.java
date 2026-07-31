@@ -23,13 +23,17 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class DispatchFileContentResolverPathTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
-  @Mock private S3StorageProperties s3Properties;
+  @Mock
+  private S3StorageProperties s3Properties;
 
-  @Mock private BatchObjectCryptoService cryptoService;
+  @Mock
+  private BatchObjectCryptoService cryptoService;
 
-  @Mock private ObjectProvider<BatchObjectStore> objectStoreProvider;
+  @Mock
+  private ObjectProvider<BatchObjectStore> objectStoreProvider;
 
   private DispatchFileContentResolver resolver;
 
@@ -56,10 +60,9 @@ class DispatchFileContentResolverPathTest {
 
   @Test
   void openInputStream_pathWithDotDot_throwsSecurity() {
-    Map<String, Object> record =
-        Map.of(
-            "storage_type", "LOCAL",
-            "storage_path", "/tmp/../etc/passwd");
+    Map<String, Object> record = Map.of(
+        "storage_type", "LOCAL",
+        "storage_path", "/tmp/../etc/passwd");
     assertThatThrownBy(() -> resolver.openInputStream(record))
         .isInstanceOf(SecurityException.class)
         .hasMessageContaining("..");

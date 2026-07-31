@@ -73,34 +73,33 @@ public class TenantConfigPackageRowProjections {
 
   List<Map<String, Object>> toJobRows(List<JobDefinitionEntity> entities) {
     return entities.stream()
-        .map(
-            e -> {
-              Map<String, Object> m = new LinkedHashMap<>();
-              m.put(COL_TENANT_ID, e.getTenantId());
-              m.put(COL_JOB_CODE, e.getJobCode());
-              m.put(COL_JOB_NAME, e.getJobName());
-              m.put(COL_JOB_TYPE, e.getJobType());
-              m.put(COL_BIZ_TYPE, e.getBizType());
-              m.put(COL_QUEUE_CODE, e.getQueueCode());
-              m.put(COL_WORKER_GROUP, e.getWorkerGroup());
-              m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
-              m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
-              m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
-              m.put(COL_CALENDAR_CODE, e.getCalendarCode());
-              m.put(COL_WINDOW_CODE, e.getWindowCode());
-              m.put(COL_RETRY_POLICY, e.getRetryPolicy());
-              m.put(COL_RETRY_MAX_COUNT, e.getRetryMaxCount());
-              m.put(COL_TIMEOUT_SECONDS, e.getTimeoutSeconds());
-              m.put(COL_SHARD_STRATEGY, e.getShardStrategy());
-              m.put(COL_EXECUTION_MODE, e.getExecutionMode());
-              m.put(COL_WATERMARK_FIELD, e.getWatermarkField());
-              m.put(COL_EXECUTION_HANDLER, e.getExecutionHandler());
-              m.put(COL_PARAM_SCHEMA, e.getParamSchema());
-              m.put(COL_DEFAULT_PARAMS, e.getDefaultParams());
-              m.put(COL_ENABLED, e.getEnabled());
-              m.put(COL_DESCRIPTION, e.getDescription());
-              return m;
-            })
+        .map(e -> {
+          Map<String, Object> m = new LinkedHashMap<>();
+          m.put(COL_TENANT_ID, e.getTenantId());
+          m.put(COL_JOB_CODE, e.getJobCode());
+          m.put(COL_JOB_NAME, e.getJobName());
+          m.put(COL_JOB_TYPE, e.getJobType());
+          m.put(COL_BIZ_TYPE, e.getBizType());
+          m.put(COL_QUEUE_CODE, e.getQueueCode());
+          m.put(COL_WORKER_GROUP, e.getWorkerGroup());
+          m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
+          m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
+          m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
+          m.put(COL_CALENDAR_CODE, e.getCalendarCode());
+          m.put(COL_WINDOW_CODE, e.getWindowCode());
+          m.put(COL_RETRY_POLICY, e.getRetryPolicy());
+          m.put(COL_RETRY_MAX_COUNT, e.getRetryMaxCount());
+          m.put(COL_TIMEOUT_SECONDS, e.getTimeoutSeconds());
+          m.put(COL_SHARD_STRATEGY, e.getShardStrategy());
+          m.put(COL_EXECUTION_MODE, e.getExecutionMode());
+          m.put(COL_WATERMARK_FIELD, e.getWatermarkField());
+          m.put(COL_EXECUTION_HANDLER, e.getExecutionHandler());
+          m.put(COL_PARAM_SCHEMA, e.getParamSchema());
+          m.put(COL_DEFAULT_PARAMS, e.getDefaultParams());
+          m.put(COL_ENABLED, e.getEnabled());
+          m.put(COL_DESCRIPTION, e.getDescription());
+          return m;
+        })
         .collect(Collectors.toList());
   }
 
@@ -123,18 +122,17 @@ public class TenantConfigPackageRowProjections {
 
   List<Map<String, Object>> toWfDefRows(List<WorkflowDefinitionEntity> entities) {
     return entities.stream()
-        .map(
-            e -> {
-              Map<String, Object> m = new LinkedHashMap<>();
-              m.put(COL_TENANT_ID, e.getTenantId());
-              m.put(COL_WORKFLOW_CODE, e.getWorkflowCode());
-              m.put("workflow_name", e.getWorkflowName());
-              m.put("workflow_type", e.getWorkflowType());
-              m.put(COL_VERSION, e.getVersion());
-              m.put(COL_ENABLED, e.getEnabled());
-              m.put(COL_DESCRIPTION, e.getDescription());
-              return m;
-            })
+        .map(e -> {
+          Map<String, Object> m = new LinkedHashMap<>();
+          m.put(COL_TENANT_ID, e.getTenantId());
+          m.put(COL_WORKFLOW_CODE, e.getWorkflowCode());
+          m.put("workflow_name", e.getWorkflowName());
+          m.put("workflow_type", e.getWorkflowType());
+          m.put(COL_VERSION, e.getVersion());
+          m.put(COL_ENABLED, e.getEnabled());
+          m.put(COL_DESCRIPTION, e.getDescription());
+          return m;
+        })
         .collect(Collectors.toList());
   }
 
@@ -142,12 +140,11 @@ public class TenantConfigPackageRowProjections {
       String tenantId, List<WorkflowDefinitionEntity> defs) {
     List<Map<String, Object>> result = new ArrayList<>();
     for (WorkflowDefinitionEntity def : defs) {
-      WorkflowNodeQuery nodeQuery =
-          WorkflowNodeQuery.builder()
-              .tenantId(tenantId)
-              .workflowDefinitionId(def.getId())
-              .workflowCode(def.getWorkflowCode())
-              .build();
+      WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(def.getId())
+          .workflowCode(def.getWorkflowCode())
+          .build();
       List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(nodeQuery);
       for (WorkflowNodeEntity node : nodes) {
         Map<String, Object> m = new LinkedHashMap<>();
@@ -177,12 +174,11 @@ public class TenantConfigPackageRowProjections {
       String tenantId, List<WorkflowDefinitionEntity> defs) {
     List<Map<String, Object>> result = new ArrayList<>();
     for (WorkflowDefinitionEntity def : defs) {
-      WorkflowEdgeQuery edgeQuery =
-          WorkflowEdgeQuery.builder()
-              .tenantId(tenantId)
-              .workflowDefinitionId(def.getId())
-              .workflowCode(def.getWorkflowCode())
-              .build();
+      WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(def.getId())
+          .workflowCode(def.getWorkflowCode())
+          .build();
       List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(edgeQuery);
       for (WorkflowEdgeEntity edge : edges) {
         Map<String, Object> m = new LinkedHashMap<>();

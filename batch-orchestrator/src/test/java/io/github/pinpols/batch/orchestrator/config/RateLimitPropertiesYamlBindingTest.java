@@ -30,10 +30,9 @@ class RateLimitPropertiesYamlBindingTest {
         loader.load("application", new ClassPathResource("application.yml"));
     MutablePropertySources sources = new MutablePropertySources();
     loaded.forEach(sources::addLast);
-    Binder binder =
-        new Binder(
-            ConfigurationPropertySources.from(sources),
-            new PropertySourcesPlaceholdersResolver(sources));
+    Binder binder = new Binder(
+        ConfigurationPropertySources.from(sources),
+        new PropertySourcesPlaceholdersResolver(sources));
     return binder.bind("batch.rate-limit", RateLimitProperties.class).get();
   }
 
@@ -45,7 +44,9 @@ class RateLimitPropertiesYamlBindingTest {
     assertThat(props.isEnabled()).as("yml 默认应开启限流").isTrue();
     assertThat(props.getMaxNewRequestsPerTenantPerMinute()).as("launch 阈值").isEqualTo(3000L);
     assertThat(props.getMaxReleaseRequestsPerTenantPerMinute()).as("release 阈值").isEqualTo(3000L);
-    assertThat(props.getMaxRegisterRequestsPerTenantPerMinute()).as("register 阈值").isEqualTo(300L);
+    assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())
+        .as("register 阈值")
+        .isEqualTo(300L);
     assertThat(props.getMaxClaimRequestsPerTenantPerMinute()).as("claim 阈值").isEqualTo(12000L);
     assertThat(props.getMaxReportRequestsPerTenantPerMinute()).as("report 阈值").isEqualTo(12000L);
   }

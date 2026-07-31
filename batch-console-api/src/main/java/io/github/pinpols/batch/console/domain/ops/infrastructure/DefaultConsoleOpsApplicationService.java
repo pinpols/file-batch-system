@@ -51,40 +51,38 @@ public class DefaultConsoleOpsApplicationService implements ConsoleOpsApplicatio
   }
 
   private ConsoleOpsSummaryResponse loadSummary(String resolvedTenantId) {
-    OpsSummaryMetrics metrics =
-        new OpsSummaryMetrics(
-            approvalCommandMapper.countByStatus(resolvedTenantId, "PENDING"),
-            new AlertMetrics(
-                alertEventMapper.countByStatus(resolvedTenantId, "OPEN"),
-                alertEventMapper.countBySeverityAndStatus(resolvedTenantId, "CRITICAL", "OPEN")),
-            new JobMetrics(
-                jobInstanceMapper.countByStatuses(
-                    resolvedTenantId, List.of(JobInstanceStatus.RUNNING.code())),
-                jobInstanceMapper.countByStatuses(
-                    resolvedTenantId,
-                    List.of(
-                        JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code())),
-                jobInstanceMapper.countSlaBreaches(
-                    resolvedTenantId,
-                    List.of(
-                        JobInstanceStatus.CREATED.code(),
-                        JobInstanceStatus.WAITING.code(),
-                        JobInstanceStatus.READY.code(),
-                        JobInstanceStatus.RUNNING.code(),
-                        JobInstanceStatus.PARTIAL_FAILED.code()))),
-            new WorkerMetrics(
-                workerRegistryMapper.countByStatus(
-                    resolvedTenantId, WorkerRegistryStatus.ONLINE.code()),
-                workerRegistryMapper.countByStatus(
-                    resolvedTenantId, WorkerRegistryStatus.DRAINING.code()),
-                workerRegistryMapper.countByStatus(
-                        resolvedTenantId, WorkerRegistryStatus.OFFLINE.code())
-                    + workerRegistryMapper.countByStatus(
-                        resolvedTenantId, WorkerRegistryStatus.DECOMMISSIONED.code())),
-            new OutboxMetrics(
-                outboxRetryLogMapper.countByStatuses(
-                    resolvedTenantId, List.of("WAITING", "RUNNING", "FAILED")),
-                outboxDeliveryLogMapper.countByStatus(resolvedTenantId, "FAILED")));
+    OpsSummaryMetrics metrics = new OpsSummaryMetrics(
+        approvalCommandMapper.countByStatus(resolvedTenantId, "PENDING"),
+        new AlertMetrics(
+            alertEventMapper.countByStatus(resolvedTenantId, "OPEN"),
+            alertEventMapper.countBySeverityAndStatus(resolvedTenantId, "CRITICAL", "OPEN")),
+        new JobMetrics(
+            jobInstanceMapper.countByStatuses(
+                resolvedTenantId, List.of(JobInstanceStatus.RUNNING.code())),
+            jobInstanceMapper.countByStatuses(
+                resolvedTenantId,
+                List.of(JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code())),
+            jobInstanceMapper.countSlaBreaches(
+                resolvedTenantId,
+                List.of(
+                    JobInstanceStatus.CREATED.code(),
+                    JobInstanceStatus.WAITING.code(),
+                    JobInstanceStatus.READY.code(),
+                    JobInstanceStatus.RUNNING.code(),
+                    JobInstanceStatus.PARTIAL_FAILED.code()))),
+        new WorkerMetrics(
+            workerRegistryMapper.countByStatus(
+                resolvedTenantId, WorkerRegistryStatus.ONLINE.code()),
+            workerRegistryMapper.countByStatus(
+                resolvedTenantId, WorkerRegistryStatus.DRAINING.code()),
+            workerRegistryMapper.countByStatus(
+                    resolvedTenantId, WorkerRegistryStatus.OFFLINE.code())
+                + workerRegistryMapper.countByStatus(
+                    resolvedTenantId, WorkerRegistryStatus.DECOMMISSIONED.code())),
+        new OutboxMetrics(
+            outboxRetryLogMapper.countByStatuses(
+                resolvedTenantId, List.of("WAITING", "RUNNING", "FAILED")),
+            outboxDeliveryLogMapper.countByStatus(resolvedTenantId, "FAILED")));
     return toResponse(resolvedTenantId, metrics);
   }
 

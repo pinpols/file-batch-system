@@ -18,10 +18,8 @@ class KafkaConsumerConfigurationTest {
     ReflectionTestUtils.setField(configuration, "maxPollRecords", 10);
     ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 8);
 
-    assertThatThrownBy(
-            () ->
-                configuration.batchKafkaListenerContainerFactory(
-                    consumerFactory(), ObservationRegistry.NOOP))
+    assertThatThrownBy(() -> configuration.batchKafkaListenerContainerFactory(
+            consumerFactory(), ObservationRegistry.NOOP))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("max-poll-records=10")
         .hasMessageContaining("max-concurrent-tasks=8");
@@ -35,10 +33,8 @@ class KafkaConsumerConfigurationTest {
     ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 8);
     ReflectionTestUtils.setField(configuration, "listenerConcurrency", 1);
 
-    assertThatCode(
-            () ->
-                configuration.batchKafkaListenerContainerFactory(
-                    consumerFactory(), ObservationRegistry.NOOP))
+    assertThatCode(() -> configuration.batchKafkaListenerContainerFactory(
+            consumerFactory(), ObservationRegistry.NOOP))
         .doesNotThrowAnyException();
   }
 
@@ -50,10 +46,8 @@ class KafkaConsumerConfigurationTest {
     ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 8);
     ReflectionTestUtils.setField(configuration, "listenerConcurrency", 1);
 
-    assertThatCode(
-            () ->
-                configuration.batchKafkaListenerContainerFactory(
-                    consumerFactory(), ObservationRegistry.NOOP))
+    assertThatCode(() -> configuration.batchKafkaListenerContainerFactory(
+            consumerFactory(), ObservationRegistry.NOOP))
         .doesNotThrowAnyException();
   }
 

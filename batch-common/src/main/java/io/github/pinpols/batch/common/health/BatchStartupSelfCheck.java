@@ -18,19 +18,18 @@ import org.springframework.context.event.EventListener;
 @Slf4j
 public class BatchStartupSelfCheck {
 
-  private static final List<String> QUARTZ_STANDARD_TABLES =
-      List.of(
-          "qrtz_job_details",
-          "qrtz_triggers",
-          "qrtz_simple_triggers",
-          "qrtz_cron_triggers",
-          "qrtz_simprop_triggers",
-          "qrtz_blob_triggers",
-          "qrtz_calendars",
-          "qrtz_paused_trigger_grps",
-          "qrtz_fired_triggers",
-          "qrtz_scheduler_state",
-          "qrtz_locks");
+  private static final List<String> QUARTZ_STANDARD_TABLES = List.of(
+      "qrtz_job_details",
+      "qrtz_triggers",
+      "qrtz_simple_triggers",
+      "qrtz_cron_triggers",
+      "qrtz_simprop_triggers",
+      "qrtz_blob_triggers",
+      "qrtz_calendars",
+      "qrtz_paused_trigger_grps",
+      "qrtz_fired_triggers",
+      "qrtz_scheduler_state",
+      "qrtz_locks");
 
   private final InformationSchemaMapper informationSchemaMapper;
   private final BatchStartupSelfCheckProperties properties;

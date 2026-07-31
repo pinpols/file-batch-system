@@ -19,8 +19,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("emit 直连 AM 旁路")
 class DefaultAlertEventServiceEmitTest {
 
-  @Mock private AlertEventMapper alertEventMapper;
-  @Mock private AlertmanagerEmitPublisher publisher;
+  @Mock
+  private AlertEventMapper alertEventMapper;
+
+  @Mock
+  private AlertmanagerEmitPublisher publisher;
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
@@ -31,12 +34,11 @@ class DefaultAlertEventServiceEmitTest {
   @Test
   @DisplayName("落库后把告警推给 AM publisher(无活跃事务时直推)")
   void emit_publishesToAlertmanagerAfterInsert() {
-    AlertEmitRequest request =
-        AlertEmitRequest.builder()
-            .tenantId("ta")
-            .alertType("JOB_SLA_BREACH")
-            .severity("CRITICAL")
-            .build();
+    AlertEmitRequest request = AlertEmitRequest.builder()
+        .tenantId("ta")
+        .alertType("JOB_SLA_BREACH")
+        .severity("CRITICAL")
+        .build();
 
     service().emit(request);
 

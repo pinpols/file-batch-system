@@ -7,7 +7,8 @@ import lombok.Data;
 @Data
 public class OutboxRetryLogQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @Size(max = 32, message = "retryStatus too long (max 32)")
   private String retryStatus;

@@ -64,21 +64,20 @@ public record SqlTransformComputeSpec(
    * <p>{@code metadata_*} 前缀也保留,通过 {@code payload.metadata.&lt;key&gt;} 展开;{@code spec.params}
    * 同样不允许以该前缀开头,避免与 metadata 命名空间碰撞。
    */
-  private static final Set<String> RESERVED_PARAMS =
-      Set.of(
-          "tenantId",
-          "jobCode",
-          "workerId",
-          "highWaterMarkIn",
-          "traceId",
-          "stepCode",
-          "batchKey",
-          "targetSchema",
-          "targetTable",
-          "partitionNo",
-          "partitionCount",
-          "partitionKey",
-          "bizDate");
+  private static final Set<String> RESERVED_PARAMS = Set.of(
+      "tenantId",
+      "jobCode",
+      "workerId",
+      "highWaterMarkIn",
+      "traceId",
+      "stepCode",
+      "batchKey",
+      "targetSchema",
+      "targetTable",
+      "partitionNo",
+      "partitionCount",
+      "partitionKey",
+      "bizDate");
 
   private static final String METADATA_PARAM_PREFIX = "metadata_";
 
@@ -110,27 +109,25 @@ public record SqlTransformComputeSpec(
         text(firstNonNull(root.get("watermarkColumn"), root.get("watermark_column")));
     Map<String, Object> params = parseMap(firstNonNull(root.get("params"), root.get("sqlParams")));
     List<ValidationRule> validations = parseValidations(root.get("validations"));
-    EmptyResultPolicy emptyResultPolicy =
-        parseEmptyResultPolicy(
-            firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy")));
+    EmptyResultPolicy emptyResultPolicy = parseEmptyResultPolicy(
+        firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy")));
     int maxStagedRows =
         parseMaxStagedRows(firstNonNull(root.get("maxStagedRows"), root.get("max_staged_rows")));
 
-    SqlTransformComputeSpec spec =
-        new SqlTransformComputeSpec(
-            SqlTransformComputePlugin.PLUGIN_ID,
-            sourceSql,
-            targetSchema,
-            targetTable,
-            writeMode,
-            stagingMode,
-            columns,
-            conflictColumns,
-            watermarkColumn,
-            params,
-            validations,
-            emptyResultPolicy,
-            maxStagedRows);
+    SqlTransformComputeSpec spec = new SqlTransformComputeSpec(
+        SqlTransformComputePlugin.PLUGIN_ID,
+        sourceSql,
+        targetSchema,
+        targetTable,
+        writeMode,
+        stagingMode,
+        columns,
+        conflictColumns,
+        watermarkColumn,
+        params,
+        validations,
+        emptyResultPolicy,
+        maxStagedRows);
     spec.validateIdentifiers();
     return spec;
   }
@@ -197,10 +194,9 @@ public record SqlTransformComputeSpec(
     // 因此对所有 writeMode 强制要求 conflictColumns。INSERT 路径在 buildPublishSql 中按 DO NOTHING
     // 语义生成 ON CONFLICT 子句,语义 = at-least-once 安全的 append-only。
     if (conflictColumns.isEmpty()) {
-      throw new IllegalArgumentException(
-          "sqlTransformCompute.conflictColumns is required for "
-              + writeMode
-              + " (PROCESS retries are at-least-once; conflictColumns 不能为空,否则重放会双写 target)");
+      throw new IllegalArgumentException("sqlTransformCompute.conflictColumns is required for "
+          + writeMode
+          + " (PROCESS retries are at-least-once; conflictColumns 不能为空,否则重放会双写 target)");
     }
     if (Texts.hasText(watermarkColumn)) {
       JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
@@ -239,9 +235,8 @@ public record SqlTransformComputeSpec(
     if (stepParams == null || stepParams.isEmpty()) {
       return Map.of();
     }
-    Object nested =
-        firstNonNull(
-            stepParams.get("sqlTransformCompute"), stepParams.get("sql_transform_compute"));
+    Object nested = firstNonNull(
+        stepParams.get("sqlTransformCompute"), stepParams.get("sql_transform_compute"));
     if (nested instanceof Map<?, ?> m) {
       return copyMap(m);
     }

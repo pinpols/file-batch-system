@@ -51,27 +51,23 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
 
     byte[] body;
     try {
-      body =
-          BoundedRequestBodyReader.read(
-              request.getInputStream(),
-              internalRequestProperties.getMaxBodyBytes(),
-              "signed-internal");
+      body = BoundedRequestBodyReader.read(
+          request.getInputStream(), internalRequestProperties.getMaxBodyBytes(), "signed-internal");
     } catch (RequestBodyLimitExceededException ex) {
       writePayloadTooLarge(response);
       return;
     }
     Object tenantAttr = request.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID);
     String tenantId = tenantAttr == null ? null : tenantAttr.toString();
-    SignedRequest signed =
-        new SignedRequest(
-            apiKey,
-            request.getMethod(),
-            request.getRequestURI(),
-            body,
-            request.getHeader(HEADER_TIMESTAMP),
-            request.getHeader(HEADER_NONCE),
-            request.getHeader(HEADER_SIGNATURE),
-            tenantId);
+    SignedRequest signed = new SignedRequest(
+        apiKey,
+        request.getMethod(),
+        request.getRequestURI(),
+        body,
+        request.getHeader(HEADER_TIMESTAMP),
+        request.getHeader(HEADER_NONCE),
+        request.getHeader(HEADER_SIGNATURE),
+        tenantId);
 
     Result result = verifier.verify(signed, System.currentTimeMillis());
     if (result != Result.OK) {
@@ -108,8 +104,7 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response
         .getWriter()
-        .write(
-            "{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"signed internal request body exceeds"
-                + " the configured limit\"}");
+        .write("{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"signed internal request body exceeds"
+            + " the configured limit\"}");
   }
 }

@@ -26,19 +26,22 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
 class ConsoleAdminTestDataControllerIntegrationTest extends AbstractIntegrationTest {
 
-  @LocalServerPort private int port;
-  @MockitoBean private ConsoleOrchestratorProxyService orchestratorProxyService;
+  @LocalServerPort
+  private int port;
+
+  @MockitoBean
+  private ConsoleOrchestratorProxyService orchestratorProxyService;
+
   private WebTestClient webTestClient;
 
   private static final String PREFIX = "itadmin";
 
   @BeforeEach
   void setUp() {
-    webTestClient =
-        WebTestClient.bindToServer()
-            .baseUrl("http://127.0.0.1:" + port)
-            .responseTimeout(Duration.ofSeconds(60))
-            .build();
+    webTestClient = WebTestClient.bindToServer()
+        .baseUrl("http://127.0.0.1:" + port)
+        .responseTimeout(Duration.ofSeconds(60))
+        .build();
     when(orchestratorProxyService.adminTestDataCleanupByPrefix(PREFIX))
         .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
   }

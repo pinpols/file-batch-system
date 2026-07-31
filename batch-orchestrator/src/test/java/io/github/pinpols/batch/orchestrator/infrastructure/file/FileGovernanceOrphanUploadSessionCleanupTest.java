@@ -50,14 +50,13 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
     when(properties.getUploadSession().getOrphanTtlSeconds()).thenReturn(86400L);
     when(properties.getUploadSession().getCleanupBatchSize()).thenReturn(100);
 
-    scheduler =
-        new FileGovernanceScheduler(
-            repository,
-            storage,
-            properties,
-            mock(FileGovernanceMetricsCacheService.class),
-            new SimpleMeterRegistry(),
-            mock(BundleArrivalLauncher.class));
+    scheduler = new FileGovernanceScheduler(
+        repository,
+        storage,
+        properties,
+        mock(FileGovernanceMetricsCacheService.class),
+        new SimpleMeterRegistry(),
+        mock(BundleArrivalLauncher.class));
   }
 
   @Test
@@ -127,14 +126,13 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
     FileGovernanceProperties disabled =
         mock(FileGovernanceProperties.class, Mockito.RETURNS_DEEP_STUBS);
     when(disabled.getUploadSession().isCleanupEnabled()).thenReturn(false);
-    FileGovernanceScheduler disabledScheduler =
-        new FileGovernanceScheduler(
-            repository,
-            storage,
-            disabled,
-            mock(FileGovernanceMetricsCacheService.class),
-            new SimpleMeterRegistry(),
-            mock(BundleArrivalLauncher.class));
+    FileGovernanceScheduler disabledScheduler = new FileGovernanceScheduler(
+        repository,
+        storage,
+        disabled,
+        mock(FileGovernanceMetricsCacheService.class),
+        new SimpleMeterRegistry(),
+        mock(BundleArrivalLauncher.class));
 
     // act
     disabledScheduler.cleanupOrphanUploadSessions();

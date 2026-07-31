@@ -12,13 +12,12 @@ class DefaultProcessStepsTest {
 
   @Test
   void defaultSteps_coverAllProcessStages() {
-    List<ProcessStageStep> steps =
-        List.of(
-            new PrepareStep(),
-            new ComputeStep(),
-            new ValidateStep(),
-            new CommitStep(),
-            new FeedbackStep(ProcessMetrics.noop()));
+    List<ProcessStageStep> steps = List.of(
+        new PrepareStep(),
+        new ComputeStep(),
+        new ValidateStep(),
+        new CommitStep(),
+        new FeedbackStep(ProcessMetrics.noop()));
 
     assertThat(steps)
         .extracting(ProcessStageStep::stage)
@@ -40,6 +39,7 @@ class DefaultProcessStepsTest {
     assertThat(new PrepareStep().execute(context).success()).isTrue();
     assertThat(new ValidateStep().execute(context).success()).isTrue();
     assertThat(new CommitStep().execute(context).success()).isTrue();
-    assertThat(new FeedbackStep(ProcessMetrics.noop()).execute(context).success()).isTrue();
+    assertThat(new FeedbackStep(ProcessMetrics.noop()).execute(context).success())
+        .isTrue();
   }
 }

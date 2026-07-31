@@ -33,13 +33,11 @@ class TaskOutcomeStatePolicyTest {
         .isEqualTo(WorkflowRunStatus.SUCCESS.code());
     assertThat(TaskOutcomeStatePolicy.resolveWorkflowEvent(1, true, false, true))
         .isEqualTo(WorkflowRunStatus.FAILED_DRY_RUN.code());
-    assertThat(
-            TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
-                Set.of(), WorkflowRunStatus.SUCCESS.code(), "CURRENT"))
+    assertThat(TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
+            Set.of(), WorkflowRunStatus.SUCCESS.code(), "CURRENT"))
         .isEqualTo(WorkflowNodeCode.END.code());
-    assertThat(
-            TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
-                Set.of("B", "A"), WorkflowRunStatus.RUNNING.code(), "CURRENT"))
+    assertThat(TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
+            Set.of("B", "A"), WorkflowRunStatus.RUNNING.code(), "CURRENT"))
         .isIn("B,A", "A,B");
   }
 
@@ -47,9 +45,8 @@ class TaskOutcomeStatePolicyTest {
   void parsesActiveNodesAndRecognizesDryRunAndTerminalStates() {
     assertThat(TaskOutcomeStatePolicy.parseActiveNodes(" A, B, A,  ")).containsExactly("A", "B");
     assertThat(TaskOutcomeStatePolicy.isTerminalJobInstanceStatus("RUNNING")).isFalse();
-    assertThat(
-            TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(
-                JobInstanceStatus.PARTIAL_FAILED.code()))
+    assertThat(TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(
+            JobInstanceStatus.PARTIAL_FAILED.code()))
         .isTrue();
 
     JobInstanceEntity instance = new JobInstanceEntity();

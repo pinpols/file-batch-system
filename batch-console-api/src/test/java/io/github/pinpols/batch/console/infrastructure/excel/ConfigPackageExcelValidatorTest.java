@@ -30,11 +30,8 @@ class ConfigPackageExcelValidatorTest {
   @Test
   void validatesFileTemplateConfigSheetRows() {
     ConfigPackageExcelValidator validator = validator();
-    PackageExcelSession session =
-        session(
-            List.of(
-                fileTemplateRow("TPL_IMPORT_CUSTOMER", "1"),
-                fileTemplateRow("TPL_IMPORT_CUSTOMER", "1")));
+    PackageExcelSession session = session(List.of(
+        fileTemplateRow("TPL_IMPORT_CUSTOMER", "1"), fileTemplateRow("TPL_IMPORT_CUSTOMER", "1")));
 
     ConfigPackageExcelValidator.PackageValidationResult result = validator.validate(session);
 
@@ -43,53 +40,46 @@ class ConfigPackageExcelValidatorTest {
     assertThat(result.fileTemplates().valid()).isEqualTo(1);
     assertThat(result.fileTemplates().invalid()).isEqualTo(1);
     assertThat(result.allIssues())
-        .anySatisfy(
-            issue ->
-                assertThat(issue.message()).contains("duplicate template_code + version in excel"));
+        .anySatisfy(issue ->
+            assertThat(issue.message()).contains("duplicate template_code + version in excel"));
   }
 
   @Test
   void reportsUnknownTemplateCodeReferencesFromJobDefaultParams() {
     ConfigPackageExcelValidator validator = validator();
-    PackageExcelSession session =
-        session(
-            List.of(),
-            List.of(
-                Map.of(
-                    "tenant_id",
-                    "t1",
-                    "job_code",
-                    "JOB_IMPORT_CUSTOMER",
-                    "job_name",
-                    "导入客户",
-                    "job_type",
-                    "IMPORT",
-                    "schedule_type",
-                    "MANUAL",
-                    "default_params",
-                    "{\"templateCode\":\"TPL_MISSING\"}")));
+    PackageExcelSession session = session(
+        List.of(),
+        List.of(Map.of(
+            "tenant_id",
+            "t1",
+            "job_code",
+            "JOB_IMPORT_CUSTOMER",
+            "job_name",
+            "导入客户",
+            "job_type",
+            "IMPORT",
+            "schedule_type",
+            "MANUAL",
+            "default_params",
+            "{\"templateCode\":\"TPL_MISSING\"}")));
 
     ConfigPackageExcelValidator.PackageValidationResult result = validator.validate(session);
 
-    assertThat(result.allIssues())
-        .anySatisfy(
-            issue -> {
-              assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
-              assertThat(issue.columnName())
-                  .isEqualTo(ConfigPackageExcelValidator.COL_DEFAULT_PARAMS);
-              assertThat(issue.message()).contains("TPL_MISSING");
-            });
+    assertThat(result.allIssues()).anySatisfy(issue -> {
+      assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
+      assertThat(issue.columnName()).isEqualTo(ConfigPackageExcelValidator.COL_DEFAULT_PARAMS);
+      assertThat(issue.message()).contains("TPL_MISSING");
+    });
   }
 
   @Test
   void validatesOptionalDependencySheetsAndCrossReferences() {
     ConfigPackageExcelValidator validator = validator();
-    PackageExcelSession session =
-        sessionWithDependencies(
-            List.of(resourceQueueRow("import-queue")),
-            List.of(calendarRow("default-calendar")),
-            List.of(windowRow("always-open")),
-            List.of(jobRow("import-queue", "default-calendar", "always-open")));
+    PackageExcelSession session = sessionWithDependencies(
+        List.of(resourceQueueRow("import-queue")),
+        List.of(calendarRow("default-calendar")),
+        List.of(windowRow("always-open")),
+        List.of(jobRow("import-queue", "default-calendar", "always-open")));
 
     ConfigPackageExcelValidator.PackageValidationResult result = validator.validate(session);
 
@@ -105,56 +95,47 @@ class ConfigPackageExcelValidatorTest {
     Map<String, String> invalidRow = new LinkedHashMap<>(jobRow("missing-queue", "", ""));
     invalidRow.put("job_code", "BROKEN_JOB");
     invalidRow.remove("job_name");
-    PackageExcelSession session =
-        sessionWithDependencies(
-            List.of(), List.of(), List.of(), List.of(invalidRow, jobRow("missing-queue", "", "")));
+    PackageExcelSession session = sessionWithDependencies(
+        List.of(), List.of(), List.of(), List.of(invalidRow, jobRow("missing-queue", "", "")));
 
     ConfigPackageExcelValidator.PackageValidationResult result = validator.validate(session);
 
-    assertThat(result.crossRefIssues())
-        .anySatisfy(
-            issue -> {
-              assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
-              assertThat(issue.columnName()).isEqualTo(ConfigPackageExcelValidator.COL_QUEUE_CODE);
-              assertThat(issue.rowNo()).isEqualTo(3);
-            });
+    assertThat(result.crossRefIssues()).anySatisfy(issue -> {
+      assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
+      assertThat(issue.columnName()).isEqualTo(ConfigPackageExcelValidator.COL_QUEUE_CODE);
+      assertThat(issue.rowNo()).isEqualTo(3);
+    });
   }
 
   @Test
   void flagsCronScheduleMissingExpr() {
-    PackageExcelSession session =
-        session(
-            List.of(),
-            List.of(
-                Map.of(
-                    "tenant_id", "t1",
-                    "job_code", "J1",
-                    "job_name", "n",
-                    "job_type", "IMPORT",
-                    "schedule_type", "CRON")));
+    PackageExcelSession session = session(
+        List.of(),
+        List.of(Map.of(
+            "tenant_id", "t1",
+            "job_code", "J1",
+            "job_name", "n",
+            "job_type", "IMPORT",
+            "schedule_type", "CRON")));
 
     ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
 
     assertThat(result.allIssues())
-        .anySatisfy(
-            issue ->
-                assertThat(issue.message())
-                    .contains("schedule_expr is required when schedule_type=CRON"));
+        .anySatisfy(issue -> assertThat(issue.message())
+            .contains("schedule_expr is required when schedule_type=CRON"));
   }
 
   @Test
   void flagsCronScheduleWithLinuxFiveFieldExpr() {
-    PackageExcelSession session =
-        session(
-            List.of(),
-            List.of(
-                Map.of(
-                    "tenant_id", "t1",
-                    "job_code", "J1",
-                    "job_name", "n",
-                    "job_type", "IMPORT",
-                    "schedule_type", "CRON",
-                    "schedule_expr", "0 2 * * *")));
+    PackageExcelSession session = session(
+        List.of(),
+        List.of(Map.of(
+            "tenant_id", "t1",
+            "job_code", "J1",
+            "job_name", "n",
+            "job_type", "IMPORT",
+            "schedule_type", "CRON",
+            "schedule_expr", "0 2 * * *")));
 
     ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
 
@@ -171,10 +152,8 @@ class ConfigPackageExcelValidatorTest {
         validator().validate(session(List.of(row)));
 
     assertThat(result.allIssues())
-        .anySatisfy(
-            issue ->
-                assertThat(issue.message())
-                    .contains("delimiter is required when file_format_type=DELIMITED"));
+        .anySatisfy(issue -> assertThat(issue.message())
+            .contains("delimiter is required when file_format_type=DELIMITED"));
   }
 
   @Test
@@ -186,10 +165,8 @@ class ConfigPackageExcelValidatorTest {
         validator().validate(session(List.of(row)));
 
     assertThat(result.allIssues())
-        .anySatisfy(
-            issue ->
-                assertThat(issue.message())
-                    .contains("query_param_schema.jdbcMappedImport.table is required"));
+        .anySatisfy(issue -> assertThat(issue.message())
+            .contains("query_param_schema.jdbcMappedImport.table is required"));
   }
 
   @Test
@@ -201,10 +178,8 @@ class ConfigPackageExcelValidatorTest {
         validator().validate(session(List.of(row)));
 
     assertThat(result.allIssues())
-        .anySatisfy(
-            issue ->
-                assertThat(issue.message())
-                    .contains("field_mappings entries must each have a non-blank 'name'"));
+        .anySatisfy(issue -> assertThat(issue.message())
+            .contains("field_mappings entries must each have a non-blank 'name'"));
   }
 
   @Test

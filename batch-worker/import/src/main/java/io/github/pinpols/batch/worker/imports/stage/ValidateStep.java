@@ -212,13 +212,12 @@ public class ValidateStep implements ImportStageStep {
     // R-4.3: 数据集级校验阶段 validatedRecordsPath 尚未创建，
     // 超阈值直接返回失败结果即可，不需要 delete（之前代码传 null 进来也是 no-op）。
     for (ValidationIssue issue : session.datasetIssues()) {
-      ValidationErrorOutcome outcome =
-          recordValidationError(
-              context,
-              issue.recordNo() == null ? 0L : issue.recordNo(),
-              issue.errorCode(),
-              issue.errorMessage(),
-              issue.rawRecord());
+      ValidationErrorOutcome outcome = recordValidationError(
+          context,
+          issue.recordNo() == null ? 0L : issue.recordNo(),
+          issue.errorCode(),
+          issue.errorMessage(),
+          issue.rawRecord());
       if (outcome.stop()) {
         return ImportStageResult.failure(
             stage(),
@@ -279,13 +278,12 @@ public class ValidateStep implements ImportStageStep {
     long loadedCandidateCount = 0L;
     try (BufferedReader reader =
             Files.newBufferedReader(parsedRecordsPath, StandardCharsets.UTF_8);
-        BufferedWriter writer =
-            Files.newBufferedWriter(
-                validatedRecordsPath,
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE)) {
+        BufferedWriter writer = Files.newBufferedWriter(
+            validatedRecordsPath,
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE)) {
       List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
       long chunkStartRecordNo = 1L;
       String line;
@@ -300,9 +298,8 @@ public class ValidateStep implements ImportStageStep {
         } catch (Exception exception) {
           SwallowedExceptionLogger.warn(ValidateStep.class, "catch:Exception", exception);
 
-          ValidationErrorOutcome outcome =
-              recordValidationError(
-                  context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
+          ValidationErrorOutcome outcome = recordValidationError(
+              context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
           if (outcome.stop()) {
             return new StreamingValidationResult(
                 validatedCount,
@@ -424,9 +421,8 @@ public class ValidateStep implements ImportStageStep {
       long recordNo = chunkStartRecordNo + index;
       ValidationIssue issue = issues.get(recordNo);
       if (issue != null) {
-        ValidationErrorOutcome outcome =
-            recordValidationError(
-                context, recordNo, issue.errorCode(), issue.errorMessage(), issue.rawRecord());
+        ValidationErrorOutcome outcome = recordValidationError(
+            context, recordNo, issue.errorCode(), issue.errorMessage(), issue.rawRecord());
         if (outcome.stop()) {
           return ChunkProcessResult.failure(
               outcome.errorCode(), outcome.errorMessage(), validCount);

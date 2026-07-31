@@ -75,9 +75,8 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       }
     }
 
-    JobInstanceEntity existingInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(
-            request.tenantId(), triggerRequest.getDedupKey());
+    JobInstanceEntity existingInstance = jobInstanceMapper.selectByTenantAndDedupKey(
+        request.tenantId(), triggerRequest.getDedupKey());
 
     return new LaunchLoadResult(
         triggerRequest, jobDefinition, workflowDefinition, existingInstance);

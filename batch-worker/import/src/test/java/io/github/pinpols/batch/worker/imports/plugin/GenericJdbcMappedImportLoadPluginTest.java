@@ -59,7 +59,8 @@ class GenericJdbcMappedImportLoadPluginTest {
   @Test
   void shouldResolveExistingBindings() {
     ImportLoadContext c = ctx();
-    assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding("${tenantId}", c)).isEqualTo("t1");
+    assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding("${tenantId}", c))
+        .isEqualTo("t1");
     assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding("${batchNo}", c))
         .isEqualTo("BATCH-1");
     assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding("${jobCode}", c))
@@ -70,9 +71,8 @@ class GenericJdbcMappedImportLoadPluginTest {
 
   @Test
   void shouldInterpolateMixedPattern() {
-    assertThat(
-            GenericJdbcMappedImportLoadPlugin.resolveBinding(
-                "${region}/${bizType}-${bizDate}", ctx()))
+    assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding(
+            "${region}/${bizType}-${bizDate}", ctx()))
         .isEqualTo("GD/CUSTOMER-2026-06-06");
   }
 
@@ -80,7 +80,8 @@ class GenericJdbcMappedImportLoadPluginTest {
   void shouldRenderNullContextValueAsEmpty() {
     ImportLoadContext c =
         new ImportLoadContext("t1", "JOB", "tr", "w", "f", "B", null, null, null, "TPL", Map.of());
-    assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding("${bizDate}", c)).isEmpty();
+    assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding("${bizDate}", c))
+        .isEmpty();
     assertThat(GenericJdbcMappedImportLoadPlugin.resolveBinding("${region}", c)).isEmpty();
   }
 
@@ -93,9 +94,8 @@ class GenericJdbcMappedImportLoadPluginTest {
 
   @Test
   void applyRegion_fallsBackToTemplateDefaultWhenMissing() {
-    ImportLoadContext noRegion =
-        new ImportLoadContext(
-            "t1", "JOB", "tr", "w", "f", "B", "2026-06-06", "T", null, "TPL", Map.of());
+    ImportLoadContext noRegion = new ImportLoadContext(
+        "t1", "JOB", "tr", "w", "f", "B", "2026-06-06", "T", null, "TPL", Map.of());
     ImportLoadContext c =
         GenericJdbcMappedImportLoadPlugin.applyRegion(noRegion, spec("SH", List.of("BJ", "SH")));
     assertThat(c.region()).isEqualTo("SH");
@@ -103,12 +103,10 @@ class GenericJdbcMappedImportLoadPluginTest {
 
   @Test
   void applyRegion_rejectsRegionNotInDictionary() {
-    ImportLoadContext bad =
-        new ImportLoadContext(
-            "t1", "JOB", "tr", "w", "f", "B", "2026-06-06", "T", "XX", "TPL", Map.of());
-    assertThatThrownBy(
-            () ->
-                GenericJdbcMappedImportLoadPlugin.applyRegion(bad, spec(null, List.of("BJ", "SH"))))
+    ImportLoadContext bad = new ImportLoadContext(
+        "t1", "JOB", "tr", "w", "f", "B", "2026-06-06", "T", "XX", "TPL", Map.of());
+    assertThatThrownBy(() ->
+            GenericJdbcMappedImportLoadPlugin.applyRegion(bad, spec(null, List.of("BJ", "SH"))))
         .isInstanceOf(WorkerConfigException.class)
         .hasMessageContaining("allowedRegions");
   }

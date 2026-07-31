@@ -28,17 +28,23 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @ExtendWith(MockitoExtension.class)
 class OutboxPollSchedulerTest {
 
-  @Mock private DefaultScheduleForwarder scheduleForwarder;
+  @Mock
+  private DefaultScheduleForwarder scheduleForwarder;
 
-  @Mock private OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
+  @Mock
+  private OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
 
-  @Mock private BatchOrchestratorGovernanceProperties governance;
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
 
-  @Mock private LockingTaskExecutor lockingTaskExecutor;
+  @Mock
+  private LockingTaskExecutor lockingTaskExecutor;
 
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Mock private OutboxEventMapper outboxEventMapper;
+  @Mock
+  private OutboxEventMapper outboxEventMapper;
 
   private OutboxPollScheduler scheduler;
   private SimpleMeterRegistry meterRegistry;
@@ -46,11 +52,10 @@ class OutboxPollSchedulerTest {
   @BeforeEach
   void setUp() throws Throwable {
     when(governance.outbox()).thenReturn(new OutboxProperties());
-    doAnswer(
-            inv -> {
-              inv.getArgument(0, LockingTaskExecutor.Task.class).call();
-              return null;
-            })
+    doAnswer(inv -> {
+          inv.getArgument(0, LockingTaskExecutor.Task.class).call();
+          return null;
+        })
         .when(lockingTaskExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
     ThreadPoolTaskScheduler executor = new ThreadPoolTaskScheduler();
@@ -58,18 +63,17 @@ class OutboxPollSchedulerTest {
     executor.setThreadNamePrefix("outbox-poll-test-");
     executor.initialize();
     meterRegistry = new SimpleMeterRegistry();
-    scheduler =
-        new OutboxPollScheduler(
-            scheduleForwarder,
-            outboxPublishCircuitBreaker,
-            governance,
-            lockingTaskExecutor,
-            gracefulShutdown,
-            outboxEventMapper,
-            new io.github.pinpols.batch.orchestrator.infrastructure.sharding
-                .StaticShardAssignmentProvider(governance.outbox()),
-            meterRegistry,
-            executor);
+    scheduler = new OutboxPollScheduler(
+        scheduleForwarder,
+        outboxPublishCircuitBreaker,
+        governance,
+        lockingTaskExecutor,
+        gracefulShutdown,
+        outboxEventMapper,
+        new io.github.pinpols.batch.orchestrator.infrastructure.sharding
+            .StaticShardAssignmentProvider(governance.outbox()),
+        meterRegistry,
+        executor);
     // 不调用 onApplicationReady()，避免后台线程干扰单元测试
   }
 
@@ -95,7 +99,10 @@ class OutboxPollSchedulerTest {
     verify(scheduleForwarder, never()).advance(any());
     verify(outboxPublishCircuitBreaker, never()).onAdvanceResult(anyInt());
     // O1: 熔断跳过整轮时 batch.outbox.circuit.skipped_polls.total +1
-    assertThat(meterRegistry.get("batch.outbox.circuit.skipped_polls.total").counter().count())
+    assertThat(meterRegistry
+            .get("batch.outbox.circuit.skipped_polls.total")
+            .counter()
+            .count())
         .isEqualTo(1.0d);
   }
 

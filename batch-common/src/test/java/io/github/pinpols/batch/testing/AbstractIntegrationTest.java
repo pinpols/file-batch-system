@@ -29,24 +29,24 @@ public abstract class AbstractIntegrationTest {
   // 破坏 MultiTenantConcurrent / OutboxForwarderRetry / ImportFailure 等依赖 outbox 状态的 IT。
   // PG 单次启动 ~3-5s,影响有限,稳妥优先。
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer PLATFORM_POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-          .withDatabaseName("batch_platform")
-          .withUsername(DEFAULT_DB_USER)
-          .withPassword(DEFAULT_DB_PASSWORD)
-          .withUrlParam("sslmode", "disable")
-          .withInitScript("db/platform-init.sql")
-          .withCommand("postgres", "-c", "max_connections=500");
+  private static final PostgreSQLContainer PLATFORM_POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse(TestContainerImages.POSTGRES))
+      .withDatabaseName("batch_platform")
+      .withUsername(DEFAULT_DB_USER)
+      .withPassword(DEFAULT_DB_PASSWORD)
+      .withUrlParam("sslmode", "disable")
+      .withInitScript("db/platform-init.sql")
+      .withCommand("postgres", "-c", "max_connections=500");
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer BUSINESS_POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-          .withDatabaseName("batch_business")
-          .withUsername(DEFAULT_DB_USER)
-          .withPassword(DEFAULT_DB_PASSWORD)
-          .withUrlParam("sslmode", "disable")
-          .withInitScript("db/business-init.sql")
-          .withCommand("postgres", "-c", "max_connections=500");
+  private static final PostgreSQLContainer BUSINESS_POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse(TestContainerImages.POSTGRES))
+      .withDatabaseName("batch_business")
+      .withUsername(DEFAULT_DB_USER)
+      .withPassword(DEFAULT_DB_PASSWORD)
+      .withUrlParam("sslmode", "disable")
+      .withInitScript("db/business-init.sql")
+      .withCommand("postgres", "-c", "max_connections=500");
 
   // Kafka 不加 withReuse:OutboxPublishCircuitBreakerKafkaFailureIT 等用 stopKafka/startKafka 做
   // fault injection,reuse 容器禁止 stop。Kafka 单次启动 ~5s,影响有限。
@@ -57,11 +57,11 @@ public abstract class AbstractIntegrationTest {
   private static final ObjectStoreContainer MINIO = new ObjectStoreContainer().withReuse(true);
 
   @SuppressWarnings("resource")
-  private static final GenericContainer<?> REDIS =
-      new GenericContainer<>(DockerImageName.parse(TestContainerImages.VALKEY))
-          .withExposedPorts(6379)
-          .withCommand("redis-server", "--appendonly", "yes")
-          .withReuse(true);
+  private static final GenericContainer<?> REDIS = new GenericContainer<>(
+          DockerImageName.parse(TestContainerImages.VALKEY))
+      .withExposedPorts(6379)
+      .withCommand("redis-server", "--appendonly", "yes")
+      .withReuse(true);
 
   static {
     // 在同一 JVM 中所有集成测试类之间保持测试基础设施端口稳定。
@@ -83,12 +83,11 @@ public abstract class AbstractIntegrationTest {
    * <p>只让确实需要「上轮残留必清」的测试(如 MultiTenantConcurrentE2eIT 的租户隔离断言) 显式在 @BeforeEach 调本方法。
    */
   protected static void truncateOutboxTables(DataSource dataSource) {
-    String sql =
-        "TRUNCATE TABLE batch.outbox_event, "
-            + "batch.event_outbox_retry, "
-            + "batch.trigger_outbox_event, "
-            + "batch.worker_report_outbox "
-            + "CASCADE";
+    String sql = "TRUNCATE TABLE batch.outbox_event, "
+        + "batch.event_outbox_retry, "
+        + "batch.trigger_outbox_event, "
+        + "batch.worker_report_outbox "
+        + "CASCADE";
     try (Connection c = dataSource.getConnection();
         Statement s = c.createStatement()) {
       s.execute(sql);

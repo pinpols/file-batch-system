@@ -98,11 +98,10 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstract
       return SdkTaskResult.ok("export already completed (resumed checkpoint), skipped");
     }
     SdkRowResult counts = new SdkRowResult();
-    resumed.ifPresent(
-        s -> {
-          counts.addSuccess(s.succeedCount());
-          ctx.commitCoordinator().restoreCounts(s.succeedCount(), s.failCount());
-        });
+    resumed.ifPresent(s -> {
+      counts.addSuccess(s.succeedCount());
+      ctx.commitCoordinator().restoreCounts(s.succeedCount(), s.failCount());
+    });
     try {
       openSink(input, ctx);
       String q = buildQuery(input, ctx);

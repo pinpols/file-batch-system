@@ -45,31 +45,28 @@ class BatchDayReplayTerminalReconcilerTest {
   void setUp() {
     sessionMapper = mock(BatchDayReplaySessionMapper.class);
     entryMapper = mock(BatchDayReplayEntryMapper.class);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
     reconciler = new BatchDayReplayTerminalReconciler(sessionMapper, entryMapper, dateTimeSupport);
   }
 
   @Test
   void successInstanceMovesEntryToSucceededAndCompletesSession() {
     when(sessionMapper.selectById("t1", 7L)).thenReturn(session(7L, "RUNNING", 2));
-    BatchDayReplayEntryEntity pendingEntry =
-        BatchDayReplayEntryEntity.builder()
-            .id(11L)
-            .sessionId(7L)
-            .tenantId("t1")
-            .jobCode("JOB_A")
-            .status("RUNNING")
-            .build();
-    BatchDayReplayEntryEntity otherEntry =
-        BatchDayReplayEntryEntity.builder()
-            .id(12L)
-            .sessionId(7L)
-            .tenantId("t1")
-            .jobCode("JOB_B")
-            .status(ENTRY_SUCCEEDED)
-            .build();
+    BatchDayReplayEntryEntity pendingEntry = BatchDayReplayEntryEntity.builder()
+        .id(11L)
+        .sessionId(7L)
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .status("RUNNING")
+        .build();
+    BatchDayReplayEntryEntity otherEntry = BatchDayReplayEntryEntity.builder()
+        .id(12L)
+        .sessionId(7L)
+        .tenantId("t1")
+        .jobCode("JOB_B")
+        .status(ENTRY_SUCCEEDED)
+        .build();
     when(entryMapper.selectBySessionId(7L)).thenReturn(List.of(pendingEntry, otherEntry));
     when(entryMapper.countBySessionAndStatus(7L, ENTRY_SUCCEEDED)).thenReturn(2L);
     when(entryMapper.countBySessionAndStatus(7L, ENTRY_FAILED)).thenReturn(0L);
@@ -90,14 +87,13 @@ class BatchDayReplayTerminalReconcilerTest {
   @Test
   void failedInstanceCompletesSessionAsPartialFailedWhenSomeFailed() {
     when(sessionMapper.selectById("t1", 8L)).thenReturn(session(8L, "RUNNING", 2));
-    BatchDayReplayEntryEntity entry =
-        BatchDayReplayEntryEntity.builder()
-            .id(20L)
-            .sessionId(8L)
-            .tenantId("t1")
-            .jobCode("JOB_X")
-            .status("RUNNING")
-            .build();
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(20L)
+        .sessionId(8L)
+        .tenantId("t1")
+        .jobCode("JOB_X")
+        .status("RUNNING")
+        .build();
     when(entryMapper.selectBySessionId(8L)).thenReturn(List.of(entry));
     when(entryMapper.countBySessionAndStatus(8L, ENTRY_SUCCEEDED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(8L, ENTRY_FAILED)).thenReturn(1L);
@@ -116,14 +112,13 @@ class BatchDayReplayTerminalReconcilerTest {
   @Test
   void runningEntryStillInFlightDoesNotTerminateSession() {
     when(sessionMapper.selectById("t1", 9L)).thenReturn(session(9L, "RUNNING", 2));
-    BatchDayReplayEntryEntity entry =
-        BatchDayReplayEntryEntity.builder()
-            .id(30L)
-            .sessionId(9L)
-            .tenantId("t1")
-            .jobCode("JOB_C")
-            .status("RUNNING")
-            .build();
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(30L)
+        .sessionId(9L)
+        .tenantId("t1")
+        .jobCode("JOB_C")
+        .status("RUNNING")
+        .build();
     when(entryMapper.selectBySessionId(9L)).thenReturn(List.of(entry));
     when(entryMapper.countBySessionAndStatus(9L, ENTRY_SUCCEEDED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(9L, ENTRY_FAILED)).thenReturn(0L);

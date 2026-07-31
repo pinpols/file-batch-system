@@ -53,17 +53,16 @@ class BatchDayGateServiceTest {
     triggerRequestMapper = mock(TriggerRequestMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
-    service =
-        new BatchDayGateService(
-            configCacheService,
-            batchDayInstanceMapper,
-            waitingLaunchMapper,
-            triggerRequestMapper,
-            jobExecutionLogMapper,
-            jobInstanceMapper,
-            new BatchDateTimeSupport(
-                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())),
-            mock(AlertEventService.class));
+    service = new BatchDayGateService(
+        configCacheService,
+        batchDayInstanceMapper,
+        waitingLaunchMapper,
+        triggerRequestMapper,
+        jobExecutionLogMapper,
+        jobInstanceMapper,
+        new BatchDateTimeSupport(
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())),
+        mock(AlertEventService.class));
   }
 
   @Test
@@ -110,15 +109,8 @@ class BatchDayGateServiceTest {
 
   @Test
   void shouldBypassFrozenForCatchUpTrigger() {
-    LaunchRequest request =
-        new LaunchRequest(
-            "t1",
-            "JOB",
-            LocalDate.of(2026, 5, 5),
-            TriggerType.CATCH_UP,
-            "req-1",
-            "trace-1",
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        "t1", "JOB", LocalDate.of(2026, 5, 5), TriggerType.CATCH_UP, "req-1", "trace-1", Map.of());
     LaunchValidationService.LaunchLoadResult loaded = loaded("NONE");
 
     BatchDayGateService.GateDecision decision =

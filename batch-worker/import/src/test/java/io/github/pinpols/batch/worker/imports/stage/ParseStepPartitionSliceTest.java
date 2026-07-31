@@ -64,7 +64,8 @@ class ParseStepPartitionSliceTest {
 
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
-    assertThat(((Number) context.getAttributes().get("parsedCount")).longValue()).isEqualTo(9L);
+    assertThat(((Number) context.getAttributes().get("parsedCount")).longValue())
+        .isEqualTo(9L);
     assertNdjsonLineCount(context, 9);
   }
 
@@ -108,14 +109,12 @@ class ParseStepPartitionSliceTest {
     union.addAll(partition2);
     union.addAll(partition3);
     assertThat(union).hasSize(9);
-    Set<String> expected =
-        IntStream.rangeClosed(1, 9)
-            .mapToObj(i -> "C" + String.format("%03d", i))
-            .collect(Collectors.toSet());
-    Set<String> actualNos =
-        union.stream()
-            .map(ParseStepPartitionSliceTest::extractCustomerNo)
-            .collect(Collectors.toSet());
+    Set<String> expected = IntStream.rangeClosed(1, 9)
+        .mapToObj(i -> "C" + String.format("%03d", i))
+        .collect(Collectors.toSet());
+    Set<String> actualNos = union.stream()
+        .map(ParseStepPartitionSliceTest::extractCustomerNo)
+        .collect(Collectors.toSet());
     assertThat(actualNos).isEqualTo(expected);
   }
 
@@ -162,44 +161,41 @@ class ParseStepPartitionSliceTest {
   private static String buildJsonArray(int n) {
     return "["
         + IntStream.rangeClosed(1, n)
-            .mapToObj(
-                i ->
-                    "{\"customerNo\":\"C"
-                        + String.format("%03d", i)
-                        + "\",\"customerName\":\"Name"
-                        + i
-                        + "\"}")
+            .mapToObj(i -> "{\"customerNo\":\"C"
+                + String.format("%03d", i)
+                + "\",\"customerName\":\"Name"
+                + i
+                + "\"}")
             .collect(Collectors.joining(","))
         + "]";
   }
 
   private ImportJobContext buildContext(
       String rawPayload, int partitionNo, int partitionCount, boolean partitionAware) {
-    ImportPayload importPayload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            "JSON",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            rawPayload,
-            null,
-            null,
-            null,
-            null,
-            Boolean.TRUE,
-            Map.of());
+    ImportPayload importPayload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        "JSON",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        rawPayload,
+        null,
+        null,
+        null,
+        null,
+        Boolean.TRUE,
+        Map.of());
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("tenant-partition-slice");
     context.setJobCode("PARSE_PARTITION");
@@ -228,7 +224,8 @@ class ParseStepPartitionSliceTest {
       return Set.of();
     }
     try {
-      List<String> lines = Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).toList();
+      List<String> lines =
+          Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).toList();
       return new HashSet<>(lines);
     } catch (Exception e) {
       throw new AssertionError("Could not read NDJSON: " + e.getMessage(), e);

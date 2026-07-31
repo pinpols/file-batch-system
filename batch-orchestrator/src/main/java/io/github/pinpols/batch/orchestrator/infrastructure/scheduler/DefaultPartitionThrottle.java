@@ -47,35 +47,32 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
     }
     int requestedPartitions = Math.max(request.getRequestedPartitionCount(), 1);
     TenantQuotaPolicyEntity quotaPolicy = resolveQuotaPolicy(request.getTenantId());
-    long tenantActivePartitions =
-        jobPartitionMapper.countActiveByTenant(
-            request.getTenantId(),
-            PartitionStatus.WAITING.code(),
-            PartitionStatus.READY.code(),
-            PartitionStatus.RUNNING.code(),
-            PartitionStatus.RETRYING.code());
+    long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(
+        request.getTenantId(),
+        PartitionStatus.WAITING.code(),
+        PartitionStatus.READY.code(),
+        PartitionStatus.RUNNING.code(),
+        PartitionStatus.RETRYING.code());
     if (quotaPolicy != null
         && quotaPolicy.maxPartitionsPerTenant() != null
         && quotaPolicy.maxPartitionsPerTenant() > 0) {
-      int pburst =
-          quotaPolicy.partitionBurstLimit() == null
-              ? 0
-              : Math.max(0, quotaPolicy.partitionBurstLimit());
-      ResourceCheck burstCheck =
-          quotaRuntimeStateService.evaluateAndReserve(
-              new QuotaRuntimeStateService.QuotaReservationRequest(
-                  new QuotaRuntimeStateService.QuotaReservationOwner(
-                      request.getTenantId(), "TENANT_PARTITIONS", request.getTenantId()),
-                  new QuotaRuntimeStateService.QuotaReservationPolicy(
-                      quotaPolicy.quotaResetPolicy(),
-                      quotaPolicy.maxPartitionsPerTenant(),
-                      pburst,
-                      governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
-                  tenantActivePartitions,
-                  requestedPartitions,
-                  new QuotaRuntimeStateService.QuotaReservationReason(
-                      "TENANT_PARTITION_LIMIT",
-                      "tenant running partitions exceed quota (including" + " partition burst)")));
+      int pburst = quotaPolicy.partitionBurstLimit() == null
+          ? 0
+          : Math.max(0, quotaPolicy.partitionBurstLimit());
+      ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
+          new QuotaRuntimeStateService.QuotaReservationRequest(
+              new QuotaRuntimeStateService.QuotaReservationOwner(
+                  request.getTenantId(), "TENANT_PARTITIONS", request.getTenantId()),
+              new QuotaRuntimeStateService.QuotaReservationPolicy(
+                  quotaPolicy.quotaResetPolicy(),
+                  quotaPolicy.maxPartitionsPerTenant(),
+                  pburst,
+                  governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
+              tenantActivePartitions,
+              requestedPartitions,
+              new QuotaRuntimeStateService.QuotaReservationReason(
+                  "TENANT_PARTITION_LIMIT",
+                  "tenant running partitions exceed quota (including" + " partition burst)")));
       if (!burstCheck.allowed()) {
         return burstCheck;
       }
@@ -84,20 +81,19 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
       long queueActivePartitions =
           countQueueActivePartitions(request, queue, tenantActivePartitions);
       int burst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
-      ResourceCheck burstCheck =
-          quotaRuntimeStateService.evaluateAndReserve(
-              new QuotaRuntimeStateService.QuotaReservationRequest(
-                  new QuotaRuntimeStateService.QuotaReservationOwner(
-                      request.getTenantId(), "QUEUE_PARTITIONS", queue.queueCode()),
-                  new QuotaRuntimeStateService.QuotaReservationPolicy(
-                      queue.quotaResetPolicy(),
-                      queue.maxRunningPartitions(),
-                      burst,
-                      governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
-                  queueActivePartitions,
-                  requestedPartitions,
-                  new QuotaRuntimeStateService.QuotaReservationReason(
-                      "QUEUE_PARTITION_LIMIT", "resource queue running partitions exceed limit")));
+      ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
+          new QuotaRuntimeStateService.QuotaReservationRequest(
+              new QuotaRuntimeStateService.QuotaReservationOwner(
+                  request.getTenantId(), "QUEUE_PARTITIONS", queue.queueCode()),
+              new QuotaRuntimeStateService.QuotaReservationPolicy(
+                  queue.quotaResetPolicy(),
+                  queue.maxRunningPartitions(),
+                  burst,
+                  governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
+              queueActivePartitions,
+              requestedPartitions,
+              new QuotaRuntimeStateService.QuotaReservationReason(
+                  "QUEUE_PARTITION_LIMIT", "resource queue running partitions exceed limit")));
       if (!burstCheck.allowed()) {
         return burstCheck;
       }
@@ -112,15 +108,14 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
     if (!Texts.hasText(workerGroup)) {
       return tenantActivePartitions;
     }
-    return jobPartitionMapper.countActiveByTenantAndWorkerGroup(
-        CountActiveByGroupParam.builder()
-            .tenantId(request.getTenantId())
-            .workerGroup(workerGroup)
-            .waitingStatus(PartitionStatus.WAITING.code())
-            .readyStatus(PartitionStatus.READY.code())
-            .runningStatus(PartitionStatus.RUNNING.code())
-            .retryingStatus(PartitionStatus.RETRYING.code())
-            .build());
+    return jobPartitionMapper.countActiveByTenantAndWorkerGroup(CountActiveByGroupParam.builder()
+        .tenantId(request.getTenantId())
+        .workerGroup(workerGroup)
+        .waitingStatus(PartitionStatus.WAITING.code())
+        .readyStatus(PartitionStatus.READY.code())
+        .runningStatus(PartitionStatus.RUNNING.code())
+        .retryingStatus(PartitionStatus.RETRYING.code())
+        .build());
   }
 
   private TenantQuotaPolicyEntity resolveQuotaPolicy(String tenantId) {

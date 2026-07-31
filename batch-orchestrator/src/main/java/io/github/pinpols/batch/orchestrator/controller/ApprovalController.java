@@ -25,20 +25,19 @@ public class ApprovalController {
   @PostMapping
   public ApprovalResponse submit(@RequestBody ApprovalRequest request) {
     return new ApprovalResponse(
-        approvalWorkflowService.submit(
-            ApprovalWorkflowService.ApprovalSubmitCommand.of(
-                request.tenantId(),
-                new ApprovalWorkflowService.ApprovalTarget(
-                    request.approvalType(),
-                    request.actionType(),
-                    request.targetType(),
-                    request.targetId(),
-                    request.payloadJson()),
-                new ApprovalWorkflowService.ApprovalSource(
-                    request.requesterId(),
-                    request.sourceTraceId(),
-                    request.sourceIdempotencyKey(),
-                    request.approvalReason()))));
+        approvalWorkflowService.submit(ApprovalWorkflowService.ApprovalSubmitCommand.of(
+            request.tenantId(),
+            new ApprovalWorkflowService.ApprovalTarget(
+                request.approvalType(),
+                request.actionType(),
+                request.targetType(),
+                request.targetId(),
+                request.payloadJson()),
+            new ApprovalWorkflowService.ApprovalSource(
+                request.requesterId(),
+                request.sourceTraceId(),
+                request.sourceIdempotencyKey(),
+                request.approvalReason()))));
   }
 
   @GetMapping("/{approvalNo}")
@@ -50,17 +49,15 @@ public class ApprovalController {
   @PostMapping("/{approvalNo}/approve")
   public ApprovalRecordResponse approve(
       @PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
-    return new ApprovalRecordResponse(
-        approvalWorkflowService.approve(
-            request.tenantId(), approvalNo, request.operatorId(), request.reason()));
+    return new ApprovalRecordResponse(approvalWorkflowService.approve(
+        request.tenantId(), approvalNo, request.operatorId(), request.reason()));
   }
 
   @PostMapping("/{approvalNo}/reject")
   public ApprovalRecordResponse reject(
       @PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
-    return new ApprovalRecordResponse(
-        approvalWorkflowService.reject(
-            request.tenantId(), approvalNo, request.operatorId(), request.reason()));
+    return new ApprovalRecordResponse(approvalWorkflowService.reject(
+        request.tenantId(), approvalNo, request.operatorId(), request.reason()));
   }
 
   @PostMapping("/{approvalNo}/executed")

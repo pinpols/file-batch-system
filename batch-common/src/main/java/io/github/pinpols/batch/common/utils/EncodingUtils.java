@@ -100,11 +100,10 @@ public final class EncodingUtils {
     if (read <= 0) {
       return pb;
     }
-    boolean isBom =
-        read == 3
-            && prefix[0] == UTF8_BOM[0]
-            && prefix[1] == UTF8_BOM[1]
-            && prefix[2] == UTF8_BOM[2];
+    boolean isBom = read == 3
+        && prefix[0] == UTF8_BOM[0]
+        && prefix[1] == UTF8_BOM[1]
+        && prefix[2] == UTF8_BOM[2];
     if (!isBom) {
       pb.unread(prefix, 0, read);
     }

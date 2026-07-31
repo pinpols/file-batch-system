@@ -40,10 +40,9 @@ public record ConsoleKafkaConsumerLagResponse(
       return null;
     }
     // partitionsWithLag 缺失时保持 null（NON_NULL 省略键），不能默认成空列表，否则键集漂移。
-    List<PartitionLag> partitions =
-        row.containsKey("partitionsWithLag")
-            ? mapList(row.get("partitionsWithLag")).stream().map(PartitionLag::from).toList()
-            : null;
+    List<PartitionLag> partitions = row.containsKey("partitionsWithLag")
+        ? mapList(row.get("partitionsWithLag")).stream().map(PartitionLag::from).toList()
+        : null;
     return new ConsoleKafkaConsumerLagResponse(
         stringValue(row, "groupId"),
         longValue(row, "totalLag"),

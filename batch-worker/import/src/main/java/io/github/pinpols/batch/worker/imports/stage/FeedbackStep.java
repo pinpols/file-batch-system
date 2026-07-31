@@ -34,7 +34,8 @@ public class FeedbackStep implements ImportStageStep {
   @Override
   public ImportStageResult execute(ImportJobContext context) {
     // ADR-026: 演练模式不写 audit 日志（避免污染实盘 file_audit 历史），直接返回 success。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return ImportStageResult.success(stage());
     }
     Map<String, Object> attrs = context.getAttributes();
@@ -50,18 +51,17 @@ public class FeedbackStep implements ImportStageStep {
         PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
         attrs.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
     detailSummary.put("pipelineInstanceId", attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    runtimeRepository.appendAudit(
-        FileAuditParam.builder()
-            .fileId(fileId)
-            .tenantId(context.getTenantId())
-            .operationType("IMPORT_FEEDBACK")
-            .operationResult("SUCCESS")
-            .operatorType("SYSTEM")
-            .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(null)
-            .detailSummary(detailSummary)
-            .build());
+    runtimeRepository.appendAudit(FileAuditParam.builder()
+        .fileId(fileId)
+        .tenantId(context.getTenantId())
+        .operationType("IMPORT_FEEDBACK")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .operatorId(context.getWorkerId())
+        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .evidenceRef(null)
+        .detailSummary(detailSummary)
+        .build());
     return ImportStageResult.success(stage());
   }
 }

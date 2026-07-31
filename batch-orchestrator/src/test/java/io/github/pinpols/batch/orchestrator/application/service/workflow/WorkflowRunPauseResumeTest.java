@@ -27,14 +27,29 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("workflow_run pause/resume(ADR-044)")
 class WorkflowRunPauseResumeTest {
 
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private WorkflowNodeRunMapper workflowNodeRunMapper;
-  @Mock private WorkflowTerminalOutboxService workflowTerminalOutboxService;
-  @Mock private WorkflowDagService workflowDagService;
-  @Mock private ObjectProvider<WorkflowNodeDispatchService> dispatchProvider;
-  @Mock private OrchestratorJobMappers jobMappers;
-  @Mock private ObjectProvider<JobExecutionLogMapper> logProvider;
-  @Mock private ObjectProvider<AlertEventService> alertProvider;
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  private WorkflowTerminalOutboxService workflowTerminalOutboxService;
+
+  @Mock
+  private WorkflowDagService workflowDagService;
+
+  @Mock
+  private ObjectProvider<WorkflowNodeDispatchService> dispatchProvider;
+
+  @Mock
+  private OrchestratorJobMappers jobMappers;
+
+  @Mock
+  private ObjectProvider<JobExecutionLogMapper> logProvider;
+
+  @Mock
+  private ObjectProvider<AlertEventService> alertProvider;
 
   private WorkflowRunManagementApplicationService service() {
     return new WorkflowRunManagementApplicationService(
@@ -61,7 +76,8 @@ class WorkflowRunPauseResumeTest {
   @DisplayName("RUNNING 可暂停 → PAUSED")
   void shouldPause_whenRunning() {
     when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class))).thenReturn(1);
+    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
+        .thenReturn(1);
 
     assertThat(service().pause("t1", 7L)).containsEntry("status", "PAUSED");
     verify(workflowRunMapper).updateStatus(any(UpdateWorkflowRunStatusParam.class));
@@ -80,7 +96,8 @@ class WorkflowRunPauseResumeTest {
   @DisplayName("PAUSED 可恢复 → RUNNING")
   void shouldResume_whenPaused() {
     when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class))).thenReturn(1);
+    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
+        .thenReturn(1);
 
     assertThat(service().resume("t1", 7L)).containsEntry("status", "RUNNING");
   }
@@ -97,7 +114,8 @@ class WorkflowRunPauseResumeTest {
   @DisplayName("CAS 落空(并发改动)→ STATE_CONFLICT")
   void shouldThrow_whenCasMissed() {
     when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("RUNNING"));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class))).thenReturn(0);
+    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
+        .thenReturn(0);
 
     assertThatThrownBy(() -> service().pause("t1", 7L)).isInstanceOf(BizException.class);
   }

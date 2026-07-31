@@ -30,33 +30,32 @@ class QueryRecordConstructionConventionTest {
       Pattern.compile("new\\s+([A-Z][A-Za-z0-9_]*Query)\\s*\\(([^;{}]*?)\\)", Pattern.DOTALL);
 
   // 白名单:文件名后缀(实际路径 endsWith 判断)
-  private static final List<String> WHITELIST_SUFFIX =
-      List.of(
-          // record 内部工厂自身的 raw new 允许(允许工厂 implementation)
-          "/domain/job/query/JobTaskQuery.java",
-          "/domain/job/query/JobPartitionQuery.java",
-          "/domain/job/query/JobStepInstanceQuery.java",
-          "/domain/job/query/JobExecutionLogQuery.java",
-          "/domain/notification/query/AlertEventQuery.java",
-          "/domain/query/JobTaskQuery.java",
-          "/domain/query/JobExecutionLogQuery.java",
-          "/domain/query/OutboxEventQuery.java",
-          "/domain/ops/query/OutboxEventQuery.java",
-          "/domain/job/query/JobDefinitionQuery.java",
-          "/domain/workflow/query/WorkflowDefinitionQuery.java",
-          "/domain/workflow/query/WorkflowNodeQuery.java",
-          "/domain/workflow/query/WorkflowEdgeQuery.java",
-          "/domain/workflow/query/WorkflowRunQuery.java",
-          "/domain/workflow/query/WorkflowNodeRunQuery.java",
-          "/domain/workflow/query/WorkflowTopologyQuery.java",
-          "/domain/governance/query/DeadLetterTaskQuery.java",
-          "/domain/ops/query/RetryScheduleQuery.java",
-          "/domain/file/query/FileErrorRecordQuery.java",
-          // follow-up:复杂 record(8/11 字段)+ E2E support 暂行豁免,纳入后续 sprint 处理
-          "/test/java/io/github/pinpols/batch/console/integration/JobInstanceQueryIntegrationTest.java",
-          "/test/java/io/github/pinpols/batch/console/integration/ConsoleAiAuditServiceIntegrationTest.java",
-          "/test/java/io/github/pinpols/batch/e2e/support/E2eOutboxPublishSupport.java",
-          "/test/java/io/github/pinpols/batch/e2e/WorkerProcessRestartRecoveryE2eIT.java");
+  private static final List<String> WHITELIST_SUFFIX = List.of(
+      // record 内部工厂自身的 raw new 允许(允许工厂 implementation)
+      "/domain/job/query/JobTaskQuery.java",
+      "/domain/job/query/JobPartitionQuery.java",
+      "/domain/job/query/JobStepInstanceQuery.java",
+      "/domain/job/query/JobExecutionLogQuery.java",
+      "/domain/notification/query/AlertEventQuery.java",
+      "/domain/query/JobTaskQuery.java",
+      "/domain/query/JobExecutionLogQuery.java",
+      "/domain/query/OutboxEventQuery.java",
+      "/domain/ops/query/OutboxEventQuery.java",
+      "/domain/job/query/JobDefinitionQuery.java",
+      "/domain/workflow/query/WorkflowDefinitionQuery.java",
+      "/domain/workflow/query/WorkflowNodeQuery.java",
+      "/domain/workflow/query/WorkflowEdgeQuery.java",
+      "/domain/workflow/query/WorkflowRunQuery.java",
+      "/domain/workflow/query/WorkflowNodeRunQuery.java",
+      "/domain/workflow/query/WorkflowTopologyQuery.java",
+      "/domain/governance/query/DeadLetterTaskQuery.java",
+      "/domain/ops/query/RetryScheduleQuery.java",
+      "/domain/file/query/FileErrorRecordQuery.java",
+      // follow-up:复杂 record(8/11 字段)+ E2E support 暂行豁免,纳入后续 sprint 处理
+      "/test/java/io/github/pinpols/batch/console/integration/JobInstanceQueryIntegrationTest.java",
+      "/test/java/io/github/pinpols/batch/console/integration/ConsoleAiAuditServiceIntegrationTest.java",
+      "/test/java/io/github/pinpols/batch/e2e/support/E2eOutboxPublishSupport.java",
+      "/test/java/io/github/pinpols/batch/e2e/WorkerProcessRestartRecoveryE2eIT.java");
 
   @Test
   void noInlineQueryConstructorWithMultipleNullPlaceholders() throws IOException {
@@ -71,10 +70,9 @@ class QueryRecordConstructionConventionTest {
     }
 
     assertThat(violations)
-        .as(
-            "Query record inline new 不允许 ≥ 2 个 null 占位 — 必须走静态工厂(CLAUDE.md §Query Record 工厂方法规约)\n"
-                + "命中:\n  "
-                + String.join("\n  ", violations))
+        .as("Query record inline new 不允许 ≥ 2 个 null 占位 — 必须走静态工厂(CLAUDE.md §Query Record 工厂方法规约)\n"
+            + "命中:\n  "
+            + String.join("\n  ", violations))
         .isEmpty();
   }
 
@@ -98,15 +96,14 @@ class QueryRecordConstructionConventionTest {
       if (nullCount >= 2) {
         // 取行号
         int lineno = src.substring(0, m.start()).split("\n", -1).length;
-        violations.add(
-            file.getFileName()
-                + ":"
-                + lineno
-                + " — new "
-                + m.group(1)
-                + "(... "
-                + nullCount
-                + " null 占位 ...)");
+        violations.add(file.getFileName()
+            + ":"
+            + lineno
+            + " — new "
+            + m.group(1)
+            + "(... "
+            + nullCount
+            + " null 占位 ...)");
       }
     }
   }

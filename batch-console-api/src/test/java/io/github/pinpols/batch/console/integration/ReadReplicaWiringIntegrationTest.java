@@ -44,9 +44,14 @@ import org.springframework.transaction.support.TransactionTemplate;
     })
 class ReadReplicaWiringIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private DataSource dataSource;
-  @Autowired private MeterRegistry meterRegistry;
-  @Autowired private PlatformTransactionManager transactionManager;
+  @Autowired
+  private DataSource dataSource;
+
+  @Autowired
+  private MeterRegistry meterRegistry;
+
+  @Autowired
+  private PlatformTransactionManager transactionManager;
 
   @DynamicPropertySource
   static void registerReadReplicaPrimary(DynamicPropertyRegistry registry) {
@@ -62,21 +67,24 @@ class ReadReplicaWiringIntegrationTest extends AbstractIntegrationTest {
   @Test
   void wiringInjectsRoutingDataSourceAndFailOpenOnReplicaUnreachable() {
     assertThat(dataSource)
-        .as(
-            "read-replica.enabled=true 应让 @Primary DataSource 走 LazyConnectionDataSourceProxy 包裹的"
-                + " routing DS")
+        .as("read-replica.enabled=true 应让 @Primary DataSource 走 LazyConnectionDataSourceProxy 包裹的"
+            + " routing DS")
         .isInstanceOf(LazyConnectionDataSourceProxy.class);
 
     TransactionTemplate readOnly = new TransactionTemplate(transactionManager);
     readOnly.setReadOnly(true);
-    Integer one =
-        readOnly.execute(
-            status -> new JdbcTemplate(dataSource).queryForObject("SELECT 1", Integer.class));
+    Integer one = readOnly.execute(
+        status -> new JdbcTemplate(dataSource).queryForObject("SELECT 1", Integer.class));
 
-    assertThat(one).as("readOnly 查询路由到不可达 replica 后应 fail-open 落到 primary，结果仍然正确").isEqualTo(1);
+    assertThat(one)
+        .as("readOnly 查询路由到不可达 replica 后应 fail-open 落到 primary，结果仍然正确")
+        .isEqualTo(1);
 
-    Counter failover = meterRegistry.find("batch.console.replica.failover.count").counter();
-    assertThat(failover).as("fail-open 时 batch.console.replica.failover.count 计数器应已注册").isNotNull();
+    Counter failover =
+        meterRegistry.find("batch.console.replica.failover.count").counter();
+    assertThat(failover)
+        .as("fail-open 时 batch.console.replica.failover.count 计数器应已注册")
+        .isNotNull();
     assertThat(failover.count()).as("至少观察到一次降级").isGreaterThanOrEqualTo(1d);
   }
 }

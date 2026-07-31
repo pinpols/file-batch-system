@@ -34,19 +34,18 @@ class ConsoleConfigCacheControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleConfigCacheController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleConfigCacheController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
   void evictJobDefinitionShouldCallService() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ops/cache/evict-job-definition")
-                .param("tenantId", "ta")
-                .param("jobCode", "JOB_A"))
+        .perform(post("/api/console/ops/cache/evict-job-definition")
+            .param("tenantId", "ta")
+            .param("jobCode", "JOB_A"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.evicted").value("job-definition:ta:JOB_A"));
     verify(service).evictJobDefinition("ta", "JOB_A");
@@ -63,10 +62,9 @@ class ConsoleConfigCacheControllerTest {
   @Test
   void evictWorkflowDefinitionShouldPassCode() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ops/cache/evict-workflow-definition")
-                .param("tenantId", "ta")
-                .param("workflowCode", "WF_A"))
+        .perform(post("/api/console/ops/cache/evict-workflow-definition")
+            .param("tenantId", "ta")
+            .param("workflowCode", "WF_A"))
         .andExpect(status().isOk());
     verify(service).evictWorkflowDefinition("ta", "WF_A");
   }
@@ -74,16 +72,14 @@ class ConsoleConfigCacheControllerTest {
   @Test
   void evictBusinessCalendarAndBatchWindowShouldDelegate() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ops/cache/evict-business-calendar")
-                .param("tenantId", "ta")
-                .param("calendarCode", "C_A"))
+        .perform(post("/api/console/ops/cache/evict-business-calendar")
+            .param("tenantId", "ta")
+            .param("calendarCode", "C_A"))
         .andExpect(status().isOk());
     mockMvc
-        .perform(
-            post("/api/console/ops/cache/evict-batch-window")
-                .param("tenantId", "ta")
-                .param("windowCode", "W_A"))
+        .perform(post("/api/console/ops/cache/evict-batch-window")
+            .param("tenantId", "ta")
+            .param("windowCode", "W_A"))
         .andExpect(status().isOk());
     verify(service).evictBusinessCalendar("ta", "C_A");
     verify(service).evictBatchWindow("ta", "W_A");

@@ -91,20 +91,26 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private static final long WORKER_START_TIMEOUT_SECONDS = 180L;
   private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private OutboxPublisher outboxPublisher;
+  @Autowired
+  private OutboxPublisher outboxPublisher;
 
-  @Autowired private OutboxEventMapper outboxEventMapper;
+  @Autowired
+  private OutboxEventMapper outboxEventMapper;
 
-  @Autowired private BatchMqTopicsProperties batchMqTopicsProperties;
+  @Autowired
+  private BatchMqTopicsProperties batchMqTopicsProperties;
 
   @Value("${spring.kafka.bootstrap-servers}")
   private String kafkaBootstrapServers;
 
-  @LocalServerPort private int localServerPort;
+  @LocalServerPort
+  private int localServerPort;
 
   @Test
   void workerProcessCanRestartAndContinueDispatching() throws Exception {
@@ -146,15 +152,14 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
       params.put("ackRequired", false);
       params.put("forceRetry", false);
 
-      launchService.launch(
-          new LaunchRequest(
-              tenantId,
-              seed.jobCode(),
-              BIZ_DATE,
-              TriggerType.API,
-              seed.requestId(),
-              "restart-trace-" + suffix,
-              params));
+      launchService.launch(new LaunchRequest(
+          tenantId,
+          seed.jobCode(),
+          BIZ_DATE,
+          TriggerType.API,
+          seed.requestId(),
+          "restart-trace-" + suffix,
+          params));
 
       publishPendingOutbox(tenantId);
 
@@ -169,21 +174,16 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
       await()
           .atMost(Duration.ofSeconds(480))
           .pollInterval(Duration.ofMillis(200))
-          .untilAsserted(
-              () -> {
-                String status =
-                    jdbcTemplate.queryForObject(
-                        """
+          .untilAsserted(() -> {
+            String status =
+                jdbcTemplate.queryForObject("""
                                 select t.task_status
                         from batch.job_task t
                         join batch.job_instance ji on ji.id = t.job_instance_id
                         where ji.tenant_id = ? and ji.dedup_key = ?
-                        """,
-                        String.class,
-                        tenantId,
-                        seed.dedupKey());
-                assertThat(status).isEqualTo("SUCCESS");
-              });
+                        """, String.class, tenantId, seed.dedupKey());
+            assertThat(status).isEqualTo("SUCCESS");
+          });
 
       await()
           .atMost(Duration.ofSeconds(20))
@@ -201,25 +201,23 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
       await()
           .atMost(Duration.ofSeconds(60))
           .pollInterval(Duration.ofMillis(500))
-          .until(
-              () -> {
-                try {
-                  Map<String, ConsumerGroupDescription> descriptions =
-                      adminClient
-                          .describeConsumerGroups(List.of(consumerGroupId))
-                          .all()
-                          .get(10, TimeUnit.SECONDS);
-                  ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
-                  return desc != null
-                      && desc.groupState() == GroupState.STABLE
-                      && !desc.members().isEmpty();
-                } catch (ExecutionException ex) {
-                  if (ex.getCause() instanceof GroupIdNotFoundException) {
-                    return false;
-                  }
-                  throw ex;
-                }
-              });
+          .until(() -> {
+            try {
+              Map<String, ConsumerGroupDescription> descriptions = adminClient
+                  .describeConsumerGroups(List.of(consumerGroupId))
+                  .all()
+                  .get(10, TimeUnit.SECONDS);
+              ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
+              return desc != null
+                  && desc.groupState() == GroupState.STABLE
+                  && !desc.members().isEmpty();
+            } catch (ExecutionException ex) {
+              if (ex.getCause() instanceof GroupIdNotFoundException) {
+                return false;
+              }
+              throw ex;
+            }
+          });
     }
   }
 
@@ -308,14 +306,11 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         "restart dispatch " + jobCode,
         CodeNormalizer.toUpperOrNull(workerGroup));
 
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
         ) values (?, ?, 'restart wf', 'DAG', 1, true)
-        """,
-        tenantId,
-        jobCode);
+        """, tenantId, jobCode);
     E2eScenarioFixture.provisionPipelineDefinition(jdbcTemplate, tenantId, jobCode, workerGroup);
 
     jdbcTemplate.update(
@@ -336,18 +331,16 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   private void publishPendingOutbox(String tenantId) {
-    List<OutboxEventEntity> pending =
-        outboxEventMapper.selectPending(
-            new OutboxEventQuery(
-                tenantId,
-                null,
-                null,
-                new PageRequest(1, 500),
-                OutboxPublishStatus.NEW.code(),
-                OutboxPublishStatus.FAILED.code(),
-                null,
-                null,
-                null));
+    List<OutboxEventEntity> pending = outboxEventMapper.selectPending(new OutboxEventQuery(
+        tenantId,
+        null,
+        null,
+        new PageRequest(1, 500),
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code(),
+        null,
+        null,
+        null));
     ensureTopicsExist(pending);
     for (OutboxEventEntity event : pending) {
       outboxPublisher.publish(event);
@@ -358,11 +351,10 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     if (pendingEvents == null || pendingEvents.isEmpty()) {
       return;
     }
-    Set<String> topics =
-        pendingEvents.stream()
-            .map(this::resolveTargetTopic)
-            .filter(topic -> topic != null && !topic.isBlank())
-            .collect(Collectors.toCollection(LinkedHashSet::new));
+    Set<String> topics = pendingEvents.stream()
+        .map(this::resolveTargetTopic)
+        .filter(topic -> topic != null && !topic.isBlank())
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     if (topics.isEmpty()) {
       return;
     }
@@ -401,39 +393,38 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
       String tenantId, String workerCode, String consumerGroupId, Path logFile)
       throws IOException, InterruptedException {
     Path workerExecJar = locateWorkerExecJar();
-    List<String> command =
-        List.of(
-            JAVA_BIN,
-            "-jar",
-            workerExecJar.toString(),
-            "--spring.profiles.active=test,e2e",
-            "--spring.main.web-application-type=none",
-            "--spring.datasource.url=" + platformJdbcUrl(),
-            "--spring.datasource.username=batch_user",
-            "--spring.datasource.password=batch_pass_123",
-            "--spring.datasource.driver-class-name=org.postgresql.Driver",
-            "--spring.kafka.bootstrap-servers=" + kafkaBootstrapServers,
-            "--batch.orchestrator.base-url=http://127.0.0.1:" + localServerPort,
-            "--batch.worker.task-client.base-url=http://127.0.0.1:" + localServerPort,
-            "--batch.worker.registry.fail-fast-on-startup=false",
-            "--batch.security.bypass-mode=true",
-            "--batch.security.kms.default-key-ref=DEFAULT_TEST",
-            "--batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==",
-            "--batch.storage.s3.endpoint=" + s3Endpoint(),
-            "--batch.storage.s3.access-key=minioadmin",
-            "--batch.storage.s3.secret-key=minioadmin123",
-            "--batch.storage.s3.bucket=" + s3Bucket(),
-            "--batch.worker.type=DISPATCH",
-            "--batch.worker.dispatch.worker-code=" + workerCode,
-            "--batch.worker.dispatch.worker-type=DISPATCH",
-            "--batch.worker.dispatch.tenant-id=" + tenantId,
-            "--batch.worker.dispatch.heartbeat-interval-millis=1000",
-            "--batch.worker.dispatch.topic=batch.task.dispatch.dispatch",
-            "--batch.worker.dispatch.consumer-group-id=" + consumerGroupId,
-            "--batch.worker.dispatch.circuit-breaker.enabled=false",
-            "--batch.worker.dispatch.health.enabled=false",
-            "--batch.worker.dispatch.receipt-poll.enabled=false",
-            "--batch.worker.lease.renew-interval-millis=1000");
+    List<String> command = List.of(
+        JAVA_BIN,
+        "-jar",
+        workerExecJar.toString(),
+        "--spring.profiles.active=test,e2e",
+        "--spring.main.web-application-type=none",
+        "--spring.datasource.url=" + platformJdbcUrl(),
+        "--spring.datasource.username=batch_user",
+        "--spring.datasource.password=batch_pass_123",
+        "--spring.datasource.driver-class-name=org.postgresql.Driver",
+        "--spring.kafka.bootstrap-servers=" + kafkaBootstrapServers,
+        "--batch.orchestrator.base-url=http://127.0.0.1:" + localServerPort,
+        "--batch.worker.task-client.base-url=http://127.0.0.1:" + localServerPort,
+        "--batch.worker.registry.fail-fast-on-startup=false",
+        "--batch.security.bypass-mode=true",
+        "--batch.security.kms.default-key-ref=DEFAULT_TEST",
+        "--batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==",
+        "--batch.storage.s3.endpoint=" + s3Endpoint(),
+        "--batch.storage.s3.access-key=minioadmin",
+        "--batch.storage.s3.secret-key=minioadmin123",
+        "--batch.storage.s3.bucket=" + s3Bucket(),
+        "--batch.worker.type=DISPATCH",
+        "--batch.worker.dispatch.worker-code=" + workerCode,
+        "--batch.worker.dispatch.worker-type=DISPATCH",
+        "--batch.worker.dispatch.tenant-id=" + tenantId,
+        "--batch.worker.dispatch.heartbeat-interval-millis=1000",
+        "--batch.worker.dispatch.topic=batch.task.dispatch.dispatch",
+        "--batch.worker.dispatch.consumer-group-id=" + consumerGroupId,
+        "--batch.worker.dispatch.circuit-breaker.enabled=false",
+        "--batch.worker.dispatch.health.enabled=false",
+        "--batch.worker.dispatch.receipt-poll.enabled=false",
+        "--batch.worker.lease.renew-interval-millis=1000");
     ProcessBuilder builder = new ProcessBuilder(command);
     builder.redirectErrorStream(true);
     builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
@@ -444,31 +435,24 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(WORKER_START_TIMEOUT_SECONDS))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String logContent =
-                  Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
-              assertThat(logContent).contains(expectedText);
-            });
+        .untilAsserted(() -> {
+          String logContent =
+              Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
+          assertThat(logContent).contains(expectedText);
+        });
   }
 
   private void awaitWorkerOnlineInRegistry(String tenantId, String workerCode) {
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              Integer count =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          Integer count = jdbcTemplate.queryForObject("""
                       select count(1)::int from batch.worker_registry
                       where tenant_id = ? and worker_code = ? and status = 'ONLINE' and worker_group = 'DISPATCH'
-                      """,
-                      Integer.class,
-                      tenantId,
-                      workerCode);
-              assertThat(count).isEqualTo(1);
-            });
+                      """, Integer.class, tenantId, workerCode);
+          assertThat(count).isEqualTo(1);
+        });
   }
 
   private Path locateWorkerExecJar() throws IOException, InterruptedException {
@@ -488,16 +472,15 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private void buildWorkerDispatchArtifact() throws IOException, InterruptedException {
     Path rootDir = projectRoot();
     Path logFile = Files.createTempFile("worker-dispatch-build-", ".log");
-    ProcessBuilder builder =
-        new ProcessBuilder(
-            "mvn",
-            "-q",
-            "-pl",
-            "batch-worker/dispatch",
-            "-am",
-            "-DskipTests",
-            "package",
-            "-Dsurefire.failIfNoSpecifiedTests=false");
+    ProcessBuilder builder = new ProcessBuilder(
+        "mvn",
+        "-q",
+        "-pl",
+        "batch-worker/dispatch",
+        "-am",
+        "-DskipTests",
+        "package",
+        "-Dsurefire.failIfNoSpecifiedTests=false");
     builder.directory(rootDir.toFile());
     builder.redirectErrorStream(true);
     builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));

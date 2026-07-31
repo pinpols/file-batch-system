@@ -58,43 +58,40 @@ class ConsoleQueryControllerTest {
 
     // ConsoleQueryController 构造参数:applicationService / responseFactory /
     // operationAuditQueryService / orchestratorProxy。本测试只覆盖 query 路径,其余 null。
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleQueryController(queryApplicationService, responseFactory, null, null))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleQueryController(queryApplicationService, responseFactory, null, null))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturnApprovalDtos() throws Exception {
     when(queryApplicationService.approvals(any()))
-        .thenReturn(
-            new PageResponse<>(
+        .thenReturn(new PageResponse<>(
+            1L,
+            1,
+            20,
+            List.of(new ConsoleApprovalCommandResponse(
                 1L,
-                1,
-                20,
-                List.of(
-                    new ConsoleApprovalCommandResponse(
-                        1L,
-                        "t1",
-                        "appr-001",
-                        "DOWNLOAD",
-                        "DOWNLOAD",
-                        "FILE",
-                        "1001",
-                        "{}",
-                        "PENDING",
-                        "req-1",
-                        null,
-                        null,
-                        null,
-                        "trace-1",
-                        "idem-1",
-                        OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
-                        null,
-                        OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
-                        OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC)))));
+                "t1",
+                "appr-001",
+                "DOWNLOAD",
+                "DOWNLOAD",
+                "FILE",
+                "1001",
+                "{}",
+                "PENDING",
+                "req-1",
+                null,
+                null,
+                null,
+                "trace-1",
+                "idem-1",
+                OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
+                null,
+                OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC)))));
 
     mockMvc
         .perform(get("/api/console/queries/approvals").param("tenantId", "t1"))
@@ -107,28 +104,26 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnAlertDtos() throws Exception {
     when(queryApplicationService.alertEvents(any()))
-        .thenReturn(
-            new PageResponse<>(
+        .thenReturn(new PageResponse<>(
+            1L,
+            1,
+            20,
+            List.of(new ConsoleAlertEventResponse(
                 1L,
-                1,
-                20,
-                List.of(
-                    new ConsoleAlertEventResponse(
-                        1L,
-                        "t1",
-                        "console-api",
-                        "FILE_ERROR",
-                        "HIGH",
-                        "file failed",
-                        "{\"k\":\"v\"}",
-                        "dedup-1",
-                        2,
-                        Instant.EPOCH,
-                        Instant.EPOCH,
-                        "trace-1",
-                        "OPEN",
-                        Instant.EPOCH,
-                        Instant.EPOCH))));
+                "t1",
+                "console-api",
+                "FILE_ERROR",
+                "HIGH",
+                "file failed",
+                "{\"k\":\"v\"}",
+                "dedup-1",
+                2,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                "trace-1",
+                "OPEN",
+                Instant.EPOCH,
+                Instant.EPOCH))));
 
     mockMvc
         .perform(get("/api/console/queries/alerts").param("tenantId", "t1"))
@@ -141,24 +136,22 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnExecutionLogDtos() throws Exception {
     when(queryApplicationService.executionLogs(any()))
-        .thenReturn(
-            new PageResponse<>(
+        .thenReturn(new PageResponse<>(
+            1L,
+            1,
+            20,
+            List.of(new ConsoleAuditLogResponse(
                 1L,
-                1,
-                20,
-                List.of(
-                    new ConsoleAuditLogResponse(
-                        1L,
-                        "t1",
-                        1001L,
-                        "FILE_UPLOAD",
-                        "SUCCESS",
-                        "OPERATOR",
-                        "u1",
-                        "trace-1",
-                        "evidence-1",
-                        "summary",
-                        Instant.EPOCH))));
+                "t1",
+                1001L,
+                "FILE_UPLOAD",
+                "SUCCESS",
+                "OPERATOR",
+                "u1",
+                "trace-1",
+                "evidence-1",
+                "summary",
+                Instant.EPOCH))));
 
     mockMvc
         .perform(get("/api/console/queries/execution-logs").param("tenantId", "t1"))
@@ -304,23 +297,22 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnLegacyPipelineDefinitionsDetail() throws Exception {
     when(queryApplicationService.filePipelineDetail(anyString(), anyLong()))
-        .thenReturn(
-            new ConsoleFilePipelineResponse(
-                1L,
-                "t1",
-                1001L,
-                "file-001",
-                "IMPORT",
-                2001L,
-                3001L,
-                "RECEIVE",
-                "PARSE",
-                "SUCCESS",
-                "trace-1",
-                Instant.EPOCH,
-                Instant.EPOCH,
-                Instant.EPOCH,
-                Instant.EPOCH));
+        .thenReturn(new ConsoleFilePipelineResponse(
+            1L,
+            "t1",
+            1001L,
+            "file-001",
+            "IMPORT",
+            2001L,
+            3001L,
+            "RECEIVE",
+            "PARSE",
+            "SUCCESS",
+            "trace-1",
+            Instant.EPOCH,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            Instant.EPOCH));
 
     mockMvc
         .perform(get("/api/console/queries/pipeline-definitions/1").param("tenantId", "t1"))
@@ -362,35 +354,34 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnJobInstanceDetail() throws Exception {
     when(queryApplicationService.jobInstance(anyString(), anyLong()))
-        .thenReturn(
-            new ConsoleJobInstanceResponse(
-                11L,
-                "t1",
-                "job-001",
-                "inst-001",
-                LocalDate.of(2026, 3, 29),
-                "MANUAL",
-                "SUCCESS",
-                "batch-1",
-                "operator-1",
-                false,
-                false,
-                null,
-                null,
-                null,
-                "queue-1",
-                "worker-group-1",
-                5,
-                "trace-1",
-                "{}",
-                "ok",
-                Instant.EPOCH,
-                3600,
-                null,
-                Instant.EPOCH,
-                Instant.EPOCH,
-                false,
-                null));
+        .thenReturn(new ConsoleJobInstanceResponse(
+            11L,
+            "t1",
+            "job-001",
+            "inst-001",
+            LocalDate.of(2026, 3, 29),
+            "MANUAL",
+            "SUCCESS",
+            "batch-1",
+            "operator-1",
+            false,
+            false,
+            null,
+            null,
+            null,
+            "queue-1",
+            "worker-group-1",
+            5,
+            "trace-1",
+            "{}",
+            "ok",
+            Instant.EPOCH,
+            3600,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            false,
+            null));
 
     mockMvc
         .perform(get("/api/console/queries/instances/11").param("tenantId", "t1"))
@@ -402,24 +393,23 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnJobStepInstanceDetail() throws Exception {
     when(queryApplicationService.jobStepInstance(anyString(), anyLong()))
-        .thenReturn(
-            new ConsoleJobStepInstanceResponse(
-                21L,
-                "t1",
-                11L,
-                1L,
-                1001L,
-                "step-1",
-                "MAIN",
-                "SUCCESS",
-                0,
-                null,
-                "ok",
-                null,
-                null,
-                null,
-                Instant.EPOCH,
-                Instant.EPOCH));
+        .thenReturn(new ConsoleJobStepInstanceResponse(
+            21L,
+            "t1",
+            11L,
+            1L,
+            1001L,
+            "step-1",
+            "MAIN",
+            "SUCCESS",
+            0,
+            null,
+            "ok",
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH));
 
     mockMvc
         .perform(get("/api/console/queries/job-step-instances/21").param("tenantId", "t1"))
@@ -431,20 +421,19 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnWorkflowRunDetail() throws Exception {
     when(queryApplicationService.workflowRun(anyString(), anyLong()))
-        .thenReturn(
-            new ConsoleWorkflowRunResponse(
-                31L,
-                "t1",
-                100L,
-                11L,
-                LocalDate.of(2026, 3, 29),
-                "RUNNING",
-                "node-1",
-                "trace-1",
-                Instant.EPOCH,
-                null,
-                Instant.EPOCH,
-                Instant.EPOCH));
+        .thenReturn(new ConsoleWorkflowRunResponse(
+            31L,
+            "t1",
+            100L,
+            11L,
+            LocalDate.of(2026, 3, 29),
+            "RUNNING",
+            "node-1",
+            "trace-1",
+            Instant.EPOCH,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH));
 
     mockMvc
         .perform(get("/api/console/queries/workflow-runs/31").param("tenantId", "t1"))
@@ -456,20 +445,19 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnWorkflowNodeRunDetail() throws Exception {
     when(queryApplicationService.workflowNodeRun(anyString(), anyLong()))
-        .thenReturn(
-            new ConsoleWorkflowNodeRunResponse(
-                41L,
-                31L,
-                "node-1",
-                "MAIN",
-                1,
-                "SUCCESS",
-                0,
-                null,
-                null,
-                Instant.EPOCH,
-                Instant.EPOCH,
-                120L));
+        .thenReturn(new ConsoleWorkflowNodeRunResponse(
+            41L,
+            31L,
+            "node-1",
+            "MAIN",
+            1,
+            "SUCCESS",
+            0,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            120L));
 
     mockMvc
         .perform(get("/api/console/queries/workflow-node-runs/41").param("tenantId", "t1"))
@@ -481,42 +469,39 @@ class ConsoleQueryControllerTest {
   @Test
   void shouldReturnBatchInstanceStatus() throws Exception {
     when(queryApplicationService.batchInstanceStatus(anyString(), any()))
-        .thenReturn(
-            List.of(
-                new ConsoleJobInstanceResponse(
-                    11L,
-                    "t1",
-                    "IMPORT_JOB",
-                    "INS-001",
-                    LocalDate.of(2026, 3, 29),
-                    "MANUAL",
-                    "RUNNING",
-                    "batch-1",
-                    "operator-1",
-                    false,
-                    false,
-                    null,
-                    null,
-                    null,
-                    "queue-1",
-                    "worker-group-1",
-                    5,
-                    "trace-1",
-                    "{}",
-                    "running",
-                    Instant.EPOCH,
-                    3600,
-                    null,
-                    Instant.EPOCH,
-                    null,
-                    false,
-                    null)));
+        .thenReturn(List.of(new ConsoleJobInstanceResponse(
+            11L,
+            "t1",
+            "IMPORT_JOB",
+            "INS-001",
+            LocalDate.of(2026, 3, 29),
+            "MANUAL",
+            "RUNNING",
+            "batch-1",
+            "operator-1",
+            false,
+            false,
+            null,
+            null,
+            null,
+            "queue-1",
+            "worker-group-1",
+            5,
+            "trace-1",
+            "{}",
+            "running",
+            Instant.EPOCH,
+            3600,
+            null,
+            Instant.EPOCH,
+            null,
+            false,
+            null)));
 
     mockMvc
-        .perform(
-            get("/api/console/queries/instances/batch-status")
-                .param("tenantId", "t1")
-                .param("instanceNos", "INS-001", "INS-002"))
+        .perform(get("/api/console/queries/instances/batch-status")
+            .param("tenantId", "t1")
+            .param("instanceNos", "INS-001", "INS-002"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].instanceNo").value("INS-001"))

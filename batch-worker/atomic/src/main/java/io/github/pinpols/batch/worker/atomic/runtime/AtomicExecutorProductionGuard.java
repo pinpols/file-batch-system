@@ -103,43 +103,38 @@ public class AtomicExecutorProductionGuard {
     List<String> violations = new ArrayList<>();
     SqlExecutorProperties sql = sqlProps.getIfAvailable();
     if (sql != null && sql.isEnabled() && sql.getAllowedDataSourceBeans().isEmpty()) {
-      violations.add(
-          "batch.worker.executors.sql.enabled=true 但 allowedDataSourceBeans 为空"
-              + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
-              + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
+      violations.add("batch.worker.executors.sql.enabled=true 但 allowedDataSourceBeans 为空"
+          + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
+          + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
     }
     StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
     if (sp != null && sp.isEnabled() && sp.getAllowedSchemas().isEmpty()) {
-      violations.add(
-          "batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
-              + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
-              + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
+      violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
+          + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
+          + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
     }
     HttpExecutorProperties http = httpProps.getIfAvailable();
     if (http != null
         && http.isEnabled()
         && http.getAllowedHostPatterns().isEmpty()
         && !http.isEnforceAllowlist()) {
-      violations.add(
-          "batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
-              + " enforceAllowlist=false — prod profile 必须二选一:"
-              + "(a) 配 batch.worker.executors.http.allowed-host-patterns 列出可访问的出口域名 glob;"
-              + "(b) 置 batch.worker.executors.http.enforce-allowlist=true 让空白名单语义变成"
-              + " fail-closed 拒绝全部");
+      violations.add("batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
+          + " enforceAllowlist=false — prod profile 必须二选一:"
+          + "(a) 配 batch.worker.executors.http.allowed-host-patterns 列出可访问的出口域名 glob;"
+          + "(b) 置 batch.worker.executors.http.enforce-allowlist=true 让空白名单语义变成"
+          + " fail-closed 拒绝全部");
     }
     ShellExecutorProperties shell = shellProps.getIfAvailable();
     if (shell != null && shell.isEnabled() && shell.getCommandWhitelist().isEmpty()) {
-      violations.add(
-          "batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
-              + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
-              + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
+      violations.add("batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
+          + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
+          + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
     }
     SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
     if (spark != null && spark.isEnabled() && spark.getAppResourceAllowlist().isEmpty()) {
-      violations.add(
-          "batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
-              + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"
-              + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");
+      violations.add("batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
+          + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"
+          + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");
     }
     return violations;
   }

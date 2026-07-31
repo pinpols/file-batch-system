@@ -45,24 +45,26 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
   private static final String CSRF_TOKEN = "audit-e2e-csrf-token";
   private static final String TENANT_ID = "t1";
 
-  @LocalServerPort private int port;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @LocalServerPort
+  private int port;
 
-  @MockitoBean private ConsoleAlertApplicationService alertService;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @MockitoBean
+  private ConsoleAlertApplicationService alertService;
 
   private WebTestClient webTestClient;
 
   @BeforeEach
   void setUp() {
-    webTestClient =
-        WebTestClient.bindToServer()
-            .baseUrl("http://127.0.0.1:" + port)
-            .responseTimeout(Duration.ofSeconds(30))
-            .build();
+    webTestClient = WebTestClient.bindToServer()
+        .baseUrl("http://127.0.0.1:" + port)
+        .responseTimeout(Duration.ofSeconds(30))
+        .build();
     // 测试前清空可能的异常数据,避免计数干扰
-    jdbcTemplate.update(
-        "DELETE FROM batch.console_operation_audit WHERE action IN ('alert.close',"
-            + " 'apiKey.create')");
+    jdbcTemplate.update("DELETE FROM batch.console_operation_audit WHERE action IN ('alert.close',"
+        + " 'apiKey.create')");
   }
 
   @Test
@@ -88,24 +90,21 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(
-            () -> {
-              Integer count =
-                  jdbcTemplate.queryForObject(
-                      "SELECT count(*)::int FROM batch.console_operation_audit"
-                          + " WHERE action = ? AND aggregate_type = ? AND aggregate_id = ?",
-                      Integer.class,
-                      "alert.close",
-                      "alert",
-                      "7");
-              assertThat(count).isEqualTo(1);
-            });
+        .untilAsserted(() -> {
+          Integer count = jdbcTemplate.queryForObject(
+              "SELECT count(*)::int FROM batch.console_operation_audit"
+                  + " WHERE action = ? AND aggregate_type = ? AND aggregate_id = ?",
+              Integer.class,
+              "alert.close",
+              "alert",
+              "7");
+          assertThat(count).isEqualTo(1);
+        });
 
-    String result =
-        jdbcTemplate.queryForObject(
-            "SELECT result FROM batch.console_operation_audit"
-                + " WHERE action = 'alert.close' ORDER BY id DESC LIMIT 1",
-            String.class);
+    String result = jdbcTemplate.queryForObject(
+        "SELECT result FROM batch.console_operation_audit"
+            + " WHERE action = 'alert.close' ORDER BY id DESC LIMIT 1",
+        String.class);
     assertThat(result).isEqualTo("SUCCESS");
   }
 
@@ -132,17 +131,15 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(
-            () -> {
-              String params =
-                  jdbcTemplate.queryForObject(
-                      "SELECT params FROM batch.console_operation_audit"
-                          + " WHERE action = 'alert.close' AND aggregate_id = '9'"
-                          + " ORDER BY id DESC LIMIT 1",
-                      String.class);
-              // alert.close 默认 recordParams=true,params 列非空且包含 reason 字段
-              assertThat(params).isNotNull();
-              assertThat(params).contains("fix-after-rcal");
-            });
+        .untilAsserted(() -> {
+          String params = jdbcTemplate.queryForObject(
+              "SELECT params FROM batch.console_operation_audit"
+                  + " WHERE action = 'alert.close' AND aggregate_id = '9'"
+                  + " ORDER BY id DESC LIMIT 1",
+              String.class);
+          // alert.close 默认 recordParams=true,params 列非空且包含 reason 字段
+          assertThat(params).isNotNull();
+          assertThat(params).contains("fix-after-rcal");
+        });
   }
 }

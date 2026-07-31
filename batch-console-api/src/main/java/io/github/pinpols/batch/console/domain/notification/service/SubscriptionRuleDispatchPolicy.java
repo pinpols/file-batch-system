@@ -48,9 +48,8 @@ final class SubscriptionRuleDispatchPolicy {
   boolean withinSendRateLimit(
       String tenantId, String channelCode, String channelType, String eventType) {
     try {
-      boolean allowed =
-          sendRateLimiter.tryAcquire(
-              "notify:send:" + tenantId + ":" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
+      boolean allowed = sendRateLimiter.tryAcquire(
+          "notify:send:" + tenantId + ":" + channelCode, MAX_SENDS_PER_CHANNEL_PER_MINUTE);
       if (!allowed) {
         recordDrop("channel_ratelimit");
         log.warn(
@@ -93,7 +92,9 @@ final class SubscriptionRuleDispatchPolicy {
           channelCode,
           eventType,
           ex.getMessage());
-      Counter.builder("notification.dedup.redis_fallback").register(meterRegistry).increment();
+      Counter.builder("notification.dedup.redis_fallback")
+          .register(meterRegistry)
+          .increment();
       return false;
     }
   }
@@ -105,19 +106,15 @@ final class SubscriptionRuleDispatchPolicy {
       String channelType,
       String eventType) {
     Map<String, Object> config = parseConfig(stringValue(rule, "config_json"));
-    String destination =
-        firstNonBlank(
-            stringValue(config, "url"),
-            stringValue(config, "to"),
-            stringValue(config, "phoneNumbers"));
+    String destination = firstNonBlank(
+        stringValue(config, "url"), stringValue(config, "to"), stringValue(config, "phoneNumbers"));
     if (destination == null) {
       return true;
     }
     try {
-      boolean allowed =
-          sendRateLimiter.tryAcquire(
-              "notify:dest:" + tenantId + ":" + Hashes.sha256Short(destination),
-              MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+      boolean allowed = sendRateLimiter.tryAcquire(
+          "notify:dest:" + tenantId + ":" + Hashes.sha256Short(destination),
+          MAX_SENDS_PER_DESTINATION_PER_MINUTE);
       if (!allowed) {
         recordDrop("dest_ratelimit");
         log.warn(
@@ -137,7 +134,9 @@ final class SubscriptionRuleDispatchPolicy {
           channelType,
           eventType,
           ex.getMessage());
-      Counter.builder("notification.ratelimit.redis_fallback").register(meterRegistry).increment();
+      Counter.builder("notification.ratelimit.redis_fallback")
+          .register(meterRegistry)
+          .increment();
       return true;
     }
   }

@@ -58,14 +58,13 @@ class PartitionReclaimUnitTest {
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.partitionLease()).thenReturn(props);
 
-    unit =
-        new PartitionReclaimUnit(
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            jobInstanceMapper,
-            outboxService,
-            governance);
+    unit = new PartitionReclaimUnit(
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        jobInstanceMapper,
+        outboxService,
+        governance);
   }
 
   @Test

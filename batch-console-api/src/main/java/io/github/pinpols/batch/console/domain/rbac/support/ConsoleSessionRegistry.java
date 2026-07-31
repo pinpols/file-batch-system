@@ -64,12 +64,11 @@ public class ConsoleSessionRegistry {
     // R-4.7：显式开 recordStats 让 Caffeine 的命中率 / 驱逐计数可观测；
     // expireAfterWrite + maximumSize 原有语义保留，运维可通过 actuator /
     // batch.console.session.* 指标判断容量是否需要调整。
-    this.localMirror =
-        Caffeine.newBuilder()
-            .expireAfterWrite(resolveTtl(securityProperties))
-            .maximumSize(100_000)
-            .recordStats()
-            .build();
+    this.localMirror = Caffeine.newBuilder()
+        .expireAfterWrite(resolveTtl(securityProperties))
+        .maximumSize(100_000)
+        .recordStats()
+        .build();
     registerCacheMetrics(meterRegistryProvider);
   }
 
@@ -80,11 +79,14 @@ public class ConsoleSessionRegistry {
     }
     // 基础计数 gauge；更完整的 CaffeineStats / tagged metrics 可后续接 micrometer-caffeine
     registry.gauge("batch.console.session.cache.size", localMirror, Cache::estimatedSize);
-    registry.gauge("batch.console.session.cache.hit_count", localMirror, c -> c.stats().hitCount());
+    registry.gauge(
+        "batch.console.session.cache.hit_count", localMirror, c -> c.stats().hitCount());
     registry.gauge(
         "batch.console.session.cache.miss_count", localMirror, c -> c.stats().missCount());
     registry.gauge(
-        "batch.console.session.cache.eviction_count", localMirror, c -> c.stats().evictionCount());
+        "batch.console.session.cache.eviction_count",
+        localMirror,
+        c -> c.stats().evictionCount());
   }
 
   public long nextSessionVersion(String username, String tenantId) {

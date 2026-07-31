@@ -69,18 +69,16 @@ class TaskTypeDescriptorAssemblyTest {
 
   @Test
   void collectsOnlyHandlersThatDeclareDescriptor() {
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg())
-            .register(
-                handlerWithDescriptor(
-                    "tenant_tx_import",
-                    SdkTaskTypeDescriptor.builder()
-                        .displayName("导入")
-                        .version("v1")
-                        .defaults(Map.of("batchSize", 500))
-                        .build()))
-            .register(plainHandler("tenant_tx_noop"))
-            .build();
+    BatchPlatformClient client = BatchPlatformClient.builder(cfg())
+        .register(handlerWithDescriptor(
+            "tenant_tx_import",
+            SdkTaskTypeDescriptor.builder()
+                .displayName("导入")
+                .version("v1")
+                .defaults(Map.of("batchSize", 500))
+                .build()))
+        .register(plainHandler("tenant_tx_noop"))
+        .build();
 
     List<SdkTaskTypeDescriptor> collected = client.collectDescriptors();
 
@@ -93,13 +91,11 @@ class TaskTypeDescriptorAssemblyTest {
   @Test
   void taskTypeOverridesDescriptorCode() {
     // descriptor 里写错 / 漏填 code,装配时一律以 handler.taskType() 为权威,保证派单路由一致
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg())
-            .register(
-                handlerWithDescriptor(
-                    "tenant_tx_export",
-                    SdkTaskTypeDescriptor.builder().code("WRONG_CODE").version("v2").build()))
-            .build();
+    BatchPlatformClient client = BatchPlatformClient.builder(cfg())
+        .register(handlerWithDescriptor(
+            "tenant_tx_export",
+            SdkTaskTypeDescriptor.builder().code("WRONG_CODE").version("v2").build()))
+        .build();
 
     List<SdkTaskTypeDescriptor> collected = client.collectDescriptors();
 

@@ -51,17 +51,15 @@ class BatchDayReplayServiceTest {
     jobInstanceMapper = mock(JobInstanceMapper.class);
     resultVersionMapper = mock(ResultVersionMapper.class);
     promoteService = mock(ResultVersionPromoteService.class);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    service =
-        new BatchDayReplayService(
-            sessionMapper,
-            entryMapper,
-            jobInstanceMapper,
-            resultVersionMapper,
-            promoteService,
-            dateTimeSupport);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    service = new BatchDayReplayService(
+        sessionMapper,
+        entryMapper,
+        jobInstanceMapper,
+        resultVersionMapper,
+        promoteService,
+        dateTimeSupport);
   }
 
   @Test
@@ -73,19 +71,17 @@ class BatchDayReplayServiceTest {
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4)))
         .thenReturn(sessionAt("t1", 7L, "RUNNING", "ALL_FAILED"));
 
-    BatchDayReplaySessionEntity result =
-        service.submit(
-            BatchDayReplaySubmitCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .scope("ALL_FAILED")
-                .resultPolicy("CREATE_NEW_VERSION")
-                .configVersionPolicy("USE_ORIGINAL_CONFIG")
-                .reason("upstream backfill")
-                .requestedBy("ops")
-                .autoApprove(true)
-                .build());
+    BatchDayReplaySessionEntity result = service.submit(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, 5, 4))
+        .scope("ALL_FAILED")
+        .resultPolicy("CREATE_NEW_VERSION")
+        .configVersionPolicy("USE_ORIGINAL_CONFIG")
+        .reason("upstream backfill")
+        .requestedBy("ops")
+        .autoApprove(true)
+        .build());
 
     assertThat(result.status()).isEqualTo("RUNNING");
     verify(entryMapper).insertBatch(anyList());
@@ -97,18 +93,16 @@ class BatchDayReplayServiceTest {
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
 
-    BatchDayReplayPreviewResponse result =
-        service.preview(
-            BatchDayReplaySubmitCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .scope("ALL_FAILED")
-                .resultPolicy("CREATE_NEW_VERSION")
-                .configVersionPolicy("USE_ORIGINAL_CONFIG")
-                .reason("upstream backfill")
-                .requestedBy("ops")
-                .build());
+    BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, 5, 4))
+        .scope("ALL_FAILED")
+        .resultPolicy("CREATE_NEW_VERSION")
+        .configVersionPolicy("USE_ORIGINAL_CONFIG")
+        .reason("upstream backfill")
+        .requestedBy("ops")
+        .build());
 
     assertThat(result.totalCount()).isEqualTo(2);
     assertThat(result.entries())
@@ -127,47 +121,38 @@ class BatchDayReplayServiceTest {
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(entryMapper.selectAssetPartitionImpacts(eq("t1"), any()))
-        .thenReturn(
-            List.of(
-                Map.of(
-                    "business_key", "job:JOB_A:2026-05-04",
-                    "asset_code", "JOB_A",
-                    "partition_key", "2026-05-04",
-                    "current_result_version_id", 11L,
-                    "freshness_status", "EFFECTIVE")));
+        .thenReturn(List.of(Map.of(
+            "business_key", "job:JOB_A:2026-05-04",
+            "asset_code", "JOB_A",
+            "partition_key", "2026-05-04",
+            "current_result_version_id", 11L,
+            "freshness_status", "EFFECTIVE")));
     when(entryMapper.selectDispatchImpacts(eq("t1"), any()))
-        .thenReturn(
-            List.of(
-                Map.of(
-                    "source_instance_id", 101L,
-                    "record_count", 3L,
-                    "sent_count", 2L,
-                    "failed_count", 1L,
-                    "pending_receipt_count", 1L)));
+        .thenReturn(List.of(Map.of(
+            "source_instance_id", 101L,
+            "record_count", 3L,
+            "sent_count", 2L,
+            "failed_count", 1L,
+            "pending_receipt_count", 1L)));
 
-    BatchDayReplayPreviewResponse result =
-        service.preview(
-            BatchDayReplaySubmitCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .scope("ALL_FAILED")
-                .reason("upstream backfill")
-                .requestedBy("ops")
-                .build());
+    BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, 5, 4))
+        .scope("ALL_FAILED")
+        .reason("upstream backfill")
+        .requestedBy("ops")
+        .build());
 
     assertThat(result.assetPartitionImpacts())
         .singleElement()
         .extracting(BatchDayReplayPreviewResponse.AssetPartitionImpact::assetCode)
         .isEqualTo("JOB_A");
-    assertThat(result.dispatchImpacts())
-        .singleElement()
-        .satisfies(
-            impact -> {
-              assertThat(impact.sourceInstanceId()).isEqualTo(101L);
-              assertThat(impact.recordCount()).isEqualTo(3L);
-              assertThat(impact.failedCount()).isEqualTo(1L);
-            });
+    assertThat(result.dispatchImpacts()).singleElement().satisfies(impact -> {
+      assertThat(impact.sourceInstanceId()).isEqualTo(101L);
+      assertThat(impact.recordCount()).isEqualTo(3L);
+      assertThat(impact.failedCount()).isEqualTo(1L);
+    });
   }
 
   @Test
@@ -176,16 +161,14 @@ class BatchDayReplayServiceTest {
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
         .thenReturn(List.of());
 
-    BatchDayReplayPreviewResponse result =
-        service.preview(
-            BatchDayReplaySubmitCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .scope("ALL_FAILED")
-                .reason("precheck")
-                .requestedBy("ops")
-                .build());
+    BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, 5, 4))
+        .scope("ALL_FAILED")
+        .reason("precheck")
+        .requestedBy("ops")
+        .build());
 
     assertThat(result.totalCount()).isZero();
     assertThat(result.warnings()).containsExactly("NO_CANDIDATES");
@@ -199,18 +182,15 @@ class BatchDayReplayServiceTest {
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
         .thenReturn(List.of());
 
-    assertThatThrownBy(
-            () ->
-                service.submit(
-                    BatchDayReplaySubmitCommand.builder()
-                        .tenantId("t1")
-                        .calendarCode("CAL")
-                        .bizDate(LocalDate.of(2026, 5, 4))
-                        .scope("ALL_FAILED")
-                        .reason("...")
-                        .requestedBy("ops")
-                        .autoApprove(true)
-                        .build()))
+    assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 4))
+            .scope("ALL_FAILED")
+            .reason("...")
+            .requestedBy("ops")
+            .autoApprove(true)
+            .build()))
         .isInstanceOf(BizException.class);
   }
 
@@ -222,35 +202,29 @@ class BatchDayReplayServiceTest {
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class)))
         .thenThrow(new DuplicateKeyException("uk_replay_session_active"));
 
-    assertThatThrownBy(
-            () ->
-                service.submit(
-                    BatchDayReplaySubmitCommand.builder()
-                        .tenantId("t1")
-                        .calendarCode("CAL")
-                        .bizDate(LocalDate.of(2026, 5, 4))
-                        .scope("ALL_FAILED")
-                        .reason("...")
-                        .requestedBy("ops")
-                        .autoApprove(true)
-                        .build()))
+    assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 4))
+            .scope("ALL_FAILED")
+            .reason("...")
+            .requestedBy("ops")
+            .autoApprove(true)
+            .build()))
         .isInstanceOf(BizException.class);
   }
 
   @Test
   void submitSubsetWithoutJobCodesIsRejected() {
-    assertThatThrownBy(
-            () ->
-                service.submit(
-                    BatchDayReplaySubmitCommand.builder()
-                        .tenantId("t1")
-                        .calendarCode("CAL")
-                        .bizDate(LocalDate.of(2026, 5, 4))
-                        .scope("SUBSET_JOB_CODES")
-                        .reason("...")
-                        .requestedBy("ops")
-                        .autoApprove(true)
-                        .build()))
+    assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 4))
+            .scope("SUBSET_JOB_CODES")
+            .reason("...")
+            .requestedBy("ops")
+            .autoApprove(true)
+            .build()))
         .isInstanceOf(BizException.class);
   }
 
@@ -258,26 +232,23 @@ class BatchDayReplayServiceTest {
   void submitOutputsOnlyMaterializesFromVersionIds() {
     // R7-A3-P1: materializeOutputsOnlyEntries 改用 selectByIds 批量预取替代 N+1。
     when(resultVersionMapper.selectByIds(eq("t1"), any()))
-        .thenReturn(
-            List.of(
-                resultVersion(11L, "job:JOB_A:2026-05-04", 100L),
-                resultVersion(12L, "job:JOB_B:2026-05-04", 101L)));
+        .thenReturn(List.of(
+            resultVersion(11L, "job:JOB_A:2026-05-04", 100L),
+            resultVersion(12L, "job:JOB_B:2026-05-04", 101L)));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4)))
         .thenReturn(sessionAt("t1", 5L, "RUNNING", "OUTPUTS_ONLY"));
 
-    BatchDayReplaySessionEntity result =
-        service.submit(
-            BatchDayReplaySubmitCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .scope("OUTPUTS_ONLY")
-                .versionIds(List.of(11L, 12L))
-                .reason("regulatory restate")
-                .requestedBy("ops")
-                .autoApprove(true)
-                .build());
+    BatchDayReplaySessionEntity result = service.submit(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, 5, 4))
+        .scope("OUTPUTS_ONLY")
+        .versionIds(List.of(11L, 12L))
+        .reason("regulatory restate")
+        .requestedBy("ops")
+        .autoApprove(true)
+        .build());
 
     assertThat(result.scope()).isEqualTo("OUTPUTS_ONLY");
     verify(entryMapper).insertBatch(anyList());
@@ -290,25 +261,20 @@ class BatchDayReplayServiceTest {
     when(resultVersionMapper.selectByIds(eq("t1"), any()))
         .thenReturn(List.of(resultVersion(11L, "job:JOB_A:2026-05-04", 100L)));
 
-    BatchDayReplayPreviewResponse result =
-        service.preview(
-            BatchDayReplaySubmitCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .scope("OUTPUTS_ONLY")
-                .versionIds(List.of(11L))
-                .reason("regulatory restate")
-                .requestedBy("ops")
-                .build());
+    BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, 5, 4))
+        .scope("OUTPUTS_ONLY")
+        .versionIds(List.of(11L))
+        .reason("regulatory restate")
+        .requestedBy("ops")
+        .build());
 
-    assertThat(result.entries())
-        .singleElement()
-        .satisfies(
-            entry -> {
-              assertThat(entry.action()).isEqualTo("PROMOTE_RESULT_VERSION");
-              assertThat(entry.resultVersionId()).isEqualTo(11L);
-            });
+    assertThat(result.entries()).singleElement().satisfies(entry -> {
+      assertThat(entry.action()).isEqualTo("PROMOTE_RESULT_VERSION");
+      assertThat(entry.resultVersionId()).isEqualTo(11L);
+    });
     assertThat(result.resultVersionImpacts())
         .singleElement()
         .extracting(BatchDayReplayPreviewResponse.ResultVersionImpact::action)
@@ -367,24 +333,22 @@ class BatchDayReplayServiceTest {
     when(sessionMapper.selectById("t1", 5L))
         .thenReturn(sessionAt("t1", 5L, "RUNNING", "OUTPUTS_ONLY"))
         .thenReturn(sessionAt("t1", 5L, "SUCCEEDED", "OUTPUTS_ONLY"));
-    BatchDayReplayEntryEntity e1 =
-        BatchDayReplayEntryEntity.builder()
-            .id(1L)
-            .sessionId(5L)
-            .tenantId("t1")
-            .jobCode("JOB_A")
-            .resultVersionId(11L)
-            .status("PENDING")
-            .build();
-    BatchDayReplayEntryEntity e2 =
-        BatchDayReplayEntryEntity.builder()
-            .id(2L)
-            .sessionId(5L)
-            .tenantId("t1")
-            .jobCode("JOB_B")
-            .resultVersionId(12L)
-            .status("PENDING")
-            .build();
+    BatchDayReplayEntryEntity e1 = BatchDayReplayEntryEntity.builder()
+        .id(1L)
+        .sessionId(5L)
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .resultVersionId(11L)
+        .status("PENDING")
+        .build();
+    BatchDayReplayEntryEntity e2 = BatchDayReplayEntryEntity.builder()
+        .id(2L)
+        .sessionId(5L)
+        .tenantId("t1")
+        .jobCode("JOB_B")
+        .resultVersionId(12L)
+        .status("PENDING")
+        .build();
     when(entryMapper.selectBySessionAndStatus(eq(5L), eq("PENDING"), anyInt()))
         .thenReturn(List.of(e1, e2));
 

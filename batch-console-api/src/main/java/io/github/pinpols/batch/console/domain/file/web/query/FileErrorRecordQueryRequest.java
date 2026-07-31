@@ -10,7 +10,9 @@ import lombok.EqualsAndHashCode;
 @Data
 public class FileErrorRecordQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
+
   private Long fileId;
 
   @Size(max = 64, message = "errorStage too long (max 64)")

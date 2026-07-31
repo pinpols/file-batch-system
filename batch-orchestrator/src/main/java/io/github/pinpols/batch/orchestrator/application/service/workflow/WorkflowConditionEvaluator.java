@@ -73,7 +73,8 @@ public class WorkflowConditionEvaluator {
       return isTruthy(value);
     }
     String leftToken = expression.substring(0, operator.index()).trim();
-    String rightToken = expression.substring(operator.index() + operator.symbol().length()).trim();
+    String rightToken =
+        expression.substring(operator.index() + operator.symbol().length()).trim();
     Object leftValue = resolveLeftOperand(leftToken, payload);
     return switch (operator.type()) {
       case EQ -> compareEquals(leftValue, resolveRightOperand(rightToken, payload));
@@ -86,9 +87,9 @@ public class WorkflowConditionEvaluator {
       case NOT_IN -> evaluateIn(leftValue, rightToken, payload, true);
       case CONTAINS -> evaluateContains(leftValue, resolveRightOperand(rightToken, payload));
       case STARTS_WITH ->
-          stringify(leftValue).startsWith(stringify(resolveRightOperand(rightToken, payload)));
+        stringify(leftValue).startsWith(stringify(resolveRightOperand(rightToken, payload)));
       case ENDS_WITH ->
-          stringify(leftValue).endsWith(stringify(resolveRightOperand(rightToken, payload)));
+        stringify(leftValue).endsWith(stringify(resolveRightOperand(rightToken, payload)));
     };
   }
 

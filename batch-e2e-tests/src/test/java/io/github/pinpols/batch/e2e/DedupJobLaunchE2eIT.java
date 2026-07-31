@@ -55,9 +55,11 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   /**
    * Sequential duplicate: launch once, then re-launch with a different request_id but the same
@@ -66,9 +68,8 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
   @Test
   void sequentialDuplicateLaunchIsIdempotent() {
     // Seed: job_definition + workflow_definition + first trigger_request
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     // Insert a second trigger_request that shares the same dedup_key but uses a different
     // request_id
@@ -79,41 +80,33 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
             tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
             request_status, trace_id
         ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup2')
-        """,
-        TENANT,
-        requestId2,
-        TriggerType.API.code(),
-        seed.jobCode(),
-        seed.dedupKey());
+        """, TENANT, requestId2, TriggerType.API.code(), seed.jobCode(), seed.dedupKey());
 
     // First launch — creates the job_instance
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-dedup-seq-1",
-            Map.of()));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-dedup-seq-1",
+        Map.of()));
 
     // Second launch with same dedup_key (different request_id) — must be treated as duplicate
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            requestId2,
-            "e2e-tr-dedup-seq-2",
-            Map.of()));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        requestId2,
+        "e2e-tr-dedup-seq-2",
+        Map.of()));
 
-    Long instanceCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            Long.class,
-            TENANT,
-            seed.dedupKey());
+    Long instanceCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        Long.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(instanceCount).isEqualTo(1L);
   }
 
@@ -125,9 +118,8 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
   @Test
   void concurrentDuplicateLaunchProducesExactlyOneInstance() throws Exception {
     // Seed: job_definition + workflow_definition + two trigger_requests sharing the same dedup_key
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
     jdbcTemplate.update(
@@ -136,12 +128,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
             tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
             request_status, trace_id
         ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup-c2')
-        """,
-        TENANT,
-        requestId2,
-        TriggerType.API.code(),
-        seed.jobCode(),
-        seed.dedupKey());
+        """, TENANT, requestId2, TriggerType.API.code(), seed.jobCode(), seed.dedupKey());
 
     CountDownLatch barrier = new CountDownLatch(2);
     ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -149,57 +136,51 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
     AtomicInteger errorCount = new AtomicInteger(0);
 
     try {
-      Future<?> f1 =
-          executor.submit(
-              () -> {
-                barrier.countDown();
-                try {
-                  barrier.await();
-                } catch (InterruptedException e) {
-                  Thread.currentThread().interrupt();
-                  return;
-                }
-                try {
-                  launchService.launch(
-                      new LaunchRequest(
-                          TENANT,
-                          seed.jobCode(),
-                          LocalDate.of(2026, 1, 15),
-                          TriggerType.API,
-                          seed.requestId(),
-                          "e2e-tr-dedup-con-1",
-                          Map.of()));
-                  successCount.incrementAndGet();
-                } catch (Exception e) {
-                  errorCount.incrementAndGet();
-                }
-              });
+      Future<?> f1 = executor.submit(() -> {
+        barrier.countDown();
+        try {
+          barrier.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+        try {
+          launchService.launch(new LaunchRequest(
+              TENANT,
+              seed.jobCode(),
+              LocalDate.of(2026, 1, 15),
+              TriggerType.API,
+              seed.requestId(),
+              "e2e-tr-dedup-con-1",
+              Map.of()));
+          successCount.incrementAndGet();
+        } catch (Exception e) {
+          errorCount.incrementAndGet();
+        }
+      });
 
-      Future<?> f2 =
-          executor.submit(
-              () -> {
-                barrier.countDown();
-                try {
-                  barrier.await();
-                } catch (InterruptedException e) {
-                  Thread.currentThread().interrupt();
-                  return;
-                }
-                try {
-                  launchService.launch(
-                      new LaunchRequest(
-                          TENANT,
-                          seed.jobCode(),
-                          LocalDate.of(2026, 1, 15),
-                          TriggerType.API,
-                          requestId2,
-                          "e2e-tr-dedup-con-2",
-                          Map.of()));
-                  successCount.incrementAndGet();
-                } catch (Exception e) {
-                  errorCount.incrementAndGet();
-                }
-              });
+      Future<?> f2 = executor.submit(() -> {
+        barrier.countDown();
+        try {
+          barrier.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+        try {
+          launchService.launch(new LaunchRequest(
+              TENANT,
+              seed.jobCode(),
+              LocalDate.of(2026, 1, 15),
+              TriggerType.API,
+              requestId2,
+              "e2e-tr-dedup-con-2",
+              Map.of()));
+          successCount.incrementAndGet();
+        } catch (Exception e) {
+          errorCount.incrementAndGet();
+        }
+      });
 
       f1.get();
       f2.get();
@@ -211,26 +192,20 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
     assertThat(successCount.get() + errorCount.get()).isEqualTo(2);
 
     // Exactly one job_instance must exist under this dedup_key
-    Long instanceCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            Long.class,
-            TENANT,
-            seed.dedupKey());
+    Long instanceCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        Long.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(instanceCount).isEqualTo(1L);
 
     // Verify both trigger_requests were updated (one LAUNCHED, one DUPLICATE)
     List<String> statuses =
-        jdbcTemplate.queryForList(
-            """
+        jdbcTemplate.queryForList("""
             select request_status from batch.trigger_request
             where tenant_id = ? and job_code = ? and dedup_key = ?
             order by request_status
-            """,
-            String.class,
-            TENANT,
-            seed.jobCode(),
-            seed.dedupKey());
+            """, String.class, TENANT, seed.jobCode(), seed.dedupKey());
     assertThat(statuses).containsExactlyInAnyOrder("DUPLICATE", "LAUNCHED");
   }
 }

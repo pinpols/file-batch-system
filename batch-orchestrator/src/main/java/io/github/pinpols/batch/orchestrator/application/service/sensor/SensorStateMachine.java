@@ -72,9 +72,8 @@ public class SensorStateMachine {
       log.warn("WAIT probe skipped: workflow_run id={} not found", nodeRun.getWorkflowRunId());
       return;
     }
-    WorkflowNodeEntity node =
-        nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
-            wfRun.getWorkflowDefinitionId(), nodeRun.getNodeCode());
+    WorkflowNodeEntity node = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+        wfRun.getWorkflowDefinitionId(), nodeRun.getNodeCode());
     if (node == null || !"WAIT".equals(node.getNodeType())) {
       log.warn(
           "WAIT probe skipped: node definition missing or wrong type wfDefId={} code={}",
@@ -125,13 +124,12 @@ public class SensorStateMachine {
     }
 
     Duration remaining = Duration.ofSeconds(cfg.timeoutSeconds).minus(elapsed);
-    SensorContext ctx =
-        new SensorContext(
-            wfRun.getTenantId(),
-            nodeRun.getId(),
-            cfg.sensorSpec,
-            buildWorkflowRunVars(wfRun),
-            remaining);
+    SensorContext ctx = new SensorContext(
+        wfRun.getTenantId(),
+        nodeRun.getId(),
+        cfg.sensorSpec,
+        buildWorkflowRunVars(wfRun),
+        remaining);
     SensorProbeResult result;
     try {
       result = policy.probe(ctx);
@@ -141,12 +139,11 @@ public class SensorStateMachine {
           nodeRun.getId(),
           cfg.sensorType,
           e.toString());
-      result =
-          SensorProbeResult.error(
-              "error.workflow.sensor_probe_failed",
-              List.of(
-                  cfg.sensorType.code(),
-                  Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
+      result = SensorProbeResult.error(
+          "error.workflow.sensor_probe_failed",
+          List.of(
+              cfg.sensorType.code(),
+              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
 
     apply(wfRun, nodeRun, cfg, result, now);
@@ -199,13 +196,12 @@ public class SensorStateMachine {
       WorkflowNodeRunEntity nodeRun,
       Instant now,
       Map<String, Object> output) {
-    NodeRunOutcome outcome =
-        NodeRunOutcome.builder()
-            .success(true)
-            .startedAt(nodeRun.getStartedAt())
-            .finishedAt(now)
-            .outputJson(serializeOutput(output))
-            .build();
+    NodeRunOutcome outcome = NodeRunOutcome.builder()
+        .success(true)
+        .startedAt(nodeRun.getStartedAt())
+        .finishedAt(now)
+        .outputJson(serializeOutput(output))
+        .build();
     NodeRunKey key = new NodeRunKey(wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(key, outcome));
     // 探测状态归零（之后归档/审计读到的快照不带遗留 next_probe_at）
@@ -220,15 +216,14 @@ public class SensorStateMachine {
       Instant now,
       String errorKey,
       List<String> errorArgs) {
-    NodeRunOutcome outcome =
-        NodeRunOutcome.builder()
-            .success(false)
-            .errorCode("SENSOR_FAIL")
-            .errorKey(errorKey)
-            .errorArgs(serializeArgs(errorArgs))
-            .startedAt(nodeRun.getStartedAt())
-            .finishedAt(now)
-            .build();
+    NodeRunOutcome outcome = NodeRunOutcome.builder()
+        .success(false)
+        .errorCode("SENSOR_FAIL")
+        .errorKey(errorKey)
+        .errorArgs(serializeArgs(errorArgs))
+        .startedAt(nodeRun.getStartedAt())
+        .finishedAt(now)
+        .build();
     NodeRunKey key = new NodeRunKey(wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(key, outcome));
     nodeRunMapper.updateSensorProbeState(
@@ -256,9 +251,8 @@ public class SensorStateMachine {
           "advanceDownstream skipped: workflow_run={} has no related job_instance", wfRun.getId());
       return;
     }
-    List<DagNodeResolution> nextNodes =
-        workflowDagService.resolveNextNodes(
-            wfRun.getWorkflowDefinitionId(), currentNodeCode, success, null);
+    List<DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
+        wfRun.getWorkflowDefinitionId(), currentNodeCode, success, null);
     if (nextNodes == null || nextNodes.isEmpty()) {
       return;
     }

@@ -38,33 +38,31 @@ class ConsoleAtomicRuntimeStatusControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAtomicRuntimeStatusController(runtimeStatusService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAtomicRuntimeStatusController(runtimeStatusService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
   void shouldReturnRuntimeStatus_whenAtomicWorkerAvailable() throws Exception {
-    ConsoleAtomicRuntimeStatusResponse resp =
-        new ConsoleAtomicRuntimeStatusResponse(
+    ConsoleAtomicRuntimeStatusResponse resp = new ConsoleAtomicRuntimeStatusResponse(
+        true,
+        null,
+        "atomic-node-1",
+        "ATOMIC",
+        Map.of("enabled", true, "commandWhitelistSize", 2),
+        Map.of("enabled", true, "dialect", "PostgreSQL"),
+        Map.of(
+            "enabled",
             true,
-            null,
-            "atomic-node-1",
-            "ATOMIC",
-            Map.of("enabled", true, "commandWhitelistSize", 2),
-            Map.of("enabled", true, "dialect", "PostgreSQL"),
-            Map.of(
-                "enabled",
-                true,
-                "enforceAllowlist",
-                true,
-                "enforceAllowlistSource",
-                "prod-default",
-                "allowlistHostsSize",
-                3),
-            Map.of("enabled", true, "allowedSchemasSize", 1));
+            "enforceAllowlist",
+            true,
+            "enforceAllowlistSource",
+            "prod-default",
+            "allowlistHostsSize",
+            3),
+        Map.of("enabled", true, "allowedSchemasSize", 1));
     when(runtimeStatusService.fetch()).thenReturn(resp);
 
     mockMvc
@@ -79,9 +77,8 @@ class ConsoleAtomicRuntimeStatusControllerTest {
   @Test
   void shouldReturnUnavailable_whenAtomicWorkerReverseChannelDisabled() throws Exception {
     when(runtimeStatusService.fetch())
-        .thenReturn(
-            ConsoleAtomicRuntimeStatusResponse.unavailable(
-                "batch.console.atomic-worker.enabled=false"));
+        .thenReturn(ConsoleAtomicRuntimeStatusResponse.unavailable(
+            "batch.console.atomic-worker.enabled=false"));
 
     mockMvc
         .perform(get("/api/console/ops/atomic-runtime-status"))

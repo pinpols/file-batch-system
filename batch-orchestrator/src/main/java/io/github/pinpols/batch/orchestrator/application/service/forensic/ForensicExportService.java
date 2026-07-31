@@ -129,24 +129,22 @@ public class ForensicExportService {
       ForensicExportRequest request, String exportId, String format, Instant requestedAt) {
     String scopeJson =
         JsonUtils.toJson(List.of("job_instances", "batch_day_operation_audits", "manifest"));
-    String jobCodesJson =
-        request.jobCodes() == null || request.jobCodes().isEmpty()
-            ? null
-            : JsonUtils.toJson(request.jobCodes());
-    forensicExportLogMapper.insert(
-        ForensicExportLogEntity.builder()
-            .tenantId(request.tenantId())
-            .exportId(exportId)
-            .bizDateFrom(request.bizDateFrom())
-            .bizDateTo(request.bizDateTo())
-            .jobCodesJson(jobCodesJson)
-            .scopeJson(scopeJson)
-            .exportFormat(format)
-            .status("PROCESSING")
-            .requestedBy(Texts.hasText(request.requestedBy()) ? request.requestedBy() : "UNKNOWN")
-            .requestedAt(requestedAt)
-            .traceId(request.traceId())
-            .build());
+    String jobCodesJson = request.jobCodes() == null || request.jobCodes().isEmpty()
+        ? null
+        : JsonUtils.toJson(request.jobCodes());
+    forensicExportLogMapper.insert(ForensicExportLogEntity.builder()
+        .tenantId(request.tenantId())
+        .exportId(exportId)
+        .bizDateFrom(request.bizDateFrom())
+        .bizDateTo(request.bizDateTo())
+        .jobCodesJson(jobCodesJson)
+        .scopeJson(scopeJson)
+        .exportFormat(format)
+        .status("PROCESSING")
+        .requestedBy(Texts.hasText(request.requestedBy()) ? request.requestedBy() : "UNKNOWN")
+        .requestedAt(requestedAt)
+        .traceId(request.traceId())
+        .build());
   }
 
   private void validate(ForensicExportRequest request) {
@@ -179,13 +177,12 @@ public class ForensicExportService {
         ZipOutputStream zip = new ZipOutputStream(digesting, StandardCharsets.UTF_8)) {
 
       // 1) job_instances
-      List<JobInstanceEntity> instances =
-          jobInstanceMapper.selectForensicByBizDateRange(
-              request.tenantId(),
-              request.bizDateFrom(),
-              request.bizDateTo(),
-              request.jobCodes(),
-              properties.getInstanceRowCap());
+      List<JobInstanceEntity> instances = jobInstanceMapper.selectForensicByBizDateRange(
+          request.tenantId(),
+          request.bizDateFrom(),
+          request.bizDateTo(),
+          request.jobCodes(),
+          properties.getInstanceRowCap());
       writeEntry(zip, "job-instances.json", JsonUtils.toJson(instances));
       rowCounts.put("job_instances", instances.size());
 
@@ -200,9 +197,8 @@ public class ForensicExportService {
         }
         // calendar_code 在 v0.1 不参与过滤 — 同 tenant 同 bizDate 下所有 calendar 的治理动作一并取
         // limit 1000 / 天足以覆盖正常运维节奏；总量再受 auditRowCap 保护
-        allAudits.addAll(
-            batchDayOperationAuditMapper.selectByCalendarBizDate(
-                request.tenantId(), null, cursor, Math.min(1000, remaining)));
+        allAudits.addAll(batchDayOperationAuditMapper.selectByCalendarBizDate(
+            request.tenantId(), null, cursor, Math.min(1000, remaining)));
       }
       writeEntry(zip, "batch-day-operation-audits.json", JsonUtils.toJson(allAudits));
       rowCounts.put("batch_day_operation_audits", allAudits.size());

@@ -41,15 +41,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class MaintenanceModeFilter extends OncePerRequestFilter {
 
   /** 维护期间始终放行的路径(健康检查 + 维护状态本身 + 登录后探活 + admin 热更新端点)。 */
-  private static final Set<String> ALWAYS_ALLOWED =
-      Set.of(
-          "/actuator/**",
-          // Alertmanager 出口:维护期告警仍需送达(与 actuator 同属内网基础设施端点,非租户业务写)。
-          "/internal/am-notify/**",
-          "/api/console/auth/check",
-          "/api/console/auth/logout",
-          "/api/console/system/maintenance",
-          "/api/console/admin/system/maintenance");
+  private static final Set<String> ALWAYS_ALLOWED = Set.of(
+      "/actuator/**",
+      // Alertmanager 出口:维护期告警仍需送达(与 actuator 同属内网基础设施端点,非租户业务写)。
+      "/internal/am-notify/**",
+      "/api/console/auth/check",
+      "/api/console/auth/logout",
+      "/api/console/system/maintenance",
+      "/api/console/admin/system/maintenance");
 
   private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 

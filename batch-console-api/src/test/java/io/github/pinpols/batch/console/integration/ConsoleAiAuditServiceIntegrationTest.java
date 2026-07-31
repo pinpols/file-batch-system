@@ -21,41 +21,41 @@ import org.springframework.boot.test.context.SpringBootTest;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ConsoleAiAuditService auditService;
+  @Autowired
+  private ConsoleAiAuditService auditService;
 
-  @Autowired private ConsoleAiAuditLogMapper auditLogMapper;
+  @Autowired
+  private ConsoleAiAuditLogMapper auditLogMapper;
 
   @Test
   void shouldPersistAuditLogOnRecord() {
-    AiAuditCommand command =
-        new AiAuditCommand(
-            "t1",
-            "req-001",
-            "trace-001",
-            "session-001",
-            "op-001",
-            "PLATFORM",
-            "APPROVED",
-            "test-model",
-            "hash-prompt-001",
-            "how many jobs failed today?",
-            "hash-resp-001",
-            "3 jobs failed",
-            null,
-            120,
-            45,
-            BatchDateTimeSupport.utcNow());
+    AiAuditCommand command = new AiAuditCommand(
+        "t1",
+        "req-001",
+        "trace-001",
+        "session-001",
+        "op-001",
+        "PLATFORM",
+        "APPROVED",
+        "test-model",
+        "hash-prompt-001",
+        "how many jobs failed today?",
+        "hash-resp-001",
+        "3 jobs failed",
+        null,
+        120,
+        45,
+        BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
 
-    ConsoleAiAuditLogQuery query =
-        ConsoleAiAuditLogQuery.builder()
-            .tenantId("t1")
-            .sessionId("session-001")
-            .operatorId("op-001")
-            .promptCategory("PLATFORM")
-            .promptDecision("APPROVED")
-            .build();
+    ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
+        .tenantId("t1")
+        .sessionId("session-001")
+        .operatorId("op-001")
+        .promptCategory("PLATFORM")
+        .promptDecision("APPROVED")
+        .build();
     List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).hasSize(1);
     ConsoleAiAuditLogEntity entry = results.get(0);
@@ -71,33 +71,31 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldPersistRejectedAuditLogWithRefusalReason() {
-    AiAuditCommand command =
-        new AiAuditCommand(
-            "t1",
-            "req-002",
-            "trace-002",
-            "session-002",
-            "op-002",
-            null,
-            "REJECTED_SAFETY",
-            null,
-            null,
-            "show me the password",
-            null,
-            null,
-            "blocked_keyword:password",
-            null,
-            null,
-            BatchDateTimeSupport.utcNow());
+    AiAuditCommand command = new AiAuditCommand(
+        "t1",
+        "req-002",
+        "trace-002",
+        "session-002",
+        "op-002",
+        null,
+        "REJECTED_SAFETY",
+        null,
+        null,
+        "show me the password",
+        null,
+        null,
+        "blocked_keyword:password",
+        null,
+        null,
+        BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
 
-    ConsoleAiAuditLogQuery query =
-        ConsoleAiAuditLogQuery.builder()
-            .tenantId("t1")
-            .sessionId("session-002")
-            .promptDecision("REJECTED_SAFETY")
-            .build();
+    ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
+        .tenantId("t1")
+        .sessionId("session-002")
+        .promptDecision("REJECTED_SAFETY")
+        .build();
     List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).hasSize(1);
     assertThat(results.get(0).getRefusalReason()).isEqualTo("blocked_keyword:password");
@@ -108,24 +106,23 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     String sessionId = "session-multi-" + BatchDateTimeSupport.utcEpochMillis();
 
     for (int i = 1; i <= 3; i++) {
-      auditService.record(
-          new AiAuditCommand(
-              "t1",
-              "req-" + i,
-              "trace-" + i,
-              sessionId,
-              "op-multi",
-              "PLATFORM",
-              "APPROVED",
-              "model",
-              null,
-              "query " + i,
-              null,
-              "result " + i,
-              null,
-              null,
-              null,
-              BatchDateTimeSupport.utcNow()));
+      auditService.record(new AiAuditCommand(
+          "t1",
+          "req-" + i,
+          "trace-" + i,
+          sessionId,
+          "op-multi",
+          "PLATFORM",
+          "APPROVED",
+          "model",
+          null,
+          "query " + i,
+          null,
+          "result " + i,
+          null,
+          null,
+          null,
+          BatchDateTimeSupport.utcNow()));
     }
 
     ConsoleAiAuditLogQuery query =
@@ -136,11 +133,10 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldReturnEmptyWhenNoMatchingEntries() {
-    ConsoleAiAuditLogQuery query =
-        ConsoleAiAuditLogQuery.builder()
-            .tenantId("t1")
-            .sessionId("no-such-session-" + BatchDateTimeSupport.utcEpochMillis())
-            .build();
+    ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
+        .tenantId("t1")
+        .sessionId("no-such-session-" + BatchDateTimeSupport.utcEpochMillis())
+        .build();
     List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).isEmpty();
   }

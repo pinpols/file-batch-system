@@ -41,12 +41,12 @@ class WorkflowDesignLockServiceTest {
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   private StringRedisTemplate redisTemplate;
 
-  @Mock private ValueOperations<String, String> valueOps;
+  @Mock
+  private ValueOperations<String, String> valueOps;
 
-  private final ObjectMapper objectMapper =
-      new ObjectMapper()
-          .registerModule(new JavaTimeModule())
-          .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+  private final ObjectMapper objectMapper = new ObjectMapper()
+      .registerModule(new JavaTimeModule())
+      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
   private final Instant fixedNow = Instant.parse("2026-06-04T08:00:00Z");
   private final Clock fixedClock = Clock.fixed(fixedNow, ZoneId.of("UTC"));

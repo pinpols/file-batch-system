@@ -95,15 +95,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
     ExportDataPlugin.DetailPage page;
     if (resuming) {
-      page =
-          ctx.dataPlugin()
-              .loadDetailPage(
-                  ctx.dataCtx(), batchIdLong, ctx.pageSize(), checkpoint.resumeCursor());
+      page = ctx.dataPlugin()
+          .loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), checkpoint.resumeCursor());
     } else {
-      page =
-          preFetchedFirstPage != null
-              ? preFetchedFirstPage
-              : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+      page = preFetchedFirstPage != null
+          ? preFetchedFirstPage
+          : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
     }
     int pageNo = 0;
     while (true) {
@@ -133,10 +130,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         break;
       }
       if (++pageNo >= DEFAULT_MAX_PAGES) {
-        throw new IllegalStateException(
-            "export page iteration exceeded MAX_PAGES="
-                + DEFAULT_MAX_PAGES
-                + "; data plugin likely returning stale cursor");
+        throw new IllegalStateException("export page iteration exceeded MAX_PAGES="
+            + DEFAULT_MAX_PAGES
+            + "; data plugin likely returning stale cursor");
       }
       page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
     }
@@ -219,9 +215,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
             "fixed-width",
             templateFixedWidthColumns(dataCtx.templateConfig()),
             dataPlugin.describeFixedWidthColumns(dataCtx, batch),
-            key ->
-                new ColumnLayout(
-                    key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' ')));
+            key -> new ColumnLayout(
+                key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' ')));
   }
 
   /**
@@ -234,10 +229,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       return enforceMaxColumns(spec.configured(), maxColumns, spec.labelTag() + "-template");
     }
     if (!spec.pluginColumns().isEmpty()) {
-      List<ColumnLayout> fromPlugin =
-          spec.pluginColumns().stream()
-              .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
-              .toList();
+      List<ColumnLayout> fromPlugin = spec.pluginColumns().stream()
+          .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
+          .toList();
       return enforceMaxColumns(fromPlugin, maxColumns, spec.labelTag() + "-plugin");
     }
     if (firstPage == null || firstPage.isEmpty()) {
@@ -264,9 +258,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (templateConfig == null || templateConfig.isEmpty()) {
       return DEFAULT_MAX_COLUMNS;
     }
-    Integer direct =
-        integerValue(
-            firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
+    Integer direct = integerValue(
+        firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
     if (direct != null && direct > 0) {
       return direct;
     }
@@ -282,14 +275,13 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   /** A-3.12：列数超上限立即 fail-fast，避免后续 StringBuilder / workbook 爆内存。 */
   protected <T> List<T> enforceMaxColumns(List<T> columns, int maxColumns, String source) {
     if (columns.size() > maxColumns) {
-      throw new IllegalArgumentException(
-          "export column count "
-              + columns.size()
-              + " exceeds max_columns="
-              + maxColumns
-              + " (source="
-              + source
-              + "); declare template.max_columns to raise the limit deliberately");
+      throw new IllegalArgumentException("export column count "
+          + columns.size()
+          + " exceeds max_columns="
+          + maxColumns
+          + " (source="
+          + source
+          + "); declare template.max_columns to raise the limit deliberately");
     }
     return columns;
   }
@@ -314,9 +306,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (templateConfig == null || templateConfig.isEmpty()) {
       return List.of();
     }
-    Object direct =
-        firstNonNull(
-            templateConfig.get("fixed_width_columns"), templateConfig.get("fixedWidthColumns"));
+    Object direct = firstNonNull(
+        templateConfig.get("fixed_width_columns"), templateConfig.get("fixedWidthColumns"));
     List<ColumnLayout> parsed = parseDelimitedColumns(direct, true);
     if (!parsed.isEmpty()) {
       return parsed;
@@ -347,10 +338,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       if (!Texts.hasText(header)) {
         header = defaultDelimitedHeader(normalizedSource);
       }
-      Integer width =
-          fixedWidth
-              ? integerValue(firstNonNull(map.get("width"), map.get("size"), map.get("len")))
-              : null;
+      Integer width = fixedWidth
+          ? integerValue(firstNonNull(map.get("width"), map.get("size"), map.get("len")))
+          : null;
       String align =
           fixedWidth ? textValue(firstNonNull(map.get("align"), map.get("alignment"))) : null;
       String padChar =
@@ -361,16 +351,15 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       String numberFormat =
           textValue(firstNonNull(map.get("numberFormat"), map.get("number_format")));
       String dateFormat = textValue(firstNonNull(map.get("dateFormat"), map.get("date_format")));
-      columns.add(
-          new ColumnLayout(
-              header,
-              normalizedSource,
-              width,
-              "RIGHT".equalsIgnoreCase(align),
-              resolvePadChar(padChar),
-              type,
-              numberFormat,
-              dateFormat));
+      columns.add(new ColumnLayout(
+          header,
+          normalizedSource,
+          width,
+          "RIGHT".equalsIgnoreCase(align),
+          resolvePadChar(padChar),
+          type,
+          numberFormat,
+          dateFormat));
     }
     return columns;
   }
@@ -392,9 +381,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     Map<String, Object> source = templateConfig == null ? Map.of() : templateConfig;
     Object schema = source.get(KEY_QUERY_PARAM_SCHEMA);
     Map<String, Object> schemaMap = toMap(schema);
-    Object delimiterRaw =
-        firstNonNull(
-            source.get("delimiter"), source.get("quote_delimiter"), schemaMap.get("delimiter"));
+    Object delimiterRaw = firstNonNull(
+        source.get("delimiter"), source.get("quote_delimiter"), schemaMap.get("delimiter"));
     String delimiter = delimiterRaw == null ? null : String.valueOf(delimiterRaw);
     if (delimiter == null || delimiter.isEmpty()) {
       delimiter = ",";
@@ -405,23 +393,14 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (quoteChar == null || quoteChar.isEmpty()) {
       quoteChar = "\"";
     }
-    QuotePolicy quotePolicy =
-        QuotePolicy.from(
-            firstNonNull(
-                source.get("quote_policy"),
-                source.get("quotePolicy"),
-                schemaMap.get("quotePolicy")));
-    EscapePolicy escapePolicy =
-        EscapePolicy.from(
-            firstNonNull(
-                source.get("escape_policy"),
-                source.get("escapePolicy"),
-                schemaMap.get("escapePolicy")));
-    int headerRows =
-        resolveIntValue(
-            firstNonNull(
-                source.get("header_rows"), source.get("headerRows"), schemaMap.get("headerRows")),
-            1);
+    QuotePolicy quotePolicy = QuotePolicy.from(firstNonNull(
+        source.get("quote_policy"), source.get("quotePolicy"), schemaMap.get("quotePolicy")));
+    EscapePolicy escapePolicy = EscapePolicy.from(firstNonNull(
+        source.get("escape_policy"), source.get("escapePolicy"), schemaMap.get("escapePolicy")));
+    int headerRows = resolveIntValue(
+        firstNonNull(
+            source.get("header_rows"), source.get("headerRows"), schemaMap.get("headerRows")),
+        1);
     return new DelimitedFormatConfig(delimiter, quoteChar, quotePolicy, escapePolicy, headerRows);
   }
 
@@ -479,12 +458,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
           case ALL -> true;
           case NONE -> false;
           case REQUIRED ->
-              text.contains(formatConfig.delimiter())
-                  || text.contains("\n")
-                  || text.contains("\r")
-                  || text.contains(formatConfig.quoteChar())
-                  || text.startsWith(" ")
-                  || text.endsWith(" ");
+            text.contains(formatConfig.delimiter())
+                || text.contains("\n")
+                || text.contains("\r")
+                || text.contains(formatConfig.quoteChar())
+                || text.startsWith(" ")
+                || text.endsWith(" ");
         };
     String escaped = escapeDelimited(text, formatConfig);
     if (!needsQuote) {
@@ -496,15 +475,15 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   protected String escapeDelimited(String value, DelimitedFormatConfig formatConfig) {
     return switch (formatConfig.escapePolicy()) {
       case BACKSLASH ->
-          value
-              .replace("\\", "\\\\")
-              .replace(formatConfig.quoteChar(), "\\" + formatConfig.quoteChar())
-              .replace("\r", "\\r")
-              .replace("\n", "\\n");
+        value
+            .replace("\\", "\\\\")
+            .replace(formatConfig.quoteChar(), "\\" + formatConfig.quoteChar())
+            .replace("\r", "\\r")
+            .replace("\n", "\\n");
       case NONE -> value;
       case DOUBLE_QUOTE ->
-          value.replace(
-              formatConfig.quoteChar(), formatConfig.quoteChar() + formatConfig.quoteChar());
+        value.replace(
+            formatConfig.quoteChar(), formatConfig.quoteChar() + formatConfig.quoteChar());
     };
   }
 
@@ -522,10 +501,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   protected String fixedWidth(Object value, ColumnLayout column) {
     String text = textValue(value);
-    int width =
-        column.width() == null || column.width() <= 0
-            ? Math.max(column.header().length(), 16)
-            : column.width();
+    int width = column.width() == null || column.width() <= 0
+        ? Math.max(column.header().length(), 16)
+        : column.width();
     if (text == null) {
       text = "";
     }

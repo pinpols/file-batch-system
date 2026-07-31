@@ -38,12 +38,10 @@ class WebhookDispatcherTest {
     // 假阳通过。改用 CountDownLatch — stub findEnabledSubscriptions 在被调用时 countDown，
     // 主线程 await 后才执行 verify，保证 async 任务确实进入了 dispatchOne 入口（且因空列表早 return）。
     CountDownLatch findCalled = new CountDownLatch(1);
-    when(webhookService.findEnabledSubscriptions("tenant-a"))
-        .thenAnswer(
-            inv -> {
-              findCalled.countDown();
-              return Collections.emptyList();
-            });
+    when(webhookService.findEnabledSubscriptions("tenant-a")).thenAnswer(inv -> {
+      findCalled.countDown();
+      return Collections.emptyList();
+    });
 
     dispatcher.dispatchAsync("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", null);
 
@@ -115,9 +113,8 @@ class WebhookDispatcherTest {
     // 这里会静默连到内网。注:字面量内网 IP 由 OkHttp 短路不走 Dns,但那类在建订阅时已被 CallbackUrlValidator 拦。
     WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
     subscription.setCallbackUrl("https://localhost:9/hook");
-    WebhookEventPayload payload =
-        new WebhookEventPayload(
-            "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
+    WebhookEventPayload payload = new WebhookEventPayload(
+        "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
 
     WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription, payload, "{}");
 
@@ -131,9 +128,8 @@ class WebhookDispatcherTest {
     // 若没有这道兜底,租户建 WEBHOOK 渠道 url=169.254.169.254 点测试即打云 metadata。
     WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
     subscription.setCallbackUrl("https://169.254.169.254/latest/meta-data/");
-    WebhookEventPayload payload =
-        new WebhookEventPayload(
-            "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
+    WebhookEventPayload payload = new WebhookEventPayload(
+        "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
 
     WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription, payload, "{}");
 

@@ -24,11 +24,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WorkerDrainTimeoutSchedulerTest {
 
-  @Mock private WorkerRegistryMapper workerRegistryMapper;
+  @Mock
+  private WorkerRegistryMapper workerRegistryMapper;
 
-  @Mock private WorkerDrainGovernanceService workerDrainGovernanceService;
+  @Mock
+  private WorkerDrainGovernanceService workerDrainGovernanceService;
 
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private WorkerDrainProperties workerDrainProperties;
   private WorkerDrainTimeoutScheduler scheduler;
@@ -37,12 +40,11 @@ class WorkerDrainTimeoutSchedulerTest {
   void setUp() {
     workerDrainProperties = new WorkerDrainProperties();
     workerDrainProperties.setEnabled(true);
-    scheduler =
-        new WorkerDrainTimeoutScheduler(
-            workerRegistryMapper,
-            workerDrainGovernanceService,
-            workerDrainProperties,
-            gracefulShutdown);
+    scheduler = new WorkerDrainTimeoutScheduler(
+        workerRegistryMapper,
+        workerDrainGovernanceService,
+        workerDrainProperties,
+        gracefulShutdown);
   }
 
   @Test

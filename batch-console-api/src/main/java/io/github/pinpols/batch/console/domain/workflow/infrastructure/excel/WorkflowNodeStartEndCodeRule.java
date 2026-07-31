@@ -56,76 +56,71 @@ public final class WorkflowNodeStartEndCodeRule {
       if (NODE_TYPE_START.equals(nodeType)) {
         stat.startCount++;
         if (!NODE_TYPE_START.equals(nodeCode)) {
-          issues.add(
-              new WorkbookIssue(
-                  SHEET,
-                  rowNo,
-                  ConfigPackageExcelValidator.COL_NODE_CODE,
-                  "workflow_node node_type=START must use node_code='START' (found '"
-                      + nodeCode
-                      + "') for workflow "
-                      + wfCode));
+          issues.add(new WorkbookIssue(
+              SHEET,
+              rowNo,
+              ConfigPackageExcelValidator.COL_NODE_CODE,
+              "workflow_node node_type=START must use node_code='START' (found '"
+                  + nodeCode
+                  + "') for workflow "
+                  + wfCode));
         }
       } else if (NODE_TYPE_END.equals(nodeType)) {
         stat.endCount++;
         if (!NODE_TYPE_END.equals(nodeCode)) {
-          issues.add(
-              new WorkbookIssue(
-                  SHEET,
-                  rowNo,
-                  ConfigPackageExcelValidator.COL_NODE_CODE,
-                  "workflow_node node_type=END must use node_code='END' (found '"
-                      + nodeCode
-                      + "') for workflow "
-                      + wfCode));
+          issues.add(new WorkbookIssue(
+              SHEET,
+              rowNo,
+              ConfigPackageExcelValidator.COL_NODE_CODE,
+              "workflow_node node_type=END must use node_code='END' (found '"
+                  + nodeCode
+                  + "') for workflow "
+                  + wfCode));
         }
       } else if (NODE_TYPE_START.equals(nodeCode) || NODE_TYPE_END.equals(nodeCode)) {
         // node_code 写了 START/END,但 node_type 没对齐
-        issues.add(
-            new WorkbookIssue(
-                SHEET,
-                rowNo,
-                ConfigPackageExcelValidator.COL_NODE_TYPE,
-                "workflow_node node_code='"
-                    + nodeCode
-                    + "' must have node_type='"
-                    + nodeCode
-                    + "' (found '"
-                    + nodeType
-                    + "')"));
+        issues.add(new WorkbookIssue(
+            SHEET,
+            rowNo,
+            ConfigPackageExcelValidator.COL_NODE_TYPE,
+            "workflow_node node_code='"
+                + nodeCode
+                + "' must have node_type='"
+                + nodeCode
+                + "' (found '"
+                + nodeType
+                + "')"));
       }
     }
 
     for (GroupStat stat : grouped.values()) {
       if (stat.startCount != 1) {
-        issues.add(
-            new WorkbookIssue(
-                SHEET,
-                0,
-                ConfigPackageExcelValidator.COL_NODE_TYPE,
-                "workflow "
-                    + stat.workflowCode
-                    + " (tenant="
-                    + stat.tenantId
-                    + ", version="
-                    + stat.workflowVersion
-                    + ") must have exactly 1 START node, found "
-                    + stat.startCount));
+        issues.add(new WorkbookIssue(
+            SHEET,
+            0,
+            ConfigPackageExcelValidator.COL_NODE_TYPE,
+            "workflow "
+                + stat.workflowCode
+                + " (tenant="
+                + stat.tenantId
+                + ", version="
+                + stat.workflowVersion
+                + ") must have exactly 1 START node, found "
+                + stat.startCount));
       }
       if (stat.endCount != 1) {
-        issues.add(
-            new WorkbookIssue(
-                SHEET,
-                0,
-                ConfigPackageExcelValidator.COL_NODE_TYPE,
-                "workflow "
-                    + stat.workflowCode
-                    + " (tenant="
-                    + stat.tenantId
-                    + ", version="
-                    + stat.workflowVersion
-                    + ") must have exactly 1 END node, found "
-                    + stat.endCount));
+        issues.add(new WorkbookIssue(
+            SHEET,
+            0,
+            ConfigPackageExcelValidator.COL_NODE_TYPE,
+            "workflow "
+                + stat.workflowCode
+                + " (tenant="
+                + stat.tenantId
+                + ", version="
+                + stat.workflowVersion
+                + ") must have exactly 1 END node, found "
+                + stat.endCount));
       }
     }
     return issues;

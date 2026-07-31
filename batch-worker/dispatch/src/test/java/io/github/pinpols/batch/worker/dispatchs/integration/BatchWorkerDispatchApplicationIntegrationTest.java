@@ -22,7 +22,8 @@ class BatchWorkerDispatchApplicationIntegrationTest extends AbstractIntegrationT
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired ApplicationContext applicationContext;
+  @Autowired
+  ApplicationContext applicationContext;
 
   @Test
   void contextLoads() {

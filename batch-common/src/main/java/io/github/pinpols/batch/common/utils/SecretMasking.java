@@ -24,16 +24,15 @@ import java.util.Set;
  */
 public final class SecretMasking {
 
-  private static final Set<String> SENSITIVE_KEYWORDS =
-      Set.of(
-          "password",
-          "secret",
-          "token",
-          "api_key",
-          "apikey",
-          "authorization",
-          "private_key",
-          "credential");
+  private static final Set<String> SENSITIVE_KEYWORDS = Set.of(
+      "password",
+      "secret",
+      "token",
+      "api_key",
+      "apikey",
+      "authorization",
+      "private_key",
+      "credential");
 
   private static final String MASK = "****";
 

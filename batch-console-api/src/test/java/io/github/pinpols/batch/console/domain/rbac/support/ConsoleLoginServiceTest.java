@@ -19,18 +19,27 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleLoginServiceTest {
 
-  @Mock private ConsoleSessionRegistry sessionRegistry;
-  @Mock private ConsoleJwtService jwtService;
-  @Mock private ConsoleUserAccountServiceSupport userAccountService;
-  @Mock private ConsolePasswordHasher passwordHasher;
+  @Mock
+  private ConsoleSessionRegistry sessionRegistry;
+
+  @Mock
+  private ConsoleJwtService jwtService;
+
+  @Mock
+  private ConsoleUserAccountServiceSupport userAccountService;
+
+  @Mock
+  private ConsolePasswordHasher passwordHasher;
   // 默认 mock:登录防护方法均 void/no-op,等效总开关关 → 既有用例行为不变。
-  @Mock private LoginProtectionService loginProtectionService;
+  @Mock
+  private LoginProtectionService loginProtectionService;
 
   @Mock
   private io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver
       requestMetadataResolver;
 
-  @InjectMocks private ConsoleLoginService loginService;
+  @InjectMocks
+  private ConsoleLoginService loginService;
 
   @Test
   void shouldIssueJwtForSeededUser() {
@@ -39,35 +48,31 @@ class ConsoleLoginServiceTest {
     request.setPassword("admin123");
     // 用户名全局唯一，按 username 查找，租户从账号记录中获取
     Mockito.when(userAccountService.findByUsername("admin"))
-        .thenReturn(
-            Optional.of(
-                new ConsoleUserAccount(
-                    "default-tenant",
-                    "admin",
-                    "Console Admin",
-                    ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123,
-                    Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
-                    true,
-                    false)));
+        .thenReturn(Optional.of(new ConsoleUserAccount(
+            "default-tenant",
+            "admin",
+            "Console Admin",
+            ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123,
+            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+            true,
+            false)));
     Mockito.when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
         .thenReturn(true);
     Mockito.when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
-    Mockito.when(
-            jwtService.issueToken(
-                "admin",
-                "default-tenant",
-                Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
-                7L))
-        .thenReturn(
-            new ConsoleAuthTokenResponse(
-                "jwt",
-                "Bearer",
-                Instant.parse("2026-04-05T00:00:00Z"),
-                Instant.parse("2026-04-05T08:00:00Z"),
-                "admin",
-                "default-tenant",
-                Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
-                false));
+    Mockito.when(jwtService.issueToken(
+            "admin",
+            "default-tenant",
+            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+            7L))
+        .thenReturn(new ConsoleAuthTokenResponse(
+            "jwt",
+            "Bearer",
+            Instant.parse("2026-04-05T00:00:00Z"),
+            Instant.parse("2026-04-05T08:00:00Z"),
+            "admin",
+            "default-tenant",
+            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+            false));
 
     var response = loginService.login(request);
     assertThat(response.username()).isEqualTo("admin");
@@ -81,16 +86,14 @@ class ConsoleLoginServiceTest {
     request.setUsername("admin");
     request.setPassword("wrong");
     Mockito.when(userAccountService.findByUsername("admin"))
-        .thenReturn(
-            Optional.of(
-                new ConsoleUserAccount(
-                    "default-tenant",
-                    "admin",
-                    "Console Admin",
-                    "hash",
-                    Set.of("ROLE_ADMIN"),
-                    true,
-                    false)));
+        .thenReturn(Optional.of(new ConsoleUserAccount(
+            "default-tenant",
+            "admin",
+            "Console Admin",
+            "hash",
+            Set.of("ROLE_ADMIN"),
+            true,
+            false)));
     Mockito.when(passwordHasher.matches("wrong", "hash")).thenReturn(false);
 
     assertThatThrownBy(() -> loginService.login(request))

@@ -55,10 +55,9 @@ public class BatchPgSessionAutoConfiguration {
         if (!BOOT_SINGLE_DATASOURCE_BEAN_NAME.equals(beanName)) {
           return bean;
         }
-        BatchPgSessionProperties pgSessionProperties =
-            Binder.get(environment)
-                .bind("batch.datasource.pg-session", Bindable.of(BatchPgSessionProperties.class))
-                .orElseGet(BatchPgSessionProperties::new);
+        BatchPgSessionProperties pgSessionProperties = Binder.get(environment)
+            .bind("batch.datasource.pg-session", Bindable.of(BatchPgSessionProperties.class))
+            .orElseGet(BatchPgSessionProperties::new);
         String applicationName =
             environment.getProperty("spring.application.name", "batch-application");
         HikariPgSessionSupport.applyPlatform(ds, pgSessionProperties, applicationName);

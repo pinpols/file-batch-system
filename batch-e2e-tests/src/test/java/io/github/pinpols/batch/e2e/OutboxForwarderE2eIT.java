@@ -57,15 +57,16 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void outboxSchedulerAutomaticallyPublishesAndWorkerReportsSuccess() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -78,35 +79,28 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
             + "\"certificateNo\":\"ID-20260115-9001\",\"mobileNo\":\"13800009001\","
             + "\"email\":\"fwd@example.com\",\"status\":\"ACTIVE\"}]");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-outbox-fwd",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-outbox-fwd",
+        params));
 
     // OutboxPollScheduler fires every 500 ms and publishes the pending outbox event automatically.
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              E2eStatusLogger.logJobFlowSnapshot(
-                  jdbcTemplate, TENANT, seed.dedupKey(), "OutboxForwarderE2eIT");
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          E2eStatusLogger.logJobFlowSnapshot(
+              jdbcTemplate, TENANT, seed.dedupKey(), "OutboxForwarderE2eIT");
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("SUCCESS");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("SUCCESS");
+        });
   }
 }

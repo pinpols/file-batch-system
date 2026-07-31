@@ -45,7 +45,8 @@ public final class WorkerDataSourceSupport {
     hikariConfig.setUsername(properties.determineUsername());
     hikariConfig.setPassword(properties.determinePassword());
     String driverClassName = properties.determineDriverClassName();
-    if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
+    if (hikariConfig.getDriverClassName() == null
+        || hikariConfig.getDriverClassName().isBlank()) {
       hikariConfig.setDriverClassName(driverClassName);
     }
     String appName = environment.getProperty("spring.application.name", defaultAppName);

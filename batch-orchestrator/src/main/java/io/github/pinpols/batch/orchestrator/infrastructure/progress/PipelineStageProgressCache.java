@@ -51,18 +51,17 @@ public class PipelineStageProgressCache {
     Instant cutoff = Instant.now().minus(TTL);
     return workerCodes.stream()
         .map(wc -> new Key(tenantId, wc))
-        .map(
-            k -> {
-              Snapshot s = store.get(k);
-              if (s == null) {
-                return null;
-              }
-              if (s.heartbeatAt().isBefore(cutoff)) {
-                store.remove(k, s);
-                return null;
-              }
-              return Map.entry(k.workerCode(), s);
-            })
+        .map(k -> {
+          Snapshot s = store.get(k);
+          if (s == null) {
+            return null;
+          }
+          if (s.heartbeatAt().isBefore(cutoff)) {
+            store.remove(k, s);
+            return null;
+          }
+          return Map.entry(k.workerCode(), s);
+        })
         .filter(java.util.Objects::nonNull)
         .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
   }

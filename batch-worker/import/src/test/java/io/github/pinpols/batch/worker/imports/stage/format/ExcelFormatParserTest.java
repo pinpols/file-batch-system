@@ -35,7 +35,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ExcelFormatParserTest {
 
-  @Mock private ImportRecordGovernanceService governanceService;
+  @Mock
+  private ImportRecordGovernanceService governanceService;
 
   private ExcelFormatParser parser;
   private ObjectMapper objectMapper;
@@ -65,11 +66,10 @@ class ExcelFormatParserTest {
 
   @Test
   void shouldPassThroughActualHeaders_whenNoFieldMappings() throws Exception {
-    byte[] xlsx =
-        TestExcelFileBuilder.builder()
-            .headers(List.of("订单号", "金额"))
-            .row(List.of("O-1", "100"))
-            .build();
+    byte[] xlsx = TestExcelFileBuilder.builder()
+        .headers(List.of("订单号", "金额"))
+        .row(List.of("O-1", "100"))
+        .build();
     ImportJobContext ctx = context();
     StringWriter sink = new StringWriter();
 
@@ -85,18 +85,16 @@ class ExcelFormatParserTest {
 
   @Test
   void shouldFailFast_whenMappedSourceHeaderMissing() throws Exception {
-    byte[] xlsx =
-        TestExcelFileBuilder.builder()
-            .headers(List.of("订单号", "金额"))
-            .row(List.of("O-1", "100"))
-            .build();
+    byte[] xlsx = TestExcelFileBuilder.builder()
+        .headers(List.of("订单号", "金额"))
+        .row(List.of("O-1", "100"))
+        .build();
     // field_mappings 配了一个不存在的来源列「客户编号」
-    Map<String, Object> tpl =
-        Map.of(
-            "field_mappings",
-            List.of(
-                Map.of("source", "订单号", "target", "orderNo"),
-                Map.of("source", "客户编号", "target", "customerNo")));
+    Map<String, Object> tpl = Map.of(
+        "field_mappings",
+        List.of(
+            Map.of("source", "订单号", "target", "orderNo"),
+            Map.of("source", "客户编号", "target", "customerNo")));
     ImportJobContext ctx = context();
     StringWriter sink = new StringWriter();
 
@@ -107,11 +105,10 @@ class ExcelFormatParserTest {
 
   @Test
   void shouldProject_whenMappedHeadersAllPresent() throws Exception {
-    byte[] xlsx =
-        TestExcelFileBuilder.builder()
-            .headers(List.of("订单号", "金额"))
-            .row(List.of("O-1", "100"))
-            .build();
+    byte[] xlsx = TestExcelFileBuilder.builder()
+        .headers(List.of("订单号", "金额"))
+        .row(List.of("O-1", "100"))
+        .build();
     Map<String, Object> tpl =
         Map.of("field_mappings", List.of(Map.of("source", "订单号", "target", "orderNo")));
     ImportJobContext ctx = context();
@@ -145,12 +142,11 @@ class ExcelFormatParserTest {
 
   @Test
   void shouldSelectSheetByName() throws Exception {
-    byte[] xlsx =
-        TestExcelFileBuilder.builder()
-            .sheetName("数据页")
-            .headers(List.of("订单号"))
-            .row(List.of("O-1"))
-            .build();
+    byte[] xlsx = TestExcelFileBuilder.builder()
+        .sheetName("数据页")
+        .headers(List.of("订单号"))
+        .row(List.of("O-1"))
+        .build();
     Map<String, Object> tpl = Map.of("excel_sheet_name", "数据页");
     ImportJobContext ctx = context();
     StringWriter sink = new StringWriter();
@@ -162,12 +158,11 @@ class ExcelFormatParserTest {
 
   @Test
   void shouldFailFast_whenNamedSheetNotFound() throws Exception {
-    byte[] xlsx =
-        TestExcelFileBuilder.builder()
-            .sheetName("数据页")
-            .headers(List.of("订单号"))
-            .row(List.of("O-1"))
-            .build();
+    byte[] xlsx = TestExcelFileBuilder.builder()
+        .sheetName("数据页")
+        .headers(List.of("订单号"))
+        .row(List.of("O-1"))
+        .build();
     Map<String, Object> tpl = Map.of("excel_sheet_name", "不存在的页");
     ImportJobContext ctx = context();
     StringWriter sink = new StringWriter();
@@ -182,12 +177,11 @@ class ExcelFormatParserTest {
   @Test
   void shouldCarryPhysicalRowNumber_onBadRow() throws Exception {
     // 表头(物理行1)+ good(物理行2)+ boom(物理行3);boom 记录序列化时抛异常 → 走 endRow 坏行 catch。
-    byte[] xlsx =
-        TestExcelFileBuilder.builder()
-            .headers(List.of("订单号"))
-            .row(List.of("good"))
-            .row(List.of("boom"))
-            .build();
+    byte[] xlsx = TestExcelFileBuilder.builder()
+        .headers(List.of("订单号"))
+        .row(List.of("good"))
+        .row(List.of("boom"))
+        .build();
     // 坏行可跳过,使 recordParseError 走 recordSkippedRecord(不抛)
     when(governanceService.isSkippable(any())).thenReturn(true);
     when(governanceService.shouldFailOnSkip(any())).thenReturn(false);
@@ -209,7 +203,8 @@ class ExcelFormatParserTest {
 
   @Test
   void shouldNotInvokeGovernance_onCleanParse() throws Exception {
-    byte[] xlsx = TestExcelFileBuilder.builder().headers(List.of("a")).row(List.of("x")).build();
+    byte[] xlsx =
+        TestExcelFileBuilder.builder().headers(List.of("a")).row(List.of("x")).build();
     ImportJobContext ctx = context();
     StringWriter sink = new StringWriter();
 

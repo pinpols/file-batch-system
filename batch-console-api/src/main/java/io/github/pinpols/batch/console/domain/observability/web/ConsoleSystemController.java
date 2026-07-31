@@ -43,13 +43,12 @@ public class ConsoleSystemController {
   @GetMapping("/maintenance")
   public CommonResponse<MaintenanceStatusResponse> maintenanceStatus() {
     MaintenanceState state = maintenanceStateHolder.current();
-    MaintenanceStatusResponse response =
-        new MaintenanceStatusResponse(
-            state.enabled(),
-            state.readOnly(),
-            state.message(),
-            state.etaAt() != null ? state.etaAt().toString() : null,
-            state.affectedServices());
+    MaintenanceStatusResponse response = new MaintenanceStatusResponse(
+        state.enabled(),
+        state.readOnly(),
+        state.message(),
+        state.etaAt() != null ? state.etaAt().toString() : null,
+        state.affectedServices());
     return CommonResponse.success(response);
   }
 
@@ -68,10 +67,9 @@ public class ConsoleSystemController {
   public CommonResponse<CronPreviewResponse> cronPreview(
       @RequestParam("expr") String expr,
       @RequestParam(value = "count", required = false) Integer count) {
-    int n =
-        count == null
-            ? CRON_PREVIEW_DEFAULT_COUNT
-            : Math.max(1, Math.min(count, CRON_PREVIEW_MAX_COUNT));
+    int n = count == null
+        ? CRON_PREVIEW_DEFAULT_COUNT
+        : Math.max(1, Math.min(count, CRON_PREVIEW_MAX_COUNT));
     String trimmed = expr == null ? "" : expr.trim();
     if (trimmed.isEmpty()) {
       throw BizException.of(
@@ -95,7 +93,7 @@ public class ConsoleSystemController {
       next.add(d.toInstant().toString());
       cursor = d;
     }
-    return CommonResponse.success(
-        new CronPreviewResponse(trimmed, true, null, next, timezoneProvider.defaultZone().getId()));
+    return CommonResponse.success(new CronPreviewResponse(
+        trimmed, true, null, next, timezoneProvider.defaultZone().getId()));
   }
 }

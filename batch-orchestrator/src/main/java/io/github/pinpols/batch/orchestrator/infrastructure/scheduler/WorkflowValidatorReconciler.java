@@ -62,17 +62,14 @@ public class WorkflowValidatorReconciler {
       try {
         // RLS Phase B：validator.validate 走 workflow_node / job_definition / calendar mapper，
         // emitInvalid 写 alert_event；都依赖 holder。try/catch 包在 runWithTenant 外保证 finally 清。
-        boolean hasErrors =
-            RlsTenantContextHolder.runWithTenant(
-                tenantId,
-                () -> {
-                  WorkflowValidationResult result = validator.validate(wf.id());
-                  if (result.hasErrors()) {
-                    emitInvalid(wf, result);
-                    return true;
-                  }
-                  return false;
-                });
+        boolean hasErrors = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+          WorkflowValidationResult result = validator.validate(wf.id());
+          if (result.hasErrors()) {
+            emitInvalid(wf, result);
+            return true;
+          }
+          return false;
+        });
         if (hasErrors) {
           invalidCount++;
         }
@@ -97,16 +94,15 @@ public class WorkflowValidatorReconciler {
     detail.put("workflowCode", wf.workflowCode());
     detail.put("errors", result.errors());
     detail.put("warnings", result.warnings());
-    AlertEmitRequest request =
-        AlertEmitRequest.builder()
-            .tenantId(wf.tenantId())
-            .serviceName("batch-orchestrator")
-            .alertType(ALERT_TYPE)
-            .severity("ERROR")
-            .title("workflow definition invalid: " + wf.workflowCode())
-            .detailJson(JsonUtils.toJson(detail))
-            .resourceKey(wf.tenantId() + ":" + wf.id())
-            .build();
+    AlertEmitRequest request = AlertEmitRequest.builder()
+        .tenantId(wf.tenantId())
+        .serviceName("batch-orchestrator")
+        .alertType(ALERT_TYPE)
+        .severity("ERROR")
+        .title("workflow definition invalid: " + wf.workflowCode())
+        .detailJson(JsonUtils.toJson(detail))
+        .resourceKey(wf.tenantId() + ":" + wf.id())
+        .build();
     alertEventService.emit(request);
   }
 }

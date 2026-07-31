@@ -46,18 +46,18 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
     String identity =
         switch (backend) {
           case "redis" ->
-              StatefulBackendIdentity.redis(
-                  environment.getProperty("spring.data.redis.host", "localhost"),
-                  environment.getProperty("spring.data.redis.port", Integer.class, 6379),
-                  environment.getProperty("spring.data.redis.database", Integer.class, 0),
-                  environment.getProperty("spring.data.redis.sentinel.master"),
-                  environment.getProperty("spring.data.redis.sentinel.nodes"));
+            StatefulBackendIdentity.redis(
+                environment.getProperty("spring.data.redis.host", "localhost"),
+                environment.getProperty("spring.data.redis.port", Integer.class, 6379),
+                environment.getProperty("spring.data.redis.database", Integer.class, 0),
+                environment.getProperty("spring.data.redis.sentinel.master"),
+                environment.getProperty("spring.data.redis.sentinel.nodes"));
           case "database" ->
-              StatefulBackendIdentity.database(
-                  environment.getRequiredProperty("spring.datasource.url"));
+            StatefulBackendIdentity.database(
+                environment.getRequiredProperty("spring.datasource.url"));
           default ->
-              throw new IllegalStateException(
-                  "unsupported batch.quota.runtime-store: " + properties.getRuntimeStore());
+            throw new IllegalStateException(
+                "unsupported batch.quota.runtime-store: " + properties.getRuntimeStore());
         };
     return new StatefulBackendGuard.DesiredBackend(
         FEATURE_KEY,

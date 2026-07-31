@@ -111,9 +111,8 @@ public class ConsoleTenantConfigPackageExcelController {
   public CommonResponse<TenantConfigPackageExcelPreviewResponse> patchPreviewRow(
       @PathVariable String uploadToken,
       @Valid @RequestBody TenantConfigPackageExcelPatchRequest request) {
-    return responseFactory.success(
-        applicationService.patchRow(
-            uploadToken, request.getSheetName(), request.getRowNo(), request.getValues()));
+    return responseFactory.success(applicationService.patchRow(
+        uploadToken, request.getSheetName(), request.getRowNo(), request.getValues()));
   }
 
   /**

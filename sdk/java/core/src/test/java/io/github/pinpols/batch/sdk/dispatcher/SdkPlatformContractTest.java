@@ -44,16 +44,15 @@ class SdkPlatformContractTest {
 
   private static final ObjectMapper M = new ObjectMapper();
 
-  private final BatchPlatformClientConfig cfg =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://x")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("k:9092")
-          .kafkaTopicPattern("p.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
+      .baseUrl("http://x")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("k:9092")
+      .kafkaTopicPattern("p.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   // ─── Kafka 派单 payload 契约 ────────────────────────────────────────────────
 
@@ -61,17 +60,16 @@ class SdkPlatformContractTest {
   void platformKafkaPayloadSdkCanDeserialize() throws Exception {
     // 模拟平台 producer 写的 JSON(对照 orchestrator BatchTopicResolver + 上游 producer
     // 写入的 TaskDispatchMessage —— 字段集是协议契约,平台改要同步改 SDK)
-    String wirePayload =
-        "{"
-            + "\"taskId\":12345,"
-            + "\"tenantId\":\"acme\","
-            + "\"jobCode\":\"daily-report\","
-            + "\"taskType\":\"echo\","
-            + "\"taskInstanceId\":\"ti-789\","
-            + "\"parameters\":{\"bizDate\":\"2026-05-31\"},"
-            + "\"runtimeAttributes\":{\"traceId\":\"abc\",\"partitionInvocationId\":\"inv-1\"},"
-            + "\"futureFieldFromPlatform\":\"ignored\""
-            + "}";
+    String wirePayload = "{"
+        + "\"taskId\":12345,"
+        + "\"tenantId\":\"acme\","
+        + "\"jobCode\":\"daily-report\","
+        + "\"taskType\":\"echo\","
+        + "\"taskInstanceId\":\"ti-789\","
+        + "\"parameters\":{\"bizDate\":\"2026-05-31\"},"
+        + "\"runtimeAttributes\":{\"traceId\":\"abc\",\"partitionInvocationId\":\"inv-1\"},"
+        + "\"futureFieldFromPlatform\":\"ignored\""
+        + "}";
 
     TaskDispatchMessage msg = M.readValue(wirePayload, TaskDispatchMessage.class);
     assertThat(msg.taskId()).isEqualTo(12345L);
@@ -156,7 +154,8 @@ class SdkPlatformContractTest {
   @Test
   void reportBusinessFailWithoutCodeDefaultsToExecutionFailed() throws IOException {
     // 业务 fail(message) 无显式码、无异常 → 规范回退 EXECUTION_FAILED(不再是旧的 "FAILED" 非协议值)。
-    Map<String, Object> body = captureReports(SdkTaskResult.fail("business rule violated")).get(0);
+    Map<String, Object> body =
+        captureReports(SdkTaskResult.fail("business rule violated")).get(0);
     assertThat(body).containsEntry("success", false).containsEntry("errorCode", "EXECUTION_FAILED");
     assertThat(body.get("resultSummary").toString()).contains("\"code\":\"EXECUTION_FAILED\"");
   }
@@ -164,7 +163,8 @@ class SdkPlatformContractTest {
   @Test
   void reportPreservesExplicitBusinessErrorCodeFromOutput() throws IOException {
     // handler 经 output['errorCode'] 显式给的协议/业务码(如 CANCELLED)必须原样透传,不被 EXECUTION_FAILED 覆盖。
-    Map<String, Object> body = captureReports(SdkTaskResult.cancelled(Map.of("offset", 42))).get(0);
+    Map<String, Object> body =
+        captureReports(SdkTaskResult.cancelled(Map.of("offset", 42))).get(0);
     assertThat(body).containsEntry("success", false).containsEntry("errorCode", "CANCELLED");
     assertThat(body.get("resultSummary").toString()).contains("\"code\":\"CANCELLED\"");
   }
@@ -175,28 +175,24 @@ class SdkPlatformContractTest {
   private List<Map<String, Object>> captureReports(SdkTaskResult result) throws IOException {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     List<Map<String, Object>> reports = new ArrayList<>();
-    when(http.report(anyLong(), anyString(), any()))
-        .thenAnswer(
-            (InvocationOnMock inv) -> {
-              reports.add(inv.getArgument(2));
-              return Map.of();
-            });
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    when(http.report(anyLong(), anyString(), any())).thenAnswer((InvocationOnMock inv) -> {
+      reports.add(inv.getArgument(2));
+      return Map.of();
+    });
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            return result;
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        return result;
+      }
+    };
     TaskDispatcher d = new TaskDispatcher(cfg, Map.of("tt", handler), http);
-    d.processInWorkerThread(
-        new TaskDispatchMessage(
-            42L, "tx", "job-1", "tt", "ti-1", Map.of(), Map.of("traceId", "abc")));
+    d.processInWorkerThread(new TaskDispatchMessage(
+        42L, "tx", "job-1", "tt", "ti-1", Map.of(), Map.of("traceId", "abc")));
     return reports;
   }
 }

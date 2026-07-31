@@ -75,9 +75,8 @@ public class ResultVersionRetentionScheduler {
       }
       // RLS Phase B：archiveSuperseded 是 UPDATE batch.result_version SET status='ARCHIVED'，
       // 严格策略下必须显式绑定 app.tenant_id 才能命中行。
-      int updated =
-          RlsTenantContextHolder.runWithTenant(
-              tenantId, () -> resultVersionMapper.archiveSuperseded(tenantId, row.id(), now, true));
+      int updated = RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> resultVersionMapper.archiveSuperseded(tenantId, row.id(), now, true));
       if (updated > 0) {
         archived++;
       }

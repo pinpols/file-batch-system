@@ -43,9 +43,8 @@ class AbstractTaskConsumerBackpressureTest {
   @BeforeEach
   void setUp() {
     pool = Executors.newFixedThreadPool(2);
-    dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @AfterEach
@@ -63,75 +62,68 @@ class AbstractTaskConsumerBackpressureTest {
     CountDownLatch allowFinish = new CountDownLatch(1);
 
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
-    when(executor.execute(any(), anyString()))
-        .thenAnswer(
-            inv -> {
-              entered.countDown();
-              allowFinish.await();
-              return new WorkerExecutionResult("1", true, "ok");
-            });
+    when(executor.execute(any(), anyString())).thenAnswer(inv -> {
+      entered.countDown();
+      allowFinish.await();
+      return new WorkerExecutionResult("1", true, "ok");
+    });
 
     WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
     when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
 
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
-    AbstractTaskConsumer consumer =
-        new AbstractTaskConsumer(registry, meterRegistryProvider, 1) {
-          @Override
-          protected AbstractWorkerLoop workerLoop() {
-            return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport) {
-              @Override
-              protected WorkerConfiguration workerConfiguration() {
-                return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
-              }
-
-              @Override
-              protected String workerGroup() {
-                return "test";
-              }
-
-              @Override
-              protected int workerPort() {
-                return 0;
-              }
-            };
-          }
-
+    AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry, meterRegistryProvider, 1) {
+      @Override
+      protected AbstractWorkerLoop workerLoop() {
+        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
           }
 
           @Override
-          protected TaskDispatchExecutor taskDispatchExecutor() {
-            return executor;
+          protected String workerGroup() {
+            return "test";
           }
 
           @Override
-          public String listenerId() {
-            return "test-listener";
-          }
-
-          @Override
-          protected DeadLetterPublisher deadLetterPublisher() {
-            return null;
+          protected int workerPort() {
+            return 0;
           }
         };
+      }
+
+      @Override
+      protected WorkerConfiguration workerConfiguration() {
+        return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+      }
+
+      @Override
+      protected TaskDispatchExecutor taskDispatchExecutor() {
+        return executor;
+      }
+
+      @Override
+      public String listenerId() {
+        return "test-listener";
+      }
+
+      @Override
+      protected DeadLetterPublisher deadLetterPublisher() {
+        return null;
+      }
+    };
 
     // 强制 permits = 1(通过构造器注入)
     consumer.initSemaphore();
 
-    String msg =
-        JsonUtils.toJson(
-            new TaskDispatchMessage(
-                "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
+    String msg = JsonUtils.toJson(new TaskDispatchMessage(
+        "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
 
-    Future<?> f1 =
-        pool.submit(
-            () -> {
-              ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);
-            });
+    Future<?> f1 = pool.submit(() -> {
+      ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);
+    });
 
     // 全 reactor 跑时 JVM 忙，2s pool thread 启动可能不够；放宽到 10s 防 timing flake
     assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
@@ -162,14 +154,10 @@ class AbstractTaskConsumerBackpressureTest {
     AbstractTaskConsumer consumer = buildConsumer(registry, executor, 1);
     consumer.initSemaphore();
 
-    String msg1 =
-        JsonUtils.toJson(
-            new TaskDispatchMessage(
-                "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
-    String msg2 =
-        JsonUtils.toJson(
-            new TaskDispatchMessage(
-                "v2", "t1", 2L, null, 2L, null, null, "IMPORT", null, null, "tr", "k", null, null));
+    String msg1 = JsonUtils.toJson(new TaskDispatchMessage(
+        "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
+    String msg2 = JsonUtils.toJson(new TaskDispatchMessage(
+        "v2", "t1", 2L, null, 2L, null, null, "IMPORT", null, null, "tr", "k", null, null));
 
     boolean result =
         (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(msg1, msg2));

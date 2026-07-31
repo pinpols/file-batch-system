@@ -99,10 +99,9 @@ public class DefaultLaunchService implements LaunchService {
     // T1：先把 instance/workflow 写入数据库并提交，避免 T2 执行期间持有更长时间锁。
     PreparedLaunch prepared;
     try {
-      prepared =
-          selfProvider
-              .getObject()
-              .prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
+      prepared = selfProvider
+          .getObject()
+          .prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
     } catch (DataIntegrityViolationException exception) {
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:DataIntegrityViolationException", exception);
@@ -132,12 +131,11 @@ public class DefaultLaunchService implements LaunchService {
     if (loaded.existingInstance() == null || rerunMode) {
       return null;
     }
-    int updated =
-        jobMappers.triggerRequestMapper.updateAcceptance(
-            request.tenantId(),
-            request.requestId(),
-            BatchStatusConstants.DUPLICATE,
-            loaded.existingInstance().getId());
+    int updated = jobMappers.triggerRequestMapper.updateAcceptance(
+        request.tenantId(),
+        request.requestId(),
+        BatchStatusConstants.DUPLICATE,
+        loaded.existingInstance().getId());
     if (updated == 0) {
       log.warn(
           "updateAcceptance(DUPLICATE) 0 行受影响,行已是终态: tenantId={} requestId={}",
@@ -161,14 +159,13 @@ public class DefaultLaunchService implements LaunchService {
       String traceId,
       PreparedLaunch prepared) {
     try {
-      partitionDispatchService.dispatch(
-          PartitionDispatchService.DispatchContext.of(
-              new PartitionDispatchService.DispatchRequest(request, effectiveParams, traceId),
-              new PartitionDispatchService.DispatchRuntime(
-                  prepared.jobInstance(),
-                  prepared.workflowRun(),
-                  prepared.initialNodes(),
-                  prepared.startedAt())));
+      partitionDispatchService.dispatch(PartitionDispatchService.DispatchContext.of(
+          new PartitionDispatchService.DispatchRequest(request, effectiveParams, traceId),
+          new PartitionDispatchService.DispatchRuntime(
+              prepared.jobInstance(),
+              prepared.workflowRun(),
+              prepared.initialNodes(),
+              prepared.startedAt())));
     } catch (RuntimeException ex) {
       // A1-B fix(2026-05-29):T1 已 commit workflow_run(CREATED + current_node_code=NODE_A,NODE_B
       // 之类的 fan-out 展开)。T2 dispatch 抛 BUSINESS_ERROR(典型 dispatch_business_error 资源调度
@@ -179,12 +176,11 @@ public class DefaultLaunchService implements LaunchService {
       throw ex;
     }
 
-    int updated =
-        jobMappers.triggerRequestMapper.updateAcceptance(
-            request.tenantId(),
-            request.requestId(),
-            BatchStatusConstants.LAUNCHED,
-            prepared.jobInstance().getId());
+    int updated = jobMappers.triggerRequestMapper.updateAcceptance(
+        request.tenantId(),
+        request.requestId(),
+        BatchStatusConstants.LAUNCHED,
+        prepared.jobInstance().getId());
     if (updated == 0) {
       log.warn(
           "updateAcceptance(LAUNCHED) 0 行受影响,行已是终态: tenantId={} requestId={}",
@@ -227,26 +223,23 @@ public class DefaultLaunchService implements LaunchService {
       LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
     Long expectedVersion = jobInstance.getVersion() == null ? 0L : jobInstance.getVersion();
     Instant now = BatchDateTimeSupport.utcNow();
-    int rows =
-        jobMappers.jobInstanceMapper.updateProgress(
-            UpdateInstanceProgressParam.builder()
-                .tenantId(jobInstance.getTenantId())
-                .id(jobInstance.getId())
-                .instanceStatus(JobInstanceStatus.FAILED.code())
-                .successPartitionCount(0)
-                .failedPartitionCount(0)
-                .resultSummary(buildDispatchRejectSummary(dispatchFailure))
-                .finishedAt(now)
-                .expectedVersion(expectedVersion)
-                .failureClass(FailureClass.BUSINESS_RULE.code())
-                .build());
+    int rows = jobMappers.jobInstanceMapper.updateProgress(UpdateInstanceProgressParam.builder()
+        .tenantId(jobInstance.getTenantId())
+        .id(jobInstance.getId())
+        .instanceStatus(JobInstanceStatus.FAILED.code())
+        .successPartitionCount(0)
+        .failedPartitionCount(0)
+        .resultSummary(buildDispatchRejectSummary(dispatchFailure))
+        .finishedAt(now)
+        .expectedVersion(expectedVersion)
+        .failureClass(FailureClass.BUSINESS_RULE.code())
+        .build());
     if (rows > 0) {
-      int updated =
-          jobMappers.triggerRequestMapper.updateAcceptance(
-              request.tenantId(),
-              request.requestId(),
-              BatchStatusConstants.REJECTED,
-              jobInstance.getId());
+      int updated = jobMappers.triggerRequestMapper.updateAcceptance(
+          request.tenantId(),
+          request.requestId(),
+          BatchStatusConstants.REJECTED,
+          jobInstance.getId());
       if (updated == 0) {
         log.warn(
             "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
@@ -318,15 +311,14 @@ public class DefaultLaunchService implements LaunchService {
   /** A1-B fix:独立事务把 workflow_run CREATED → FAILED(CAS 守护防覆盖正常 outcome 回报)。 */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markWorkflowRunFailedDueToDispatch(WorkflowRunEntity workflowRun) {
-    workflowMappers.workflowRunMapper.updateStatus(
-        UpdateWorkflowRunStatusParam.builder()
-            .tenantId(workflowRun.getTenantId())
-            .id(workflowRun.getId())
-            .runStatus(WorkflowRunStatus.FAILED.code())
-            .currentNodeCode(WorkflowNodeCode.END.code())
-            .finishedAt(BatchDateTimeSupport.utcNow())
-            .expectedStatuses(List.of(WorkflowRunStatus.CREATED.code()))
-            .build());
+    workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
+        .tenantId(workflowRun.getTenantId())
+        .id(workflowRun.getId())
+        .runStatus(WorkflowRunStatus.FAILED.code())
+        .currentNodeCode(WorkflowNodeCode.END.code())
+        .finishedAt(BatchDateTimeSupport.utcNow())
+        .expectedStatuses(List.of(WorkflowRunStatus.CREATED.code()))
+        .build());
   }
 
   /**
@@ -340,20 +332,18 @@ public class DefaultLaunchService implements LaunchService {
       LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId) {
-    Instant batchDaySlaDeadlineAt =
-        launchBatchDayService.resolveBatchDaySlaDeadlineAt(
-            request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
+    Instant batchDaySlaDeadlineAt = launchBatchDayService.resolveBatchDaySlaDeadlineAt(
+        request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
     JobInstanceEntity jobInstance =
         buildJobInstanceEntity(request, loaded, effectiveParams, traceId, batchDaySlaDeadlineAt);
     int inserted = jobMappers.jobInstanceMapper.insert(jobInstance);
     if (inserted <= 0) {
-      throw new DuplicateKeyException(
-          "duplicate job_instance idempotency key: tenant="
-              + request.tenantId()
-              + ", dedupKey="
-              + jobInstance.getDedupKey()
-              + ", runAttempt="
-              + jobInstance.getRunAttempt());
+      throw new DuplicateKeyException("duplicate job_instance idempotency key: tenant="
+          + request.tenantId()
+          + ", dedupKey="
+          + jobInstance.getDedupKey()
+          + ", runAttempt="
+          + jobInstance.getRunAttempt());
     }
     launchBatchDayService.upsertBatchDayInstance(
         request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
@@ -374,10 +364,9 @@ public class DefaultLaunchService implements LaunchService {
       Instant batchDaySlaDeadlineAt) {
     String dedupKey = loaded.triggerRequest().getDedupKey();
     Long explicitParent = launchParamResolver.resolveParentInstanceId(effectiveParams);
-    Long parentInstanceId =
-        explicitParent != null
-            ? explicitParent
-            : (loaded.existingInstance() == null ? null : loaded.existingInstance().getId());
+    Long parentInstanceId = explicitParent != null
+        ? explicitParent
+        : (loaded.existingInstance() == null ? null : loaded.existingInstance().getId());
     Integer priority =
         loaded.jobDefinition().priority() == null ? 5 : loaded.jobDefinition().priority();
     String highWaterMarkIn = resolveHighWaterMarkIn(request.tenantId(), loaded);
@@ -412,24 +401,21 @@ public class DefaultLaunchService implements LaunchService {
     entity.setSuccessPartitionCount(0);
     entity.setFailedPartitionCount(0);
     entity.setTraceId(traceId);
-    entity.setParamsSnapshot(
-        launchParamResolver.buildParamsSnapshot(
-            loaded.jobDefinition(), request, effectiveParams, traceId));
+    entity.setParamsSnapshot(launchParamResolver.buildParamsSnapshot(
+        loaded.jobDefinition(), request, effectiveParams, traceId));
     // V93 P0-4: 创建时从 jobDefinition 抓 calendarCode 快照, 之后 config 变更不污染历史 instance
     entity.setCalendarCode(loaded.jobDefinition().calendarCode());
     // V94: data_interval 直接透传 LaunchRequest 的字段; trigger 侧已计算好, orchestrator 不再算
     entity.setDataIntervalStart(request.dataIntervalStart());
     entity.setDataIntervalEnd(request.dataIntervalEnd());
-    entity.setDeadlineAt(
-        launchParamResolver.resolveDeadlineAt(
-            BatchDateTimeSupport.utcNow(),
-            request.bizDate(),
-            loaded.jobDefinition(),
-            effectiveParams,
-            batchDaySlaDeadlineAt));
-    entity.setExpectedDurationSeconds(
-        launchParamResolver.resolveExpectedDurationSeconds(
-            loaded.jobDefinition(), effectiveParams));
+    entity.setDeadlineAt(launchParamResolver.resolveDeadlineAt(
+        BatchDateTimeSupport.utcNow(),
+        request.bizDate(),
+        loaded.jobDefinition(),
+        effectiveParams,
+        batchDaySlaDeadlineAt));
+    entity.setExpectedDurationSeconds(launchParamResolver.resolveExpectedDurationSeconds(
+        loaded.jobDefinition(), effectiveParams));
     entity.setHighWaterMarkIn(highWaterMarkIn);
     entity.setReplaySessionId(request.replaySessionId());
     entity.setDryRun(request.dryRun());
@@ -443,7 +429,8 @@ public class DefaultLaunchService implements LaunchService {
       Integer runAttempt) {
     Map<String, Object> snapshot = new LinkedHashMap<>();
     snapshot.put(
-        "triggerType", request.triggerType() == null ? null : request.triggerType().code());
+        "triggerType",
+        request.triggerType() == null ? null : request.triggerType().code());
     snapshot.put("runAttempt", runAttempt);
     snapshot.put("parentInstanceId", parentInstanceId);
     snapshot.put(
@@ -593,9 +580,8 @@ public class DefaultLaunchService implements LaunchService {
 
   private LaunchResponse resolveConcurrentDuplicate(
       LaunchRequest request, LaunchLoadResult loaded, RuntimeException exception) {
-    JobInstanceEntity existingInstance =
-        jobMappers.jobInstanceMapper.selectByTenantAndDedupKey(
-            request.tenantId(), loaded.triggerRequest().getDedupKey());
+    JobInstanceEntity existingInstance = jobMappers.jobInstanceMapper.selectByTenantAndDedupKey(
+        request.tenantId(), loaded.triggerRequest().getDedupKey());
     if (existingInstance == null) {
       // 不是 dedup_key 命中(本 requestId 的实例已随 prepareJobInstance 事务回滚)。若违的是
       // uk_workflow_run_active(V124 部分唯一索引:tenant+workflow_definition+biz_date 在
@@ -612,12 +598,11 @@ public class DefaultLaunchService implements LaunchService {
     if (request.triggerType() == TriggerType.RERUN) {
       throw exception;
     }
-    int updated =
-        jobMappers.triggerRequestMapper.updateAcceptance(
-            request.tenantId(),
-            request.requestId(),
-            BatchStatusConstants.DUPLICATE,
-            existingInstance.getId());
+    int updated = jobMappers.triggerRequestMapper.updateAcceptance(
+        request.tenantId(),
+        request.requestId(),
+        BatchStatusConstants.DUPLICATE,
+        existingInstance.getId());
     if (updated == 0) {
       log.warn(
           "updateAcceptance(DUPLICATE) 0 行受影响,行已是终态: tenantId={} requestId={}",

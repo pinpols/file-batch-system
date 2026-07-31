@@ -129,15 +129,12 @@ public class TriggerLaunchConsumer {
       final LaunchRequest boundRequest = request;
       LaunchResponse response;
       if (boundTenantId != null && !boundTenantId.isBlank() && !"unknown".equals(boundTenantId)) {
-        response =
-            RlsTenantContextHolder.runWithTenant(
-                boundTenantId,
-                () -> {
-                  LaunchResponse r = launchApplicationService.launch(boundRequest);
-                  // 闭环回写也在 holder 作用域内,确保 trigger_request UPDATE 走 RLS。
-                  writeBackTriggerRequestLaunched(boundTenantId, boundRequest.requestId(), r);
-                  return r;
-                });
+        response = RlsTenantContextHolder.runWithTenant(boundTenantId, () -> {
+          LaunchResponse r = launchApplicationService.launch(boundRequest);
+          // 闭环回写也在 holder 作用域内,确保 trigger_request UPDATE 走 RLS。
+          writeBackTriggerRequestLaunched(boundTenantId, boundRequest.requestId(), r);
+          return r;
+        });
       } else {
         response = launchApplicationService.launch(boundRequest);
         writeBackTriggerRequestLaunched(boundTenantId, boundRequest.requestId(), response);
@@ -167,7 +164,12 @@ public class TriggerLaunchConsumer {
         counter(METRIC_FAILED, "tenant", tenantTag, "reason", "rate_limited").increment();
         throw ex;
       }
-      counter(METRIC_FAILED, "tenant", tenantTag, "reason", "http_" + ex.getStatusCode().value())
+      counter(
+              METRIC_FAILED,
+              "tenant",
+              tenantTag,
+              "reason",
+              "http_" + ex.getStatusCode().value())
           .increment();
       throw ex;
     } catch (BizException ex) {
@@ -212,7 +214,9 @@ public class TriggerLaunchConsumer {
     }
     Long jobInstanceId = null;
     try {
-      if (response != null && response.instanceNo() != null && !response.instanceNo().isBlank()) {
+      if (response != null
+          && response.instanceNo() != null
+          && !response.instanceNo().isBlank()) {
         JobInstanceEntity jobInstance =
             jobInstanceMapper.selectByInstanceNo(tenantId, response.instanceNo());
         if (jobInstance != null) {

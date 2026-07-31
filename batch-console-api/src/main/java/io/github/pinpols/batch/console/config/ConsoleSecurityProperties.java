@@ -152,17 +152,15 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
     }
     for (String origin : corsAllowedOrigins) {
       if (origin == null || origin.isBlank()) {
-        throw new IllegalStateException(
-            "FATAL: batch.console.security.cors-allowed-origins 含空白条目,"
-                + "必须是显式 origin(如 https://console.example.com)");
+        throw new IllegalStateException("FATAL: batch.console.security.cors-allowed-origins 含空白条目,"
+            + "必须是显式 origin(如 https://console.example.com)");
       }
       String trimmed = origin.trim();
       if ("*".equals(trimmed) || "null".equalsIgnoreCase(trimmed)) {
-        throw new IllegalStateException(
-            "FATAL: batch.console.security.cors-allowed-origins='"
-                + trimmed
-                + "' 被禁止 —— allowCredentials=true 与通配符 origin 不兼容(W3C CORS 规范),"
-                + "必须显式列具体 origin。");
+        throw new IllegalStateException("FATAL: batch.console.security.cors-allowed-origins='"
+            + trimmed
+            + "' 被禁止 —— allowCredentials=true 与通配符 origin 不兼容(W3C CORS 规范),"
+            + "必须显式列具体 origin。");
       }
     }
   }

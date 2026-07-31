@@ -86,14 +86,29 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   /** 抢锁窗口窄,多跑几轮放大命中概率。R*N = 120 对 outcome/reclaim 抢锁。 */
   private static final int ROUNDS = 10;
 
-  @Autowired private LaunchService launchService;
-  @Autowired private TaskExecutionService taskExecutionService;
-  @Autowired private PartitionReclaimUnit reclaimUnit;
-  @Autowired private JobInstanceMapper jobInstanceMapper;
-  @Autowired private JobPartitionMapper jobPartitionMapper;
-  @Autowired private JobTaskMapper jobTaskMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private WorkerRegistryCache workerRegistryCache;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private TaskExecutionService taskExecutionService;
+
+  @Autowired
+  private PartitionReclaimUnit reclaimUnit;
+
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private WorkerRegistryCache workerRegistryCache;
 
   @BeforeEach
   void refreshWorkers() {
@@ -122,7 +137,8 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
           invocations[i] = "inv-" + round + "-" + UUID.randomUUID();
           resetShardToRunning(shards.get(i), fannedOut.seed().workerCode(), invocations[i]);
           // reclaim 用传入实体的 version 做 partition CAS,必须在 reset 之后重新读到最新 version。
-          freshPartitions.add(jobPartitionMapper.selectById(TENANT, shards.get(i).partitionId()));
+          freshPartitions.add(
+              jobPartitionMapper.selectById(TENANT, shards.get(i).partitionId()));
         }
 
         CountDownLatch startGate = new CountDownLatch(1);
@@ -132,36 +148,31 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
           String invocation = invocations[i];
           JobPartitionEntity reclaimTarget = freshPartitions.get(i);
           // outcome 线程:真 applyTaskOutcome(success)——task→partition 锁序。
-          futures.add(
-              pool.submit(
-                  () -> {
-                    await(startGate);
-                    try {
-                      taskExecutionService.applyTaskOutcome(
-                          TaskOutcomeCommand.builder()
-                              .tenantId(TENANT)
-                              .taskId(shard.taskId())
-                              .success(true)
-                              .resultSummary("{\"records\":1}")
-                              .partitionInvocationId(invocation)
-                              .build());
-                    } catch (RuntimeException ex) {
-                      classify(ex, deadlocks, benignConflicts);
-                    }
-                    return null;
-                  }));
+          futures.add(pool.submit(() -> {
+            await(startGate);
+            try {
+              taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+                  .tenantId(TENANT)
+                  .taskId(shard.taskId())
+                  .success(true)
+                  .resultSummary("{\"records\":1}")
+                  .partitionInvocationId(invocation)
+                  .build());
+            } catch (RuntimeException ex) {
+              classify(ex, deadlocks, benignConflicts);
+            }
+            return null;
+          }));
           // reclaim 线程:真 PartitionReclaimUnit.reclaim——partition→task 锁序。
-          futures.add(
-              pool.submit(
-                  () -> {
-                    await(startGate);
-                    try {
-                      reclaimUnit.reclaim(reclaimTarget);
-                    } catch (RuntimeException ex) {
-                      classify(ex, deadlocks, benignConflicts);
-                    }
-                    return null;
-                  }));
+          futures.add(pool.submit(() -> {
+            await(startGate);
+            try {
+              reclaimUnit.reclaim(reclaimTarget);
+            } catch (RuntimeException ex) {
+              classify(ex, deadlocks, benignConflicts);
+            }
+            return null;
+          }));
         }
 
         startGate.countDown();
@@ -209,14 +220,13 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
       resetShardToRunning(shards.get(i), fannedOut.seed().workerCode(), settleInvocations[i]);
     }
     for (int i = 0; i < shards.size(); i++) {
-      taskExecutionService.applyTaskOutcome(
-          TaskOutcomeCommand.builder()
-              .tenantId(TENANT)
-              .taskId(shards.get(i).taskId())
-              .success(true)
-              .resultSummary("{\"records\":1}")
-              .partitionInvocationId(settleInvocations[i])
-              .build());
+      taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+          .tenantId(TENANT)
+          .taskId(shards.get(i).taskId())
+          .success(true)
+          .resultSummary("{\"records\":1}")
+          .partitionInvocationId(settleInvocations[i])
+          .build());
     }
 
     for (Shard shard : shards) {
@@ -273,44 +283,40 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   // ---- fixture helpers（复用 PartitionJoinPromotionIntegrationTest 的 launch/claim 范式）----
 
   private FannedOutInstance launchBundle(int count) {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
-            jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
+    LaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
     List<Map<String, Object>> bundleFiles = new ArrayList<>();
     for (int i = 0; i < count; i++) {
       bundleFiles.add(Map.of("sourceFileId", 4000 + i, "templateCode", "TPL_" + i));
     }
-    LaunchRequest request =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.EVENT)
-            .requestId(seed.requestId())
-            .traceId("trace-deadlock-" + seed.requestId())
-            .params(Map.of("bundleFiles", bundleFiles))
-            .build();
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-deadlock-" + seed.requestId())
+        .params(Map.of("bundleFiles", bundleFiles))
+        .build();
     launchService.launch(request);
 
     JobInstanceEntity instance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
     assertThat(instance).as("bundle launch must create the instance").isNotNull();
-    List<JobPartitionEntity> partitions =
-        jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(TENANT, instance.getId(), null, null));
+    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(TENANT, instance.getId(), null, null));
     assertThat(partitions).as("bundle must fan out into K partitions").hasSize(count);
     return new FannedOutInstance(seed, instance.getId());
   }
 
   private List<Shard> claimAllShards(FannedOutInstance fannedOut) {
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
+    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+        new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
     List<Shard> shards = new ArrayList<>();
     for (JobTaskEntity task : tasks) {
-      JobTaskEntity claimed =
-          taskExecutionService.assignWorker(TENANT, task.getId(), fannedOut.seed().workerCode());
+      JobTaskEntity claimed = taskExecutionService.assignWorker(
+          TENANT, task.getId(), fannedOut.seed().workerCode());
       assertThat(claimed).isNotNull();
       shards.add(new Shard(task.getId(), task.getJobPartitionId()));
     }
@@ -358,12 +364,11 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int countColumn(String column, Long instanceId) {
-    Integer value =
-        jdbcTemplate.queryForObject(
-            "select " + column + " from batch.job_instance where tenant_id = ? and id = ?",
-            Integer.class,
-            TENANT,
-            instanceId);
+    Integer value = jdbcTemplate.queryForObject(
+        "select " + column + " from batch.job_instance where tenant_id = ? and id = ?",
+        Integer.class,
+        TENANT,
+        instanceId);
     return value == null ? 0 : value;
   }
 

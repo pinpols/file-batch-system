@@ -14,13 +14,12 @@ class ProcessMetricsTest {
   void noopFactory_doesNotThrow_whenRegistryAbsent() {
     ProcessMetrics metrics = ProcessMetrics.noop();
 
-    assertThatCode(
-            () -> {
-              metrics.recordComputeStagedRows("t1", 10);
-              metrics.recordCommitPublishedRows("t1", 5);
-              metrics.incrementValidationFailed("t1", "rule1");
-              metrics.recordStageDuration("PREPARE", "t1", true, 12345L);
-            })
+    assertThatCode(() -> {
+          metrics.recordComputeStagedRows("t1", 10);
+          metrics.recordCommitPublishedRows("t1", 5);
+          metrics.incrementValidationFailed("t1", "rule1");
+          metrics.recordStageDuration("PREPARE", "t1", true, 12345L);
+        })
         .doesNotThrowAnyException();
   }
 
@@ -36,12 +35,15 @@ class ProcessMetricsTest {
     metrics.recordStageDuration("COMPUTE", "t1", true, 5_000_000L);
 
     assertThat(registry.find(ProcessMetrics.STAGED_ROWS).summary().count()).isEqualTo(1);
-    assertThat(registry.find(ProcessMetrics.STAGED_ROWS).summary().totalAmount()).isEqualTo(100);
+    assertThat(registry.find(ProcessMetrics.STAGED_ROWS).summary().totalAmount())
+        .isEqualTo(100);
 
     assertThat(registry.find(ProcessMetrics.PUBLISHED_ROWS).summary().count()).isEqualTo(1);
-    assertThat(registry.find(ProcessMetrics.PUBLISHED_ROWS).summary().totalAmount()).isEqualTo(90);
+    assertThat(registry.find(ProcessMetrics.PUBLISHED_ROWS).summary().totalAmount())
+        .isEqualTo(90);
 
-    assertThat(registry.find(ProcessMetrics.VALIDATION_FAILED).counter().count()).isEqualTo(2.0);
+    assertThat(registry.find(ProcessMetrics.VALIDATION_FAILED).counter().count())
+        .isEqualTo(2.0);
 
     assertThat(registry.find(ProcessMetrics.STAGE_DURATION).timer().count()).isEqualTo(1);
   }
@@ -58,13 +60,12 @@ class ProcessMetricsTest {
 
     // 三种独立 tag 组合 → 3 个 timer 实例;同 tag 组合的两次 record 累计在一个 timer 上。
     assertThat(registry.find(ProcessMetrics.STAGE_DURATION).timers()).hasSize(3);
-    assertThat(
-            registry
-                .find(ProcessMetrics.STAGE_DURATION)
-                .tag("stage", "PREPARE")
-                .tag("success", "true")
-                .timer()
-                .count())
+    assertThat(registry
+            .find(ProcessMetrics.STAGE_DURATION)
+            .tag("stage", "PREPARE")
+            .tag("success", "true")
+            .timer()
+            .count())
         .isEqualTo(2);
   }
 
@@ -78,7 +79,8 @@ class ProcessMetricsTest {
 
     // 两次 null/blank tag 应当合并到同一个 (tenantId=unknown, ruleName=unknown) 计数器。
     assertThat(registry.find(ProcessMetrics.VALIDATION_FAILED).counters()).hasSize(1);
-    assertThat(registry.find(ProcessMetrics.VALIDATION_FAILED).counter().count()).isEqualTo(2.0);
+    assertThat(registry.find(ProcessMetrics.VALIDATION_FAILED).counter().count())
+        .isEqualTo(2.0);
   }
 
   private static ObjectProvider<MeterRegistry> asProvider(MeterRegistry registry) {

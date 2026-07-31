@@ -107,10 +107,9 @@ public class ConsoleAssetFreshnessPolicyService {
           ERROR_INVALID_ARGUMENT_DETAIL,
           "lookbackDays must be between 1 and 31");
     }
-    String severity =
-        Texts.hasText(param.severity())
-            ? param.severity().trim().toUpperCase(Locale.ROOT)
-            : DEFAULT_SEVERITY;
+    String severity = Texts.hasText(param.severity())
+        ? param.severity().trim().toUpperCase(Locale.ROOT)
+        : DEFAULT_SEVERITY;
     if (!VALID_SEVERITIES.contains(severity)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

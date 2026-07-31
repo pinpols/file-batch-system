@@ -40,10 +40,8 @@ public class DelimitedExportFormat extends AbstractExportFormat {
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
 
     // ADR-041 Phase1.4:出站内嵌 trailer 控制记录(默认关闭,trailer_template.present=true 才启用)。
-    Map<String, Object> trailerTemplate =
-        toMap(
-            firstNonNull(
-                templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate")));
+    Map<String, Object> trailerTemplate = toMap(firstNonNull(
+        templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate")));
     boolean trailerEnabled = OutboundTrailerRecord.enabled(trailerTemplate);
     boolean resuming = isResuming(ctx);
     String amountField = trailerEnabled ? OutboundTrailerRecord.amountField(trailerTemplate) : null;
@@ -67,28 +65,23 @@ public class DelimitedExportFormat extends AbstractExportFormat {
         writeDelimitedHeaderRows(writer, columns, formatConfig);
       }
       long recordCount =
-          generatePaged(
-              ctx,
-              firstPage,
-              file::flushAndSync,
-              (batch, detail, rowIndex) -> {
-                StringJoiner joiner = new StringJoiner(formatConfig.delimiter());
-                for (ColumnLayout column : columns) {
-                  joiner.add(
-                      csv(resolveDelimitedValue(batch, detail, column.source()), formatConfig));
-                }
-                writer.write(joiner.toString());
-                writer.newLine();
-                if (accumulationField != null) {
-                  BigDecimal value = decimalValue(detail.get(accumulationField));
-                  if (value != null) {
-                    controlTotal[0] = controlTotal[0].add(value);
-                  }
-                }
-                if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
-                  writer.flush();
-                }
-              });
+          generatePaged(ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
+            StringJoiner joiner = new StringJoiner(formatConfig.delimiter());
+            for (ColumnLayout column : columns) {
+              joiner.add(csv(resolveDelimitedValue(batch, detail, column.source()), formatConfig));
+            }
+            writer.write(joiner.toString());
+            writer.newLine();
+            if (accumulationField != null) {
+              BigDecimal value = decimalValue(detail.get(accumulationField));
+              if (value != null) {
+                controlTotal[0] = controlTotal[0].add(value);
+              }
+            }
+            if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
+              writer.flush();
+            }
+          });
       if (trailerEnabled) {
         writeDelimitedTrailer(writer, trailerTemplate, recordCount, controlTotal[0], formatConfig);
       }
@@ -119,12 +112,11 @@ public class DelimitedExportFormat extends AbstractExportFormat {
     if (batch == null || batch.isEmpty()) {
       return null;
     }
-    return decimalValue(
-        firstNonNull(
-            batch.get("total_amount"),
-            batch.get("totalAmount"),
-            batch.get("control_total"),
-            batch.get("controlTotal")));
+    return decimalValue(firstNonNull(
+        batch.get("total_amount"),
+        batch.get("totalAmount"),
+        batch.get("control_total"),
+        batch.get("controlTotal")));
   }
 
   private void writeDelimitedHeaderRows(

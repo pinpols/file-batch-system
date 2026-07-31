@@ -58,16 +58,15 @@ public class DefaultConsoleFileTemplateApplicationService
   public PageResponse<Map<String, Object>> list(FileTemplateQueryRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    FileTemplateConfigQuery query =
-        new FileTemplateConfigQuery(
-            tenantId,
-            request.getKeyword(),
-            request.getTemplateCode(),
-            request.getTemplateName(),
-            request.getTemplateType(),
-            request.getBizType(),
-            request.getEnabled(),
-            pageRequest);
+    FileTemplateConfigQuery query = new FileTemplateConfigQuery(
+        tenantId,
+        request.getKeyword(),
+        request.getTemplateCode(),
+        request.getTemplateName(),
+        request.getTemplateType(),
+        request.getBizType(),
+        request.getEnabled(),
+        pageRequest);
     long total = mapper.countByQuery(query);
     List<Map<String, Object>> items = mapper.selectByQuery(query);
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
@@ -138,14 +137,13 @@ public class DefaultConsoleFileTemplateApplicationService
     FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
     param.setTenantId(tenantId);
     param.setTemplateCode(request.getTemplateCode());
-    param.setBasicInfo(
-        basicInfo(
-            request.getTemplateName(),
-            request.getTemplateType(),
-            request.getBizType(),
-            request.getEnabled() != null ? request.getEnabled() : true,
-            version,
-            request.getDescription()));
+    param.setBasicInfo(basicInfo(
+        request.getTemplateName(),
+        request.getTemplateType(),
+        request.getBizType(),
+        request.getEnabled() != null ? request.getEnabled() : true,
+        version,
+        request.getDescription()));
     FileTemplateConfigUpsertParam.FormatOptions format =
         new FileTemplateConfigUpsertParam.FormatOptions();
     format.setFileFormatType(request.getFileFormatType());
@@ -170,29 +168,26 @@ public class DefaultConsoleFileTemplateApplicationService
     format.setFieldMappingsJson(request.getFieldMappingsJson());
     format.setValidationRuleSetJson(request.getValidationRuleSetJson());
     param.setFormat(format);
-    param.setQuery(
-        queryOptions(
-            request.getDefaultQueryCode(),
-            request.getDefaultQuerySql(),
-            request.getQueryParamSchemaJson()));
+    param.setQuery(queryOptions(
+        request.getDefaultQueryCode(),
+        request.getDefaultQuerySql(),
+        request.getQueryParamSchemaJson()));
     // Runtime: DB 默认 streaming=true / page=1000 / fetch=1000 / chunk=500,补一致默认
-    param.setRuntime(
-        runtimeOptions(
-            request.getStreamingEnabled() != null ? request.getStreamingEnabled() : Boolean.TRUE,
-            request.getPageSize() != null ? request.getPageSize() : 1000,
-            request.getFetchSize() != null ? request.getFetchSize() : 1000,
-            request.getChunkSize() != null ? request.getChunkSize() : 500));
+    param.setRuntime(runtimeOptions(
+        request.getStreamingEnabled() != null ? request.getStreamingEnabled() : Boolean.TRUE,
+        request.getPageSize() != null ? request.getPageSize() : 1000,
+        request.getFetchSize() != null ? request.getFetchSize() : 1000,
+        request.getChunkSize() != null ? request.getChunkSize() : 500));
     // Security: DB 全部 NOT NULL DEFAULT FALSE,补默认避免 not-null violation
-    SecurityOptionsInput securityInput =
-        SecurityOptionsInput.builder()
-            .previewMaskingEnabled(coalesceFalse(request.getPreviewMaskingEnabled()))
-            .errorLineMaskingEnabled(coalesceFalse(request.getErrorLineMaskingEnabled()))
-            .logMaskingEnabled(coalesceFalse(request.getLogMaskingEnabled()))
-            .contentEncryptionEnabled(coalesceFalse(request.getContentEncryptionEnabled()))
-            .encryptionKeyRef(request.getEncryptionKeyRef())
-            .downloadRequiresApproval(coalesceFalse(request.getDownloadRequiresApproval()))
-            .maskingRuleSet(request.getMaskingRuleSet())
-            .build();
+    SecurityOptionsInput securityInput = SecurityOptionsInput.builder()
+        .previewMaskingEnabled(coalesceFalse(request.getPreviewMaskingEnabled()))
+        .errorLineMaskingEnabled(coalesceFalse(request.getErrorLineMaskingEnabled()))
+        .logMaskingEnabled(coalesceFalse(request.getLogMaskingEnabled()))
+        .contentEncryptionEnabled(coalesceFalse(request.getContentEncryptionEnabled()))
+        .encryptionKeyRef(request.getEncryptionKeyRef())
+        .downloadRequiresApproval(coalesceFalse(request.getDownloadRequiresApproval()))
+        .maskingRuleSet(request.getMaskingRuleSet())
+        .build();
     param.setSecurity(securityOptions(securityInput));
     param.setPluginRefs(pluginRefs(request.getLoadTargetRef(), request.getExportDataRef()));
     param.setAudit(auditOptions(operator, operator));
@@ -289,26 +284,20 @@ public class DefaultConsoleFileTemplateApplicationService
 
   private SecurityOptionsInput buildSecurityInputForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    SecurityOptionsInput securityInput =
-        SecurityOptionsInput.builder()
-            .previewMaskingEnabled(
-                coalesceBoolean(
-                    req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled"))
-            .errorLineMaskingEnabled(
-                coalesceBoolean(
-                    req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled"))
-            .logMaskingEnabled(
-                coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled"))
-            .contentEncryptionEnabled(
-                coalesceBoolean(
-                    req.getContentEncryptionEnabled(), existing, "content_encryption_enabled"))
-            .encryptionKeyRef(
-                coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref"))
-            .downloadRequiresApproval(
-                coalesceBoolean(
-                    req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
-            .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
-            .build();
+    SecurityOptionsInput securityInput = SecurityOptionsInput.builder()
+        .previewMaskingEnabled(
+            coalesceBoolean(req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled"))
+        .errorLineMaskingEnabled(coalesceBoolean(
+            req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled"))
+        .logMaskingEnabled(
+            coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled"))
+        .contentEncryptionEnabled(coalesceBoolean(
+            req.getContentEncryptionEnabled(), existing, "content_encryption_enabled"))
+        .encryptionKeyRef(coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref"))
+        .downloadRequiresApproval(coalesceBoolean(
+            req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
+        .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
+        .build();
     return securityInput;
   }
 
@@ -439,10 +428,9 @@ public class DefaultConsoleFileTemplateApplicationService
 
   private String defaultExportSql(FileTemplateMappingDraftCommand command, List<String> columns) {
     String selectColumns = columns.isEmpty() ? "id" : String.join(", ", columns);
-    String tableRef =
-        Texts.hasText(command.schemaName())
-            ? command.schemaName() + "." + command.tableName()
-            : command.tableName();
+    String tableRef = Texts.hasText(command.schemaName())
+        ? command.schemaName() + "." + command.tableName()
+        : command.tableName();
     String tenantColumn = firstText(command.tenantColumn(), "tenant_id");
     return "select "
         + selectColumns

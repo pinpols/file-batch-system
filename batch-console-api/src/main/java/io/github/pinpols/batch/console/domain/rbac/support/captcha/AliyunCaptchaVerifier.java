@@ -63,9 +63,8 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
     try {
       String host = properties.getAliyunEndpoint();
       String url = "https://" + host + "/";
-      String body =
-          objectMapper.writeValueAsString(
-              Map.of("CaptchaVerifyParam", token, "SceneId", properties.getAliyunSceneId()));
+      String body = objectMapper.writeValueAsString(
+          Map.of("CaptchaVerifyParam", token, "SceneId", properties.getAliyunSceneId()));
 
       Map<String, String> headers = signedHeaders(host, body);
       String json = postJson(url, headers, body);
@@ -75,7 +74,8 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
       if (result.path("VerifyResult").asBoolean(false)) {
         return CaptchaResult.ok();
       }
-      return CaptchaResult.fail("aliyun rejected: " + root.path("Body").path("Code").asText(""));
+      return CaptchaResult.fail(
+          "aliyun rejected: " + root.path("Body").path("Code").asText(""));
     } catch (Exception ex) {
       // 净化:只打异常类型/消息,绝不打 token(用户可控)/ AK / 签名。
       log.warn(
@@ -102,15 +102,14 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
     canonicalHeaders.put("x-acs-signature-nonce", nonce);
     canonicalHeaders.put("x-acs-version", VERSION);
 
-    String authorization =
-        buildAuthorization(
-            "POST",
-            "/",
-            "",
-            canonicalHeaders,
-            hashedPayload,
-            properties.getAliyunAccessKeyId(),
-            properties.getAliyunAccessKeySecret());
+    String authorization = buildAuthorization(
+        "POST",
+        "/",
+        "",
+        canonicalHeaders,
+        hashedPayload,
+        properties.getAliyunAccessKeyId(),
+        properties.getAliyunAccessKeySecret());
 
     TreeMap<String, String> headers = new TreeMap<>(canonicalHeaders);
     headers.put("Authorization", authorization);
@@ -119,22 +118,19 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
 
   /** 执行 application/json POST,带上签名头,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
   protected String postJson(String url, Map<String, String> headers, String body) throws Exception {
-    HttpRequest.Builder builder =
-        HttpRequest.newBuilder(URI.create(url))
-            .header("Content-Type", "application/json; charset=utf-8")
-            .header("Accept", "application/json")
-            .timeout(REQUEST_TIMEOUT)
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+        .header("Content-Type", "application/json; charset=utf-8")
+        .header("Accept", "application/json")
+        .timeout(REQUEST_TIMEOUT)
+        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
     // host 头由 HttpClient 自行管理,不可手动 set,故签名头里跳过 host。
-    headers.forEach(
-        (k, v) -> {
-          if (!"host".equalsIgnoreCase(k)) {
-            builder.header(k, v);
-          }
-        });
-    HttpResponse<String> response =
-        httpClient.send(
-            builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    headers.forEach((k, v) -> {
+      if (!"host".equalsIgnoreCase(k)) {
+        builder.header(k, v);
+      }
+    });
+    HttpResponse<String> response = httpClient.send(
+        builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     return response.body();
   }
 
@@ -180,18 +176,17 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
       headerLines.append(e.getKey()).append(':').append(e.getValue().trim()).append('\n');
     }
 
-    String canonicalRequest =
-        httpMethod
-            + '\n'
-            + canonicalUri
-            + '\n'
-            + canonicalQuery
-            + '\n'
-            + headerLines
-            + '\n'
-            + signedHeaders
-            + '\n'
-            + hashedPayload;
+    String canonicalRequest = httpMethod
+        + '\n'
+        + canonicalUri
+        + '\n'
+        + canonicalQuery
+        + '\n'
+        + headerLines
+        + '\n'
+        + signedHeaders
+        + '\n'
+        + hashedPayload;
 
     String stringToSign = ALGORITHM + '\n' + CaptchaCrypto.sha256Hex(canonicalRequest);
     String signature = CaptchaCrypto.hmacSha256Hex(accessKeySecret, stringToSign);

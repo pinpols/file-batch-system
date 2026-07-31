@@ -26,8 +26,7 @@ public class CapacityProfileController {
       @RequestParam(value = "to", required = false) Instant to,
       @RequestParam(value = "groupBy", required = false) String groupBy,
       @RequestParam(value = "limit", required = false) Integer limit) {
-    return CommonResponse.success(
-        capacityProfileService.query(
-            tenantId, from, to, CapacityProfileGroupBy.fromNullable(groupBy), limit));
+    return CommonResponse.success(capacityProfileService.query(
+        tenantId, from, to, CapacityProfileGroupBy.fromNullable(groupBy), limit));
   }
 }

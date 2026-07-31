@@ -49,9 +49,11 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired private ImportIngressScanner scanner;
+  @Autowired
+  private ImportIngressScanner scanner;
 
-  @Autowired private PlatformFileRuntimeRepository runtimeRepository;
+  @Autowired
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   @Test
   void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
@@ -62,13 +64,18 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
     S3Client client = s3Client();
     client.putObject(
-        PutObjectRequest.builder().bucket(bucket).key(objectName).contentType("text/csv").build(),
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(objectName)
+            .contentType("text/csv")
+            .build(),
         RequestBody.fromBytes(content));
 
     // 调度器中扫描已禁用，但我们直接调用 scan()
     scanner.scan();
 
-    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+        .isTrue();
     Map<String, Object> row =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
     assertThat(row).isNotEmpty();
@@ -87,19 +94,25 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     byte[] content = "id,name\n2,Bob\n".getBytes(StandardCharsets.UTF_8);
     S3Client client = s3Client();
     client.putObject(
-        PutObjectRequest.builder().bucket(bucket).key(objectName).contentType("text/csv").build(),
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(objectName)
+            .contentType("text/csv")
+            .build(),
         RequestBody.fromBytes(content));
 
     // 第一次扫描：注册文件
     scanner.scan();
-    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+        .isTrue();
     Map<String, Object> first =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
     long firstId = ((Number) first.get("id")).longValue();
 
     // 第二次扫描：不应创建重复记录（幂等）
     scanner.scan();
-    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+        .isTrue();
     Map<String, Object> after =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
     assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
@@ -113,8 +126,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     S3Client client = s3Client();
 
     // v2 批次清单:声明 order-it.csv 用模板 TPL_ORDER
-    String manifestJson =
-        """
+    String manifestJson = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-it-group",
@@ -134,7 +146,11 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
     byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
     client.putObject(
-        PutObjectRequest.builder().bucket(bucket).key(dataObject).contentType("text/csv").build(),
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(dataObject)
+            .contentType("text/csv")
+            .build(),
         RequestBody.fromBytes(content));
 
     scanner.scan();
@@ -162,7 +178,11 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
     byte[] content = "id,name\n3,Carol\n".getBytes(StandardCharsets.UTF_8);
     client.putObject(
-        PutObjectRequest.builder().bucket(bucket).key(dataObject).contentType("text/csv").build(),
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(dataObject)
+            .contentType("text/csv")
+            .build(),
         RequestBody.fromBytes(content));
 
     scanner.scan();
@@ -171,8 +191,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     assertThat(before).isNotEmpty();
     assertThat(String.valueOf(before.get("metadata_json"))).doesNotContain("bundleJobCode");
 
-    String manifestJson =
-        """
+    String manifestJson = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-late-it-group",
@@ -184,8 +203,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
             { "fileName": "%s", "templateCode": "TPL_ORDER_LATE" }
           ]
         }
-        """
-            .formatted(dataFileName, dataFileName);
+        """.formatted(dataFileName, dataFileName);
     client.putObject(
         PutObjectRequest.builder()
             .bucket(bucket)
@@ -209,9 +227,8 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   private S3Client s3Client() {
     return S3Client.builder()
         .endpointOverride(URI.create(s3Endpoint()))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create("minioadmin", "minioadmin123")))
         .forcePathStyle(true)
         .region(Region.US_EAST_1)
         .build();

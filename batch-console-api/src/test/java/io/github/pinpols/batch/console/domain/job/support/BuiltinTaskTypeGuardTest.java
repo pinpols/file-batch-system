@@ -84,7 +84,8 @@ class BuiltinTaskTypeGuardTest {
   }
 
   private static void setAuthorities(String... authorities) {
-    var grants = java.util.Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList();
+    var grants =
+        java.util.Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList();
     var auth = new UsernamePasswordAuthenticationToken("test-user", "n/a", grants);
     SecurityContextHolder.getContext().setAuthentication(auth);
   }

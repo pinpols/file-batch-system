@@ -12,9 +12,11 @@ import lombok.Data;
 
 @Data
 public class PipelineDefinitionSaveRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String jobCode;
+  @ValidResourceCode
+  private String jobCode;
 
   @NotBlank
   @Size(max = 256)
@@ -39,7 +41,8 @@ public class PipelineDefinitionSaveRequest {
   @Size(max = 512)
   private String description;
 
-  @Valid private List<StepItem> steps;
+  @Valid
+  private List<StepItem> steps;
 
   @Data
   public static class StepItem {

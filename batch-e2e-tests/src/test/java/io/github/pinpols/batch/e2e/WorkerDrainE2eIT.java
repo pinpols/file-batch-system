@@ -59,11 +59,14 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
   private static final String WORKER_CODE = "e2e-import-drain-1";
   private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private WorkerDrainGovernanceService workerDrainGovernanceService;
+  @Autowired
+  private WorkerDrainGovernanceService workerDrainGovernanceService;
 
   @Value("${local.server.port}")
   private int localServerPort;
@@ -78,9 +81,8 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
   @Test
   void drainTimeoutReclaimsRunningTaskAndDecommissionsWorker() throws Exception {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -93,19 +95,16 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
             + "\"certificateNo\":\"ID-20260115-DRN1\",\"mobileNo\":\"13800009999\","
             + "\"email\":\"drain@example.com\",\"status\":\"ACTIVE\"}]");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-worker-drain",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-worker-drain",
+        params));
 
-    Long taskId =
-        jdbcTemplate.queryForObject(
-            """
+    Long taskId = jdbcTemplate.queryForObject("""
             select t.id
             from batch.job_task t
                      join batch.job_instance ji on ji.id = t.job_instance_id
@@ -113,10 +112,7 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
               and ji.dedup_key = ?
             order by t.id asc
             limit 1
-            """,
-            Long.class,
-            TENANT,
-            seed.dedupKey());
+            """, Long.class, TENANT, seed.dedupKey());
     assertThat(taskId).isNotNull();
 
     jdbcTemplate.update(
@@ -133,85 +129,55 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
         TENANT,
         taskId);
 
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(
-                URI.create(
-                    "http://127.0.0.1:"
-                        + localServerPort
-                        + "/internal/workers/"
-                        + WORKER_CODE
-                        + "/drain"))
-            .header("Content-Type", "application/json")
-            .POST(
-                HttpRequest.BodyPublishers.ofString(
-                    "{\"tenantId\":\"" + TENANT + "\",\"timeoutSeconds\":1}"))
-            .build();
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create(
+            "http://127.0.0.1:" + localServerPort + "/internal/workers/" + WORKER_CODE + "/drain"))
+        .header("Content-Type", "application/json")
+        .POST(HttpRequest.BodyPublishers.ofString(
+            "{\"tenantId\":\"" + TENANT + "\",\"timeoutSeconds\":1}"))
+        .build();
     HttpResponse<String> drainResponse =
         HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
     assertThat(drainResponse.statusCode()).isBetween(200, 299);
 
-    await()
-        .atMost(Duration.ofSeconds(5))
-        .untilAsserted(
-            () -> {
-              Map<String, Object> worker =
-                  jdbcTemplate.queryForMap(
-                      """
+    await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+      Map<String, Object> worker = jdbcTemplate.queryForMap("""
                       select status, drain_started_at, drain_deadline_at
                       from batch.worker_registry
                       where tenant_id = ? and worker_code = ?
-                      """,
-                      TENANT,
-                      WORKER_CODE);
-              assertThat(worker.get("status")).isEqualTo("DRAINING");
-              assertThat(worker.get("drain_started_at")).isNotNull();
-              assertThat(worker.get("drain_deadline_at")).isNotNull();
-            });
+                      """, TENANT, WORKER_CODE);
+      assertThat(worker.get("status")).isEqualTo("DRAINING");
+      assertThat(worker.get("drain_started_at")).isNotNull();
+      assertThat(worker.get("drain_deadline_at")).isNotNull();
+    });
 
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         update batch.worker_registry
         set drain_deadline_at = current_timestamp - interval '1 second',
             updated_at = current_timestamp
         where tenant_id = ? and worker_code = ?
-        """,
-        TENANT,
-        WORKER_CODE);
+        """, TENANT, WORKER_CODE);
     workerDrainGovernanceService.takeoverAfterDrainTimeout(TENANT, WORKER_CODE);
 
-    await()
-        .atMost(Duration.ofSeconds(5))
-        .untilAsserted(
-            () -> {
-              Map<String, Object> workerAfterTimeout =
-                  jdbcTemplate.queryForMap(
-                      """
+    await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+      Map<String, Object> workerAfterTimeout = jdbcTemplate.queryForMap("""
                       select status, drain_started_at, drain_deadline_at
                       from batch.worker_registry
                       where tenant_id = ? and worker_code = ?
-                      """,
-                      TENANT,
-                      WORKER_CODE);
-              assertThat(workerAfterTimeout.get("status")).isEqualTo("DECOMMISSIONED");
-              assertThat(workerAfterTimeout.get("drain_started_at")).isNull();
-              assertThat(workerAfterTimeout.get("drain_deadline_at")).isNull();
-            });
+                      """, TENANT, WORKER_CODE);
+      assertThat(workerAfterTimeout.get("status")).isEqualTo("DECOMMISSIONED");
+      assertThat(workerAfterTimeout.get("drain_started_at")).isNull();
+      assertThat(workerAfterTimeout.get("drain_deadline_at")).isNull();
+    });
 
-    await()
-        .atMost(Duration.ofSeconds(5))
-        .untilAsserted(
-            () -> {
-              Map<String, Object> taskAfterTimeout =
-                  jdbcTemplate.queryForMap(
-                      """
+    await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+      Map<String, Object> taskAfterTimeout = jdbcTemplate.queryForMap("""
                       select task_status, assigned_worker_code
                       from batch.job_task
                       where id = ?
-                      """,
-                      taskId);
-              assertThat(taskAfterTimeout.get("task_status")).isEqualTo("READY");
-              assertThat(taskAfterTimeout.get("assigned_worker_code")).isNull();
-            });
+                      """, taskId);
+      assertThat(taskAfterTimeout.get("task_status")).isEqualTo("READY");
+      assertThat(taskAfterTimeout.get("assigned_worker_code")).isNull();
+    });
   }
 }

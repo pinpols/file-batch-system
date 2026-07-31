@@ -194,9 +194,8 @@ public class TaskDispatcher {
     handlers.forEach((type, handler) -> decorated.put(type, decorate(handler, idempotencyStore)));
     this.handlers = Map.copyOf(decorated);
     this.httpClient = httpClient;
-    this.executor =
-        Executors.newFixedThreadPool(
-            config.getMaxConcurrentTasks(), namedThreadFactory("batch-sdk-dispatch"));
+    this.executor = Executors.newFixedThreadPool(
+        config.getMaxConcurrentTasks(), namedThreadFactory("batch-sdk-dispatch"));
     // permit 数 == 线程数:提交即占 permit,跑满 max 后 onMessage 返回 RETRY_LATER → 不提交 offset + pause partition,
     // 无界工作队列因此永不堆积(submit 数被 permit 卡在 max 以内)。
     this.capacity = new Semaphore(config.getMaxConcurrentTasks());
@@ -288,14 +287,13 @@ public class TaskDispatcher {
       return DispatchDecision.RETRY_LATER;
     }
     try {
-      executor.execute(
-          () -> {
-            try {
-              processInWorkerThread(msg);
-            } finally {
-              capacity.release();
-            }
-          });
+      executor.execute(() -> {
+        try {
+          processInWorkerThread(msg);
+        } finally {
+          capacity.release();
+        }
+      });
       return DispatchDecision.SUBMITTED;
     } catch (RejectedExecutionException ex) {
       capacity.release();
@@ -368,18 +366,17 @@ public class TaskDispatcher {
     progressReporters.put(msg.taskId(), progress);
 
     // EXECUTE
-    SdkTaskContext ctx =
-        new SdkTaskContext(
-            msg.tenantId(),
-            msg.jobCode(),
-            msg.taskInstanceId(),
-            msg.taskId(),
-            config.getWorkerCode(),
-            msg.parameters() == null ? Map.of() : msg.parameters(),
-            msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes(),
-            msg.schedulingContext(),
-            cancellation,
-            progress);
+    SdkTaskContext ctx = new SdkTaskContext(
+        msg.tenantId(),
+        msg.jobCode(),
+        msg.taskInstanceId(),
+        msg.taskId(),
+        config.getWorkerCode(),
+        msg.parameters() == null ? Map.of() : msg.parameters(),
+        msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes(),
+        msg.schedulingContext(),
+        cancellation,
+        progress);
 
     SdkTaskResult result;
     try {

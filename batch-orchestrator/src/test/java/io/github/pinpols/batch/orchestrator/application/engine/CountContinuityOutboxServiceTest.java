@@ -28,22 +28,28 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CountContinuityOutboxServiceTest {
 
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private WorkflowEdgeMapper workflowEdgeMapper;
-  @Mock private WorkflowNodeRunMapper workflowNodeRunMapper;
-  @Mock private DomainEventPublisher domainEventPublisher;
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowEdgeMapper workflowEdgeMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  private DomainEventPublisher domainEventPublisher;
 
   private CountContinuityOutboxService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new CountContinuityOutboxService(
-            workflowRunMapper,
-            workflowEdgeMapper,
-            workflowNodeRunMapper,
-            domainEventPublisher,
-            new ObjectMapper());
+    service = new CountContinuityOutboxService(
+        workflowRunMapper,
+        workflowEdgeMapper,
+        workflowNodeRunMapper,
+        domainEventPublisher,
+        new ObjectMapper());
   }
 
   private WorkflowRunEntity run() {

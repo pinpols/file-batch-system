@@ -44,13 +44,12 @@ public class OrchestratorSecretPreflightCheck {
       return;
     }
     try {
-      HttpStatusCode status =
-          orchestratorRestClient
-              .get()
-              .uri("/internal/orchestrator/drain/status")
-              .retrieve()
-              .toBodilessEntity()
-              .getStatusCode();
+      HttpStatusCode status = orchestratorRestClient
+          .get()
+          .uri("/internal/orchestrator/drain/status")
+          .retrieve()
+          .toBodilessEntity()
+          .getStatusCode();
       log.info(
           "orchestrator preflight ok: status={} — internal-secret alignment confirmed", status);
     } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden authErr) {

@@ -49,25 +49,22 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
     def.setTenantId(TENANT);
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
 
-    service =
-        new DefaultConsoleWorkflowDefinitionApplicationService(
-            definitionMapper,
-            nodeMapper,
-            edgeMapper,
-            mock(
-                io.github.pinpols.batch.console.domain.workflow.mapper
-                    .WorkflowDefinitionVersionMapper.class),
-            jobDefinitionMapper,
-            mock(ConsoleRealtimeDomainEventPublisher.class),
-            tenantGuard,
-            mock(ConsoleConfigCacheInvalidationService.class),
-            mock(
-                io.github.pinpols.batch.console.domain.workflow.application
-                    .WorkflowDesignLockService.class),
-            mock(
-                io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator
-                    .class),
-            new com.fasterxml.jackson.databind.ObjectMapper());
+    service = new DefaultConsoleWorkflowDefinitionApplicationService(
+        definitionMapper,
+        nodeMapper,
+        edgeMapper,
+        mock(
+            io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper
+                .class),
+        jobDefinitionMapper,
+        mock(ConsoleRealtimeDomainEventPublisher.class),
+        tenantGuard,
+        mock(ConsoleConfigCacheInvalidationService.class),
+        mock(
+            io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService
+                .class),
+        mock(io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator.class),
+        new com.fasterxml.jackson.databind.ObjectMapper());
   }
 
   @Test

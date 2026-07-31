@@ -23,13 +23,12 @@ class PipelineWorkerAtomicClasspathCheckTest {
   @Test
   void shouldFailFast_whenCanaryPresent() {
     // 通过子类 override isCanaryPresent() 模拟「atomic 类在 pipeline worker classpath 上」
-    PipelineWorkerAtomicClasspathCheck check =
-        new PipelineWorkerAtomicClasspathCheck() {
-          @Override
-          protected boolean isCanaryPresent() {
-            return true;
-          }
-        };
+    PipelineWorkerAtomicClasspathCheck check = new PipelineWorkerAtomicClasspathCheck() {
+      @Override
+      protected boolean isCanaryPresent() {
+        return true;
+      }
+    };
     assertThatThrownBy(check::verifyClasspathIsolation)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("ADR-029 violation")
@@ -38,13 +37,12 @@ class PipelineWorkerAtomicClasspathCheckTest {
 
   @Test
   void shouldPass_whenCanaryAbsent_viaOverride() {
-    PipelineWorkerAtomicClasspathCheck check =
-        new PipelineWorkerAtomicClasspathCheck() {
-          @Override
-          protected boolean isCanaryPresent() {
-            return false;
-          }
-        };
+    PipelineWorkerAtomicClasspathCheck check = new PipelineWorkerAtomicClasspathCheck() {
+      @Override
+      protected boolean isCanaryPresent() {
+        return false;
+      }
+    };
     assertThatCode(check::verifyClasspathIsolation).doesNotThrowAnyException();
   }
 }

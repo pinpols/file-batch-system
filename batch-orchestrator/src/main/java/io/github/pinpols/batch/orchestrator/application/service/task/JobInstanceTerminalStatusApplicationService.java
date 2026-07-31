@@ -28,13 +28,12 @@ public class JobInstanceTerminalStatusApplicationService {
   /** CAS 更新实例终态并收敛非终态分区/任务；返回受影响行数（0 表示并发抢占或未命中）。 */
   @Transactional
   public int updateTerminalStatusAndReconcileChildren(JobInstanceTerminalStatusCommand command) {
-    int rows =
-        jobInstanceMapper.updateStatus(
-            command.tenantId(),
-            command.id(),
-            command.terminalInstanceStatus(),
-            command.finishedAt(),
-            command.expectedVersion());
+    int rows = jobInstanceMapper.updateStatus(
+        command.tenantId(),
+        command.id(),
+        command.terminalInstanceStatus(),
+        command.finishedAt(),
+        command.expectedVersion());
     if (rows > 0) {
       terminalChildStateReconciler.reconcile(
           command.tenantId(), command.id(), command.terminalInstanceStatus());

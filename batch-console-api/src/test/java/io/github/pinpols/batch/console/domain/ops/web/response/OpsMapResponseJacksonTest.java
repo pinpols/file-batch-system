@@ -101,14 +101,13 @@ class OpsMapResponseJacksonTest {
     summary.put("taskStatusCounts", List.of());
     summary.put(
         "outboxStatusCounts",
-        List.of(
-            Map.of(
-                "status",
-                "NEW",
-                "count",
-                1L,
-                "oldest",
-                Timestamp.from(Instant.parse("2026-07-11T02:00:00Z")))));
+        List.of(Map.of(
+            "status",
+            "NEW",
+            "count",
+            1L,
+            "oldest",
+            Timestamp.from(Instant.parse("2026-07-11T02:00:00Z")))));
     summary.put("onlineWorkersForGroup", 3L);
 
     Map<String, Object> finding = new LinkedHashMap<>();
@@ -135,9 +134,8 @@ class OpsMapResponseJacksonTest {
 
     Map<String, Object> backSummary =
         mapper.convertValue(back.get("summary"), new TypeReference<>() {});
-    Map<String, Object> outbox0 =
-        mapper.convertValue(
-            ((List<?>) backSummary.get("outboxStatusCounts")).get(0), new TypeReference<>() {});
+    Map<String, Object> outbox0 = mapper.convertValue(
+        ((List<?>) backSummary.get("outboxStatusCounts")).get(0), new TypeReference<>() {});
     // MyBatis 行省略 null 列：该 outbox 行无 newest → 键不得出现。
     assertThat(outbox0).containsKeys("status", "count", "oldest").doesNotContainKey("newest");
     assertThat(outbox0).containsEntry("status", "NEW").containsEntry("count", 1);
@@ -159,18 +157,8 @@ class OpsMapResponseJacksonTest {
     normal.put("partitionCount", 2);
     normal.put(
         "partitionsWithLag",
-        List.of(
-            Map.of(
-                "topic",
-                "t1",
-                "partition",
-                0,
-                "committedOffset",
-                10L,
-                "endOffset",
-                15L,
-                "lag",
-                5L)));
+        List.of(Map.of(
+            "topic", "t1", "partition", 0, "committedOffset", 10L, "endOffset", 15L, "lag", 5L)));
 
     Map<String, Object> normalBack = roundTrip(ConsoleKafkaConsumerLagResponse.from(normal));
     assertThat(normalBack)

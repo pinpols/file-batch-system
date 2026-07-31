@@ -45,9 +45,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkerRegistryServiceTest {
 
-  @Mock private WorkerRegistryMapper mapper;
-  @Mock private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
-  @Mock private SystemParameterMapper systemParameterMapper;
+  @Mock
+  private WorkerRegistryMapper mapper;
+
+  @Mock
+  private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+
+  @Mock
+  private SystemParameterMapper systemParameterMapper;
+
   private final io.github.pinpols.batch.orchestrator.infrastructure.progress
           .PipelineStageProgressCache
       progressCache =
@@ -62,13 +68,12 @@ class DefaultWorkerRegistryServiceTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    service =
-        new DefaultWorkerRegistryService(
-            mapper,
-            customTaskTypeRegistryMapper,
-            progressCache,
-            systemParameterMapper,
-            workerRegistryProperties);
+    service = new DefaultWorkerRegistryService(
+        mapper,
+        customTaskTypeRegistryMapper,
+        progressCache,
+        systemParameterMapper,
+        workerRegistryProperties);
     // @Lazy self 字段注入,单元测下用反射手动指向自己 (走非事务路径)
     Field self = DefaultWorkerRegistryService.class.getDeclaredField("self");
     self.setAccessible(true);
@@ -157,10 +162,8 @@ class DefaultWorkerRegistryServiceTest {
     service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
 
     verify(mapper)
-        .touchHeartbeat(
-            org.mockito.ArgumentMatchers.argThat(
-                (TouchHeartbeatParam p) ->
-                    WorkerRegistryStatus.DRAINING.code().equals(p.getNextStatus())));
+        .touchHeartbeat(org.mockito.ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+            WorkerRegistryStatus.DRAINING.code().equals(p.getNextStatus())));
   }
 
   @Test
@@ -174,10 +177,8 @@ class DefaultWorkerRegistryServiceTest {
     service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
 
     verify(mapper)
-        .touchHeartbeat(
-            org.mockito.ArgumentMatchers.argThat(
-                (TouchHeartbeatParam p) ->
-                    WorkerRegistryStatus.DECOMMISSIONED.code().equals(p.getNextStatus())));
+        .touchHeartbeat(org.mockito.ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+            WorkerRegistryStatus.DECOMMISSIONED.code().equals(p.getNextStatus())));
   }
 
   @Test
@@ -191,10 +192,8 @@ class DefaultWorkerRegistryServiceTest {
     service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
 
     verify(mapper)
-        .touchHeartbeat(
-            org.mockito.ArgumentMatchers.argThat(
-                (TouchHeartbeatParam p) ->
-                    WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
+        .touchHeartbeat(org.mockito.ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+            WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
   }
 
   @Test
@@ -239,42 +238,40 @@ class DefaultWorkerRegistryServiceTest {
   @Test
   @DisplayName("register: 缺 workerGroup → 400 校验拒(不落库,杜绝 NOT NULL 撞 500 刷日志)")
   void registerMissingWorkerGroupRejected() {
-    WorkerHeartbeatDto noGroup =
-        new WorkerHeartbeatDto(
-            "ta",
-            "w1",
-            null,
-            WorkerRegistryStatus.ONLINE.code(),
-            "host",
-            "1.2.3.4",
-            "pid",
-            "build-1",
-            "sdk-1",
-            Instant.now(),
-            List.of(),
-            1,
-            null,
-            null,
-            null,
-            null);
-    WorkerHeartbeatDto blankGroup =
-        new WorkerHeartbeatDto(
-            "ta",
-            "w1",
-            "  ",
-            WorkerRegistryStatus.ONLINE.code(),
-            "host",
-            "1.2.3.4",
-            "pid",
-            "build-1",
-            "sdk-1",
-            Instant.now(),
-            List.of(),
-            1,
-            null,
-            null,
-            null,
-            null);
+    WorkerHeartbeatDto noGroup = new WorkerHeartbeatDto(
+        "ta",
+        "w1",
+        null,
+        WorkerRegistryStatus.ONLINE.code(),
+        "host",
+        "1.2.3.4",
+        "pid",
+        "build-1",
+        "sdk-1",
+        Instant.now(),
+        List.of(),
+        1,
+        null,
+        null,
+        null,
+        null);
+    WorkerHeartbeatDto blankGroup = new WorkerHeartbeatDto(
+        "ta",
+        "w1",
+        "  ",
+        WorkerRegistryStatus.ONLINE.code(),
+        "host",
+        "1.2.3.4",
+        "pid",
+        "build-1",
+        "sdk-1",
+        Instant.now(),
+        List.of(),
+        1,
+        null,
+        null,
+        null,
+        null);
 
     assertThatThrownBy(() -> service.register(noGroup))
         .isInstanceOf(BizException.class)
@@ -450,22 +447,19 @@ class DefaultWorkerRegistryServiceTest {
   void registerUpsertsDeclaredTaskTypes() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    WorkerTaskTypeDescriptorDto descriptor =
-        new WorkerTaskTypeDescriptorDto(
-            "tenant_ta_import", "导入", "v1", Map.of("batchSize", 500), null, null);
+    WorkerTaskTypeDescriptorDto descriptor = new WorkerTaskTypeDescriptorDto(
+        "tenant_ta_import", "导入", "v1", Map.of("batchSize", 500), null, null);
 
     service.register(dtoWithTaskTypes(List.of(descriptor)));
 
     verify(customTaskTypeRegistryMapper)
-        .upsertDeclared(
-            org.mockito.ArgumentMatchers.argThat(
-                (CustomTaskTypeUpsertParam p) ->
-                    "tenant_ta_import".equals(p.getTaskTypeCode())
-                        && "导入".equals(p.getDisplayName())
-                        && "v1".equals(p.getDescriptorVersion())
-                        && "w1".equals(p.getDeclaredByWorkerCode())
-                        && p.getDescriptor() != null
-                        && p.getDescriptor().contains("batchSize")));
+        .upsertDeclared(org.mockito.ArgumentMatchers.argThat(
+            (CustomTaskTypeUpsertParam p) -> "tenant_ta_import".equals(p.getTaskTypeCode())
+                && "导入".equals(p.getDisplayName())
+                && "v1".equals(p.getDescriptorVersion())
+                && "w1".equals(p.getDeclaredByWorkerCode())
+                && p.getDescriptor() != null
+                && p.getDescriptor().contains("batchSize")));
   }
 
   @Test
@@ -493,15 +487,13 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
-  @DisplayName(
-      "register: descriptor.defaults 含 secret → Lane C SensitiveDataValidator 抛"
-          + " BizException,不写入数据库")
+  @DisplayName("register: descriptor.defaults 含 secret → Lane C SensitiveDataValidator 抛"
+      + " BizException,不写入数据库")
   void registerRejectsDescriptorWithCredential_LaneC() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
-    WorkerTaskTypeDescriptorDto leaky =
-        new WorkerTaskTypeDescriptorDto(
-            "tenant_ta_leak", "leak", "v1", Map.of("apiKey", "leaked-AKIA-token"), null, null);
+    WorkerTaskTypeDescriptorDto leaky = new WorkerTaskTypeDescriptorDto(
+        "tenant_ta_leak", "leak", "v1", Map.of("apiKey", "leaked-AKIA-token"), null, null);
 
     assertThatThrownBy(() -> service.register(dtoWithTaskTypes(List.of(leaky))))
         .isInstanceOf(BizException.class)
@@ -574,7 +566,8 @@ class DefaultWorkerRegistryServiceTest {
   void updateStatus_missing_returns_null() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("missing"))).thenReturn(null);
 
-    assertThat(service.updateStatus("ta", "missing", WorkerRegistryStatus.OFFLINE.code())).isNull();
+    assertThat(service.updateStatus("ta", "missing", WorkerRegistryStatus.OFFLINE.code()))
+        .isNull();
     verify(mapper, never()).insert(any());
     verify(mapper, never()).updateById(any());
   }

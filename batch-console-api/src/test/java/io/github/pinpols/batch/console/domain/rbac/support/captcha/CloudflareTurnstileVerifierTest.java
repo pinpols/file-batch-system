@@ -52,9 +52,8 @@ class CloudflareTurnstileVerifierTest {
   @Test
   @DisplayName("success=false 带 error-codes → 失败,reason 含错误码")
   void failureResponse_fails() {
-    StubVerifier verifier =
-        new StubVerifier(
-            properties, "{\"success\":false,\"error-codes\":[\"invalid-input-response\"]}");
+    StubVerifier verifier = new StubVerifier(
+        properties, "{\"success\":false,\"error-codes\":[\"invalid-input-response\"]}");
 
     CaptchaResult result = verifier.verify("bad-token", "1.2.3.4");
 

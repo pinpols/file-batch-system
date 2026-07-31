@@ -51,15 +51,14 @@ class DefaultConsoleFileApplicationServiceTest {
   @BeforeEach
   void setUp() {
     s3Properties.setBucket("default-bucket");
-    service =
-        new DefaultConsoleFileApplicationService(
-            orchestratorClient,
-            approvalClient,
-            metadataResolver,
-            tenantGuard,
-            fileRecordMapper,
-            objectStore,
-            s3Properties);
+    service = new DefaultConsoleFileApplicationService(
+        orchestratorClient,
+        approvalClient,
+        metadataResolver,
+        tenantGuard,
+        fileRecordMapper,
+        objectStore,
+        s3Properties);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
   }
 
@@ -143,12 +142,11 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   void shouldWriteUploadedContentToObjectStore() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(
-            Map.of(
-                "storage_type", "S3",
-                "storage_bucket", "bucket-a",
-                "storage_path", "uploads/t1/a.csv",
-                "mime_type", "text/csv"));
+        .thenReturn(Map.of(
+            "storage_type", "S3",
+            "storage_bucket", "bucket-a",
+            "storage_path", "uploads/t1/a.csv",
+            "mime_type", "text/csv"));
     MockMultipartFile file =
         new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
 
@@ -167,11 +165,10 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   void shouldCloseUploadInputStreamAfterStorePut() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(
-            Map.of(
-                "storage_type", "S3",
-                "storage_bucket", "bucket-a",
-                "storage_path", "uploads/t1/a.csv"));
+        .thenReturn(Map.of(
+            "storage_type", "S3",
+            "storage_bucket", "bucket-a",
+            "storage_path", "uploads/t1/a.csv"));
     CloseTrackingInputStream inputStream =
         new CloseTrackingInputStream("id,name\n1,A\n".getBytes());
     MultipartFile file = new CloseTrackingMultipartFile(inputStream, 12L, "text/csv");

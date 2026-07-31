@@ -18,22 +18,18 @@ class DefaultStepExecutionAdapterTest {
 
   @Test
   void shouldRouteToRegisteredExecutor() {
-    BatchTaskExecutor shell =
-        stub(
-            "shell",
-            ctx -> {
-              assertThat(ctx.tenantId()).isEqualTo("t1");
-              assertThat(ctx.jobCode()).isEqualTo("job-1");
-              assertThat(ctx.workerId()).isEqualTo("w-1");
-              assertThat(ctx.runtimeAttributes()).containsEntry("traceId", "trace-1");
-              return TaskResult.ok();
-            });
+    BatchTaskExecutor shell = stub("shell", ctx -> {
+      assertThat(ctx.tenantId()).isEqualTo("t1");
+      assertThat(ctx.jobCode()).isEqualTo("job-1");
+      assertThat(ctx.workerId()).isEqualTo("w-1");
+      assertThat(ctx.runtimeAttributes()).containsEntry("traceId", "trace-1");
+      return TaskResult.ok();
+    });
     DefaultStepExecutionAdapter adapter =
         new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(shell)));
 
-    StepExecutionResponse resp =
-        adapter.execute(
-            new StepExecutionRequest("t1", "job-1", "shell", "w-1", Map.of("traceId", "trace-1")));
+    StepExecutionResponse resp = adapter.execute(
+        new StepExecutionRequest("t1", "job-1", "shell", "w-1", Map.of("traceId", "trace-1")));
 
     assertThat(resp.success()).isTrue();
     assertThat(resp.code()).isEqualTo("SUCCESS");
@@ -68,12 +64,9 @@ class DefaultStepExecutionAdapterTest {
 
   @Test
   void shouldCatchUncaughtExecutorException() {
-    BatchTaskExecutor throwing =
-        stub(
-            "http",
-            ctx -> {
-              throw new RuntimeException("network kaboom");
-            });
+    BatchTaskExecutor throwing = stub("http", ctx -> {
+      throw new RuntimeException("network kaboom");
+    });
     DefaultStepExecutionAdapter adapter =
         new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(throwing)));
 
@@ -88,25 +81,20 @@ class DefaultStepExecutionAdapterTest {
   @Test
   void shouldRouteByPayloadTaskTypeAndPassParams() {
     // job_type=ATOMIC ⇒ stepCode="ATOMIC";真正子类型 + 参数都在 payload 里。
-    BatchTaskExecutor sql =
-        stub(
-            "sql",
-            ctx -> {
-              assertThat(ctx.parameters()).containsEntry("sql", "SELECT 1");
-              assertThat(ctx.parameters()).containsEntry("taskType", "sql");
-              return TaskResult.ok();
-            });
+    BatchTaskExecutor sql = stub("sql", ctx -> {
+      assertThat(ctx.parameters()).containsEntry("sql", "SELECT 1");
+      assertThat(ctx.parameters()).containsEntry("taskType", "sql");
+      return TaskResult.ok();
+    });
     DefaultStepExecutionAdapter adapter =
         new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(sql)));
 
-    StepExecutionResponse resp =
-        adapter.execute(
-            new StepExecutionRequest(
-                "t1",
-                "job-1",
-                "ATOMIC",
-                "w-1",
-                Map.of("payload", "{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}")));
+    StepExecutionResponse resp = adapter.execute(new StepExecutionRequest(
+        "t1",
+        "job-1",
+        "ATOMIC",
+        "w-1",
+        Map.of("payload", "{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}")));
 
     assertThat(resp.success()).isTrue();
     assertThat(resp.code()).isEqualTo("SUCCESS");
@@ -118,10 +106,8 @@ class DefaultStepExecutionAdapterTest {
     DefaultStepExecutionAdapter adapter =
         new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(shell)));
 
-    StepExecutionResponse resp =
-        adapter.execute(
-            new StepExecutionRequest(
-                "t1", "job-1", "shell", "w-1", Map.of("payload", "{\"command\":\"/bin/echo\"}")));
+    StepExecutionResponse resp = adapter.execute(new StepExecutionRequest(
+        "t1", "job-1", "shell", "w-1", Map.of("payload", "{\"command\":\"/bin/echo\"}")));
 
     assertThat(resp.success()).isTrue();
   }

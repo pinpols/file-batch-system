@@ -81,21 +81,20 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
   private static final ObjectMapper JSON = new ObjectMapper();
 
-  @Autowired private ApprovalWorkflowService approvalWorkflowService;
+  @Autowired
+  private ApprovalWorkflowService approvalWorkflowService;
 
   @Test
   void shouldSubmitApprovalAndReturnApprovalNo() {
-    String approvalNo =
-        approvalWorkflowService.submit(
-            new ApprovalSubmissionSpec()
-                .actionType("DLQ_REPLAY")
-                .targetType("DEAD_LETTER")
-                .targetId("100")
-                .payloadJson("{\"reason\":\"data error\"}")
-                .sourceTraceId("trace-001")
-                .sourceIdempotencyKey("idem-001")
-                .approvalReason("need approval")
-                .build());
+    String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+        .actionType("DLQ_REPLAY")
+        .targetType("DEAD_LETTER")
+        .targetId("100")
+        .payloadJson("{\"reason\":\"data error\"}")
+        .sourceTraceId("trace-001")
+        .sourceIdempotencyKey("idem-001")
+        .approvalReason("need approval")
+        .build());
 
     assertThat(approvalNo).isNotBlank();
 
@@ -107,16 +106,14 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldTransitionFromPendingToApproved() {
-    String approvalNo =
-        approvalWorkflowService.submit(
-            new ApprovalSubmissionSpec()
-                .actionType("RETRY")
-                .targetType("JOB_PARTITION")
-                .targetId("200")
-                .sourceTraceId("trace-approve")
-                .sourceIdempotencyKey("idem-approve")
-                .approvalReason("retry needed")
-                .build());
+    String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB_PARTITION")
+        .targetId("200")
+        .sourceTraceId("trace-approve")
+        .sourceIdempotencyKey("idem-approve")
+        .approvalReason("retry needed")
+        .build());
 
     ApprovalWorkflowService.ApprovalRecord approved =
         approvalWorkflowService.approve("t1", approvalNo, "approver-001", "looks good");
@@ -127,16 +124,14 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldTransitionFromPendingToRejected() {
-    String approvalNo =
-        approvalWorkflowService.submit(
-            new ApprovalSubmissionSpec()
-                .actionType("DLQ_REPLAY")
-                .targetType("DEAD_LETTER")
-                .targetId("300")
-                .sourceTraceId("trace-reject")
-                .sourceIdempotencyKey("idem-reject")
-                .approvalReason("suspicious operation")
-                .build());
+    String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+        .actionType("DLQ_REPLAY")
+        .targetType("DEAD_LETTER")
+        .targetId("300")
+        .sourceTraceId("trace-reject")
+        .sourceIdempotencyKey("idem-reject")
+        .approvalReason("suspicious operation")
+        .build());
 
     ApprovalWorkflowService.ApprovalRecord rejected =
         approvalWorkflowService.reject("t1", approvalNo, "approver-002", "data looks wrong");
@@ -146,16 +141,14 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldTransitionFromApprovedToExecuted() {
-    String approvalNo =
-        approvalWorkflowService.submit(
-            new ApprovalSubmissionSpec()
-                .actionType("RETRY")
-                .targetType("JOB")
-                .targetId("400")
-                .sourceTraceId("trace-exec")
-                .sourceIdempotencyKey("idem-exec")
-                .approvalReason("retry")
-                .build());
+    String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB")
+        .targetId("400")
+        .sourceTraceId("trace-exec")
+        .sourceIdempotencyKey("idem-exec")
+        .approvalReason("retry")
+        .build());
 
     approvalWorkflowService.approve("t1", approvalNo, "approver-001", "ok");
 
@@ -167,32 +160,27 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldReturnCurrentStateWhenAlreadyApproved() {
-    String approvalNo =
-        approvalWorkflowService.submit(
-            new ApprovalSubmissionSpec()
-                .actionType("RETRY")
-                .targetType("JOB")
-                .targetId("500")
-                .sourceTraceId("trace-double-approve")
-                .sourceIdempotencyKey("idem-double")
-                .approvalReason("retry")
-                .build());
+    String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB")
+        .targetId("500")
+        .sourceTraceId("trace-double-approve")
+        .sourceIdempotencyKey("idem-double")
+        .approvalReason("retry")
+        .build());
 
     approvalWorkflowService.approve("t1", approvalNo, "approver-001", "first approval");
     // 第二次审批应具有幂等性 —— 返回当前 APPROVED 状态
-    ApprovalWorkflowService.ApprovalRecord result =
-        approvalWorkflowService.approve(
-            "t1", approvalNo, "approver-002", "second approval attempt");
+    ApprovalWorkflowService.ApprovalRecord result = approvalWorkflowService.approve(
+        "t1", approvalNo, "approver-002", "second approval attempt");
 
     assertThat(result.approvalStatus()).isEqualTo("APPROVED");
   }
 
   @Test
   void shouldThrowWhenGettingNonExistentApproval() {
-    assertThatThrownBy(
-            () ->
-                approvalWorkflowService.get(
-                    "t1", "apr-nonexistent-" + BatchDateTimeSupport.utcEpochMillis()))
+    assertThatThrownBy(() -> approvalWorkflowService.get(
+            "t1", "apr-nonexistent-" + BatchDateTimeSupport.utcEpochMillis()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.approval.not_found");
   }
@@ -200,17 +188,15 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldPreservePayloadJsonThroughApprovalLifecycle() throws Exception {
     String payload = "{\"deadLetterId\":999,\"reason\":\"retry needed\"}";
-    String approvalNo =
-        approvalWorkflowService.submit(
-            new ApprovalSubmissionSpec()
-                .actionType("DLQ_REPLAY")
-                .targetType("DEAD_LETTER")
-                .targetId("999")
-                .payloadJson(payload)
-                .sourceTraceId("trace-payload")
-                .sourceIdempotencyKey("idem-payload")
-                .approvalReason("verify payload")
-                .build());
+    String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+        .actionType("DLQ_REPLAY")
+        .targetType("DEAD_LETTER")
+        .targetId("999")
+        .payloadJson(payload)
+        .sourceTraceId("trace-payload")
+        .sourceIdempotencyKey("idem-payload")
+        .approvalReason("verify payload")
+        .build());
 
     ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.get("t1", approvalNo);
     assertThat(JSON.readTree(record.payloadJson())).isEqualTo(JSON.readTree(payload));

@@ -46,7 +46,8 @@ class CronExpressionAdapterTest {
 
   @Test
   void nextRespectsTimezone() {
-    Instant base = LocalDateTime.of(2026, 4, 26, 0, 0, 0).atZone(ZoneId.of("UTC")).toInstant();
+    Instant base =
+        LocalDateTime.of(2026, 4, 26, 0, 0, 0).atZone(ZoneId.of("UTC")).toInstant();
     Instant nextShanghai = adapter.next("0 0 9 * * ?", SHANGHAI, base);
     Instant nextUtc = adapter.next("0 0 9 * * ?", ZoneId.of("UTC"), base);
     assertThat(nextShanghai).isNotEqualTo(nextUtc);
@@ -116,8 +117,12 @@ class CronExpressionAdapterTest {
       Date quartzNext = quartzExpr.getNextValidTimeAfter(Date.from(cursor));
       if (adapterNext == null || quartzNext == null) {
         // 两者都耗尽才 OK
-        assertThat(adapterNext).as("adapter null at iter %d for cron %s", i, cronExpr).isNull();
-        assertThat(quartzNext).as("quartz null at iter %d for cron %s", i, cronExpr).isNull();
+        assertThat(adapterNext)
+            .as("adapter null at iter %d for cron %s", i, cronExpr)
+            .isNull();
+        assertThat(quartzNext)
+            .as("quartz null at iter %d for cron %s", i, cronExpr)
+            .isNull();
         break;
       }
       adapterSeries.add(adapterNext);

@@ -13,21 +13,19 @@ class ConfigMapResponseTest {
   void quotaPolicyShouldNormalizeSnakeCaseColumns() {
     Instant updatedAt = Instant.parse("2026-07-11T04:00:00Z");
 
-    QuotaPolicyResponse response =
-        QuotaPolicyResponse.from(
-            Map.of(
-                "id",
-                7L,
-                "tenant_id",
-                "ta",
-                "policy_code",
-                "default",
-                "max_running_jobs_per_tenant",
-                10,
-                "enabled",
-                true,
-                "updated_at",
-                Timestamp.from(updatedAt)));
+    QuotaPolicyResponse response = QuotaPolicyResponse.from(Map.of(
+        "id",
+        7L,
+        "tenant_id",
+        "ta",
+        "policy_code",
+        "default",
+        "max_running_jobs_per_tenant",
+        10,
+        "enabled",
+        true,
+        "updated_at",
+        Timestamp.from(updatedAt)));
 
     assertThat(response.tenantId()).isEqualTo("ta");
     assertThat(response.policyCode()).isEqualTo("default");
@@ -37,21 +35,19 @@ class ConfigMapResponseTest {
 
   @Test
   void resourceQueueShouldNormalizeSnakeCaseColumns() {
-    ResourceQueueResponse response =
-        ResourceQueueResponse.from(
-            Map.of(
-                "id",
-                9L,
-                "tenant_id",
-                "ta",
-                "queue_code",
-                "import",
-                "queue_type",
-                "IMPORT",
-                "max_running_partitions",
-                8,
-                "enabled",
-                true));
+    ResourceQueueResponse response = ResourceQueueResponse.from(Map.of(
+        "id",
+        9L,
+        "tenant_id",
+        "ta",
+        "queue_code",
+        "import",
+        "queue_type",
+        "IMPORT",
+        "max_running_partitions",
+        8,
+        "enabled",
+        true));
 
     assertThat(response.queueCode()).isEqualTo("import");
     assertThat(response.queueType()).isEqualTo("IMPORT");
@@ -62,27 +58,25 @@ class ConfigMapResponseTest {
   void syncLogShouldExposeTypedTimestamp() {
     Instant createdAt = Instant.parse("2026-07-11T04:00:00Z");
 
-    ConfigSyncLogResponse response =
-        ConfigSyncLogResponse.from(
-            Map.of(
-                "id",
-                11L,
-                "tenantId",
-                "ta",
-                "syncDirection",
-                "IMPORT",
-                "totalItems",
-                5,
-                "successItems",
-                5,
-                "failedItems",
-                0,
-                "skippedItems",
-                0,
-                "syncStatus",
-                "SUCCESS",
-                "createdAt",
-                Timestamp.from(createdAt)));
+    ConfigSyncLogResponse response = ConfigSyncLogResponse.from(Map.of(
+        "id",
+        11L,
+        "tenantId",
+        "ta",
+        "syncDirection",
+        "IMPORT",
+        "totalItems",
+        5,
+        "successItems",
+        5,
+        "failedItems",
+        0,
+        "skippedItems",
+        0,
+        "syncStatus",
+        "SUCCESS",
+        "createdAt",
+        Timestamp.from(createdAt)));
 
     assertThat(response.createdAt()).isEqualTo(createdAt);
   }

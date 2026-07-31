@@ -67,12 +67,11 @@ public class CountContinuityOutboxService {
     if (incoming.isEmpty()) {
       return;
     }
-    List<String> upstreamCodes =
-        incoming.stream()
-            .map(WorkflowEdgeEntity::getFromNodeCode)
-            .filter(Texts::hasText)
-            .distinct()
-            .toList();
+    List<String> upstreamCodes = incoming.stream()
+        .map(WorkflowEdgeEntity::getFromNodeCode)
+        .filter(Texts::hasText)
+        .distinct()
+        .toList();
     if (upstreamCodes.isEmpty()) {
       return;
     }
@@ -104,13 +103,12 @@ public class CountContinuityOutboxService {
     payload.put("currentInputCount", currentInput);
     String eventKey =
         run.getTenantId() + ":continuity:" + run.getId() + ":" + upstreamCode + "->" + nodeCode;
-    domainEventPublisher.publish(
-        DomainEvent.builder(run.getTenantId())
-            .aggregate(AGGREGATE_TYPE, run.getId())
-            .type(EVENT_TYPE)
-            .key(eventKey)
-            .payload(payload)
-            .build());
+    domainEventPublisher.publish(DomainEvent.builder(run.getTenantId())
+        .aggregate(AGGREGATE_TYPE, run.getId())
+        .type(EVENT_TYPE)
+        .key(eventKey)
+        .payload(payload)
+        .build());
     log.warn(
         "count continuity mismatch (alert-only): workflowRunId={}, {}.outputCount={} !="
             + " {}.inputCount={}",

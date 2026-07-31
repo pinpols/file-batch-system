@@ -41,7 +41,8 @@ public class StoreStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式下不上传 MinIO/SFTP，仅落 SHA + 占位 objectName 让下游 stage 链路完整跑完
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return executeDryRun(context);
     }
     Object generatedFilePath =
@@ -79,11 +80,10 @@ public class StoreStep implements ExportStageStep {
       context.getAttributes().put("checksumType", "SHA-256");
       context.getAttributes().put("checksumValue", expectedSha);
 
-      String tempKey =
-          s3ExportStorage.writeObject(
-              tempObjectName,
-              uploadPath,
-              encrypt ? BatchFileConstants.CONTENT_TYPE_OCTET_STREAM : contentType);
+      String tempKey = s3ExportStorage.writeObject(
+          tempObjectName,
+          uploadPath,
+          encrypt ? BatchFileConstants.CONTENT_TYPE_OCTET_STREAM : contentType);
       ExportStageResult partVerification = verifyPartUpload(expectedSha, tempKey, encryptedPath);
       if (partVerification != null) {
         return partVerification;
@@ -134,10 +134,9 @@ public class StoreStep implements ExportStageStep {
   }
 
   private String resolveTempObjectName(ExportJobContext context, String objectName) {
-    String tempObjectName =
-        resolveText(
-            context.getAttributes().get("tempObjectName"),
-            objectName + BatchFileConstants.FILE_PART_SUFFIX);
+    String tempObjectName = resolveText(
+        context.getAttributes().get("tempObjectName"),
+        objectName + BatchFileConstants.FILE_PART_SUFFIX);
     if (!tempObjectName.endsWith(BatchFileConstants.FILE_PART_SUFFIX)) {
       tempObjectName = tempObjectName + BatchFileConstants.FILE_PART_SUFFIX;
     }

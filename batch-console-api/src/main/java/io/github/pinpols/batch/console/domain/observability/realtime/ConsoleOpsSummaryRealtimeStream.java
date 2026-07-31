@@ -45,8 +45,10 @@ public class ConsoleOpsSummaryRealtimeStream {
       new ConcurrentHashMap<>();
   // P0:summaryCache 原裸 ConcurrentHashMap 仅在读路径判 TTL,从不删除,租户基数大时永久驻留。
   // 改 Caffeine expireAfterWrite(10s) + maximumSize(1000),与 SUMMARY_CACHE_TTL_MILLIS 对齐。
-  private final Cache<String, CachedSummary> summaryCache =
-      Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.SECONDS).maximumSize(1000).build();
+  private final Cache<String, CachedSummary> summaryCache = Caffeine.newBuilder()
+      .expireAfterWrite(10, TimeUnit.SECONDS)
+      .maximumSize(1000)
+      .build();
   private final TaskScheduler scheduler;
 
   public ConsoleOpsSummaryRealtimeStream(
@@ -72,22 +74,20 @@ public class ConsoleOpsSummaryRealtimeStream {
 
   private void publishRefresh(String tenantId, boolean force) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-    Runnable publish =
-        () -> {
-          if (force) {
-            publishSummarySnapshot(resolvedTenantId, true);
-            return;
-          }
-          scheduleCoalescedRefresh(resolvedTenantId);
-        };
+    Runnable publish = () -> {
+      if (force) {
+        publishSummarySnapshot(resolvedTenantId, true);
+        return;
+      }
+      scheduleCoalescedRefresh(resolvedTenantId);
+    };
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              publish.run();
-            }
-          });
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          publish.run();
+        }
+      });
       return;
     }
     publish.run();
@@ -118,22 +118,20 @@ public class ConsoleOpsSummaryRealtimeStream {
   }
 
   private void scheduleCoalescedRefresh(String tenantId) {
-    scheduledRefreshes.compute(
-        tenantId,
-        (key, existing) -> {
-          if (existing != null && !existing.isDone()) {
-            return existing;
-          }
-          return scheduler.schedule(
-              () -> {
-                try {
-                  publishSummarySnapshot(tenantId, true);
-                } finally {
-                  scheduledRefreshes.remove(tenantId);
-                }
-              },
-              Instant.now().plus(Duration.ofMillis(REFRESH_DEBOUNCE_MILLIS)));
-        });
+    scheduledRefreshes.compute(tenantId, (key, existing) -> {
+      if (existing != null && !existing.isDone()) {
+        return existing;
+      }
+      return scheduler.schedule(
+          () -> {
+            try {
+              publishSummarySnapshot(tenantId, true);
+            } finally {
+              scheduledRefreshes.remove(tenantId);
+            }
+          },
+          Instant.now().plus(Duration.ofMillis(REFRESH_DEBOUNCE_MILLIS)));
+    });
   }
 
   private void publishSummarySnapshot(String tenantId, boolean forceRefresh) {
@@ -141,14 +139,13 @@ public class ConsoleOpsSummaryRealtimeStream {
     if (summary == null) {
       return;
     }
-    ConsoleSseEvent event =
-        new ConsoleSseEvent(
-            tenantId,
-            STREAM,
-            EVENT_TYPE,
-            cursorFactory.nextCursor(),
-            summary,
-            dateTimeSupport.nowInstant());
+    ConsoleSseEvent event = new ConsoleSseEvent(
+        tenantId,
+        STREAM,
+        EVENT_TYPE,
+        cursorFactory.nextCursor(),
+        summary,
+        dateTimeSupport.nowInstant());
     realtimeEventHub.publish(event);
     redisPublisher.publish(event);
   }

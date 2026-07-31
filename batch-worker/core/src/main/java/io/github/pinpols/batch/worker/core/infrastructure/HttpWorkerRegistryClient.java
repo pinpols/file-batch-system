@@ -79,22 +79,19 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     }
     synchronized (this) {
       if (this.restClient == null) {
-        this.restClient =
-            restClientBuilderProvider
-                .getObject()
-                .baseUrl(resolveBaseUrl())
-                .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
-                // R7-A2-P1：JDK 默认 HttpURLConnection 无超时。worker loop 单线程调
-                // heartbeat / register / unregister，orchestrator GC pause / DB stall 任一
-                // 阻塞都会让 worker loop 永久挂起 — orchestrator 端 lease 又会过期 → 同 task
-                // 被另一 worker 重抢，造成 double-exec。给 5s/10s 短超时让 worker 快速回退。
-                .requestFactory(
-                    ClientHttpRequestFactoryBuilder.detect()
-                        .build(
-                            HttpClientSettings.defaults()
-                                .withConnectTimeout(Duration.ofSeconds(5))
-                                .withReadTimeout(Duration.ofSeconds(10))))
-                .build();
+        this.restClient = restClientBuilderProvider
+            .getObject()
+            .baseUrl(resolveBaseUrl())
+            .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+            // R7-A2-P1：JDK 默认 HttpURLConnection 无超时。worker loop 单线程调
+            // heartbeat / register / unregister，orchestrator GC pause / DB stall 任一
+            // 阻塞都会让 worker loop 永久挂起 — orchestrator 端 lease 又会过期 → 同 task
+            // 被另一 worker 重抢，造成 double-exec。给 5s/10s 短超时让 worker 快速回退。
+            .requestFactory(ClientHttpRequestFactoryBuilder.detect()
+                .build(HttpClientSettings.defaults()
+                    .withConnectTimeout(Duration.ofSeconds(5))
+                    .withReadTimeout(Duration.ofSeconds(10))))
+            .build();
       }
       return this.restClient;
     }

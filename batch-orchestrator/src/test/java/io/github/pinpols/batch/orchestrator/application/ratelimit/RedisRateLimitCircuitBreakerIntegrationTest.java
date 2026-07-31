@@ -44,38 +44,34 @@ class RedisRateLimitCircuitBreakerIntegrationTest {
   @DisplayName("真 Redis 停机 → 连续失败开熔断 → 后续请求短路 near-instant fail-open(不再阻塞 500ms)")
   void sustainedRealRedisFailureOpensCircuitAndStopsStalling() {
     @SuppressWarnings("resource")
-    GenericContainer<?> redis =
-        new GenericContainer<>(DockerImageName.parse(TestContainerImages.VALKEY))
-            .withExposedPorts(6379);
+    GenericContainer<?> redis = new GenericContainer<>(
+            DockerImageName.parse(TestContainerImages.VALKEY))
+        .withExposedPorts(6379);
     redis.start();
 
     RedisClient client = RedisClient.create();
     // autoReconnect(false):Redis 停机后命令立即失败,不无限重连;命令超时交给 bucket4j requestTimeout(500ms) 兜底。
-    client.setOptions(
-        ClientOptions.builder()
-            .autoReconnect(false)
-            .socketOptions(SocketOptions.builder().connectTimeout(Duration.ofSeconds(2)).build())
-            .build());
-    RedisURI uri =
-        RedisURI.builder()
-            .withHost(redis.getHost())
-            .withPort(redis.getMappedPort(6379))
-            .withTimeout(Duration.ofSeconds(2))
-            .build();
+    client.setOptions(ClientOptions.builder()
+        .autoReconnect(false)
+        .socketOptions(
+            SocketOptions.builder().connectTimeout(Duration.ofSeconds(2)).build())
+        .build());
+    RedisURI uri = RedisURI.builder()
+        .withHost(redis.getHost())
+        .withPort(redis.getMappedPort(6379))
+        .withTimeout(Duration.ofSeconds(2))
+        .build();
     try (StatefulRedisConnection<String, byte[]> connection =
         client.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE), uri)) {
       // requestTimeout 与生产 Bucket4jRateLimitConfig.REQUEST_TIMEOUT 对齐(500ms)。
-      LettuceBasedProxyManager<String> proxyManager =
-          Bucket4jLettuce.casBasedBuilder(connection)
-              .requestTimeout(Duration.ofMillis(500))
-              .expirationAfterWrite(
-                  ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-                      Duration.ofMinutes(1)))
-              .build();
+      LettuceBasedProxyManager<String> proxyManager = Bucket4jLettuce.casBasedBuilder(connection)
+          .requestTimeout(Duration.ofMillis(500))
+          .expirationAfterWrite(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
+              Duration.ofMinutes(1)))
+          .build();
       SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-      RedisRateLimitCircuitBreaker circuitBreaker =
-          new RedisRateLimitCircuitBreaker(
-              config(), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
+      RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
+          config(), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
       TokenBucketRateLimiter limiter =
           new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
 
@@ -91,8 +87,10 @@ class RedisRateLimitCircuitBreakerIntegrationTest {
             .as("failing call %d must fail-open", i + 1)
             .isTrue();
       }
-      assertThat(
-              meterRegistry.get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN).gauge().value())
+      assertThat(meterRegistry
+              .get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN)
+              .gauge()
+              .value())
           .as("circuit should be OPEN after 3 sustained real-Redis failures")
           .isEqualTo(1.0);
 
@@ -105,12 +103,11 @@ class RedisRateLimitCircuitBreakerIntegrationTest {
       assertThat(elapsedMillis)
           .as("short-circuit must skip Redis entirely, far below requestTimeout(500ms)")
           .isLessThan(100L);
-      assertThat(
-              meterRegistry
-                  .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
-                  .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_CIRCUIT_OPEN)
-                  .counter()
-                  .count())
+      assertThat(meterRegistry
+              .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
+              .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_CIRCUIT_OPEN)
+              .counter()
+              .count())
           .as("short-circuited request must count reason=circuit_open")
           .isGreaterThanOrEqualTo(1.0);
     } finally {

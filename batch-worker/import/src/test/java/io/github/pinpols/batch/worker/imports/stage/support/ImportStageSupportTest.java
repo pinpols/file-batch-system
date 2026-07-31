@@ -70,10 +70,8 @@ class ImportStageSupportTest {
     when(repository.toLong(99L)).thenReturn(99L);
     doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSING"), any());
 
-    assertThatThrownBy(
-            () ->
-                ImportStageSupport.updateFileStatusRecoverAware(
-                    repository, context, "PARSING", Map.of()))
+    assertThatThrownBy(() -> ImportStageSupport.updateFileStatusRecoverAware(
+            repository, context, "PARSING", Map.of()))
         .isInstanceOf(BizException.class)
         .hasMessage("error.common.state_conflict_detail");
   }
@@ -87,10 +85,8 @@ class ImportStageSupportTest {
     doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSED"), any());
     when(repository.currentFileStatus(99L)).thenReturn("PARSING");
 
-    assertThatThrownBy(
-            () ->
-                ImportStageSupport.updateFileStatusRecoverAware(
-                    repository, context, "PARSED", Map.of()))
+    assertThatThrownBy(() -> ImportStageSupport.updateFileStatusRecoverAware(
+            repository, context, "PARSED", Map.of()))
         .isInstanceOf(BizException.class)
         .hasMessage("error.common.state_conflict_detail");
   }

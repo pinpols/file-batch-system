@@ -8,14 +8,21 @@ import lombok.Data;
 
 @Data
 public class HolidayImportRequest {
-  @NotNull private String tenantId;
+  @NotNull
+  private String tenantId;
 
-  @NotEmpty @Valid private List<HolidayItem> items;
+  @NotEmpty
+  @Valid
+  private List<HolidayItem> items;
 
   @Data
   public static class HolidayItem {
-    @NotNull private String bizDate;
-    @NotNull private String dayType;
+    @NotNull
+    private String bizDate;
+
+    @NotNull
+    private String dayType;
+
     private String holidayName;
     private String description;
   }

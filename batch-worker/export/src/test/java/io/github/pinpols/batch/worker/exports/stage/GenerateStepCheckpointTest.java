@@ -97,46 +97,39 @@ class GenerateStepCheckpointTest {
     ExportDataPluginRegistry pluginRegistry = mock(ExportDataPluginRegistry.class);
     when(pluginRegistry.require(any())).thenReturn(dataPlugin);
 
-    ExportWorkerConfiguration config =
-        new ExportWorkerConfiguration(
-            "worker-test",
-            "EXPORT",
-            "tenant-test",
-            5000L,
-            "batch-export",
-            "group-export",
-            null,
-            500_000L,
-            new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
+    ExportWorkerConfiguration config = new ExportWorkerConfiguration(
+        "worker-test",
+        "EXPORT",
+        "tenant-test",
+        5000L,
+        "batch-export",
+        "group-export",
+        null,
+        500_000L,
+        new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
 
     ObjectMapper objectMapper = new ObjectMapper();
-    ExportFormatStrategyRegistry formatStrategyRegistry =
-        new ExportFormatStrategyRegistry(
-            List.of(
-                new JsonExportFormat(objectMapper),
-                new DelimitedExportFormat(objectMapper),
-                new ExcelExportFormat(objectMapper),
-                new FixedWidthExportFormat(objectMapper)));
+    ExportFormatStrategyRegistry formatStrategyRegistry = new ExportFormatStrategyRegistry(List.of(
+        new JsonExportFormat(objectMapper),
+        new DelimitedExportFormat(objectMapper),
+        new ExcelExportFormat(objectMapper),
+        new FixedWidthExportFormat(objectMapper)));
 
     positionStore = new InMemoryPositionStore();
     WorkerCheckpointProperties props = new WorkerCheckpointProperties();
     props.setEnabled(true); // 开续跑
 
-    generateStep =
-        new GenerateStep(
-            pluginRegistry,
-            formatStrategyRegistry,
-            config,
-            objectMapper,
-            props,
-            positionStore,
-            new GenerateCursorCodec());
+    generateStep = new GenerateStep(
+        pluginRegistry,
+        formatStrategyRegistry,
+        config,
+        objectMapper,
+        props,
+        positionStore,
+        new GenerateCursorCodec());
 
-    deterministicFile =
-        Path.of(
-            System.getProperty("java.io.tmpdir"),
-            "file-batch-export",
-            "inst-" + INSTANCE_ID + ".json");
+    deterministicFile = Path.of(
+        System.getProperty("java.io.tmpdir"), "file-batch-export", "inst-" + INSTANCE_ID + ".json");
     Files.deleteIfExists(deterministicFile);
     Files.deleteIfExists(deterministicFile("DELIMITED"));
   }
@@ -270,7 +263,8 @@ class GenerateStepCheckpointTest {
             any(ExportDataContext.class), anyLong(), anyInt(), eq("cursor-2")))
         .thenThrow(new RuntimeException("simulated crash loading page 2"));
 
-    assertThat(generateStep.execute(buildContext("DELIMITED", trailerTemplate())).success())
+    assertThat(
+            generateStep.execute(buildContext("DELIMITED", trailerTemplate())).success())
         .isFalse();
     assertThat(positionStore.marker).isNotNull();
 
@@ -295,9 +289,8 @@ class GenerateStepCheckpointTest {
     context.setTenantId("tenant-gen-test");
     context.setJobCode("GEN_JOB");
     context.setWorkerId("worker-1");
-    ExportPayload payload =
-        new ExportPayload(
-            null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
+    ExportPayload payload = new ExportPayload(
+        null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
     context.getAttributes().put("exportPayload", payload);
     context.getAttributes().put("exportFileFormatType", fileFormatType);
     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);

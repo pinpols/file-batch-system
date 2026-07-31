@@ -54,12 +54,11 @@ class ConsoleAdminMaintenanceControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAdminMaintenanceController(stateHolder, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAdminMaintenanceController(stateHolder, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -74,16 +73,14 @@ class ConsoleAdminMaintenanceControllerTest {
 
   @Test
   void putShouldHotUpdateStateInPlace() throws Exception {
-    String body =
-        """
+    String body = """
         {"enabled":true,"readOnly":true,"message":"DB 灰度中","etaAt":"2026-05-20T15:00:00Z",
          "affectedServices":["job-schedule","file-download"]}
         """;
     mockMvc
-        .perform(
-            put("/api/console/admin/system/maintenance")
-                .contentType(APPLICATION_JSON)
-                .content(body))
+        .perform(put("/api/console/admin/system/maintenance")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.enabled").value(true))
         .andExpect(jsonPath("$.data.readOnly").value(true))
@@ -101,15 +98,13 @@ class ConsoleAdminMaintenanceControllerTest {
   @Test
   void putShouldRestoreToDisabledOnEnabledFalse() throws Exception {
     // 先开
-    stateHolder.update(
-        new MaintenanceState(
-            true, false, "x", Instant.parse("2026-05-20T16:00:00Z"), List.of("a")));
+    stateHolder.update(new MaintenanceState(
+        true, false, "x", Instant.parse("2026-05-20T16:00:00Z"), List.of("a")));
     // 再关
     mockMvc
-        .perform(
-            put("/api/console/admin/system/maintenance")
-                .contentType(APPLICATION_JSON)
-                .content("{\"enabled\":false}"))
+        .perform(put("/api/console/admin/system/maintenance")
+            .contentType(APPLICATION_JSON)
+            .content("{\"enabled\":false}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.enabled").value(false));
     assertThat(stateHolder.current().enabled()).isFalse();
@@ -118,10 +113,9 @@ class ConsoleAdminMaintenanceControllerTest {
   @Test
   void putShouldNormalizeNullAffectedServicesToEmptyList() throws Exception {
     mockMvc
-        .perform(
-            put("/api/console/admin/system/maintenance")
-                .contentType(APPLICATION_JSON)
-                .content("{\"enabled\":true}"))
+        .perform(put("/api/console/admin/system/maintenance")
+            .contentType(APPLICATION_JSON)
+            .content("{\"enabled\":true}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.affectedServices").isArray())
         .andExpect(jsonPath("$.data.affectedServices.length()").value(0));

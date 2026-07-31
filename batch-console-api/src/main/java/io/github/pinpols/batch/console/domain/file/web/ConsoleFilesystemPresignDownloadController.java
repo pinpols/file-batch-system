@@ -63,10 +63,9 @@ public class ConsoleFilesystemPresignDownloadController {
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.file.fs_presign_key_invalid");
     }
     // 2) HMAC + 过期校验
-    String secret =
-        Texts.hasText(filesystemProperties.getPresignSecret())
-            ? filesystemProperties.getPresignSecret()
-            : securityProperties.getInternalSecret();
+    String secret = Texts.hasText(filesystemProperties.getPresignSecret())
+        ? filesystemProperties.getPresignSecret()
+        : securityProperties.getInternalSecret();
     if (!FilesystemPresignTokens.verify(bucket, key, expEpochSec, signature, secret)) {
       log.warn(
           "fs presign download rejected: bucket={} key={} exp={} (invalid signature or expired)",
@@ -77,14 +76,13 @@ public class ConsoleFilesystemPresignDownloadController {
     }
     // 3) 走 BatchObjectStore.get（加密装饰层若启用会透明解密）
     final String fileName = key.substring(key.lastIndexOf('/') + 1);
-    StreamingResponseBody body =
-        (OutputStream out) -> {
-          try (InputStream in = openStream(bucket, key)) {
-            in.transferTo(out);
-          } catch (ObjectNotFoundException notFound) {
-            throw new IOException("fs object not found: " + key, notFound);
-          }
-        };
+    StreamingResponseBody body = (OutputStream out) -> {
+      try (InputStream in = openStream(bucket, key)) {
+        in.transferTo(out);
+      } catch (ObjectNotFoundException notFound) {
+        throw new IOException("fs object not found: " + key, notFound);
+      }
+    };
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,

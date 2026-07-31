@@ -62,33 +62,29 @@ public final class StatefulBackendGuard {
   private GuardResult cutover(Connection connection, CurrentBinding current, DesiredBackend desired)
       throws SQLException {
     if (!Texts.hasText(desired.cutoverId())) {
-      throw new StatefulBackendSwitchRejectedException(
-          "stateful backend switch rejected for "
-              + desired.featureKey()
-              + ": registered="
-              + current.backend()
-              + " ("
-              + current.backendIdentity()
-              + "), requested="
-              + desired.backend()
-              + " ("
-              + desired.backendIdentity()
-              + "). Drain writes, migrate or explicitly accept the transition, then set a new "
-              + "one-time cutover-id.");
+      throw new StatefulBackendSwitchRejectedException("stateful backend switch rejected for "
+          + desired.featureKey()
+          + ": registered="
+          + current.backend()
+          + " ("
+          + current.backendIdentity()
+          + "), requested="
+          + desired.backend()
+          + " ("
+          + desired.backendIdentity()
+          + "). Drain writes, migrate or explicitly accept the transition, then set a new "
+          + "one-time cutover-id.");
     }
     if (cutoverIdWasUsed(connection, desired.featureKey(), desired.cutoverId())) {
-      throw new StatefulBackendSwitchRejectedException(
-          "stateful backend switch rejected for "
-              + desired.featureKey()
-              + ": cutover-id "
-              + desired.cutoverId()
-              + " was already used");
+      throw new StatefulBackendSwitchRejectedException("stateful backend switch rejected for "
+          + desired.featureKey()
+          + ": cutover-id "
+          + desired.cutoverId()
+          + " was already used");
     }
 
     long generation = current.generation() + 1L;
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            """
+    try (PreparedStatement statement = connection.prepareStatement("""
             UPDATE batch.stateful_backend_binding
                SET backend = ?,
                    backend_identity = ?,
@@ -111,9 +107,7 @@ public final class StatefulBackendGuard {
   }
 
   private void insertBaseline(Connection connection, DesiredBackend desired) throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            """
+    try (PreparedStatement statement = connection.prepareStatement("""
             INSERT INTO batch.stateful_backend_binding
                 (feature_key, backend, backend_identity, generation, updated_by)
             VALUES (?, ?, ?, 0, ?)
@@ -134,9 +128,7 @@ public final class StatefulBackendGuard {
       long generation,
       String action)
       throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            """
+    try (PreparedStatement statement = connection.prepareStatement("""
             INSERT INTO batch.stateful_backend_cutover_history
                 (feature_key, generation, action,
                  previous_backend, previous_backend_identity,
@@ -158,9 +150,7 @@ public final class StatefulBackendGuard {
 
   private CurrentBinding selectCurrent(Connection connection, String featureKey)
       throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            """
+    try (PreparedStatement statement = connection.prepareStatement("""
             SELECT backend, backend_identity, generation
               FROM batch.stateful_backend_binding
              WHERE feature_key = ?
@@ -181,9 +171,7 @@ public final class StatefulBackendGuard {
 
   private boolean cutoverIdWasUsed(Connection connection, String featureKey, String cutoverId)
       throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            """
+    try (PreparedStatement statement = connection.prepareStatement("""
             SELECT 1
               FROM batch.stateful_backend_cutover_history
              WHERE feature_key = ? AND cutover_id = ?

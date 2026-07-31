@@ -65,10 +65,9 @@ public class AlertmanagerNotifyController {
       throw BizException.of(
           ResultCode.UNAUTHORIZED, "error.common.unauthorized_detail", "am-notify not configured");
     }
-    String provided =
-        authorization != null && authorization.startsWith(BEARER_PREFIX)
-            ? authorization.substring(BEARER_PREFIX.length()).trim()
-            : null;
+    String provided = authorization != null && authorization.startsWith(BEARER_PREFIX)
+        ? authorization.substring(BEARER_PREFIX.length()).trim()
+        : null;
     if (!SecretComparator.constantTimeEquals(expected, provided)) {
       log.warn("am-notify rejected: invalid or missing bearer token");
       throw BizException.of(

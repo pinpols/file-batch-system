@@ -86,12 +86,10 @@ class ConfigPackageWorkbookGuidanceTest {
       assertThat(jobTypes).allMatch(jobCodes::contains);
       // 每行的 manifest 示例必须是真实非空 .batch.json v2(含 schemaVersion + jobCode),不是占位。
       assertThat(manifestExamples)
-          .allSatisfy(
-              m ->
-                  assertThat(m)
-                      .contains("batch-manifest-v2")
-                      .contains("jobCode")
-                      .contains("fileMapping"));
+          .allSatisfy(m -> assertThat(m)
+              .contains("batch-manifest-v2")
+              .contains("jobCode")
+              .contains("fileMapping"));
       // 导出束清单不含 requiredFiles(manifest-only 触发);导入/分发含。
       assertThat(manifestExamples.get(1)).doesNotContain("requiredFiles");
       assertThat(manifestExamples.get(0)).contains("requiredFiles");

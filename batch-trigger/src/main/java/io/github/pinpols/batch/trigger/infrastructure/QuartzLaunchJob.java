@@ -91,27 +91,24 @@ public class QuartzLaunchJob implements Job {
     boolean readinessRetry = jobDataMap.containsKey(READINESS_ORIGINAL_FIRE_TIME);
     if (!readinessRetry && requiresManualApproval(descriptor, scheduledFireTime, actualFireTime)) {
       misfireHandler.handle(descriptor.getTenantId() + ":" + descriptor.getJobCode());
-      triggerService.createPendingCatchUp(
-          new ScheduledTriggerCommand(
-              descriptor,
-              scheduledFireTime,
-              TriggerType.CATCH_UP,
-              IdGenerator.newBusinessNo("quartz"),
-              IdGenerator.newTraceId()));
+      triggerService.createPendingCatchUp(new ScheduledTriggerCommand(
+          descriptor,
+          scheduledFireTime,
+          TriggerType.CATCH_UP,
+          IdGenerator.newBusinessNo("quartz"),
+          IdGenerator.newTraceId()));
       return;
     }
-    TriggerType triggerType =
-        readinessRetry
-            ? TriggerType.valueOf(jobDataMap.getString(READINESS_TRIGGER_TYPE))
-            : resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
+    TriggerType triggerType = readinessRetry
+        ? TriggerType.valueOf(jobDataMap.getString(READINESS_TRIGGER_TYPE))
+        : resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
     try {
-      triggerService.launchScheduled(
-          new ScheduledTriggerCommand(
-              descriptor,
-              scheduledFireTime,
-              triggerType,
-              IdGenerator.newBusinessNo("quartz"),
-              IdGenerator.newTraceId()));
+      triggerService.launchScheduled(new ScheduledTriggerCommand(
+          descriptor,
+          scheduledFireTime,
+          triggerType,
+          IdGenerator.newBusinessNo("quartz"),
+          IdGenerator.newTraceId()));
     } catch (BizException e) {
       // R-arch-audit-2026-05-23 P1: 用 ResultCode 枚举比较替代 e.getMessage().contains(...) 字符串匹配。
       // i18n 错误信息文本变动不再让此分支静默失效。
@@ -149,10 +146,9 @@ public class QuartzLaunchJob implements Job {
       TriggerType triggerType,
       UpstreamNotReadyException cause)
       throws JobExecutionException {
-    Instant deferredSince =
-        jobDataMap.containsKey(READINESS_DEFERRED_SINCE)
-            ? Instant.ofEpochMilli(jobDataMap.getLongValue(READINESS_DEFERRED_SINCE))
-            : actualFireTime;
+    Instant deferredSince = jobDataMap.containsKey(READINESS_DEFERRED_SINCE)
+        ? Instant.ofEpochMilli(jobDataMap.getLongValue(READINESS_DEFERRED_SINCE))
+        : actualFireTime;
     Duration waited = Duration.between(deferredSince, actualFireTime);
     if (waited.getSeconds() >= triggerRuntimeProperties.getReadinessWindowSeconds()) {
       meterRegistry.counter("batch.trigger.quartz.readiness.timeout").increment();
@@ -174,15 +170,14 @@ public class QuartzLaunchJob implements Job {
     retryData.put(READINESS_TRIGGER_TYPE, triggerType.name());
     Instant retryAt =
         actualFireTime.plusSeconds(triggerRuntimeProperties.getReadinessRecheckIntervalSeconds());
-    org.quartz.Trigger retryTrigger =
-        TriggerBuilder.newTrigger()
-            .withIdentity("readiness-retry-" + UUID.randomUUID(), TriggerSchedulerFacade.JOB_GROUP)
-            .forJob(context.getJobDetail().getKey())
-            .usingJobData(retryData)
-            .startAt(java.util.Date.from(retryAt))
-            .withSchedule(
-                SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
-            .build();
+    org.quartz.Trigger retryTrigger = TriggerBuilder.newTrigger()
+        .withIdentity("readiness-retry-" + UUID.randomUUID(), TriggerSchedulerFacade.JOB_GROUP)
+        .forJob(context.getJobDetail().getKey())
+        .usingJobData(retryData)
+        .startAt(java.util.Date.from(retryAt))
+        .withSchedule(
+            SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
+        .build();
     try {
       context.getScheduler().scheduleJob(retryTrigger);
       meterRegistry.counter("batch.trigger.quartz.readiness.deferred").increment();
@@ -226,7 +221,8 @@ public class QuartzLaunchJob implements Job {
     if (maxDays <= 0L) {
       return TriggerType.CATCH_UP;
     }
-    long driftDays = Math.max(0L, Duration.between(scheduledFireTime, actualFireTime).toDays());
+    long driftDays =
+        Math.max(0L, Duration.between(scheduledFireTime, actualFireTime).toDays());
     return driftDays <= maxDays ? TriggerType.CATCH_UP : TriggerType.SCHEDULED;
   }
 
@@ -248,7 +244,8 @@ public class QuartzLaunchJob implements Job {
     if (maxDays <= 0L) {
       return true;
     }
-    long driftDays = Math.max(0L, Duration.between(scheduledFireTime, actualFireTime).toDays());
+    long driftDays =
+        Math.max(0L, Duration.between(scheduledFireTime, actualFireTime).toDays());
     return driftDays <= maxDays;
   }
 

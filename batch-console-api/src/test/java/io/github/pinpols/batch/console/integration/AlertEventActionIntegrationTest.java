@@ -26,11 +26,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ConsoleAlertApplicationService alertApplicationService;
+  @Autowired
+  private ConsoleAlertApplicationService alertApplicationService;
 
-  @Autowired private AlertEventMapper alertEventMapper;
+  @Autowired
+  private AlertEventMapper alertEventMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldAckAlert() {
@@ -100,17 +103,13 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
         Timestamp.from(BatchDateTimeSupport.utcNow()),
         Timestamp.from(BatchDateTimeSupport.utcNow()),
         status);
-    Long id =
-        jdbcTemplate.queryForObject(
-            """
+    Long id = jdbcTemplate.queryForObject("""
             select id
             from batch.alert_event
             where tenant_id = ?
             order by id desc
             limit 1
-            """,
-            Long.class,
-            tenantId);
+            """, Long.class, tenantId);
     return id == null ? -1L : id;
   }
 

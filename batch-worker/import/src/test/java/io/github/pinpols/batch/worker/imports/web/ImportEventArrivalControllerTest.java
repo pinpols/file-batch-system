@@ -20,7 +20,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("事件驱动到达通知端点")
 class ImportEventArrivalControllerTest {
 
-  @Mock private ImportIngressScanner importIngressScanner;
+  @Mock
+  private ImportIngressScanner importIngressScanner;
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 

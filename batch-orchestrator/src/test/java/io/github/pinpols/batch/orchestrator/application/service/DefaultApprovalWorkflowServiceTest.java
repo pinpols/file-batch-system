@@ -99,18 +99,16 @@ class DefaultApprovalWorkflowServiceTest {
   void shouldInsertApprovalWithPendingStatusOnSubmit() {
     when(approvalCommandMapper.insert(any())).thenReturn(1);
 
-    String approvalNo =
-        service.submit(
-            new ApprovalSubmissionSpec()
-                .actionType("DLQ_REPLAY")
-                .targetType("DEAD_LETTER")
-                .targetId("500")
-                .payloadJson("{\"reason\":\"test\"}")
-                .requesterId("op-001")
-                .sourceTraceId("trace-001")
-                .sourceIdempotencyKey("idem-001")
-                .approvalReason("test approval")
-                .build());
+    String approvalNo = service.submit(new ApprovalSubmissionSpec()
+        .actionType("DLQ_REPLAY")
+        .targetType("DEAD_LETTER")
+        .targetId("500")
+        .payloadJson("{\"reason\":\"test\"}")
+        .requesterId("op-001")
+        .sourceTraceId("trace-001")
+        .sourceIdempotencyKey("idem-001")
+        .approvalReason("test approval")
+        .build());
 
     assertThat(approvalNo).isNotBlank();
     assertThat(approvalNo).startsWith("apr");
@@ -121,16 +119,15 @@ class DefaultApprovalWorkflowServiceTest {
   void shouldUseEmptyJsonWhenPayloadIsNull() {
     when(approvalCommandMapper.insert(any())).thenReturn(1);
 
-    service.submit(
-        new ApprovalSubmissionSpec()
-            .actionType("RETRY")
-            .targetType("JOB")
-            .targetId("1")
-            .requesterId("op")
-            .sourceTraceId("trace")
-            .sourceIdempotencyKey("idem")
-            .approvalReason("reason")
-            .build());
+    service.submit(new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB")
+        .targetId("1")
+        .requesterId("op")
+        .sourceTraceId("trace")
+        .sourceIdempotencyKey("idem")
+        .approvalReason("reason")
+        .build());
 
     verify(approvalCommandMapper).insert(any());
   }

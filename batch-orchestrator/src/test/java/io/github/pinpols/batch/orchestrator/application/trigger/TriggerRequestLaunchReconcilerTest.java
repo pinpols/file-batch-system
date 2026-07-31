@@ -35,8 +35,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TriggerRequestLaunchReconcilerTest {
 
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private SimpleMeterRegistry meterRegistry;
   private TriggerRequestLaunchReconciler reconciler;
@@ -50,9 +53,8 @@ class TriggerRequestLaunchReconcilerTest {
                 .TriggerLaunchReconcilerProperties();
     props.setMinAgeSeconds(300);
     props.setBatchSize(200);
-    reconciler =
-        new TriggerRequestLaunchReconciler(
-            triggerRequestMapper, gracefulShutdown, meterRegistry, props);
+    reconciler = new TriggerRequestLaunchReconciler(
+        triggerRequestMapper, gracefulShutdown, meterRegistry, props);
   }
 
   @Test
@@ -138,7 +140,9 @@ class TriggerRequestLaunchReconcilerTest {
   }
 
   private double reconciledCount(String tenant) {
-    return meterRegistry.counter("batch.trigger.launch.reconciled.total", "tenant", tenant).count();
+    return meterRegistry
+        .counter("batch.trigger.launch.reconciled.total", "tenant", tenant)
+        .count();
   }
 
   private double skippedCount(String tenant) {

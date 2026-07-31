@@ -55,10 +55,9 @@ public interface DryRunGuard {
       return passThrough();
     }
     Object value = attributes.get("dryRun");
-    boolean dryRun =
-        value instanceof Boolean b
-            ? b
-            : value != null && "true".equalsIgnoreCase(String.valueOf(value));
+    boolean dryRun = value instanceof Boolean b
+        ? b
+        : value != null && "true".equalsIgnoreCase(String.valueOf(value));
     return dryRun ? skipAll() : passThrough();
   }
 
@@ -66,41 +65,39 @@ public interface DryRunGuard {
   final class DryRunGuards {
     private DryRunGuards() {}
 
-    static final DryRunGuard PASS_THROUGH =
-        new DryRunGuard() {
-          @Override
-          public boolean isDryRun() {
-            return false;
-          }
+    static final DryRunGuard PASS_THROUGH = new DryRunGuard() {
+      @Override
+      public boolean isDryRun() {
+        return false;
+      }
 
-          @Override
-          public void runUnlessDryRun(String opTag, Runnable action) {
-            action.run();
-          }
+      @Override
+      public void runUnlessDryRun(String opTag, Runnable action) {
+        action.run();
+      }
 
-          @Override
-          public <T> T callOrSkip(String opTag, Supplier<T> action, T dryRunFallback) {
-            return action.get();
-          }
-        };
+      @Override
+      public <T> T callOrSkip(String opTag, Supplier<T> action, T dryRunFallback) {
+        return action.get();
+      }
+    };
 
-    static final DryRunGuard SKIP_ALL =
-        new DryRunGuard() {
-          @Override
-          public boolean isDryRun() {
-            return true;
-          }
+    static final DryRunGuard SKIP_ALL = new DryRunGuard() {
+      @Override
+      public boolean isDryRun() {
+        return true;
+      }
 
-          @Override
-          public void runUnlessDryRun(String opTag, Runnable action) {
-            log.info("[dry-run] skip side-effect op={}", opTag);
-          }
+      @Override
+      public void runUnlessDryRun(String opTag, Runnable action) {
+        log.info("[dry-run] skip side-effect op={}", opTag);
+      }
 
-          @Override
-          public <T> T callOrSkip(String opTag, Supplier<T> action, T dryRunFallback) {
-            log.info("[dry-run] skip side-effect op={} fallback={}", opTag, dryRunFallback);
-            return dryRunFallback;
-          }
-        };
+      @Override
+      public <T> T callOrSkip(String opTag, Supplier<T> action, T dryRunFallback) {
+        log.info("[dry-run] skip side-effect op={} fallback={}", opTag, dryRunFallback);
+        return dryRunFallback;
+      }
+    };
   }
 }

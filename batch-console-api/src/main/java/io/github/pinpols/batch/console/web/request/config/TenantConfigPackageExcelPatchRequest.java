@@ -10,7 +10,8 @@ import lombok.Data;
 public class TenantConfigPackageExcelPatchRequest {
 
   /** sheet 名(后端 validator SHEET 常量,如 job_definition / file_channel_config)。 */
-  @NotBlank private String sheetName;
+  @NotBlank
+  private String sheetName;
 
   /** 行号(与预览返回一致;数据行从 2 起,1 为表头)。 */
   @Min(2)

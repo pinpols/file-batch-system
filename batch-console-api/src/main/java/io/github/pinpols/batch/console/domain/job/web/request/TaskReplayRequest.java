@@ -8,9 +8,11 @@ import lombok.Data;
 @Data
 public class TaskReplayRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @NotNull private Long taskId;
+  @NotNull
+  private Long taskId;
 
   @Size(max = 512, message = "reason too long (max 512)")
   private String reason;

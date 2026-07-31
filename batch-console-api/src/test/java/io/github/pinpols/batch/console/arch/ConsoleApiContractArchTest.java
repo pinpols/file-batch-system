@@ -32,18 +32,16 @@ import org.springframework.web.bind.annotation.RestController;
  */
 class ConsoleApiContractArchTest {
 
-  private static final JavaClasses CLASSES =
-      new ClassFileImporter()
-          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-          .importPackages("io.github.pinpols.batch.console..");
+  private static final JavaClasses CLASSES = new ClassFileImporter()
+      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+      .importPackages("io.github.pinpols.batch.console..");
 
   /** 端点方法允许的返回类型:统一信封 + 二进制/流式响应的框架类型 + void。 */
-  private static final Set<String> ALLOWED_RETURN_TYPES =
-      Set.of(
-          CommonResponse.class.getName(),
-          "org.springframework.http.ResponseEntity",
-          "org.springframework.web.servlet.mvc.method.annotation.SseEmitter",
-          "void");
+  private static final Set<String> ALLOWED_RETURN_TYPES = Set.of(
+      CommonResponse.class.getName(),
+      "org.springframework.http.ResponseEntity",
+      "org.springframework.web.servlet.mvc.method.annotation.SseEmitter",
+      "void");
 
   /** 直接或元注解标了 @RequestMapping(含 @GetMapping/@PostMapping 等)的方法即 HTTP 端点。 */
   private static final DescribedPredicate<JavaMethod> ARE_ENDPOINT_METHODS =
@@ -61,13 +59,12 @@ class ConsoleApiContractArchTest {
         public void check(JavaMethod method, ConditionEvents events) {
           String returnType = method.getRawReturnType().getFullName();
           if (!ALLOWED_RETURN_TYPES.contains(returnType)) {
-            events.add(
-                SimpleConditionEvent.violated(
-                    method,
-                    String.format(
-                        "%s 返回 %s,违反 CLAUDE.md #6(应返 CommonResponse;下载/流式才用"
-                            + " ResponseEntity/SseEmitter)",
-                        method.getFullName(), returnType)));
+            events.add(SimpleConditionEvent.violated(
+                method,
+                String.format(
+                    "%s 返回 %s,违反 CLAUDE.md #6(应返 CommonResponse;下载/流式才用"
+                        + " ResponseEntity/SseEmitter)",
+                    method.getFullName(), returnType)));
           }
         }
       };

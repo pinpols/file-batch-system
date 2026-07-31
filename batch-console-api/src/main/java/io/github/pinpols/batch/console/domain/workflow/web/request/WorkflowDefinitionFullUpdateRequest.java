@@ -22,7 +22,9 @@ import lombok.Data;
 @Data
 public class WorkflowDefinitionFullUpdateRequest {
 
-  @NotNull @Valid private WorkflowDefinitionSaveRequest definition;
+  @NotNull
+  @Valid
+  private WorkflowDefinitionSaveRequest definition;
 
   /** 客户端最近一次 GET 拿到的 version,服务端用它做乐观锁检查;不传则跳过版本冲突校验(便于工具脚本)。 */
   private Integer expectedVersion;

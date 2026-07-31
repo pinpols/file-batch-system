@@ -27,14 +27,13 @@ class ResultVersionQueryServiceTest {
 
   @Test
   void findEffectiveReturnsRowWhenPresent() {
-    ResultVersionEntity row =
-        ResultVersionEntity.builder()
-            .id(1L)
-            .tenantId("t1")
-            .businessKey("job:JOB_A:2026-05-04")
-            .versionNo(2)
-            .status("EFFECTIVE")
-            .build();
+    ResultVersionEntity row = ResultVersionEntity.builder()
+        .id(1L)
+        .tenantId("t1")
+        .businessKey("job:JOB_A:2026-05-04")
+        .versionNo(2)
+        .status("EFFECTIVE")
+        .build();
     when(mapper.selectEffective("t1", "job:JOB_A:2026-05-04")).thenReturn(row);
 
     var found = service.findEffective("t1", "job:JOB_A:2026-05-04");
@@ -53,12 +52,11 @@ class ResultVersionQueryServiceTest {
 
   @Test
   void findEffectiveByJobDerivesBusinessKey() {
-    ResultVersionEntity row =
-        ResultVersionEntity.builder()
-            .id(1L)
-            .businessKey("job:JOB_A:2026-05-04")
-            .status("EFFECTIVE")
-            .build();
+    ResultVersionEntity row = ResultVersionEntity.builder()
+        .id(1L)
+        .businessKey("job:JOB_A:2026-05-04")
+        .status("EFFECTIVE")
+        .build();
     when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
         .thenReturn(List.of(row));
 
@@ -70,12 +68,11 @@ class ResultVersionQueryServiceTest {
 
   @Test
   void findEffectiveByJobReturnsEmptyWhenLatestAttemptPending() {
-    ResultVersionEntity row =
-        ResultVersionEntity.builder()
-            .id(2L)
-            .businessKey("job:JOB_A:2026-05-04")
-            .status("PENDING")
-            .build();
+    ResultVersionEntity row = ResultVersionEntity.builder()
+        .id(2L)
+        .businessKey("job:JOB_A:2026-05-04")
+        .status("PENDING")
+        .build();
     when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
         .thenReturn(List.of(row));
 
@@ -92,13 +89,12 @@ class ResultVersionQueryServiceTest {
 
   @Test
   void findLatestByJobReturnsLatestVersionByBusinessKey() {
-    ResultVersionEntity row =
-        ResultVersionEntity.builder()
-            .id(2L)
-            .businessKey("job:JOB_A:2026-05-04")
-            .versionNo(4)
-            .status("PENDING")
-            .build();
+    ResultVersionEntity row = ResultVersionEntity.builder()
+        .id(2L)
+        .businessKey("job:JOB_A:2026-05-04")
+        .versionNo(4)
+        .status("PENDING")
+        .build();
     when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
         .thenReturn(List.of(row));
 

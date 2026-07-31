@@ -70,12 +70,12 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-          .withDatabaseName("batch_business")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123")
-          .withUrlParam("sslmode", "disable");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse(TestContainerImages.POSTGRES))
+      .withDatabaseName("batch_business")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123")
+      .withUrlParam("sslmode", "disable");
 
   private DriverManagerDataSource dataSource;
   private JdbcTemplate jdbcTemplate;
@@ -103,8 +103,7 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
 
     jdbcTemplate.execute("DROP SCHEMA IF EXISTS biz CASCADE");
     jdbcTemplate.execute("CREATE SCHEMA biz");
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         CREATE TABLE biz.ckpt_customer (
           tenant_id text NOT NULL,
           customer_no text NOT NULL,
@@ -115,17 +114,16 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
 
     runtimeRepository = mock(PlatformFileRuntimeRepository.class);
     when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
-    workerConfig =
-        new ImportWorkerConfiguration(
-            "wc",
-            "wt",
-            "tenant",
-            5_000L,
-            "topic",
-            "cg",
-            List.of(),
-            new FileProcessing(true, 1000, 1000, 2),
-            Boolean.FALSE);
+    workerConfig = new ImportWorkerConfiguration(
+        "wc",
+        "wt",
+        "tenant",
+        5_000L,
+        "topic",
+        "cg",
+        List.of(),
+        new FileProcessing(true, 1000, 1000, 2),
+        Boolean.FALSE);
   }
 
   @AfterEach
@@ -153,8 +151,9 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
     assertThat(attempt1.success()).isFalse(); // advance 抛错冒泡 → 阶段失败(= 进程崩溃)
     // 业务库已落第一个 chunk(plugin 自 auto-commit);位点因 advance 崩溃而未持久
     assertThat(customerNos()).containsExactly("C1", "C2");
-    assertThat(
-            positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD).positionMarker())
+    assertThat(positionStore
+            .load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD)
+            .positionMarker())
         .isNull();
 
     // ── Attempt 2:重派,同 pipelineInstanceId,位点仍为空 → 从第 0 行续跑,重做 C1,C2 ──
@@ -164,7 +163,9 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
     assertThat(customerNos()).containsExactly("C1", "C2", "C3", "C4");
     assertThat(rowCount()).isEqualTo(4);
     // 位点在完整重跑后标记完成
-    assertThat(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD).completed())
+    assertThat(positionStore
+            .load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD)
+            .completed())
         .isTrue();
   }
 

@@ -43,7 +43,8 @@ import org.springframework.beans.factory.ObjectProvider;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultExportStageExecutorTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   // The step under test
   private ExportStageStep prepareStep;
@@ -87,7 +88,10 @@ class DefaultExportStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isTrue();
     assertThat(results.get(0).stage()).isEqualTo(ExportStage.PREPARE);
-    assertThat(meterRegistry.find("export.file.rows.total").tag("workerType", "EXPORT").counter())
+    assertThat(meterRegistry
+            .find("export.file.rows.total")
+            .tag("workerType", "EXPORT")
+            .counter())
         .isNotNull();
     assertThat(hasTagKey("export.file.rows.total", "tenant")).isFalse();
     verify(runtimeRepository).finishStepRunSuccess(eq(STEP_RUN_ID), any());
@@ -96,11 +100,8 @@ class DefaultExportStageExecutorTest {
   @Test
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(prepareStep.execute(any()))
-        .thenThrow(
-            BizException.of(
-                ResultCode.INVALID_ARGUMENT,
-                "error.common.invalid_argument",
-                "invalid export config"));
+        .thenThrow(BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "invalid export config"));
     ExportJobContext context = buildContext();
 
     List<ExportStageResult> results = executor.execute(context);
@@ -169,20 +170,19 @@ class DefaultExportStageExecutorTest {
     context.setTenantId("t1");
     context.setWorkerId("w1");
     context.setJobCode("JOB_001");
-    PipelineStepDefinition step =
-        new PipelineStepDefinition(
-            1L,
-            1L,
-            "EXPORT_PREPARE",
-            "Export Prepare",
-            ExportStage.PREPARE.name(),
-            1,
-            implCode,
-            Map.of(),
-            0,
-            "NONE",
-            0,
-            true);
+    PipelineStepDefinition step = new PipelineStepDefinition(
+        1L,
+        1L,
+        "EXPORT_PREPARE",
+        "Export Prepare",
+        ExportStage.PREPARE.name(),
+        1,
+        implCode,
+        Map.of(),
+        0,
+        "NONE",
+        0,
+        true);
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of(step));
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
     return context;

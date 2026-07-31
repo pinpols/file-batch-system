@@ -57,17 +57,15 @@ public class CronExpressionAdapter {
 
   private CronExpression parseOrCache(String cronExpr, ZoneId zone) {
     String cacheKey = cronExpr + "|" + zone.getId();
-    return cache.computeIfAbsent(
-        cacheKey,
-        k -> {
-          try {
-            CronExpression expr = new CronExpression(cronExpr);
-            expr.setTimeZone(TimeZone.getTimeZone(zone));
-            return expr;
-          } catch (ParseException e) {
-            throw new IllegalArgumentException("invalid cron expression: " + cronExpr, e);
-          }
-        });
+    return cache.computeIfAbsent(cacheKey, k -> {
+      try {
+        CronExpression expr = new CronExpression(cronExpr);
+        expr.setTimeZone(TimeZone.getTimeZone(zone));
+        return expr;
+      } catch (ParseException e) {
+        throw new IllegalArgumentException("invalid cron expression: " + cronExpr, e);
+      }
+    });
   }
 
   /** trigger schedule_expr 修改时,从缓存清掉旧 cron(防内存累积)。 R4-P0-3：键含 zone，evict 时枚举所有 zone 变体清掉。 */

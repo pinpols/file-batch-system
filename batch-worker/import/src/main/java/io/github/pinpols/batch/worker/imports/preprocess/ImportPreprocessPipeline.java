@@ -89,13 +89,12 @@ public final class ImportPreprocessPipeline {
    * 扩展新的压缩/加密算法时，在表里新增一行即可，避免散落的 if-else。 {@code encrypt_type=NONE} 视为无加密，在调用端直接跳过；其他未注册的加密类型在非
    * bypass 模式下拒收。
    */
-  private static final Map<String, String> IMPLICIT_COMPRESS_STEPS =
-      Map.of(
-          "ZIP", "UNZIP",
-          "GZIP", "GUNZIP",
-          "TAR", "UNTAR",
-          "TAR_GZ", "UNTAR_GZ",
-          "TGZ", "UNTAR_GZ");
+  private static final Map<String, String> IMPLICIT_COMPRESS_STEPS = Map.of(
+      "ZIP", "UNZIP",
+      "GZIP", "GUNZIP",
+      "TAR", "UNTAR",
+      "TAR_GZ", "UNTAR_GZ",
+      "TGZ", "UNTAR_GZ");
 
   private static final Map<String, String> IMPLICIT_ENCRYPT_STEPS =
       Map.of("AES", "AES_GCM_DECRYPT");
@@ -123,10 +122,9 @@ public final class ImportPreprocessPipeline {
       }
       List<Map<String, Object>> steps = resolveSteps(template, bypassMode);
       byte[] current = input;
-      boolean hasExplicitDigestStep =
-          steps.stream()
-              .map(step -> stringProp(step, KEY_TYPE))
-              .anyMatch(type -> "VERIFY_DIGEST".equalsIgnoreCase(type));
+      boolean hasExplicitDigestStep = steps.stream()
+          .map(step -> stringProp(step, KEY_TYPE))
+          .anyMatch(type -> "VERIFY_DIGEST".equalsIgnoreCase(type));
       if (!bypassMode && !hasExplicitDigestStep) {
         // 隐式 checksum 来自 file_record/.chk，语义固定为“入站原始对象字节”完整性校验。
         // 若业务需要在解压/解密/转码之后校验，请在 preprocess_pipeline 中显式放置 VERIFY_DIGEST。
@@ -142,7 +140,7 @@ public final class ImportPreprocessPipeline {
           case "GUNZIP" -> current = gunzip(current, properties);
           case "UNTAR" -> current = untar(current, step, payload, properties);
           case "UNTAR_GZ" ->
-              current = untar(gunzip(current, properties), step, payload, properties);
+            current = untar(gunzip(current, properties), step, payload, properties);
           case "AES_GCM_DECRYPT" -> {
             if (!bypassMode) {
               current = aesGcmDecrypt(current, step, payload);
@@ -160,8 +158,8 @@ public final class ImportPreprocessPipeline {
           }
           case "CHARSET_TRANSCODE" -> current = charsetTranscode(current, step);
           default ->
-              throw new ImportPreprocessException(
-                  "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
+            throw new ImportPreprocessException(
+                "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
         }
       }
       return current;
@@ -369,9 +367,8 @@ public final class ImportPreprocessPipeline {
   private static void verifyDigest(
       byte[] input, Map<String, Object> step, ImportPayload payload, Map<String, Object> template)
       throws Exception {
-    String algorithm =
-        normalizeDigestName(
-            firstNonBlank(stringProp(step, "algorithm"), digestAlgorithm(template, payload)));
+    String algorithm = normalizeDigestName(
+        firstNonBlank(stringProp(step, "algorithm"), digestAlgorithm(template, payload)));
     if (POLICY_NONE.equalsIgnoreCase(algorithm)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DIGEST_ALGORITHM_MISSING",
@@ -454,10 +451,9 @@ public final class ImportPreprocessPipeline {
   private static void verifyRsaSha256(byte[] input, Map<String, Object> step, ImportPayload payload)
       throws Exception {
     String pem = stringProp(step, "publicKeyPem");
-    String signatureB64 =
-        firstNonBlank(
-            stringProp(step, "signatureBase64"),
-            metaString(payload == null ? Map.of() : payload.metadata(), "signatureBase64"));
+    String signatureB64 = firstNonBlank(
+        stringProp(step, "signatureBase64"),
+        metaString(payload == null ? Map.of() : payload.metadata(), "signatureBase64"));
     if (!Texts.hasText(pem) || !Texts.hasText(signatureB64)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_RSA_CONFIG_MISSING",
@@ -476,10 +472,9 @@ public final class ImportPreprocessPipeline {
   }
 
   private static PublicKey readPublicKeyFromPem(String pem) throws Exception {
-    String stripped =
-        pem.replace("-----BEGIN PUBLIC KEY-----", EMPTY)
-            .replace("-----END PUBLIC KEY-----", EMPTY)
-            .replaceAll("\\s", EMPTY);
+    String stripped = pem.replace("-----BEGIN PUBLIC KEY-----", EMPTY)
+        .replace("-----END PUBLIC KEY-----", EMPTY)
+        .replaceAll("\\s", EMPTY);
     byte[] decoded = Base64.getDecoder().decode(stripped);
     X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
     return KeyFactory.getInstance("RSA").generatePublic(spec);
@@ -515,18 +510,17 @@ public final class ImportPreprocessPipeline {
         writer.write(buf, 0, n);
         // 中途即检查 cap, 避免超量字节先被 transcode 出来再爆
         if (out.size() > cap) {
-          throw new IllegalArgumentException(
-              "CHARSET_TRANSCODE output exceeds cap: inputBytes="
-                  + input.length
-                  + ", outputBytes>="
-                  + out.size()
-                  + ", cap="
-                  + cap
-                  + " (from="
-                  + fromCs
-                  + ", to="
-                  + toCs
-                  + ")");
+          throw new IllegalArgumentException("CHARSET_TRANSCODE output exceeds cap: inputBytes="
+              + input.length
+              + ", outputBytes>="
+              + out.size()
+              + ", cap="
+              + cap
+              + " (from="
+              + fromCs
+              + ", to="
+              + toCs
+              + ")");
         }
       }
       writer.flush();

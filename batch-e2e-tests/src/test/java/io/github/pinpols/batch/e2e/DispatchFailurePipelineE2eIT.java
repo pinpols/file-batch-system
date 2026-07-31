@@ -50,18 +50,19 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void dispatchJobReportsFailedWhenChannelDoesNotExist() {
     String path = "/tmp/e2e-dispatch-fail-" + System.nanoTime() + ".json";
-    Long fileId =
-        jdbcTemplate.queryForObject(
-            """
+    Long fileId = jdbcTemplate.queryForObject("""
             insert into batch.file_record (
                 tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
                 file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
@@ -71,15 +72,11 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
                 'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
                 ?, 'SYSTEM', 'GENERATED', date '2026-01-15', 'e2e-dis-fail-trace'
             ) returning id
-            """,
-            Long.class,
-            TENANT,
-            path);
+            """, Long.class, TENANT, path);
     assertThat(fileId).isNotNull();
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
@@ -91,40 +88,32 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
     params.put("ackRequired", false);
     params.put("forceRetry", false);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-dispatch-fail",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-dispatch-fail",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("FAILED");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("FAILED");
+        });
 
     // File record must NOT have been marked DISPATCHED on failure
-    String fileStatus =
-        jdbcTemplate.queryForObject(
-            "select file_status from batch.file_record where id = ?", String.class, fileId);
+    String fileStatus = jdbcTemplate.queryForObject(
+        "select file_status from batch.file_record where id = ?", String.class, fileId);
     assertThat(fileStatus).isNotEqualTo("DISPATCHED");
   }
 }

@@ -80,15 +80,14 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     }
 
     String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
-    String externalRequestId =
-        command.payload().externalRequestId() != null
-                && !command.payload().externalRequestId().isBlank()
-            ? command.payload().externalRequestId()
-            : UUID.randomUUID().toString();
-    String receiptCode =
-        command.payload().receiptCode() != null && !command.payload().receiptCode().isBlank()
-            ? command.payload().receiptCode()
-            : "R-" + externalRequestId;
+    String externalRequestId = command.payload().externalRequestId() != null
+            && !command.payload().externalRequestId().isBlank()
+        ? command.payload().externalRequestId()
+        : UUID.randomUUID().toString();
+    String receiptCode = command.payload().receiptCode() != null
+            && !command.payload().receiptCode().isBlank()
+        ? command.payload().receiptCode()
+        : "R-" + externalRequestId;
     boolean acknowledged =
         "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
     boolean pending =
@@ -127,9 +126,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     String smtpUser = stringProp(channelConfig, "smtp_username");
     String smtpPass = stringProp(channelConfig, "smtp_password");
     boolean startTls = boolProp(channelConfig, "smtp_starttls", true);
-    int connectTimeoutMillis =
-        positiveIntProp(
-            channelConfig, "smtp_connection_timeout_millis", DEFAULT_SMTP_TIMEOUT_MILLIS);
+    int connectTimeoutMillis = positiveIntProp(
+        channelConfig, "smtp_connection_timeout_millis", DEFAULT_SMTP_TIMEOUT_MILLIS);
     int readTimeoutMillis =
         positiveIntProp(channelConfig, "smtp_timeout_millis", DEFAULT_SMTP_TIMEOUT_MILLIS);
     int writeTimeoutMillis =
@@ -140,9 +138,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     }
 
     String from = firstNonBlank(stringProp(channelConfig, "mail_from"), smtpUser);
-    String to =
-        firstNonBlank(
-            stringProp(channelConfig, "mail_to"), stringProp(channelConfig, "target_endpoint"));
+    String to = firstNonBlank(
+        stringProp(channelConfig, "mail_to"), stringProp(channelConfig, "target_endpoint"));
     if (!Texts.hasText(from) || !Texts.hasText(to)) {
       return null;
     }
@@ -247,10 +244,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   private void addAttachment(
       MimeMessage message, byte[] attachmentBytes, Map<String, Object> fileRecord)
       throws Exception {
-    String attachName =
-        firstNonBlank(
-            String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
-            String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin")));
+    String attachName = firstNonBlank(
+        String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
+        String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin")));
     String mimeType =
         String.valueOf(fileRecord.getOrDefault("mime_type", "application/octet-stream"));
 

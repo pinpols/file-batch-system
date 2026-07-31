@@ -36,7 +36,8 @@ public class CompleteStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return ExportStageResult.success(stage());
     }
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
@@ -52,10 +53,9 @@ public class CompleteStep implements ExportStageStep {
     ExportPayload exportPayload =
         attrs.get("exportPayload") instanceof ExportPayload payload ? payload : null;
     Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    String nextStatus =
-        exportPayload != null && Boolean.TRUE.equals(exportPayload.autoDispatch())
-            ? "DISPATCHING"
-            : "GENERATED";
+    String nextStatus = exportPayload != null && Boolean.TRUE.equals(exportPayload.autoDispatch())
+        ? "DISPATCHING"
+        : "GENERATED";
     Map<String, Object> fileMetadata = new LinkedHashMap<>();
     fileMetadata.put(KEY_RECORD_COUNT, attrs.get(KEY_RECORD_COUNT));
     fileMetadata.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
@@ -67,18 +67,17 @@ public class CompleteStep implements ExportStageStep {
     detailSummary.put(KEY_RECORD_COUNT, attrs.get(KEY_RECORD_COUNT));
     detailSummary.put("fileSizeBytes", attrs.get("fileSizeBytes"));
     detailSummary.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
-    runtimeRepository.appendAudit(
-        FileAuditParam.builder()
-            .fileId(fileId)
-            .tenantId(context.getTenantId())
-            .operationType("EXPORT_COMPLETE")
-            .operationResult("SUCCESS")
-            .operatorType("SYSTEM")
-            .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(String.valueOf(attrs.get(KEY_OBJECT_NAME)))
-            .detailSummary(detailSummary)
-            .build());
+    runtimeRepository.appendAudit(FileAuditParam.builder()
+        .fileId(fileId)
+        .tenantId(context.getTenantId())
+        .operationType("EXPORT_COMPLETE")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .operatorId(context.getWorkerId())
+        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .evidenceRef(String.valueOf(attrs.get(KEY_OBJECT_NAME)))
+        .detailSummary(detailSummary)
+        .build());
     return ExportStageResult.success(stage());
   }
 }

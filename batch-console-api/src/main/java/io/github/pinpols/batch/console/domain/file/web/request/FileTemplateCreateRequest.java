@@ -8,9 +8,11 @@ import lombok.Data;
 
 @Data
 public class FileTemplateCreateRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String templateCode;
+  @ValidResourceCode
+  private String templateCode;
 
   @Size(max = 256)
   private String templateName;

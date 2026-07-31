@@ -52,14 +52,13 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
     if (jobDef.getEnabled() != null && !jobDef.getEnabled()) {
       throw BizException.of(ResultCode.VALIDATION_ERROR, "error.job.definition_disabled");
     }
-    String result =
-        ops.delegateLaunch(
-            tenantId,
-            jobCode,
-            request.getBizDate(),
-            ops.resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
-            ops.parsePayload(request.getPayload()),
-            idempotencyKey);
+    String result = ops.delegateLaunch(
+        tenantId,
+        jobCode,
+        request.getBizDate(),
+        ops.resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
+        ops.parsePayload(request.getPayload()),
+        idempotencyKey);
     ops.publishRefresh(tenantId);
     return result;
   }
@@ -150,16 +149,8 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
         status = "FAILED";
         error = e.getMessage();
       }
-      results.add(
-          new ConsoleBatchTriggerEntryResponse(
-              i,
-              item.getJobCode(),
-              item.getBizDate(),
-              dryRunFlag,
-              status,
-              result,
-              instanceNo,
-              error));
+      results.add(new ConsoleBatchTriggerEntryResponse(
+          i, item.getJobCode(), item.getBizDate(), dryRunFlag, status, result, instanceNo, error));
     }
     return results;
   }

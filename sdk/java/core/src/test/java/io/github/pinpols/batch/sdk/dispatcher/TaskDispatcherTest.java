@@ -27,16 +27,15 @@ import org.mockito.ArgumentCaptor;
 
 class TaskDispatcherTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("kafka:9092")
-          .kafkaTopicPattern("batch.task.dispatch.tx.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("kafka:9092")
+      .kafkaTopicPattern("batch.task.dispatch.tx.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private TaskDispatcher dispatcher;
 
@@ -66,19 +65,18 @@ class TaskDispatcherTest {
   void claimSuccessRunsHandlerAndReports() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<SdkTaskContext> seenCtx = new AtomicReference<>();
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            seenCtx.set(ctx);
-            return SdkTaskResult.ok("done", Map.of("rows", 100));
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        seenCtx.set(ctx);
+        return SdkTaskResult.ok("done", Map.of("rows", 100));
+      }
+    };
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
 
     dispatcher.processInWorkerThread(msg("tt"));
@@ -104,30 +102,28 @@ class TaskDispatcherTest {
   @Test
   void partitionInvocationThreadedToClaimAndReport() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            return SdkTaskResult.ok("done", Map.of());
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        return SdkTaskResult.ok("done", Map.of());
+      }
+    };
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
 
     // 分区任务:runtimeAttributes 带 partitionInvocationId(平台 R3-P1-10/R3-P0-5 强制不变量)。
-    TaskDispatchMessage partitioned =
-        new TaskDispatchMessage(
-            42L,
-            "tx",
-            "job-1",
-            "tt",
-            "ti-9",
-            Map.of("p", 1),
-            Map.of("traceId", "abc", "partitionInvocationId", "inv-77"));
+    TaskDispatchMessage partitioned = new TaskDispatchMessage(
+        42L,
+        "tx",
+        "job-1",
+        "tt",
+        "ti-9",
+        Map.of("p", 1),
+        Map.of("traceId", "abc", "partitionInvocationId", "inv-77"));
     dispatcher.processInWorkerThread(partitioned);
 
     ArgumentCaptor<Map<String, Object>> claimBody = mapCaptor();
@@ -147,18 +143,17 @@ class TaskDispatcherTest {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(eq(42L), anyString(), any()))
         .thenReturn(Map.of("partitionInvocationId", "inv-from-claim"));
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            return SdkTaskResult.ok("done", Map.of());
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        return SdkTaskResult.ok("done", Map.of());
+      }
+    };
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
 
     dispatcher.processInWorkerThread(
@@ -175,18 +170,17 @@ class TaskDispatcherTest {
   @Test
   void handlerExceptionStillReportsFailure() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            throw new RuntimeException("biz boom");
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        throw new RuntimeException("biz boom");
+      }
+    };
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
 
     dispatcher.processInWorkerThread(msg("tt"));
@@ -209,18 +203,17 @@ class TaskDispatcherTest {
   @Test
   void handlerReturnsNullTreatedAsFailure() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            return null;
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        return null;
+      }
+    };
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
 
     dispatcher.processInWorkerThread(msg("tt"));
@@ -256,19 +249,18 @@ class TaskDispatcherTest {
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(409, "409 already claimed"));
     AtomicBoolean executed = new AtomicBoolean();
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            executed.set(true);
-            return SdkTaskResult.ok();
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        executed.set(true);
+        return SdkTaskResult.ok();
+      }
+    };
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
 
     dispatcher.processInWorkerThread(msg("tt"));
@@ -282,7 +274,8 @@ class TaskDispatcherTest {
   @Test
   void reportFailureSwallowed() throws Exception {
     // 关掉 report 重试(0 次)让本用例只验"吞异常不外抛 + 调一次"语义,避免退避 sleep 拖慢测试。
-    BatchPlatformClientConfig noRetryConfig = config.toBuilder().claimMax5xxRetries(0).build();
+    BatchPlatformClientConfig noRetryConfig =
+        config.toBuilder().claimMax5xxRetries(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.report(anyLong(), anyString(), any())).thenThrow(new IOException("503 down"));
     dispatcher = new TaskDispatcher(noRetryConfig, Map.of("tt", noopHandler()), http);
@@ -299,19 +292,18 @@ class TaskDispatcherTest {
   void onMessageRunsAsyncOnExecutor() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     CountDownLatch executed = new CountDownLatch(1);
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            executed.countDown();
-            return SdkTaskResult.ok();
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        executed.countDown();
+        return SdkTaskResult.ok();
+      }
+    };
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
 
     dispatcher.onMessage(msg("tt"));

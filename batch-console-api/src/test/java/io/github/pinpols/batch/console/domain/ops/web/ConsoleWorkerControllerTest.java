@@ -44,22 +44,18 @@ class ConsoleWorkerControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleWorkerController(applicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleWorkerController(applicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(
-            post("/api/console/workers/w1/drain")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+            post("/api/console/workers/w1/drain").contentType(APPLICATION_JSON).content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
         .andExpect(status().isBadRequest())
@@ -71,27 +67,24 @@ class ConsoleWorkerControllerTest {
   @Test
   void shouldDrainAndReturnCommonResponseOnSuccess() throws Exception {
     when(applicationService.drain(anyString(), any(), anyString()))
-        .thenReturn(
-            new ConsoleWorkerRegistryResponse(
-                1L,
-                "t1",
-                "w1",
-                "group-a",
-                null,
-                null,
-                "DRAINING",
-                BatchDateTimeSupport.utcNow(),
-                0,
-                null,
-                null));
+        .thenReturn(new ConsoleWorkerRegistryResponse(
+            1L,
+            "t1",
+            "w1",
+            "group-a",
+            null,
+            null,
+            "DRAINING",
+            BatchDateTimeSupport.utcNow(),
+            0,
+            null,
+            null));
 
     mockMvc
-        .perform(
-            post("/api/console/workers/w1/drain")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/workers/w1/drain")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
         .andExpect(status().isOk())

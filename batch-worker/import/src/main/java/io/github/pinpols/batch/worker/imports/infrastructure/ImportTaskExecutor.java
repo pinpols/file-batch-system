@@ -79,14 +79,13 @@ public class ImportTaskExecutor implements BatchTaskExecutor {
     // SPI 路径:把 TaskContext 还原为 Pipeline 语义的 StepExecutionRequest
     // 注意:Pipeline 的 stepCode 历来 = task.getTaskType()(JobType code),不是某个具体 step
     // 见 DefaultTaskExecutionWrapper.execute() 的 new StepExecutionRequest(...) 第 3 参数
-    StepExecutionRequest req =
-        new StepExecutionRequest(
-            ctx.tenantId(),
-            ctx.jobCode(),
-            taskType(), // stepCode = "IMPORT"
-            ctx.workerId(),
-            ctx.runtimeAttributes() // pipelineInstanceId / traceId / bizDate 等都在这
-            );
+    StepExecutionRequest req = new StepExecutionRequest(
+        ctx.tenantId(),
+        ctx.jobCode(),
+        taskType(), // stepCode = "IMPORT"
+        ctx.workerId(),
+        ctx.runtimeAttributes() // pipelineInstanceId / traceId / bizDate 等都在这
+        );
     StepExecutionResponse resp = delegate.execute(req);
     if (resp.success()) {
       return TaskResult.ok(resp.message() == null ? "ok" : resp.message());

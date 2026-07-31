@@ -47,11 +47,11 @@ class ConsoleQuotaPolicyControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleQuotaPolicyController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleQuotaPolicyController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String body(String policyCode) {
@@ -61,10 +61,9 @@ class ConsoleQuotaPolicyControllerValidationTest {
   @Test
   void rejects_policyCode_with_space() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/quota-policies")
-                .contentType(APPLICATION_JSON)
-                .content(body("q q q")))
+        .perform(post("/api/console/quota-policies")
+            .contentType(APPLICATION_JSON)
+            .content(body("q q q")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verify(service, never()).create(ArgumentMatchers.any());
@@ -101,10 +100,9 @@ class ConsoleQuotaPolicyControllerValidationTest {
   void accepts_valid_policyCode() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     mockMvc
-        .perform(
-            post("/api/console/quota-policies")
-                .contentType(APPLICATION_JSON)
-                .content(body("policy_ok_01")))
+        .perform(post("/api/console/quota-policies")
+            .contentType(APPLICATION_JSON)
+            .content(body("policy_ok_01")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     verify(service).create(ArgumentMatchers.any());

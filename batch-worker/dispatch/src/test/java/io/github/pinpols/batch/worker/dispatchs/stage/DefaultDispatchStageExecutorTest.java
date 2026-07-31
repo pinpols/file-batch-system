@@ -41,7 +41,8 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultDispatchStageExecutorTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   // The step under test
   private DispatchStageStep prepareStep;
@@ -81,7 +82,10 @@ class DefaultDispatchStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isTrue();
     assertThat(results.get(0).stage()).isEqualTo(DispatchStage.PREPARE);
-    assertThat(meterRegistry.find("dispatch.receipt.total").tag("workerType", "DISPATCH").counter())
+    assertThat(meterRegistry
+            .find("dispatch.receipt.total")
+            .tag("workerType", "DISPATCH")
+            .counter())
         .isNotNull();
     assertThat(hasTagKey("dispatch.receipt.total", "tenant")).isFalse();
     verify(runtimeRepository).finishStepRunSuccess(eq(STEP_RUN_ID), any());
@@ -90,11 +94,10 @@ class DefaultDispatchStageExecutorTest {
   @Test
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(prepareStep.execute(any()))
-        .thenThrow(
-            BizException.of(
-                ResultCode.INVALID_ARGUMENT,
-                "error.common.invalid_argument",
-                "invalid dispatch config"));
+        .thenThrow(BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.common.invalid_argument",
+            "invalid dispatch config"));
     DispatchJobContext context = buildContext();
 
     List<DispatchStageResult> results = executor.execute(context);
@@ -163,20 +166,19 @@ class DefaultDispatchStageExecutorTest {
     context.setTenantId("t1");
     context.setWorkerId("w1");
     context.setDispatchId("d1");
-    PipelineStepDefinition step =
-        new PipelineStepDefinition(
-            1L,
-            1L,
-            "DISPATCH_PREPARE",
-            "Dispatch Prepare",
-            DispatchStage.PREPARE.name(),
-            1,
-            implCode,
-            Map.of(),
-            0,
-            "NONE",
-            0,
-            true);
+    PipelineStepDefinition step = new PipelineStepDefinition(
+        1L,
+        1L,
+        "DISPATCH_PREPARE",
+        "Dispatch Prepare",
+        DispatchStage.PREPARE.name(),
+        1,
+        implCode,
+        Map.of(),
+        0,
+        "NONE",
+        0,
+        true);
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of(step));
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
     return context;

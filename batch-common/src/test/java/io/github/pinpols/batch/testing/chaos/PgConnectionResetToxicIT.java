@@ -37,14 +37,12 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
 
         withDown(
             ProxyTarget.PG,
-            () ->
-                assertThatThrownBy(
-                        () -> {
-                          try (Statement s = conn.createStatement()) {
-                            s.executeQuery("SELECT 1").close();
-                          }
-                        })
-                    .isInstanceOf(SQLException.class));
+            () -> assertThatThrownBy(() -> {
+                  try (Statement s = conn.createStatement()) {
+                    s.executeQuery("SELECT 1").close();
+                  }
+                })
+                .isInstanceOf(SQLException.class));
       }
     }
   }

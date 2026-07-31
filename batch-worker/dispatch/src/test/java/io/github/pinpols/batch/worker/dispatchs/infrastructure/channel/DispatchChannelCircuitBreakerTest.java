@@ -129,7 +129,9 @@ class DispatchChannelCircuitBreakerTest {
     assertThat(cb.allow(CHANNEL)).isTrue();
     assertThat(cb.allow(CHANNEL)).isTrue();
     assertThat(cb.allow(CHANNEL)).isTrue();
-    assertThat(cb.allow(CHANNEL)).as("beyond half-open probe budget must be rejected").isFalse();
+    assertThat(cb.allow(CHANNEL))
+        .as("beyond half-open probe budget must be rejected")
+        .isFalse();
   }
 
   @Test
@@ -182,19 +184,18 @@ class DispatchChannelCircuitBreakerTest {
 
     // act
     for (int t = 0; t < threads; t++) {
-      pool.submit(
-          () -> {
-            try {
-              start.await();
-              for (int i = 0; i < perThread; i++) {
-                breaker.recordFailure(CHANNEL);
-              }
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            } finally {
-              done.countDown();
-            }
-          });
+      pool.submit(() -> {
+        try {
+          start.await();
+          for (int i = 0; i < perThread; i++) {
+            breaker.recordFailure(CHANNEL);
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } finally {
+          done.countDown();
+        }
+      });
     }
     start.countDown();
     assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
@@ -221,11 +222,10 @@ class DispatchChannelCircuitBreakerTest {
 
     triggerOpenWith(cb, "ch-metered");
 
-    assertThat(
-            meterRegistry
-                .find("resilience4j.circuitbreaker.state")
-                .tag("name", "ch-metered")
-                .meters())
+    assertThat(meterRegistry
+            .find("resilience4j.circuitbreaker.state")
+            .tag("name", "ch-metered")
+            .meters())
         .as("OPEN breaker for the key must be bound to the injected MeterRegistry")
         .isNotEmpty();
   }
@@ -238,11 +238,17 @@ class DispatchChannelCircuitBreakerTest {
     triggerOpenWith(cb, "ch-a");
     cb.recordFailure("ch-b"); // below threshold, stays CLOSED
 
-    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", "ch-a").meters())
+    assertThat(meterRegistry
+            .find("resilience4j.circuitbreaker.state")
+            .tag("name", "ch-a")
+            .meters())
         .as("ch-a breaker must be metered")
         .isNotEmpty();
     // ch-b 未熔断但仍是活跃 breaker(CLOSED 且有失败计数,未被 recordSuccess 驱逐),同样应有独立 meter
-    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", "ch-b").meters())
+    assertThat(meterRegistry
+            .find("resilience4j.circuitbreaker.state")
+            .tag("name", "ch-b")
+            .meters())
         .as("ch-b breaker must be independently metered from ch-a")
         .isNotEmpty();
   }
@@ -259,7 +265,10 @@ class DispatchChannelCircuitBreakerTest {
     String key = "ch-lifecycle";
     triggerOpenWith(cb, key); // → OPEN
     assertThat(cb.allow(key)).as("OPEN 时应拒绝").isFalse();
-    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", key).meters())
+    assertThat(meterRegistry
+            .find("resilience4j.circuitbreaker.state")
+            .tag("name", key)
+            .meters())
         .as("OPEN breaker 必须已被 metered")
         .isNotEmpty();
 
@@ -272,7 +281,10 @@ class DispatchChannelCircuitBreakerTest {
     }
     assertThat(cb.currentOpenCircuits()).isEqualTo(0);
 
-    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", key).meters())
+    assertThat(meterRegistry
+            .find("resilience4j.circuitbreaker.state")
+            .tag("name", key)
+            .meters())
         .as("breaker 恢复健康被驱逐后,其 tagged state meter 必须随 onEntryRemoved 一并消失(无泄漏)")
         .isEmpty();
   }

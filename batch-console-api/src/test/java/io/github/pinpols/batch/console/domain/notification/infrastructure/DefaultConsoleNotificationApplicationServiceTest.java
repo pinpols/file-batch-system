@@ -59,22 +59,20 @@ class DefaultConsoleNotificationApplicationServiceTest {
     testChannelRateLimiter = mock(SlidingWindowRateLimiter.class);
     when(testChannelRateLimiter.tryAcquire(any(), ArgumentMatchers.anyInt())).thenReturn(true);
     callbackUrlValidator = mock(CallbackUrlValidator.class);
-    service =
-        new DefaultConsoleNotificationApplicationService(
-            tenantGuard,
-            metadataResolver,
-            channelMapper,
-            ruleMapper,
-            deliveryLogMapper,
-            senderRegistry,
-            webhookDispatcher,
-            testChannelRateLimiter,
-            callbackUrlValidator);
+    service = new DefaultConsoleNotificationApplicationService(
+        tenantGuard,
+        metadataResolver,
+        channelMapper,
+        ruleMapper,
+        deliveryLogMapper,
+        senderRegistry,
+        webhookDispatcher,
+        testChannelRateLimiter,
+        callbackUrlValidator);
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(metadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata(
-                "req-1", "trace-1", "tenant-a", "operator-1", "idem-1", "127.0.0.1"));
+        .thenReturn(new ConsoleRequestMetadata(
+            "req-1", "trace-1", "tenant-a", "operator-1", "idem-1", "127.0.0.1"));
   }
 
   @Test
@@ -105,20 +103,16 @@ class DefaultConsoleNotificationApplicationServiceTest {
     assertThatThrownBy(() -> service.getChannel("tenant-a", "missing"))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
-        .satisfies(
-            ex -> {
-              BizException bx = (BizException) ex;
-              boolean keyMatch =
-                  bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
-              boolean argsMatch =
-                  bx.getMessageArgs() != null
-                      && java.util.Arrays.stream(bx.getMessageArgs())
-                          .anyMatch(
-                              a -> a != null && a.toString().toLowerCase().contains("not found"));
-              assertThat(keyMatch || argsMatch)
-                  .as("messageKey or args should imply not_found")
-                  .isTrue();
-            });
+        .satisfies(ex -> {
+          BizException bx = (BizException) ex;
+          boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
+          boolean argsMatch = bx.getMessageArgs() != null
+              && java.util.Arrays.stream(bx.getMessageArgs())
+                  .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
+          assertThat(keyMatch || argsMatch)
+              .as("messageKey or args should imply not_found")
+              .isTrue();
+        });
   }
 
   @Test
@@ -148,23 +142,20 @@ class DefaultConsoleNotificationApplicationServiceTest {
     // Critical 回归堵口:WEBHOOK 渠道 url 存前经 CallbackUrlValidator fail-closed,拦字面量内网/元数据 IP,
     // 不让它入库(OkHttp Dns pin 对字面量 IP 短路不生效,此处是主修)。
     when(channelMapper.selectByCode("tenant-a", "hook-1")).thenReturn(null);
-    org.mockito.Mockito.doThrow(
-            io.github.pinpols.batch.common.exception.BizException.of(
-                io.github.pinpols.batch.common.enums.ResultCode.INVALID_ARGUMENT,
-                "error.callback.restricted_address"))
+    org.mockito.Mockito.doThrow(io.github.pinpols.batch.common.exception.BizException.of(
+            io.github.pinpols.batch.common.enums.ResultCode.INVALID_ARGUMENT,
+            "error.callback.restricted_address"))
         .when(callbackUrlValidator)
         .validate("https://169.254.169.254/latest/meta-data/");
 
-    assertThatThrownBy(
-            () ->
-                service.createChannel(
-                    "tenant-a",
-                    channelUpsert(
-                        "hook-1",
-                        "Hook One",
-                        "WEBHOOK",
-                        "{\"url\":\"https://169.254.169.254/latest/meta-data/\"}",
-                        true)))
+    assertThatThrownBy(() -> service.createChannel(
+            "tenant-a",
+            channelUpsert(
+                "hook-1",
+                "Hook One",
+                "WEBHOOK",
+                "{\"url\":\"https://169.254.169.254/latest/meta-data/\"}",
+                true)))
         .isInstanceOf(BizException.class);
 
     verify(channelMapper, never()).insert(any());
@@ -189,10 +180,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
         .thenReturn(Map.of("channelCode", "email-1"));
 
-    assertThatThrownBy(
-            () ->
-                service.createChannel(
-                    "tenant-a", channelUpsert("email-1", "Email One", "EMAIL", null, true)))
+    assertThatThrownBy(() -> service.createChannel(
+            "tenant-a", channelUpsert("email-1", "Email One", "EMAIL", null, true)))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("code_already_exists");
   }
@@ -248,27 +237,20 @@ class DefaultConsoleNotificationApplicationServiceTest {
   void shouldRejectRuleWhenChannelMissing() {
     when(channelMapper.selectByCode("tenant-a", "missing")).thenReturn(null);
 
-    assertThatThrownBy(
-            () ->
-                service.createRule(
-                    "tenant-a",
-                    ruleUpsert("default-rule", "missing", "JOB_SUCCESS", null, null, true)))
+    assertThatThrownBy(() -> service.createRule(
+            "tenant-a", ruleUpsert("default-rule", "missing", "JOB_SUCCESS", null, null, true)))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
-        .satisfies(
-            ex -> {
-              BizException bx = (BizException) ex;
-              boolean keyMatch =
-                  bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
-              boolean argsMatch =
-                  bx.getMessageArgs() != null
-                      && java.util.Arrays.stream(bx.getMessageArgs())
-                          .anyMatch(
-                              a -> a != null && a.toString().toLowerCase().contains("not found"));
-              assertThat(keyMatch || argsMatch)
-                  .as("messageKey or args should imply not_found")
-                  .isTrue();
-            });
+        .satisfies(ex -> {
+          BizException bx = (BizException) ex;
+          boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
+          boolean argsMatch = bx.getMessageArgs() != null
+              && java.util.Arrays.stream(bx.getMessageArgs())
+                  .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
+          assertThat(keyMatch || argsMatch)
+              .as("messageKey or args should imply not_found")
+              .isTrue();
+        });
   }
 
   @Test
@@ -298,26 +280,20 @@ class DefaultConsoleNotificationApplicationServiceTest {
   void shouldThrowWhenRuleMissing() {
     when(ruleMapper.selectById("tenant-a", 99L)).thenReturn(null);
 
-    assertThatThrownBy(
-            () ->
-                service.updateRule(
-                    "tenant-a", 99L, ruleUpsert("r", "email-1", "JOB_FAILED", null, null, true)))
+    assertThatThrownBy(() -> service.updateRule(
+            "tenant-a", 99L, ruleUpsert("r", "email-1", "JOB_FAILED", null, null, true)))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
-        .satisfies(
-            ex -> {
-              BizException bx = (BizException) ex;
-              boolean keyMatch =
-                  bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
-              boolean argsMatch =
-                  bx.getMessageArgs() != null
-                      && java.util.Arrays.stream(bx.getMessageArgs())
-                          .anyMatch(
-                              a -> a != null && a.toString().toLowerCase().contains("not found"));
-              assertThat(keyMatch || argsMatch)
-                  .as("messageKey or args should imply not_found")
-                  .isTrue();
-            });
+        .satisfies(ex -> {
+          BizException bx = (BizException) ex;
+          boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
+          boolean argsMatch = bx.getMessageArgs() != null
+              && java.util.Arrays.stream(bx.getMessageArgs())
+                  .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
+          assertThat(keyMatch || argsMatch)
+              .as("messageKey or args should imply not_found")
+              .isTrue();
+        });
   }
 
   private static NotificationChannelUpsertRequest channelUpsert(
@@ -365,14 +341,13 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   void shouldTestChannelBySendingRealMessageAndLogSuccess() {
     when(channelMapper.selectByCode("tenant-a", "wecom-1"))
-        .thenReturn(
-            Map.of(
-                "channel_code",
-                "wecom-1",
-                "channel_type",
-                "WECOM",
-                "config_json",
-                "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+        .thenReturn(Map.of(
+            "channel_code",
+            "wecom-1",
+            "channel_type",
+            "WECOM",
+            "config_json",
+            "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
     NotificationSender sender = mock(NotificationSender.class);
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any(NotificationMessage.class))).thenReturn(WebhookDeliveryResult.ok());
@@ -405,14 +380,13 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   void shouldReportFailureAndPassThroughErrorWhenSendFails() {
     when(channelMapper.selectByCode("tenant-a", "wecom-1"))
-        .thenReturn(
-            Map.of(
-                "channel_code",
-                "wecom-1",
-                "channel_type",
-                "WECOM",
-                "config_json",
-                "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+        .thenReturn(Map.of(
+            "channel_code",
+            "wecom-1",
+            "channel_type",
+            "WECOM",
+            "config_json",
+            "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
     NotificationSender sender = mock(NotificationSender.class);
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any(NotificationMessage.class)))
@@ -436,14 +410,13 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   void shouldRouteWebhookChannelThroughWebhookDispatcher() {
     when(channelMapper.selectByCode("tenant-a", "hook-1"))
-        .thenReturn(
-            Map.of(
-                "channel_code",
-                "hook-1",
-                "channel_type",
-                "WEBHOOK",
-                "config_json",
-                "{\"url\":\"https://example.com/hook\",\"secret\":\"s3cr3t\"}"));
+        .thenReturn(Map.of(
+            "channel_code",
+            "hook-1",
+            "channel_type",
+            "WEBHOOK",
+            "config_json",
+            "{\"url\":\"https://example.com/hook\",\"secret\":\"s3cr3t\"}"));
     when(webhookDispatcher.attemptDelivery(
             any(WebhookSubscriptionEntity.class),
             any(WebhookEventPayload.class),
@@ -466,22 +439,19 @@ class DefaultConsoleNotificationApplicationServiceTest {
   void shouldRejectTestChannelWhenRateLimited() {
     // deliverTest 是可重复触发的 SSRF 放大点(赢 DNS-rebinding 竞态);超频时限流拦下,不再建连投递。
     when(channelMapper.selectByCode("tenant-a", "hook-1"))
-        .thenReturn(
-            Map.of(
-                "channel_code",
-                "hook-1",
-                "channel_type",
-                "WEBHOOK",
-                "config_json",
-                "{\"url\":\"https://example.com/hook\"}"));
+        .thenReturn(Map.of(
+            "channel_code",
+            "hook-1",
+            "channel_type",
+            "WEBHOOK",
+            "config_json",
+            "{\"url\":\"https://example.com/hook\"}"));
     when(testChannelRateLimiter.tryAcquire(any(), ArgumentMatchers.anyInt())).thenReturn(false);
 
     assertThatThrownBy(() -> service.testChannel("tenant-a", "hook-1"))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getCode())
-                    .isEqualTo(io.github.pinpols.batch.common.enums.ResultCode.RATE_LIMITED));
+        .satisfies(ex -> assertThat(((BizException) ex).getCode())
+            .isEqualTo(io.github.pinpols.batch.common.enums.ResultCode.RATE_LIMITED));
 
     // 拦在建连之前:没有走 webhook 投递,也没写投递日志
     verify(webhookDispatcher, never())

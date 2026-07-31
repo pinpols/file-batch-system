@@ -41,9 +41,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
     retryGovernanceService = mock(RetryGovernanceService.class);
     drainProperties = new WorkerDrainProperties();
     drainProperties.setDefaultTimeoutSeconds(300);
-    service =
-        new DefaultWorkerDrainGovernanceService(
-            workerRegistryMapper, jobTaskMapper, retryGovernanceService, drainProperties);
+    service = new DefaultWorkerDrainGovernanceService(
+        workerRegistryMapper, jobTaskMapper, retryGovernanceService, drainProperties);
   }
 
   // ── startDrain ────────────────────────────────────────────────────────────
@@ -67,9 +66,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldThrowWhenWorkerAlreadyDecommissionedOnStartDrain() {
-    WorkerRegistryEntity registry =
-        onlineWorker("t1", "w1")
-            .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     assertThatThrownBy(() -> service.startDrain("t1", "w1", null)).isInstanceOf(BizException.class);
@@ -208,13 +206,12 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldTakeoverAndDecommissionWhenDrainingWorkerFound() {
-    WorkerRegistryEntity registry =
-        onlineWorker("t1", "w1")
-            .withDrain(
-                WorkerRegistryStatus.DRAINING.code(),
-                BatchDateTimeSupport.utcNow().minusSeconds(600),
-                BatchDateTimeSupport.utcNow().minusSeconds(100),
-                BatchDateTimeSupport.utcNow().minusSeconds(600));
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1")
+        .withDrain(
+            WorkerRegistryStatus.DRAINING.code(),
+            BatchDateTimeSupport.utcNow().minusSeconds(600),
+            BatchDateTimeSupport.utcNow().minusSeconds(100),
+            BatchDateTimeSupport.utcNow().minusSeconds(600));
 
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
@@ -229,9 +226,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldContinueTakeoverWhenOneTaskRetryFails() {
-    WorkerRegistryEntity registry =
-        onlineWorker("t1", "w1")
-            .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
     WorkerRegistryEntity decommissioned =
         registry.withDecommissioned(BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
@@ -261,9 +257,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void warmup_flipsOfflineToOnline() {
-    WorkerRegistryEntity registry =
-        onlineWorker("t1", "w1")
-            .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
     when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
@@ -286,9 +281,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void warmup_rejectsDraining() {
-    WorkerRegistryEntity registry =
-        onlineWorker("t1", "w1")
-            .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);
@@ -297,9 +291,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void warmup_rejectsDecommissioned() {
-    WorkerRegistryEntity registry =
-        onlineWorker("t1", "w1")
-            .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);

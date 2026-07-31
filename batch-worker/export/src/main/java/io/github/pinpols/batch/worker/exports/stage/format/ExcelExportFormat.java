@@ -59,18 +59,15 @@ public class ExcelExportFormat extends AbstractExportFormat {
     // 已创建的 /tmp sheet-backing temp file 永不清理。Java 9+ try-with-resources 支持
     // 资源变量复用,把 workbook 与 outputStream 一起放进 try() 即可保证两者都被关闭。
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
-        OutputStream outputStream =
-            Files.newOutputStream(
-                ctx.generatedFile(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE)) {
-      ExcelSheetWriter writer =
-          new ExcelSheetWriter(
-              workbook, columns, sheetName, headerRows, rowsPerSheet, styleOptions, this);
-      long recordCount =
-          generatePaged(
-              ctx, firstPage, (batch, detail, rowIndex) -> writer.writeDataRow(batch, detail));
+        OutputStream outputStream = Files.newOutputStream(
+            ctx.generatedFile(),
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE)) {
+      ExcelSheetWriter writer = new ExcelSheetWriter(
+          workbook, columns, sheetName, headerRows, rowsPerSheet, styleOptions, this);
+      long recordCount = generatePaged(
+          ctx, firstPage, (batch, detail, rowIndex) -> writer.writeDataRow(batch, detail));
       workbook.write(outputStream);
       return recordCount;
     }
@@ -84,9 +81,8 @@ public class ExcelExportFormat extends AbstractExportFormat {
     if (templateConfig == null || templateConfig.isEmpty()) {
       return 0;
     }
-    Integer raw =
-        integerValue(
-            firstNonNull(templateConfig.get("rows_per_sheet"), templateConfig.get("rowsPerSheet")));
+    Integer raw = integerValue(
+        firstNonNull(templateConfig.get("rows_per_sheet"), templateConfig.get("rowsPerSheet")));
     if (raw == null || raw <= 0) {
       return 0;
     }

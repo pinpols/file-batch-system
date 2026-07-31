@@ -154,13 +154,12 @@ public class ImportRecordGovernanceService {
 
   public void recordThresholdViolation(
       ImportJobContext context, ImportStage stage, String errorCode, String message) {
-    BadRecordContext brc =
-        BadRecordContext.builder()
-            .context(context)
-            .stage(stage)
-            .errorCode(errorCode)
-            .errorMessage(message)
-            .build();
+    BadRecordContext brc = BadRecordContext.builder()
+        .context(context)
+        .stage(stage)
+        .errorCode(errorCode)
+        .errorMessage(message)
+        .build();
     recordBadRecord(brc);
     context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED, true);
   }
@@ -199,9 +198,8 @@ public class ImportRecordGovernanceService {
     String errorOutputPath = null;
     ErrorSinkType sinkType = resolveErrorSinkType();
     if (sinkType == ErrorSinkType.ERROR_FILE || sinkType == ErrorSinkType.BOTH) {
-      errorOutputPath =
-          errorOutputStorage.writeErrorOutput(
-              context.getTenantId(), String.valueOf(fileId), badRecords);
+      errorOutputPath = errorOutputStorage.writeErrorOutput(
+          context.getTenantId(), String.valueOf(fileId), badRecords);
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("badRecordCount", badRecords.size());
@@ -226,18 +224,17 @@ public class ImportRecordGovernanceService {
       metadata.put("errorOutputPath", errorOutputPath);
     }
     runtimeRepository.updateFileMetadata(fileId, metadata);
-    runtimeRepository.appendAudit(
-        FileAuditParam.builder()
-            .fileId(fileId)
-            .tenantId(context.getTenantId())
-            .operationType("BAD_RECORD_GOVERNANCE")
-            .operationResult("SUCCESS")
-            .operatorType("SYSTEM")
-            .operatorId(context.getWorkerId())
-            .traceId(stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef("import-error-output")
-            .detailSummary(metadata)
-            .build());
+    runtimeRepository.appendAudit(FileAuditParam.builder()
+        .fileId(fileId)
+        .tenantId(context.getTenantId())
+        .operationType("BAD_RECORD_GOVERNANCE")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .operatorId(context.getWorkerId())
+        .traceId(stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .evidenceRef("import-error-output")
+        .detailSummary(metadata)
+        .build());
   }
 
   /**
@@ -280,18 +277,17 @@ public class ImportRecordGovernanceService {
     Long sourceRowNum = locator == null ? null : locator.rowNum();
     String sourceColumn = locator == null ? null : locator.column();
     Map<String, Object> attrs = context.getAttributes();
-    ImportBadRecordEntity badRecord =
-        new ImportBadRecordEntity(
-            recordNo,
-            stage == null ? null : stage.name(),
-            errorCode,
-            errorMessage,
-            rawRecord,
-            skipped,
-            resolveSkipAction().code(),
-            null,
-            sourceRowNum,
-            sourceColumn);
+    ImportBadRecordEntity badRecord = new ImportBadRecordEntity(
+        recordNo,
+        stage == null ? null : stage.name(),
+        errorCode,
+        errorMessage,
+        rawRecord,
+        skipped,
+        resolveSkipAction().code(),
+        null,
+        sourceRowNum,
+        sourceColumn);
     badRecords(context).add(badRecord);
 
     if (skipped) {
@@ -326,29 +322,27 @@ public class ImportRecordGovernanceService {
     if (batchSecurityProperties.isBypassMode()) {
       errorLineMask = false;
     }
-    String safeMessage =
-        errorLineMask
-            ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet)
-            : errorMessage;
+    String safeMessage = errorLineMask
+        ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet)
+        : errorMessage;
     Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
     Object safePayload =
         errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
-    runtimeRepository.insertFileErrorRecord(
-        FileErrorRecordParam.builder()
-            .tenantId(context.getTenantId())
-            .fileId(fileId)
-            .pipelineInstanceId(pipelineInstanceId)
-            .pipelineStepRunId(pipelineStepRunId)
-            .recordNo(recordNo)
-            .errorCode(errorCode)
-            .errorMessage(safeMessage)
-            .errorStage(stage == null ? null : stage.name())
-            .skipped(skipped)
-            .skipAction(resolveSkipAction().code())
-            .rawRecord(safePayload)
-            .sourceRowNum(sourceRowNum)
-            .sourceColumn(sourceColumn)
-            .build());
+    runtimeRepository.insertFileErrorRecord(FileErrorRecordParam.builder()
+        .tenantId(context.getTenantId())
+        .fileId(fileId)
+        .pipelineInstanceId(pipelineInstanceId)
+        .pipelineStepRunId(pipelineStepRunId)
+        .recordNo(recordNo)
+        .errorCode(errorCode)
+        .errorMessage(safeMessage)
+        .errorStage(stage == null ? null : stage.name())
+        .skipped(skipped)
+        .skipAction(resolveSkipAction().code())
+        .rawRecord(safePayload)
+        .sourceRowNum(sourceRowNum)
+        .sourceColumn(sourceColumn)
+        .build());
 
     if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
       attrs.put("manualReviewRequired", true);

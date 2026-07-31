@@ -17,10 +17,8 @@ class OrchestratorApiExceptionHandlerTest {
   @Test
   void shouldMapTooManyRequestsToRateLimited() {
     // LaunchApplicationService 限流抛 429,不能落 default 被降级成 SYSTEM_ERROR。
-    ResponseEntity<CommonResponse<Void>> response =
-        handler.handleResponseStatus(
-            new ResponseStatusException(
-                HttpStatus.TOO_MANY_REQUESTS, "launch rate limit exceeded"));
+    ResponseEntity<CommonResponse<Void>> response = handler.handleResponseStatus(
+        new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "launch rate limit exceeded"));
 
     assertThat(response.getStatusCode().value()).isEqualTo(429);
     assertThat(response.getBody()).isNotNull();
@@ -64,9 +62,8 @@ class OrchestratorApiExceptionHandlerTest {
 
   @Test
   void shouldFallbackToSystemErrorForUnmappedStatus() {
-    ResponseEntity<CommonResponse<Void>> response =
-        handler.handleResponseStatus(
-            new ResponseStatusException(HttpStatus.BAD_GATEWAY, "upstream"));
+    ResponseEntity<CommonResponse<Void>> response = handler.handleResponseStatus(
+        new ResponseStatusException(HttpStatus.BAD_GATEWAY, "upstream"));
 
     assertThat(response.getStatusCode().value()).isEqualTo(502);
     assertThat(response.getBody().code()).isEqualTo(ResultCode.SYSTEM_ERROR);

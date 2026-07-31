@@ -156,24 +156,23 @@ public class AuditAspect {
       RequestInfo req = currentRequest();
       // canonical record 构造器(豁免参数数量约束),按 DB 列顺序传 16 个字段。
       // 一致性 SUCCESS / FAILED 由 errorCode 是否为 null 决定。
-      mapper.insert(
-          new OperationAuditEvent(
-              op.tenantId(),
-              ann.aggregateType(),
-              aggregateId,
-              ann.action(),
-              op.operatorId(),
-              op.operatorRole(),
-              errorCode == null ? "SUCCESS" : "FAILED",
-              errorCode,
-              truncate(errorMsg, 1024),
-              paramsJson,
-              req.traceId(),
-              req.requestId(),
-              req.ipHash(),
-              req.uaHash(),
-              1,
-              Instant.now()));
+      mapper.insert(new OperationAuditEvent(
+          op.tenantId(),
+          ann.aggregateType(),
+          aggregateId,
+          ann.action(),
+          op.operatorId(),
+          op.operatorRole(),
+          errorCode == null ? "SUCCESS" : "FAILED",
+          errorCode,
+          truncate(errorMsg, 1024),
+          paramsJson,
+          req.traceId(),
+          req.requestId(),
+          req.ipHash(),
+          req.uaHash(),
+          1,
+          Instant.now()));
     } catch (Exception e) {
       // 审计写失败不能拖垮业务事务 —— 业务侧已经做完了真正的事,这里只是留痕
       log.warn("[audit] insert failed action={}", ann.action(), e);
@@ -193,11 +192,10 @@ public class AuditAspect {
       // P0 安全:SpEL 用 SimpleEvaluationContext + DataBindingPropertyAccessor 做最小权限上下文。
       // SimpleEvaluationContext 禁止 T(System).exit(0) 类型方法 / Type 引用 / bean 引用,
       // 仅允许属性 / 索引 / 算术 / 实例方法。
-      SimpleEvaluationContext ctx =
-          SimpleEvaluationContext.forPropertyAccessors(
-                  DataBindingPropertyAccessor.forReadOnlyAccess())
-              .withInstanceMethods()
-              .build();
+      SimpleEvaluationContext ctx = SimpleEvaluationContext.forPropertyAccessors(
+              DataBindingPropertyAccessor.forReadOnlyAccess())
+          .withInstanceMethods()
+          .build();
       String[] names = paramNameDiscoverer.getParameterNames(method);
       if (names != null) {
         for (int i = 0; i < names.length && i < args.length; i++) {
@@ -276,10 +274,9 @@ public class AuditAspect {
     if (auth == null || !(auth.getPrincipal() instanceof ConsolePrincipal p)) {
       return new OperatorInfo(null, null, resolveTenantFallback(targetTenantId, null));
     }
-    String role =
-        p.authorities() == null || p.authorities().isEmpty()
-            ? null
-            : p.authorities().iterator().next();
+    String role = p.authorities() == null || p.authorities().isEmpty()
+        ? null
+        : p.authorities().iterator().next();
     return new OperatorInfo(
         p.username(), role, resolveTenantFallback(targetTenantId, p.tenantId()));
   }
@@ -315,11 +312,10 @@ public class AuditAspect {
     try {
       String[] names = paramNameDiscoverer.getParameterNames(method);
       if (expr.startsWith("#")) {
-        SimpleEvaluationContext ctx =
-            SimpleEvaluationContext.forPropertyAccessors(
-                    DataBindingPropertyAccessor.forReadOnlyAccess())
-                .withInstanceMethods()
-                .build();
+        SimpleEvaluationContext ctx = SimpleEvaluationContext.forPropertyAccessors(
+                DataBindingPropertyAccessor.forReadOnlyAccess())
+            .withInstanceMethods()
+            .build();
         if (names != null) {
           for (int i = 0; i < names.length && i < args.length; i++) {
             ctx.setVariable(names[i], args[i]);

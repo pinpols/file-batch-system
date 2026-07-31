@@ -62,9 +62,8 @@ public class Bucket4jRateLimitConfig {
   public StatefulRedisConnection<String, byte[]> rateLimitRedisConnection(
       RedisConnectionFactory redisConnectionFactory) {
     if (!(redisConnectionFactory instanceof LettuceConnectionFactory lettuceConnectionFactory)) {
-      throw new IllegalStateException(
-          "rate limiter requires a LettuceConnectionFactory but found: "
-              + redisConnectionFactory.getClass().getName());
+      throw new IllegalStateException("rate limiter requires a LettuceConnectionFactory but found: "
+          + redisConnectionFactory.getClass().getName());
     }
     AbstractRedisClient nativeClient = lettuceConnectionFactory.getNativeClient();
     if (!(nativeClient instanceof RedisClient redisClient)) {

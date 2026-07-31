@@ -41,16 +41,19 @@ class ConsoleAtomicTaskConfigServiceTest {
 
   private static final String TENANT = "ta";
 
-  @Mock private AtomicTaskConfigMapper mapper;
+  @Mock
+  private AtomicTaskConfigMapper mapper;
 
   // schemaService 是无依赖单例,直接 @Spy 真实对象(测试要的是 catalog 数据,不需要 stub)
   @Spy
   private ConsoleAtomicTaskTypeSchemaService schemaService =
       new ConsoleAtomicTaskTypeSchemaService();
 
-  @Spy private ObjectMapper objectMapper = new ObjectMapper();
+  @Spy
+  private ObjectMapper objectMapper = new ObjectMapper();
 
-  @InjectMocks private ConsoleAtomicTaskConfigService service;
+  @InjectMocks
+  private ConsoleAtomicTaskConfigService service;
 
   @Test
   void shouldCreateSqlConfig_whenParametersMatchSchema() {

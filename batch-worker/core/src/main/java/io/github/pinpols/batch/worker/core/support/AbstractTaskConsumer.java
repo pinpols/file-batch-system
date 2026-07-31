@@ -205,12 +205,9 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
         String tenantId = finalMessage.tenantId();
         WorkerExecutionResult result;
         if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
-          result =
-              RlsTenantContextHolder.runWithTenant(
-                  tenantId,
-                  () ->
-                      taskDispatchExecutor()
-                          .execute(finalMessage, finalRegistration.getWorkerId()));
+          result = RlsTenantContextHolder.runWithTenant(
+              tenantId,
+              () -> taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId()));
         } else {
           result = taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId());
         }
@@ -382,7 +379,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     for (Map.Entry<String, List<BatchPayload>> entry : byTenant.entrySet()) {
       String tenantId = entry.getKey();
       List<BatchPayload> group = entry.getValue();
-      List<TaskDispatchMessage> messages = group.stream().map(BatchPayload::message).toList();
+      List<TaskDispatchMessage> messages =
+          group.stream().map(BatchPayload::message).toList();
       List<BatchItemExecution> executions = executeBatchForTenant(tenantId, messages, workerId);
       for (BatchItemExecution execution : executions) {
         if (execution == null || execution.skipped()) {
@@ -594,8 +592,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
       return new String[] {baseTopic};
     }
-    return new String[] {
-      baseTopic, BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode)
+    return new String[] {baseTopic, BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode)
     };
   }
 
@@ -622,15 +619,13 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     String baseTopic = resolveBaseTopic(cfg);
     String safeBase = baseTopic.replace(".", "\\.");
     String configuredWorkerCode = cfg.workerCode();
-    String nodeDirect =
-        (configuredWorkerCode == null || configuredWorkerCode.isBlank())
-            ? null
-            : "\\.node\\." + escapeRegex(configuredWorkerCode);
+    String nodeDirect = (configuredWorkerCode == null || configuredWorkerCode.isBlank())
+        ? null
+        : "\\.node\\." + escapeRegex(configuredWorkerCode);
 
-    WorkerKafkaSubscribeProperties.Mode mode =
-        subscribeProperties == null
-            ? WorkerKafkaSubscribeProperties.Mode.PATTERN
-            : subscribeProperties.getSubscribeMode();
+    WorkerKafkaSubscribeProperties.Mode mode = subscribeProperties == null
+        ? WorkerKafkaSubscribeProperties.Mode.PATTERN
+        : subscribeProperties.getSubscribeMode();
 
     String suffixAlt;
     switch (mode) {
@@ -640,19 +635,17 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
         break;
       case TENANT_SCOPED:
         // 只订阅 allowlist 中的 tenant 后缀（+ node-direct）；其他 tenant 的后缀不接
-        List<String> allow =
-            subscribeProperties.getTenantAllowlist() == null
-                ? List.of()
-                : subscribeProperties.getTenantAllowlist();
+        List<String> allow = subscribeProperties.getTenantAllowlist() == null
+            ? List.of()
+            : subscribeProperties.getTenantAllowlist();
         if (allow.isEmpty()) {
           suffixAlt = nodeDirect;
         } else {
-          String tenantAlt =
-              allow.stream()
-                  .filter(s -> s != null && !s.isBlank())
-                  .map(AbstractTaskConsumer::escapeRegex)
-                  .reduce((a, b) -> a + "|" + b)
-                  .orElse(null);
+          String tenantAlt = allow.stream()
+              .filter(s -> s != null && !s.isBlank())
+              .map(AbstractTaskConsumer::escapeRegex)
+              .reduce((a, b) -> a + "|" + b)
+              .orElse(null);
           String tenantBranch = tenantAlt == null ? null : "\\.(" + tenantAlt + ")";
           suffixAlt = joinAlt(nodeDirect, tenantBranch);
         }
@@ -705,12 +698,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     return workerConfiguration().consumerGroupId();
   }
 
-  private static final Map<String, String> WORKER_TYPE_TOPIC =
-      Map.of(
-          "IMPORT", BatchTopics.TASK_DISPATCH_IMPORT,
-          "EXPORT", BatchTopics.TASK_DISPATCH_EXPORT,
-          "PROCESS", BatchTopics.TASK_DISPATCH_PROCESS,
-          "DISPATCH", BatchTopics.TASK_DISPATCH_DISPATCH);
+  private static final Map<String, String> WORKER_TYPE_TOPIC = Map.of(
+      "IMPORT", BatchTopics.TASK_DISPATCH_IMPORT,
+      "EXPORT", BatchTopics.TASK_DISPATCH_EXPORT,
+      "PROCESS", BatchTopics.TASK_DISPATCH_PROCESS,
+      "DISPATCH", BatchTopics.TASK_DISPATCH_DISPATCH);
 
   // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → process → dispatch）
   // P2: 改用 LinkedHashMap 保留顺序又表达 Map 语义,避免 List<Entry> 在阅读时被误读为 List。

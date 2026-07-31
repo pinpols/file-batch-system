@@ -33,10 +33,10 @@ class ConsoleWorkflowRunControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleWorkflowRunController(proxy, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleWorkflowRunController(proxy, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -79,10 +79,9 @@ class ConsoleWorkflowRunControllerTest {
   void skipNodeShouldPassNodeCode() throws Exception {
     when(proxy.workflowRunSkipNode(3L, "ta", "NODE_A")).thenReturn(Map.of("status", "skipped"));
     mockMvc
-        .perform(
-            post("/api/console/workflow-runs/3/skip-node")
-                .param("tenantId", "ta")
-                .param("nodeCode", "NODE_A"))
+        .perform(post("/api/console/workflow-runs/3/skip-node")
+            .param("tenantId", "ta")
+            .param("nodeCode", "NODE_A"))
         .andExpect(status().isOk());
     verify(proxy).workflowRunSkipNode(3L, "ta", "NODE_A");
   }

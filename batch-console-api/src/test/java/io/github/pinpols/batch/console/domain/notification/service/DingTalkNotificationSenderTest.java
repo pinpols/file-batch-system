@@ -110,10 +110,8 @@ class DingTalkNotificationSenderTest {
         };
 
     WebhookDeliveryResult result =
-        sender.send(
-            message(
-                "{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\","
-                    + "\"secret\":\"SEC123\"}"));
+        sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\","
+            + "\"secret\":\"SEC123\"}"));
 
     assertThat(result.success()).isTrue();
     assertThat(sentUrl.get()).contains("timestamp=1700000000000");

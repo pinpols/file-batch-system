@@ -26,16 +26,15 @@ import org.mockito.ArgumentCaptor;
 
 class HeartbeatSchedulerTest {
 
-  private final BatchPlatformClientConfig cfg =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://x")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("k:9092")
-          .kafkaTopicPattern("t.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(4)
-          .build();
+  private final BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
+      .baseUrl("http://x")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("k:9092")
+      .kafkaTopicPattern("t.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(4)
+      .build();
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   private static ArgumentCaptor<Map<String, Object>> mapCaptor() {
@@ -68,9 +67,8 @@ class HeartbeatSchedulerTest {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightCount()).thenReturn(1);
-    WorkerIdentity identity =
-        new WorkerIdentity(
-            "sdk-self-hosted", "host-a", "10.0.0.1", "12345", List.of("echo", "sleep"), "build-9");
+    WorkerIdentity identity = new WorkerIdentity(
+        "sdk-self-hosted", "host-a", "10.0.0.1", "12345", List.of("echo", "sleep"), "build-9");
     try (HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher, identity)) {
       s.tick();
     }

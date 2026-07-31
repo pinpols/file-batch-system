@@ -28,14 +28,13 @@ class TenantOperationalConfigApplySupportTest {
     CalendarHolidayMapper holidayMapper = mock(CalendarHolidayMapper.class);
     TenantQuotaPolicyMapper quotaMapper = mock(TenantQuotaPolicyMapper.class);
     AlertRoutingConfigMapper alertMapper = mock(AlertRoutingConfigMapper.class);
-    TenantOperationalConfigApplySupport support =
-        new TenantOperationalConfigApplySupport(
-            resourceQueueMapper,
-            batchWindowMapper,
-            calendarMapper,
-            holidayMapper,
-            quotaMapper,
-            alertMapper);
+    TenantOperationalConfigApplySupport support = new TenantOperationalConfigApplySupport(
+        resourceQueueMapper,
+        batchWindowMapper,
+        calendarMapper,
+        holidayMapper,
+        quotaMapper,
+        alertMapper);
     BusinessCalendarSpec spec = new BusinessCalendarSpec();
     spec.setCalendarCode("cn-settlement");
     spec.setCalendarName("CN Settlement");
@@ -52,11 +51,9 @@ class TenantOperationalConfigApplySupportTest {
     assertThat(rows.getValue())
         .extracting(row -> row.get("holiday_date"))
         .containsExactly("2026-01-01", "2026-02-17");
-    assertThat(rows.getValue())
-        .allSatisfy(
-            row -> {
-              assertThat(row).containsEntry("calendar_id", 91L);
-              assertThat(row).containsEntry("created_by", "admin");
-            });
+    assertThat(rows.getValue()).allSatisfy(row -> {
+      assertThat(row).containsEntry("calendar_id", 91L);
+      assertThat(row).containsEntry("created_by", "admin");
+    });
   }
 }

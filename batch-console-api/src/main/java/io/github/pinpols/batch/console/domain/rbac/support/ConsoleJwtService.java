@@ -137,8 +137,10 @@ public class ConsoleJwtService {
   // JWT IP/UA binding drift 日志抑制器:同一 (用户+租户+storedHash→currentHash) 组合
   // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复刷屏(实测一轮 e2e 8000+ 行噪音)。
   // 10k 上限够覆盖任何合理量级会话规模。
-  private final Cache<String, Boolean> driftLogSuppressor =
-      Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(5)).maximumSize(10_000).build();
+  private final Cache<String, Boolean> driftLogSuppressor = Caffeine.newBuilder()
+      .expireAfterWrite(Duration.ofMinutes(5))
+      .maximumSize(10_000)
+      .build();
 
   // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
   // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
@@ -174,9 +176,8 @@ public class ConsoleJwtService {
           || lower.contains("change-me")
           || lower.contains("change_me")
           || jwtSecret.length() < 32) {
-        log.warn(
-            "⚠️ 非生产 profile:batch.console.security.jwt-secret 仍为默认/弱密钥,生产前务必经 env / "
-                + "secret-manager 注入 ≥32 字符强密钥(prod-like profile 下会 fail-fast 拒绝启动)");
+        log.warn("⚠️ 非生产 profile:batch.console.security.jwt-secret 仍为默认/弱密钥,生产前务必经 env / "
+            + "secret-manager 注入 ≥32 字符强密钥(prod-like profile 下会 fail-fast 拒绝启动)");
       }
     }
     SecretKey key = signingKey();
@@ -221,18 +222,17 @@ public class ConsoleJwtService {
     Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
     String jti = UUID.randomUUID().toString();
     HttpServletRequest currentRequest = currentRequest();
-    JwtClaimsSet.Builder claimsBuilder =
-        JwtClaimsSet.builder()
-            .issuer(properties.getJwtIssuer())
-            .subject(username)
-            .issuedAt(issuedAt)
-            .expiresAt(expiresAt)
-            .id(jti)
-            .claim(CLAIM_TENANT_ID, tenantId)
-            .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
-            .claim(CLAIM_SESSION_VERSION, sessionVersion)
-            .claim(CLAIM_JTI, jti)
-            .claim(CLAIM_AUTHORITIES, authorities == null ? List.of() : List.copyOf(authorities));
+    JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
+        .issuer(properties.getJwtIssuer())
+        .subject(username)
+        .issuedAt(issuedAt)
+        .expiresAt(expiresAt)
+        .id(jti)
+        .claim(CLAIM_TENANT_ID, tenantId)
+        .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
+        .claim(CLAIM_SESSION_VERSION, sessionVersion)
+        .claim(CLAIM_JTI, jti)
+        .claim(CLAIM_AUTHORITIES, authorities == null ? List.of() : List.copyOf(authorities));
     if (currentRequest != null) {
       String ipHash = hashClientIp(currentRequest);
       String uaHash = hashUserAgent(currentRequest);
@@ -244,12 +244,10 @@ public class ConsoleJwtService {
       }
     }
     JwtClaimsSet claims = claimsBuilder.build();
-    String token =
-        encoder()
-            .encode(
-                JwtEncoderParameters.from(
-                    JwsHeader.with(MacAlgorithm.HS256).type("JWT").build(), claims))
-            .getTokenValue();
+    String token = encoder()
+        .encode(JwtEncoderParameters.from(
+            JwsHeader.with(MacAlgorithm.HS256).type("JWT").build(), claims))
+        .getTokenValue();
     return new ConsoleAuthTokenResponse(
         token,
         "Bearer",
@@ -410,9 +408,8 @@ public class ConsoleJwtService {
 
   private SecretKey signingKey() {
     try {
-      byte[] keyBytes =
-          MessageDigest.getInstance("SHA-256")
-              .digest(properties.getJwtSecret().getBytes(StandardCharsets.UTF_8));
+      byte[] keyBytes = MessageDigest.getInstance("SHA-256")
+          .digest(properties.getJwtSecret().getBytes(StandardCharsets.UTF_8));
       return new SecretKeySpec(keyBytes, "HmacSHA256");
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 is not available", exception);

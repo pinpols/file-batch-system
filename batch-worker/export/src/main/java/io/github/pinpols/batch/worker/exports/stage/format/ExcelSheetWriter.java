@@ -119,7 +119,8 @@ final class ExcelSheetWriter {
     }
     if (styleOptions.autoWidth()) {
       for (int c = 0; c < columns.size(); c++) {
-        currentSheet.setColumnWidth(c, ExcelStyleSupport.autoColumnWidth(columns.get(c).header()));
+        currentSheet.setColumnWidth(
+            c, ExcelStyleSupport.autoColumnWidth(columns.get(c).header()));
       }
     }
     if (styleOptions.freezeHeader()) {
@@ -193,14 +194,11 @@ final class ExcelSheetWriter {
     if (pattern == null || pattern.isBlank()) {
       return;
     }
-    CellStyle style =
-        columnStyleCache.computeIfAbsent(
-            columnIndex,
-            idx -> {
-              CellStyle s = workbook.createCellStyle();
-              s.setDataFormat(dataFormat.getFormat(pattern));
-              return s;
-            });
+    CellStyle style = columnStyleCache.computeIfAbsent(columnIndex, idx -> {
+      CellStyle s = workbook.createCellStyle();
+      s.setDataFormat(dataFormat.getFormat(pattern));
+      return s;
+    });
     cell.setCellStyle(style);
   }
 

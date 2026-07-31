@@ -25,8 +25,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsolePushApprovalNotifierTest {
 
-  @Mock private ConsolePushApprovalNotificationMapper notificationMapper;
-  @Mock private ConsolePushSender pushSender;
+  @Mock
+  private ConsolePushApprovalNotificationMapper notificationMapper;
+
+  @Mock
+  private ConsolePushSender pushSender;
 
   private ConsolePushProperties properties;
   private ConsolePushApprovalNotifier notifier;
@@ -70,9 +73,8 @@ class ConsolePushApprovalNotifierTest {
 
   @Test
   void shouldUseRejectionReasonWhenRejected() {
-    PendingApprovalNotification p =
-        approval(
-            "ap-2", "ta", "COMPENSATION", "REJECTED", "alice", "bob", null, "blocked by policy");
+    PendingApprovalNotification p = approval(
+        "ap-2", "ta", "COMPENSATION", "REJECTED", "alice", "bob", null, "blocked by policy");
     when(notificationMapper.findPending(10, 50)).thenReturn(List.of(p));
     when(notificationMapper.insertIgnore(any())).thenReturn(1);
 

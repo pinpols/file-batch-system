@@ -22,11 +22,11 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:17"))
-          .withDatabaseName("batch_platform")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse("postgres:17"))
+      .withDatabaseName("batch_platform")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123");
 
   @Test
   void migrationPlatformCreatesBatchDayInstance() {
@@ -38,18 +38,14 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
         .load()
         .migrate();
 
-    SingleConnectionDataSource dataSource =
-        new SingleConnectionDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+    SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     try {
       JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-      Long cnt =
-          jdbc.queryForObject(
-              """
+      Long cnt = jdbc.queryForObject("""
               select count(*) from information_schema.tables
               where table_schema = 'batch' and table_name = 'batch_day_instance'
-              """,
-              Long.class);
+              """, Long.class);
       assertThat(cnt).isEqualTo(1L);
     } finally {
       dataSource.destroy();

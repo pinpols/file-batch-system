@@ -49,37 +49,34 @@ class ConsoleConfigControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleConfigController(configApplicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleConfigController(configApplicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturnConfigReleaseListAsDtos() throws Exception {
     when(configApplicationService.configReleases(any()))
-        .thenReturn(
-            List.of(
-                new ConsoleConfigReleaseResponse(
-                    1L,
-                    "t1",
-                    "FILE",
-                    "KEY",
-                    "Name",
-                    "DRAFT",
-                    1,
-                    "{}",
-                    "{\"a\":1}",
-                    Instant.EPOCH,
-                    Instant.EPOCH,
-                    null,
-                    null,
-                    "u1",
-                    "u2",
-                    Instant.EPOCH,
-                    Instant.EPOCH)));
+        .thenReturn(List.of(new ConsoleConfigReleaseResponse(
+            1L,
+            "t1",
+            "FILE",
+            "KEY",
+            "Name",
+            "DRAFT",
+            1,
+            "{}",
+            "{\"a\":1}",
+            Instant.EPOCH,
+            Instant.EPOCH,
+            null,
+            null,
+            "u1",
+            "u2",
+            Instant.EPOCH,
+            Instant.EPOCH)));
 
     mockMvc
         .perform(get("/api/console/config/releases").param("tenantId", "t1"))
@@ -93,12 +90,10 @@ class ConsoleConfigControllerTest {
     when(configApplicationService.publishConfigRelease(anyLong(), any())).thenReturn("PUBLISHED");
 
     mockMvc
-        .perform(
-            post("/api/console/config/releases/1/publish")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/config/releases/1/publish")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","operatorId":"u1","traceId":"trace-1","reason":"ok"}
                     """))
         .andExpect(status().isOk())
@@ -111,42 +106,38 @@ class ConsoleConfigControllerTest {
   @Test
   void shouldReturnSecretVersionAndChangeLogDtos() throws Exception {
     when(configApplicationService.secretVersions(any()))
-        .thenReturn(
-            List.of(
-                new ConsoleSecretVersionResponse(
-                    1L,
-                    "t1",
-                    "REF",
-                    "Secret",
-                    2,
-                    "ACTIVE",
-                    true,
-                    Instant.EPOCH,
-                    Instant.EPOCH,
-                    Instant.EPOCH,
-                    Instant.EPOCH,
-                    "{}",
-                    "reason",
-                    "u1",
-                    "u2",
-                    Instant.EPOCH,
-                    Instant.EPOCH)));
+        .thenReturn(List.of(new ConsoleSecretVersionResponse(
+            1L,
+            "t1",
+            "REF",
+            "Secret",
+            2,
+            "ACTIVE",
+            true,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "{}",
+            "reason",
+            "u1",
+            "u2",
+            Instant.EPOCH,
+            Instant.EPOCH)));
     when(configApplicationService.configChangeLogs(any()))
-        .thenReturn(
-            List.of(
-                new ConsoleConfigChangeLogResponse(
-                    2L,
-                    "t1",
-                    "FILE",
-                    "KEY",
-                    1,
-                    "CREATE",
-                    "SUCCESS",
-                    "API",
-                    "u1",
-                    "trace-1",
-                    "{}",
-                    Instant.EPOCH)));
+        .thenReturn(List.of(new ConsoleConfigChangeLogResponse(
+            2L,
+            "t1",
+            "FILE",
+            "KEY",
+            1,
+            "CREATE",
+            "SUCCESS",
+            "API",
+            "u1",
+            "trace-1",
+            "{}",
+            Instant.EPOCH)));
 
     mockMvc
         .perform(get("/api/console/config/secrets").param("tenantId", "t1"))

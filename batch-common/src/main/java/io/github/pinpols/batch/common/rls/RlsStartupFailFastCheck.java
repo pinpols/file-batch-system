@@ -45,14 +45,13 @@ public class RlsStartupFailFastCheck {
           result.missingEnable(),
           result.missingForce(),
           result.missingPolicy());
-      throw new IllegalStateException(
-          "RLS startup fail-fast: "
-              + result.allMissingTables().size()
-              + " biz table(s) missing RLS enable/force/policy: "
-              + result.allMissingTables()
-              + ". Run scripts/db/business/rls-phase-a.sql or add the table to "
-              + "batch.rls.exempt-tables if it is non-tenant metadata. "
-              + "See logs above for per-category diff.");
+      throw new IllegalStateException("RLS startup fail-fast: "
+          + result.allMissingTables().size()
+          + " biz table(s) missing RLS enable/force/policy: "
+          + result.allMissingTables()
+          + ". Run scripts/db/business/rls-phase-a.sql or add the table to "
+          + "batch.rls.exempt-tables if it is non-tenant metadata. "
+          + "See logs above for per-category diff.");
     }
     log.info("RLS closed-world startup check passed");
   }

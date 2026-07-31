@@ -59,11 +59,14 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void dispatchJobRunsThroughKafkaClaimAndReportsSuccess() {
@@ -72,9 +75,8 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     Long fileId = insertGeneratedFile("e2e-dis", "e2e.json", path, "e2e-dis-trace");
     assertThat(fileId).isNotNull();
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
@@ -85,35 +87,28 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     params.put("ackRequired", false);
     params.put("forceRetry", false);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-dispatch",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-dispatch",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("SUCCESS");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("SUCCESS");
+        });
 
     // Content-level triple-check (状态 + 回执 + 审计) via DispatchReceiptVerifier
     DispatchReceiptVerifier.forTenant(TENANT)
@@ -130,22 +125,19 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
   @Test
   void bundleDispatchExpandsAndEachPartitionRunsThroughWorker() {
     upsertLocalChannel("e2e_local_dispatch");
-    Long fileOne =
-        insertGeneratedFile(
-            "e2e-bundle-dis-1",
-            "e2e-bundle-1.json",
-            "/tmp/e2e-bundle-dispatch-" + System.nanoTime() + "-1.json",
-            "e2e-bundle-dis-trace-1");
-    Long fileTwo =
-        insertGeneratedFile(
-            "e2e-bundle-dis-2",
-            "e2e-bundle-2.json",
-            "/tmp/e2e-bundle-dispatch-" + System.nanoTime() + "-2.json",
-            "e2e-bundle-dis-trace-2");
+    Long fileOne = insertGeneratedFile(
+        "e2e-bundle-dis-1",
+        "e2e-bundle-1.json",
+        "/tmp/e2e-bundle-dispatch-" + System.nanoTime() + "-1.json",
+        "e2e-bundle-dis-trace-1");
+    Long fileTwo = insertGeneratedFile(
+        "e2e-bundle-dis-2",
+        "e2e-bundle-2.json",
+        "/tmp/e2e-bundle-dispatch-" + System.nanoTime() + "-2.json",
+        "e2e-bundle-dis-trace-2");
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "BUNDLE_DISPATCH", "dispatch");
+    LaunchSeed seed = E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "BUNDLE_DISPATCH", "dispatch");
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("receiptCode", "R-E2E-BUNDLE-DISPATCH");
@@ -157,59 +149,42 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
             Map.of("sourceFileId", fileOne, "targetRef", "e2e_local_dispatch"),
             Map.of("sourceFileId", fileTwo, "targetRef", "e2e_local_dispatch")));
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.EVENT,
-            seed.requestId(),
-            "e2e-tr-bundle-dispatch",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.EVENT,
+        seed.requestId(),
+        "e2e-tr-bundle-dispatch",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(180))
         .pollInterval(Duration.ofMillis(250))
-        .untilAsserted(
-            () -> {
-              Integer successfulTasks =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          Integer successfulTasks =
+              jdbcTemplate.queryForObject("""
                       select count(*)::int from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ? and t.task_status = 'SUCCESS'
-                      """,
-                      Integer.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(successfulTasks).isEqualTo(2);
-            });
+                      """, Integer.class, TENANT, seed.dedupKey());
+          assertThat(successfulTasks).isEqualTo(2);
+        });
 
     Integer dispatchedFiles =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             select count(*)::int from batch.file_record
             where tenant_id = ? and id in (?, ?) and file_status = 'DISPATCHED'
-            """,
-            Integer.class,
-            TENANT,
-            fileOne,
-            fileTwo);
+            """, Integer.class, TENANT, fileOne, fileTwo);
     assertThat(dispatchedFiles).isEqualTo(2);
 
-    Integer receipts =
-        jdbcTemplate.queryForObject(
-            """
+    Integer receipts = jdbcTemplate.queryForObject(
+        """
             select count(*)::int from batch.file_dispatch_record
             where tenant_id = ? and file_id in (?, ?) and channel_code = ?
-            """,
-            Integer.class,
-            TENANT,
-            fileOne,
-            fileTwo,
-            "e2e_local_dispatch");
+            """, Integer.class, TENANT, fileOne, fileTwo, "e2e_local_dispatch");
     assertThat(receipts).isEqualTo(2);
   }
 
@@ -233,13 +208,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
             select 1 from batch.file_channel_config
             where tenant_id = ? and channel_code = ?
         )
-        """,
-        TENANT,
-        channelCode,
-        "E2E local dispatch",
-        channelCode,
-        TENANT,
-        channelCode);
+        """, TENANT, channelCode, "E2E local dispatch", channelCode, TENANT, channelCode);
   }
 
   private Long insertGeneratedFile(
@@ -255,13 +224,6 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
             'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
             ?, 'SYSTEM', 'GENERATED', date '2026-01-15', ?
         ) returning id
-        """,
-        Long.class,
-        TENANT,
-        fileCode,
-        fileName,
-        fileName,
-        storagePath,
-        traceId);
+        """, Long.class, TENANT, fileCode, fileName, fileName, storagePath, traceId);
   }
 }

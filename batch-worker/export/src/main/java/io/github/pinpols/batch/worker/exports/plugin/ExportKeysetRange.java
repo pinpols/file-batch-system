@@ -31,17 +31,13 @@ public record ExportKeysetRange(
       return inactiveFor(partitionCount, partitionNo);
     }
     BigDecimal span = hi.subtract(lo);
-    BigDecimal loN =
-        lo.add(
-            span.multiply(BigDecimal.valueOf(partitionNo - 1))
-                .divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64));
+    BigDecimal loN = lo.add(span.multiply(BigDecimal.valueOf(partitionNo - 1))
+        .divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64));
     boolean last = partitionNo == partitionCount;
-    BigDecimal hiN =
-        last
-            ? hi
-            : lo.add(
-                span.multiply(BigDecimal.valueOf(partitionNo))
-                    .divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64));
+    BigDecimal hiN = last
+        ? hi
+        : lo.add(span.multiply(BigDecimal.valueOf(partitionNo))
+            .divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64));
     return new ExportKeysetRange(true, loN, hiN, last, partitionCount, partitionNo);
   }
 }

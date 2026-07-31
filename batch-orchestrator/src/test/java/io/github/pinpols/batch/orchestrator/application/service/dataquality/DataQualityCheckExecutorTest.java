@@ -53,13 +53,12 @@ class DataQualityCheckExecutorTest {
 
   @Test
   void tableLevelPassWithMinThresholdEmitsPass() {
-    DataQualityRuleEntity rule =
-        rule(
-            "ROW_COUNT_OK",
-            "TABLE_LEVEL",
-            "BLOCKER",
-            "SELECT count(*) FROM batch.batch_day_instance WHERE tenant_id = :tenantId",
-            "{\"min\":1}");
+    DataQualityRuleEntity rule = rule(
+        "ROW_COUNT_OK",
+        "TABLE_LEVEL",
+        "BLOCKER",
+        "SELECT count(*) FROM batch.batch_day_instance WHERE tenant_id = :tenantId",
+        "{\"min\":1}");
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
     when(jdbcTemplate.queryForObject(
             anyString(), any(MapSqlParameterSource.class), eq(Number.class)))
@@ -73,13 +72,12 @@ class DataQualityCheckExecutorTest {
 
   @Test
   void tableLevelBlockerFailGatesEffective() {
-    DataQualityRuleEntity rule =
-        rule(
-            "ROW_COUNT_LOW",
-            "TABLE_LEVEL",
-            "BLOCKER",
-            "SELECT count(*) FROM batch.batch_day_instance",
-            "{\"min\":100}");
+    DataQualityRuleEntity rule = rule(
+        "ROW_COUNT_LOW",
+        "TABLE_LEVEL",
+        "BLOCKER",
+        "SELECT count(*) FROM batch.batch_day_instance",
+        "{\"min\":100}");
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
     when(jdbcTemplate.queryForObject(
             anyString(), any(MapSqlParameterSource.class), eq(Number.class)))
@@ -121,13 +119,12 @@ class DataQualityCheckExecutorTest {
 
   @Test
   void rejectsForbiddenFunctionExpressionWithoutExecuting() {
-    DataQualityRuleEntity rule =
-        rule(
-            "DOS_SLEEP",
-            "TABLE_LEVEL",
-            "BLOCKER",
-            "SELECT pg_sleep(30) FROM batch.batch_day_instance",
-            null);
+    DataQualityRuleEntity rule = rule(
+        "DOS_SLEEP",
+        "TABLE_LEVEL",
+        "BLOCKER",
+        "SELECT pg_sleep(30) FROM batch.batch_day_instance",
+        null);
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
 
     var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");

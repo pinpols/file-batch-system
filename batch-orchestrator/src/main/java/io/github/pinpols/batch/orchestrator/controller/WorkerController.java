@@ -86,9 +86,8 @@ public class WorkerController {
       @PathVariable String workerCode,
       @RequestBody WorkerDrainRequest request,
       HttpServletRequest httpRequest) {
-    String tenantId =
-        InternalRequestTenantGuard.resolveTenant(
-            httpRequest, request == null ? null : request.tenantId());
+    String tenantId = InternalRequestTenantGuard.resolveTenant(
+        httpRequest, request == null ? null : request.tenantId());
     return workerDrainGovernanceService.startDrain(
         tenantId, workerCode, request == null ? null : request.timeoutSeconds());
   }

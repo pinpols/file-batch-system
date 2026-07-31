@@ -23,9 +23,8 @@ public final class BusinessPlacementResolverFactory {
 
   public static BusinessPlacementResolver create(
       BusinessRoutingProperties routingProperties, TenantPlacementRepository placementRepository) {
-    HashAndSiloPlacementResolver hashFallback =
-        new HashAndSiloPlacementResolver(
-            routingProperties.getPooledShardCount(), routingProperties.getSiloOverrides());
+    HashAndSiloPlacementResolver hashFallback = new HashAndSiloPlacementResolver(
+        routingProperties.getPooledShardCount(), routingProperties.getSiloOverrides());
     if (routingProperties.getPlacementSource() == BusinessRoutingProperties.PlacementSource.TABLE) {
       return new DbTablePlacementResolver(
           placementRepository,

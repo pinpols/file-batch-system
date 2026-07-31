@@ -24,13 +24,12 @@ class DatasetRuleEvaluatorControlRecordTest {
   void blockerMismatch_raisesIssue() {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
-    evaluator.evaluate(
-        session(
-            Map.of("controlRecordCheck", Map.of("enabled", true, "blocker", true)),
-            10L,
-            1000L,
-            issues,
-            applied));
+    evaluator.evaluate(session(
+        Map.of("controlRecordCheck", Map.of("enabled", true, "blocker", true)),
+        10L,
+        1000L,
+        issues,
+        applied));
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).errorCode()).isEqualTo("IMPORT_VALIDATE_CONTROL_RECORD");
     assertThat(applied).contains("control_record_check");
@@ -41,13 +40,12 @@ class DatasetRuleEvaluatorControlRecordTest {
   void matchingCount_noIssue() {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
-    evaluator.evaluate(
-        session(
-            Map.of("controlRecordCheck", Map.of("enabled", true, "blocker", true)),
-            1000L,
-            1000L,
-            issues,
-            applied));
+    evaluator.evaluate(session(
+        Map.of("controlRecordCheck", Map.of("enabled", true, "blocker", true)),
+        1000L,
+        1000L,
+        issues,
+        applied));
     assertThat(issues).isEmpty();
     assertThat(applied).contains("control_record_check");
   }
@@ -57,9 +55,8 @@ class DatasetRuleEvaluatorControlRecordTest {
   void mismatchAlertOnly_noIssue() {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
-    evaluator.evaluate(
-        session(
-            Map.of("controlRecordCheck", Map.of("enabled", true)), 10L, 1000L, issues, applied));
+    evaluator.evaluate(session(
+        Map.of("controlRecordCheck", Map.of("enabled", true)), 10L, 1000L, issues, applied));
     assertThat(issues).isEmpty();
     assertThat(applied).contains("control_record_check");
   }
@@ -69,13 +66,12 @@ class DatasetRuleEvaluatorControlRecordTest {
   void noDeclaredCount_skips() {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
-    evaluator.evaluate(
-        session(
-            Map.of("controlRecordCheck", Map.of("enabled", true, "blocker", true)),
-            null,
-            1000L,
-            issues,
-            applied));
+    evaluator.evaluate(session(
+        Map.of("controlRecordCheck", Map.of("enabled", true, "blocker", true)),
+        null,
+        1000L,
+        issues,
+        applied));
     assertThat(issues).isEmpty();
     assertThat(applied).doesNotContain("control_record_check");
   }

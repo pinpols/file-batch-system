@@ -42,19 +42,17 @@ import org.junit.jupiter.api.Test;
  */
 class ConsoleCacheInvalidationCoverageTest {
 
-  private static final JavaClasses CLASSES =
-      new ClassFileImporter()
-          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-          .importPackages("io.github.pinpols.batch.console..");
+  private static final JavaClasses CLASSES = new ClassFileImporter()
+      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+      .importPackages("io.github.pinpols.batch.console..");
 
   /** 受缓存约束的 5 个 application service 实现类（全限定名）。 */
-  private static final Set<String> CACHED_SERVICE_FQNS =
-      Set.of(
-          "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService",
-          "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService",
-          "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleCalendarApplicationService",
-          "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleBatchWindowApplicationService",
-          "io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleQuotaPolicyApplicationService");
+  private static final Set<String> CACHED_SERVICE_FQNS = Set.of(
+      "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService",
+      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService",
+      "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleCalendarApplicationService",
+      "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleBatchWindowApplicationService",
+      "io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleQuotaPolicyApplicationService");
 
   /**
    * mapper 写方法名前缀集合（按这 5 个 service 实际调用的 mapper 方法名归纳）：insert / batchInsert / update* /
@@ -71,16 +69,15 @@ class ConsoleCacheInvalidationCoverageTest {
    * 显式豁免集："全限定类名#方法名"。每条必须注释说明"为何这个写方法语义上不需要 evict"（典型：写的是非缓存的侧表 / 历史快照表，不进 orchestrator 读热点；或私有
    * helper，其全部 public 调用方已对父键 evict）。仅这 2 条 workflow 私有 helper 豁免；新增条目须有明确架构理由，否则护栏失效。
    */
-  private static final Set<String> EXEMPTIONS =
-      Set.of(
-          // 私有 helper，被 create/update/fullUpdate 调用 —— 它写的是 workflow_node / workflow_edge
-          // （workflow 定义聚合的一部分），三个 public 入口都在同事务里调 evictWorkflowDefinition 清父键，
-          // 子表随父键一起失效，无需在 helper 内重复 evict。
-          "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService#upsertNodesAndEdges",
-          // 私有 helper，仅 fullUpdate 调用 —— 它写的是 workflow_definition_version 历史快照表，
-          // 不在 orchestrator launch 读热点缓存路径上（只供 console 版本 diff 列表读），故无需 evict 配置缓存；
-          // fullUpdate 本身已对主定义 evictWorkflowDefinition。
-          "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService#appendVersionSnapshot");
+  private static final Set<String> EXEMPTIONS = Set.of(
+      // 私有 helper，被 create/update/fullUpdate 调用 —— 它写的是 workflow_node / workflow_edge
+      // （workflow 定义聚合的一部分），三个 public 入口都在同事务里调 evictWorkflowDefinition 清父键，
+      // 子表随父键一起失效，无需在 helper 内重复 evict。
+      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService#upsertNodesAndEdges",
+      // 私有 helper，仅 fullUpdate 调用 —— 它写的是 workflow_definition_version 历史快照表，
+      // 不在 orchestrator launch 读热点缓存路径上（只供 console 版本 diff 列表读），故无需 evict 配置缓存；
+      // fullUpdate 本身已对主定义 evictWorkflowDefinition。
+      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService#appendVersionSnapshot");
 
   @Test
   void everyWriteMethodInCachedServicesMustEvictCache() {
@@ -88,14 +85,15 @@ class ConsoleCacheInvalidationCoverageTest {
     // (空守护)——这里显式断言它们都在,改名即红,逼着同步更新 CACHED_SERVICE_FQNS。
     for (String fqn : CACHED_SERVICE_FQNS) {
       boolean present = CLASSES.stream().anyMatch(c -> c.getFullName().equals(fqn));
-      Assertions.assertThat(present).as("受缓存 service 未找到(改名/移包了?护栏会静默失效,请同步更新): %s", fqn).isTrue();
+      Assertions.assertThat(present)
+          .as("受缓存 service 未找到(改名/移包了?护栏会静默失效,请同步更新): %s", fqn)
+          .isTrue();
     }
-    ArchRule rule =
-        ArchRuleDefinition.methods()
-            .that(areDeclaredInCachedServices())
-            .and()
-            .areNotStatic()
-            .should(evictCacheWheneverTheyWriteAMapper());
+    ArchRule rule = ArchRuleDefinition.methods()
+        .that(areDeclaredInCachedServices())
+        .and()
+        .areNotStatic()
+        .should(evictCacheWheneverTheyWriteAMapper());
     rule.check(CLASSES);
   }
 
@@ -129,12 +127,11 @@ class ConsoleCacheInvalidationCoverageTest {
           }
         }
         if (writesMapper && !evictsCache) {
-          events.add(
-              SimpleConditionEvent.violated(
-                  method,
-                  method.getFullName()
-                      + " 调用了 mapper 写方法但没有调用 ConsoleConfigCacheInvalidationService 的 evict* —— "
-                      + "可能留陈旧缓存。若该写表非 orchestrator 读热点，请加入 EXEMPTIONS 并注释理由；否则补 evict。"));
+          events.add(SimpleConditionEvent.violated(
+              method,
+              method.getFullName()
+                  + " 调用了 mapper 写方法但没有调用 ConsoleConfigCacheInvalidationService 的 evict* —— "
+                  + "可能留陈旧缓存。若该写表非 orchestrator 读热点，请加入 EXEMPTIONS 并注释理由；否则补 evict。"));
         }
       }
     };

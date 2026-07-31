@@ -79,9 +79,8 @@ class SdkTypedImportCheckpointResumeTest {
     // arrange: 预置已完成断点(taskId=7)
     InMemorySdkCheckpoint cp = new InMemorySdkCheckpoint();
     cp.save("7", new SdkCheckpointState(Map.of("row", 99), 100L, 0L, true));
-    SdkCommitCoordinator coord =
-        new SdkCommitCoordinator(
-            "7", cp, new ProgressReporter(), new CancellationSignal(), true, 1);
+    SdkCommitCoordinator coord = new SdkCommitCoordinator(
+        "7", cp, new ProgressReporter(), new CancellationSignal(), true, 1);
     ResumableImport handler = new ResumableImport(10);
 
     // act
@@ -99,9 +98,8 @@ class SdkTypedImportCheckpointResumeTest {
   void shouldCommitEachBatchAndMarkCompleted() {
     // arrange
     InMemorySdkCheckpoint cp = new InMemorySdkCheckpoint();
-    SdkCommitCoordinator coord =
-        new SdkCommitCoordinator(
-            "7", cp, new ProgressReporter(), new CancellationSignal(), true, 1);
+    SdkCommitCoordinator coord = new SdkCommitCoordinator(
+        "7", cp, new ProgressReporter(), new CancellationSignal(), true, 1);
     ResumableImport handler = new ResumableImport(30);
 
     // act: 100 行,batchSize=30 → 4 批
@@ -122,9 +120,8 @@ class SdkTypedImportCheckpointResumeTest {
     // arrange: 预置进行中的断点 succeed=1000(未完成)
     InMemorySdkCheckpoint cp = new InMemorySdkCheckpoint();
     cp.save("7", new SdkCheckpointState(Map.of("row", 999), 1000L, 0L, false));
-    SdkCommitCoordinator coord =
-        new SdkCommitCoordinator(
-            "7", cp, new ProgressReporter(), new CancellationSignal(), true, 1);
+    SdkCommitCoordinator coord = new SdkCommitCoordinator(
+        "7", cp, new ProgressReporter(), new CancellationSignal(), true, 1);
     ResumableImport handler = new ResumableImport(50);
 
     // act: 本次再处理 50 行

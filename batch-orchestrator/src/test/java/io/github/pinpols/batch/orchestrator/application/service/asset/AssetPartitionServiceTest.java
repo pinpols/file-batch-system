@@ -32,31 +32,28 @@ class AssetPartitionServiceTest {
   @Test
   void findEffectiveJobPartitionPrefersMaterializedPartition() {
     LocalDate bizDate = LocalDate.of(2026, 6, 30);
-    AssetPartitionSnapshot snapshot =
-        new AssetPartitionSnapshot(
-            "t1",
-            "JOB_A",
-            bizDate,
-            "2026-06-30",
-            "job:JOB_A:2026-06-30",
-            "EFFECTIVE",
-            4,
-            101L,
-            "INLINE_JSON",
-            "{\"rows\":20}",
-            null);
+    AssetPartitionSnapshot snapshot = new AssetPartitionSnapshot(
+        "t1",
+        "JOB_A",
+        bizDate,
+        "2026-06-30",
+        "job:JOB_A:2026-06-30",
+        "EFFECTIVE",
+        4,
+        101L,
+        "INLINE_JSON",
+        "{\"rows\":20}",
+        null);
     when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
         .thenReturn(snapshot);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
-        .thenReturn(
-            Optional.of(
-                ResultVersionEntity.builder()
-                    .tenantId("t1")
-                    .businessKey("job:JOB_A:2026-06-30")
-                    .versionNo(4)
-                    .jobInstanceId(101L)
-                    .status("EFFECTIVE")
-                    .build()));
+        .thenReturn(Optional.of(ResultVersionEntity.builder()
+            .tenantId("t1")
+            .businessKey("job:JOB_A:2026-06-30")
+            .versionNo(4)
+            .jobInstanceId(101L)
+            .status("EFFECTIVE")
+            .build()));
 
     Optional<AssetPartitionSnapshot> found =
         service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
@@ -68,29 +65,27 @@ class AssetPartitionServiceTest {
   @Test
   void findEffectiveJobPartitionIgnoresStaleMaterializedPartitionWhenLatestEffectiveIsNewer() {
     LocalDate bizDate = LocalDate.of(2026, 6, 30);
-    AssetPartitionSnapshot stale =
-        new AssetPartitionSnapshot(
-            "t1",
-            "JOB_A",
-            bizDate,
-            "2026-06-30",
-            "job:JOB_A:2026-06-30",
-            "EFFECTIVE",
-            4,
-            101L,
-            "INLINE_JSON",
-            "{\"rows\":20}",
-            null);
-    ResultVersionEntity latest =
-        ResultVersionEntity.builder()
-            .tenantId("t1")
-            .businessKey("job:JOB_A:2026-06-30")
-            .versionNo(5)
-            .jobInstanceId(102L)
-            .status("EFFECTIVE")
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{\"rows\":30}")
-            .build();
+    AssetPartitionSnapshot stale = new AssetPartitionSnapshot(
+        "t1",
+        "JOB_A",
+        bizDate,
+        "2026-06-30",
+        "job:JOB_A:2026-06-30",
+        "EFFECTIVE",
+        4,
+        101L,
+        "INLINE_JSON",
+        "{\"rows\":20}",
+        null);
+    ResultVersionEntity latest = ResultVersionEntity.builder()
+        .tenantId("t1")
+        .businessKey("job:JOB_A:2026-06-30")
+        .versionNo(5)
+        .jobInstanceId(102L)
+        .status("EFFECTIVE")
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"rows\":30}")
+        .build();
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(latest));
     when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
@@ -108,16 +103,15 @@ class AssetPartitionServiceTest {
   @Test
   void findEffectiveJobPartitionFallsBackToResultVersionProjection() {
     LocalDate bizDate = LocalDate.of(2026, 6, 30);
-    ResultVersionEntity version =
-        ResultVersionEntity.builder()
-            .tenantId("t1")
-            .businessKey("job:JOB_A:2026-06-30")
-            .versionNo(3)
-            .jobInstanceId(100L)
-            .status("EFFECTIVE")
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{\"rows\":10}")
-            .build();
+    ResultVersionEntity version = ResultVersionEntity.builder()
+        .tenantId("t1")
+        .businessKey("job:JOB_A:2026-06-30")
+        .versionNo(3)
+        .jobInstanceId(100L)
+        .status("EFFECTIVE")
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"rows\":10}")
+        .build();
     when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
         .thenReturn(null);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
@@ -136,7 +130,8 @@ class AssetPartitionServiceTest {
 
   @Test
   void findEffectiveJobPartitionReturnsEmptyForInvalidInput() {
-    assertThat(service.findEffectiveJobPartition("t1", " ", LocalDate.of(2026, 6, 30))).isEmpty();
+    assertThat(service.findEffectiveJobPartition("t1", " ", LocalDate.of(2026, 6, 30)))
+        .isEmpty();
     assertThat(service.findEffectiveJobPartition("t1", "JOB_A", null)).isEmpty();
     verify(assetPartitionMapper, never()).selectEffectiveJobPartition(null, null, null);
     verify(resultVersionQueryService, never()).findLatestByJob(null, null, null);
@@ -146,14 +141,12 @@ class AssetPartitionServiceTest {
   void isJobPartitionReadyRequiresEffectiveVersion() {
     LocalDate bizDate = LocalDate.of(2026, 6, 30);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
-        .thenReturn(
-            Optional.of(
-                ResultVersionEntity.builder()
-                    .tenantId("t1")
-                    .businessKey("job:JOB_A:2026-06-30")
-                    .versionNo(4)
-                    .status("PENDING")
-                    .build()));
+        .thenReturn(Optional.of(ResultVersionEntity.builder()
+            .tenantId("t1")
+            .businessKey("job:JOB_A:2026-06-30")
+            .versionNo(4)
+            .status("PENDING")
+            .build()));
 
     assertThat(service.isJobPartitionReady("t1", "JOB_A", bizDate)).isFalse();
   }
@@ -162,14 +155,12 @@ class AssetPartitionServiceTest {
   void findEffectiveJobPartitionBlocksOldEffectiveWhenLatestAttemptPending() {
     LocalDate bizDate = LocalDate.of(2026, 6, 30);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
-        .thenReturn(
-            Optional.of(
-                ResultVersionEntity.builder()
-                    .tenantId("t1")
-                    .businessKey("job:JOB_A:2026-06-30")
-                    .versionNo(5)
-                    .status("PENDING")
-                    .build()));
+        .thenReturn(Optional.of(ResultVersionEntity.builder()
+            .tenantId("t1")
+            .businessKey("job:JOB_A:2026-06-30")
+            .versionNo(5)
+            .status("PENDING")
+            .build()));
 
     Optional<AssetPartitionSnapshot> found =
         service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
@@ -186,37 +177,35 @@ class AssetPartitionServiceTest {
     instance.setJobCode("JOB_A");
     instance.setBizDate(LocalDate.of(2026, 6, 30));
     Instant effectiveAt = Instant.parse("2026-06-30T01:02:03Z");
-    ResultVersionEntity version =
-        ResultVersionEntity.builder()
-            .id(900L)
-            .tenantId("t1")
-            .businessKey("job:JOB_A:2026-06-30")
-            .versionNo(5)
-            .jobInstanceId(100L)
-            .status("EFFECTIVE")
-            .effectiveAt(effectiveAt)
-            .payloadStorage("INLINE_JSON")
-            .payloadRef("s3://bucket/key")
-            .build();
+    ResultVersionEntity version = ResultVersionEntity.builder()
+        .id(900L)
+        .tenantId("t1")
+        .businessKey("job:JOB_A:2026-06-30")
+        .versionNo(5)
+        .jobInstanceId(100L)
+        .status("EFFECTIVE")
+        .effectiveAt(effectiveAt)
+        .payloadStorage("INLINE_JSON")
+        .payloadRef("s3://bucket/key")
+        .build();
     when(assetPartitionMapper.selectDataAssetId("t1", "JOB_A", "JOB")).thenReturn(10L);
 
     service.materializeEffectiveJobPartition(instance, version);
 
     verify(assetPartitionMapper).upsertDataAsset("t1", "JOB_A", "JOB", "JOB_A", "JOB_A");
     verify(assetPartitionMapper)
-        .upsertEffectiveJobPartition(
-            new AssetPartitionMaterializationCommand(
-                "t1",
-                10L,
-                "JOB_A",
-                "2026-06-30",
-                LocalDate.of(2026, 6, 30),
-                900L,
-                "job:JOB_A:2026-06-30",
-                100L,
-                effectiveAt,
-                "INLINE_JSON",
-                "s3://bucket/key"));
+        .upsertEffectiveJobPartition(new AssetPartitionMaterializationCommand(
+            "t1",
+            10L,
+            "JOB_A",
+            "2026-06-30",
+            LocalDate.of(2026, 6, 30),
+            900L,
+            "job:JOB_A:2026-06-30",
+            100L,
+            effectiveAt,
+            "INLINE_JSON",
+            "s3://bucket/key"));
   }
 
   @Test
@@ -226,13 +215,12 @@ class AssetPartitionServiceTest {
     instance.setId(100L);
     instance.setJobCode("JOB_A");
     instance.setBizDate(LocalDate.of(2026, 6, 30));
-    ResultVersionEntity version =
-        ResultVersionEntity.builder()
-            .tenantId("t1")
-            .jobInstanceId(100L)
-            .businessKey("job:JOB_A:2026-06-30")
-            .status("PENDING")
-            .build();
+    ResultVersionEntity version = ResultVersionEntity.builder()
+        .tenantId("t1")
+        .jobInstanceId(100L)
+        .businessKey("job:JOB_A:2026-06-30")
+        .status("PENDING")
+        .build();
 
     service.materializeEffectiveJobPartition(instance, version);
 

@@ -103,18 +103,17 @@ public class AtomicIsolationStartupCheck {
         environment.getProperty(PROP_ISOLATION_ACKNOWLEDGED, Boolean.class, false);
 
     if (requireIsolation && !acknowledged) {
-      throw new IllegalStateException(
-          "ADR-029 isolation gate: dual-use SPI executor(s) "
-              + enabledDualUse
-              + " enabled with "
-              + PROP_REQUIRE_ISOLATION
-              + "=true but "
-              + PROP_ISOLATION_ACKNOWLEDGED
-              + " not set. Refusing to start. Verify minimal-privilege deployment "
-              + "(dedicated low-priv DB role / dedicated ServiceAccount / egress NetworkPolicy / "
-              + "restricted secret) then set "
-              + PROP_ISOLATION_ACKNOWLEDGED
-              + "=true.");
+      throw new IllegalStateException("ADR-029 isolation gate: dual-use SPI executor(s) "
+          + enabledDualUse
+          + " enabled with "
+          + PROP_REQUIRE_ISOLATION
+          + "=true but "
+          + PROP_ISOLATION_ACKNOWLEDGED
+          + " not set. Refusing to start. Verify minimal-privilege deployment "
+          + "(dedicated low-priv DB role / dedicated ServiceAccount / egress NetworkPolicy / "
+          + "restricted secret) then set "
+          + PROP_ISOLATION_ACKNOWLEDGED
+          + "=true.");
     }
   }
 

@@ -50,8 +50,7 @@ import javax.sql.DataSource;
  */
 public final class JdbcSdkCheckpoint implements SdkCheckpoint {
 
-  private static final String UPSERT_SQL =
-      """
+  private static final String UPSERT_SQL = """
       INSERT INTO sdk_task_checkpoint
           (task_id, break_position, succeed_count, fail_count, completed, updated_at)
       VALUES (?, ?, ?, ?, ?, now())
@@ -84,12 +83,8 @@ public final class JdbcSdkCheckpoint implements SdkCheckpoint {
         if (!rs.next()) {
           return Optional.empty();
         }
-        return Optional.of(
-            new SdkCheckpointState(
-                readBreakPosition(rs.getString(1)),
-                rs.getLong(2),
-                rs.getLong(3),
-                rs.getBoolean(4)));
+        return Optional.of(new SdkCheckpointState(
+            readBreakPosition(rs.getString(1)), rs.getLong(2), rs.getLong(3), rs.getBoolean(4)));
       }
     } catch (Exception e) {
       throw new IllegalStateException("checkpoint load failed for taskId=" + taskId, e);

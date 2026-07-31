@@ -24,14 +24,15 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @ExtendWith(MockitoExtension.class)
 class ConsoleReportExcelControllerTest {
 
-  @Mock private ConsoleReportExcelApplicationService reportService;
+  @Mock
+  private ConsoleReportExcelApplicationService reportService;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleReportExcelController(reportService)).build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleReportExcelController(reportService))
+        .build();
   }
 
   @Test
@@ -47,21 +48,19 @@ class ConsoleReportExcelControllerTest {
 
     // R2-P1-9: StreamingResponseBody 走 Spring async dispatch，MockMvc 需要先抓 async result
     // 再走 asyncDispatch 才能渲染响应体；否则 content() 为空。
-    var configResult =
-        mockMvc
-            .perform(get("/api/console/reports/excel/config-releases").param("tenantId", "t1"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    var configResult = mockMvc
+        .perform(get("/api/console/reports/excel/config-releases").param("tenantId", "t1"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
     mockMvc
         .perform(asyncDispatch(configResult))
         .andExpect(status().isOk())
         .andExpect(content().bytes(configBytes));
 
-    var snapshotResult =
-        mockMvc
-            .perform(get("/api/console/reports/excel/scheduler-snapshot").param("tenantId", "t1"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    var snapshotResult = mockMvc
+        .perform(get("/api/console/reports/excel/scheduler-snapshot").param("tenantId", "t1"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
     mockMvc
         .perform(asyncDispatch(snapshotResult))
         .andExpect(status().isOk())

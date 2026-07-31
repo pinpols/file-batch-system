@@ -13,8 +13,7 @@ class BatchManifestTest {
   @Test
   @DisplayName("解析 batch-manifest-v1:requiredFiles 等字段映射正确")
   void parsesBatchManifest() throws Exception {
-    String json =
-        """
+    String json = """
         {
           "schemaVersion": "batch-manifest-v1",
           "fileGroupCode": "region-daily",
@@ -42,10 +41,9 @@ class BatchManifestTest {
   @Test
   @DisplayName("v1 清单无 fileMapping:hasFileMapping=false,向后兼容")
   void v1ManifestHasNoFileMapping() throws Exception {
-    BatchManifest m =
-        objectMapper.readValue(
-            "{\"schemaVersion\":\"batch-manifest-v1\",\"requiredFiles\":[\"a.csv\"]}",
-            BatchManifest.class);
+    BatchManifest m = objectMapper.readValue(
+        "{\"schemaVersion\":\"batch-manifest-v1\",\"requiredFiles\":[\"a.csv\"]}",
+        BatchManifest.class);
     assertThat(m.fileMapping()).isNull();
     assertThat(m.hasFileMapping()).isFalse();
     assertThat(m.templateCodeFor("a.csv")).isEmpty();
@@ -54,8 +52,7 @@ class BatchManifestTest {
   @Test
   @DisplayName("v2 清单解析 fileMapping:逐文件模板映射 + 可选目标表覆盖")
   void parsesV2FileMapping() throws Exception {
-    String json =
-        """
+    String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-daily",
@@ -85,8 +82,7 @@ class BatchManifestTest {
   @Test
   @DisplayName("v2 分发束清单解析 fileMapping:逐文件下游渠道 targetRef")
   void parsesV2DispatchFileMapping() throws Exception {
-    String json =
-        """
+    String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "dispatch-eod",
@@ -120,8 +116,7 @@ class BatchManifestTest {
   @Test
   @DisplayName("manifest-only 导出束:jobCode + 模板集 + 无 requiredFiles → isManifestOnlyExport")
   void detectsManifestOnlyExportBundle() throws Exception {
-    String json =
-        """
+    String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "export-eod",
@@ -142,8 +137,7 @@ class BatchManifestTest {
   @Test
   @DisplayName("导入束清单(有 requiredFiles)不是 manifest-only 导出")
   void importBundleIsNotManifestOnlyExport() throws Exception {
-    String json =
-        """
+    String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-daily",
@@ -159,10 +153,8 @@ class BatchManifestTest {
   @Test
   @DisplayName("无 jobCode 或无模板 → 不是 manifest-only 导出")
   void exportRequiresJobCodeAndTemplates() throws Exception {
-    BatchManifest noJob =
-        objectMapper.readValue(
-            "{\"fileMapping\":[{\"fileName\":\"o\",\"templateCode\":\"EXP_A\"}]}",
-            BatchManifest.class);
+    BatchManifest noJob = objectMapper.readValue(
+        "{\"fileMapping\":[{\"fileName\":\"o\",\"templateCode\":\"EXP_A\"}]}", BatchManifest.class);
     assertThat(noJob.isManifestOnlyExport()).isFalse();
     BatchManifest noTpl =
         objectMapper.readValue("{\"jobCode\":\"BUNDLE_EXPORT_X\"}", BatchManifest.class);

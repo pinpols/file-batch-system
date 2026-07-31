@@ -25,9 +25,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TaskTimeoutEnforcerTest {
 
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private BatchOrchestratorGovernanceProperties governance;
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
   private final TimeoutEnforcerProperties timeoutProps = new TimeoutEnforcerProperties();

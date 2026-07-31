@@ -48,7 +48,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   })
   static class TestApplication {}
 
-  @Autowired private TokenBucketRateLimiter limiter;
+  @Autowired
+  private TokenBucketRateLimiter limiter;
 
   private static String uniqueTenant() {
     return "t-tb-" + System.nanoTime();
@@ -96,18 +97,15 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
     RedisClient secondClient = RedisClient.create(RedisURI.create(redisHost(), redisPort()));
     try (StatefulRedisConnection<String, byte[]> conn =
         secondClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE))) {
-      LettuceBasedProxyManager<String> secondProxyManager =
-          Bucket4jLettuce.casBasedBuilder(conn)
-              .expirationAfterWrite(
-                  ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-                      Duration.ofMinutes(1)))
-              .build();
+      LettuceBasedProxyManager<String> secondProxyManager = Bucket4jLettuce.casBasedBuilder(conn)
+          .expirationAfterWrite(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
+              Duration.ofMinutes(1)))
+          .build();
       SimpleMeterRegistry replicaMeterRegistry = new SimpleMeterRegistry();
-      TokenBucketRateLimiter replicaTwo =
-          new TokenBucketRateLimiter(
-              secondProxyManager,
-              replicaMeterRegistry,
-              RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry));
+      TokenBucketRateLimiter replicaTwo = new TokenBucketRateLimiter(
+          secondProxyManager,
+          replicaMeterRegistry,
+          RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry));
 
       // 副本1 消费 2 个
       assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();

@@ -37,22 +37,20 @@ final class DryRunObjectStorageProbe {
       return 0;
     }
     if (!S3_BUCKET_PATTERN.matcher(bucket).matches()) {
-      findings.add(
-          DryRunFinding.error(
-              "EXEC_S3_BUCKET_INVALID",
-              SCOPE_EXECUTION,
-              "s3 bucket name does not match DNS-style rule: " + bucket,
-              bucket));
+      findings.add(DryRunFinding.error(
+          "EXEC_S3_BUCKET_INVALID",
+          SCOPE_EXECUTION,
+          "s3 bucket name does not match DNS-style rule: " + bucket,
+          bucket));
       return 1;
     }
     S3Client client = s3ClientProvider.getIfAvailable();
     if (client == null) {
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_S3_CLIENT_UNAVAILABLE",
-              SCOPE_EXECUTION,
-              "S3Client bean unavailable; bucket name passed regex only",
-              bucket));
+      findings.add(DryRunFinding.warn(
+          "EXEC_S3_CLIENT_UNAVAILABLE",
+          SCOPE_EXECUTION,
+          "S3Client bean unavailable; bucket name passed regex only",
+          bucket));
       return 1;
     }
     probeBucket(client, bucket, findings);
@@ -69,24 +67,15 @@ final class DryRunObjectStorageProbe {
         exists = false;
       }
       if (exists) {
-        findings.add(
-            DryRunFinding.pass(
-                "EXEC_S3_BUCKET_OK", SCOPE_EXECUTION, "s3 bucket exists: " + bucket));
+        findings.add(DryRunFinding.pass(
+            "EXEC_S3_BUCKET_OK", SCOPE_EXECUTION, "s3 bucket exists: " + bucket));
       } else {
-        findings.add(
-            DryRunFinding.error(
-                "EXEC_S3_BUCKET_MISSING",
-                SCOPE_EXECUTION,
-                "s3 bucket not found: " + bucket,
-                bucket));
+        findings.add(DryRunFinding.error(
+            "EXEC_S3_BUCKET_MISSING", SCOPE_EXECUTION, "s3 bucket not found: " + bucket, bucket));
       }
     } catch (Exception ex) {
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_S3_PROBE_FAILED",
-              SCOPE_EXECUTION,
-              "s3 probe failed: " + ex.getMessage(),
-              bucket));
+      findings.add(DryRunFinding.warn(
+          "EXEC_S3_PROBE_FAILED", SCOPE_EXECUTION, "s3 probe failed: " + ex.getMessage(), bucket));
     }
   }
 

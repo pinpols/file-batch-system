@@ -48,8 +48,12 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired DataSource dataSource;
-  @Autowired BeanFactory beanFactory;
+  @Autowired
+  DataSource dataSource;
+
+  @Autowired
+  BeanFactory beanFactory;
+
   private JdbcTemplate jdbc;
 
   @BeforeEach
@@ -59,13 +63,11 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     jdbc.execute("CREATE SCHEMA spi_it");
     jdbc.execute("CREATE TABLE spi_it.marker(id serial primary key, note text)");
     // 真 PROCEDURE(prokind 'p' → 原生 CALL)
-    jdbc.execute(
-        "CREATE PROCEDURE spi_it.it_proc() LANGUAGE plpgsql AS $$ BEGIN"
-            + " INSERT INTO spi_it.marker(note) VALUES ('proc'); END $$");
+    jdbc.execute("CREATE PROCEDURE spi_it.it_proc() LANGUAGE plpgsql AS $$ BEGIN"
+        + " INSERT INTO spi_it.marker(note) VALUES ('proc'); END $$");
     // 真 FUNCTION 返回 void(prokind 'f' → {call} 转义)
-    jdbc.execute(
-        "CREATE FUNCTION spi_it.it_fn_void() RETURNS void LANGUAGE plpgsql AS $$ BEGIN"
-            + " INSERT INTO spi_it.marker(note) VALUES ('fn'); END $$");
+    jdbc.execute("CREATE FUNCTION spi_it.it_fn_void() RETURNS void LANGUAGE plpgsql AS $$ BEGIN"
+        + " INSERT INTO spi_it.marker(note) VALUES ('fn'); END $$");
     // OUT refcursor 的 PROCEDURE,游标覆盖 50 行(测 maxRefCursorRows 截断)
     jdbc.execute(
         "CREATE PROCEDURE spi_it.it_proc_cursor(OUT c refcursor) LANGUAGE plpgsql AS $$ BEGIN"
@@ -98,9 +100,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   void realProcedureRunsViaNativeCall() {
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
     assertThat(r.success()).isTrue();
-    assertThat(
-            jdbc.queryForObject(
-                "select count(*) from spi_it.marker where note='proc'", Integer.class))
+    assertThat(jdbc.queryForObject(
+            "select count(*) from spi_it.marker where note='proc'", Integer.class))
         .isEqualTo(1);
   }
 
@@ -108,9 +109,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   void realFunctionRunsViaCallEscape() {
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_fn_void")));
     assertThat(r.success()).isTrue();
-    assertThat(
-            jdbc.queryForObject(
-                "select count(*) from spi_it.marker where note='fn'", Integer.class))
+    assertThat(jdbc.queryForObject(
+            "select count(*) from spi_it.marker where note='fn'", Integer.class))
         .isEqualTo(1);
   }
 
@@ -118,15 +118,9 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   void refCursorTruncatedAtCap() {
     StoredProcExecutorProperties p = props();
     p.setMaxRefCursorRows(5);
-    TaskResult r =
-        executor(p)
-            .execute(
-                ctx(
-                    Map.of(
-                        "procedureName",
-                        "spi_it.it_proc_cursor",
-                        "outParams",
-                        List.of("REF_CURSOR"))));
+    TaskResult r = executor(p)
+        .execute(ctx(
+            Map.of("procedureName", "spi_it.it_proc_cursor", "outParams", List.of("REF_CURSOR"))));
     assertThat(r.success()).isTrue();
     assertThat(r.output().get("truncated")).isEqualTo(true);
   }
@@ -156,9 +150,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     // verifyExecutePrivilege=true 时 has_function_privilege 应判定无权 → fail,message 含权限字样。
     String role = "spi_lowpriv_" + Long.toHexString(System.nanoTime());
     String pwd = "lp_pwd";
-    jdbc.execute(
-        "CREATE PROCEDURE spi_it.it_proc_restricted() LANGUAGE plpgsql AS $$ BEGIN"
-            + " INSERT INTO spi_it.marker(note) VALUES ('restricted'); END $$");
+    jdbc.execute("CREATE PROCEDURE spi_it.it_proc_restricted() LANGUAGE plpgsql AS $$ BEGIN"
+        + " INSERT INTO spi_it.marker(note) VALUES ('restricted'); END $$");
     // PG 过程默认对 PUBLIC 授予 EXECUTE;先收回再建低权限角色,使其确实无权。
     jdbc.execute("REVOKE EXECUTE ON PROCEDURE spi_it.it_proc_restricted() FROM PUBLIC");
     jdbc.execute("CREATE ROLE " + role + " LOGIN PASSWORD '" + pwd + "'");

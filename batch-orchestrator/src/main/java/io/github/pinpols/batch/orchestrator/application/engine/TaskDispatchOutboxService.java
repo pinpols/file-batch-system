@@ -44,7 +44,9 @@ public class TaskDispatchOutboxService {
   private final JobTaskMapper jobTaskMapper;
   private final BizDateArithmetic bizDateArithmetic;
 
-  @Lazy @Autowired private TaskDispatchOutboxService self;
+  @Lazy
+  @Autowired
+  private TaskDispatchOutboxService self;
 
   /**
    * 写入一条“任务派发事件”到 outbox。
@@ -81,33 +83,31 @@ public class TaskDispatchOutboxService {
       String eventKey,
       RunMode runModeOverride) {
     Long jobPartitionId = partition != null ? partition.getId() : null;
-    String idempotencyKey =
-        partition != null
-            ? partition.getIdempotencyKey()
-            : resolveIdempotencyKeyWithoutPartition(task, eventKey);
+    String idempotencyKey = partition != null
+        ? partition.getIdempotencyKey()
+        : resolveIdempotencyKeyWithoutPartition(task, eventKey);
     // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
     // 时 EffectiveTaskConfig 实时读 DB;此处只保留 task key + 路由元数据。
     // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
     // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非写入 message 临时透传。
     persistRunModeOverride(task, runModeOverride);
-    TaskDispatchMessage message =
-        new TaskDispatchMessage(
-            "v2",
-            task.getTenantId(),
-            jobInstance.getId(),
-            jobPartitionId,
-            task.getId(),
-            jobInstance.getInstanceNo(),
-            jobInstance.getJobCode(),
-            task.getTaskType(),
-            task.getAssignedWorkerCode(),
-            resolvePriorityBand(jobInstance.getPriority()),
-            traceId,
-            idempotencyKey,
-            BatchDateTimeSupport.utcNow(),
-            buildSchedulingContext(jobInstance),
-            partition == null ? null : partition.getPartitionNo(),
-            resolvePartitionCount(jobInstance));
+    TaskDispatchMessage message = new TaskDispatchMessage(
+        "v2",
+        task.getTenantId(),
+        jobInstance.getId(),
+        jobPartitionId,
+        task.getId(),
+        jobInstance.getInstanceNo(),
+        jobInstance.getJobCode(),
+        task.getTaskType(),
+        task.getAssignedWorkerCode(),
+        resolvePriorityBand(jobInstance.getPriority()),
+        traceId,
+        idempotencyKey,
+        BatchDateTimeSupport.utcNow(),
+        buildSchedulingContext(jobInstance),
+        partition == null ? null : partition.getPartitionNo(),
+        resolvePartitionCount(jobInstance));
 
     // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
     // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
@@ -115,15 +115,14 @@ public class TaskDispatchOutboxService {
     Integer priority = task.getPriority() != null ? task.getPriority() : jobInstance.getPriority();
     String resolvedKey =
         eventKey == null || eventKey.isBlank() ? task.getTenantId() + ":" + task.getId() : eventKey;
-    domainEventPublisher.publish(
-        DomainEvent.builder(task.getTenantId())
-            .aggregate("JOB_TASK", task.getId())
-            .type(task.getTaskType())
-            .key(resolvedKey)
-            .payload(JsonUtils.toMap(message))
-            .traceId(traceId)
-            .priority(priority)
-            .build());
+    domainEventPublisher.publish(DomainEvent.builder(task.getTenantId())
+        .aggregate("JOB_TASK", task.getId())
+        .type(task.getTaskType())
+        .key(resolvedKey)
+        .payload(JsonUtils.toMap(message))
+        .traceId(traceId)
+        .priority(priority)
+        .build());
   }
 
   /**

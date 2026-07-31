@@ -66,23 +66,21 @@ public class AlertmanagerSilenceBridge {
     this.props = properties.getSilence();
     this.meterRegistryProvider = meterRegistryProvider;
     if (props.isEnabled() && Texts.hasText(props.getApiBaseUrl())) {
-      this.httpClient =
-          HttpClient.newBuilder()
-              .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMillis()))
-              .build();
-      ThreadPoolExecutor pool =
-          new ThreadPoolExecutor(
-              1,
-              1,
-              30L,
-              TimeUnit.SECONDS,
-              new LinkedBlockingQueue<>(256),
-              r -> {
-                Thread t = new Thread(r, "am-silence-bridge");
-                t.setDaemon(true);
-                return t;
-              },
-              new ThreadPoolExecutor.AbortPolicy());
+      this.httpClient = HttpClient.newBuilder()
+          .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMillis()))
+          .build();
+      ThreadPoolExecutor pool = new ThreadPoolExecutor(
+          1,
+          1,
+          30L,
+          TimeUnit.SECONDS,
+          new LinkedBlockingQueue<>(256),
+          r -> {
+            Thread t = new Thread(r, "am-silence-bridge");
+            t.setDaemon(true);
+            return t;
+          },
+          new ThreadPoolExecutor.AbortPolicy());
       this.executor = pool;
       log.info("AlertmanagerSilenceBridge enabled: apiBaseUrl={}", props.getApiBaseUrl());
     } else {
@@ -139,10 +137,9 @@ public class AlertmanagerSilenceBridge {
   }
 
   private void sendSilence(AlertEventEntity alert, Integer durationMinutes) {
-    int minutes =
-        durationMinutes != null && durationMinutes > 0
-            ? durationMinutes
-            : props.getDefaultDurationMinutes();
+    int minutes = durationMinutes != null && durationMinutes > 0
+        ? durationMinutes
+        : props.getDefaultDurationMinutes();
     Instant now = Instant.now();
     List<Map<String, Object>> matchers = new ArrayList<>();
     matchers.add(matcher("alertname", alert.getAlertType()));
@@ -183,15 +180,12 @@ public class AlertmanagerSilenceBridge {
 
   private void post(String uri, Object body, String action) {
     try {
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(uri))
-              .timeout(Duration.ofMillis(props.getTimeoutMillis()))
-              .header("Content-Type", "application/json")
-              .POST(
-                  HttpRequest.BodyPublishers.ofString(
-                      JsonUtils.toJson(body), StandardCharsets.UTF_8))
-              .build();
+      HttpRequest request = HttpRequest.newBuilder()
+          .uri(URI.create(uri))
+          .timeout(Duration.ofMillis(props.getTimeoutMillis()))
+          .header("Content-Type", "application/json")
+          .POST(HttpRequest.BodyPublishers.ofString(JsonUtils.toJson(body), StandardCharsets.UTF_8))
+          .build();
       HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
       int sc = resp.statusCode();
       if (sc >= 200 && sc < 300) {

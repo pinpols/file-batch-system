@@ -30,10 +30,9 @@ public class ProcessStagingStartupAuditContributor implements WorkerStartupAudit
     details.put("retentionHours", retentionHours);
     details.put("batchSize", Math.max(100, properties.getBatchSize()));
     Instant oldest = processStagingMapper.selectMinStagedAt();
-    long oldestAgeSeconds =
-        oldest == null
-            ? 0
-            : Math.max(0, (BatchDateTimeSupport.utcEpochMillis() - oldest.toEpochMilli()) / 1000);
+    long oldestAgeSeconds = oldest == null
+        ? 0
+        : Math.max(0, (BatchDateTimeSupport.utcEpochMillis() - oldest.toEpochMilli()) / 1000);
     long orphanRows = processStagingMapper.countOrphansOlderThan(retentionHours);
     details.put("oldestAgeSeconds", oldestAgeSeconds);
     details.put("orphanRowsPastRetention", orphanRows);

@@ -71,14 +71,13 @@ class SdkAbstractTypedExportHandlerTest {
   @DisplayName("writeOut 返显式结果 → 覆盖默认 output")
   void shouldUseExplicitWriteOutResult_whenProvided() {
     // 准备
-    RecordingTypedExport handler =
-        new RecordingTypedExport() {
-          @Override
-          protected SdkTaskResult writeOut(
-              ExportRequest input, SdkTaskContext ctx, SdkRowResult counts) {
-            return SdkTaskResult.ok("uploaded", Map.of("uri", "s3://bucket/" + input.table()));
-          }
-        };
+    RecordingTypedExport handler = new RecordingTypedExport() {
+      @Override
+      protected SdkTaskResult writeOut(
+          ExportRequest input, SdkTaskContext ctx, SdkRowResult counts) {
+        return SdkTaskResult.ok("uploaded", Map.of("uri", "s3://bucket/" + input.table()));
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("table", "orders", "rows", 3)));

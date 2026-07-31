@@ -50,17 +50,16 @@ public class ConsoleJobQueryService {
   public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
       JobDefinitionQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    JobDefinitionQuery query =
-        new JobDefinitionQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getJobCode(),
-            request.getJobName(),
-            request.getJobType(),
-            request.getWorkerGroup(),
-            request.getQueueCode(),
-            request.getScheduleType(),
-            request.getEnabled(),
-            pageRequest);
+    JobDefinitionQuery query = new JobDefinitionQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getJobCode(),
+        request.getJobName(),
+        request.getJobType(),
+        request.getWorkerGroup(),
+        request.getQueueCode(),
+        request.getScheduleType(),
+        request.getEnabled(),
+        pageRequest);
     List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
     long total = jobMappers.jobDefinitionMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobDefinitionResponse);
@@ -73,21 +72,19 @@ public class ConsoleJobQueryService {
   public PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(
       JobExecutionLogQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
-    JobExecutionLogQuery query =
-        new JobExecutionLogQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getJobInstanceId(),
-            request.getJobPartitionId(),
-            request.getLogLevel(),
-            request.getLogType(),
-            request.getTraceId(),
-            request.getKeyword(),
-            pageRequest,
-            decodeCursorId(request.getCursor()));
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
+    JobExecutionLogQuery query = new JobExecutionLogQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getJobInstanceId(),
+        request.getJobPartitionId(),
+        request.getLogLevel(),
+        request.getLogType(),
+        request.getTraceId(),
+        request.getKeyword(),
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<JobExecutionLogEntity> rows = jobMappers.jobExecutionLogMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -123,29 +120,26 @@ public class ConsoleJobQueryService {
           "sortBy=duration is not supported in cursor mode; remove cursor or use pageNo");
     }
     // cursor 模式忽略 pageNo,统一 pageNo=1(防止意外 OFFSET);其它字段保留以拼 WHERE
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
     Long cursorId = decodeCursorId(request.getCursor());
-    JobInstanceQuery query =
-        new JobInstanceQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getJobCode(),
-            request.getInstanceStatus(),
-            parseCsv(request.getInstanceStatuses()),
-            request.getInstanceNo(),
-            request.getBizDate(),
-            request.getTraceId(),
-            parseFlexibleInstant(
-                request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
-            parseFlexibleInstantEndOfDay(
-                request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
-            request.getSortBy(),
-            request.getMinDurationSeconds(),
-            request.getSlaBreached(),
-            pageRequest,
-            cursorId);
+    JobInstanceQuery query = new JobInstanceQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getJobCode(),
+        request.getInstanceStatus(),
+        parseCsv(request.getInstanceStatuses()),
+        request.getInstanceNo(),
+        request.getBizDate(),
+        request.getTraceId(),
+        parseFlexibleInstant(request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
+        parseFlexibleInstantEndOfDay(
+            request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
+        request.getSortBy(),
+        request.getMinDurationSeconds(),
+        request.getSlaBreached(),
+        pageRequest,
+        cursorId);
     List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toJobInstanceResponse, JobInstanceEntity::getId);
@@ -171,19 +165,17 @@ public class ConsoleJobQueryService {
   public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
       JobStepInstanceQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
-    JobStepInstanceQuery query =
-        new JobStepInstanceQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getJobInstanceId(),
-            request.getJobPartitionId(),
-            request.getStepCode(),
-            request.getStepStatus(),
-            pageRequest,
-            decodeCursorId(request.getCursor()));
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
+    JobStepInstanceQuery query = new JobStepInstanceQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getJobInstanceId(),
+        request.getJobPartitionId(),
+        request.getStepCode(),
+        request.getStepStatus(),
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<JobStepInstanceEntity> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -201,17 +193,15 @@ public class ConsoleJobQueryService {
 
   public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
-    PageRequest pageRequest =
-        cursorMode
-            ? new PageRequest(1, request.getPageSize())
-            : new PageRequest(request.getPageNo(), request.getPageSize());
-    JobPartitionQuery query =
-        new JobPartitionQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getJobInstanceId(),
-            request.getPartitionStatus(),
-            pageRequest,
-            decodeCursorId(request.getCursor()));
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
+    JobPartitionQuery query = new JobPartitionQuery(
+        resolveTenant(tenantGuard, request.getTenantId()),
+        request.getJobInstanceId(),
+        request.getPartitionStatus(),
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<JobPartitionEntity> rows = jobMappers.jobPartitionMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toJobPartitionResponse, JobPartitionEntity::getId);
@@ -329,8 +319,10 @@ public class ConsoleJobQueryService {
   /** Comma-separated -> trimmed list,null/空 → null。供「多状态过滤」入口复用。 */
   private static List<String> parseCsv(String csv) {
     if (csv == null || csv.isBlank()) return null;
-    List<String> out =
-        Arrays.stream(csv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+    List<String> out = Arrays.stream(csv.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .toList();
     return out.isEmpty() ? null : out;
   }
 }

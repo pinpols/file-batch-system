@@ -70,12 +70,10 @@ class ConsoleBatchDayReplayControllerTest {
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
         .thenReturn(CommonResponse.success(Map.of("id", 1, "status", "PENDING_APPROVAL")));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleBatchDayReplayController(
-                    orchestratorInternalRestClient, tenantGuard, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
+            orchestratorInternalRestClient, tenantGuard, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -83,12 +81,10 @@ class ConsoleBatchDayReplayControllerTest {
     when(tenantGuard.resolveTenant("tb")).thenReturn("ta");
 
     mockMvc
-        .perform(
-            post("/api/console/ops/batch-day-replay/sessions")
-                .header("Idempotency-Key", "idem-1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/ops/batch-day-replay/sessions")
+            .header("Idempotency-Key", "idem-1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId":"tb",
                       "calendarCode":"CAL-CN",
@@ -123,11 +119,10 @@ class ConsoleBatchDayReplayControllerTest {
   void submitShouldRejectMissingRequiredFieldsWith400() throws Exception {
     // calendarCode/bizDate/scope/reason/requestedBy @NotBlank —— 缺失直接 400,不触达 orchestrator。
     mockMvc
-        .perform(
-            post("/api/console/ops/batch-day-replay/sessions")
-                .header("Idempotency-Key", "idem-2")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\"}"))
+        .perform(post("/api/console/ops/batch-day-replay/sessions")
+            .header("Idempotency-Key", "idem-2")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\"}"))
         .andExpect(status().isBadRequest());
     verify(orchestratorInternalRestClient, never()).build();
   }
@@ -137,11 +132,9 @@ class ConsoleBatchDayReplayControllerTest {
     when(tenantGuard.resolveTenant(null)).thenReturn("ta");
 
     mockMvc
-        .perform(
-            post("/api/console/ops/batch-day-replay/sessions/preview")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/ops/batch-day-replay/sessions/preview")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "calendarCode":"CAL-CN",
                       "bizDate":"2026-07-01",
@@ -163,12 +156,10 @@ class ConsoleBatchDayReplayControllerTest {
   @Test
   void submitShouldRejectInvalidBizDateWith400() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ops/batch-day-replay/sessions")
-                .header("Idempotency-Key", "idem-3")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/ops/batch-day-replay/sessions")
+            .header("Idempotency-Key", "idem-3")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "calendarCode":"CAL-CN",
                       "bizDate":"2026/07/01",

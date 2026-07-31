@@ -65,10 +65,9 @@ class BoundedContextMigrationProgressTest {
 
   @Test
   void reportCurrentViolationCount() {
-    JavaClasses classes =
-        new ClassFileImporter()
-            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("io.github.pinpols.batch.console..");
+    JavaClasses classes = new ClassFileImporter()
+        .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+        .importPackages("io.github.pinpols.batch.console..");
 
     Map<String, Integer> matrix = new TreeMap<>();
     int total = 0;
@@ -108,14 +107,12 @@ class BoundedContextMigrationProgressTest {
     System.out.println("[BoundedContext] suppressed (whitelisted) edges: " + suppressed);
     sorted.forEach((k, v) -> System.out.println("[BoundedContext]   " + k + " : " + v));
     if (total == 0) {
-      System.out.println(
-          "[BoundedContext] No violations detected — safe to remove @Disabled from "
-              + "BoundedContextDependencyArchTest.");
+      System.out.println("[BoundedContext] No violations detected — safe to remove @Disabled from "
+          + "BoundedContextDependencyArchTest.");
     }
     assertThat(total)
-        .as(
-            "bounded-context cross dependencies must not increase; lower this budget as migration"
-                + " progresses")
+        .as("bounded-context cross dependencies must not increase; lower this budget as migration"
+            + " progresses")
         .isLessThanOrEqualTo(MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS);
   }
 

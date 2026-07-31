@@ -91,22 +91,21 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       Pattern.compile("\\b(application_\\d+_\\d+|app-\\d+-\\d+|driver-\\d+)\\b");
 
   /** spark-submit 跑起来必需的 env(其余一律清掉,防 worker 的密钥/凭据透传进 Spark 作业)。 */
-  private static final Set<String> ESSENTIAL_ENV_KEYS =
-      Set.of(
-          "SPARK_HOME",
-          "SPARK_CONF_DIR",
-          "JAVA_HOME",
-          "HADOOP_HOME",
-          "HADOOP_CONF_DIR",
-          "YARN_CONF_DIR",
-          "PYSPARK_PYTHON",
-          "KRB5_CONFIG",
-          "PATH",
-          "HOME",
-          "USER",
-          "LANG",
-          "LC_ALL",
-          "TMPDIR");
+  private static final Set<String> ESSENTIAL_ENV_KEYS = Set.of(
+      "SPARK_HOME",
+      "SPARK_CONF_DIR",
+      "JAVA_HOME",
+      "HADOOP_HOME",
+      "HADOOP_CONF_DIR",
+      "YARN_CONF_DIR",
+      "PYSPARK_PYTHON",
+      "KRB5_CONFIG",
+      "PATH",
+      "HOME",
+      "USER",
+      "LANG",
+      "LC_ALL",
+      "TMPDIR");
 
   private final SparkSubmitExecutorProperties props;
 
@@ -202,9 +201,8 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     if ("cluster".equalsIgnoreCase(deployMode)) {
       // #3:cluster 模式 driver 在远端,spark-submit 提交完即 exit=0(=已提交,非已完成)。
       // 远端终态轮询未实现前直接拒绝,**不让 cluster 静默假成功**。需要时按类注释接状态轮询后再放开。
-      throw new SparkValidationException(
-          "deployMode=cluster 暂不支持(远端 driver 终态轮询未实现,会误判'已提交'为成功);"
-              + "请用 client 模式,或接入 YARN/K8s/REST 状态轮询后再启用");
+      throw new SparkValidationException("deployMode=cluster 暂不支持(远端 driver 终态轮询未实现,会误判'已提交'为成功);"
+          + "请用 client 模式,或接入 YARN/K8s/REST 状态轮询后再启用");
     }
     String mainClass = optionalString(params.get(PARAM_MAIN_CLASS), "");
     String name = optionalString(params.get(PARAM_NAME), "");
@@ -438,22 +436,20 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     private final StringBuffer buf = new StringBuffer();
 
     private StreamCollector(InputStream in, int maxBytes) {
-      this.thread =
-          new Thread(
-              () -> {
-                try (BufferedReader r =
-                    new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                  String line;
-                  while ((line = r.readLine()) != null) {
-                    if (buf.length() < maxBytes) {
-                      buf.append(line).append('\n');
-                    }
-                    // 超过 maxBytes 仍继续 readLine 把管道读空,防子进程因 buffer 写满阻塞。
-                  }
-                } catch (IOException ignored) {
-                  // 进程结束/流关闭时读异常可忽略
-                }
-              });
+      this.thread = new Thread(() -> {
+        try (BufferedReader r =
+            new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+          String line;
+          while ((line = r.readLine()) != null) {
+            if (buf.length() < maxBytes) {
+              buf.append(line).append('\n');
+            }
+            // 超过 maxBytes 仍继续 readLine 把管道读空,防子进程因 buffer 写满阻塞。
+          }
+        } catch (IOException ignored) {
+          // 进程结束/流关闭时读异常可忽略
+        }
+      });
       this.thread.setDaemon(true);
     }
 

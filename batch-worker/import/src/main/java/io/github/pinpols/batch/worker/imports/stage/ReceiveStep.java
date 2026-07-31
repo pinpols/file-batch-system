@@ -136,34 +136,31 @@ public class ReceiveStep implements ImportStageStep {
       mergeSecurityMetadata(
           metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
       mergeUserMetadata(metadata, importPayload.metadata());
-      Long fileId =
-          runtimeRepository.createFileRecord(
-              FileRecordParam.builder()
-                  .tenantId(context.getTenantId())
-                  .fileCode(importPayload.fileCode())
-                  .bizType(defaultText(importPayload.bizType(), context.getJobCode()))
-                  .fileCategory("INPUT")
-                  .fileName(fileName)
-                  .originalFileName(defaultText(importPayload.originalFileName(), fileName))
-                  .fileFormatType(fileFormatType)
-                  .charset(defaultText(importPayload.charset(), EncodingUtils.UTF_8))
-                  .fileSizeBytes(payloadLength)
-                  .checksumType(defaultText(importPayload.checksumType(), "NONE"))
-                  .checksumValue(importPayload.checksumValue())
-                  .storageType(defaultText(importPayload.storageType(), "LOCAL"))
-                  .storagePath(
-                      defaultText(
-                          importPayload.storagePath(),
-                          "ingress/" + context.getTenantId() + "/" + traceId + "/" + fileName))
-                  .storageBucket(importPayload.storageBucket())
-                  .fileVersion(null)
-                  .bizDate(parseBizDate(context.getBizDate()))
-                  .sourceType(defaultText(importPayload.sourceType(), "UPLOAD"))
-                  .sourceRef(importPayload.sourceRef())
-                  .fileStatus("RECEIVED")
-                  .traceId(traceId)
-                  .metadata(metadata)
-                  .build());
+      Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+          .tenantId(context.getTenantId())
+          .fileCode(importPayload.fileCode())
+          .bizType(defaultText(importPayload.bizType(), context.getJobCode()))
+          .fileCategory("INPUT")
+          .fileName(fileName)
+          .originalFileName(defaultText(importPayload.originalFileName(), fileName))
+          .fileFormatType(fileFormatType)
+          .charset(defaultText(importPayload.charset(), EncodingUtils.UTF_8))
+          .fileSizeBytes(payloadLength)
+          .checksumType(defaultText(importPayload.checksumType(), "NONE"))
+          .checksumValue(importPayload.checksumValue())
+          .storageType(defaultText(importPayload.storageType(), "LOCAL"))
+          .storagePath(defaultText(
+              importPayload.storagePath(),
+              "ingress/" + context.getTenantId() + "/" + traceId + "/" + fileName))
+          .storageBucket(importPayload.storageBucket())
+          .fileVersion(null)
+          .bizDate(parseBizDate(context.getBizDate()))
+          .sourceType(defaultText(importPayload.sourceType(), "UPLOAD"))
+          .sourceRef(importPayload.sourceRef())
+          .fileStatus("RECEIVED")
+          .traceId(traceId)
+          .metadata(metadata)
+          .build());
       attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
       attrs.put(
           PipelineRuntimeKeys.FILE_RECORD,

@@ -54,12 +54,11 @@ class RlsClosedWorldCheckIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() {
-    postgres =
-        new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-            .withDatabaseName("batch_business")
-            .withUsername("batch_user")
-            .withPassword("batch_pass_123")
-            .withUrlParam("sslmode", "disable");
+    postgres = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
+        .withDatabaseName("batch_business")
+        .withUsername("batch_user")
+        .withPassword("batch_pass_123")
+        .withUrlParam("sslmode", "disable");
     postgres.start();
 
     HikariConfig cfg = new HikariConfig();
@@ -113,10 +112,9 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   private void createPlainTableWithRls(JdbcTemplate target, String table) {
-    target.execute(
-        "CREATE TABLE biz."
-            + table
-            + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
+    target.execute("CREATE TABLE biz."
+        + table
+        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
     applyRls(target, "biz." + table);
   }
 
@@ -125,30 +123,27 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   private void createPlainTableNoRls(JdbcTemplate target, String table) {
-    target.execute(
-        "CREATE TABLE biz."
-            + table
-            + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
+    target.execute("CREATE TABLE biz."
+        + table
+        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
   }
 
   /** 分区父表 + 4 个 hash 子表(对齐 customer_account 在 create_biz_tables.sql 的形态)。RLS 仅施于父表。 */
   private void createPartitionedTableWithRls(String table) {
-    jdbc.execute(
-        "CREATE TABLE biz."
-            + table
-            + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))"
-            + " PARTITION BY HASH (tenant_id)");
+    jdbc.execute("CREATE TABLE biz."
+        + table
+        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))"
+        + " PARTITION BY HASH (tenant_id)");
     for (int i = 0; i < 4; i++) {
-      jdbc.execute(
-          "CREATE TABLE biz."
-              + table
-              + "_p"
-              + i
-              + " PARTITION OF biz."
-              + table
-              + " FOR VALUES WITH (MODULUS 4, REMAINDER "
-              + i
-              + ")");
+      jdbc.execute("CREATE TABLE biz."
+          + table
+          + "_p"
+          + i
+          + " PARTITION OF biz."
+          + table
+          + " FOR VALUES WITH (MODULUS 4, REMAINDER "
+          + i
+          + ")");
     }
     applyRls("biz." + table);
   }
@@ -160,20 +155,18 @@ class RlsClosedWorldCheckIntegrationTest {
   private void applyRls(JdbcTemplate target, String fqTable) {
     target.execute("ALTER TABLE " + fqTable + " ENABLE ROW LEVEL SECURITY");
     target.execute("ALTER TABLE " + fqTable + " FORCE ROW LEVEL SECURITY");
-    target.execute(
-        "CREATE POLICY tenant_isolation_strict ON "
-            + fqTable
-            + " AS PERMISSIVE FOR ALL TO PUBLIC"
-            + " USING (tenant_id = current_setting('app.tenant_id', true))"
-            + " WITH CHECK (tenant_id = current_setting('app.tenant_id', true))");
+    target.execute("CREATE POLICY tenant_isolation_strict ON "
+        + fqTable
+        + " AS PERMISSIVE FOR ALL TO PUBLIC"
+        + " USING (tenant_id = current_setting('app.tenant_id', true))"
+        + " WITH CHECK (tenant_id = current_setting('app.tenant_id', true))");
   }
 
   /** 建表 + ENABLE/FORCE RLS + 施一个**同名但语义坏**的 policy(policyClause 决定坏法)。 */
   private void createTableWithNamedPolicy(String table, String policyClause) {
-    jdbc.execute(
-        "CREATE TABLE biz."
-            + table
-            + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
+    jdbc.execute("CREATE TABLE biz."
+        + table
+        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
     jdbc.execute("ALTER TABLE biz." + table + " ENABLE ROW LEVEL SECURITY");
     jdbc.execute("ALTER TABLE biz." + table + " FORCE ROW LEVEL SECURITY");
     jdbc.execute("CREATE POLICY tenant_isolation_strict ON biz." + table + " " + policyClause);
@@ -275,11 +268,9 @@ class RlsClosedWorldCheckIntegrationTest {
     createPlainTableWithRls(shard1Jdbc, "customer_account");
     createPlainTableNoRls(shard1Jdbc, "bar");
 
-    DataSource routing =
-        BusinessRoutingDataSourceFactory.multiShard(
-            Map.of(
-                HashAndSiloPlacementResolver.DEFAULT_KEY, dataSource, "shard-1", shard1DataSource),
-            new HashAndSiloPlacementResolver(2, Map.of()));
+    DataSource routing = BusinessRoutingDataSourceFactory.multiShard(
+        Map.of(HashAndSiloPlacementResolver.DEFAULT_KEY, dataSource, "shard-1", shard1DataSource),
+        new HashAndSiloPlacementResolver(2, Map.of()));
 
     Health health = new RlsPolicyHealthIndicator(routing).health();
 
@@ -298,11 +289,9 @@ class RlsClosedWorldCheckIntegrationTest {
     createPlainTableWithRls(jdbc, "customer_account");
     createPlainTableWithRls(shard1Jdbc, "customer_account");
 
-    DataSource routing =
-        BusinessRoutingDataSourceFactory.multiShard(
-            Map.of(
-                HashAndSiloPlacementResolver.DEFAULT_KEY, dataSource, "shard-1", shard1DataSource),
-            new HashAndSiloPlacementResolver(2, Map.of()));
+    DataSource routing = BusinessRoutingDataSourceFactory.multiShard(
+        Map.of(HashAndSiloPlacementResolver.DEFAULT_KEY, dataSource, "shard-1", shard1DataSource),
+        new HashAndSiloPlacementResolver(2, Map.of()));
 
     Health health = new RlsPolicyHealthIndicator(routing).health();
 

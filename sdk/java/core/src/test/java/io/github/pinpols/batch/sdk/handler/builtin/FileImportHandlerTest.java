@@ -24,7 +24,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class FileImportHandlerTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   private SdkTaskContext ctx(Path file) {
     return new SdkTaskContext(

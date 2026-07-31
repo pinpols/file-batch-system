@@ -88,22 +88,19 @@ public class WorkerCapabilityTagsAuditScheduler {
       // RLS Phase B：审计 loop 当前只跑 JSON 解析、未触 DB，但按统一规范仍以 worker 所属 tenant 绑定，
       // 让未来扩展（例如把脏行 mark 到 worker_registry.audit_invalid）天然落到正确 RLS 上下文。
       final int loggedSnapshot = logged;
-      boolean invalid =
-          RlsTenantContextHolder.runWithTenant(
-              tenantId,
-              () -> {
-                if (!looksValidStringArray(row.getRawValue())) {
-                  if (loggedSnapshot < logSampleLimit) {
-                    log.warn(
-                        "invalid capability_tags detected: tenant={} workerCode={} raw={}",
-                        row.getTenantId(),
-                        row.getWorkerCode(),
-                        row.getRawValue());
-                  }
-                  return true;
-                }
-                return false;
-              });
+      boolean invalid = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+        if (!looksValidStringArray(row.getRawValue())) {
+          if (loggedSnapshot < logSampleLimit) {
+            log.warn(
+                "invalid capability_tags detected: tenant={} workerCode={} raw={}",
+                row.getTenantId(),
+                row.getWorkerCode(),
+                row.getRawValue());
+          }
+          return true;
+        }
+        return false;
+      });
       if (invalid) {
         confirmed++;
         if (logged < logSampleLimit) {

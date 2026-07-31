@@ -29,8 +29,11 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("安全增量补偿 hook：opt-in off 逐字节不变 / on 才触发 / best-effort 不掩盖原始失败")
 class PipelineCompensationHookTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private ProcessingPositionStore positionStore;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private ProcessingPositionStore positionStore;
 
   private PipelineCompensationHook hook(PipelineCompensator... compensators) {
     return new PipelineCompensationHook(
@@ -154,19 +157,18 @@ class PipelineCompensationHookTest {
   @Test
   @DisplayName("compensator 内部抛异常：hook 不上抛，仍记审计，原始失败不被掩盖")
   void compensatorThrows_isSwallowed() {
-    PipelineCompensator throwing =
-        new PipelineCompensator() {
-          @Override
-          public String pipelineType() {
-            return "IMPORT";
-          }
+    PipelineCompensator throwing = new PipelineCompensator() {
+      @Override
+      public String pipelineType() {
+        return "IMPORT";
+      }
 
-          @Override
-          public CompensationResult compensate(
-              String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attrs) {
-            throw new IllegalStateException("boom");
-          }
-        };
+      @Override
+      public CompensationResult compensate(
+          String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attrs) {
+        throw new IllegalStateException("boom");
+      }
+    };
     PipelineCompensationHook hook = hook(throwing);
     Map<String, Object> attributes = attributesWithTemplate(true);
 

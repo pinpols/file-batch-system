@@ -28,12 +28,10 @@ public class MeteredObjectStore implements BatchObjectStore {
   }
 
   private void timedRun(String op, Runnable action) {
-    timed(
-        op,
-        () -> {
-          action.run();
-          return null;
-        });
+    timed(op, () -> {
+      action.run();
+      return null;
+    });
   }
 
   private <T> T timed(String op, Supplier<T> action) {

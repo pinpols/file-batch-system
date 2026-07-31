@@ -24,16 +24,15 @@ public class ConsoleRealtimeRedisPublisher {
     if (event == null) {
       return;
     }
-    ConsoleRealtimeStreamEnvelope envelope =
-        new ConsoleRealtimeStreamEnvelope(
-            instanceIdProvider.instanceId(),
-            event.tenantId(),
-            event.stream(),
-            event.eventType(),
-            event.cursor(),
-            false,
-            event.data() == null ? "" : JsonUtils.toJson(event.data()),
-            event.emittedAt());
+    ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
+        instanceIdProvider.instanceId(),
+        event.tenantId(),
+        event.stream(),
+        event.eventType(),
+        event.cursor(),
+        false,
+        event.data() == null ? "" : JsonUtils.toJson(event.data()),
+        event.emittedAt());
     replayStore.append(envelope);
     redisTemplate.convertAndSend(CHANNEL_KEY, JsonUtils.toJson(envelope));
   }

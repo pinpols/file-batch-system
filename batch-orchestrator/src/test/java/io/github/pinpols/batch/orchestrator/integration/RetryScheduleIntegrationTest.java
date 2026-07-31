@@ -20,7 +20,8 @@ import org.springframework.boot.test.context.SpringBootTest;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private RetryScheduleMapper retryScheduleMapper;
+  @Autowired
+  private RetryScheduleMapper retryScheduleMapper;
 
   @Test
   void shouldInsertAndSelectRetrySchedule() {
@@ -44,10 +45,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(60)); // already due
     retryScheduleMapper.insert(entity);
 
-    List<RetryScheduleEntity> due =
-        retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery(
-                "t1", RetryScheduleStatus.WAITING.code(), BatchDateTimeSupport.utcNow(), 100));
+    List<RetryScheduleEntity> due = retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
+        "t1", RetryScheduleStatus.WAITING.code(), BatchDateTimeSupport.utcNow(), 100));
 
     assertThat(due).isNotEmpty();
     boolean found = due.stream().anyMatch(r -> dedupKey.equals(r.getDedupKey()));
@@ -62,10 +61,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setNextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(3600)); // not yet due
     retryScheduleMapper.insert(entity);
 
-    List<RetryScheduleEntity> due =
-        retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery(
-                "t1", RetryScheduleStatus.WAITING.code(), BatchDateTimeSupport.utcNow(), 100));
+    List<RetryScheduleEntity> due = retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
+        "t1", RetryScheduleStatus.WAITING.code(), BatchDateTimeSupport.utcNow(), 100));
 
     boolean found = due.stream().anyMatch(r -> dedupKey.equals(r.getDedupKey()));
     assertThat(found).isFalse();
@@ -78,12 +75,11 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
 
-    int updated =
-        retryScheduleMapper.markRunning(
-            entity.getTenantId(),
-            entity.getId(),
-            RetryScheduleStatus.WAITING.code(),
-            RetryScheduleStatus.RUNNING.code());
+    int updated = retryScheduleMapper.markRunning(
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
 
     assertThat(updated).isEqualTo(1);
   }
@@ -101,12 +97,11 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         RetryScheduleStatus.WAITING.code(),
         RetryScheduleStatus.RUNNING.code());
     // 第二次尝试应失败（通过 fromStatus 检查实现乐观锁）
-    int second =
-        retryScheduleMapper.markRunning(
-            entity.getTenantId(),
-            entity.getId(),
-            RetryScheduleStatus.WAITING.code(),
-            RetryScheduleStatus.RUNNING.code());
+    int second = retryScheduleMapper.markRunning(
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
 
     assertThat(second).isZero();
   }
@@ -117,12 +112,11 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setDedupKey("tenant-a:wrong-tenant:" + BatchDateTimeSupport.utcEpochMillis());
     retryScheduleMapper.insert(entity);
 
-    int updated =
-        retryScheduleMapper.markRunning(
-            "tenant-b",
-            entity.getId(),
-            RetryScheduleStatus.WAITING.code(),
-            RetryScheduleStatus.RUNNING.code());
+    int updated = retryScheduleMapper.markRunning(
+        "tenant-b",
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
 
     assertThat(updated).isZero();
     assertThat(retryScheduleMapper.selectById(entity.getId()).getRetryStatus())
@@ -140,12 +134,11 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         entity.getId(),
         RetryScheduleStatus.WAITING.code(),
         RetryScheduleStatus.RUNNING.code());
-    int updated =
-        retryScheduleMapper.markSuccess(
-            entity.getTenantId(),
-            entity.getId(),
-            RetryScheduleStatus.WAITING.code(),
-            RetryScheduleStatus.SUCCESS.code());
+    int updated = retryScheduleMapper.markSuccess(
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.SUCCESS.code());
 
     assertThat(updated).isZero();
     assertThat(retryScheduleMapper.selectById(entity.getId()).getRetryStatus())
@@ -164,12 +157,11 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         RetryScheduleStatus.WAITING.code(),
         RetryScheduleStatus.RUNNING.code());
 
-    int updated =
-        retryScheduleMapper.markSuccess(
-            entity.getTenantId(),
-            entity.getId(),
-            RetryScheduleStatus.RUNNING.code(),
-            RetryScheduleStatus.SUCCESS.code());
+    int updated = retryScheduleMapper.markSuccess(
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.RUNNING.code(),
+        RetryScheduleStatus.SUCCESS.code());
 
     assertThat(updated).isEqualTo(1);
     RetryScheduleEntity loaded = retryScheduleMapper.selectById(entity.getId());

@@ -9,13 +9,17 @@ import lombok.Data;
 @Data
 public class TriggerRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 128, message = "jobCode too long (max 128)")
   private String jobCode;
 
-  @NotBlank @ValidBizDate private String bizDate;
+  @NotBlank
+  @ValidBizDate
+  private String bizDate;
+
   private String triggerType;
   private String payload;
 

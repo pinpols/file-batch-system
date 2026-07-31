@@ -24,8 +24,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AckDispatchStepTest {
 
-  @Mock private FileDispatchRepository fileDispatchRepository;
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private FileDispatchRepository fileDispatchRepository;
+
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   private AckDispatchStep step;
 

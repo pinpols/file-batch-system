@@ -40,7 +40,8 @@ class DefaultConsoleOpsApplicationServiceTest {
         .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
     when(approvalCommandMapper.countByStatus("tenant-a", "PENDING")).thenReturn(4L);
     when(alertEventMapper.countByStatus("tenant-a", "OPEN")).thenReturn(6L);
-    when(alertEventMapper.countBySeverityAndStatus("tenant-a", "CRITICAL", "OPEN")).thenReturn(2L);
+    when(alertEventMapper.countBySeverityAndStatus("tenant-a", "CRITICAL", "OPEN"))
+        .thenReturn(2L);
     when(jobInstanceMapper.countByStatuses("tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
         .thenReturn(7L);
     when(jobInstanceMapper.countByStatuses(
@@ -68,16 +69,15 @@ class DefaultConsoleOpsApplicationServiceTest {
         .thenReturn(11L);
     when(outboxDeliveryLogMapper.countByStatus("tenant-a", "FAILED")).thenReturn(13L);
 
-    DefaultConsoleOpsApplicationService service =
-        new DefaultConsoleOpsApplicationService(
-            tenantGuard,
-            approvalCommandMapper,
-            jobInstanceMapper,
-            workerRegistryMapper,
-            outboxRetryLogMapper,
-            outboxDeliveryLogMapper,
-            alertEventMapper,
-            cacheService);
+    DefaultConsoleOpsApplicationService service = new DefaultConsoleOpsApplicationService(
+        tenantGuard,
+        approvalCommandMapper,
+        jobInstanceMapper,
+        workerRegistryMapper,
+        outboxRetryLogMapper,
+        outboxDeliveryLogMapper,
+        alertEventMapper,
+        cacheService);
 
     ConsoleOpsSummaryResponse response = service.summary("tenant-a");
 

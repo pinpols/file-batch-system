@@ -51,10 +51,9 @@ public class ConsoleTenantGuard {
     // 不一致时抛 FORBIDDEN —— 这是越权的真正拦截点（参见 shouldRejectMismatchedTenant 测试）
     ConsoleRequestMetadata metadata = currentMetadataOrNull();
     String authenticatedTenantId = authenticatedTenantId();
-    String effectiveTenantId =
-        authenticatedTenantId != null
-            ? authenticatedTenantId
-            : metadata != null ? metadata.tenantId() : null;
+    String effectiveTenantId = authenticatedTenantId != null
+        ? authenticatedTenantId
+        : metadata != null ? metadata.tenantId() : null;
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
       // M1 (#780 评审) fail-closed 收口：JWT tenant claim 与 request metadata 双缺失时，
       // 仅在<b>系统 / @Async 路径</b>（SecurityContext 无 ConsolePrincipal）回退到调用方
@@ -115,10 +114,9 @@ public class ConsoleTenantGuard {
     }
     String authenticatedTenantId = authenticatedTenantId();
     ConsoleRequestMetadata metadata = currentMetadataOrNull();
-    String effectiveTenantId =
-        authenticatedTenantId != null
-            ? authenticatedTenantId
-            : metadata != null ? metadata.tenantId() : null;
+    String effectiveTenantId = authenticatedTenantId != null
+        ? authenticatedTenantId
+        : metadata != null ? metadata.tenantId() : null;
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
     }

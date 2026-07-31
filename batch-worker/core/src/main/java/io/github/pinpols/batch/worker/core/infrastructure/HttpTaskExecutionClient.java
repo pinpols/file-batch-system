@@ -88,29 +88,26 @@ public class HttpTaskExecutionClient
    * 旧 orchestrator(P1-2.1 之前)claim 返空 body 时回的占位:fields 全 null,worker 走 fallback 到
    * TaskDispatchMessage 旧字段。语义上等价于"claim 成功但无 fresh config"。
    */
-  private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG =
-      new EffectiveTaskConfig(
-          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null);
+  private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG = new EffectiveTaskConfig(
+      null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+      null, null);
 
   @Override
   public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
     String traceId = currentTraceId();
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-    ClaimOutcome<EffectiveTaskConfig> outcome =
-        executeClaimLike(
-            "claim",
-            () ->
-                client()
-                    .post()
-                    .uri("/internal/tasks/{taskId}/claim", taskId)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-                    .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                    .body(new ClaimRequest(tenantId, workerId, null))
-                    .retrieve()
-                    .body(EffectiveTaskConfig.class));
+    ClaimOutcome<EffectiveTaskConfig> outcome = executeClaimLike(
+        "claim",
+        () -> client()
+            .post()
+            .uri("/internal/tasks/{taskId}/claim", taskId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+            .body(new ClaimRequest(tenantId, workerId, null))
+            .retrieve()
+            .body(EffectiveTaskConfig.class));
     if (!outcome.success()) {
       return Optional.empty();
     }
@@ -132,29 +129,26 @@ public class HttpTaskExecutionClient
 
   /** 单 chunk:优先 {@code POST /claim-batch};404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #claim}。 */
   private List<TaskClaimResult> claimBatchChunkHttpOrFallback(List<TaskClaimItem> chunk) {
-    RetryState state =
-        RetryState.initial(
-            properties.getClaimMaxAttempts(),
-            properties.getClaimInitialBackoffMillis(),
-            properties.getClaimMaxBackoffMillis());
+    RetryState state = RetryState.initial(
+        properties.getClaimMaxAttempts(),
+        properties.getClaimInitialBackoffMillis(),
+        properties.getClaimMaxBackoffMillis());
     while (state.canAttempt()) {
       try {
-        List<ClaimBatchHttpItem> payload =
-            chunk.stream()
-                .map(it -> new ClaimBatchHttpItem(it.tenantId(), it.taskId(), it.workerId(), null))
-                .toList();
+        List<ClaimBatchHttpItem> payload = chunk.stream()
+            .map(it -> new ClaimBatchHttpItem(it.tenantId(), it.taskId(), it.workerId(), null))
+            .toList();
         String traceId = currentTraceId();
         String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-        ClaimBatchHttpResponse response =
-            client()
-                .post()
-                .uri("/internal/tasks/claim-batch")
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                .body(new ClaimBatchHttpRequest(payload))
-                .retrieve()
-                .body(ClaimBatchHttpResponse.class);
+        ClaimBatchHttpResponse response = client()
+            .post()
+            .uri("/internal/tasks/claim-batch")
+            .contentType(MediaType.APPLICATION_JSON)
+            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
+            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+            .body(new ClaimBatchHttpRequest(payload))
+            .retrieve()
+            .body(ClaimBatchHttpResponse.class);
         return mapClaimChunkOrFallback(chunk, response);
       } catch (HttpClientErrorException ex) {
         if (ex.getStatusCode() == HttpStatus.NOT_FOUND
@@ -193,7 +187,9 @@ public class HttpTaskExecutionClient
       log.warn(
           "claim-batch response mismatch: chunk size {}, response results {}",
           chunk.size(),
-          response == null || response.results() == null ? null : response.results().size());
+          response == null || response.results() == null
+              ? null
+              : response.results().size());
       return fallbackClaimChunk(chunk);
     }
     List<TaskClaimResult> out = new ArrayList<>(chunk.size());
@@ -223,16 +219,15 @@ public class HttpTaskExecutionClient
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
     return executeClaimLike(
             "renew",
-            () ->
-                client()
-                    .post()
-                    .uri("/internal/tasks/{taskId}/renew", taskId)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-                    .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                    .body(new ClaimRequest(tenantId, workerId, partitionInvocationId))
-                    .retrieve()
-                    .toBodilessEntity())
+            () -> client()
+                .post()
+                .uri("/internal/tasks/{taskId}/renew", taskId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                .body(new ClaimRequest(tenantId, workerId, partitionInvocationId))
+                .retrieve()
+                .toBodilessEntity())
         .success();
   }
 
@@ -255,26 +250,24 @@ public class HttpTaskExecutionClient
    */
   private Map<Long, TaskLeaseRenewResult> renewBatchChunkHttpOrFallback(
       List<TaskLeaseRenewItem> chunk) {
-    RetryState state =
-        RetryState.initial(
-            properties.getClaimMaxAttempts(),
-            properties.getClaimInitialBackoffMillis(),
-            properties.getClaimMaxBackoffMillis());
+    RetryState state = RetryState.initial(
+        properties.getClaimMaxAttempts(),
+        properties.getClaimInitialBackoffMillis(),
+        properties.getClaimMaxBackoffMillis());
     while (state.canAttempt()) {
       try {
         List<BatchRenewHttpItem> payload = chunk.stream().map(this::toHttpItem).toList();
         String traceId = currentTraceId();
         String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-        BatchRenewHttpResponse response =
-            client()
-                .post()
-                .uri("/internal/tasks/leases/renew-batch")
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                .body(new BatchRenewHttpRequest(payload))
-                .retrieve()
-                .body(BatchRenewHttpResponse.class);
+        BatchRenewHttpResponse response = client()
+            .post()
+            .uri("/internal/tasks/leases/renew-batch")
+            .contentType(MediaType.APPLICATION_JSON)
+            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
+            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+            .body(new BatchRenewHttpRequest(payload))
+            .retrieve()
+            .body(BatchRenewHttpResponse.class);
         return mapChunkOrFallback(chunk, response);
       } catch (HttpClientErrorException ex) {
         if (ex.getStatusCode() == HttpStatus.NOT_FOUND
@@ -313,7 +306,9 @@ public class HttpTaskExecutionClient
       log.warn(
           "renew-batch response mismatch: chunk size {}, response results {}",
           chunk.size(),
-          response == null || response.results() == null ? null : response.results().size());
+          response == null || response.results() == null
+              ? null
+              : response.results().size());
       return fallbackRenewChunk(chunk);
     }
     Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
@@ -387,8 +382,8 @@ public class HttpTaskExecutionClient
   }
 
   private void recordReportDropped(String reason) {
-    meterRegistry.ifPresent(
-        registry -> registry.counter("worker.report.dropped.total", "reason", reason).increment());
+    meterRegistry.ifPresent(registry ->
+        registry.counter("worker.report.dropped.total", "reason", reason).increment());
   }
 
   @Override
@@ -399,21 +394,18 @@ public class HttpTaskExecutionClient
   private void recordReportDuration(
       TaskExecutionReport report, String outcome, long durationNanos) {
     // tenantId 不作 metric tag(高基数,随租户线性膨胀);只保留 outcome(枚举型,低基数)
-    meterRegistry.ifPresent(
-        registry ->
-            Timer.builder("batch.worker.report.duration")
-                .tags(Tags.of("outcome", outcome))
-                .publishPercentiles(0.5, 0.95, 0.99)
-                .register(registry)
-                .record(durationNanos, TimeUnit.NANOSECONDS));
+    meterRegistry.ifPresent(registry -> Timer.builder("batch.worker.report.duration")
+        .tags(Tags.of("outcome", outcome))
+        .publishPercentiles(0.5, 0.95, 0.99)
+        .register(registry)
+        .record(durationNanos, TimeUnit.NANOSECONDS));
   }
 
   private void reportInternal(TaskExecutionReport report) {
-    RetryState state =
-        RetryState.initial(
-            properties.getReportMaxAttempts(),
-            properties.getReportInitialBackoffMillis(),
-            properties.getReportMaxBackoffMillis());
+    RetryState state = RetryState.initial(
+        properties.getReportMaxAttempts(),
+        properties.getReportInitialBackoffMillis(),
+        properties.getReportMaxBackoffMillis());
     String traceFallback = currentTraceId();
     while (state.canAttempt()) {
       String traceId = firstNonBlank(report.getTraceId(), traceFallback);
@@ -488,11 +480,10 @@ public class HttpTaskExecutionClient
   }
 
   private <T> ClaimOutcome<T> executeClaimLike(String operation, Supplier<T> call) {
-    RetryState state =
-        RetryState.initial(
-            properties.getClaimMaxAttempts(),
-            properties.getClaimInitialBackoffMillis(),
-            properties.getClaimMaxBackoffMillis());
+    RetryState state = RetryState.initial(
+        properties.getClaimMaxAttempts(),
+        properties.getClaimInitialBackoffMillis(),
+        properties.getClaimMaxBackoffMillis());
     while (state.canAttempt()) {
       try {
         // body 可能为 null(旧 orchestrator 返 bodyless;或 renew 路径用 toBodilessEntity)。
@@ -598,18 +589,16 @@ public class HttpTaskExecutionClient
     synchronized (this) {
       if (this.restClient == null) {
         JdkClientHttpRequestFactory factory =
-            new JdkClientHttpRequestFactory(
-                HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                    .build());
+            new JdkClientHttpRequestFactory(HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+                .build());
         factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
-        this.restClient =
-            restClientBuilderProvider
-                .getObject()
-                .baseUrl(resolveBaseUrl())
-                .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
-                .requestFactory(factory)
-                .build();
+        this.restClient = restClientBuilderProvider
+            .getObject()
+            .baseUrl(resolveBaseUrl())
+            .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+            .requestFactory(factory)
+            .build();
       }
       return this.restClient;
     }
