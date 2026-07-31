@@ -6,10 +6,11 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,10 +21,22 @@ import org.springframework.stereotype.Component;
  * ImportTaskExecutor} 的 Javadoc 和 {@code docs/design/task-spi-design.md} §Phase 3。
  */
 @Component
-@RequiredArgsConstructor
 public class ExportTaskExecutor implements BatchTaskExecutor {
 
   private final ExportStepExecutionAdapter delegate;
+  private final WorkerExecutionTimeoutProperties timeoutProperties;
+
+  /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
+  public ExportTaskExecutor(ExportStepExecutionAdapter delegate) {
+    this(delegate, new WorkerExecutionTimeoutProperties());
+  }
+
+  @Autowired
+  public ExportTaskExecutor(
+      ExportStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
+    this.delegate = delegate;
+    this.timeoutProperties = timeoutProperties;
+  }
 
   @Override
   public String taskType() {
@@ -36,7 +49,7 @@ public class ExportTaskExecutor implements BatchTaskExecutor {
         java.util.Set.of(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET),
         false,
         true,
-        Duration.ofMinutes(30));
+        Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()));
   }
 
   @Override

@@ -446,6 +446,13 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeSftp(
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
+    return probeSftp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchChannelProbeResult probeSftp(
+      Map<String, Object> channelConfig,
+      boolean dnsGuardEnabled,
+      DispatchRuntimeProperties properties) {
     try {
       String host = resolveEndpointOrFail(channelConfig, "sftp_host", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(host)) {
@@ -458,7 +465,7 @@ final class RemoteFilesystemDispatchSupport {
               ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
               : new InetSocketAddress(host, port);
       try (Socket socket = new Socket()) {
-        socket.connect(target, 5_000);
+        socket.connect(target, probeConnectTimeoutMillis(properties));
       }
       return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
     } catch (Exception ex) {
@@ -470,6 +477,13 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeSmtp(
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
+    return probeSmtp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchChannelProbeResult probeSmtp(
+      Map<String, Object> channelConfig,
+      boolean dnsGuardEnabled,
+      DispatchRuntimeProperties properties) {
     try {
       String host = resolveEndpointOrFail(channelConfig, "smtp_host", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(host)) {
@@ -482,7 +496,7 @@ final class RemoteFilesystemDispatchSupport {
               ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
               : new InetSocketAddress(host, port);
       try (Socket socket = new Socket()) {
-        socket.connect(target, 5_000);
+        socket.connect(target, probeConnectTimeoutMillis(properties));
       }
       return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
     } catch (Exception ex) {
@@ -494,6 +508,13 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeHttp(
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
+    return probeHttp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
+  }
+
+  static DispatchChannelProbeResult probeHttp(
+      Map<String, Object> channelConfig,
+      boolean dnsGuardEnabled,
+      DispatchRuntimeProperties properties) {
     try {
       String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(endpoint)) {
@@ -503,8 +524,8 @@ final class RemoteFilesystemDispatchSupport {
       // 与真实 API/API_PUSH dispatch 的 SSRF 防护保持一致。
       OkHttpClient client =
           new OkHttpClient.Builder()
-              .connectTimeout(Duration.ofSeconds(5))
-              .readTimeout(Duration.ofSeconds(5))
+              .connectTimeout(Duration.ofMillis(properties.getProbeConnectTimeoutMillis()))
+              .readTimeout(Duration.ofMillis(properties.getProbeReadTimeoutMillis()))
               .build();
       if (dnsGuardEnabled) {
         String probeHost = URI.create(endpoint).getHost();
@@ -548,13 +569,22 @@ final class RemoteFilesystemDispatchSupport {
     return switch (channelType) {
       case "NAS" -> probeNas(channelConfig, properties);
       case "OSS" -> probeOss(channelConfig, s3Properties, objectStore);
-      case "SFTP" -> probeSftp(channelConfig, dnsGuardEnabled);
-      case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled);
-      case "API", "API_PUSH" -> probeHttp(channelConfig, dnsGuardEnabled);
+      case "SFTP" -> probeSftp(channelConfig, dnsGuardEnabled, properties);
+      case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled, properties);
+      case "API", "API_PUSH" -> probeHttp(channelConfig, dnsGuardEnabled, properties);
       default ->
           new DispatchChannelProbeResult(
               false, "unsupported health probe channel type: " + channelType, null);
     };
+  }
+
+  private static int probeConnectTimeoutMillis(DispatchRuntimeProperties properties) {
+    long timeout = properties.getProbeConnectTimeoutMillis();
+    if (timeout < 1 || timeout > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException(
+          "probe-connect-timeout-millis must be between 1 and 2147483647");
+    }
+    return (int) timeout;
   }
 
   private static int maxInlinePayloadBytes(DispatchRuntimeProperties properties) {

@@ -22,6 +22,12 @@ public class WorkerExecutionTimeoutProperties {
   /** 默认 task 超时 (秒). 当 EffectiveTaskConfig.timeoutSeconds 为 null/0 时回退. 默认 30 分钟. */
   private long defaultTimeoutSeconds = 1800L;
 
+  /**
+   * SPI 能力声明中的建议超时 (秒)。它只影响路由/元数据中的 recommendedTimeout，不覆盖任务自身的 timeoutSeconds。 各 worker 可在
+   * application.yml 中按模块覆盖，默认 30 分钟。
+   */
+  private long capabilityTimeoutSeconds = 1800L;
+
   /** 上限 (秒). 超过此值即截断 (防配置错误: timeout=999999 会长期占用 worker 执行线程). */
   private long maxTimeoutSeconds = 7200L;
 

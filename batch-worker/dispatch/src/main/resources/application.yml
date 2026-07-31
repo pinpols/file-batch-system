@@ -47,6 +47,8 @@ batch:
         enabled: true
     # Worker 类型（IMPORT/EXPORT/DISPATCH）
     type: DISPATCH
+    execution:
+      capability-timeout-seconds: ${BATCH_WORKER_DISPATCH_CAPABILITY_TIMEOUT_SECONDS:900}
     # 实例内并发上限（背压）：dispatch 通常较轻，默认略大
     max-concurrent-tasks: ${BATCH_WORKER_DISPATCH_MAX_CONCURRENT_TASKS:8}
     # P2-5 Kafka 订阅模式（PATTERN/FIXED/TENANT_SCOPED）；详见 batch-worker-import yml 注释
@@ -71,6 +73,8 @@ batch:
         local-sandbox-root: ${BATCH_DISPATCH_LOCAL_SANDBOX_ROOT:}
         nas-copy-timeout-seconds: ${BATCH_DISPATCH_NAS_COPY_TIMEOUT_SECONDS:300}
         oss-max-inline-mib: ${BATCH_DISPATCH_OSS_MAX_INLINE_MIB:512}
+        probe-connect-timeout-millis: ${BATCH_DISPATCH_PROBE_CONNECT_TIMEOUT_MS:5000}
+        probe-read-timeout-millis: ${BATCH_DISPATCH_PROBE_READ_TIMEOUT_MS:5000}
       circuit-breaker:
         # 断路器：连续失败达到阈值后进入冷却，防止雪崩
         enabled: true
@@ -96,3 +100,7 @@ batch:
         interval-millis: ${BATCH_DISPATCH_RECEIPT_POLL_MS:60000}
         # 单次轮询批大小
         batch-size: ${BATCH_DISPATCH_RECEIPT_POLL_BATCH:50}
+        connect-timeout-millis: ${BATCH_DISPATCH_RECEIPT_POLL_CONNECT_TIMEOUT_MS:5000}
+        read-timeout-millis: ${BATCH_DISPATCH_RECEIPT_POLL_READ_TIMEOUT_MS:15000}
+        write-timeout-millis: ${BATCH_DISPATCH_RECEIPT_POLL_WRITE_TIMEOUT_MS:5000}
+        call-timeout-millis: ${BATCH_DISPATCH_RECEIPT_POLL_CALL_TIMEOUT_MS:30000}

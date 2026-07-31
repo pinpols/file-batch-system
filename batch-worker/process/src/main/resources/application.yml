@@ -36,6 +36,8 @@ batch:
       isolation-check:
         enabled: true
     type: PROCESS
+    execution:
+      capability-timeout-seconds: ${BATCH_WORKER_PROCESS_CAPABILITY_TIMEOUT_SECONDS:1200}
     max-concurrent-tasks: ${BATCH_WORKER_PROCESS_MAX_CONCURRENT_TASKS:4}
     kafka:
       subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}

@@ -6,11 +6,12 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import java.time.Duration;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,10 +22,28 @@ import org.springframework.stereotype.Component;
  * §Phase 3。
  */
 @Component
-@RequiredArgsConstructor
 public class ProcessTaskExecutor implements BatchTaskExecutor {
 
   private final ProcessStepExecutionAdapter delegate;
+  private final WorkerExecutionTimeoutProperties timeoutProperties;
+
+  /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
+  public ProcessTaskExecutor(ProcessStepExecutionAdapter delegate) {
+    this(delegate, compatibilityDefaults());
+  }
+
+  @Autowired
+  public ProcessTaskExecutor(
+      ProcessStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
+    this.delegate = delegate;
+    this.timeoutProperties = timeoutProperties;
+  }
+
+  private static WorkerExecutionTimeoutProperties compatibilityDefaults() {
+    WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
+    properties.setCapabilityTimeoutSeconds(1200L);
+    return properties;
+  }
 
   @Override
   public String taskType() {
@@ -34,7 +53,10 @@ public class ProcessTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        Set.of(ResourceKind.CPU, ResourceKind.DB), false, true, Duration.ofMinutes(20));
+        Set.of(ResourceKind.CPU, ResourceKind.DB),
+        false,
+        true,
+        Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()));
   }
 
   @Override
